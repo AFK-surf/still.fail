@@ -27,7 +27,7 @@ fn offers_tester(n? : Int = 3) -> OffersAt raise {
   let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=600.0, platform=0)
   let names = ["甲", "乙", "丙"]
   let keys = Array::makei(n, fn(i) { "k\{i}" })
-  let named : Map[String, String] = {}
+  let named : Map[String, String] = Map([])
   for i, k in keys {
     named[k] = if i < names.length() { names[i] } else { "第\{i}" }
   }

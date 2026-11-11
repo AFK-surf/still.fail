@@ -4,7 +4,7 @@
 ///|
 test "a picture that takes 137 ms to decode: told decoded at the moment it was asked for and 137 after it, the same at any frame rate; another told at once" {
   let shown = @signals.signal(false)
-  let told : Map[String, Double] = {}
+  let told : Map[String, Double] = Map([])
   let t = Tester::new(fn(_c) {  }, images=[("slow", 600, 400), ("quick", 600, 400)])
   set_view_app(fn(root) {
     root.show(fn() { shown.get() }, fn(v) {

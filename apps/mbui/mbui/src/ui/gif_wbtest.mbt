@@ -7,7 +7,7 @@
 fn lzw_coded(indices : Array[Int], min_code : Int, out : Array[Byte]) -> Unit {
   let clear = 1 << min_code
   let end = clear + 1
-  let table : Map[Int, Int] = {}
+  let table : Map[Int, Int] = Map([])
   let mut size = min_code + 1
   let mut next = end + 1
   let mut acc = 0

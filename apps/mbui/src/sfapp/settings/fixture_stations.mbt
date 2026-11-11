@@ -27,7 +27,7 @@ let row_overview_fields : Array[String] = ["viewer", "counts", "disk", "drive"]
 fn fields_kept(v : Json, keep : Array[String]) -> Json {
   match v {
     Object(o) => {
-      let m : Map[String, Json] = {}
+      let m : Map[String, Json] = Map([])
       for k, x in o {
         if keep.contains(k) {
           m[k] = x
@@ -63,7 +63,7 @@ pub fn station_row(whole : Json) -> Json {
 fn fields_dropped(v : Json, drop : Array[String]) -> Json {
   match v {
     Object(o) => {
-      let m : Map[String, Json] = {}
+      let m : Map[String, Json] = Map([])
       for k, x in o {
         if !drop.contains(k) {
           m[k] = x
@@ -146,7 +146,7 @@ pub fn quota_said(q : Json) -> Json {
 fn ago_said(time : Json) -> Json {
   match time {
     Object(o) => {
-      let m : Map[String, Json] = {}
+      let m : Map[String, Json] = Map([])
       for k, x in o {
         m[k] = fields_kept(x, ["ago"])
       }

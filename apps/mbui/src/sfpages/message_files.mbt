@@ -926,7 +926,7 @@ fn reveal_frosted(c : @ui.Ctx, blur : Double) -> Unit {
 
 ///|
 /// Each image's way in, by its source, while the run lasts (None: first shown decoded, as it is).
-let reveals : Map[String, @motion.Anim?] = {}
+let reveals : Map[String, @motion.Anim?] = Map([])
 
 ///|
 /// What the messages keep of their own, let go (the package's reset).

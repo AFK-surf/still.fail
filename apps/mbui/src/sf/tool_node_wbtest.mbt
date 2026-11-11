@@ -210,7 +210,7 @@ test "a tool as a node beside the old one, in each state and as what it says cha
 ///|
 test "a tool as a node pressed at each way in's moment, no frame drawn: a click, a finger's tap, Enter and Space with the focus, a screen reader's Activate; said unable to be pressed between frames, by none of them, its id read out before asked late" {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed)
   let n = t.get(Button, label="复制 new")
   let (cx, cy) = (n.rect.0 + n.rect.2 / 2.0, n.rect.1 + n.rect.3 / 2.0)
@@ -661,7 +661,7 @@ test "a tip going as kit's goes, drawn smaller as it fades about its edge toward
 /// that, and how many times it was pressed.
 fn finger_held_tip(wait : Double, then_press : Bool) -> (Bool, Bool, Bool, Int) raise {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   // (a touch screen's app: the hand a finger's)
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed, platform=1)
   let shown = fn() { t.semantics().any(fn(s) { s.role == Tooltip && s.label == "复制 new" && !s.hidden }) }
@@ -698,7 +698,7 @@ test "a tool as a node's tip held open by a finger, as kit's tooltip: shown once
 /// `hold` ms first: how many times it was pressed.
 fn let_go_past(platform : Int, past : Double, hold? : Double = 0.0) -> Int raise {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed, platform~)
   let n = t.get(Button, label="复制 new")
   assert_eq(n.rect.2, tool_side, msg="the tool drawn tool_side across")

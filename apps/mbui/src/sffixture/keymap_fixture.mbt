@@ -185,7 +185,7 @@ pub fn fixture_keys_set(changed : Map[String, Array[String]], params : Json) -> 
 ///|
 /// The prefs' `keys`: each action's keys changed here.
 pub fn fixture_keys(changed : Map[String, Array[String]]) -> Json {
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   for k, v in changed {
     o[k] = Json::array(v.map(Json::string(_)))
   }

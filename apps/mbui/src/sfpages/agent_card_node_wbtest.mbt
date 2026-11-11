@@ -493,8 +493,8 @@ fn agent_trigger_open(hands : Map[String, @sf.HoverHand], name : String) -> Bool
 
 ///|
 test "an activity row's avatar says neither: a finger's tap on it the row's (opened), no card; held long_press_ms, its agent's card, the row not pressed" {
-  let pressed : Map[String, Int] = {}
-  let hands : Map[String, @sf.HoverHand] = {}
+  let pressed : Map[String, Int] = Map([])
+  let hands : Map[String, @sf.HoverHand] = Map([])
   let t = agent_triggers(1, pressed, hands)
   t.run_for(@ui.move_most_ms)
   // (the avatar: 40 + 20, the row's middle)
@@ -531,8 +531,8 @@ test "an activity row's avatar says neither: a finger's tap on it the row's (ope
 
 ///|
 test "a message's name says its press: clicked, its own (the agent's history); the mouse resting on it, its card, its words starting where the name's do" {
-  let pressed : Map[String, Int] = {}
-  let hands : Map[String, @sf.HoverHand] = {}
+  let pressed : Map[String, Int] = Map([])
+  let hands : Map[String, @sf.HoverHand] = Map([])
   let t = agent_triggers(0, pressed, hands)
   t.run_for(@ui.move_most_ms)
   // (the name: 40 + 20 + 18 + 60, the row's middle)

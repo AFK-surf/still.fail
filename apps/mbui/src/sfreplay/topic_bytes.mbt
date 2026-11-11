@@ -40,12 +40,12 @@ fn kb(bytes : Int) -> Int {
 /// subscriptions. A message in is counted as its line's bytes.
 pub fn tape_topics(trace : String) -> TapeTopics {
   // (a subscription by its id in the run: its topic, and its topic with its params, what one asked again shares)
-  let subs : Map[Int, (String, String)] = {}
-  let gone : Map[Int, Bool] = {}
+  let subs : Map[Int, (String, String)] = Map([])
+  let gone : Map[Int, Bool] = Map([])
   // (let go of keeping its value, till the core's `{id, v}`)
-  let keeping : Map[Int, Bool] = {}
-  let wholes : Map[String, Int] = {}
-  let topics : Map[String, Int] = {}
+  let keeping : Map[Int, Bool] = Map([])
+  let wholes : Map[String, Int] = Map([])
+  let topics : Map[String, Int] = Map([])
   let mut whole = 0
   let mut again = 0
   let mut unheld = 0
@@ -114,7 +114,7 @@ pub fn tape_topics(trace : String) -> TapeTopics {
 ///|
 /// Each trace's bar (topic_bytes_known_test.mbt): its name, the KB that may come whole, how many may come again whole,
 /// how many may come for what was let go of. Empty until a test package says them (trace then says nothing of them).
-let tape_bars : Map[String, (Int, Int, Int)] = {}
+let tape_bars : Map[String, (Int, Int, Int)] = Map([])
 
 ///|
 /// The traces' bars, said once as a test package starts (its init): every trace a flow reads must have one.

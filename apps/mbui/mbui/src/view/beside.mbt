@@ -211,7 +211,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
   self.besides_at.clear()
   self.besides_at.append(live)
   // (1 being placed, 2 placed beside its anchor, 3 refused: where it is laid out)
-  let state : Map[Int, Int] = {}
+  let state : Map[Int, Int] = Map([])
   fn refused(at : Int) -> Unit {
     state[at] = 3
     // (on no side of anything)

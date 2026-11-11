@@ -43,7 +43,7 @@ pub fn link_cards_node(
   card_of : (LinkOf) -> LinkCard?,
   loc~ : SourceLoc,
 ) -> Map[Int, HoverHand] {
-  let hands : Map[Int, HoverHand] = {}
+  let hands : Map[Int, HoverHand] = Map([])
   v.box(made_for=loc, fn(h) {
     h.over(Is(true)) |> ignore
     h.each(shown, fn(l) { (l.2, l.0) }, fn(row, l) {

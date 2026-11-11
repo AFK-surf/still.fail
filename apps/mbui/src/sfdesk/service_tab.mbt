@@ -86,12 +86,12 @@ pub fn sv_sweep(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// The pages of tabs closed (by their service_key: station, job), not yet let go.
 // kept across runs: put back by sv_reset (reset)
-let sv_closing : Map[String, (String, String)] = {}
+let sv_closing : Map[String, (String, String)] = Map([])
 
 ///|
 /// The pages drawn in this build (by their service_key).
 // kept across runs: put back by sv_reset (reset)
-let sv_drawn : Map[String, Bool] = {}
+let sv_drawn : Map[String, Bool] = Map([])
 
 ///|
 fn sv_reset() -> Unit {

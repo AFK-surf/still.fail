@@ -110,7 +110,7 @@ fn words_within(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> Arra
 /// own terms, its words where the old one's are; read out the same; each pressed alone where it can be.
 fn choice_rows_same(look : Look, platform : Int, card? : Bool = false) -> Unit raise {
   let about = "\{look} on \{platform}, card \{card}"
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = choice_rows_tester(look, platform, pressed, card~)
   for s in choice_rows {
     let (o, n) = choice_pair(t, s.label)
@@ -247,7 +247,7 @@ fn node_choice_row(col : @view.View, i : Int, count : (String) -> Unit) -> Unit 
 /// on a window `at` by its 打开 (`pressed`: a sheet a press opened, a small panel beside it) or by nothing (a sheet, a
 /// dialog in the middle of the window), at rest; each tapped once in its middle.
 fn panel_choice_rows(at : (Int, Double, Double), pressed : Bool, old : Bool, listed? : Bool = false) -> (Array[String], Map[String, Int]) raise {
-  let count : Map[String, Int] = {}
+  let count : Map[String, Int] = Map([])
   let tally = fn(k : String) { count[k] = count.get(k).unwrap_or(0) + 1 }
   let open = fn(from : Anchor) {
     let from = if pressed { from } else { Unanchored }

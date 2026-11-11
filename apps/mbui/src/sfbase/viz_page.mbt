@@ -512,7 +512,7 @@ pub fn viz_follow_up(station : String, session : String) -> (String) -> Bool {
 ///|
 /// Words a visualization asked to send, by the draft key of the chat whose composer they go into: taken by it.
 // kept across runs: put back by viz_pages_reset (sfbase's reset)
-pub let followed_into : Map[String, String] = {}
+pub let followed_into : Map[String, String] = Map([])
 
 ///|
 /// The visualization a message of chat `session` on `station` places, kept by session `key`, drawn there; the ways

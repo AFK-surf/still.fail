@@ -77,7 +77,7 @@ fn rail_round_node(v : @view.View, at : () -> RailAt) -> Unit {
 /// The rail's places' nodes as they are made (their names), for what opens beside one at its cause (the rail's menu
 /// asked of the rail itself or by a fixture: beside its first place, or the one named).
 // kept across runs: each let go with its node
-let rail_drawn : Map[String, @view.View] = {}
+let rail_drawn : Map[String, @view.View] = Map([])
 
 ///|
 /// The rail's node as it is made: the trigger of what opens beside it from the old frame (rail_adder: a press in the

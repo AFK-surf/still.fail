@@ -72,7 +72,7 @@ fn tile_outlines(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
 
 ///|
 /// The tiles' outlines cut so far, by their path data and scale (tile_outlines).
-let tiles_made : Map[(String, Double), Array[(Array[Double], Bool)]] = {}
+let tiles_made : Map[(String, Double), Array[(Array[Double], Bool)]] = Map([])
 
 ///|
 /// The sheet filled from its foot `part` of its height (FileTile's rect from y = 36 − 36 × part, cut to the sheet's

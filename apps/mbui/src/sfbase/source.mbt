@@ -338,7 +338,7 @@ fn topic_held(name : String, params : Map[String, Json]) -> Bool {
 /// The topics a reader holds now (topic_held's), each once, by the source that follows it: what a page that opens
 /// another in its place hands over (open_handing_held).
 fn topics_held() -> Array[(Source, String, Map[String, Json])] {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   let out : Array[(Source, String, Map[String, Json])] = []
   for t in followed_topics.val {
     if !seen.contains(t.key) && t.holder.watched() {

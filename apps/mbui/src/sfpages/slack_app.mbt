@@ -37,7 +37,7 @@ priv struct SaDraft {
 ///|
 /// The groups `settings` (a Slack app's, as the core has them) turns on.
 fn sa_groups(settings : Json?) -> Map[String, Bool] {
-  let groups : Map[String, Bool] = {}
+  let groups : Map[String, Bool] = Map([])
   match field(settings, "groups") {
     Some(Object(m)) =>
       for g, v in m {
@@ -101,7 +101,7 @@ fn sa_draft_reset(d : SaDraft, settings : Json?) -> Unit {
 ///|
 /// What an app's look and permissions say of it, as the core takes its settings (the name in messages its name too).
 fn sa_settings_of(name : String, description : String, color : String, groups : Map[String, Bool], settings : Json?) -> Json {
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for g, v in groups {
     out[g] = Json::boolean(v)
   }
@@ -124,16 +124,16 @@ fn sa_settings(d : SaDraft, settings : Json?) -> Json {
 ///|
 /// The drafts, by their form; the folds open, by station/connect; icons made, each its own picture's key.
 // kept across runs: made as each form is first made; slack_app_reset empties it
-let sa_drafts : Map[String, SaDraft] = {}
+let sa_drafts : Map[String, SaDraft] = Map([])
 
 ///|
 // kept across runs: said by the fold's press; slack_app_reset empties it
-let sa_open : Map[String, Bool] = {}
+let sa_open : Map[String, Bool] = Map([])
 
 ///|
 /// What a form started from (its settings as text), by its key: a change there starts it again.
 // kept across runs: said as each form starts; slack_app_reset empties it
-let sa_started : Map[String, String] = {}
+let sa_started : Map[String, String] = Map([])
 
 ///|
 /// The forms whose permissions Slack wants approved (their install links), by station/connect.
@@ -285,7 +285,7 @@ fn config_token_dialog(core : Core, station : String) -> Unit {
 ///|
 /// What a configuration token form went through: why the station refused it ("" none).
 // kept across runs: said by its call's answer; slack_app_reset leaves it (keyed by the dialog's own key)
-let sa_token_errors : Map[String, String] = {}
+let sa_token_errors : Map[String, String] = Map([])
 
 ///|
 /// Adding a Slack workspace's app configuration token by its refresh token (ConfigTokenForm): three steps, each a

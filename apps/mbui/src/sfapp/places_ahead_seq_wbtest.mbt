@@ -11,7 +11,7 @@
 /// where they say more than its workspace or station): the client's messages out, what a run's trace keeps.
 fn ahead_phone(ms : Double, said : Array[String]) -> @ui.Tester {
   new_run()
-  let names : Map[Int, String] = {}
+  let names : Map[Int, String] = Map([])
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }
     let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => return }

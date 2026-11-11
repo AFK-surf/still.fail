@@ -49,7 +49,7 @@ let sizes_steady : SizesSteady = {
 ///|
 /// Each file's bar: how many faults a Tester made there may show.
 // kept across runs: said once as a test program starts (its packages' `init`)
-let sizes_steady_bars : Map[String, Int] = {}
+let sizes_steady_bars : Map[String, Int] = Map([])
 
 ///|
 /// The faults known in the tests of the files `bars` names, each how many a Tester made there may show (as
@@ -276,7 +276,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
   self.with_tree_nodes(steady=true, fn() {
     let tree = view_tree()
     // (one ident twice in the frame: who either is, unsaid)
-    let count : Map[Int, Int] = {}
+    let count : Map[Int, Int] = Map([])
     for i in 0..<self.count {
       let id = self.nodes[i].ident
       count[id] = count.get(id).unwrap_or(0) + 1
@@ -471,7 +471,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     }
     // (what goes as what holds it went, by as far in the frame, carried by it: that one said, the outermost so carried,
     // not each thing in it)
-    let placed : Map[Int, Double] = {}
+    let placed : Map[Int, Double] = Map([])
     for f in faults {
       if !f.2 {
         placed[f.0] = f.3

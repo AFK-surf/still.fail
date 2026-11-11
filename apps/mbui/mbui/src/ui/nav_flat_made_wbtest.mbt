@@ -22,7 +22,7 @@ priv struct FlatMadeLog {
 fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool], FlatMadeLog) {
   let log : FlatMadeLog = { made: [], serials: [], dropped: [], heads: [], heads_dropped: [], left: [] }
   // (what each entry's page said of itself, by the entry: its head says it)
-  let said : Map[Int, @signals.Signal[String]] = {}
+  let said : Map[Int, @signals.Signal[String]] = Map([])
   let said_of = fn(k : Int) {
     match said.get(k) {
       Some(s) => s

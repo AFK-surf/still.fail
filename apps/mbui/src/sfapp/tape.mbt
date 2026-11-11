@@ -207,7 +207,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
   let t0 = t.time()
   let out : Array[String] = []
   // each word's frames that differ: from, to, how many, how many not drawn here, the worst offset (here less Android's)
-  let runs : Map[String, TapeRun] = {}
+  let runs : Map[String, TapeRun] = Map([])
   let order : Array[String] = []
   // what the person did: taps (by their words or where they were), a finger's down, moves and up, pages pushed, back
   let taps = tape.events.filter(fn(e) {

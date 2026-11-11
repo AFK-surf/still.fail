@@ -45,7 +45,7 @@ pub fn[K : Hash + Eq] Keyed::set(self : Keyed[K], ks : Array[K]) -> Unit {
   if ks.length() == self.members.length() && ks.length() <= 8 && keys_held(self.members, ks) {
     return
   }
-  let now : Map[K, Bool] = {}
+  let now : Map[K, Bool] = Map([])
   for k in ks {
     now[k] = true
   }

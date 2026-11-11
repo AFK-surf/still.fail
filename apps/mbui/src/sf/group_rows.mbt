@@ -12,7 +12,7 @@ priv struct GroupRows {
 ///|
 /// Each group's rows as last drawn, by the group's key.
 // kept across runs: put back by group_rows_reset, as a run begins (run_begin)
-let group_rows_of : Map[String, GroupRows] = {}
+let group_rows_of : Map[String, GroupRows] = Map([])
 
 ///|
 /// What every group's rows were forgets (a run anew).
@@ -34,11 +34,11 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
       s
     }
   }
-  let here : Map[String, Bool] = {}
+  let here : Map[String, Bool] = Map([])
   for r in rows {
     here[r.0] = true
   }
-  let was : Map[String, Bool] = {}
+  let was : Map[String, Bool] = Map([])
   for r in st.order {
     was[r.0] = true
   }

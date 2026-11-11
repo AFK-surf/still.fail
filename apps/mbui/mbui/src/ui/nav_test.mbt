@@ -194,7 +194,7 @@ test "the system's back gesture (predictive back) follows, then goes or not" {
 test "a page asks the stack where it stands: the root under a page sliding in over it is still the root, one leaving keeps its own" {
   let nav = @ui.Nav::new(0)
   // each page's under as it was last built
-  let told : Map[Int, Int?] = {}
+  let told : Map[Int, Int?] = Map([])
   let t = @ui.Tester::new(fn(c) {
     c.nav(nav, fn(i) {
       told[i] = nav.under()

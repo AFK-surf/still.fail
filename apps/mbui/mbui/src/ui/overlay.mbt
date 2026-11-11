@@ -1107,7 +1107,7 @@ fn Ctx::keys_reach(self : Ctx, id : Int) -> Bool {
 /// where the keys go; the press outside each, from the top down; each dismissed so given up and told so then, the
 /// topmost first (Ctx::layers_dismissed).
 fn Ctx::layer_keys_now(self : Ctx) -> Unit {
-  let before : Map[Int, Dismiss] = {}
+  let before : Map[Int, Dismiss] = Map([])
   self.dismissals.each(fn(id, why) { before[id] = why })
   let open = self.last_layers.filter(fn(l) { self.layer_takes(l) }).rev()
   // (an Escape come since the frame began: in the keys the next frame takes, desk_frame_start; taken here, it is gone

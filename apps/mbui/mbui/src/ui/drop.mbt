@@ -432,7 +432,7 @@ priv struct FilesOn {
 ///|
 /// What takes files from outside over each box (Ctx::on_files), by its id: what its last build said.
 // kept across runs: said as each box is built, let go with its page (Ctx::forget); a run's start clears it (drop_reset)
-let files_on : Map[Int, FilesOn] = {}
+let files_on : Map[Int, FilesOn] = Map([])
 
 ///|
 /// The box that takes them that files from outside are held over now (Ctx::on_files; 0 none): told as they leave it.

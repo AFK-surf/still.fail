@@ -100,7 +100,7 @@ test "old natural: as tall as what it holds the first frame, and as it grows, na
   let at = @signals.signal((0.0, 0.0))
   let alpha = @signals.signal(1.0)
   let built = Ref(0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = natural_tester(400.0, 800.0, rows, words, width, at, alpha, built, ids)
   let first = natural_said(t, ids)
   rows.set(5)
@@ -126,7 +126,7 @@ test "old natural: held by a short window and grown, the same as opened in the t
   let mk = fn(h : Double) {
     let rows = @signals.signal(12)
     let built = Ref(0)
-    let ids : Map[String, @view.View] = {}
+    let ids : Map[String, @view.View] = Map([])
     let t = natural_tester(400.0, h, rows, @signals.signal("词"), @signals.signal(240.0), @signals.signal((0.0, 0.0)), @signals.signal(1.0), built, ids)
     (t, ids)
   }
@@ -147,7 +147,7 @@ test "old natural: moved, faded: painted alone, nothing built nor laid out, its 
   let at = @signals.signal((0.0, 0.0))
   let alpha = @signals.signal(1.0)
   let built = Ref(0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = natural_tester(400.0, 800.0, rows, @signals.signal("词"), @signals.signal(240.0), at, alpha, built, ids)
   let h = laid_of(ids["old"]).3
   // (laid out the same twice: what comes after it may be painted alone, as island_moved_wbtest has it)
@@ -191,7 +191,7 @@ test "old natural: the one old view, as tall as the window, then shorter: smalle
 ///|
 test "old natural: scaled: laid out as tall as it was, what comes after where it was, drawn at that scale, painted alone" {
   let s = @signals.signal(1.0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = Tester::new(fn(_c) {  }, w=400.0, h=800.0)
   set_view_app(fn(root) {
     root.box(fn(col) {
@@ -244,7 +244,7 @@ let natural_mark : Int64 = 0x33AA55FFL
 test "old natural: holding a row that grows in its column, a box in it scrolling past 100 (Ctx::capped past_most, a panel's column of its own): as tall as that box shows, 100, whatever the window, from the first frame" {
   let out = []
   for h in [800.0, 300.0] {
-    let ids : Map[String, @view.View] = {}
+    let ids : Map[String, @view.View] = Map([])
     let t = Tester::new(fn(_c) {  }, w=400.0, h~)
     set_view_app(fn(root) {
       root.box(fn(col) {
@@ -396,7 +396,7 @@ test "old fits: as wide as what it holds and as tall from the first frame; wider
   let words = @signals.signal("词词词")
   let at = @signals.signal((0.0, 0.0))
   let built = Ref(0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = fits_tester(200.0, words, at, built, ids)
   let first = fits_said(ids)
   words.set("词词词词词词")

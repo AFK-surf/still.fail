@@ -92,7 +92,7 @@ fn weigh(j : Json, path : String, deep : Int, by : Map[String, Int], own? : Bool
 /// What `j` weighs (the bytes of its JSON), and its `most` heaviest paths with what each weighs, the heaviest first (of
 /// as heavy, by name): a path's weight has what is under it, so a list and what makes it heavy both show.
 pub fn weights(j : Json, most? : Int = 12) -> (Int, Array[(String, Int)]) {
-  let by : Map[String, Int] = {}
+  let by : Map[String, Int] = Map([])
   let n = weigh(j, "", 0, by)
   let all = by.to_array()
   all.sort_by(fn(a, b) {

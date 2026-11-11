@@ -377,11 +377,11 @@ pub(all) struct Peek {
 
 ///|
 /// The cards' previews, by card.
-pub let peeks : Map[String, Peek] = {}
+pub let peeks : Map[String, Peek] = Map([])
 
 ///|
 /// The cards with a preview built in this pass of the frame, or held by a list's row kept as its nodes (@ui.built_used).
-pub let peeks_built : Map[String, Bool] = {}
+pub let peeks_built : Map[String, Bool] = Map([])
 
 ///|
 /// Previews asked for so far: each view's name its own.

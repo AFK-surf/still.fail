@@ -120,7 +120,7 @@ pub fn Tester::probe_at(self : Tester, x : Double, y : Double) -> String {
   self.move(x, y)
   self.frame()
   let after = self.frame_export()
-  let counted : Map[String, Int] = {}
+  let counted : Map[String, Int] = Map([])
   for l in before {
     counted[l] = counted.get(l).unwrap_or(0) + 1
   }

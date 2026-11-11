@@ -22,7 +22,7 @@ fn link_rig(platform? : Int = 0, bare_b? : Bool = false) -> LinkRig {
   set_words(fn(key, _) { key })
   let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=500.0, platform~)
   t.check_looks(false)
-  let held : Map[String, Int] = {}
+  let held : Map[String, Int] = Map([])
   let reads : Array[(String, Bool)] = []
   let runs : @signals.Signal[Array[@ui.Run]] = @signals.signal([
     @ui.plain("先看 "),

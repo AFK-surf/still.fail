@@ -10,7 +10,7 @@
 /// Where the add page of a station begins, when it is come to with a provider and how (the web's addProfilePath with
 /// its provider and `method`): told to its draft as that is opened.
 // kept across runs: said by the pages that lead to it; reset (pages.mbt) empties it
-pub let add_profile_start : Map[String, Array[(String, Json)]] = {}
+pub let add_profile_start : Map[String, Array[(String, Json)]] = Map([])
 
 ///|
 /// A new profile (AddProfile) on station `address` (another online one where it is not: the first), made once in node

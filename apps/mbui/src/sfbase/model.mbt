@@ -344,7 +344,7 @@ fn chats_view(v : Json) -> ChatsView {
 ///|
 /// The list's stations that say something of each of their rows (station_on), by address.
 fn stations_said(v : Json) -> Map[String, Json] {
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for s in items(Some(v), "stations") {
     if field(Some(s), "offline") is Some(_) || field(Some(s), "reconnecting") is Some(_) {
       out[text(Some(s), "station")] = s

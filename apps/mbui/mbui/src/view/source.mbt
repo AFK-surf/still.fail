@@ -240,7 +240,7 @@ pub fn Tree::press_boxes(self : Tree) -> Array[(NodeId, (Double, Double, Double,
     }
     found.push((c.id, b))
   })
-  let index : Map[Int, Int] = {}
+  let index : Map[Int, Int] = Map([])
   for k, f in found {
     index[f.0.at] = k
   }

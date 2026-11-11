@@ -231,7 +231,7 @@ fn outline_body(
   // its rows by their keys, as the core has them now
   let table : @signals.Computed[(Array[String], Map[String, OutlineRow])] = @signals.computed(fn(_) {
     let keys : Array[String] = []
-    let rows : Map[String, OutlineRow] = {}
+    let rows : Map[String, OutlineRow] = Map([])
     // (a key once: the list's keys are its rows', so a message the core said twice is one row)
     let put = fn(k : String, row : OutlineRow) {
       if !rows.contains(k) {
@@ -630,7 +630,7 @@ let outline_count_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted,
 /// The chats whose page shows a way into the outline now, by the chat's key: what (its id, to stand beside) and whether
 /// it is the rail (its outline held then: what the steps' keys go along). ⌘G opens it there.
 // kept across runs: said as each page is built, let go of by the package's reset (pages.mbt)
-let outline_entries : Map[String, (Int, Bool)] = {}
+let outline_entries : Map[String, (Int, Bool)] = Map([])
 
 ///|
 /// What people said in chat `r` (its view `v`), oldest first, as a key's handler finds it: its outline where its rail
@@ -665,7 +665,7 @@ pub fn outline_open_keys(src : Source, r : ChatRef, v : ChatView, stint? : Int =
 /// The outline to open in each chat as its page shows a way into it (a screen's fixture: outline_preset), with the
 /// words to type in it, by the chat's key.
 // kept across runs: let go of as it opens, and by the package's reset (pages.mbt)
-let outline_presets : Map[String, String] = {}
+let outline_presets : Map[String, String] = Map([])
 
 ///|
 /// Chat `key`'s outline opened as its page next shows a way into it, `words` typed in its field (a screen's fixture).
@@ -840,7 +840,7 @@ let rail_said : @signals.Signal[Map[String, (String, String)]] = @signals.signal
 ///|
 /// The chunks of rail_said asked for whose answer has not come, by the chat's key and the chunk.
 // kept across runs: let go of by the package's reset (chat_list.mbt)
-let rail_asking : Map[String, Bool] = {}
+let rail_asking : Map[String, Bool] = Map([])
 
 ///|
 /// What a tick of chat `k`'s rail standing for its message `seq` says: its first line and time, "" till the core gave

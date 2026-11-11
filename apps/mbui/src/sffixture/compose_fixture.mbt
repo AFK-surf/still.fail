@@ -34,7 +34,7 @@ pub(all) struct FixWrite {
 }
 
 ///|
-pub let fix_writes : Map[String, FixWrite] = {}
+pub let fix_writes : Map[String, FixWrite] = Map([])
 
 ///|
 pub fn fix_write(f : Fixture, key : String) -> FixWrite {

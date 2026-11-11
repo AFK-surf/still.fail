@@ -1033,7 +1033,7 @@ test "cubicBezier: generates easing functions from curve definitions" {
 ///|
 test "cubicBezier: its output is not quantised" {
   let ease = @motion.cubic_bezier(0.25, 0.1, 0.25, 1.0)
-  let values : Map[Double, Bool] = {}
+  let values : Map[Double, Bool] = Map([])
   for i in 0..=1000 {
     values[ease(0.3 + i.to_double() * 1.0e-6)] = true
   }

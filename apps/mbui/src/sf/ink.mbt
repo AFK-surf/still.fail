@@ -123,7 +123,7 @@ pub let ink_read : Ref[((String, String, (String?) -> Unit) -> Unit)?] = Ref(Non
 
 ///|
 /// The inks answered, by the language and the code; the latest kept, up to `inks_budget` of code.
-let inks : Map[String, String?] = {}
+let inks : Map[String, String?] = Map([])
 
 ///|
 let inks_order : Array[String] = []
@@ -135,7 +135,7 @@ let inks_used : Ref[Int] = Ref(0)
 let inks_budget : Int = 4000000
 
 ///|
-let inks_asked : Map[String, Bool] = {}
+let inks_asked : Map[String, Bool] = Map([])
 
 ///|
 fn init {

@@ -263,7 +263,7 @@ priv struct LSpan {
 ///|
 fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
   let db = opt.fonts
-  let fonts : Map[String, ResolvedFont] = {}
+  let fonts : Map[String, ResolvedFont] = Map([])
   for chunk in text.chunks {
     for span in chunk.spans {
       let key = span.font.key()

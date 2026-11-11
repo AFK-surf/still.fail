@@ -7,7 +7,7 @@
 
 ///|
 /// The topics asked for, by their key: one subscription each, asked again the same every frame.
-let dumped : Map[String, Int] = {}
+let dumped : Map[String, Int] = Map([])
 
 ///|
 fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
@@ -410,7 +410,7 @@ fn main {
     @core.trace_to(fn(line) { @hostapi.log("CORETRACE " + line) }, bytes_max~)
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
-    let started : Map[String, Json] = {}
+    let started : Map[String, Json] = Map([])
     // (and where the host keeps downloads in a scripted run: what it says of a file kept, which the app tells the core)
     for name in @sfcore.started_by + ["MBUI_DOWNLOADS_DIR"] {
       let v = @sfcore.env_text(name)

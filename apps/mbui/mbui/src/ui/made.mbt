@@ -145,10 +145,10 @@ pub fn[T, K : Hash + Eq] made_each(
   key : (T) -> K,
   row : (@signals.Signal[T]) -> Made,
 ) -> () -> Array[Made] {
-  let kept : Map[K, (@signals.Signal[T], Made)] = {}
+  let kept : Map[K, (@signals.Signal[T], Made)] = Map([])
   fn() {
     let now = items()
-    let seen : Map[K, Bool] = {}
+    let seen : Map[K, Bool] = Map([])
     let out = []
     @signals.untracked(fn() {
       for item in now {
@@ -254,7 +254,7 @@ fn Made::let_go(self : Made) -> Unit {
 /// What is made, by key (Ctx::made), and the nodes put among the frame's by the last build, by their slots: taken out
 /// as each build begins (made_detach) for the build to make its own in their places.
 // kept across runs: let go as a run begins (made_forget)
-let made_roots : Map[Int, Made] = {}
+let made_roots : Map[Int, Made] = Map([])
 
 ///|
 // kept across runs: written as each build puts what is made among the frame's nodes
@@ -264,19 +264,19 @@ let made_placed : Array[(Int, Node)] = []
 /// What a press on each node made does, by its id, as it was last put among the frame's (Made::on_press), till it is
 /// let go: one kept in a list's row put back unbuilt with it does as it did.
 // kept across runs: written as what is made is put among the frame's nodes, let go with it
-let made_presses : Map[Int, () -> Unit] = {}
+let made_presses : Map[Int, () -> Unit] = Map([])
 
 ///|
 /// What the second of two presses on each target does in place of a press (Ctx::on_double_press), by its id, as its
 /// box was last built.
 // kept across runs: written as what says it is built; a run's start clears it
-let made_double_presses : Map[Int, () -> Unit] = {}
+let made_double_presses : Map[Int, () -> Unit] = Map([])
 
 ///|
 /// What a part beside each target does as a press on the target is let go, as well as the target's own (a popover its
 /// trigger opens: Ctx::on_press_beside), by its id, as it was last built.
 // kept across runs: written as what says it is built; a run's start clears it
-let made_beside_presses : Map[Int, () -> Unit] = {}
+let made_beside_presses : Map[Int, () -> Unit] = Map([])
 
 ///|
 /// A run begins: nothing made is kept.
@@ -497,7 +497,7 @@ priv struct KeysTaken {
 ///|
 /// The keys taken over each field (by the field's id, its owner): one part's at a time, the last build's to say it.
 // kept across runs: said as each build builds what takes them, let go as a build does not; a run's start clears it
-let keys_taken : Map[Int, KeysTaken] = {}
+let keys_taken : Map[Int, KeysTaken] = Map([])
 
 ///|
 /// The keys of field `owner` (the id that has the focus as they come: its editor's) that the part being built over it

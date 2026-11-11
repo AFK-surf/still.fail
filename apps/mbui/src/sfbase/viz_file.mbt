@@ -132,7 +132,7 @@ fn viz_origin(url : String) -> String {
 
 ///|
 pub fn viz_tokens_json(dark : Bool) -> String {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   for t in viz_tokens(dark) {
     m[t.0] = Json::string(t.1)
   }

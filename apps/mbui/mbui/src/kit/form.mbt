@@ -116,8 +116,8 @@ pub fn form(
       s
     }
   }
-  let values : Map[String, String] = {}
-  let errors : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
+  let errors : Map[String, String] = Map([])
   let mut entered = false
   let mut pressed = false
   let fi = c.box(w~, gap=16.0, fn() {

@@ -15,7 +15,7 @@ pub(all) enum ImagePixels {
 
 ///|
 /// Read back, by the long side asked for and the source ("BUCKET SRC").
-let pixels_read : Map[String, ImagePixels] = {}
+let pixels_read : Map[String, ImagePixels] = Map([])
 
 ///|
 /// The pixels of the image at `src` (a path, an http(s) URL, a key given to image_bytes) decoded to at most `px` on its

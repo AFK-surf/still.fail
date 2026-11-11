@@ -256,7 +256,7 @@ fn sheet_node(
       let capped_of = fn(x : PanelOf) { x.tall > 0.0 && !x.form }
       // (an old body a share of the window tall: as tall as its lists say they would be, where one says, up to that
       // share (the host's capped_want's), else that share; told by its old view as it is built, by page)
-      let says : Map[Int, @signals.Signal[Bool]] = {}
+      let says : Map[Int, @signals.Signal[Bool]] = Map([])
       let says_of = fn(n : Int) {
         match says.get(n) {
           Some(s) => s
@@ -501,14 +501,14 @@ fn sheet_node(
       }
       // (each page's slide: where it is off to the sheet's side, in the sheet's widths (0 in place, -1 off to its
       // start, 1 off to its end), from where, to where, from when and how long, said as a page is put on or taken off)
-      let ways : Map[Int, @signals.Signal[(Double, Double, Double, Double)]] = {}
+      let ways : Map[Int, @signals.Signal[(Double, Double, Double, Double)]] = Map([])
       let way_at = fn(w : (Double, Double, Double, Double), t : Double) {
         w.1 + @ui.move_path(w.0 - w.1, 0.0, t - w.2, w.3).0
       }
       // (each page off to a side once its slide there is over: laid out nowhere then, drawn and read out not at all,
       // kept as it was left; told at that moment, and taken back at the cause of its way back)
-      let aways : Map[Int, @signals.Signal[Bool]] = {}
-      let dues : Map[Int, () -> Unit] = {}
+      let aways : Map[Int, @signals.Signal[Bool]] = Map([])
+      let dues : Map[Int, () -> Unit] = Map([])
       let away_after = fn(n : Int, w : (Double, Double, Double, Double)) {
         match dues.get(n) {
           Some(d) => d()

@@ -17,7 +17,7 @@ let hang_gate : HangGate = HangGate::new()
 
 ///|
 /// The subscriptions a switch being timed took on (by their ids), until their first message.
-let timed : Map[Int, Bool] = {}
+let timed : Map[Int, Bool] = Map([])
 
 ///|
 /// The host's reports set going, before the app's first frame.
@@ -66,7 +66,7 @@ fn reports_start() -> Unit {
           m["hangs_unsent"] = Json::number(unsent.to_double())
           // (what the core said meanwhile to ids nothing held, let be unread, by what the ids were: how many, their
           // length; none: not said)
-          let unheld : Map[String, Json] = {}
+          let unheld : Map[String, Json] = Map([])
           for u in @core.unheld_said() {
             unheld[u.0] = Json::array([Json::number(u.1.to_double()), Json::number(u.2.to_double())])
           }
@@ -98,7 +98,7 @@ fn reports_start() -> Unit {
         let (bytes, parts) = match value {
           Some(v) => {
             let (n, heavy) = @core.weights(v)
-            let said : Map[String, Json] = {}
+            let said : Map[String, Json] = Map([])
             if n >= weights_floor {
               for p in heavy {
                 said[p.0] = Json::number(p.1.to_double())

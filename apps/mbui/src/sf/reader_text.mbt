@@ -310,7 +310,7 @@ fn book_of(title : String, book : ReadBook, encoding : String, truncated : Bool,
     let (chunks, starts) = chunk_text(words)
     ([], chunks, starts)
   }
-  let heads : Map[Int, Bool] = {}
+  let heads : Map[Int, Bool] = Map([])
   for h in book.heads {
     heads[h] = true
   }

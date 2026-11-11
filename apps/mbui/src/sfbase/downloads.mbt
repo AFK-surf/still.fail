@@ -178,7 +178,7 @@ pub fn downloads_frame(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// Each download of `listed` all here taken (once) and saved.
 fn take_ready(src : Source, listed : Array[Json]) -> Unit {
-  let ready : Map[String, Bool] = {}
+  let ready : Map[String, Bool] = Map([])
   for d in listed {
     if text(Some(d), "state") == "ready" {
       ready[text(Some(d), "id")] = true

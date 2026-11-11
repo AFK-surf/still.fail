@@ -1070,7 +1070,7 @@ fn signal_client_calls(client : @core.Client) -> Source {
 /// What of `sent` (a client's messages out) is a chats' list asked, let go of, or told its window: `sub`, `unsub`,
 /// `window <rows>`, in order.
 fn chats_sent(sent : Array[String]) -> Array[String] {
-  let ids : Map[Int, Bool] = {}
+  let ids : Map[Int, Bool] = Map([])
   let out : Array[String] = []
   for text in sent {
     let j = @json.parse(text) catch { _ => continue }
@@ -1387,7 +1387,7 @@ test "a topic signal keeps following when a direct reader leaves the shared subs
 test "a topic signal still watched when the core client resets subscribes again" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
-  let waits : Map[Int, String] = {}
+  let waits : Map[Int, String] = Map([])
   let ticket = Ref(0)
   client.track(fn(what) {
     ticket.val += 1

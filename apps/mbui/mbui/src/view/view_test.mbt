@@ -365,7 +365,7 @@ test "what holds a button drawn off and faded: the button drawn and pressed wher
 ///|
 test "two rows, one changed: the other row's bindings run nothing, given its items again as they were" {
   let items = @signals.signal([{ key: "a", words: "甲" }, { key: "b", words: "乙" }])
-  let runs : Map[String, Int] = {}
+  let runs : Map[String, Int] = Map([])
   let t = @view.Tree::new(fn(root) {
     root.each(fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
       let k = item.get().key

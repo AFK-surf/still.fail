@@ -27,8 +27,8 @@ fn cg_rows(swap : Int, then : Array[String], frames? : Double = 1000.0 / 60.0) -
   t.frame(390.0, 844.0) |> ignore
   t.event(100.0, fn() { keys.set(["头", "处理中"]) })
   let ys = []
-  let rest : Map[String, Double] = {}
-  let last : Map[String, Double] = {}
+  let rest : Map[String, Double] = Map([])
+  let last : Map[String, Double] = Map([])
   let mut i = 0
   let mut at = 100.0
   let mut swapped = false

@@ -370,11 +370,11 @@ let probe_env : Ref[Int] = Ref(-1)
 /// on); and what the app asked of the core, by name, each its count. Said and begun again with each summary of the
 /// frames (perf_said).
 // kept across runs: the record's counts, taken by perf_said
-let perf_ins : Map[String, (Int, Int, Double)] = {}
+let perf_ins : Map[String, (Int, Int, Double)] = Map([])
 
 ///|
 // kept across runs: the record's counts, taken by perf_said
-let perf_outs : Map[String, Int] = {}
+let perf_outs : Map[String, Int] = Map([])
 
 ///|
 fn perf_in(what : String, text : String, bytes : Bytes?, ms : Double) -> Unit {

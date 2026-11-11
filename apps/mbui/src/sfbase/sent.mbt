@@ -3,7 +3,7 @@
 
 ///|
 /// What was sent from each chat (its station and session, `\u{1}` between), not in the core's view yet.
-let local_sending : Map[String, Array[LocalSent]] = {}
+let local_sending : Map[String, Array[LocalSent]] = Map([])
 
 ///|
 /// What was sent from chat `rk` and is not in its view yet, as its list takes it over.
@@ -57,7 +57,7 @@ pub fn local_sent(o : Outgoing) -> Bool {
 /// The rows of the view `v` there when words were sent: an outbox entry's, a message's, and the outbox entry it was
 /// (rows are keyed by it: row_keys).
 fn sent_before(v : ChatView) -> Map[String, Bool] {
-  let before : Map[String, Bool] = {}
+  let before : Map[String, Bool] = Map([])
   for o in v.outbox {
     before["o:" + o.id] = true
   }
@@ -223,13 +223,13 @@ pub fn sent_local_gone(rk : String, key : String) -> Unit {
 /// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
 /// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image). Written only by
 /// sent_picture_kept, which tells what a node of the window's tree read of it (sent_picture_told).
-let sent_pictures : Map[String, String] = {}
+let sent_pictures : Map[String, String] = Map([])
 
 ///|
 /// What a node read of sent_pictures (sent_picture_told), by its key: told as that one is kept, made as one is first
 /// read so, let go as nothing reads it any more. The old views' reads (sent_picture) track nothing.
 // kept across runs: let go with sent_pictures (sent_reset)
-let sent_pictures_told : Map[String, @signals.Signal[Int]] = {}
+let sent_pictures_told : Map[String, @signals.Signal[Int]] = Map([])
 
 ///|
 /// The picture an image sent from here was picked as, kept by `key` (sent_key's, or "upload\u{1}" and its upload's

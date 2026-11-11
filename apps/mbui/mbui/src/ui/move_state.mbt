@@ -216,7 +216,7 @@ pub fn Ctx::move_state(
   if self.still() {
     return
   }
-  let names : Map[String, FixedArray[Bool]] = {}
+  let names : Map[String, FixedArray[Bool]] = Map([])
   let vars : Array[String] = []
   for m in moves {
     let (name, props) = m

@@ -1122,11 +1122,11 @@ pub fn list_keys(
   }
   lm.changed_frame = frame
   // (the rows between, before and now)
-  let old : Map[Int, Int] = {}
+  let old : Map[Int, Int] = Map([])
   for i in lead..<(nb - tail) {
     old[before[i]] = i
   }
-  let fresh : Map[Int, Int] = {}
+  let fresh : Map[Int, Int] = Map([])
   for i in lead..<(nk - tail) {
     fresh[ks[i]] = i
   }
@@ -1138,7 +1138,7 @@ pub fn list_keys(
   // which of the rows there before and now went ahead of others (those alike at the start and the end went ahead of
   // none)
   let mut kept_i = 0
-  let kept_before : Map[Int, Int] = {}
+  let kept_before : Map[Int, Int] = Map([])
   let mut j = 0
   for i in lead..<(nb - tail) {
     if fresh.contains(before[i]) {
@@ -1378,7 +1378,7 @@ pub fn reveal_height(c : @ui.Ctx, key : String) -> Double {
 /// shows is laid out (layout_entry), kept while what asks for the room (reveal, reveal_height) is built, its room shut
 /// too; let go with that (reveal_kept).
 // kept across runs: forgotten as a Tester starts anew (reset)
-let reveal_heights : Map[Int, Double] = {}
+let reveal_heights : Map[Int, Double] = Map([])
 
 ///|
 /// Room `k` asked by what is built now: its height kept while that is built, let go once it is not.
@@ -1461,7 +1461,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   let frame = c.frame_number()
   measures_laid_in.val = frame
   let still = c.still()
-  let scrolled : Map[Int, Double] = {}
+  let scrolled : Map[Int, Double] = Map([])
   // (shapes first: what is carried on one's ground is placed by where that is this frame)
   let order = mo.entries.filter(fn(e) { e.reshape })
   if !order.is_empty() {
@@ -1513,20 +1513,20 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 /// (where to, by what), set out again as long as that one, so what moves together for one cause (a composer's ground,
 /// its words, its ＋ and its send) is on one clock (sf/motion.mbt: as long as its way is far).
 // kept across runs: cleared as each frame's layout begins, taken as it ends (after_layout)
-let together : Map[String, (Double, Array[(Anim, Double, Spec, Double?)])] = {}
+let together : Map[String, (Double, Array[(Anim, Double, Spec, Double?)])] = Map([])
 
 ///|
 /// For each cause (`by`) a shape set off for at a moment said (reshape's `at`): that moment, from which what moves for
 /// it this frame sets out.
 // kept across runs: cleared as each frame's layout begins
-let cause_at : Map[String, Double] = {}
+let cause_at : Map[String, Double] = Map([])
 
 ///|
 /// For each cause (`by`) a shape set off for from its foot (reshape's `foot`): the frame it did, and how far its foot
 /// moved in that frame for nothing it changes for, which what moves with it takes at once. Kept for the frame, not for
 /// one build of it: a build again of that frame (its rows kept or not) reads what the first did.
 // (forgotten as the app is reset: frames are counted again from there, a cause's frame of before no frame of now)
-let foot_moved : Map[String, (Int, Double)] = {}
+let foot_moved : Map[String, (Int, Double)] = Map([])
 
 ///|
 /// How far the foot of the shape set off for cause `by` from its foot in frame `frame` moved for nothing it changes for
@@ -2428,24 +2428,24 @@ fn draw_ghosts(c : @ui.Ctx, li : Int) -> Unit {
 /// What reads where a node kept by its key lies (measured_rect: where a flight lands) as it is built, told as it moves:
 /// a signal by the key, made as it is first read.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_at : Map[Int, @signals.Signal[Int]] = {}
+let measure_at : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// What reads how big a node kept by its key is, or whether it is laid out (measured, measured_size, measured_rect: a
 /// measure, a reveal's content) as it is built, told as that changes, not as it moves (a page it is on sliding in): a
 /// signal by the key, made as it is first read.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_size : Map[Int, @signals.Signal[Int]] = {}
+let measure_size : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// What reads only how tall a node kept by its key is (measured), told as that changes, not as it gets wider.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_tall : Map[Int, @signals.Signal[Int]] = {}
+let measure_tall : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// What reads the resolved corners of a measured node, independently of its position and size.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_radii : Map[Int, @signals.Signal[Int]] = {}
+let measure_radii : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// Measure `key` read of `said` as what is built is built: built again as what it reads of it changes.
@@ -2522,7 +2522,7 @@ fn measured_now(r : Rec?) -> (Double, Double, Double, Double, (Double, Double, D
 /// `f`, the measures it tells told only once it is done, each whose kept came out otherwise than before it: a build of
 /// the frame again lays it out as the first did, and two nodes measured by one key (two pages' alike) each told in it.
 fn measures_told_once(c : @ui.Ctx, f : () -> Unit) -> Unit {
-  let was : Map[Int, (Double, Double, Double, Double, (Double, Double, Double, Double), Bool)] = {}
+  let was : Map[Int, (Double, Double, Double, Double, (Double, Double, Double, Double), Bool)] = Map([])
   mo.recs.each(fn(k, r) { was[k] = measured_now(Some(r)).unwrap() })
   let held = []
   let outer = measures_held.val
@@ -2547,12 +2547,12 @@ fn measures_told_once(c : @ui.Ctx, f : () -> Unit) -> Unit {
 ///|
 /// The keys of the measures read while the frame probe counts (@ui.perf_counting), by their hash.
 // kept across runs: the performance record's, read by nothing else
-let measure_names : Map[Int, String] = {}
+let measure_names : Map[Int, String] = Map([])
 
 ///|
 /// How often each measure read told what read it since the record last asked, by its key and why.
 // kept across runs: the performance record's, read by nothing else
-let measure_told : Map[String, Int] = {}
+let measure_told : Map[String, Int] = Map([])
 
 ///|
 /// Measure `key` telling what reads it, for `why`: counted for the performance record ("measures:", the most told

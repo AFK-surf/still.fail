@@ -6,12 +6,12 @@
 ///|
 /// Each page's blocks as given and as its list made of them, by the page's key (scroll_page's `keys`).
 // kept across runs: put back by settings' reset (parts_reset)
-let page_rows : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
+let page_rows : Map[String, @ui.ListRows[(String, () -> Unit)]] = Map([])
 
 ///|
 /// Each page's keys that can make its list continuous, as last given.
 // kept across runs: put back by settings' reset (parts_reset)
-let page_keys : Map[String, Array[String]] = {}
+let page_keys : Map[String, Array[String]] = Map([])
 
 ///|
 fn page_rows_of(key : String) -> @ui.ListRows[(String, () -> Unit)] {
@@ -114,7 +114,7 @@ fn scroll_page(
       page_keys[key] = present
       let watched = present.iter().any(fn(k) { was.contains(k) })
       // (what each shows, by its key: one showing another thing goes to its new height)
-      let shows : Map[String, String] = {}
+      let shows : Map[String, String] = Map([])
       match versions {
         Some(vs) if vs.length() == ks.length() =>
           for i, k in ks {

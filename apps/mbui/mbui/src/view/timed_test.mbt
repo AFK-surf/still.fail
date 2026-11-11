@@ -10,7 +10,7 @@ test "the tree's work timed by part: its structures' changes, its bindings, its 
   t.frame(300.0, 600.0, now=0.0) |> ignore
   // (a clock a ms on at each reading: every part timed comes out 1 ms at least)
   let clock = Ref(0.0)
-  let took : Map[String, Double] = {}
+  let took : Map[String, Double] = Map([])
   let listening = Ref(true)
   t.timed_by(
     Some(

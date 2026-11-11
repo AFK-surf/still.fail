@@ -83,10 +83,10 @@ let hover_now : Ref[(String, Int)?] = Ref(None)
 let hover_shut : Ref[Bool] = Ref(false)
 
 ///|
-let hover_open : Map[String, Bool] = {}
+let hover_open : Map[String, Bool] = Map([])
 
 ///|
-let hover_holds : Map[String, Int] = {}
+let hover_holds : Map[String, Int] = Map([])
 
 ///|
 /// Whether card `key` is kept open by what was pressed in it.
@@ -522,7 +522,7 @@ priv struct GoneLine {
 }
 
 ///|
-let ran_lines : Map[Int, RanLines] = {}
+let ran_lines : Map[Int, RanLines] = Map([])
 
 ///|
 fn hover_reset() -> Unit {

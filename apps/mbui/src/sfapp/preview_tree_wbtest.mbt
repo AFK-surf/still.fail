@@ -723,7 +723,7 @@ test "viewer on the tree: its whole answered later, between frames, as the core 
 test "viewer on the tree: the one beside it read ahead, stepped to before its answer came: read once, shown whole as it comes" {
   new_run()
   let base = fixture("chat-preview-step")
-  let asked : Map[String, Int] = {}
+  let asked : Map[String, Int] = Map([])
   let later = 2000.0
   let src : Source = {
     ..base,
@@ -1139,7 +1139,7 @@ test "viewer on the tree, a wide window: a picture as it comes says how much has
   new_run()
   let base = fixture("chat-preview-step")
   // (each picture's whole held, how much of it has come told by the test)
-  let said : Map[String, (Json) -> Unit] = {}
+  let said : Map[String, (Json) -> Unit] = Map([])
   let src : Source = {
     ..base,
     read_going: fn(name, params, on_value, done) {
@@ -1168,8 +1168,8 @@ test "viewer on the tree, a phone's screen: a picture as it comes, its floating 
   new_run()
   let base = fixture("chat-preview-step")
   // (its whole held: how much of it has come told by the test, then the whole given)
-  let said : Map[String, (Json) -> Unit] = {}
-  let held : Map[String, () -> Unit] = {}
+  let said : Map[String, (Json) -> Unit] = Map([])
+  let held : Map[String, () -> Unit] = Map([])
   let src : Source = {
     ..base,
     read_going: fn(name, params, on_value, done) {
@@ -1229,7 +1229,7 @@ test "viewer on the tree, a phone's screen: a picture as it comes, its floating 
 test "viewer on the tree, a phone's screen: a picture coming, its card shown: at rest between what the core says; closed as it comes, nothing of it reading the clock once it is gone" {
   new_run()
   let base = fixture("chat-preview-step")
-  let said : Map[String, (Json) -> Unit] = {}
+  let said : Map[String, (Json) -> Unit] = Map([])
   let src : Source = {
     ..base,
     read_going: fn(name, params, on_value, done) {
@@ -1550,8 +1550,8 @@ fn folded_preview(
 
 ///|
 test "viewer on the tree, a fold half open wider than a phone: its floating bar its nodes, its kind and size after its name with its tools, none of the old bar's and no zoom's tools (zoomed by the hand and the keys); made narrower than a phone, the kind and size gone, the bar the same nodes" {
-  let said : Map[String, (Json) -> Unit] = {}
-  let given : Map[String, () -> Unit] = {}
+  let said : Map[String, (Json) -> Unit] = Map([])
+  let given : Map[String, () -> Unit] = Map([])
   let t = folded_preview(890.0, true, said, given)
   assert_true(@sf.layout(890.0) is Small, msg="a small screen however wide")
   let v = viewer.get().unwrap()
@@ -1840,7 +1840,7 @@ fn wide_bar_inset(t : @ui.Tester, v : Viewer, inset : Bool) -> ((Double, Bool, B
 ///|
 test "viewer on the tree, a wide window, the bar across the top the same coming and whole, the window gone full screen and back (its title bar the system's, then the app's again), the same viewer, on a Mac and on Windows: clear of the window's buttons at its left (a Mac's) while they are in it, its last tool clear of them at its right (Windows', the app's own) while they are, else at the window's corner; a press on its blank moving the window then, nothing under it taking the press" {
   for platform in [0, 3] {
-    let given : Map[String, () -> Unit] = {}
+    let given : Map[String, () -> Unit] = Map([])
     let t = held_wide_preview(given, platform~)
     let v = viewer.get().unwrap()
     assert_true(v.coming() && v.in_tree, msg="\{platform}: coming, the tree's viewer")
@@ -1937,7 +1937,7 @@ fn wide_name_middle(t : @ui.Tester, name : String) -> Double {
 
 ///|
 test "viewer on the tree, a wide window, the bar across the top: its file's name in the window's middle, coming and whole, however wide the way back and the tools are" {
-  let given : Map[String, () -> Unit] = {}
+  let given : Map[String, () -> Unit] = Map([])
   let t = held_wide_preview(given)
   let v = viewer.get().unwrap()
   assert_true(v.coming(), msg="coming")
@@ -1954,7 +1954,7 @@ test "viewer on the tree, a wide window, the bar across the top: its file's name
 ///|
 test "viewer on the tree, a wide window, the bar across the top: its last tool as far in from the window's side as a page's bar's last, on a Mac (its window's corner 16, followed), on Windows 11 (8, too square to follow) and on an Android tablet (none), 1280 wide and 840" {
   for (platform, corner, w) in [(0, 16.0, 1280.0), (3, 8.0, 1280.0), (2, 0.0, 1280.0), (2, 0.0, 840.0)] {
-    let given : Map[String, () -> Unit] = {}
+    let given : Map[String, () -> Unit] = Map([])
     let t = held_wide_preview(given, platform~, corner~, w~)
     let v = viewer.get().unwrap()
     (given.get(v.file.name).unwrap())()
@@ -2027,7 +2027,7 @@ test "viewer on the tree, an Android tablet 840 wide, a picture whose name is fa
 fn wide_bar_room(what : String, w : Double, platform : Int, fs : Double, hold : Bool) -> Map[String, (Double, Double)] {
   new_run()
   let base = fixture("chat-preview-" + what)
-  let said : Map[String, (Json) -> Unit] = {}
+  let said : Map[String, (Json) -> Unit] = Map([])
   let src : Source = {
     ..base,
     read_going: fn(name, params, on_value, done) {
@@ -2057,7 +2057,7 @@ fn wide_bar_room(what : String, w : Double, platform : Int, fs : Double, hold : 
     t.draw()
   }
   t.run_for(@kit.progress_known_ms)
-  let out : Map[String, (Double, Double)] = {}
+  let out : Map[String, (Double, Double)] = Map([])
   // (coming and the bar its nodes: 1; else 0)
   out["nodes"] = (if v.coming() == hold && @sfbase.bar_as_nodes(v, w) { 1.0 } else { 0.0 }, 0.0)
   let at = fn(k : String, l : String) {
@@ -2309,7 +2309,7 @@ test "viewer on the tree, a wide window, transparency reduced: the way to the pi
 
 ///|
 test "viewer on the tree, a wide window, its picture coming: the bar across the top's way back clicked, the viewer closing as it is let go, no frame drawn after it" {
-  let given : Map[String, () -> Unit] = {}
+  let given : Map[String, () -> Unit] = Map([])
   let t = held_wide_preview(given)
   let v = viewer.get().unwrap()
   assert_true(v.coming() && v.in_tree, msg="coming, the tree's viewer")
@@ -2321,8 +2321,8 @@ test "viewer on the tree, a wide window, its picture coming: the bar across the 
 
 ///|
 test "viewer on the tree, a wide window, its picture coming as the core says it: not known, then known, then more, then whole; each as it is said (its bar read out), drawn so; whole, its bar gone and its tools there; closed while it comes, nothing read of the clock after" {
-  let given : Map[String, () -> Unit] = {}
-  let said : Map[String, (Json) -> Unit] = {}
+  let given : Map[String, () -> Unit] = Map([])
+  let said : Map[String, (Json) -> Unit] = Map([])
   let t = held_wide_preview(given, said~)
   let v = viewer.get().unwrap()
   assert_true(v.coming() && @sfbase.bar_as_nodes(v, 1280.0), msg="coming: the bar its nodes")
@@ -2351,7 +2351,7 @@ test "viewer on the tree, a wide window, its picture coming as the core says it:
   assert_true(t.find("正在读取") is None, msg="whole: its words gone")
   assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 1, msg="whole: its copy")
   // (another, closed while it comes)
-  let given2 : Map[String, () -> Unit] = {}
+  let given2 : Map[String, () -> Unit] = Map([])
   let t2 = held_wide_preview(given2)
   let v2 = viewer.get().unwrap()
   assert_true(v2.coming(), msg="coming again")

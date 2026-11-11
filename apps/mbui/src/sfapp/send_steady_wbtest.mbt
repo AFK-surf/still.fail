@@ -48,13 +48,13 @@ fn send_at_pace(
   }
   // (words drawn once only: another of the same, the agent's name on its line say, is not the one followed)
   let once = fn(said : Array[(String, Double, Double, Double, Double, Double)]) {
-    let n : Map[String, Int] = {}
+    let n : Map[String, Int] = Map([])
     for w in said {
       n[w.0] = n.get(w.0).unwrap_or(0) + 1
     }
     n
   }
-  let before : Map[String, Double] = {}
+  let before : Map[String, Double] = Map([])
   let said = t.words_said()
   let counts = once(said)
   // (not what is said under the viewer's own last message, its time or that it is on its way: under the new one once
@@ -66,10 +66,10 @@ fn send_at_pace(
     }
   }
   tap_send(t)
-  let last : Map[String, Double] = {}
-  let way : Map[String, Double] = {}
-  let turns : Map[String, Int] = {}
-  let down : Map[String, Double] = {}
+  let last : Map[String, Double] = Map([])
+  let way : Map[String, Double] = Map([])
+  let turns : Map[String, Int] = Map([])
+  let down : Map[String, Double] = Map([])
   // (sent after others, their answer is not waited for: till the core, then the station, has them, and they are in)
   let end_at = t.time() +
     core +
@@ -79,7 +79,7 @@ fn send_at_pace(
     3000.0
   while t.time() < end_at {
     t.frame()
-    let seen : Map[String, Double] = {}
+    let seen : Map[String, Double] = Map([])
     // (the frame's words read once, not twice: a tenth or so of this file's time, run at each of CI's rates)
     let said = t.words_said()
     let counts = once(said)
@@ -448,17 +448,17 @@ test "words sent in a chat whose turn is over: 已完成 closing as they come an
   let sent = t.time()
   // (where each of the words drawn, once on the screen, was the frame before, and how far down any went in a frame;
   // till 处理中's row is open: it comes as the station takes them, its room on the list's way from then)
-  let last : Map[String, Double] = {}
+  let last : Map[String, Double] = Map([])
   let bad : Array[String] = []
   let mut came = false
   while t.time() < sent + 350.0 + 2.0 * @ui.move_most_ms {
     t.frame()
     let said = t.words_said()
-    let n : Map[String, Int] = {}
+    let n : Map[String, Int] = Map([])
     for w in said {
       n[w.0] = n.get(w.0).unwrap_or(0) + 1
     }
-    let seen : Map[String, Double] = {}
+    let seen : Map[String, Double] = Map([])
     for w in said {
       if n.get(w.0) == Some(1) && w.5 > 0.0 && w.2 + w.4 < field && w.2 + w.4 > 0.0 {
         seen[w.0] = w.2

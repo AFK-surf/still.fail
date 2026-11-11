@@ -478,7 +478,7 @@ pub fn service_unanswered(sink : Sink, path : String, status : Int, words : Stri
 /// emptied or expired one left out).
 pub fn cookie_jar(header : String, set : Array[(String, String)]) -> String {
   let names : Array[String] = []
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   for one in header.split(";") {
     let one = one.trim().to_owned()
     match one.find("=") {

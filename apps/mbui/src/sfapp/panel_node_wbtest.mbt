@@ -230,7 +230,7 @@ fn panel_out_drawn(t : @ui.Tester) -> String {
   let inside = fn(px : Double, py : Double) { px >= x - 1.0 && px <= x + w + 1.0 && py >= y - 1.0 && py <= y + h + 1.0 }
   let f = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
   let glyphs = t.drawn_glyphs().filter(fn(g) { inside(g.0, g.1) })
-  let alphas : Map[Int, Int] = {}
+  let alphas : Map[Int, Int] = Map([])
   for g in glyphs {
     let a = (g.2 & 0xFF).to_int()
     alphas[a] = alphas.get(a).unwrap_or(0) + 1

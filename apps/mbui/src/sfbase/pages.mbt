@@ -132,7 +132,7 @@ priv struct PageSource {
 }
 
 ///|
-let page_sources : Map[Int, Array[PageSource]] = {}
+let page_sources : Map[Int, Array[PageSource]] = Map([])
 
 ///|
 priv struct LeftPageChat {
@@ -143,7 +143,7 @@ priv struct LeftPageChat {
 ///|
 // An explicitly absent entry means a navigation entry left before it had a page source. A missing map entry is an
 // older caller that placed a page directly in left_pages and still uses the surrounding source.
-let left_page_sources : Map[Int, LeftPageChat?] = {}
+let left_page_sources : Map[Int, LeftPageChat?] = Map([])
 
 ///|
 let page_source_seen : Ref[Int] = Ref(0)
@@ -155,7 +155,7 @@ priv struct PendingChatReader {
 }
 
 ///|
-let pending_chat_readers : Map[Int, PendingChatReader] = {}
+let pending_chat_readers : Map[Int, PendingChatReader] = Map([])
 
 ///|
 /// Whether a row is still keeping an early reader for this navigation entry.
@@ -252,7 +252,7 @@ pub fn handoff_chat_open(r : ChatRef, reader : TopicLease) -> Unit {
 /// The readers a page handed over as it opened another in its place (open_handing), by the entry opened's serial:
 /// each the entry's as its view is made (page_entry_source), let go once its first build has read what it reads
 /// (page_entry_read).
-let handed_readers : Map[Int, Array[TopicLease]] = {}
+let handed_readers : Map[Int, Array[TopicLease]] = Map([])
 
 ///|
 /// `open` run (a page opening the next in its place: a folder the folder it goes into), with this page's reader of
@@ -904,7 +904,7 @@ pub fn reset() -> Unit {
 ///|
 /// Each hold's press as last felt (`what` held: a message's words picked, a link's menu, a page's bar folded): once a
 /// press, whichever of a frame's builds saw it.
-let felt_holds : Map[String, Int] = {}
+let felt_holds : Map[String, Int] = Map([])
 
 ///|
 /// Felt as the hold `what` takes the press it is,

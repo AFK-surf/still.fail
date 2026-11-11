@@ -19,7 +19,7 @@ fn focus_tester(
   d_says? : @signals.Signal[Bool] = @signals.signal(true),
 ) -> (Tester, Ref[Int], Map[String, @view.NodeId]) {
   let ob = Ref(0)
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
   t.check_looks(false)
   set_view_app(fn(root) {
@@ -197,7 +197,7 @@ test "a screen reader's Focus on a node as it may give it then: kept from what i
 test "Tab between two nodes builds none of the old views again; Tab to an old view's widget builds that one again, its ring shown, not the other" {
   let built = [0, 0]
   let ring = Ref(false)
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
   t.check_looks(false)
   set_view_app(fn(root) {
@@ -284,7 +284,7 @@ fn layered_tester(
   let field_id = Ref(0)
   let layer_id = Ref(0)
   let ring = Ref(false)
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let field = Field::new()
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   t.check_looks(false)

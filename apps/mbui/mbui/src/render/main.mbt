@@ -246,7 +246,7 @@ fn main {
 
 ///|
 /// The glyphs placed, by their keys (instances).
-let placed : Map[Int, (Double, Double, Double, Double)] = {}
+let placed : Map[Int, (Double, Double, Double, Double)] = Map([])
 
 ///|
 /// The parts of the next frame drawn again told to the renderer (as a host's frame tells them: src/ui/hostcall.mbt).
@@ -281,7 +281,7 @@ fn instances(dl : Dl, path : String, atlas : @hostapi.Atlas, colour_atlas : @hos
   // each glyph made again: its atlas place here (placed as an app places it: @hostapi.Atlas), by the list's
   let shaped = FixedArray::make(4096, 0.0)
   let g = FixedArray::make(8, 0.0)
-  let places : Map[Int, (Double, Double, Double, Double)] = {}
+  let places : Map[Int, (Double, Double, Double, Double)] = Map([])
   let mut unknown = 0
   dl.glyphs.each(fn(no, gl) {
     let (size, weight, style, cluster, text) = gl
@@ -329,7 +329,7 @@ fn instances(dl : Dl, path : String, atlas : @hostapi.Atlas, colour_atlas : @hos
     }
   })
   // each image decoded again
-  let ids : Map[Int, Int] = {}
+  let ids : Map[Int, Int] = Map([])
   let info = FixedArray::make(4, 0.0)
   dl.images.each(fn(no, im) {
     let (px, src, bytes) = im

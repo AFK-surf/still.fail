@@ -42,10 +42,10 @@ let clock_read_bars : Map[String, Int] = {
 
 ///|
 // kept across tests: each place said once (Tree::clock_read_in_binding), and the places of each bar's file found so far
-let clock_reads_said : Map[String, Bool] = {}
+let clock_reads_said : Map[String, Bool] = Map([])
 
 ///|
-let clock_read_places : Map[String, Array[String]] = {}
+let clock_read_places : Map[String, Array[String]] = Map([])
 
 ///|
 /// The file of a place (`module/path:line`).

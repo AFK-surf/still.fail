@@ -118,7 +118,7 @@ test "touch wide: an agent's history as the agent writes builds no old view's ro
   let with_live = fn(words : String) -> Json {
     match was {
       Object(m) => {
-        let o : Map[String, Json] = {}
+        let o : Map[String, Json] = Map([])
         for k, v in m {
           o[k] = v
         }
@@ -140,7 +140,7 @@ test "touch wide: an agent's history as the agent writes builds no old view's ro
         let p = base.topic(name, params).get().snapshot()
         match p.value {
           Some(Object(m)) => {
-            let o : Map[String, Json] = {}
+            let o : Map[String, Json] = Map([])
             for k, v in m {
               o[k] = v
             }
@@ -262,7 +262,7 @@ test "the desk's history beside a chat: a wheel up 60 at a time over turns whose
   let t = wheel_history(fn() { history })
   // (each turn's group by its own words, where it is drawn in the history beside the chat, made or not)
   let groups = fn() {
-    let at : Map[Int, Double] = {}
+    let at : Map[Int, Double] = Map([])
     for k in 0..<12 {
       match t.find("跑了命令 第\{k}轮") {
         Some((x, y)) if x > 800.0 => at[k] = y
@@ -297,7 +297,7 @@ test "the desk's history beside a chat: a wheel up 60 at a time over turns whose
 fn wheel_live(was : Json, words : String) -> Json {
   match was {
     Object(m) => {
-      let o : Map[String, Json] = {}
+      let o : Map[String, Json] = Map([])
       for k, v in m {
         o[k] = v
       }

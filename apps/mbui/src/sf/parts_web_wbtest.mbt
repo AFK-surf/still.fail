@@ -431,7 +431,7 @@ test "a list's row as a node in a side column: what stands at its first line's e
 test "a list's row as a node: its lines as high as their words' lines at the system's size of words, nothing over another, its mark across its first line's middle, a chat's row higher by as much as they are" {
   // (a mouse's and a finger's sizes; the default size of words and a phone's set larger; a row as high as what it
   // holds, its mark beside its first line, and a chat's row, as high as the theme says)
-  let rows : Map[String, Double] = {}
+  let rows : Map[String, Double] = Map([])
   for platform in [0, 2] {
     for high in [false, true] {
       for scale in [1.0, 1.3] {

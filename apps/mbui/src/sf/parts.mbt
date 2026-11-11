@@ -1534,7 +1534,7 @@ fn menu_items(
 ) -> Bool {
   let open = menu_is(key)
   let entries : Array[@kit.Entry] = []
-  let icons : Map[String, String] = {}
+  let icons : Map[String, String] = Map([])
   let danger : Array[String] = []
   for i, x in items {
     match x {
@@ -3691,7 +3691,7 @@ priv struct Handling {
 
 ///|
 /// The edges in hand, by their ids.
-let handlings : Map[Int, Handling] = {}
+let handlings : Map[Int, Handling] = Map([])
 
 ///|
 /// What the pointer does with the edge `id` of a column `width` wide, on its `edge`, a drag area across (Ctx::drag_on:
@@ -3790,7 +3790,7 @@ fn edge_state(over : Bool, on : Bool, active : Bool, line : Bool) -> Int {
 
 ///|
 /// How each edge showed last, by its key: as it changes, its look moves to the new one (the web's transitions).
-let edges_shown : Map[String, Int] = {}
+let edges_shown : Map[String, Int] = Map([])
 
 ///|
 /// A column's edge as it looks (parts.css.ts resizeHandle), 7 wide and as high as what holds
@@ -3899,7 +3899,7 @@ let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.css("bg=FieldHover"))
 /// The edges whose tip is put away, by their keys: pressed since the pointer came onto them (the web's tip.hide() as the
 /// pointer goes down: back only once it has left and come again). None while in hand; once let go, where the pointer
 /// was let go (on the edge, which followed it, wherever the edge was last drawn).
-let edge_tips_away : Map[String, (Double, Double)?] = {}
+let edge_tips_away : Map[String, (Double, Double)?] = Map([])
 
 ///|
 /// A tip that follows the pointer along a tall thin thing (usePointerTip: an edge), `id`: shown 300 ms after the pointer

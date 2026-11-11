@@ -728,7 +728,7 @@ pub fn Ctx::after_build_or_scroll(self : Ctx, key : String, f : () -> Unit) -> U
 /// What the frame's builds said to tell (Ctx::after_build, in the order said), once by its id: the last said of it,
 /// where the first was.
 fn tells_once(tells : Array[(Int, () -> Unit)]) -> Array[() -> Unit] {
-  let at : Map[Int, Int] = {}
+  let at : Map[Int, Int] = Map([])
   let out : Array[() -> Unit] = []
   for t in tells {
     match at.get(t.0) {
@@ -2603,14 +2603,14 @@ pub fn perf_counting() -> Bool {
 /// `painted: <painted_why>`, `looks`: frame_watch.mbt's, with where it was asked or read); the heaviest one's work and
 /// why; the messages posted to the app, by channel, each its count and bytes (messages_take).
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_whys : Map[String, (Int, Double)] = {}
+let probe_whys : Map[String, (Int, Double)] = Map([])
 
 ///|
 /// The motions the frames since the last summary were for, each its count and work (ms), by the motion their why names
 /// as what read the clock (frame_watch.mbt's built_motion: an Anim's key and who told it), whether it was built, laid
 /// out or painted for it.
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_motions : Map[String, (Int, Double)] = {}
+let probe_motions : Map[String, (Int, Double)] = Map([])
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
@@ -2618,13 +2618,13 @@ let probe_worst : Ref[(Double, String)] = { val: (0.0, "") }
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_channels : Map[String, (Int, Int)] = {}
+let probe_channels : Map[String, (Int, Int)] = Map([])
 
 ///|
 /// What else is said with each summary into the record (perf_also), by name: an app's (its core's calls and topics,
 /// its page, a remote screen's frames).
 // kept across runs: said once as an app starts
-let probe_also : Map[String, (Double) -> String] = {}
+let probe_also : Map[String, (Double) -> String] = Map([])
 
 ///|
 /// `f`'s line said with each summary of the frames into the device's performance record (@hostapi.perf_line) while it

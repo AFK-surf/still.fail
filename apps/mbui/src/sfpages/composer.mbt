@@ -2499,7 +2499,7 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
   c.semantics(b, Button, id~, label=([label] + on.map(fn(o) { o.1 })).join(" "), expanded=open)
   let entries = to.map(fn(o) { @kit.menu_check(o.thread.to_string(), o.on, label=o.place) })
   // each its platform's mark before its place, as beside 抄送
-  let marks : Map[String, (@ui.Ctx, Double) -> Unit] = {}
+  let marks : Map[String, (@ui.Ctx, Double) -> Unit] = Map([])
   for o in to {
     let via = o.via
     marks[o.thread.to_string()] = fn(c, _) { cc_mark(c, via) }

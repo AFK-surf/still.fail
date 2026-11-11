@@ -15,7 +15,7 @@ priv enum MermaidChart {
 
 ///|
 // kept across runs: the core's answers, by what was asked (mermaid_ask)
-let mermaid_charts : Map[String, MermaidChart] = {}
+let mermaid_charts : Map[String, MermaidChart] = Map([])
 
 ///|
 // kept across runs: how many answers came (a signal: a frame drawing a chart reads it, and comes again as one does)

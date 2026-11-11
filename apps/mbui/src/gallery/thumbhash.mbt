@@ -2,7 +2,7 @@
 // shown while the photo itself comes.
 
 ///|
-let hashed : Map[String, Bool] = {}
+let hashed : Map[String, Bool] = Map([])
 
 ///|
 /// Every Tester starts as the app does (mbui's on_reset): the pictures made here gone with its images.

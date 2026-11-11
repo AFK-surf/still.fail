@@ -6,7 +6,7 @@
 test "beside: below its anchor, its middle on its anchor's; above it where there is no room below; kept in the window; following its anchor moved" {
   let ax = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {
@@ -42,7 +42,7 @@ test "beside: leaving, or its anchor gone, it stays where it last went beside it
   let anchor_on = @signals.signal(true, same=fn(a, b) { a == b })
   let on = @signals.signal(true, same=fn(a, b) { a == b })
   let fade = @signals.signal(1.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.show(at_once=true, fn() { anchor_on.get() }, fn(a) {
@@ -140,7 +140,7 @@ test "lives_with: held beside its owner in one layer, the layer let go whole (a 
 test "beside: one beside another that goes beside a third, made and said the other way round: placed in their order, whatever order made or said; following the first's holder moved, in the one frame after; a colour alone changed, none placed again" {
   let hx = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ink = @signals.signal(0x000000FFL, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       // (the last of the chain made first: its anchor a node made after it)
@@ -188,8 +188,8 @@ test "beside: one beside another that goes beside a third, made and said the oth
 ///|
 test "beside: two beside each other (a ring), and one beside what it holds: each goes beside nothing, where it is laid out, frame after frame" {
   let grow = @signals.signal(30.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
-  let made : Map[String, @view.View] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
+  let made : Map[String, @view.View] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       for k in ["a", "b", "c"] {
@@ -230,7 +230,7 @@ test "beside: two beside each other (a ring), and one beside what it holds: each
 test "went_over: the side it went on as it is placed: moved along its anchor or within the room it has, the same; no room below, above; room again, below" {
   let ax = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {
@@ -272,7 +272,7 @@ test "went_over: the side it went on as it is placed: moved along its anchor or 
 ///|
 /// A tree in a window 400×500: an anchor 40×20 at (100, `ay`) while `on`, a node 60×484 beside it (Bottom, 6 off).
 fn went_tree(ay : @signals.Signal[Double], on : @signals.Signal[Bool]) -> (@view.Tree, Map[String, @view.NodeId]) {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.show(at_once=true, fn() { on.get() }, fn(s) {
@@ -326,7 +326,7 @@ test "beside a piece of its anchor (`piece`): by that piece, given how big the a
   // (a plain value, not followed: what the piece reads, as it is placed)
   let piece_at = Ref(Some((10.0, 5.0)))
   let given : Array[(Double, Double)] = []
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {
@@ -382,7 +382,7 @@ test "beside a piece of its anchor (`piece`): by that piece, given how big the a
 /// its start, moved `shift` further along (View::beside's along_offset); beside the piece (10, 0, 20, 20) of it where
 /// `piece`.
 fn beside_shifted(ax : Double, shift : Double, piece? : Bool = false) -> (Double, Double) {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {

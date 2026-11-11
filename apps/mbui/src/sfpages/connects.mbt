@@ -725,7 +725,7 @@ fn mine_filter_node(parent : @view.View, key : String, of : String, mine : () ->
 ///|
 /// Which filter's menu is open, by its key.
 // kept across runs: said by its button as its menu opens and goes; reset empties it
-let mine_filter_open : Map[String, Bool] = {}
+let mine_filter_open : Map[String, Bool] = Map([])
 
 ///|
 /// Whether filter `key`'s menu is open (tests).

@@ -1048,7 +1048,7 @@ fn fx_station_profile_groups(profiles : Array[Json]) -> Array[Json] {
 
 ///|
 fn fx_station_profile_states(profiles : Array[Json]) -> Json {
-  let states : Map[String, Json] = {}
+  let states : Map[String, Json] = Map([])
   for p in profiles {
     let pv = Some(p)
     let trouble = field(pv, "trouble")
@@ -1203,7 +1203,7 @@ fn fx_cx_more() -> Array[(String, Json)] {
     "gpt-6", "gpt-6-mini", "gpt-6-nano", "gpt-6-codex", "gpt-6-codex-mini", "gpt-5.5", "gpt-5.5-mini", "gpt-5.5-codex", "gpt-5",
     "gpt-5-mini", "o9", "o9-mini",
   ]..append(fx.models_added)
-  let names : Map[String, Json] = {}
+  let names : Map[String, Json] = Map([])
   for m in ids {
     names[m] = str(m.to_upper())
   }

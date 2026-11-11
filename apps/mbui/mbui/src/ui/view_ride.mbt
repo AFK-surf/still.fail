@@ -242,7 +242,7 @@ let ride_unkept : ByNode[Bool] = ByNode::new()
 /// stands for (Ctx::flat_from), drawn by the host itself where it keeps them.
 // kept across runs: let go with what kept them (ride_let_go), told to the host as the frame they were last in is
 // presented (ride_groups_told)
-let ride_groups : Map[Int, RideKept] = {}
+let ride_groups : Map[Int, RideKept] = Map([])
 
 ///|
 /// The groups made so far: a group's number is never another's, so the same header is never another's instances
@@ -938,7 +938,7 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
 /// The captures the glass of the row drawn again (Ctx::ride_again) took as it was painted, each the one it takes in
 /// this frame.
 // kept across runs: emptied as each row is drawn again
-let ride_caps : Map[Int, Int] = {}
+let ride_caps : Map[Int, Int] = Map([])
 
 ///|
 /// Row kept `k`'s instances `i0` until `i1` put after the frame's, moved by (dx, dy), their shapes' pieces where they

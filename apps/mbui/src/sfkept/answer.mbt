@@ -20,14 +20,14 @@ fn kept(call : String) -> Map[String, Json] {
     Some(t) => t
     None => {
       // an answer a line: [call, key, answer]
-      let t : Map[String, Json] = {}
+      let t : Map[String, Json] = Map([])
       for line in kept_answers.split("\n") {
         match (@json.parse(line.to_owned()) catch { _ => Json::null() }) {
           Array([String(call), String(key), answer]) =>
             match t.get(call) {
               Some(Object(m)) => m[key] = answer
               _ => {
-                let m : Map[String, Json] = {}
+                let m : Map[String, Json] = Map([])
                 m[key] = answer
                 t[call] = Json::object(m)
               }
@@ -81,7 +81,7 @@ fn not_kept(ask : Map[String, Json]) -> Result[(Json, Bytes?), Json]? {
 
 ///|
 /// The books asked of in this run, by the id each was answered with: its key in `reader.book`.
-let books : Map[Int, String] = {}
+let books : Map[Int, String] = Map([])
 
 ///|
 let next_book : Ref[Int] = Ref(1)
@@ -156,7 +156,7 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
           let id = next_book.val
           next_book.val += 1
           books[id] = key
-          let out : Map[String, Json] = {}
+          let out : Map[String, Json] = Map([])
           match entry.get("answer") {
             Some(Object(a)) =>
               for k, v in a {

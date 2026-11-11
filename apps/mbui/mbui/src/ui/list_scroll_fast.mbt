@@ -3,11 +3,11 @@
 
 ///|
 // kept across runs: stopped when the run is reset or the list is no longer laid out
-let list_hand_watches : Map[Int, @signals.Watch] = {}
+let list_hand_watches : Map[Int, @signals.Watch] = Map([])
 
 ///|
 // kept across runs: what the hand told since each list was last laid out
-let list_hand_dirty : Map[Int, Bool] = {}
+let list_hand_dirty : Map[Int, Bool] = Map([])
 
 ///|
 // kept across runs: the last build's readbacks, so a scroll may skip layout only if each projection stays the same
@@ -15,11 +15,11 @@ let list_fast_info_reads : Array[(String, () -> Bool)] = []
 
 ///|
 // kept across runs: the last build's exact position reads
-let list_fast_place_reads : Map[Int, (String, (Int, Double, Double)?)] = {}
+let list_fast_place_reads : Map[Int, (String, (Int, Double, Double)?)] = Map([])
 
 ///|
 // kept across runs: the ids of what is told after a build that follows where lists stand (Ctx::after_build_or_scroll)
-let tells_follow_lists : Map[Int, Bool] = {}
+let tells_follow_lists : Map[Int, Bool] = Map([])
 
 ///|
 // kept across runs: those the last build said, told again as a list moves with nothing built
@@ -156,7 +156,7 @@ fn Ctx::list_hand_move(self : Ctx, at : Double) -> String {
   }
   // Do not move a row with layout-dependent side effects, an editor or a nested coordinate system. An editor outside
   // these rows stays in place and need not force their layout.
-  let stops : Map[String, Bool] = {}
+  let stops : Map[String, Bool] = Map([])
   let mut r = list.first
   while r >= 0 {
     let row = self.nodes[r]

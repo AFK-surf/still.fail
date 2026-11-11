@@ -91,7 +91,7 @@ let rows_steady : RowsSteady = {
 ///|
 /// Each file's bar: how many jolts a Tester made there may show (the app's tests' known faults, falling as mended).
 // kept across runs: said once as a test program starts (its packages' `init`)
-let rows_steady_bars : Map[String, Int] = {}
+let rows_steady_bars : Map[String, Int] = Map([])
 
 ///|
 /// The jolts known in the tests of the files `bars` names (as words_over_known says its files), each how many a Tester

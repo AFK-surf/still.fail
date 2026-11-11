@@ -6,7 +6,7 @@
 
 ///|
 /// The groups opened past their first three, by their key.
-let open_jobs_all : Map[String, Bool] = {}
+let open_jobs_all : Map[String, Bool] = Map([])
 
 ///|
 fn open_jobs_reset() -> Unit {

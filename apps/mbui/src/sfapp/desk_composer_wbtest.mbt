@@ -524,7 +524,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
 /// How many pictures a tester decoded (each at as many sizes as it was drawn at: a picture covering its tile, once its
 /// proportions are known, again at the size it is drawn).
 fn loaded_sources(t : @ui.Tester) -> Int {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   for l in t.image_loads() {
     seen[l.0] = true
   }

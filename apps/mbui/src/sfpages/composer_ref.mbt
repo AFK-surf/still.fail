@@ -111,7 +111,7 @@ fn ref_panel_body(v : @view.View, close : () -> Unit, src : Source, key : String
 fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
   let prefs = src.topic("prefs", {}).get().value
   let own : Json = if on == (text(prefs, "dropAs") == "file") { Json::null() } else { Json::boolean(on) }
-  let files : Map[String, Json] = {}
+  let files : Map[String, Json] = Map([])
   files[key] = own
   (src.call)("prefs.set", { "dropFiles": Json::object(files) }, @sfbase.answer_unread)
 }

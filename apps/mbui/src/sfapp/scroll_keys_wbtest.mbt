@@ -9,8 +9,8 @@
 /// moved.
 fn list_shift(t : @ui.Tester, before : Array[(String, Double, Double, Double, Double, Double)], x0 : Double, x1 : Double) -> Double {
   let once = fn(ws : Array[(String, Double, Double, Double, Double, Double)]) {
-    let m : Map[String, Double] = {}
-    let twice : Map[String, Bool] = {}
+    let m : Map[String, Double] = Map([])
+    let twice : Map[String, Bool] = Map([])
     for w in ws {
       if w.1 >= x0 && w.1 < x1 {
         if m.contains(w.0) {
@@ -26,7 +26,7 @@ fn list_shift(t : @ui.Tester, before : Array[(String, Double, Double, Double, Do
   }
   let was = once(before)
   let now = once(t.words())
-  let counts : Map[Double, Int] = {}
+  let counts : Map[Double, Int] = Map([])
   for k, y in was {
     match now.get(k) {
       Some(y2) if y != y2 => counts[y - y2] = counts.get(y - y2).unwrap_or(0) + 1

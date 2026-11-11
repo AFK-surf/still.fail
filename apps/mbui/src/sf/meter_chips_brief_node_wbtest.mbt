@@ -124,7 +124,7 @@ test "meter_chips_brief_node in a line short even of the low ones: those it has 
       let at = "platform \{platform} \{w} wide (least \{least})"
       let t = mb_tester(true, w, platform)
       // (each chip's ground and fill: a rect as high as a small chip on the line's top; a chip, the widest at its start)
-      let chips : Map[Int, (Double, Double)] = {}
+      let chips : Map[Int, (Double, Double)] = Map([])
       for r in t.drawn_rects() {
         if r.1.abs() < 0.01 && (r.3 - 16.0).abs() < 0.01 {
           let k = (r.0 * 100.0).round().to_int()

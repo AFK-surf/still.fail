@@ -6,7 +6,7 @@
 /// What of `heard` is a subscription to, or a letting go of, a topic (the client's messages out): `sub <topic>`,
 /// `unsub <topic>`, in order.
 fn wire_subs(heard : Array[String]) -> Array[String] {
-  let topics : Map[Int, String] = {}
+  let topics : Map[Int, String] = Map([])
   let out : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }
@@ -217,7 +217,7 @@ fn switch_frames(t : @ui.Tester, src : Source, start : Double, upto : Double) ->
 ///|
 /// The client's subscriptions to `chats` and lettings go of them, in order: `sub <scope>`, `unsub <scope>`.
 fn wire_chats(heard : Array[String]) -> Array[String] {
-  let scopes : Map[Int, String] = {}
+  let scopes : Map[Int, String] = Map([])
   let out : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }

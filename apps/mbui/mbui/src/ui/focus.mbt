@@ -267,7 +267,7 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
 fn Ctx::tab_stops(self : Ctx) -> Array[Focusable] {
   let trap = self.trapping_layer()
   let out : Array[Focusable] = []
-  let seen : Map[Int, Bool] = {}
+  let seen : Map[Int, Bool] = Map([])
   for f in self.focus_spliced() {
     // (and what of the window's tree is over the trapping layer in the window's stack of layers: no layer under it
     // traps it, View::stacked; under a modal layer of the tree's over it, an old one's none: Tree::allows)

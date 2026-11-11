@@ -368,7 +368,7 @@ pub fn Tree::said_pass(
     }
   }
 
-  let visited : Map[Int, Bool] = {}
+  let visited : Map[Int, Bool] = Map([])
   // (one read out: what it says, what it is called and what it holds where `words`, `kids`)
   let entry = fn(
     at : Int,

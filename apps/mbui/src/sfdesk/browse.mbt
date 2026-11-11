@@ -34,7 +34,7 @@ priv struct BrowsePlace {
 ///|
 /// The places by the page's key for each (the files' page's sides, a chat's tab), named p1, p2… as they come (the
 /// same steps give the same names).
-let browse_places : Map[String, BrowsePlace] = {}
+let browse_places : Map[String, BrowsePlace] = Map([])
 
 ///|
 fn browse_reset() -> Unit {

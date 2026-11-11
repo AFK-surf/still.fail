@@ -510,7 +510,7 @@ priv struct GifCycle {
 
 ///|
 /// The GIFs that move, by the key they were handed over as.
-let moving_images : Map[String, GifCycle] = {}
+let moving_images : Map[String, GifCycle] = Map([])
 
 ///|
 /// `data` handed over as `key` when it is a GIF of more than one frame: its frames each a picture of its own, its first

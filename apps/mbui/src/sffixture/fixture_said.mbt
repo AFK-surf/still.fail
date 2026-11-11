@@ -40,7 +40,7 @@ pub fn said_stretch(value : Json, path : ArrayView[String]) -> Json {
       match value {
         Array(a) => Json::array(a.map(fn(x) { said_stretch(x, rest) }))
         Object(m) => {
-          let o : Map[String, Json] = {}
+          let o : Map[String, Json] = Map([])
           for k, v in m {
             o[k] = said_stretch(v, rest)
           }
@@ -74,7 +74,7 @@ pub fn said_steps_of(topic : String) -> Array[Array[String]] {
   let all = match said_steps.val {
     Some(m) => m
     None => {
-      let m : Map[String, Array[Array[String]]] = {}
+      let m : Map[String, Array[Array[String]]] = Map([])
       for name, paths in said_paths {
         m[name] = paths.map(fn(p) { p.split(".").map(fn(v) { v.to_owned() }).collect() })
       }

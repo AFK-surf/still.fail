@@ -9,7 +9,7 @@
 fn with_fields(v : Json, more : Array[(String, Json)]) -> Json {
   match v {
     Object(m) => {
-      let o : Map[String, Json] = {}
+      let o : Map[String, Json] = Map([])
       for k, x in m {
         o[k] = x
       }

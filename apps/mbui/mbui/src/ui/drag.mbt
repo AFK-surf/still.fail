@@ -329,7 +329,7 @@ pub(all) enum PressStep {
 ///|
 /// What follows the presses that go down on each box (Ctx::follow_press), by its id: what its last build said.
 // kept across runs: said as each box is built, let go with its page (Ctx::forget); a run's start clears it
-let press_followers : Map[Int, (PressStep) -> Unit] = {}
+let press_followers : Map[Int, (PressStep) -> Unit] = Map([])
 
 ///|
 /// What follows the press held now: what the box it went down on said as the press went down (none: none).

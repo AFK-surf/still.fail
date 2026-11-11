@@ -64,7 +64,7 @@ fn image(station : String, id : String, call : String, params : Json, name : Str
 fn with_rail_view(v : Json?) -> Json? {
   match v {
     Some(Object(m)) if !m.contains("railView") => {
-      let kept : Map[String, Json] = {}
+      let kept : Map[String, Json] = Map([])
       for k in ["rail", "rails"] {
         match m.get(k) {
           Some(x) => kept[k] = x
@@ -224,7 +224,7 @@ fn is_all_connects(name : String, params : Map[String, Json]) -> Bool {
 /// once the last of them leaves, as several of the app's topics are read out of one followed (a graph's readers are
 /// counted by the client itself, by its signal's watchers).
 // kept across runs: emptied as a Tester begins (on_reset)
-let holders : Map[String, Map[String, Bool]] = {}
+let holders : Map[String, Map[String, Bool]] = Map([])
 
 ///|
 /// Topic `whole` with `whole_params` followed for the app's topic `name` with `params` (a hold of it counted, holders).
@@ -234,7 +234,7 @@ fn follow_whole(whole : String, whole_params : Map[String, Json], name : String,
     let held = match holders.get(of) {
       Some(h) => h
       None => {
-        let h : Map[String, Bool] = {}
+        let h : Map[String, Bool] = Map([])
         holders[of] = h
         h
       }
@@ -292,7 +292,7 @@ priv struct Made {
 /// Each made value by the app's topic (its wire key): made again only when what it is made of is another value, so a
 /// page reading it each frame gets the same object while nothing changed (its version too).
 // kept across runs: emptied as a Tester begins (on_reset)
-let made : Map[String, Made] = {}
+let made : Map[String, Made] = Map([])
 
 ///|
 /// The versions given made values: one more for each made anew, so none is given twice.

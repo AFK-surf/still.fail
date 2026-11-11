@@ -478,7 +478,7 @@ let page_keyed : Ref[Array[(String, String)]?] = Ref(None)
 ///|
 /// Each page's blocks as given and as its list made of them, by the list's key (keyed_blocks).
 // kept across runs: put back by page_rows_reset, as a run begins (run_begin)
-let page_lists : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
+let page_lists : Map[String, @ui.ListRows[(String, () -> Unit)]] = Map([])
 
 ///|
 /// What every page's blocks were forgets (a run anew).
@@ -513,7 +513,7 @@ fn keyed_blocks(
     }
   }
   let keys = Array::makei(chrome, fn(i) { "~" + i.to_string() })
-  let versions : Map[String, String] = {}
+  let versions : Map[String, String] = Map([])
   for k in ks {
     keys.push(k.0)
     versions[k.0] = k.1

@@ -86,7 +86,7 @@ pub fn Face::parse(data : Bytes, index : Int) -> Face? {
   }
   let offset = if tag_at(data, 0) == "ttcf" { u32(data, 12 + index * 4) } else { 0 }
   let num_tables = u16(data, offset + 4)
-  let tables : Map[String, (Int, Int)] = {}
+  let tables : Map[String, (Int, Int)] = Map([])
   for k in 0..<num_tables {
     let r = offset + 12 + k * 16
     let t = tag_at(data, r)

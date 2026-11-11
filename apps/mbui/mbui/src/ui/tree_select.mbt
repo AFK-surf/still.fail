@@ -37,7 +37,7 @@ let words_picker : (@view.View) -> @view.Live[(Int, Int)] = words_picked_span
 /// own made as it is first read (words_picked_span): told as what is picked changes (picked_told), each only as its
 /// own span does.
 // kept across runs: said again from what is picked as that changes
-let picked_spans_said : Map[SelKey, @signals.Signal[(Int, Int)]] = {}
+let picked_spans_said : Map[SelKey, @signals.Signal[(Int, Int)]] = Map([])
 
 ///|
 /// Whether what is picked with the pointer was picked by a finger, as a signal (Ctx::selection_by_finger).

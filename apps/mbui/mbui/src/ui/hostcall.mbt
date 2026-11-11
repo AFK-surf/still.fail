@@ -1031,7 +1031,7 @@ fn answers_by_the_frame() -> Unit {
   if outside_tickets.is_empty() {
     return
   }
-  let kinds : Map[Int, Bool] = {}
+  let kinds : Map[Int, Bool] = Map([])
   for k, _ in outside_tickets {
     kinds[(k >> 32).to_int()] = true
   }
@@ -1459,7 +1459,7 @@ fn site_body_kept(b : Bytes) -> Bytes {
 fn json_kept(j : Json) -> Json {
   match j {
     Object(m) => {
-      let out : Map[String, Json] = {}
+      let out : Map[String, Json] = Map([])
       for k, v in m {
         out[k] = if secret_name(k) { Json::string("-") } else { json_kept(v) }
       }
@@ -1499,7 +1499,7 @@ fn query_kept(path : String) -> String {
 
 ///|
 /// What was last told of each site view's page (view_site_state's JSON), so that it is told as it changes.
-let sites_told_state : Map[Int, String] = {}
+let sites_told_state : Map[Int, String] = Map([])
 
 ///|
 /// What the app tells a view's host beyond its controls (native.mbt): `what` 1 a script to run in its page
@@ -1575,7 +1575,7 @@ let views_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref(None)
 
 ///|
 /// What was last told of each view's answers (view, what), so that each is told once as it changes.
-let views_told_text : Map[(Int, Int), String] = {}
+let views_told_text : Map[(Int, Int), String] = Map([])
 
 ///|
 /// What a real host says of its native views from now on given to `line`, a JSON object a time, as it changes: how a
@@ -1607,7 +1607,7 @@ fn view_told(id : Int, what : Int, text : String) -> Unit {
 
 ///|
 /// What was last told of each view's state (view_info: its state and numbers), so that it is told as it changes.
-let views_told_info : Map[Int, String] = {}
+let views_told_info : Map[Int, String] = Map([])
 
 ///|
 fn view_info_told(id : Int, state : Int, out : FixedArray[Double]) -> Unit {

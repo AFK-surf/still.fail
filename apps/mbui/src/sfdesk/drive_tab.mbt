@@ -41,7 +41,7 @@ let ftab : FChatTab = {
 /// again then, a part kept as its nodes too, whether it was a press in the tab, the composer's way to a folder or
 /// anything else; what reads another workspace's not.
 // kept across runs: said again as the tab is put back (tab_reset)
-let ftab_places_said : Map[String, @signals.Signal[DriveAt??]] = {}
+let ftab_places_said : Map[String, @signals.Signal[DriveAt??]] = Map([])
 
 ///|
 /// The tab of `ws` put at `at` (None: the places).

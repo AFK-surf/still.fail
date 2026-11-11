@@ -91,7 +91,7 @@ fn same_drawn(made : Array[String], old : Array[String], what : String) -> Unit 
     }
   }
   let kinds = fn(a : Array[String]) {
-    let m : Map[String, Int] = {}
+    let m : Map[String, Int] = Map([])
     for x in a {
       let parts = x.split(",").collect()
       let k = if parts.length() > 5 { parts[5].to_owned() } else { "?" }

@@ -86,7 +86,7 @@ fn A11yMirror::apply(self : A11yMirror, full : Bool, focus : Int, told : Array[A
   }
   self.focus = focus
   // (what this update's hold: none of it gone, wherever it was)
-  let held : Map[Int, Bool] = {}
+  let held : Map[Int, Bool] = Map([])
   for n in told {
     for k in n.kids {
       held[k] = true
@@ -352,9 +352,9 @@ fn a11y_olds(
 ) -> Array[Int] {
   let tops : Array[Int] = []
   // by index in `old`: its node's number (0 hidden), where it is, its node in `out`
-  let num : Map[Int, Int] = {}
-  let place : Map[Int, (Double, Double)] = {}
-  let made : Map[Int, A11yNode] = {}
+  let num : Map[Int, Int] = Map([])
+  let place : Map[Int, (Double, Double)] = Map([])
+  let made : Map[Int, A11yNode] = Map([])
   for k in ks {
     let s = old[k]
     if s.hidden || hide(k) {

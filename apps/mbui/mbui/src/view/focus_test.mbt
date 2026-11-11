@@ -4,7 +4,7 @@
 
 ///|
 test "focus: what can take it, in the tree's order with what hosts an old view at its place; one taking no press, or said to take no focus, none of it; one pressed by no key, one all the same" {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {
@@ -46,8 +46,8 @@ test "focus: what can take it, in the tree's order with what hosts an old view a
 
 ///|
 test "focus: given to a node, it and the one before told, each once, nothing else; shown only where the keyboard gave it; none given to one that cannot take it" {
-  let ids : Map[String, @view.NodeId] = {}
-  let views : Map[String, @view.View] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
+  let views : Map[String, @view.View] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       for k in ["a", "b", "c"] {
@@ -151,7 +151,7 @@ test "focus: let go of at the cause that keeps its node from input, what hosts t
 test "focus: what holds a node said to take the focus no more keeps nothing from it: the node in it keeps the focus; said to take no press, it is let go of" {
   let outer_focus = @signals.signal(true, same=fn(a, b) { a == b })
   let outer_presses = @signals.signal(true, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let lost : Array[@view.NodeId] = []
   let t = @view.Tree::new(
     fn(root) {
@@ -204,8 +204,8 @@ test "focus: what holds a node, with the focus, said to take it no more: let go 
 test "focus: one said to take it, Tab passing it (tab=false): given it by the program, none of Tab's; said anew with Tab's default, on and keys as they were, told as a change and Tab's again; let go and another made in its place, Tab's" {
   let first = @signals.signal(true, same=fn(a, b) { a == b })
   let second = @signals.signal(false, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
-  let views : Map[String, @view.View] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
+  let views : Map[String, @view.View] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.show(at_once=true, fn() { first.get() }, fn(p) {

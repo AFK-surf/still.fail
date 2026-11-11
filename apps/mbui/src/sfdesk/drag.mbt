@@ -451,7 +451,7 @@ fn fdrag_send(
   let into_json : Json = { "station": Json::string(into.station), "root": Json::string(into_root), "path": Json::string(into.path) }
   // the stations' copy (or move), the answer about a name there said
   let transfer = fn(answer : String?) {
-    let conflicts : Map[String, Json] = {}
+    let conflicts : Map[String, Json] = Map([])
     match answer {
       Some(a) => conflicts[item.name] = Json::string(a)
       None => ()

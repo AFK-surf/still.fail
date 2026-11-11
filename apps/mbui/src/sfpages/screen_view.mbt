@@ -1341,4 +1341,4 @@ pub fn screens_perf(span : Double) -> String {
 ///|
 /// Each open screen's frames and bytes as screens_perf last said them, by its key.
 // kept across runs: the record's counts, put back as a screen closes (screens_perf)
-let screens_perf_was : Map[String, (Int, Int)] = {}
+let screens_perf_was : Map[String, (Int, Int)] = Map([])

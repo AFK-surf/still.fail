@@ -30,7 +30,7 @@ fn changing_named(v : Json) -> Json {
       }
     Array(a) => Json::array(a.map(changing_named))
     Object(m) => {
-      let o : Map[String, Json] = {}
+      let o : Map[String, Json] = Map([])
       for k, x in m {
         o[changing_names.get(k).unwrap_or(k)] = changing_named(x)
       }

@@ -673,7 +673,7 @@ pub fn Viewer::thumb_over(self : Viewer) -> (Double) -> Unit {
 /// brought, as its chat says it), by its thumbnail's id, as a signal of its own made as it is first read
 /// (Viewer::thumb_over): told as that thumbnail's changes, not as another's.
 // kept across runs: said as each changes; put back with the thumbnails
-let thumbs_said : Map[String, @signals.Signal[String]] = {}
+let thumbs_said : Map[String, @signals.Signal[String]] = Map([])
 
 ///|
 /// What is drawn over each chat's list (by its key, as last built): how much of its top the bar takes, how much of
@@ -1178,7 +1178,7 @@ pub let pv_strip : Strip = { way: @motion.Way::new(0.0), leaving: None, pinned: 
 ///|
 /// The images beside one asked of the core (`imageNear`), each by its params: let go with the chat they are of
 /// (chat_left), as they hold its thread there.
-pub let near_asked : Map[String, Map[String, Json]] = {}
+pub let near_asked : Map[String, Map[String, Json]] = Map([])
 
 ///|
 /// The images beside those of `station`'s chats let go (a chat of it left).
@@ -1475,7 +1475,7 @@ pub fn stream_part(
 /// How a host's own reader reads the parts `stream_part` would (@ui.NativeView::video's `direct`), past the app: the
 /// core's `call` with `p` (its `offset` and `length` each part's own), the whole's size as `size` says it (0 not known).
 pub fn direct_part(call : String, p : Map[String, Json], size : Double) -> String {
-  let q : Map[String, Json] = {}
+  let q : Map[String, Json] = Map([])
   for k, v in p {
     if k != "offset" && k != "length" {
       q[k] = v

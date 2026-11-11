@@ -3,12 +3,12 @@
 // (mbui's Ctx::shapes), at whatever size and colour, nothing made first.
 
 ///|
-let made : Map[String, Bool] = {}
+let made : Map[String, Bool] = Map([])
 
 ///|
 /// The shapes of each icon, picture and ring drawn, by what it is, its size and its colour: what is drawn is the same
 /// shapes again, not worked out each frame.
-let shapes_made : Map[String, Array[@ui.Shape]] = {}
+let shapes_made : Map[String, Array[@ui.Shape]] = Map([])
 
 ///|
 /// An icon or a picture as drawn: its shapes and the name its node says.
@@ -20,16 +20,16 @@ priv struct DrawnShapes {
 ///|
 /// The icons drawn, by name, size and colour (`icon`): found by those, its name said once, not written out in words
 /// (a size and a colour in figures) for each icon on every frame.
-let icons_made : Map[(String, Double, Int64), DrawnShapes] = {}
+let icons_made : Map[(String, Double, Int64), DrawnShapes] = Map([])
 
 ///|
 /// Icons' parts drawn, by name, parts, size and ink (`icon_parts_shapes`): what breathes or lights in steps drawn in
 /// each step's ink found again, not cut from the icon's numbers anew each step.
-let parts_made : Map[(String, Array[Int], Double, Int64), Array[@ui.Shape]] = {}
+let parts_made : Map[(String, Array[Int], Double, Int64), Array[@ui.Shape]] = Map([])
 
 ///|
 /// The pictures drawn, by key, width, scale and tint (picture.mbt draw_drawable), as icons_made.
-let pictures_made : Map[(String, Double, Double, Int64?), DrawnShapes] = {}
+let pictures_made : Map[(String, Double, Double, Int64?), DrawnShapes] = Map([])
 
 ///|
 /// Every Tester starts as the app does (mbui's on_reset): the images made here gone with its own, nothing waited on or
@@ -243,7 +243,7 @@ let video_capsule_kept : Ref[WordsBoxKept?] = Ref(None)
 
 ///|
 /// How far each video's capsule last said it had come: what it fades out with once it is here.
-let video_capsule_last : Map[String, Double] = {}
+let video_capsule_last : Map[String, Double] = Map([])
 
 ///|
 /// The capsule's height, its play mark's and its ring's.
@@ -464,7 +464,7 @@ fn icon_numbers(name : String) -> Array[Double]? {
 }
 
 ///|
-let icon_read : Map[String, Array[Double]] = {}
+let icon_read : Map[String, Array[Double]] = Map([])
 
 ///|
 /// The numbers in `text`, each a space from the next, as icons.py writes them ("-12", "0.562"): its digits read as one

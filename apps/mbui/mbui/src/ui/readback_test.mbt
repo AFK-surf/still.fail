@@ -213,7 +213,7 @@ fn builds_a_frame(seen : Map[Int, Int], c : @ui.Ctx) -> Unit {
 
 ///|
 test "a list dragged that the view reads nothing of is built once a frame" {
-  let seen : Map[Int, Int] = {}
+  let seen : Map[Int, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       builds_a_frame(seen, c)
@@ -259,7 +259,7 @@ test "a list's rows in view read as the view builds are this frame's, built agai
 
 ///|
 test "what is built from a list's end alone is built again as it gets there, not at every step before" {
-  let seen : Map[Int, Int] = {}
+  let seen : Map[Int, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       builds_a_frame(seen, c)
@@ -290,7 +290,7 @@ test "what is built from a list's end alone is built again as it gets there, not
 
 ///|
 test "words kept on a row dragged that nothing reads are built once a frame" {
-  let seen : Map[Int, Int] = {}
+  let seen : Map[Int, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       builds_a_frame(seen, c)

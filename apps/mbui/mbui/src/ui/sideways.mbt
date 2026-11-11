@@ -59,7 +59,7 @@ priv struct Sideways {
 }
 
 ///|
-let sideways : Map[Int, Sideways] = {}
+let sideways : Map[Int, Sideways] = Map([])
 
 ///|
 /// How a fling slows: as the desktop's coasting (0.997 a ms; scroll.mbt), a little firmer on a phone's short rows.
@@ -527,7 +527,7 @@ fn Ctx::shows_after_layout(self : Ctx) -> Unit {
     return
   }
   // the boxes scrolling this build, by their node: their id and state
-  let boxes : Map[Int, (Int, Sideways)] = {}
+  let boxes : Map[Int, (Int, Sideways)] = Map([])
   sideways.each(fn(id, st) {
     if st.frame == self.build_no && !st.field && st.box >= 0 {
       boxes[st.box] = (id, st)

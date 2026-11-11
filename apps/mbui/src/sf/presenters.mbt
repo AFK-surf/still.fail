@@ -301,7 +301,7 @@ let presented_said : @signals.Signal[Array[(Int, Bool, Bool)]] = @signals.signal
 /// What each menu presented offers, as it was last told (presented_changed), by its serial: its items as they show
 /// (label, icon, danger, disabled, chosen, heading), so that what draws them is built again as they show otherwise.
 // kept across runs: put back by presenters_reset; one let go as it is
-let presented_items_said : Map[Int, @signals.Signal[Array[(String, String, Bool, Bool, Bool?, Bool)?]]] = {}
+let presented_items_said : Map[Int, @signals.Signal[Array[(String, String, Bool, Bool, Bool?, Bool)?]]] = Map([])
 
 ///|
 /// How `items` show, compared as they are given anew (presented_changed).
@@ -330,7 +330,7 @@ fn presented_items_of(serial : Int, items : Array[MenuItem?]) -> Array[MenuItem?
 /// marked while one is drawn (a row held, lifted while its menu is up: presented_drawn_of) stays so while what took
 /// its place is, and what took that one's.
 // kept across runs: put back by presenters_reset; one let go as what it leads to is gone
-let took_place : Map[Int, Int] = {}
+let took_place : Map[Int, Int] = Map([])
 
 ///|
 /// Which are drawn (open, or going), by their serials: told each as it comes or is gone (presented_drawn_of).
@@ -856,7 +856,7 @@ let lists_now : Array[(Int, Double)] = []
 ///|
 /// A capped panel's lists as its body was last drawn, by the presented's serial: each its box and what it holds.
 // kept across runs: said by measured_body, let go of by presenters_reset
-let lists_of : Map[Int, Array[(Int, Double)]] = {}
+let lists_of : Map[Int, Array[(Int, Double)]] = Map([])
 
 ///|
 /// A capped panel's body (filling its share: `style`), its lists saying what they hold as it is drawn. Its box.

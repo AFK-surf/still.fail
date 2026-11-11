@@ -1107,7 +1107,7 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
 /// node was laid out, stayed there, out of step with its hole. The hole's move (and scale) taken to the view's content
 /// and clip, the clip cut by where the hole's own clip was taken.
 fn Ctx::follow_holes(self : Ctx) -> Unit {
-  let at : Map[Int, Int] = {}
+  let at : Map[Int, Int] = Map([])
   let a = self.inst
   let mut k = 0
   while k < self.ninst {

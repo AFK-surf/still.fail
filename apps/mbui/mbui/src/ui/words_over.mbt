@@ -52,7 +52,7 @@ let words_over : WordsOver = { held: true, file: "", pairs: Set([]), frames: [] 
 /// Each file's bar: how many pairs of words over words a Tester made there may show while what it walks through
 /// moves (the app's tests' known faults, falling as they are mended).
 // kept across runs: said once as a test program starts (its packages' `init`)
-let words_over_bars : Map[String, Int] = {}
+let words_over_bars : Map[String, Int] = Map([])
 
 ///|
 /// Exact pairs intentionally shown during a particular test's closing overlay fade. A pair in any other motion is
@@ -229,7 +229,7 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
   }
   // (glyphs met through a grid of cells, not each with each)
   let cell = 24.0
-  let grid : Map[Int, Array[Int]] = {}
+  let grid : Map[Int, Array[Int]] = Map([])
   let pairs : Set[Int] = Set([])
   for q in 0..<ks.length() {
     let (x0, y0, x1, y1) = rs[q]

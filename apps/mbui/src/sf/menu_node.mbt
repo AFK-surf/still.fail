@@ -61,7 +61,7 @@ pub fn menu_node(
       let words_in = fn() { look().words }
       // (its rows that can be chosen, by their index: the one with the focus is lit; the keyboard moves the focus along
       // them, shown, the pointer onto one, unseen)
-      let rows : Map[Int, @view.View] = {}
+      let rows : Map[Int, @view.View] = Map([])
       // (the row of the rows' one stop of Tab's: the last that had the focus, else the first: Radix's roving focus)
       let current = @signals.signal(first_live(@signals.untracked(content), 0, 1), same=fn(a, b) { a == b })
       // (where Tab stops in its rows, as they are now: that one while it can still be chosen; else (made one not to be

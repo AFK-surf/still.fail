@@ -83,7 +83,7 @@ pub fn vault_editor_dialog(
     file_pick: None,
   }
   let key = fn(part : String) { "vault-editor/" + e.serial.to_string() + "/" + part }
-  let filled : Map[String, Bool] = {}
+  let filled : Map[String, Bool] = Map([])
   // a field's words put in once, as it opens
   let field_for = fn(part : String, value : String) -> @ui.Field {
     let f = field_of(key(part))
@@ -96,7 +96,7 @@ pub fn vault_editor_dialog(
     f
   }
   // the fields' words as last typed: the foot's 保存 reads them
-  let words : Map[String, String] = {}
+  let words : Map[String, String] = Map([])
   // a field of its: its label, its line (or lines: `area`), a secret's dotted, what is wrong under it
   let input = fn(c : @ui.Ctx, part : String, label : String, placeholder : String, secret : Bool, area : Bool, error : String) {
     let value = if part == "name" || part == "hosts" || part == "env" {

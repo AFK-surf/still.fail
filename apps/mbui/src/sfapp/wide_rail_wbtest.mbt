@@ -389,7 +389,7 @@ test "wide: 自定义侧边条 from the rail's menu: what can be added beside th
 fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
   new_run()
   let base = fixture("home")
-  let kept : Map[String, Json] = {}
+  let kept : Map[String, Json] = Map([])
   // (told as `kept` changes, where the prefs set changes it)
   let kept_told = @signals.signal(0)
   let src : Source = {

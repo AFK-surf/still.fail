@@ -142,7 +142,7 @@ fn changelog_real_walk() -> RealSeen {
   let asks = []
   // (while held, an ask not answered before is not answered yet: the core's round trip for a tab chosen)
   let hold = @signals.signal(false)
-  let answered : Map[String, Bool] = {}
+  let answered : Map[String, Bool] = Map([])
   let base = fixture("settings")
   let src : Source = {
     ..base,
@@ -184,7 +184,7 @@ fn changelog_real_walk() -> RealSeen {
     best
   }
   // (the changes alive: their versions' words, where each is drawn down the window)
-  let versions : Map[String, Bool] = {}
+  let versions : Map[String, Bool] = Map([])
   for i, _ in real_tabs {
     for c in real_changes(i) {
       versions[text(Some(c.1), "versionName")] = true

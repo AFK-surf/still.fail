@@ -1636,11 +1636,11 @@ pub fn Ctx::list_moving(self : Ctx, key : String) -> Bool {
 
 ///|
 /// How many rows each list had (Ctx::list_grew).
-let list_counts : Map[Int, Int] = {}
+let list_counts : Map[Int, Int] = Map([])
 
 ///|
 /// The keys each list given its rows' causes (ListRows) had as it was last built: which are new to it.
-let list_keys_seen : Map[Int, Array[String]] = {}
+let list_keys_seen : Map[Int, Array[String]] = Map([])
 
 ///|
 /// Whether list `id` has more rows than when it was last built.

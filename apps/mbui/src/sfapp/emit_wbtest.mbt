@@ -180,7 +180,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
-  let frames : Map[String, Int] = {}
+  let frames : Map[String, Int] = Map([])
   // frame by frame over its whole way out
   let end = t.time() + emit_all_ms()
   while t.time() < end {

@@ -1120,7 +1120,7 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
     t.layer == picked.layer && (!picked.finger || t.island == picked.island) && old_owner_open(t.island)
   })
-  let drawn : Map[SelKey, SelSpan] = {}
+  let drawn : Map[SelKey, SelSpan] = Map([])
   for t in laid {
     if !drawn.contains(t.base) {
       drawn[t.base] = { a: 0, b: 0, text: t.text, at: t.at }
@@ -1162,10 +1162,10 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   } else {
     (picked.to, picked.from)
   }
-  let known : Map[SelKey, SelSpan] = {}
+  let known : Map[SelKey, SelSpan] = Map([])
   picked.spans.each(fn(k, s) { if !drawn.contains(k) { known[k] = s } })
   drawn.each(fn(k, d) { known[k] = d })
-  let spans : Map[SelKey, SelSpan] = {}
+  let spans : Map[SelKey, SelSpan] = Map([])
   known.each(fn(k, s) {
     let n = s.text.length()
     let a = if k == lo.base {

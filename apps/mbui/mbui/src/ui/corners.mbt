@@ -292,7 +292,7 @@ fn[T] Ctx::with_tree_nodes(
     tree.drawn_held()
   }
   // (what each draws as it is drawn, and how big: what the squeeze reads of its words, View::shorter's and its scale)
-  let contents : Map[Int, (@view.Content, Double)] = {}
+  let contents : Map[Int, (@view.Content, Double)] = Map([])
   if facts {
     tree.each_drawn_scaled(fn(c, _, _, _, s) { contents[c.id.at] = (c, s) })
     tree_nodes_from.val = count
@@ -805,7 +805,7 @@ fn Ctx::too_square(self : Ctx, ra : Double, rb : Double) -> Bool {
 /// corner may stand (Theme::corner_fit far), whether the box is round enough for it there or not (a composer's send
 /// 10 in, its corner following a window's 6).
 fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> Map[Int, Array[(Int, Double)]] {
-  let out : Map[Int, Array[(Int, Double)]] = {}
+  let out : Map[Int, Array[(Int, Double)]] = Map([])
   for j in 0..<self.count {
     let b = self.nodes[j]
     if !(b.shows_ground() || b.lit_ground()) || b.layer {
@@ -1224,7 +1224,7 @@ let tree_pictures : Set[Int] = Set([])
 /// (Ctx::with_tree_nodes, but where they are `laid`, whose asks read none of it): for a fault to say where it was made
 /// (sizes_steady.mbt). None while they are not.
 // kept across runs: emptied before and after each time the tree's nodes are taken in so
-let tree_frame_ids : Map[Int, @view.NodeId] = {}
+let tree_frame_ids : Map[Int, @view.NodeId] = Map([])
 
 ///|
 /// The nodes said to be pictures (Role Image) this frame, the old views' and the tree's (in_picture).

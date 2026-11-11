@@ -289,7 +289,7 @@ fn Ctx::bar_owner(self : Ctx, id : Int) -> (Bar, Double, Theme)? {
 /// changes (Ctx::bar_moved): what draws one (Ctx::side_bar, Ctx::bar_where, as the frame is painted) reads its own,
 /// painted again as it changes, not as another's does.
 // kept across runs: put back as a run begins (reset_globals)
-let bars_hand : Map[Int, @signals.Signal[(Bool, Bool)]] = {}
+let bars_hand : Map[Int, @signals.Signal[(Bool, Bool)]] = Map([])
 
 ///|
 /// How the hand has the bar of `id` (near, held), read: its signal made as it is first read.

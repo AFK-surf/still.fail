@@ -159,7 +159,7 @@ let outs_said : Array[String] = []
 
 ///|
 // kept across runs: begun anew by each replay (Replay::parse)
-let outs_subs : Map[Int, String] = {}
+let outs_subs : Map[Int, String] = Map([])
 
 ///|
 /// What the app told the core in the replay last begun, in order (outs_said).
@@ -377,7 +377,7 @@ pub fn Replay::parse(log : String) -> Replay {
 pub fn Replay::keep_stations(self : Replay) -> Unit {
   // (a kept one by the id the run gave it, while the run had it: ids are given again after a client's reset)
   self.stations_own = true
-  let owner : Map[Int, Int] = {}
+  let owner : Map[Int, Int] = Map([])
   for e in self.evs {
     guard e.msg is Object(m) && !e.host && !is_step(e.msg) else { continue }
     guard id_of(m) is Some(id) else { continue }
@@ -1440,7 +1440,7 @@ fn Replay::live(self : Replay, msg : Json) -> Json? {
     Some(then) =>
       match self.ids.get(then) {
         Some(now) => {
-          let copy : Map[String, Json] = {}
+          let copy : Map[String, Json] = Map([])
           for k, v in m {
             copy[k] = if k == "id" { Json::number(now.to_double()) } else { v }
           }
@@ -1519,7 +1519,7 @@ fn sig(
   ignore_summary? : Bool = false,
   ignore_part? : Bool = false,
 ) -> String {
-  let copy : Map[String, Json] = {}
+  let copy : Map[String, Json] = Map([])
   for k, v in m {
     // (asked as more of another of its subscriptions: answered whole as the tape's one is)
     if k != "id" && !(k == "from" && ignore_part && twin_topic(name_of(m))) {
@@ -1571,7 +1571,7 @@ fn canon(j : Json) -> String {
 /// How many of the run's calls `call` have had their answer (an `ok` or an `error`: a stream's end) given here: what a
 /// scripted run's `answered CALL` lines count (the k-th answer from the start).
 pub fn Replay::answers_given(self : Replay, call : String) -> Int {
-  let asked : Map[Int, Bool] = {}
+  let asked : Map[Int, Bool] = Map([])
   let mut n = 0
   for e in self.evs {
     guard e.msg is Object(m) && m.get("id") is Some(Number(id, ..)) else { continue }
@@ -1616,7 +1616,7 @@ pub fn Replay::nth_call_at(self : Replay, call : String, n : Int) -> (Double?, D
 /// test times a motion the answer starts from, as the tape has it at this pace, not as the app says it. None while
 /// none is given.
 pub fn Replay::given_at(self : Replay, call : String) -> Double? {
-  let asked : Map[Int, Bool] = {}
+  let asked : Map[Int, Bool] = Map([])
   let mut at : Double? = None
   for e in self.evs {
     guard e.msg is Object(m) && m.get("id") is Some(Number(id, ..)) else { continue }

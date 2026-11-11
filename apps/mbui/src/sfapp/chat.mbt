@@ -205,7 +205,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
 
 ///|
 /// Which of the chat's asks the bell went to last, by chat (it goes to the next one each time, round again).
-let ask_turns : Map[String, Int] = {}
+let ask_turns : Map[String, Int] = Map([])
 
 ///|
 let bar_drop_people : Int = 1

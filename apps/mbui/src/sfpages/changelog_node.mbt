@@ -110,7 +110,7 @@ pub fn changelog_node(
   // out once for each value: what each block of them is, and where on its day's card a change is)
   let listed : @signals.Computed[(Array[String], Map[String, ListedPart])] = @signals.computed(fn(_) {
     let keys = []
-    let parts : Map[String, ListedPart] = {}
+    let parts : Map[String, ListedPart] = Map([])
     for i, d in days() {
       let dk = day_key(d, i)
       keys.push("day/" + dk)
@@ -167,7 +167,7 @@ pub fn changelog_node(
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   // (where each part's list was scrolled to, kept while the page is: each as it was left, as the old view's lists by
   // their keys were till the page left the stack)
-  let scrolls : Map[String, @view.Scroll] = {}
+  let scrolls : Map[String, @view.Scroll] = Map([])
   // (the part whose changes show as it is, the first where none is said: what its page and where it was scrolled to
   // are by; another chosen, its page once the core has answered it)
   v.pick(fn() { text(tabs().get(shown_at()), "part") }, fn(pv, part) {

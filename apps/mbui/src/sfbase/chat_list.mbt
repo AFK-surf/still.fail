@@ -220,7 +220,7 @@ pub struct RowsMade {
 }
 
 ///|
-pub let readings : Map[String, Reading] = {}
+pub let readings : Map[String, Reading] = Map([])
 
 ///|
 pub fn reading_of(key : String) -> Reading {
@@ -329,7 +329,7 @@ pub(all) struct KeptPlace {
 }
 
 ///|
-pub let kept_places : Map[String, KeptPlace] = {}
+pub let kept_places : Map[String, KeptPlace] = Map([])
 
 
 ///|
@@ -474,7 +474,7 @@ priv struct SentHereMade {
 
 ///|
 // kept across runs: forgotten with what was sent (sent_reset, as a run starts)
-let sent_here_made : Map[String, Array[SentHereMade]] = {}
+let sent_here_made : Map[String, Array[SentHereMade]] = Map([])
 
 ///|
 /// How many of a chat's views sent_here_view keeps what it made of: more readers than this at once make theirs again.
@@ -815,7 +815,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   if lingered && (played || !shown) {
     return
   }
-  let running : Map[String, Agent] = {}
+  let running : Map[String, Agent] = Map([])
   if !v.newer {
     for a in v.agents {
       if at_work(a) {
@@ -840,7 +840,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       em.watched = watched
       em.changed()
     }
-    let showing : Map[String, Bool] = {}
+    let showing : Map[String, Bool] = Map([])
     for k, _ in running {
       showing[k] = true
     }
@@ -1412,7 +1412,7 @@ pub fn row_keys(
   // what was sent from here: the core's row once it has it (the first of this device's own not there when it was
   // sent, each taken once), going on as that row (drawn already: it does not rise in, nor wait a turn; words flying
   // there go on to it)
-  let taken : Map[String, Bool] = {}
+  let taken : Map[String, Bool] = Map([])
   let still : Array[LocalSent] = []
   // (the core's rows taken for what was sent before its own row was ever in the list: new to the list's end, they take
   // back the floor as what comes in does)
@@ -1569,7 +1569,7 @@ pub fn row_keys(
   }
   // what each row that makes way saw come in over it last: the newest of the rows over it that came, by whose avatar
   // they came out of (an agent's line not for its own: its avatar away, it comes back to where the line now is)
-  let newest : Map[String, (Int, String)] = {}
+  let newest : Map[String, (Int, String)] = Map([])
   rd.makes_way.clear()
   for i, k in keys {
     match list[i] {

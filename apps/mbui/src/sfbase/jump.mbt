@@ -4,7 +4,7 @@
 
 ///|
 /// The message each chat is to go to once its list is in place (Screen.Chat.at: a notification's), by chat.
-pub let go_tos : Map[String, Double] = {}
+pub let go_tos : Map[String, Double] = Map([])
 
 ///|
 /// The chat `r`, once open and in place, goes to its message `seq` (the pages before it brought in until it is
@@ -28,12 +28,12 @@ pub fn go_to(r : ChatRef, seq : Double, passage? : String = "", keep_place? : Bo
 
 ///|
 /// The passage of the message each chat is to go to that is to flash alone (go_to), by chat.
-pub let go_to_passages : Map[String, String] = {}
+pub let go_to_passages : Map[String, String] = Map([])
 
 ///|
 /// The words a search opened each chat at its message with (Screen.Chat.words), by chat: marked in
 /// that message rather than it flashing.
-pub let go_to_words : Map[String, Array[String]] = {}
+pub let go_to_words : Map[String, Array[String]] = Map([])
 
 ///|
 /// The chat `r` opened from a search at its message `seq`, the search's `words` marked there (Search.kt FoundRow,
@@ -51,7 +51,7 @@ pub fn open_chat_found(r : ChatRef, seq : Double, words : Array[String]) -> Unit
 /// showed and how far its top was below the list's (as kept_places keeps a place), by chat. The way to the newest goes
 /// back there first (go_back_to), then to the end; at the end, sending, `chat.latest` forget it (place_forget).
 // kept across runs: put back by the package's reset (pages.mbt)
-pub let places_back : Map[String, (Double, Double)] = {}
+pub let places_back : Map[String, (Double, Double)] = Map([])
 
 ///|
 /// Told as a place is kept or forgotten: what says the way to the newest (its tip, its name) built again.
@@ -62,7 +62,7 @@ pub let places_back_said : @signals.Signal[Int] = @signals.signal(0)
 /// The offset each chat's list goes back to its place at (go_back_to): the message gone to then is put there, its top that
 /// far under the list's, not flashing (list_after).
 // kept across runs: put back by the package's reset (pages.mbt)
-pub let go_back_offsets : Map[String, Double] = {}
+pub let go_back_offsets : Map[String, Double] = Map([])
 
 ///|
 /// Where the reader was is kept for chat `k` (go_to's): its list showing, placed, more than its own height from the

@@ -29,7 +29,7 @@ priv struct RefField {
 }
 
 ///|
-let ref_fields : Map[String, RefField] = {}
+let ref_fields : Map[String, RefField] = Map([])
 
 ///|
 /// From how many characters words pasted at once go as a file (the core's PASTE_THRESHOLD; 0 till it has said).

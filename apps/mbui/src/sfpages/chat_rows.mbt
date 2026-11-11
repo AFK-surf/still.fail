@@ -807,7 +807,7 @@ priv struct Steady {
 }
 
 ///|
-let steadies : Map[String, Steady] = {}
+let steadies : Map[String, Steady] = Map([])
 
 ///|
 /// What the rows keep of their own, let go (the package's reset).

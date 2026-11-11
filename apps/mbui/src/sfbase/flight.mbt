@@ -224,7 +224,7 @@ let quote_prefix : String = "quote:"
 ///|
 /// Where in its box in the message each file flying there lands (flight_landing's `share`, by its landing's key): the
 /// share of the box's width and height its picture takes, centred, and whether its crop begins at the top.
-let landing_shares : Map[String, (Double, Double, Bool)] = {}
+let landing_shares : Map[String, (Double, Double, Bool)] = Map([])
 
 ///|
 /// How long the words take to their place, the share of it they fly (the rest they settle), and from when they

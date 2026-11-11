@@ -77,7 +77,7 @@ pub let bar_adding : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b
 ///|
 /// How far a place held on 下方栏's page is moved along its bar (BarCard's `dx`: the finger's way past the slop), by
 /// its bar and its name, while a finger has it.
-pub let bar_moves : Map[String, Double] = {}
+pub let bar_moves : Map[String, Double] = Map([])
 
 // ---------------------------------------------------------------------------
 // 存储空间 (what this device keeps)

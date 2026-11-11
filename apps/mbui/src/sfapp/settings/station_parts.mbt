@@ -124,7 +124,7 @@ fn adb_ask(name : String, params : Json) -> Unit {
 ///|
 /// The notifications' words, the app's own (AdbShare.java fills `{name}`, `{n}`, `{error}`).
 pub fn adb_texts() -> Json {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   for k in [
       "title", "notify.title", "notify.chats", "notify.on", "notify.idle", "notify.screen", "notify.screens", "stop", "turnOff", "pair.channel", "code", "pair.ask", "typeCode", "enterCode", "connecting",
       "connected", "connected.left", "notPaired", "pair.popped", "off", "attaching", "pairing", "paired", "pairFailed",
@@ -169,7 +169,7 @@ pub fn adb_lend_view(all : Json?, address : String) -> Json? {
   }
   match adb_lends(all).iter().find_first(fn(l) { text(Some(l), "station") == address }) {
     Some(Object(l)) => {
-      let out : Map[String, Json] = {}
+      let out : Map[String, Json] = Map([])
       for k, v in l {
         out[k] = v
       }

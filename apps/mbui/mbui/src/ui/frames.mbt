@@ -108,7 +108,7 @@ fn shape_pieces_key(c : Ctx, k : Int) -> Double {
 /// The pictures the last frame drew, numbered as first drawn (their host's ids, which depend on what was decoded
 /// before, are not what was drawn).
 fn image_numbers(c : Ctx) -> Map[Int, Int] {
-  let named : Map[Int, Int] = {}
+  let named : Map[Int, Int] = Map([])
   for k in 0..<c.ninst {
     let b = k * inst_size
     if c.inst[b + 5] == 4.0 {

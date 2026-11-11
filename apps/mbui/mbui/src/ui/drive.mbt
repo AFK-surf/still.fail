@@ -262,7 +262,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
   let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_owned() }).to_array()
   // what the runner has done, as the host posts it (done_watch.h: {"done": X, "said": WORDS}), the frame its post
   // wakes taking it
-  let runner_done : Map[String, String] = {}
+  let runner_done : Map[String, String] = Map([])
   let watching = done_dir != "" && h_drive(9, done_dir)
   if watching {
     on_message("runner", fn(j, _) { runner_said(runner_done, j) })

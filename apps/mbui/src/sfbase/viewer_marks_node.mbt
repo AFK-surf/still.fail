@@ -548,7 +548,7 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
 fn note_cards_node(r : @view.View) -> Unit {
   r.padding(Is((0.0, 0.0, 0.0, marks_notes_over_tools))) |> ignore
   // (each card's node by its mark: what +N reads of which are left out)
-  let cards : Map[Int, @view.View] = {}
+  let cards : Map[Int, @view.View] = Map([])
   r.box(fn(row) {
     // (each card as tall as what it holds, +N's its one line, its items at its top)
     row

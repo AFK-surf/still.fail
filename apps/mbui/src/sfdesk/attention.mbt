@@ -155,7 +155,7 @@ fn trouble_kept(src : Source, w : Workspace, what : String) -> String {
 
 ///|
 fn trouble_keep(src : Source, w : Workspace, what : String, words : Json) -> Unit {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   m[w.id + "\n" + what] = words
   (src.call)("prefs.set", Json::object({ "trouble": Json::object(m) }), @sfbase.answer_unread)
 }
@@ -176,7 +176,7 @@ fn trouble_forget(src : Source, w : Workspace) -> Unit {
   let clearing = (generation, seen, gone)
   if attention.trouble_forgotten.get(w.id) == Some(clearing) { return }
   attention.trouble_forgotten[w.id] = clearing
-  let patch : Map[String, Json] = {}
+  let patch : Map[String, Json] = Map([])
   patch[w.id + "\nseen"] = Json::null()
   patch[w.id + "\ngone"] = Json::null()
   (src.call)("prefs.set", { "trouble": Json::object(patch) }, @sfbase.answer_unread)
@@ -336,7 +336,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
         let dismiss = if alert && failure != "" {
           Some(fn() {
             attention.gone.push(key)
-            let m : Map[String, Json] = {}
+            let m : Map[String, Json] = Map([])
             m[text(v, "workspace")] = Json::array([Json::string(failure)])
             act(
               src,

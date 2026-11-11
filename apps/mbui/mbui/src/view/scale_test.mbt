@@ -5,7 +5,7 @@
 test "scale: a node drawn half as big about its middle, what it holds with it; about its edge toward its anchor, the side it went on" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
   let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(n) {

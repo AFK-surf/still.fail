@@ -636,7 +636,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     }
     _ => ()
   }
-  let placed : Map[String, Attachment] = {}
+  let placed : Map[String, Attachment] = Map([])
   for n in m.placed {
     match files.iter().find_first(fn(a) { a.name == n }) {
       Some(a) => placed[n] = a

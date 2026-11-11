@@ -157,7 +157,7 @@ fn next_tape_actions_gen() -> Int {
 /// Each page's bar on the tape, by its entry (its number): made as its page is first shown or built, let go as the entry
 /// leaves the stack (nav_flat_view's `gone`), not as its node stops showing.
 // kept across runs: emptied as a run begins (tape_goes_reset), each let go with its entry
-let tape_bars : Map[Int, TapeBar] = {}
+let tape_bars : Map[Int, TapeBar] = Map([])
 
 ///|
 /// The bar of entry `k`'s page, made as it is first asked.

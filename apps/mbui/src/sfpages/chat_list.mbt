@@ -352,7 +352,7 @@ fn rows_said(key : String, v : ChatView, read : Array[Entry]) -> Int {
 
 ///|
 // kept across runs: only compared with what is given next, by each list's key
-let rows_given : Map[String, (ChatView, Array[Entry], Int)] = {}
+let rows_given : Map[String, (ChatView, Array[Entry], Int)] = Map([])
 
 ///|
 /// A chat's messages to come while it is read the first time (the library's Waiting, in its bones): made-up messages
@@ -584,7 +584,7 @@ fn asks_of(v : ChatView) -> Array[Double] {
 
 ///|
 /// Which of each chat's asks the bell goes to next (by the chat's key).
-pub let ask_turns : Map[String, Int] = {}
+pub let ask_turns : Map[String, Int] = Map([])
 
 ///|
 /// What ⌘F last asked the window moved about (`chat.around`), once (-1 none).
@@ -753,7 +753,7 @@ fn laid_at_w(key : String, held : Bool, w : Double) -> String {
 
 ///|
 /// The width each chat list's rows were last held at on a page's way (laid_at_w).
-let lists_held_w : Map[String, Double] = {}
+let lists_held_w : Map[String, Double] = Map([])
 
 ///|
 /// How far from the left of a pane `frame_w` wide chat list `key`, laid out `list_w` wide, stands: in its middle; on a
@@ -774,7 +774,7 @@ fn list_shift(key : String, frame_w : Double, list_w : Double) -> Double {
 ///|
 /// Each chat list on a page's way, or the moment it found it over: the way ("" over), how wide its pane was as it set
 /// off, when it is there, and the moment last asked at (laid_w).
-let lists_set_off : Map[String, (String, Double, Double, Double)] = {}
+let lists_set_off : Map[String, (String, Double, Double, Double)] = Map([])
 
 ///|
 fn row_side(w : Double) -> Double {

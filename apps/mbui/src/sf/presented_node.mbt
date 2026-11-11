@@ -16,7 +16,7 @@ let tree_presented : Set[Int] = Set([])
 /// Whether the row of each serial draws it as a sheet (sheet_node): what a page is put on (panel_page) only where it
 /// is.
 // kept across runs: put back by presenters_reset
-let tree_as_sheet : Map[Int, Bool] = {}
+let tree_as_sheet : Map[Int, Bool] = Map([])
 
 ///|
 /// Whether `p` is drawn as a sheet of the window's tree on screen `sheet` (小屏's): sheet_node, as presented_nodes picks.

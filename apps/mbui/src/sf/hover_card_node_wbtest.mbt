@@ -32,9 +32,9 @@ fn hover_rig(
 ) -> HoverRig {
   let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=500.0, platform~)
   t.check_looks(false)
-  let hands : Map[String, HoverHand] = {}
+  let hands : Map[String, HoverHand] = Map([])
   let turns : Array[(String, Bool, Double)] = []
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   @ui.set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
     let layer : Ref[@view.View?] = Ref(None)

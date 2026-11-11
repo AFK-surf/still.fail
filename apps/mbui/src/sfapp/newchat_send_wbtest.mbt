@@ -144,7 +144,7 @@ test "wide: a new chat's first words sent: its field's hint not drawn over them 
 
 ///|
 test "a new chat's first words go into their bubble from the frame they are sent, the core's answers and its view of the chat however late" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let words = "把发布说明写一下"
@@ -191,7 +191,7 @@ fn keyboard_up(t : @ui.Tester, h : Double) -> Unit {
 ///|
 test "a new chat's first words sent with the keyboard up: no words over others on any frame, the core however late" {
   // (words over words on any frame where something moves fail the test: words_over.mbt)
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let (_, y) = bar_places_at()
@@ -307,7 +307,7 @@ test "a new chat's first words sent on a short page: nothing of its scene the fo
 
 ///|
 test "a new chat's first words sent: its scene fades where it is from then, as they go, not once the chat is made" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let t = held_core(held, @signals.signal(true))
   let title = "想让 agent 做什么？"
   new_chat_sent(t, "把发布说明写一下") |> ignore
@@ -343,7 +343,7 @@ test "a new chat's first words sent: its scene fades where it is from then, as t
 
 ///|
 test "a new chat's first words hold its composer as tall as it was while they are in it, its chat's, till they set out" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let (_, y) = bar_places_at()
@@ -383,7 +383,7 @@ test "a new chat's first words with the core at once: never gone, into their bub
 
 ///|
 test "a new chat's first words not sent (the chat not made): the page the new chat again, they back in its field" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   new_run()
   let base = fixture("home")

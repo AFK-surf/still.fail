@@ -291,7 +291,7 @@ let cd_state_gap : Double = 8.0
 ///|
 /// Whether the connect's last write was its turning on or off (said as such meanwhile), by station/id.
 // kept across runs: said by the menu's 停用 and 启用; connect_reset empties it
-let cd_switching : Map[String, Bool] = {}
+let cd_switching : Map[String, Bool] = Map([])
 
 ///|
 /// What is done to it less often (Menu), its ⋯ in `a`: pressed, its menu by it at its end, as the connect is then:
@@ -1058,7 +1058,7 @@ let cd_sessions_shown : Int = 5
 ///|
 /// The connects whose sessions are all shown, by station/id.
 // kept across runs: said by 显示全部 and 收起; connect_reset empties it
-let cd_all_sessions : Map[String, Bool] = {}
+let cd_all_sessions : Map[String, Bool] = Map([])
 
 ///|
 /// It handed to another person (OwnerDialog): a member of the workspace picked, or any email while its members are not

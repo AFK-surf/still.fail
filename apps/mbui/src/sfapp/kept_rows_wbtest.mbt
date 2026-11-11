@@ -64,7 +64,7 @@ fn kept_rows_read_out(t : @ui.Tester, a11y : Bool) -> Array[String] {
       lines.push(l.split("\u{1F}").map(fn(v) { v.to_owned() }).collect())
     }
   }
-  let at : Map[String, Int] = {}
+  let at : Map[String, Int] = Map([])
   for k, f in lines {
     at[f[0]] = k
   }

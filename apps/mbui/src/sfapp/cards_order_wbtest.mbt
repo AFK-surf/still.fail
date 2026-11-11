@@ -32,17 +32,17 @@ test "words sent after a card's answer stay under it: from the press to rest no 
   let (deliver, answer_in, end_in) = @sffixture.fix_pace.val
   // (till their answer has come and the turn is over, and what that sets off is at rest)
   let rest = sent + deliver + answer_in + end_in + 2.0 * @ui.move_most_ms
-  let last : Map[String, Double] = {}
+  let last : Map[String, Double] = Map([])
   let mut worst = 0.0
   let mut worst_at = ""
   while t.time() < rest {
     t.frame()
     let said = t.words_said()
-    let n : Map[String, Int] = {}
+    let n : Map[String, Int] = Map([])
     for w in said {
       n[w.0] = n.get(w.0).unwrap_or(0) + 1
     }
-    let seen : Map[String, Double] = {}
+    let seen : Map[String, Double] = Map([])
     for w in said {
       if n.get(w.0) == Some(1) && w.5 > 0.0 && w.2 < field && w.2 + w.4 > 0.0 {
         seen[w.0] = w.2

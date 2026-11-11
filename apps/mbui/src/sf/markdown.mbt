@@ -127,7 +127,7 @@ fn kept_tree(text : String) -> Json? {
 }
 
 ///|
-let markdown_asked : Map[String, Bool] = {}
+let markdown_asked : Map[String, Bool] = Map([])
 
 ///|
 fn init {
@@ -138,20 +138,20 @@ fn init {
 }
 
 ///|
-let parsed : Map[String, Array[MdBlock]] = {}
+let parsed : Map[String, Array[MdBlock]] = Map([])
 
 ///|
 /// The texts parsed lately, oldest first; the drawing data counts toward the budget too.
 let parsed_order : Array[String] = []
 
 ///|
-let core_parsed : Map[String, Bool] = {}
+let core_parsed : Map[String, Bool] = Map([])
 
 ///|
 let parsed_most : Int = 4096
 
 ///|
-let parsed_cost : Map[String, Int] = {}
+let parsed_cost : Map[String, Int] = Map([])
 
 ///|
 let parsed_used : Ref[Int] = Ref(0)
@@ -494,7 +494,7 @@ fn Md::column(self : Md, key : String, pieces : Array[Piece]) -> Int {
 
 ///|
 /// The blocks of the parts drawn lately (`markdown_part`), by their key.
-let parts : Map[String, Array[MdBlock]] = {}
+let parts : Map[String, Array[MdBlock]] = Map([])
 
 ///|
 fn init {
@@ -1008,7 +1008,7 @@ fn Md::words(
   let p = theme().p
   let runs = []
   // a bare link to a screen reads as its title
-  let titles : Map[String, String] = {}
+  let titles : Map[String, String] = Map([])
   match self.screens {
     Some(sc) => {
       let bare = []
@@ -1610,7 +1610,7 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
 /// The links in an agent's words (`tree`, the core's reading of `text`), each once, with what the core says each is to
 /// (their `to`), for what is shown as a link is pointed at (a chat's card, a pull request's).
 pub fn md_links_to(text : String, tree : Json?) -> Map[String, LinkTo] {
-  let out : Map[String, LinkTo] = {}
+  let out : Map[String, LinkTo] = Map([])
   fn inl(xs : Array[MdInline]) -> Unit {
     for x in xs {
       match x {

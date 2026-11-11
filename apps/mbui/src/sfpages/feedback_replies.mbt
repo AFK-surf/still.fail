@@ -41,7 +41,7 @@ fn feedback_notice(c : @ui.Ctx, src : Source, r : ChatRef, width : Double, chat 
 /// What is being written to the team, by report (the panel's field: kept while the app runs, as a draft is while its
 /// page is open), and the reports whose answer is on its way.
 // kept across runs: put back by feedback_reset
-let feedback_fields : Map[String, @ui.Field] = {}
+let feedback_fields : Map[String, @ui.Field] = Map([])
 
 ///|
 fn feedback_reset() -> Unit {

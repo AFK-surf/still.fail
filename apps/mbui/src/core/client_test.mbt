@@ -375,7 +375,7 @@ test "a streamed call: each value before its answer, with the bytes beside it; c
 test "what is asked of the core is awaited until answered or first read" {
   let sent : Array[String] = []
   let c = Client::new(fn(s) { sent.push(s) })
-  let waits : Map[Int, String] = {}
+  let waits : Map[Int, String] = Map([])
   let n = Ref(0)
   c.track(
     fn(what) {

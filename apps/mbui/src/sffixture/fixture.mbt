@@ -998,7 +998,7 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
 ///|
 // kept across runs: let go of as a fixture is made (fixture)
 /// A long-paged account's rows as the app has had them, by their keys.
-let paged_rows : Map[String, Json] = {}
+let paged_rows : Map[String, Json] = Map([])
 
 ///|
 /// Row `r` as the app has it: as it had it, else read from its text.
@@ -1067,7 +1067,7 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
 /// The made-up core's answers given, by topic and what was asked, each as of the version it was given at, and its
 /// draft's for a draft's topic (fixture_topic).
 // kept across runs: let go as a fixture is made (fixture)
-let fixture_answers : Map[String, (Int, Int, Topic)] = {}
+let fixture_answers : Map[String, (Int, Int, Topic)] = Map([])
 
 ///|
 /// Topic `name` asked with `params`, worked out of the made-up core as it is (`version`).
@@ -1334,7 +1334,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         },
       ])
     "prefs" => {
-      let lf : Map[String, Json] = {}
+      let lf : Map[String, Json] = Map([])
       for k, v in f.filters {
         lf[k] = Json::string(v)
       }
@@ -1464,7 +1464,7 @@ pub fn fixture_stations_way(v : Json?) -> Json? {
           list.map(fn(x) {
             match x {
               Object(o) => {
-                let m : Map[String, Json] = {}
+                let m : Map[String, Json] = Map([])
                 for k, val in o {
                   if k != "net" {
                     m[k] = val
@@ -1498,7 +1498,7 @@ pub fn round_trip(base : Source, ms : Double) -> Source {
 /// `base` answering as round_trip does, each ask `ms()` late as it is asked: a test's own setup answered at once, what
 /// it watches late (a chat opened once the first is shown: its view on its way while the test looks).
 pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
-  let read : Map[String, Bool] = {}
+  let read : Map[String, Bool] = Map([])
   {
     ..base,
     call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms(), fn() { done(r) }) }) },
@@ -1536,9 +1536,9 @@ pub fn round_trip_again(
   late? : (String, Map[String, Json]) -> Double,
 ) -> Source {
   // (the topic and params a page read, by what the client puts on the wire for them: what to answer it with)
-  let named : Map[String, (String, Map[String, Json])] = {}
+  let named : Map[String, (String, Map[String, Json])] = Map([])
   // (what is answered for each subscription the client holds, by its id: called to stop)
-  let live : Map[Int, () -> Unit] = {}
+  let live : Map[Int, () -> Unit] = Map([])
   let wire_key = fn(name : String, wire : Map[String, Json]) { @sfbase.wire_topic_key(name, wire) }
   // (whether this one is the core still: one another took the core's place from (a test after, a kept conversation)
   // says nothing more, all it answers stopped)
@@ -1566,7 +1566,7 @@ pub fn round_trip_again(
           Some(String(x)) => x
           _ => return
         }
-        let wire : Map[String, Json] = {}
+        let wire : Map[String, Json] = Map([])
         for k, v in t {
           if k != "topic" {
             wire[k] = v

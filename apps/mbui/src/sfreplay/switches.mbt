@@ -11,7 +11,7 @@ pub fn trace_switches() -> Array[String] {
 ///|
 /// Which of sfcore's trace_switches `trace` (a trace's text) does not say its run's app had on.
 pub fn switches_off(trace : String) -> Array[String] {
-  let env : Map[String, String] = {}
+  let env : Map[String, String] = Map([])
   for kv in @core.Replay::parse(trace).env() {
     env[kv.0] = kv.1
   }

@@ -40,7 +40,7 @@ fn one_of_at(t : @view.Tree, ids : Map[String, @view.NodeId], name : String) -> 
 
 ///|
 test "one_of: room for the first whole (300): it alone drawn, its two side by side; not (150): the last alone, one over the other" {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = one_of_row(ids, 300.0)
   assert_eq(one_of_at(t, ids, "a1"), Some((0.0, 16.0)), msg="300: the first's a")
   assert_eq(one_of_at(t, ids, "b1"), Some((120.0, 16.0)), msg="300: the first's b, beside it")
@@ -55,7 +55,7 @@ test "one_of: room for the first whole (300): it alone drawn, its two side by si
 
 ///|
 test "one_of: the window made narrower, then wider again: the other way in the frame laid out at that width, at once, the same nodes" {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = one_of_row(ids, 300.0)
   let first = ids["a1"]
   t.frame(150.0, 300.0) |> ignore
@@ -71,7 +71,7 @@ test "one_of: the window made narrower, then wider again: the other way in the f
 
 ///|
 test "one_of: room for neither whole (100): the last, all of it" {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = one_of_row(ids, 100.0)
   assert_eq(one_of_at(t, ids, "a1"), None, msg="100: the first not drawn")
   assert_eq(one_of_at(t, ids, "a2"), Some((0.0, 16.0)), msg="100: the last's a")

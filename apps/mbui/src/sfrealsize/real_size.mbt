@@ -43,7 +43,7 @@ fn fixture_named(v : Json) -> Json {
     String(s) => Json::string(named(s))
     Array(a) => Json::array(a.map(fixture_named))
     Object(m) => {
-      let o : Map[String, Json] = {}
+      let o : Map[String, Json] = Map([])
       for k, x in m {
         o[named(k)] = fixture_named(x)
       }
@@ -62,7 +62,7 @@ fn values() -> Map[String, Array[(Map[String, Json], Json)]] {
   match table.val {
     Some(t) => t
     None => {
-      let t : Map[String, Array[(Map[String, Json], Json)]] = {}
+      let t : Map[String, Array[(Map[String, Json], Json)]] = Map([])
       for raw in put_raw {
         match (@json.parse(raw.0) catch { _ => Json::null() }) {
           Object(params) =>
@@ -102,7 +102,7 @@ fn asked_so(asked : Map[String, Json], kept : Map[String, Json], naming_too? : A
       Some(v) => v
     }
   }
-  let keys : Map[String, Bool] = {}
+  let keys : Map[String, Bool] = Map([])
   for k, _ in asked {
     keys[k] = true
   }

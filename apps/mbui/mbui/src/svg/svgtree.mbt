@@ -645,7 +645,7 @@ priv struct TreeBuilder {
 fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
   let doc : SDoc = { nodes: [], attrs: [], links: {} }
   doc.nodes.push({ kind: SRoot, tag: "", parent: -1, children: [], attr_start: 0, attr_end: 0, text: "" })
-  let id_map : Map[String, Int] = {}
+  let id_map : Map[String, Int] = Map([])
   let all = []
   xml.descendants(0, all)
   for n in all {
@@ -685,7 +685,7 @@ fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
   if root < 0 || doc.tag(root) != "svg" {
     return None
   }
-  let links : Map[String, Int] = {}
+  let links : Map[String, Int] = Map([])
   let patterns = []
   let clip_paths = []
   let masks = []

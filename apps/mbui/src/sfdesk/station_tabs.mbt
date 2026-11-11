@@ -88,12 +88,12 @@ fn station_tab_page(r : ChatRef, tab : String) -> Page? {
 
 ///|
 /// Keep the opening intent per chat: login browsers close their tab when gone.
-let panel_screen_pages : Map[String, @sfbase.ScreenAt] = {}
+let panel_screen_pages : Map[String, @sfbase.ScreenAt] = Map([])
 
 ///|
 /// The station screens shown in a tab, by the tab: the station and the screen, and whether the frame's builds drew it
 /// since station_tabs_sweep went over them last (as the frame before's were over).
-let panel_screens : Map[String, (String, String, Bool)] = {}
+let panel_screens : Map[String, (String, String, Bool)] = Map([])
 
 ///|
 fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab : String, own_bar? : @ui.Style? = None) -> Bool {

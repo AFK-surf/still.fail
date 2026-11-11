@@ -968,7 +968,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   // motions of its own: each run to the end it says, Tester::rest_of; and again while what those motions' frames asked
   // is answered, a page gone at its slide's end telling the core where it was)
   let mut rounds = 0
-  let wakes : Map[String, Int] = {}
+  let wakes : Map[String, Int] = Map([])
   while true {
     rounds += 1
     // (what never stops asking: said, not hidden behind the idle check)
@@ -1281,12 +1281,12 @@ priv enum Kept {
 /// What the strict pass worked its inputs out to, by the test's line that asked (a step there skipped or taken more
 /// often, as what the test reads of its screen decides, does not shift the others'), in the order taken there (Kept).
 // kept across runs: emptied as each strict pass begins, read on by the pace passes after it (Flow::start)
-let kept_inputs : Map[String, Array[Kept]] = {}
+let kept_inputs : Map[String, Array[Kept]] = Map([])
 
 ///|
 /// How many of each line's kept inputs a pace pass has given.
 // kept across runs: emptied as each pace pass begins
-let kept_next : Map[String, Int] = {}
+let kept_next : Map[String, Int] = Map([])
 
 ///|
 /// `k` kept for the step the test's line `site` asked (the strict pass's).
@@ -1301,7 +1301,7 @@ fn kept_push(site : String, k : Kept) -> Unit {
 /// When the strict pass's app asked each `answered` step's call and when it was answered, by the test's line, the call
 /// and which of its calls (Flow::answered).
 // kept across runs: emptied as each strict pass begins, read by the pace passes after it
-let strict_answers : Map[String, (Double?, Double?)] = {}
+let strict_answers : Map[String, (Double?, Double?)] = Map([])
 
 ///|
 /// The `answered` steps a pace pass came to (the test's line, the call, which of its calls): said at its end.

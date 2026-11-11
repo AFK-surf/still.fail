@@ -94,7 +94,7 @@ fn steps_list_node(
   let rows = @signals.computed(fn(_) {
     let (_, all) = steps_rows_of_topic(src, params, lkey)
     let keys : Array[String] = []
-    let by : Map[String, StepsRow] = {}
+    let by : Map[String, StepsRow] = Map([])
     let mut live = 0
     for r in all {
       let k = match r {

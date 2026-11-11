@@ -46,7 +46,7 @@ fn outside_dialog(_c : @ui.Ctx, src : Source, key : String) -> Unit {
 ///|
 /// The askings up, by draft key: their presented panel (@sf.last_presented).
 // kept across runs: put back by outside_reset
-let outside_up : Map[String, Int] = {}
+let outside_up : Map[String, Int] = Map([])
 
 ///|
 fn outside_reset() -> Unit {

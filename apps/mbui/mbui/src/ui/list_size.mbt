@@ -656,7 +656,7 @@ pub fn[T] ListRows::rows(
   }
   self.last_keys = keys
   self.last_items = items
-  let here : Map[String, Bool] = {}
+  let here : Map[String, Bool] = Map([])
   if !same_keys {
     for k in keys {
       here[k] = true
@@ -746,7 +746,7 @@ pub fn[T] ListRows::rows(
     // down past others moved, not each it passed, which only kept their order among themselves)
     if !same_keys {
       let ahead : Set[String] = Set([])
-      let before : Map[String, Int] = {}
+      let before : Map[String, Int] = Map([])
       for j, r in self.order {
         before[r.0] = j
       }

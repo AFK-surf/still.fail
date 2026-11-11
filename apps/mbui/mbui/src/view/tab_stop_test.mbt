@@ -11,7 +11,7 @@ fn tab_has(t : @view.Tree, id : @view.NodeId) -> Bool {
 ///|
 test "tab_stop: said twice, the first's condition changing after does nothing; the second's, the stop" {
   let (a, b) = (@signals.signal(true), @signals.signal(false))
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(x) {
@@ -38,7 +38,7 @@ test "tab_stop: said twice, the first's condition changing after does nothing; t
 ///|
 test "tab_stop: said after focusable, whether the node takes the focus going off and on again: a stop again, as tab_stop says" {
   let on = @signals.signal(true)
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(x) {
@@ -63,7 +63,7 @@ test "tab_stop: said after focusable, whether the node takes the focus going off
 ///|
 test "tab_stop: focusable said after it, its tab holds, tab_stop's condition changing after does nothing" {
   let c = @signals.signal(false)
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(x) {
@@ -87,7 +87,7 @@ test "tab_stop: focusable said after it, its tab holds, tab_stop's condition cha
 ///|
 test "tab_stop: its node let go of, one made after in its place, said to take the focus with Tab: the old condition changing does nothing to it" {
   let (one, two, c) = (@signals.signal(true), @signals.signal(false), @signals.signal(false))
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.show(at_once=true, fn() { one.get() }, fn(x) {

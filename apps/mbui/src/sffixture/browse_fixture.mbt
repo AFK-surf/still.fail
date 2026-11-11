@@ -62,7 +62,7 @@ pub fn fix_browse_prefs_set(params : Json) -> Bool {
         let kept = match fix_browse.prefs.get(k) {
           Some(x) => x
           None => {
-            let x : Map[String, Json] = {}
+            let x : Map[String, Json] = Map([])
             fix_browse.prefs[k] = x
             x
           }
@@ -140,7 +140,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
   let station = text(params, "station")
   let root = text(params, "root")
   // the folders it surely reads: the way down to the one shown (and to the one a press is in)
-  let folders : Map[String, Json] = {}
+  let folders : Map[String, Json] = Map([])
   let given = fn(path : String) {
     let mut so_far = ""
     let parts = if path == "" { [] } else { path.split("/").map(fn(p) { p.to_owned() }).collect() }
@@ -157,7 +157,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
     }
   }
   // the stations for a path typed; the time for a letter typed (else none, so a step is the same at any time)
-  let stations : Map[String, Json] = {}
+  let stations : Map[String, Json] = Map([])
   if name == "files.go" {
     match f {
       Some(f) => stations[text(params, "workspace")] = fix_browse_stations(f, text(params, "workspace"))
@@ -170,7 +170,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
     ("type", Some(c)) => c.moment()
     _ => 0.0
   }
-  let prefs : Map[String, Json] = {}
+  let prefs : Map[String, Json] = Map([])
   for k in ["driveViews", "filesTabs"] {
     prefs[k] = Json::object(fix_browse.prefs.get(k).unwrap_or({}).copy())
   }

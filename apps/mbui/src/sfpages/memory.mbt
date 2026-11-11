@@ -80,7 +80,7 @@ fn memories_list_node(v : @view.View, core : Core, stations : () -> Array[Json])
 ///|
 /// The stations' names by their ids (whose a shared skill is).
 fn station_names(stations : Array[Json]) -> Map[String, String] {
-  let names : Map[String, String] = {}
+  let names : Map[String, String] = Map([])
   for s in stations {
     names[text(Some(s), "id")] = text(Some(s), "name")
   }

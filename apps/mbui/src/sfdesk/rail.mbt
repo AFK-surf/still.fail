@@ -466,7 +466,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let extra = rail_in_view(src, w)
   let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
   let entries : Array[@kit.Entry] = []
-  let icons : Map[String, String] = {}
+  let icons : Map[String, String] = Map([])
   if away.length() > 0 {
     entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
     for i in away {

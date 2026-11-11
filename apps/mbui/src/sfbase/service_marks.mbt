@@ -151,7 +151,7 @@ pub fn service_marked(p : ServicePage, said : Json) -> Unit {
       if number(s, "height") > 0.0 {
         m.css_h = number(s, "height")
       }
-      let boxes : Map[Int, (Double, Double, Double, Double)] = {}
+      let boxes : Map[Int, (Double, Double, Double, Double)] = Map([])
       for b in items(s, "at") {
         match (field(Some(b), "n"), css_box(Some(b))) {
           (Some(Number(n, ..)), Some(r)) => boxes[n.to_int()] = r

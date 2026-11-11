@@ -10,7 +10,7 @@ pub fn fixture_link_parse(url : String) -> Json {
     Some(i) => (url.view(end_offset=i).to_owned(), url.view(start_offset=i + 1).to_owned())
     None => (url, "")
   }
-  let q : Map[String, String] = {}
+  let q : Map[String, String] = Map([])
   for kv in query.split("&") {
     let kv = kv.to_owned()
     match kv.find("=") {
@@ -18,7 +18,7 @@ pub fn fixture_link_parse(url : String) -> Json {
       None => ()
     }
   }
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   let put = fn(k : String, v : String) { if v != "" { o[k] = Json::string(v) } }
   let after = fn(cut : String) -> Array[String]? {
     match path.find(cut) {

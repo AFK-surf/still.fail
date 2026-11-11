@@ -13,19 +13,19 @@
 /// it gone or not. Each kept while something of the window's tree reads its text (md_readers) or its answer is kept
 /// (parsed): let go as both are gone, never kept for each text there ever was.
 // kept across runs: put back as a run begins (on_reset)
-let md_answered : Map[String, @signals.Signal[Int]] = {}
+let md_answered : Map[String, @signals.Signal[Int]] = Map([])
 
 ///|
 /// How many of the window's tree's readers read each text now (table_node's, as made and as they say another).
 // kept across runs: put back as a run begins (on_reset)
-let md_readers : Map[String, Int] = {}
+let md_readers : Map[String, Int] = Map([])
 
 ///|
 /// The core's reading of each text something of the window's tree reads now (md_readers), held by them while they do,
 /// whatever the texts read lately (blocks_of's, which others push out): from its answer, or as it was kept as the
 /// first of them came; let go as the last goes.
 // kept across runs: put back as a run begins (on_reset)
-let md_held : Map[String, Array[MdBlock]] = {}
+let md_held : Map[String, Array[MdBlock]] = Map([])
 
 ///|
 fn init {

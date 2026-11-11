@@ -409,7 +409,7 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
 }
 
 ///|
-let glyphs_read : Map[String, (Array[String], Array[String])] = {}
+let glyphs_read : Map[String, (Array[String], Array[String])] = Map([])
 
 ///|
 /// Whose service a profile runs on (ProviderLogo): OpenCode's square, a listed provider's maker

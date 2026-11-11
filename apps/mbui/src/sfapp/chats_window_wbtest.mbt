@@ -10,7 +10,7 @@
 /// What of `heard` (the client's messages out) asks or lets go of ws1's list of all its chats, or tells its window:
 /// `window <rows>`, `sub`, `unsub`, in order.
 fn window_wire(heard : Array[String]) -> Array[String] {
-  let ids : Map[Int, Bool] = {}
+  let ids : Map[Int, Bool] = Map([])
   let out : Array[String] = []
   let ours = fn(p : Map[String, Json]) {
     p.get("scope") == Some(Json::string("ws1")) && p.get("mine") == Some(Json::boolean(false)) && !p.contains("watching") && !p.contains("hidden")

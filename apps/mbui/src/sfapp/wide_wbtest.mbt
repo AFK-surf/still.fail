@@ -860,7 +860,7 @@ fn hint_drawn(t : @ui.Tester) -> Bool raise {
 
 ///|
 test "wide: a new chat's first words, the hint gone under them, into their bubble over the composer from the frame they are sent, whenever the core answers" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread, w=1280.0, h=800.0, platform=0)
   t.frame()
@@ -2787,7 +2787,7 @@ test "wide: adding a favorite chooses a station and folder without changing its 
 fn with_row(v : Json, id : String, more : Map[String, Json]) -> Json {
   match v {
     Object(m) => {
-      let out : Map[String, Json] = {}
+      let out : Map[String, Json] = Map([])
       for k, x in m {
         out[k] = with_row(x, id, more)
       }

@@ -479,7 +479,7 @@ fn trans_ms(tr : @motion.Trans) -> Double {
 ///|
 test "a list's row gone leaves by a copy; the rest close over it, late" {
   let keys = @signals.signal(["a", "b", "c", "d"])
-  let ids : Map[String, Int] = {}
+  let ids : Map[String, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       let ks = keys.get()

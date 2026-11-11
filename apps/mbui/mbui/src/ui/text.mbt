@@ -956,7 +956,7 @@ let no_glyph : Glyph = {
 ///|
 /// The glyphs in the atlas by their places ("u v", as an instance has them): their keys.
 fn glyph_keys() -> Map[String, Int] {
-  let at : Map[String, Int] = {}
+  let at : Map[String, Int] = Map([])
   text_cache.glyphs.each(fn(key, g) { if g.plot >= 0 { at["\{g.u} \{g.v}"] = key } })
   at
 }

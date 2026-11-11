@@ -18,7 +18,7 @@ let nav_untaken : Ref[Bool] = { val: false }
 let native_workspace_anchor : Ref[Int] = { val: 0 }
 
 ///|
-let native_sidebar_items : Map[Int, @hostapi.NavItem] = {}
+let native_sidebar_items : Map[Int, @hostapi.NavItem] = Map([])
 
 ///|
 let floating_bar : Ref[@hostapi.NavBar?] = { val: None }
@@ -87,16 +87,16 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
 let nav_page : Array[(@hostapi.NavItem, () -> Unit)] = []
 
 ///|
-let nav_page_was : Map[String, () -> Unit] = {}
+let nav_page_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// What each row of a page's action's menu does (bar_action rows), by the row's id, for what is chosen between frames.
-let nav_rows_was : Map[String, () -> Unit] = {}
+let nav_rows_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// What is up over the whole window handed the bars the frame before (@sf.native_over_act), by id, for what is chosen
 /// between frames.
-let nav_over_was : Map[String, () -> Unit] = {}
+let nav_over_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// The page of the stack being drawn now (frame.mbt's nav_flat), None outside one.
@@ -634,7 +634,7 @@ fn tab_of_place(lit : String) -> String {
 ///|
 /// What each tab showed as it was left (its stack's pages), by its workspace and its id (tab_kept_key); kept while the app
 /// runs.
-let tabs_kept : Map[String, Array[Page]] = {}
+let tabs_kept : Map[String, Array[Page]] = Map([])
 
 ///|
 /// The key of tab `tab` of workspace `ws` in tabs_kept: each workspace's tabs keep their own (a chat of one never shown

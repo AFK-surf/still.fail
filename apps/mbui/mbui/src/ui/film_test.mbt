@@ -133,7 +133,7 @@ test "a Tester over a live host: the words laid out and drawn by its text, the f
     }
   }
   // (each where it was put last: the face given as it was first drawn, it was drawn again)
-  let last : Map[Int, (Int, Int)] = {}
+  let last : Map[Int, (Int, Int)] = Map([])
   for p in host.put {
     last[p.0] = (p.1, p.2)
   }

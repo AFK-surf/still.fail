@@ -59,15 +59,15 @@ let writing_cache : Ref[Array[WritingCached]] = Ref([])
 
 ///|
 /// Each draft by its key, as the page has it.
-pub let writings : Map[String, Writing] = {}
+pub let writings : Map[String, Writing] = Map([])
 
 ///|
 /// The pictures of the files picked or pasted here, by their id: shown at once from their bytes (until the file leaves
 /// the draft), and the station each went up to with its bytes (one sent to another station goes up again there).
-pub let writing_pictures : Map[String, String] = {}
+pub let writing_pictures : Map[String, String] = Map([])
 
 ///|
-let writing_went : Map[String, (String, String, Bytes)] = {}
+let writing_went : Map[String, (String, String, Bytes)] = Map([])
 
 ///|
 /// The videos added here, read whole, that the host has no picture of (no address for them: @hostapi.Picked.src), by
@@ -99,7 +99,7 @@ pub fn writing_stills(c : @ui.Ctx) -> Unit {
 ///|
 /// The station each file added here goes up to, by its id.
 // kept across runs: put back by writings_reset (sfbase's reset)
-let writing_stations : Map[String, String] = {}
+let writing_stations : Map[String, String] = Map([])
 
 ///|
 /// Whether file `id` of a draft was put up from here (picked or pasted here: writing_add), which every message it goes
@@ -112,7 +112,7 @@ pub fn writing_put_here(id : String) -> Bool {
 /// What each file picked or pasted here is (file_seed, held_seed), by its id: the same one added again while it is in
 /// its draft is not added twice.
 // kept across runs: put back by writings_reset (sfbase's reset)
-let writing_seeds : Map[String, String] = {}
+let writing_seeds : Map[String, String] = Map([])
 
 ///|
 /// Whether draft `w` has the file `seed` names already (writing_seeds).
@@ -547,7 +547,7 @@ pub fn host_picture(name : String, src : String) -> String {
 /// Files shared into the app from another (Android's share sheet), waiting for their chat's composer to take them, by
 /// its draft's key.
 // kept across runs: put back by writings_reset (sfbase's reset)
-pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
+pub let shared_into : Map[String, Array[@hostapi.Picked]] = Map([])
 
 ///|
 /// The station files' picker (＋ → Station 文件) put up for draft `key` (`src` what it reads the stations by): sfdesk's
@@ -738,7 +738,7 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 /// the one it goes to, where a new chat's files go up now.
 pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (Json?) -> Unit) -> Unit {
   w.taken = Some((w.state.text.get(), w.state.quotes.get(), w.state.files.get()))
-  let params : Map[String, Json] = {}
+  let params : Map[String, Json] = Map([])
   if station != "" {
     params["station"] = Json::string(station)
   }
@@ -996,4 +996,4 @@ pub let neighbour_held : Ref[() -> Bool] = Ref(fn() { false })
 ///|
 /// The files quoted, by draft key, not yet taken by a composer.
 // kept across runs: put back by writings_reset (sfbase's reset)
-pub let quoted_into : Map[String, Array[(String, String, String, Json)]] = {}
+pub let quoted_into : Map[String, Array[(String, String, String, Json)]] = Map([])
