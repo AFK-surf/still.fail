@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [bd43f701d](https://github.com/AFK-surf/still.fail/commit/bd43f701d74ca1bf1a034df61a8df6fe49f3e36f) core: a device holding no lock takes the one the w | 1.84 | 2.46 | 10.34 | 29.07 | 36.51 | 25.89 | 48.27 | 94.67 | 176.93 |
 | [6fe7172b5](https://github.com/AFK-surf/still.fail/commit/6fe7172b5a4288a778a1e4f1f6414ff34591b942) e2e: locks round 17, a station in the workspace th | 1.84 | 2.46 | 10.34 | 29.06 | 36.51 | 25.88 | 48.27 | 94.49 | 166.36 |
 | [79fe73414](https://github.com/AFK-surf/still.fail/commit/79fe734141c015f06d681ccd90a6200d58ba31d9) mbui: a GIF that moves decoded a frame at a time,  | 1.84 | 2.46 | 10.33 | 29.05 | 36.47 | 25.86 | 48.2 | 93.83 | 180.15 |
 | [3b0992b92](https://github.com/AFK-surf/still.fail/commit/3b0992b9224fffd8941e54b864a5ccf487960453) core: people added to a locked workspace are in it | 1.84 | 2.46 | 10.31 | 29.04 | 36.43 | 25.86 | 48.2 | 93.83 | 177.06 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6b5d712ec](https://github.com/AFK-surf/still.fail/commit/6b5d712ec8acf81f95d311331d7e0ff4139e2862) app, core: a call given no on_done is one nobody r | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.37 | 182.65 |
 | [ee58f52b1](https://github.com/AFK-surf/still.fail/commit/ee58f52b16ea68ab1cb197964e6ee222b7167160) mbui: test.sh says testexe's lines of each run who | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.14 | 188.9 |
 | [80220ce56](https://github.com/AFK-surf/still.fail/commit/80220ce56c2138afb177d342bd78f313df9034e2) mbui: a list's block come at its foot is made alon | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.5 | 126.65 |
-| [704829c69](https://github.com/AFK-surf/still.fail/commit/704829c6912df0d8d968971712f6750ede3a7b02) mbui: a motion's end said as it was once it is ove | 1.82 | 2.43 | 10.12 | 28.86 | 35.75 | 25.7 | 47.62 | 94.65 | 183.12 |
