@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e7fa757d4](https://github.com/AFK-surf/still.fail/commit/e7fa757d4a6c9acfbd3413912199351792addbb6) mbui: whether the app is shown, in front and going | 1.83 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.54 | 155.91 |
 | [4b231d061](https://github.com/AFK-surf/still.fail/commit/4b231d0618e72bab4c12dc8d748fef3c4621cdda) mbui: a page's list held stretched at an end told  | 1.84 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.57 | 170.18 |
 | [525a3f848](https://github.com/AFK-surf/still.fail/commit/525a3f848a2de213b7314f3af6cd579bfaea28e8) app: links to a station's screens and to a chat's  | 1.84 | 2.45 | 10.23 | 29 | 36.2 | 25.82 | 48 | 94.49 | 132.29 |
 | [16c0c777a](https://github.com/AFK-surf/still.fail/commit/16c0c777ace2f893323615cacc5ce638c0d5e694) app, mbui: a hang report says which kind of page w | 1.83 | 2.45 | 10.24 | 28.99 | 36.19 | 25.82 | 48 | 94.45 | 185.01 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a0a38cd76](https://github.com/AFK-surf/still.fail/commit/a0a38cd76cac16c75a2fd16651e86a28d2d1ab34) app, core: 更新日志 is asked the tab in view a page at | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.08 | 173.84 |
 | [e4ae7785a](https://github.com/AFK-surf/still.fail/commit/e4ae7785aedbee58bbb68aa136bcf196592a55fd) mbui: a chat's picture or file shared from its pre | 1.82 | 2.43 | 10.11 | 28.85 | 35.71 | 25.69 | 47.6 | 94.24 | 179.2 |
 | [dd5043929](https://github.com/AFK-surf/still.fail/commit/dd504392987e37f66165900fb79c8183f4f04d58) core test: the byte bar refuses a topic its fixtur | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.32 | 175.87 |
-| [abfaa469a](https://github.com/AFK-surf/still.fail/commit/abfaa469ad49121f8c8ea1e22e163714af21a6bf) mbui, app: words that are part of a mark are drawn | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.14 | 175.39 |
