@@ -151,12 +151,15 @@ fn ink_keep(key : String, ink : String?) -> Unit {
     inks_used.val += key.length()
   }
   inks[key] = ink
+  // (told to a node that reads it: ink_node.mbt)
+  ink_tell(key)
   while inks_order.length() > 1 && inks_used.val > inks_budget {
     let old = inks_order[0]
     inks_order.remove(0) |> ignore
     inks_used.val -= old.length()
     inks.remove(old)
     inks_asked.remove(old)
+    ink_tell(old)
   }
 }
 
