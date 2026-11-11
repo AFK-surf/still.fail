@@ -334,6 +334,7 @@ pub fn Tester::new(
   loc~ : SourceLoc,
 ) -> Tester {
   host_settings_given.val = ""
+  fake_dues.clear()
   frames_by_clock_on.val = false
   let f = {
     time,
@@ -952,6 +953,10 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
 /// frame is drawn for its vsync). The next events may come at any moment from `now`.
 pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Unit {
   let at = now
+  // (what was posted told at its moment, and what the fake host does at its own moments up to this frame's, before the
+  // clock comes there: posted_tell, FakeHost::due)
+  posted_tell()
+  fake_dues_to(self.fake, at)
   self.fake.time = at
   // decodes started last frame are done, the views opened are ready: the host's events for them (unless the test
   // says when: Tester::finish)
@@ -1120,6 +1125,7 @@ pub fn Tester::by_hand(self : Tester, f : () -> Unit) -> Unit {
 ///|
 /// Text committed by the input method (or typed on a hardware keyboard).
 pub fn Tester::type_text(self : Tester, s : String) -> Unit {
+  posted_tell()
   on_text(0, s, 0, 0)
   self.draw()
 }
@@ -1127,12 +1133,14 @@ pub fn Tester::type_text(self : Tester, s : String) -> Unit {
 ///|
 /// The input method's composition, with the caret at its end.
 pub fn Tester::compose(self : Tester, s : String) -> Unit {
+  posted_tell()
   on_text(1, s, s.length(), 0)
   self.draw()
 }
 
 ///|
 pub fn Tester::key(self : Tester, code : Int, mods? : Int = 0) -> Unit {
+  posted_tell()
   on_key(code, mods)
   self.draw()
 }
@@ -1933,6 +1941,8 @@ pub fn Tester::opened(self : Tester) -> Array[String] {
 ///|
 /// The clock moves on `ms`, no frame drawn.
 pub fn Tester::advance(self : Tester, ms : Double) -> Unit {
+  posted_tell()
+  fake_dues_to(self.fake, self.fake.time + ms)
   self.fake.time = self.fake.time + ms
 }
 
@@ -2848,6 +2858,7 @@ pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy
 /// A key (`code`, `mods` held) the host says came at `at` (its own moment), told now, later: no frame drawn.
 pub fn Tester::key_told(self : Tester, code : Int, mods : Int, at : Double) -> Unit {
   self.fake.event_at = at
+  posted_tell()
   on_key(code, mods)
   self.fake.event_at = -1.0
 }
@@ -2857,6 +2868,7 @@ pub fn Tester::key_told(self : Tester, code : Int, mods : Int, at : Double) -> U
 /// drawn.
 pub fn Tester::text_told(self : Tester, s : String, at : Double) -> Unit {
   self.fake.event_at = at
+  posted_tell()
   on_text(0, s, 0, 0)
   self.fake.event_at = -1.0
 }
