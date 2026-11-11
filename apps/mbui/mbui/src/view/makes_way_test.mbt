@@ -238,3 +238,54 @@ test "words wrapping in a padded column shown, let go of and shown again, no fra
   assert_eq(none, one)
   assert_true(none[none.length() - 1] > 40.0, msg="shown again, wrapped: \{none}")
 }
+
+///|
+test "a show let go of and its opposite shown down a column at once: one in the other's place next to it, each its own way with something between them" {
+  // (next to each other: the one shown in the other's place, from as tall as it was, what is under them going so)
+  let a_on = @signals.signal(true, same=fn(a, b) { a == b })
+  let c_on = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.show(fn() { a_on.get() }, fn(v) { v.height(Is(Some(40.0))).words(Is("A")) |> ignore })
+    root.show(fn() { c_on.get() }, fn(v) { v.height(Is(Some(60.0))).words(Is("C")) |> ignore })
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  t.event(100.0, fn() {
+    a_on.set(false)
+    c_on.set(true)
+  })
+  t.at(100.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(word_y(t, "C"), 0.0)
+  assert_eq(word_y(t, "下"), 40.0)
+  // (B between them: A closes its way over B, C opens its own under B, from nothing; B never put up at once)
+  let a_on = @signals.signal(true, same=fn(a, b) { a == b })
+  let c_on = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.show(fn() { a_on.get() }, fn(v) { v.height(Is(Some(40.0))).words(Is("A")) |> ignore })
+    root.box(fn(b) { b.height(Is(Some(40.0))).words(Is("B")) |> ignore }) |> ignore
+    root.show(fn() { c_on.get() }, fn(v) { v.height(Is(Some(60.0))).words(Is("C")) |> ignore })
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(word_y(t, "B"), 40.0)
+  t.event(100.0, fn() {
+    a_on.set(false)
+    c_on.set(true)
+  })
+  t.at(100.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(word_y(t, "B"), 40.0)
+  assert_eq(word_y(t, "C"), 80.0)
+  assert_eq(word_y(t, "下"), 80.0)
+  // (a Move over 40, half of it: nine tenths closed; C's over 60 as far)
+  t.at(225.0)
+  t.frame(390.0, 844.0) |> ignore
+  let b = word_y(t, "B")
+  assert_true(b > 3.0 && b < 6.0, msg="B half way: \{b}")
+  t.at(600.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(word_y(t, "B"), 0.0)
+  assert_eq(word_y(t, "C"), 40.0)
+  assert_eq(word_y(t, "下"), 100.0)
+}
