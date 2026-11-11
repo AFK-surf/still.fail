@@ -251,7 +251,7 @@ priv struct ViewBlock {
   h : Double
   /// its glyphs where they are before they are set on the pixels (instance, x, the line's baseline, the glyph's own
   /// offset from it), each set on them where the scene composes it, as an old view's are where they are painted
-  glyphs : Array[(Int, Double, Double, Double)]
+  glyphs : Array[(Int, Double, Double, Double, Double, Double)]
   /// the glyphs it draws from, each where it was in the atlas as it was made (key, u, v): kept there as it is composed
   /// frame after frame, made again once one is not (view_glyphs_held)
   kept : Array[(Int, Double, Double)]
@@ -565,6 +565,50 @@ fn view_words_measure_set(
   )
   // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size)
   (if width >= 0.0 && look.wrap && soft_wrapped(tl.line_end, tl.shaped.cu) { width } else { tl.w }, tl.h)
+}
+
+///|
+/// The cells `words` on one line are cut into as a node draws them set as `look` says, at the size of words `scale` its
+/// node's are at (View::words_scale): each glyph's middle from the line's start and its advance, in the order and terms
+/// of GlyphAt's `index` and `cx` (what is not a glyph, a blank, none), so a glyph of one line of words is matched with
+/// the glyph in the same place of another's (View::glyphs_by: one line changing into another a glyph at a time, the
+/// activity row's of a chat, chat_rows.mbt's, as Ctx::words_glyph_cells gives an old view's). Drawn by View::words, or
+/// `mono` by View::words_runs of one piece in the code face, its pieces set as runs_plain says. Nothing of a node read:
+/// a value of its arguments alone.
+pub fn glyph_cells(
+  words : String,
+  look : @view.WordsLook,
+  scale : Double,
+  mono? : Bool = false,
+) -> Array[(Double, Double)] {
+  let cells : Array[(Double, Double)] = []
+  if mono {
+    let r = view_rich([@text.span(words, mono=true)], { ..look, wrap: false }, @view.runs_plain, scale, false)
+    let lay = layout_rich(r, 1.0e9)
+    for i in 0..<lay.keys.length() {
+      if lay.keys[i] >= 0 {
+        cells.push((lay.xs[i] + lay.adv[i] / 2.0, lay.adv[i]))
+      }
+    }
+  } else {
+    let tl = layout_words(
+      view_words_set(words, { ..look, wrap: false }, false),
+      view_sp(scale, look.size),
+      look.weight,
+      1.0e9,
+      false,
+      balance=false,
+      line=view_line(scale, look),
+      spacing=view_spacing(scale, look),
+      style=view_words_style(),
+    )
+    for i in 0..<tl.shaped.keys.length() {
+      if tl.shaped.keys[i] >= 0 {
+        cells.push((tl.xs[i] + tl.shaped.adv[i] / 2.0, tl.shaped.adv[i]))
+      }
+    }
+  }
+  cells
 }
 
 ///|
@@ -2090,7 +2134,7 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
   let solid = glass_paint.solid
   let mut glass_at = -1
   let mut cut = (0, 0)
-  let glyphs : Array[(Int, Double, Double, Double)] = []
+  let glyphs : Array[(Int, Double, Double, Double, Double, Double)] = []
   // (the glyphs it draws from, told as they are drawn: kept in the atlas as long as it is composed, view_glyphs_held)
   let was_kept = glyphs_kept.val
   let kept : Array[(Int, Double, Double)] = []
@@ -2207,6 +2251,20 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     }
   }
   let bone_to = self.ninst - start
+  // (its glyphs each drawn by a look of its own where it says so, numbered from its first, in the terms it is drawn in:
+  // View::glyphs_by, as an old view's node's are, scene.mbt's paint; what that is asked under no tracking, its state
+  // said by its binding alone)
+  let glyphs_was = match tree.glyphs_of(c.id) {
+    Some(f) if bones == 0L => {
+      let was = (glyph_look.val, glyph_n.val, glyph_cut.val)
+      let k = clip_top()
+      glyph_look.val = Some(fn(at) { @signals.untracked(fn() { f(at) }) })
+      glyph_n.val = 0
+      glyph_cut.val = (clip_stack[k + 1], clip_stack[k + 3])
+      Some(was)
+    }
+    _ => None
+  }
   if bones == 0L && c.words != "" && !c.runs.is_empty() {
     // (in pieces each set its own way: one paragraph, as Ctx::rich's; one line given less than it is wide cut to it,
     // ending in an ellipsis, as its plain words are)
@@ -2279,6 +2337,14 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     if !k.wrap && tl.w > c.w + 0.5 && !c.ellipsis_past {
       cut = (from, self.ninst - start)
     }
+  }
+  match glyphs_was {
+    Some((l, gi, cut_at)) => {
+      glyph_look.val = l
+      glyph_n.val = gi
+      glyph_cut.val = cut_at
+    }
+    None => ()
   }
   // (its shapes, as bands worked out once for the outlines said (kept by them, whatever colour they are drawn in), in
   // its tint where it has one; their pieces its own, counted from 0)
@@ -2392,7 +2458,7 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     cut,
     w: c.w,
     h: c.h,
-    glyphs: glyphs.map(fn(g) { (g.0 - start, g.1, g.2, g.3) }),
+    glyphs: glyphs.map(fn(g) { (g.0 - start, g.1, g.2, g.3, g.4, g.5) }),
     kept,
   }
 }
@@ -2471,10 +2537,11 @@ fn Ctx::view_blit(
   // so from where it is drawn)
   let sc = self.scale
   for gl in made.glyphs {
-    let (i, gx, base, goy) = gl
+    // (and moved by its own look after that, View::glyphs_by: as an old view's glyph is, after it is set on the pixels)
+    let (i, gx, base, goy, own_x, own_y) = gl
     let b = at + i * inst_size
-    s.unsafe_set(b, if lx == x { on_pixels(x + gx, sc) } else { x + on_pixels(lx + gx, sc) - lx })
-    s.unsafe_set(b + 1, if ly == y { on_glyph_row(y + base, goy, sc) } else { y + on_glyph_row(ly + base, goy, sc) - ly })
+    s.unsafe_set(b, (if lx == x { on_pixels(x + gx, sc) } else { x + on_pixels(lx + gx, sc) - lx }) + own_x)
+    s.unsafe_set(b + 1, (if ly == y { on_glyph_row(y + base, goy, sc) } else { y + on_glyph_row(ly + base, goy, sc) - ly }) + own_y)
   }
   // (its own ground drawn off where it is laid out, bigger and as round as it says (View::ground_drawn): before its
   // glass's capture is told where it is)

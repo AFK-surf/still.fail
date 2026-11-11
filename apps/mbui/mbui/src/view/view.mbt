@@ -132,6 +132,8 @@ pub(all) struct Look {
   mut words_center : Bool
   /// whether its words, not wrapped, keep their line breaks, each line as it is (View::words_breaks)
   mut words_breaks : Bool
+  /// how many times what its glyphs are drawn by was said (View::glyphs_by): its words drawn again as it is
+  mut glyphs_said : Int
   /// whether its words' ellipsis, one line cut short past it, is drawn past its box (View::ellipsis_past)
   mut ellipsis_past : Bool
   /// the picture it draws as wide as it is laid out, its curves cut for the pixels it is drawn at (View::picture)
@@ -191,6 +193,8 @@ pub(all) struct Content {
   words_center : Bool
   /// its words, not wrapped, on their lines as written (View::words_breaks)
   words_breaks : Bool
+  /// how many times what its glyphs are drawn by was said (View::glyphs_by; Tree::glyphs_of)
+  glyphs_said : Int
   /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
   ellipsis_past : Bool
   /// the picture it draws as wide as it is (View::picture)
@@ -293,6 +297,8 @@ pub(all) struct Drawn {
   words_center : Bool
   /// its words, not wrapped, on their lines as written (View::words_breaks)
   words_breaks : Bool
+  /// how many times what its glyphs are drawn by was said (View::glyphs_by; Tree::glyphs_of)
+  glyphs_said : Int
   /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
   ellipsis_past : Bool
   /// the picture it draws as wide as it is (View::picture)
@@ -599,6 +605,8 @@ struct Node {
   mut drawn_off : (Double, Double, Double, Double)
   /// what moves it off where it is laid out from how big it is laid out (View::moved_by), and how far that last
   /// came to (as it was placed, or as what it reads changed)
+  /// what each glyph of its words is drawn by, as its state is said now (View::glyphs_by)
+  mut glyphs_fn : ((GlyphAt) -> GlyphLook)?
   mut moved_by : ((Double, Double, Double) -> (Double, Double))?
   mut moved : (Double, Double)
   /// when that move is over at the size it is laid out, where it holds what is leaving that holds it till then
@@ -1480,6 +1488,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.look.clips = false
       n.look.words_center = false
       n.look.words_breaks = false
+      n.look.glyphs_said = 0
       n.look.ellipsis_past = false
       n.look.picture = None
       n.look.turn = 0.0
@@ -1494,6 +1503,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       }
       n.drew = false
       n.drawn_off = (0.0, 0.0, 0.0, 0.0)
+      n.glyphs_fn = None
       n.moved_by = None
       n.moved = (0.0, 0.0)
       n.moved_holds = None
@@ -1615,7 +1625,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, words_breaks: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, words_breaks: false, glyphs_said: 0, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         words_as_said,
@@ -1734,6 +1744,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         drawn_stale: true,
         drew: false,
         drawn_off: (0.0, 0.0, 0.0, 0.0),
+        glyphs_fn: None,
         moved_by: None,
         moved: (0.0, 0.0),
         moved_holds: None,
@@ -3019,6 +3030,7 @@ priv enum Prop {
   GoneEmpty
   FillsAcross
   WordsBreaks
+  GlyphsBy
 } derive(Eq, Show)
 
 ///|
@@ -3102,6 +3114,7 @@ fn Prop::ord(self : Prop) -> Int {
     OverScrim => 51
     Measured => 52
     WordsCentered => 53
+    GlyphsBy => 86
     EllipsisPast => 54
     WordsBreaks => 87
     Points => 55
@@ -9612,6 +9625,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     clips_self: n.look.clips && n.coming,
     words_center: n.look.words_center,
     words_breaks: n.look.words_breaks,
+    glyphs_said: n.look.glyphs_said,
     ellipsis_past: n.look.ellipsis_past,
     picture: n.look.picture,
     bones: self.bones_of_at(at),
@@ -10401,6 +10415,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     clips_self: c.clips_self,
     words_center: c.words_center,
     words_breaks: c.words_breaks,
+    glyphs_said: c.glyphs_said,
     ellipsis_past: c.ellipsis_past,
     picture: c.picture,
     bones: c.bones,

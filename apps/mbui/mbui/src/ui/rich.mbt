@@ -1289,7 +1289,7 @@ fn Ctx::emit_rich_glyphs(
   alpha : Double,
   cy0 : Double,
   cy1 : Double,
-  unplaced? : Array[(Int, Double, Double, Double)],
+  unplaced? : Array[(Int, Double, Double, Double, Double, Double)],
   center_in? : Double = -1.0,
 ) -> Unit {
   let sc = self.scale
@@ -1335,7 +1335,7 @@ fn Ctx::emit_rich_glyphs(
     let l = lay.line_of[c]
     let top = oy + lay.line_y[l]
     // (its own look, where what holds it says one: Ctx::glyphs_by)
-    let own = glyph_next(ox + lay.xs[c], top, lay.line_h[l])
+    let own = glyph_next(ox + lay.xs[c], top, lay.line_h[l], l, lay.xs[c] + lay.adv[c] / 2.0)
     match own {
       Some(gl) if gl.alpha <= 0.002 => continue
       _ => ()
@@ -1363,13 +1363,10 @@ fn Ctx::emit_rich_glyphs(
     }
     let gx = glyph_x(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
     let gy = glyph_row(top + lay.line_base[l], g.oy / z, sc)
-    match unplaced {
-      Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z))
-      None => ()
-    }
     let (gw, gh) = (g.gw / z, g.gh / z)
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
+    let (set_x, set_y) = (gx, gy)
     let (gx, gy, gw, gh, ga) = match own {
       Some(gl) => {
         let ink_x = gx + gw * (1.0 - gl.scale) / 2.0
@@ -1378,6 +1375,12 @@ fn Ctx::emit_rich_glyphs(
         (x + gl.dx, gy + gh * (1.0 - gl.scale) / 2.0 + gl.dy, gw * gl.scale * gl.sx, gh * gl.scale, alpha * gl.alpha)
       }
       None => (gx, gy, gw, gh, alpha)
+    }
+    // (where it is before it is set on the pixels, for what places it again elsewhere (view_blit), and what its own
+    // look moves it by after that)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z, gx - set_x, gy - set_y))
+      None => ()
     }
     glyph_pushing.val = true
     self.push_inst(

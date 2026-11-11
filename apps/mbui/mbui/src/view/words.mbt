@@ -774,3 +774,65 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
   }
   self
 }
+
+///|
+/// How a glyph is drawn over how it is laid out: its opacity, offsets and uniform scale about its ink's middle. `sx`
+/// scales horizontally about its advance's middle. One type for an old view's glyphs (ui's Ctx::glyphs_by, @ui.GlyphLook)
+/// and a node's (View::glyphs_by).
+pub(all) struct GlyphLook {
+  alpha : Double
+  dx : Double
+  dy : Double
+  scale : Double
+  sx : Double
+} derive(Show, Eq)
+
+///|
+/// A glyph as it is painted, for its own look (View::glyphs_by; an old view's Ctx::glyphs_by):
+/// - `index`: its number, from 0 in the order painted, the order read in. What is not a glyph (a list's mark, a
+///   quote's bar, a code's ground) is said with the number of the glyph after it.
+/// - `x`, `y`, `h`: where its line's box starts and its line's height: an old view's in the window, a node's in the
+///   node's own terms (where its words are drawn from, before it is placed, moved or scaled).
+/// - `top`, `foot`: the top and foot of what cuts what it is drawn in, in the same terms as `y`.
+/// - `line`: the line of its words it is on, from 0 (a line its words break onto, wrapped or kept: View::words_breaks).
+///   -1 for what is not a glyph.
+/// - `cx`: where its middle is along that line, from the line's start: its advance's start and half its advance, in
+///   the points its words are laid out in (the system's size of words applied; not what places, moves or scales them,
+///   nor a centred line's shift). What it is in the cells its words are cut into (ui's glyph_cells). 0 for what is not
+///   a glyph.
+pub(all) struct GlyphAt {
+  index : Int
+  x : Double
+  y : Double
+  h : Double
+  top : Double
+  foot : Double
+  line : Int
+  cx : Double
+} derive(Show, Eq)
+
+///|
+/// Each glyph of its words drawn with what `f` gives for `state` as it is said now and that glyph (GlyphAt): words
+/// coming or changing a glyph at a time. `state` is bound as any property is (what a way gives at the moment drawn,
+/// View::drawn_while, Way::shown_on; the cells two lines of words are cut into), and `f` reads its two arguments alone:
+/// no clock, no signal, nothing laid out (it is asked as the words are painted, under no tracking, as often as they
+/// are). So its words are drawn again as `state` changes, and only then: what a way gives that is over asks for no
+/// frame, as anything bound to it. How it is laid out, picked, pressed and read out is as without it. Paint's.
+#callsite(autofill(loc))
+pub fn[T : Eq] View::glyphs_by(self : View, state : Live[T], f : (T, GlyphAt) -> GlyphLook, loc~ : SourceLoc) -> View {
+  self.bind(loc~, GlyphsBy, state, Paint, fn(s) {
+    let n = self.tree.nodes[self.at]
+    n.glyphs_fn = Some(fn(at) { f(s, at) })
+    // (what it draws is another as this is: its words made again, Content's `glyphs_said`)
+    n.look.glyphs_said = n.look.glyphs_said + 1
+  })
+  self
+}
+
+///|
+/// What each glyph of node `id`'s words is drawn by as it is said now (View::glyphs_by): what hosts the tree asks it
+/// as it paints them. None where nothing is said, or it is gone.
+pub fn Tree::glyphs_of(self : Tree, id : NodeId) -> ((GlyphAt) -> GlyphLook)? {
+  guard self.lives(id) else { return None }
+  self.nodes[id.at].glyphs_fn
+}

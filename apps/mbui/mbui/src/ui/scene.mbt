@@ -889,7 +889,7 @@ fn Ctx::push_inst(
   }
   let (y, alpha, c2d) = match glyph_look.val {
     Some(f) if !glyph_pushing.val => {
-      let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 })
+      let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1, line: -1, cx: 0.0 })
       (y + l.dy, alpha * l.alpha, if kind == 0.0 { c2d * l.alpha } else { c2d })
     }
     _ => (y, alpha, c2d)
@@ -1074,14 +1074,14 @@ let glyph_cut : Ref[(Double, Double)] = Ref((0.0, 0.0))
 let glyph_pushing : Ref[Bool] = Ref(false)
 
 ///|
-/// The next glyph's own look, where what is painted says one (Ctx::glyphs_by), counted: its line's box from (x, y),
-/// `h` high.
-fn glyph_next(x : Double, y : Double, h : Double) -> GlyphLook? {
+/// The next glyph's own look, where what is painted says one (Ctx::glyphs_by, View::glyphs_by), counted: its line's
+/// box from (x, y), `h` high; it on line `line` of its words, its middle `cx` along it (GlyphAt's).
+fn glyph_next(x : Double, y : Double, h : Double, line : Int, cx : Double) -> GlyphLook? {
   match glyph_look.val {
     Some(f) => {
       let gi = glyph_n.val
       glyph_n.val = gi + 1
-      Some(f({ index: gi, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 }))
+      Some(f({ index: gi, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1, line, cx }))
     }
     None => None
   }
@@ -1098,7 +1098,7 @@ fn Ctx::emit_text(
   center_in? : Double = -1.0,
   spans? : Array[(Int, Int, Int64)] = [],
   font? : (Double, Int, Int, Double),
-  unplaced? : Array[(Int, Double, Double, Double)],
+  unplaced? : Array[(Int, Double, Double, Double, Double, Double)],
 ) -> Unit {
   let s = tl.shaped
   let n = s.starts.length()
@@ -1139,7 +1139,7 @@ fn Ctx::emit_text(
     let line = tl.line_of[c]
     let top = oy + line.to_double() * tl.line_h
     // (its own look, where what holds it says one: numbered whether or not it shows, Ctx::glyphs_by)
-    let own = glyph_next(ox + tl.xs[c], top, tl.line_h)
+    let own = glyph_next(ox + tl.xs[c], top, tl.line_h, line, tl.xs[c] + tl.shaped.adv[c] / 2.0)
     match own {
       Some(l) if l.alpha <= 0.002 => continue
       _ => ()
@@ -1169,15 +1169,10 @@ fn Ctx::emit_text(
     }
     let gx = glyph_x(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
     let gy = glyph_row(top + tl.ascent, g.oy / z, sc)
-    // (where it is before it is set on the pixels, for what places it again elsewhere: a node's words, set on the
-    // pixels where the scene composes them, view_blit)
-    match unplaced {
-      Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z, top + tl.ascent, g.oy / z))
-      None => ()
-    }
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
+    let (set_x, set_y) = (gx, gy)
     let (gx, gy, gw, gh, ga) = match own {
       Some(l) => {
         let ink_x = gx + gw * (1.0 - l.scale) / 2.0
@@ -1186,6 +1181,12 @@ fn Ctx::emit_text(
         (x + l.dx, gy + gh * (1.0 - l.scale) / 2.0 + l.dy, gw * l.scale * l.sx, gh * l.scale, alpha * l.alpha)
       }
       None => (gx, gy, gw, gh, alpha)
+    }
+    // (where it is before it is set on the pixels, for what places it again elsewhere: a node's words, set on the
+    // pixels where the scene composes them, view_blit; what its own look moves it by after that, as here)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z, top + tl.ascent, g.oy / z, gx - set_x, gy - set_y))
+      None => ()
     }
     glyph_pushing.val = true
     self.push_inst(
