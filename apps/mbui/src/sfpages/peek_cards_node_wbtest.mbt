@@ -279,10 +279,10 @@ test "a station's card as nodes: the same words where they were and the same rec
     }
     let (faded, a) = peek_faded_apart(peek_faults_new(t.audit(), old_faults), name)
     if a.length() > 0 {
-      faults.push("\{name}: audit, the old card's not: \{a}")
+      faults.push("\{name}: audit, the old card's not: \{Repr(a)}")
     }
     if faded.length() != (if name == "coming back" { peek_faded_faults } else { 0 }) {
-      faults.push("\{name}: \{faded.length()} faded words fainter than the contrast asks: \{faded}")
+      faults.push("\{name}: \{faded.length()} faded words fainter than the contrast asks: \{Repr(faded)}")
     }
   }
   assert_eq(faults, [], msg=faults.join("\n"))
@@ -317,10 +317,10 @@ test "a station's part as nodes (under its agent's, in one card): the same as th
     }
     let (faded, a) = peek_faded_apart(peek_faults_new(t.audit(), old_faults), name)
     if a.length() > 0 {
-      faults.push("\{name}: audit, the old card's not: \{a}")
+      faults.push("\{name}: audit, the old card's not: \{Repr(a)}")
     }
     if faded.length() != (if name == "coming back" { peek_faded_faults } else { 0 }) {
-      faults.push("\{name}: \{faded.length()} faded words fainter than the contrast asks: \{faded}")
+      faults.push("\{name}: \{faded.length()} faded words fainter than the contrast asks: \{Repr(faded)}")
     }
   }
   assert_eq(faults, [], msg=faults.join("\n"))

@@ -73,7 +73,7 @@ test "the ring as a node drawn as the old view's progress_ring is, none come, a 
     seen.push(new.length())
   }
   // (more of it drawn as more is come: the track alone, then the track and its part)
-  assert_true(seen[1] > seen[0], msg="\{seen}")
+  assert_true(seen[1] > seen[0], msg="\{Repr(seen)}")
   // (its nodes the same: told another part, only what it draws worked out again)
   assert_eq(@ui.view_tree().unwrap().alive(), alive)
   assert_eq(t.audit(), [])

@@ -121,7 +121,7 @@ test "a mouse resting on a link: its own card after hover_card_open_ms, beside t
   let (px, py, _, ph) = r.piece("甲的链接")
   match r.card_at("甲的链接的卡") {
     // (its words 10 in from the card's padding 8 (a small panel's): the card at the piece's start, 6 under it)
-    Some((x, y)) => assert_true(x > px && x < px + 40.0 && y > py + ph + hover_card_offset, msg="\{(x, y, px, py, ph)}")
+    Some((x, y)) => assert_true(x > px && x < px + 40.0 && y > py + ph + hover_card_offset, msg="\{Repr((x, y, px, py, ph))}")
     None => fail("甲's card not drawn")
   }
   assert_true(r.card_at("乙的链接的卡") is None)
@@ -138,7 +138,7 @@ test "a mouse resting on a link: its own card after hover_card_open_ms, beside t
   assert_true(r.open(3) && !r.open(1))
   let (bx, _, _, _) = r.piece("乙的链接")
   match r.card_at("乙的链接的卡") {
-    Some((x, _)) => assert_true(x > bx && x < bx + 40.0, msg="\{(x, bx)}")
+    Some((x, _)) => assert_true(x > bx && x < bx + 40.0, msg="\{Repr((x, bx))}")
     None => fail("乙's card not drawn")
   }
   let faults = r.t.audit()

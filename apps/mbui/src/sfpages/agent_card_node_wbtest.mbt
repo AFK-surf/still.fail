@@ -356,11 +356,11 @@ test "an agent's card as nodes: the same words where they were and the same rect
     }
     let (known, rest) = agent_rooms_known(t.audit(), card)
     if known.length() != agent_rooms_expected(name) {
-      faults.push("\{name}: \{known.length()} rooms known, \{agent_rooms_expected(name)} said: \{known}")
+      faults.push("\{name}: \{known.length()} rooms known, \{agent_rooms_expected(name)} said: \{Repr(known)}")
     }
     // (what else it says, the old card said too: its context's words cut short where it is not known)
     if rest.length() != old_faults.length() {
-      faults.push("\{name}: audit: \{rest}, the old card's \{old_faults}")
+      faults.push("\{name}: audit: \{Repr(rest)}, the old card's \{Repr(old_faults)}")
     }
   }
   assert_eq(faults, [], msg=faults.join("\n"))
@@ -405,11 +405,11 @@ test "an agent's card with its station's part in one tile (a finger's hold on th
     }
     let widths = agent_tile_widths(new_tiles)
     if widths.length() != 3 || widths.iter().any(fn(w) { w != widths[0] }) {
-      faults.push("\{name}: its figures \{widths}, not three shares alike")
+      faults.push("\{name}: its figures \{Repr(widths)}, not three shares alike")
     }
     let (known, rest) = agent_rooms_known(t.audit(), card)
     if known.length() != agent_rooms_expected(name) || rest.length() > 0 {
-      faults.push("\{name}: \{known.length()} rooms known, \{agent_rooms_expected(name)} said; audit: \{rest}")
+      faults.push("\{name}: \{known.length()} rooms known, \{agent_rooms_expected(name)} said; audit: \{Repr(rest)}")
     }
   }
   assert_eq(faults, [], msg=faults.join("\n"))
@@ -525,8 +525,8 @@ test "an activity row's avatar says neither: a finger's tap on it the row's (ope
     f.contains("made at stillfail/src/sfpages/agent_card_node_wbtest.mbt:") &&
     (f.contains(" at 60,53 18×18, ") || f.contains(" at 138,52 60×20, "))
   })
-  assert_eq(over_row.length(), 2, msg="held: \{rest}")
-  assert_eq(rest.filter(fn(f) { !over_row.contains(f) }), [], msg="held: \{rest}")
+  assert_eq(over_row.length(), 2, msg="held: \{Repr(rest)}")
+  assert_eq(rest.filter(fn(f) { !over_row.contains(f) }), [], msg="held: \{Repr(rest)}")
 }
 
 ///|

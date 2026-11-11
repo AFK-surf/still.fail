@@ -155,7 +155,7 @@ fn band_frame(c : BandCase) -> Unit {
 /// A frame as words: its number, input, moment, band, and its rows.
 fn band_said(f : BandFrame) -> String {
   let rows = f.rows.map(fn(r) { "\{r.0}@\{r.1}-\{r.2}" })
-  "f\{f.n} \{f.phase} t=\{f.at} band \{f.gap} from \{f.gap_at}: \{rows}"
+  "f\{f.n} \{f.phase} t=\{f.at} band \{f.gap} from \{f.gap_at}: \{Repr(rows)}"
 }
 
 ///|
@@ -249,7 +249,7 @@ test "a page's list given the same input at the same moments at 60, 120 and 24 f
           let a = mine[k]
           let b = theirs[k]
           faults.push(
-            "\{scale} a point, \{rate} against 120: \{differ.length()} of \{moments.length()} moments, the first t=\{k.to_double() / 1000.0}: only at \{rate} \{a.filter(fn(e) { !b.contains(e) })}; only at 120 \{b.filter(fn(e) { !a.contains(e) })}",
+            "\{scale} a point, \{rate} against 120: \{differ.length()} of \{moments.length()} moments, the first t=\{k.to_double() / 1000.0}: only at \{rate} \{Repr(a.filter(fn(e) { !b.contains(e) }))}; only at 120 \{Repr(b.filter(fn(e) { !a.contains(e) }))}",
           )
         }
         None => ()

@@ -608,10 +608,10 @@ test "a phone's Home: its search tucked under the top bar out of sight takes no 
   let field = (fx, fy, fx + fw, fy + fh)
   // (the bar's keys: what takes presses whose top is above the field's foot, the field's line under them)
   let keys = boxes.filter(fn(b) { b.1.1 < field.3 && named(b) != "搜索全部内容" }).map(fn(b) { (named(b), b.1) })
-  assert_true(keys.length() >= 3, msg="the bar's keys: \{keys}")
+  assert_true(keys.length() >= 3, msg="the bar's keys: \{Repr(keys)}")
   // (tucked: its foot no lower than the bar's keys' feet are, past them by 8)
   let bar_foot = keys.fold(init=0.0, fn(m, k) { if k.1.3 > m { k.1.3 } else { m } })
-  assert_true(field.3 <= bar_foot + 8.0, msg="tucked: the field \{field}, the keys' foot \{bar_foot}")
+  assert_true(field.3 <= bar_foot + 8.0, msg="tucked: the field \{Repr(field)}, the keys' foot \{bar_foot}")
   // (the bar between its keys, a finger's room clear of each, at its keys' middle line: the first such place over the
   // field's middle third)
   let my = (keys[0].1.1 + keys[0].1.3) / 2.0
@@ -629,7 +629,7 @@ test "a phone's Home: its search tucked under the top bar out of sight takes no 
   for k in keys {
     let (name, (x0, _, x1, y1)) = k
     for d in [1.0, 7.0] {
-      assert_false(tucked_tap((x0 + x1) / 2.0, y1 + d), msg="\{d} below \{name} at \{k.1}")
+      assert_false(tucked_tap((x0 + x1) / 2.0, y1 + d), msg="\{d} below \{name} at \{Repr(k.1)}")
     }
   }
   match clear {

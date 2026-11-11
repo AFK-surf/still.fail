@@ -346,13 +346,13 @@ test "a layer presented over all else (a hover card under its trigger) covering 
   let faults = t.tree_room_faults()
   assert_true(
     faults.length() == 1 && faults[0].has_prefix("room: ") && faults[0].contains("60×20") && faults[0].contains("has 60×38"),
-    msg="drawn over: \{faults}",
+    msg="drawn over: \{Repr(faults)}",
   )
   // (c) in the layer: its key 4 over another, each 34 high (12 on its far side, 2 on the near)
   let t = rr_presented(true, true)
   let faults = t.tree_room_faults()
   assert_true(
     faults.length() == 2 && faults.iter().all(fn(f) { f.has_prefix("room: ") && f.contains("30×20") && f.contains("has 44×34") }),
-    msg="in the layer: \{faults}",
+    msg="in the layer: \{Repr(faults)}",
   )
 }

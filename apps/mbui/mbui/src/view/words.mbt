@@ -812,7 +812,7 @@ pub(all) struct GlyphLook {
   dy : Double
   scale : Double
   sx : Double
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A glyph as it is painted, for its own look (View::glyphs_by; an old view's Ctx::glyphs_by):
@@ -836,7 +836,7 @@ pub(all) struct GlyphAt {
   foot : Double
   line : Int
   cx : Double
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Each glyph of its words drawn with what `f` gives for `state` as it is said now and that glyph (GlyphAt): words

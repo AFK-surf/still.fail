@@ -523,16 +523,16 @@ test "a page's list's wheel notch: when it is at rest said from what it was as i
   for notches in [1, 2] {
     let (rest, at_end, after, then) = notch_rests(notches, 0.0)
     assert_true(rest is Some(_), msg="\{notches}: not moving by itself")
-    assert_true(after.iter().all(fn(x) { x == at_end }), msg="\{notches}: at rest at \{at_end}, after \{after}")
+    assert_true(after.iter().all(fn(x) { x == at_end }), msg="\{notches}: at rest at \{at_end}, after \{Repr(after)}")
     assert_eq(then, None)
     ones.push(rest)
     for period in [1000.0 / 60.0, 1000.0 / 120.0, 1000.0 / 24.0, 1000.0 / 7.0] {
       let got = notch_rests(notches, period)
-      assert_eq(got, (rest, at_end, after, then), msg="\{notches} at \{period}: \{got}, in one jump \{(rest, at_end, after, then)}")
+      assert_eq(got, (rest, at_end, after, then), msg="\{notches} at \{period}: \{Repr(got)}, in one jump \{Repr((rest, at_end, after, then))}")
     }
   }
   // (turned again, said again: at rest later than the one alone)
-  assert_true(ones[1].unwrap() > ones[0].unwrap(), msg="\{ones}")
+  assert_true(ones[1].unwrap() > ones[0].unwrap(), msg="\{Repr(ones)}")
 }
 
 ///|

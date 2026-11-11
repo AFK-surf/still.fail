@@ -554,8 +554,8 @@ test "对话目录: the rail's ticks, one for each said, the reader's (the 16th:
   // (the rest one colour, quieter than the ink, each as long as its turn: shorter than the reader's, 4 for one message,
   // longer as more answered it: 林's first (Claude answering, then Ana) longer than Ana's next (林 straight after))
   let short = ticks.filter(fn(k) { k.1 != long[0].1.1 })
-  assert_true(short.iter().all(fn(k) { k.1 == short[0].1 && k.0 >= 4.0 && k.0 <= 12.0 }), msg="\{ticks}")
-  assert_true(ticks[0].0 > ticks[1].0 && ticks[1].0 == 4.0, msg="\{ticks}")
+  assert_true(short.iter().all(fn(k) { k.1 == short[0].1 && k.0 >= 4.0 && k.0 <= 12.0 }), msg="\{Repr(ticks)}")
+  assert_true(ticks[0].0 > ticks[1].0 && ticks[1].0 == 4.0, msg="\{Repr(ticks)}")
   // three said: the rail as tall as a press at least, its ticks in its middle
   let three : Json = {
     "days": [{ "date": "2026-11-10", "day": "今天", "seqs": [2, 4, 6] }],
@@ -1092,13 +1092,13 @@ test "对话目录: a tick of the rail pointed at says its message's first line 
   assert_eq(outline_rows_asked(calls).length(), asked + 1)
   let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
   assert_eq(tip.length(), 1, msg="\{tip}")
-  assert_true(tip[0].has_prefix("早，今天想把发布清单") && tip[0].has_suffix("09:12"), msg="\{tip}")
+  assert_true(tip[0].has_prefix("早，今天想把发布清单") && tip[0].has_suffix("09:12"), msg="\{Repr(tip)}")
   // (the next: Ana's 09:40, its words held already, nothing asked)
   t.move_to(rx + rw / 2.0, ticks[1].1 + 1.0)
   t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
   assert_eq(outline_rows_asked(calls).length(), asked + 1)
   let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
-  assert_true(tip.length() == 1 && tip[0].has_prefix("签名证书下周三过期") && tip[0].has_suffix("09:40"), msg="\{tip}")
+  assert_true(tip.length() == 1 && tip[0].has_prefix("签名证书下周三过期") && tip[0].has_suffix("09:40"), msg="\{Repr(tip)}")
   // (pressed there, the outline as from the rail)
   t.click(Button, label="对话目录")
   t.run_for(@ui.move_most_ms)
@@ -1153,5 +1153,5 @@ test "a phone's chat: each key of its bar, over the messages scrolled under the 
   u.release(x, y)
   u.run_for(@sfbase.pick_bar_in_ms)
   let p = @sfbase.picked.get()
-  assert_true(p.ts != "" && p.b > p.a, msg="held long on \{past.text} at (\{x}, \{y}): \{p}")
+  assert_true(p.ts != "" && p.b > p.a, msg="held long on \{past.text} at (\{x}, \{y}): \{Repr(p)}")
 }

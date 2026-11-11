@@ -449,8 +449,8 @@ fn aw_crowded(faults : Array[String], at : String, history : Int, work : Int) ->
   let of = fn(place : String) { room.filter(fn(f) { f.contains(place) }) }
   let h = of("sfdesk/history.mbt:397")
   let w = of("sfpages/agent_work.mbt:352")
-  assert_eq(h.length(), history, msg="\{at}: \{h}")
-  assert_eq(w.length(), work, msg="\{at}: \{w}")
+  assert_eq(h.length(), history, msg="\{at}: \{Repr(h)}")
+  assert_eq(w.length(), work, msg="\{at}: \{Repr(w)}")
 }
 
 ///|

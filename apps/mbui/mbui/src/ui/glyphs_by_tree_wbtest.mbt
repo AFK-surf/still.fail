@@ -96,10 +96,10 @@ test "a node's glyphs by a look of their own: each told its number, its line and
       assert_eq(made_told, old_told, msg="\{at}: told")
       assert_eq(made_drawn, old_drawn, msg="\{at}: drawn: only made \{made_drawn.filter(fn(x) { !old_drawn.contains(x) })} | only old \{old_drawn.filter(fn(x) { !made_drawn.contains(x) })}")
       // (all its glyphs told and drawn: ab cd efg hij, 10)
-      assert_eq(made_told.length(), 10, msg="\{at}: \{made_told}")
+      assert_eq(made_told.length(), 10, msg="\{at}: \{Repr(made_told)}")
       // (narrow: on two lines, the middle along each from its own start: the second line's first glyph as the first's)
       if w < 100.0 {
-        assert_true(made_told[0].has_prefix("0: line 0, cx 3.75,") && made_told[4].has_prefix("4: line 1, cx 3.75,"), msg="\{at}: \{made_told}")
+        assert_true(made_told[0].has_prefix("0: line 0, cx 3.75,") && made_told[4].has_prefix("4: line 1, cx 3.75,"), msg="\{at}: \{Repr(made_told)}")
       }
     }
   }
@@ -145,7 +145,7 @@ test "the cells a line of words is cut into (glyph_cells): each glyph's middle w
       let told = node_glyph_middles(words, mono, scale)
       let cells = glyph_cells(words, { ..@view.words_plain, wrap: false }, scale, mono~).map(fn(c) { c.0 })
       assert_eq(cells, told, msg="\{words} at \{scale}")
-      assert_true(cells.length() > 0 && cells.iter().all(fn(x) { x > 0.0 }), msg="\{cells}")
+      assert_true(cells.length() > 0 && cells.iter().all(fn(x) { x > 0.0 }), msg="\{Repr(cells)}")
     }
   }
 }

@@ -174,7 +174,7 @@ test "a chats' list's first ask on 小屏 and 大屏: its window told before it,
     let (titles, more) = window_rows(src)
     let drawn = window_drawn(t, titles, h).length()
     let first = @sfbase.first_window(h)
-    said.push("\{name}: \{wire[:2].to_owned()} first \{first}, held \{titles.length()}, drawn \{drawn}, more \{more > 0}, bones \{t.bones_drawn()}")
+    said.push("\{name}: \{@ui.list_text(wire[:2].to_owned())} first \{first}, held \{titles.length()}, drawn \{drawn}, more \{more > 0}, bones \{t.bones_drawn()}")
     assert_true(drawn > 0 && drawn <= first, msg="\{name}: \{drawn} rows drawn, told \{first}")
   }
   assert_eq(said, [
@@ -249,7 +249,7 @@ test "a chats' list scrolled down on 小屏 with a finger and on 大屏 with a m
     }
     let wire = asked
     let (titles, _) = window_rows(src)
-    said.push("\{name}: subs \{wire.filter(fn(x) { x == "sub" }).length()}, unsubs \{wire.filter(fn(x) { x == "unsub" }).length()}, windows \{wire.filter(fn(x) { x.has_prefix("window") })}, held \{titles.length()}")
+    said.push("\{name}: subs \{wire.filter(fn(x) { x == "sub" }).length()}, unsubs \{wire.filter(fn(x) { x == "unsub" }).length()}, windows \{@ui.list_text(wire.filter(fn(x) { x.has_prefix("window") }))}, held \{titles.length()}")
   }
   assert_eq(faults, [])
   assert_eq(said, [

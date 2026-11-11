@@ -17,7 +17,7 @@ fn cut_self_walk(t : Tester, on : @signals.Signal[Bool]) -> Unit raise {
     for m in cut_self_moments {
       t.run_for(asked + m - t.time())
       let over = t.words_over_now()
-      assert_true(over.is_empty(), msg="\{if showing { "shown" } else { "let go" }} at \{m}: \{over}")
+      assert_true(over.is_empty(), msg="\{if showing { "shown" } else { "let go" }} at \{m}: \{Repr(over)}")
     }
   }
 }

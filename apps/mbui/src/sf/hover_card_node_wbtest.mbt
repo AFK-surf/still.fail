@@ -596,7 +596,7 @@ test "a card said along_offset stands that much further along its trigger's side
     assert_true(h.open("甲"), msg="\{off}: open")
     let r = h.trigger("甲")
     match h.card_along("甲") {
-      Some(c) => assert_eq((c.0, c.1), (r.0 + off, r.1 + r.3 + hover_card_offset), msg="\{off}: \{c}, its trigger \{r}")
+      Some(c) => assert_eq((c.0, c.1), (r.0 + off, r.1 + r.3 + hover_card_offset), msg="\{off}: \{Repr(c)}, its trigger \{Repr(r)}")
       None => fail("\{off}: open, none drawn")
     }
     assert_eq(h.t.audit(), [], msg="\{off}")
@@ -611,7 +611,7 @@ test "a card said a piece of its trigger stands beside that piece (a link in its
   assert_true(h.open("乙"), msg="open")
   let r = h.trigger("乙")
   match h.card_along("乙") {
-    Some(c) => assert_eq((c.0, c.1), (r.0 + 30.0 - 5.0, r.1 + 4.0 + 12.0 + hover_card_offset), msg="\{c}, its trigger \{r}")
+    Some(c) => assert_eq((c.0, c.1), (r.0 + 30.0 - 5.0, r.1 + 4.0 + 12.0 + hover_card_offset), msg="\{Repr(c)}, its trigger \{Repr(r)}")
     None => fail("open, none drawn")
   }
   // (its hand says the card while it is made: what is opened from what it holds stands beside it)

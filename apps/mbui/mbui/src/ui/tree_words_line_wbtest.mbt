@@ -157,7 +157,7 @@ fn breaks_read(
   let (x0, y0, w, h) = t.rect_of(probe[0]).unwrap()
   let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
   let at = if runs {
-    probe.map(fn(l) { "\{l}: \{t.run_rects(l).map(fn(r) { (r2(r.0 - x0), r2(r.1 - y0), r2(r.2), r2(r.3)) })}" })
+    probe.map(fn(l) { "\{l}: \{list_text(t.run_rects(l).map(fn(r) { rect_text((r2(r.0 - x0), r2(r.1 - y0), r2(r.2), r2(r.3))) }))}" })
   } else {
     []
   }
@@ -175,11 +175,11 @@ test "words on their lines as written (View::words_breaks): a line each, as wide
       let at = "\{if runs { "in pieces" } else { "plain" }}, wrap \{wrap}, breaks \{breaks}"
       let old = breaks_read(false, runs, wrap, breaks, words, 9)
       let made = breaks_read(true, runs, wrap, breaks, words, 9)
-      assert_eq(made, old, msg="\{at}: made \{made} | old \{old}".replace_all(old="\n", new="\\n"))
+      assert_eq(made, old, msg="\{at}: made \{Repr(made)} | old \{Repr(old)}".replace_all(old="\n", new="\\n"))
       // (kept: its four lines, 22 each, one under the other; run on: one line)
       let (size, _, _, _) = made
       if wrap || breaks {
-        assert_true(size.1 >= 4.0 * 22.0, msg="\{at}: \{size}")
+        assert_true(size.1 >= 4.0 * 22.0, msg="\{at}: \{Repr(size)}")
       } else {
         assert_eq(size.1, 22.0, msg=at)
       }
