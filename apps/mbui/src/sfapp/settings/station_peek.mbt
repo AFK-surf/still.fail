@@ -177,7 +177,12 @@ let peek_card_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, co
 /// The station's name, as the workspace's stations say it once they are read: none before (its id is no name, not
 /// said in its place meanwhile); its id only where they are read and give it none (not among them, or unnamed).
 fn peek_name(core : Core, address : String) -> String {
-  let stations = (core.topic)("stations", { "scope": str(peek_scope(address)) }).get().value
+  peek_name_of((core.topic)("stations", { "scope": str(peek_scope(address)) }).get().value, address)
+}
+
+///|
+/// The station's name (peek_name's), of the workspace's stations as the core says them (`stations`).
+fn peek_name_of(stations : Json?, address : String) -> String {
   guard stations is Some(_) else { return "" }
   match text(peek_station_of(stations, address), "name") {
     "" => station_name(address)
