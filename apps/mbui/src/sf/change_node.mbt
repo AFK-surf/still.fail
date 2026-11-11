@@ -7,11 +7,12 @@
 ///|
 /// One line of a change: its words, led by its kind's `label` (none: no label, its room kept where it is wide), the
 /// accent's where it is something `fresh`.
+#derive(Eq)
 pub(all) struct ChangeLine {
   label : String
   text : String
   fresh : Bool
-} derive(Eq)
+}
 
 ///|
 /// What a page says in place of what it lists (waiting over, nothing there, what went wrong), `words` as it says it now:

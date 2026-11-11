@@ -16,6 +16,7 @@
 ///|
 /// How a node is drawn, over how it is laid out: its opacity, its offset, its scale about a point of it (`ox`, `oy`:
 /// shares of its width and height).
+#derive(Eq, Debug)
 pub(all) struct Look {
   alpha : Double
   dx : Double
@@ -33,7 +34,7 @@ pub(all) struct Look {
   /// shows (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
   /// over that's (sf/motion.mbt rule 4); then all it holds at once, never its words after its icons and pictures
   words : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// As a frame's said lines write a drawn node's look (tester_rows.mbt): what `derive(Show)` wrote.
@@ -188,6 +189,7 @@ priv struct Drawn {
 ///|
 /// A move of what is painted moved by a look of its own (Ctx::paint_node's `moved`): about (ox, oy) by sx, sy, then by
 /// dx, dy, turned by rot about where its point is drawn.
+#derive(Eq)
 priv struct Move {
   ox : Double
   oy : Double
@@ -196,7 +198,7 @@ priv struct Move {
   dx : Double
   dy : Double
   rot : Double
-} derive(Eq)
+}
 
 ///|
 priv struct DrawState {

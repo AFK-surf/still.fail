@@ -1190,6 +1190,7 @@ pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -
 /// before asked for) or its end (the page after), at its end, away from it (the way to the newest), and whether the
 /// asks waiting are all in view (the bell over the way to the end, jump_to_ask). A scroll changing none of that builds
 /// nothing again.
+#derive(Eq)
 pub(all) struct ListMade {
   laid : Bool
   near_top : Bool
@@ -1197,7 +1198,7 @@ pub(all) struct ListMade {
   at_end : Bool
   away : Bool
   asks_seen : Bool
-} derive(Eq)
+}
 
 ///|
 pub fn list_made(info : @ui.ListInfo?, n : Int, ask_rows : Array[Int]) -> ListMade {

@@ -181,20 +181,22 @@ priv struct Desk {
 /// window's tree's (its words in pieces: which tree it is of, by its number (view_tree_made), the row of a list made by
 /// its key it is in and where it is in that row (View::row_place): the same paragraph while its row's key is there,
 /// scrolled away and back, whatever node shows it then; another once another row is where it was); none.
+#derive(Eq, Hash)
 priv enum SelKey {
   NoSel
   Para(Int)
   Words(Int, @view.NodeId, Array[Int])
-} derive(Eq, Hash)
+}
 
 ///|
 /// Which layer words picked with the pointer are in, the only one a selection picks in (as a browser's started in a
 /// dialog stays in it): an old view's (overlay.mbt: its id; 0 the page), or one of the window's tree's (where in its
 /// stack of layers: Tree::stack_of, -1 in none).
+#derive(Eq)
 priv enum SelLayer {
   OldLayer(Int)
   TreeLayer(Int)
-} derive(Eq)
+}
 
 ///|
 priv struct SelTarget {

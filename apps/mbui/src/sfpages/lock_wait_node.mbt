@@ -24,11 +24,12 @@ pub fn lock_wait_node(
 
 ///|
 /// Which of the steps shows (pair_steps' branches): the code typed, one being found, or what is so and the request.
+#derive(Eq)
 priv enum PairShows {
   Typing
   Finding
   Asked
-} derive(Eq)
+}
 
 ///|
 /// The steps in `col` (pair_steps' as nodes, on the waiting page): typing, 输入… over the six boxes, then 正在核对

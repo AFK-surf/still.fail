@@ -89,12 +89,13 @@ fn notice_body_node(
 /// How a notice's words are drawn now (system_notice's): a chat's run changed, open, a line each (`Lines`), else on one
 /// line or what changed (`Short`); about a profile, its link at its end (`Linked`); else its Markdown, open or on one
 /// line (`Md`).
+#derive(Eq)
 priv enum NoticeWords {
   Lines
   Short
   Linked(Bool)
   Md(Bool)
-} derive(Eq)
+}
 
 ///|
 /// How notice `m`'s words are drawn, `open` or not (NoticeWords).
@@ -111,11 +112,12 @@ fn notice_words_of(m : Message, open : Bool) -> NoticeWords {
 ///|
 /// What a notice's pill ends in (system_notice's): · 安装 where the station lacks the chat's runtime, else · 上报 where
 /// the failure is reportable, else nothing.
+#derive(Eq)
 priv enum NoticeEnd {
   Install
   Report
   NoEnd
-} derive(Eq)
+}
 
 ///|
 /// A notice's pill (system_notice's `pill`) in `v`: round on the neutral ground (a failure's, the danger's), rounded less

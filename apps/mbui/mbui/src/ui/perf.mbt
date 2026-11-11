@@ -52,6 +52,7 @@ fn perf_touch_submitted(at : Double) -> Unit {
 /// What the last frame did: the nodes its builds made (the last build's), those laid out anew, those placed elsewhere
 /// as they were and those where they were (layout.mbt's commit); the instances it drew; how long its builds, its layout
 /// and its paint took (ms, by work_now); how many times it was built (a layout read back that moved builds it again).
+#derive(Debug)
 pub(all) struct FramePerf {
   nodes : Int
   laid : Int
@@ -69,7 +70,7 @@ pub(all) struct FramePerf {
   layout_ms : Double
   paint_ms : Double
   passes : Int
-} derive(Debug)
+}
 
 ///|
 /// The layout's counts as the frame began, and how many builds it took (frame_body).

@@ -249,12 +249,13 @@ fn GlyphInfo::unhide(self : GlyphInfo) -> Unit {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Direction {
   LeftToRight
   RightToLeft
   TopToBottom
   BottomToTop
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as a shaping plan's key says it (ShapeFont::plan): what `derive(Show)` wrote.

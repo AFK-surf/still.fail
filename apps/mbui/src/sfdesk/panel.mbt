@@ -465,10 +465,11 @@ pub fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, chat : (
 ///|
 /// Whose side panel is open (what the frame puts beside the page on the tape): a chat's, or workspace `ws`'s new
 /// chat's (its Station 文件, kept by the same `chatTabs`, by `new:<ws>`).
+#derive(Eq)
 pub(all) enum SideOf {
   ChatSide(ChatRef)
   NewSide(String)
-} derive(Eq)
+}
 
 ///|
 /// The key its panel is kept by (chatTabs).

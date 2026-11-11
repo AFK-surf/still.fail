@@ -239,12 +239,13 @@ pub fn tip_node(
 ///|
 /// How a finger holds a tip open (tip_node): not at all, held down on its control, let go of it a moment ago, tapped open
 /// (till the next tap).
+#derive(Eq)
 enum TipHeld {
   Free
   Held
   Lifted
   Opened
-} derive(Eq)
+}
 
 ///|
 /// What a control tells its tip of a finger (tip_node's): held on it long enough (`hold`: shown at once, as long as it

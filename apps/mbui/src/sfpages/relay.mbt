@@ -82,13 +82,14 @@ fn relay_shown(v : @view.View) -> () -> RelayShown {
 ///|
 /// What stands in the list's place while nothing is picked: the thread of a link typed, its places being read, not
 /// read, none connected, or the places offered.
+#derive(Eq)
 priv enum RelayList {
   Thread
   Reading
   Failed
   NoConnects
   Places
-} derive(Eq)
+}
 
 ///|
 /// The panel's body in node `v`, made once as it opens: one of two, as a place is picked or not. Picking: the bots to

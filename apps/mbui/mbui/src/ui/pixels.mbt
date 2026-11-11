@@ -4,6 +4,7 @@
 
 ///|
 /// What an image's pixels are so far.
+#derive(Eq)
 pub(all) enum ImagePixels {
   /// being decoded
   PixelsComing
@@ -11,7 +12,7 @@ pub(all) enum ImagePixels {
   PixelsRead(Int, Int, FixedArray[Byte])
   /// it did not decode, or cannot be read back here
   PixelsFailed
-} derive(Eq)
+}
 
 ///|
 /// Read back, by the long side asked for and the source ("BUCKET SRC").

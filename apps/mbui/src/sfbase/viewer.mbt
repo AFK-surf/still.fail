@@ -38,6 +38,7 @@ pub fn pv_fill(key : String, args : Array[(String, String)]) -> String {
 // ── what a file is ───────────────────────────────
 
 ///|
+#derive(Eq)
 pub(all) enum PKind {
   KImage
   KVideo
@@ -48,7 +49,7 @@ pub(all) enum PKind {
   KHtml
   KCode
   KText
-} derive(Eq)
+}
 
 ///|
 /// What a file shows as by its name: its kind (None: look at its bytes), its type, its language (code).

@@ -3,6 +3,7 @@
 // so reference counting sees no cycles.
 
 ///|
+#derive(Eq)
 pub(all) enum Size {
   Auto
   Px(Double)
@@ -12,29 +13,32 @@ pub(all) enum Size {
   Cut
   /// a share of the parent's room inside its padding, in percent (CSS's `width: 50%`)
   Pct(Double)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Dir {
   Row
   Column
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Align {
   AStart
   ACenter
   AEnd
   AStretch
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Justify {
   JStart
   JCenter
   JEnd
   JBetween
-} derive(Eq)
+}
 
 ///|
 let kind_box = 0

@@ -8,11 +8,12 @@
 
 ///|
 /// An item of a group (a toggle group's, a radio group's): its value, its words, whether it is disabled.
+#derive(Eq, Debug)
 pub(all) struct Item {
   value : String
   label : String
   disabled : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// An item `value`, its words `label` (the value by default).

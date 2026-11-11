@@ -10,10 +10,11 @@
 
 ///|
 /// How a page is laid out: as the web's narrow app is (`Narrow`), or its desktop pages (`Wide`).
+#derive(Eq, Debug)
 pub(all) enum Look {
   Narrow
   Wide
-} derive(Eq, Debug)
+}
 
 ///|
 /// The arrangements of the pages being drawn, the innermost last (a page's frame says its own as it draws what it
@@ -104,10 +105,11 @@ pub(all) struct PageFrame {
 /// What a page made once says of itself to the frame that names it (its bar: `named`), as it changes: its title, what
 /// it is for said by a mark beside it ("" none; not its lead, what it holds says under its title). Compared by what it
 /// says.
+#derive(Eq)
 pub(all) struct PageSaid {
   title : String
   about : String
-} derive(Eq)
+}
 
 ///|
 /// A frame that gives a page nothing: nowhere back, no room over or under it.

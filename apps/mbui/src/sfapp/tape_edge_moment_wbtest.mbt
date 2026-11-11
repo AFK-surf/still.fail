@@ -6,6 +6,7 @@
 /// What an edge's run comes to (edge_seen): whether the edge is held as the finger goes down; held once the tree is
 /// brought to the hold's end; the sidebar's width after each move; held after the release; the pane in use as the press
 /// on the page is let go (no frame after it), and once the tape's move had its while.
+#derive(Eq, Debug)
 priv struct EdgeSeen {
   down : Bool
   held : Bool
@@ -13,7 +14,7 @@ priv struct EdgeSeen {
   after : Bool
   pressed : @sfdesk.TapePane
   rest : @sfdesk.TapePane
-} derive(Eq, Debug)
+}
 
 ///|
 /// 中屏 on the tape (a finger's, 720 wide), the sidebar in use: a finger down on the sidebar's edge at `t0`, held

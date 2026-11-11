@@ -276,11 +276,12 @@ fn thing_menu_at(x : Double, y : Double, seq : Double, url : String, away : (Dou
 ///|
 /// What a chat's page of things shows as the core's `chatThings` has it (`v`): its bones while it is read (or while it
 /// has nothing and more may come), words saying it has none once all of it is read, else what it has.
+#derive(Eq)
 priv enum ThingsState {
   ThingsWaiting
   ThingsNone
   ThingsShown
-} derive(Eq)
+}
 
 ///|
 fn things_state(v : Json?) -> ThingsState {

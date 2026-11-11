@@ -55,6 +55,7 @@ pub struct Zoom {
 /// What a zoom was told to show: the picture's size and the stage's, where it is (scale, x, y) and whether fitted, the
 /// glide or the fling it is on (where a glide goes; a fling's own way its motions'). Where it shows at a moment is a
 /// function of this and of those motions (Zoom::rect).
+#derive(Eq)
 priv struct ZoomSaid {
   nw : Double
   nh : Double
@@ -67,7 +68,7 @@ priv struct ZoomSaid {
   gliding : Bool
   to : (Double, Double, Double)
   flinging : Bool
-} derive(Eq)
+}
 
 ///|
 /// One number's way, said once as it sets out (from where, how fast, to where, by what, from when): where it is at a

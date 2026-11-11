@@ -391,12 +391,13 @@ pub fn player_full_act(p : @kit.Media, width : Double) -> (String, Bool, () -> U
 
 ///|
 /// What a finger dragging the picture does.
+#derive(Eq)
 priv enum PlayerDrag {
   NoDrag
   AlongTime
   DownClose
   MoveZoom
-} derive(Eq)
+}
 
 ///|
 /// The views open, by their player's key.

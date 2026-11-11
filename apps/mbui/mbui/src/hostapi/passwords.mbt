@@ -56,6 +56,7 @@ pub fn OpRun::done(self : OpRun) -> OpDone? {
 
 ///|
 /// Why a run did not give what it was asked, as the person can act on it.
+#derive(Eq, Debug)
 pub(all) enum OpTrouble {
   /// No `op` here, or not signed in through the desktop app (1Password's CLI integration off).
   NoTool
@@ -63,7 +64,7 @@ pub(all) enum OpTrouble {
   Unreached
   /// Anything else, in its own words.
   Other(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Why it ended badly; None where it gave what it was asked.
@@ -90,11 +91,12 @@ pub fn OpRun::end(self : OpRun) -> Unit {
 
 ///|
 /// A login of the password manager: its id there, its title, its account (not secret: the person picks by it).
+#derive(Eq, Debug)
 pub(all) struct PasswordLogin {
   id : String
   title : String
   username : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Whether `href` (a login's website, as the password manager keeps it: an address, or a bare host) is `host` or a

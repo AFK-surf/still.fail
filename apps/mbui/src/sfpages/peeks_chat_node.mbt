@@ -8,12 +8,13 @@
 ///|
 /// What a chat's card shows (chat_card's): an archived one as its message says it; its bones while the link or the
 /// list is read; that it is gone; the chat found.
+#derive(Eq)
 priv enum ChatShows {
   Archived
   Sample
   Gone
   Found
-} derive(Eq)
+}
 
 ///|
 /// What a chat's card holds (chat_card's) in `parent`: the chat `href` names (as it is now), read in a chat of station

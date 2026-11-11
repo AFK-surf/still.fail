@@ -147,10 +147,11 @@ test "pressed: its callback writes the state outside any tracking, what reads it
 }
 
 ///|
+#derive(Eq)
 priv struct Item {
   key : String
   words : String
-} derive(Eq)
+}
 
 ///|
 /// A list of rows by key, each row's making counted, each row's words by its item.

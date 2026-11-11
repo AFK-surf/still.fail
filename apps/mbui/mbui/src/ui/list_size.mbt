@@ -19,11 +19,12 @@
 ///|
 /// What changed a row's height, and when (the frames' clock): it came into the list (from nothing), it goes from it
 /// (to nothing: the row stays in the list till then), or what it holds changed (from the height it had then).
+#derive(Eq)
 pub(all) enum RowSize {
   Comes(Double)
   Goes(Double)
   Changed(Double)
-} derive(Eq)
+}
 
 ///|
 fn RowSize::at(self : RowSize) -> Double {

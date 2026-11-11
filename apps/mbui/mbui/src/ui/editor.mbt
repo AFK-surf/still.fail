@@ -579,23 +579,25 @@ fn EditorState::typed_told(self : EditorState, before : String, anchor : Int, ca
 ///|
 /// An edit of a field's words or selection by the person (EditorState::typed_told): its words and selection before it
 /// and after it, and what made it.
+#derive(Eq, Debug)
 pub(all) struct FieldEdit {
   was : String
   was_selection : (Int, Int)
   now : String
   selection : (Int, Int)
   by : FieldEditBy
-} derive(Eq, Debug)
+}
 
 ///|
 /// What made an edit of a field: keys typed (a key, the input method's text), a paste (and words let go on it), an undo
 /// or a redo, the pointer (its caret put or words picked with it).
+#derive(Eq, Debug)
 pub(all) enum FieldEditBy {
   Typed
   Pasted
   Undone
   Pointed
-} derive(Eq, Debug)
+}
 
 ///|
 /// What the edit changed of its words (words_changed).
@@ -1161,6 +1163,7 @@ pub fn Field::composing(self : Field) -> Bool {
 /// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at least
 /// and at most,
 /// `trim`.
+#derive(Eq, Debug)
 pub(all) struct FieldLaid {
   words : String
   font_size : Double
@@ -1170,7 +1173,7 @@ pub(all) struct FieldLaid {
   min_lines : Int
   max_lines : Int
   trim : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// What `field` shows, followed (Field::composed_said), as a plain Ctx::editor of it set so lays it out: for a node of

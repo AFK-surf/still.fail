@@ -6,12 +6,13 @@
 /// `color` (RRGGBBAA), drawn as far along its length as `upto` (a share of it, 0 … 1: a line as it is being drawn).
 /// Its pieces' round ends lie over each other where they join: a colour that lets what is under it show (its alpha
 /// under 1) shows darker there.
+#derive(Eq, Debug)
 pub(all) struct Line {
   points : Array[(Double, Double)]
   width : Double
   color : Int64
   upto : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// A line (see `Line`): whole unless `upto` says how much of it.

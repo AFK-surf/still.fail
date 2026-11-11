@@ -7,10 +7,11 @@ priv struct Filter {
 }
 
 ///|
+#derive(Eq)
 priv enum ColorInterp {
   SRGB
   LinearRGB
-} derive(Eq)
+}
 
 ///|
 priv struct Primitive {

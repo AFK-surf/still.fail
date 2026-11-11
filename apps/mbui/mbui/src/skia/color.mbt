@@ -2,12 +2,13 @@
 
 ///|
 /// RGBA in bytes, straight alpha.
+#derive(Eq, Debug)
 pub(all) struct ColorU8 {
   r : Int
   g : Int
   b : Int
   a : Int
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ColorU8::from_rgba(r : Int, g : Int, b : Int, a : Int) -> ColorU8 {
@@ -25,12 +26,13 @@ pub fn ColorU8::premultiply(self : ColorU8) -> PremultipliedColorU8 {
 
 ///|
 /// RGBA in bytes, colour premultiplied by alpha.
+#derive(Eq, Debug)
 pub(all) struct PremultipliedColorU8 {
   r : Int
   g : Int
   b : Int
   a : Int
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn PremultipliedColorU8::from_rgba(r : Int, g : Int, b : Int, a : Int) -> PremultipliedColorU8? {
@@ -78,12 +80,13 @@ fn f2u8(x : Float) -> Int {
 
 ///|
 /// An RGBA colour of channels in 0..=1, straight alpha.
+#derive(Eq, Debug)
 pub(all) struct Color {
   r : Float
   g : Float
   b : Float
   a : Float
-} derive(Eq, Debug)
+}
 
 ///|
 pub let color_transparent : Color = { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }
@@ -150,12 +153,13 @@ pub fn Color::to_color_u8(self : Color) -> ColorU8 {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct PremultipliedColor {
   r : Float
   g : Float
   b : Float
   a : Float
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn PremultipliedColor::demultiply(self : PremultipliedColor) -> Color {
@@ -179,12 +183,13 @@ pub fn premultiply_u8(c : Int, a : Int) -> Int {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ColorSpace {
   Linear
   Gamma2
   SimpleSRGB
   FullSRGBGamma
-} derive(Eq, Debug)
+}
 
 ///|
 fn ColorSpace::expand_channel(self : ColorSpace, x : Float) -> Float {
@@ -278,12 +283,13 @@ fn f2u32(x : Float) -> UInt {
 
 ///|
 /// A rect of whole pixels on a screen: at 0 or past it, never empty, its right and bottom within i32.
+#derive(Eq, Debug)
 pub(all) struct ScreenIntRect {
   x : Int
   y : Int
   width : Int
   height : Int
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ScreenIntRect::from_xywh(x : Int, y : Int, width : Int, height : Int) -> ScreenIntRect? {
@@ -339,6 +345,7 @@ fn IntRect::to_screen_int_rect(self : IntRect) -> ScreenIntRect? {
 // ── blend modes ───────────────────────────────────────────────────────
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum BlendMode {
   Clear
   Source
@@ -369,7 +376,7 @@ pub(all) enum BlendMode {
   Saturation
   Color
   Luminosity
-} derive(Eq, Debug)
+}
 
 ///|
 fn BlendMode::should_pre_scale_coverage(self : BlendMode) -> Bool {

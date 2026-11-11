@@ -6,12 +6,13 @@
 
 ///|
 /// What a form field takes: words, an email, a password (dots), a number.
+#derive(Eq, Debug)
 pub(all) enum FieldKind {
   Words
   Email
   Secret
   Number
-} derive(Eq, Debug)
+}
 
 ///|
 /// A form's field: its name (its value's key), its label, what it takes, whether it is needed, its placeholder, and

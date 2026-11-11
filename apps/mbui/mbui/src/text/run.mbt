@@ -5,6 +5,7 @@
 ///|
 /// A run of a paragraph's words in one style. `span` makes one with only
 /// what differs from the paragraph said.
+#derive(Eq, Debug)
 pub(all) struct Run {
   text : String
   /// 0: the paragraph's
@@ -33,29 +34,31 @@ pub(all) struct Run {
   link : String
   /// A positioned inline drawing; text is still its copyable, accessible alternative.
   drawing : InlineDrawing?
-} derive(Eq, Debug)
+}
 
 ///|
 /// A run's ground shaped as a label on its line rather than code's (CSS's inline-block: a tag before words), in ems of
 /// the run's size: `room` either side of its words on it, `height` (centred on its words' ink), its `corner`, and
 /// `after` it, off it, before what follows.
+#derive(Eq, Debug)
 pub(all) struct Ground {
   room : Double
   height : Double
   corner : Double
   after : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// A drawing within text, measured in em. Its paths are already laid out, from its top left, y down. Words outside
 /// its alphabet use the host's serif face: (words, x, baseline, size), also in em. It has no parser or markup.
+#derive(Eq, Debug)
 pub(all) struct InlineDrawing {
   width : Double
   height : Double
   baseline : Double
   paths : Array[Array[(Array[Double], Bool)]]
   words : Array[(String, Double, Double, Double)]
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn span(

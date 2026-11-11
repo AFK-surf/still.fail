@@ -7,13 +7,14 @@
 let ns_xml : String = "http://www.w3.org/XML/1998/namespace"
 
 ///|
+#derive(Eq)
 priv enum XKind {
   XRoot
   XElement
   XText
   XComment
   XPI
-} derive(Eq)
+}
 
 ///|
 priv struct XAttr {

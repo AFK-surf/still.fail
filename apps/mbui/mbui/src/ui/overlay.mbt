@@ -17,11 +17,12 @@
 
 ///|
 /// Why a layer was dismissed.
+#derive(Eq, Debug)
 pub(all) enum Dismiss {
   Escape
   Outside
   Back
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as what a layer is told it was dismissed by is written (tests compare it): what `derive(Show)` wrote.

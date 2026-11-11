@@ -35,6 +35,7 @@ struct Sem {
 /// A node of the tree (Ctx::semantics_tree): what its widget said, where it is (x, y, w, h, as laid out), whether it
 /// has the keyboard's focus, whether it is hidden (under a modal, in a hidden part: not read out, not found by
 /// Tester::get), its parent's index in the tree (-1 none) and how deep it is.
+#derive(Debug)
 pub struct SemNode {
   id : Int
   role : Role
@@ -55,7 +56,7 @@ pub struct SemNode {
   hidden : Bool
   parent : Int
   depth : Int
-} derive(Debug)
+}
 
 ///|
 /// Node `node` (as Ctx::box returns it) is a widget of `role`: its `label` (none: the words built in it, as a button

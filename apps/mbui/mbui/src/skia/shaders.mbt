@@ -2,10 +2,11 @@
 // SkGradientShader, SkTwoPointConicalGradient and SkImageShader.
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GradientStop {
   position : Float
   color : Color
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn GradientStop::new(position : Float, color : Color) -> GradientStop {
@@ -206,11 +207,12 @@ pub(all) struct Pattern {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FilterQuality {
   Nearest
   Bilinear
   Bicubic
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a path is painted with (Shader).

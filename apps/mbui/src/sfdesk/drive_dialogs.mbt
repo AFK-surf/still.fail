@@ -261,12 +261,13 @@ fn picker_body(v : @view.View, src : Source, p : @sfbase.FolderPick) -> Unit {
 ///|
 /// What the picker shows under its filter: the folder read, one it cannot read (or failed to), nothing there (or
 /// nothing found), or its rows.
+#derive(Eq)
 priv enum PickerShows {
   PickerReading
   PickerShut
   PickerNone
   PickerListed
-} derive(Eq)
+}
 
 ///|
 fn picker_shows() -> PickerShows {

@@ -14,11 +14,12 @@ pub let focus_space : Int = 2
 ///|
 /// A node of the window's tree as Tab goes among them (Tree::focus_order): which, whether it hosts an old view (whose
 /// own go at its place), which keys press it as it has the focus (focus_enter, focus_space).
+#derive(Eq, Debug)
 pub(all) struct FocusAt {
   id : NodeId
   hosted : Bool
   keys : Int
-} derive(Eq, Debug)
+}
 
 ///|
 /// It can take the keyboard's focus while `on` holds (Tab goes to it in the tree's order), pressed as it has it by
@@ -464,10 +465,11 @@ pub fn View::focus_returns(self : View) -> View {
 ///|
 /// What opened a layer (View::opened_by): a node of the tree's, or something of an old view its host keeps by its key
 /// (the old frame's widget's id, as Ctx::overlay's `return_focus` names it).
+#derive(Eq, Debug)
 pub(all) enum Opener {
   ByNode(NodeId)
   ByOld(Int)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The layers that give the focus (View::focus_opens, focus_opens_first, focus_returns) that are `self` or in it opened

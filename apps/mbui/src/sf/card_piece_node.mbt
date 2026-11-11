@@ -7,12 +7,13 @@
 
 ///|
 /// Which piece of a card a block of it is (card_piece_node): the whole card, its top, one between, its foot.
+#derive(Eq, Debug)
 pub(all) enum CardPiece {
   CardWhole
   CardTop
   CardBetween
   CardFoot
-} derive(Eq, Debug)
+}
 
 ///|
 /// The piece of a card the `i`th of `n` rows on it is (n at least 1).

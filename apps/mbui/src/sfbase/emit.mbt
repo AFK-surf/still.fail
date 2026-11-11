@@ -10,12 +10,13 @@
 // over the list.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Pose {
   Fold
   Float
   Spit
   Return
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as tests count frames by a turn's pose: what `derive(Show)` wrote.

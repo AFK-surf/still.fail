@@ -8,13 +8,14 @@
 ///|
 /// What a wide page made once holds, in its order: what stands over it, its head, its blocks by their keys, the room
 /// at its foot.
+#derive(Eq, Hash)
 priv enum WideItem {
   WideTop
   WideHead
   WideLead
   WideBlock(String)
   WideFoot
-} derive(Eq, Hash)
+}
 
 ///|
 /// A wide page made once (wide_page's) in node `v`: under what stands over it as the frame says (`frame`'s top), its

@@ -9,6 +9,7 @@
 /// ratio, stiffness and the visibility threshold it rests within (and a
 /// delay, ms, held at its start: ListMotion.kt Delayed); a tween of so many
 /// ms on a curve after a delay; or there at once (after a delay).
+#derive(Eq, Debug)
 pub(all) enum Spec {
   Spring(Double, Double, Double, Double)
   Tween(Double, @ui.Ease, Double)
@@ -18,7 +19,7 @@ pub(all) enum Spec {
   Snap(Double)
   /// one of Motion's transitions (transition.mbt: spring_to, tween_to, keyframes_to, inertia_to)
   Motion(Transition)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Compose's spring(dampingRatio, stiffness, visibilityThreshold): by

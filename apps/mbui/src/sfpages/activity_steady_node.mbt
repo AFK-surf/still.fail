@@ -9,21 +9,23 @@
 ///|
 /// What an agent says it does, as its row reads it: the step's key, its words, whether in the monospaced face, whether
 /// it is important.
+#derive(Eq, Debug)
 pub(all) struct ActivitySaid {
   key : String
   words : String
   mono : Bool
   important : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// What shows, steadied: the step (`said`), the words it took the place of ("" none: the row's first), and the moment it
 /// began showing.
+#derive(Eq, Debug)
 pub(all) struct ActivityShown {
   said : ActivitySaid
   was : String
   at : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// One row's steadying: what shows, and what is waiting to (the latest other step and when it was first said; an

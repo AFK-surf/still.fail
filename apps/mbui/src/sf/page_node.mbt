@@ -164,6 +164,7 @@ fn styled_words(w : @view.View, words : () -> String, style : () -> @ui.TextStyl
 ///|
 /// What a page made once holds, in its order (page_node's): what stands over it, back, its large title, what it is for,
 /// its blocks by their keys, the room at its foot.
+#derive(Eq, Hash)
 priv enum PageItem {
   Top
   Back
@@ -172,7 +173,7 @@ priv enum PageItem {
   Lead
   Block(String)
   Foot
-} derive(Eq, Hash)
+}
 
 ///|
 /// A page titled `title` in node `v` (page's, as nodes), laid out as a page as wide as its frame gives it is (`width`:

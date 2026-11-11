@@ -21,11 +21,12 @@ let pf_session : String = "s-c1"
 
 ///|
 /// How the core says a file's colours in a case: not asked of one (none here), asked and not yet said, said at once.
+#derive(Eq)
 priv enum PfInk {
   NoCore
   Asked
   Said
-} derive(Eq)
+}
 
 ///|
 /// What each piece of the fixture's code is, as the test's core says it: all of each line of it a function's colour.

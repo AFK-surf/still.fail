@@ -111,12 +111,13 @@ pub fn paper_viewer_ink(p : ReaderPaper) -> ViewerInk {
 
 ///|
 /// A reader's panel: the contents, the search, the layout.
+#derive(Eq)
 pub(all) enum ReaderPanel {
   NoPanel
   Contents
   Find
   Layout
-} derive(Eq)
+}
 
 ///|
 /// A text being read: how it comes (how much so far), then the book and where to start; where the reader is (a block

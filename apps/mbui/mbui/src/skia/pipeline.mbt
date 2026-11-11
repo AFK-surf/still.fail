@@ -100,11 +100,12 @@ fn Stage::lowp(self : Stage) -> Bool {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum SpreadMode {
   Pad
   Reflect
   Repeat
-} derive(Eq, Debug)
+}
 
 ///|
 priv struct GradientColor {

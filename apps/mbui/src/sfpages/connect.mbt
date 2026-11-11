@@ -118,12 +118,13 @@ pub fn connect_node(
 
 ///|
 /// What a connect's page is now (connect_node's).
+#derive(Eq)
 priv enum CdState {
   CdFailed
   CdReading
   CdGone
   CdFound
-} derive(Eq)
+}
 
 ///|
 /// What a block of a page shows, said as its data (what it reads: its version on its page's list, @sf.page's `keys`).

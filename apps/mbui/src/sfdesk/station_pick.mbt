@@ -9,13 +9,14 @@
 ///|
 /// Where the picker is (None: the places): a station's folder (`root` its place there, `path` under it), with the
 /// names it shows.
+#derive(Eq)
 pub(all) struct PickAt {
   station : String
   station_name : String
   root : String
   root_name : String
   path : String
-} derive(Eq)
+}
 
 ///|
 /// The picker: where it is, what is ticked (by station and path), in the order ticked. Signals: what its body and its
@@ -154,11 +155,12 @@ fn station_pick_way(v : @view.View) -> Unit {
 
 ///|
 /// What the places show: the stations read the first time (or failing to be), none lending a folder, or their places.
+#derive(Eq)
 priv enum PlacesShow {
   PlacesReading
   PlacesNone
   PlacesListed
-} derive(Eq)
+}
 
 ///|
 /// The stations lending folders in workspace `ws` (None while they are read the first time), and why they could not be
@@ -308,11 +310,12 @@ fn places_pick_sample(v : @view.View) -> Unit {
 
 ///|
 /// What a folder shows: read the first time, failing to be read, or what is in it.
+#derive(Eq)
 priv enum FolderShows {
   FolderReading
   FolderFailed
   FolderRead
-} derive(Eq)
+}
 
 ///|
 /// A folder in node `v`: itself to tick as a whole, then what is in it (a folder entered, a file ticked).

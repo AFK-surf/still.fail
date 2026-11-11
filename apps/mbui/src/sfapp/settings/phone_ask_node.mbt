@@ -11,6 +11,7 @@
 /// What a phone's request's card says, as its message has it now (phone_card's arguments): the request, the agent's
 /// reason, the longest its owner lets it be granted for (`lasts`: hour, chat), whether it is the viewer's to answer
 /// (`mine`), whose it is (`who`), and how it went once decided (`ended`: status, scope, why).
+#derive(Eq)
 pub(all) struct PhoneCard {
   request : String
   reason : String
@@ -18,7 +19,7 @@ pub(all) struct PhoneCard {
   mine : Bool
   who : String?
   ended : (String, String, String)?
-} derive(Eq)
+}
 
 ///|
 /// Whether this device lends its own adb as far as it has said so (phone_lends', without asking its host: see the

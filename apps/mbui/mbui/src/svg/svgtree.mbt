@@ -120,11 +120,12 @@ priv struct SAttr {
 }
 
 ///|
+#derive(Eq)
 priv enum SKind {
   SRoot
   SElem
   SText
-} derive(Eq)
+}
 
 ///|
 priv struct SNode {
@@ -473,10 +474,11 @@ fn SDoc::attr_numbers(self : SDoc, id : Int, aid : String) -> Array[Float]? {
 }
 
 ///|
+#derive(Eq)
 priv enum Units {
   UserSpaceOnUse
   ObjectBoundingBox
-} derive(Eq)
+}
 
 ///|
 fn SDoc::attr_units(self : SDoc, id : Int, aid : String) -> Units? {
@@ -488,11 +490,12 @@ fn SDoc::attr_units(self : SDoc, id : Int, aid : String) -> Units? {
 }
 
 ///|
+#derive(Eq)
 priv enum Visibility {
   Visible
   Hidden
   Collapse
-} derive(Eq)
+}
 
 ///|
 fn parse_visibility(v : String) -> Visibility? {
@@ -505,11 +508,12 @@ fn parse_visibility(v : String) -> Visibility? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ShapeRendering {
   OptimizeSpeed
   CrispEdges
   GeometricPrecision
-} derive(Eq, Debug)
+}
 
 ///|
 fn parse_shape_rendering(v : String) -> ShapeRendering? {
@@ -527,11 +531,12 @@ pub fn ShapeRendering::use_shape_antialiasing(self : ShapeRendering) -> Bool {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum TextRendering {
   TrOptimizeSpeed
   TrOptimizeLegibility
   TrGeometricPrecision
-} derive(Eq, Debug)
+}
 
 ///|
 fn parse_text_rendering(v : String) -> TextRendering? {
@@ -544,6 +549,7 @@ fn parse_text_rendering(v : String) -> TextRendering? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ImageRendering {
   OptimizeQuality
   IrOptimizeSpeed
@@ -551,7 +557,7 @@ pub(all) enum ImageRendering {
   HighQuality
   IrCrispEdges
   Pixelated
-} derive(Eq, Debug)
+}
 
 ///|
 fn parse_image_rendering(v : String) -> ImageRendering? {

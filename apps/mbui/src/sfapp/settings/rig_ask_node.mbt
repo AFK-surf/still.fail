@@ -9,6 +9,7 @@
 /// agent's reason, the time it asked for, what it said of the chat (`rig.decide`'s `ask`), whether it is the viewer's
 /// to answer (`mine`), whose it is (`who`), one of its devices alone (`device`: its name, "" the rig itself), and how
 /// it went once decided (`ended`: granted, its words).
+#derive(Eq)
 pub(all) struct RigCard {
   request : String
   name : String
@@ -19,7 +20,7 @@ pub(all) struct RigCard {
   who : String?
   device : String
   ended : (Bool, String)?
-} derive(Eq)
+}
 
 ///|
 /// The card of request `card` (as it says it now) in `v` (rig_card's, as nodes): its words, and its answer where it is

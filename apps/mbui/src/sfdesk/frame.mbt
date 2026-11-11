@@ -111,11 +111,12 @@ pub(all) struct Wide {
 ///|
 /// The panels on the tape (laid out Medium), from its start: the rail and the sidebar, the page, a chat's side panel
 /// while it is open.
+#derive(Eq, Debug)
 pub(all) enum TapePane {
   Side
   Page
   Panel
-} derive(Eq, Debug)
+}
 
 ///|
 pub let wide : Wide = {

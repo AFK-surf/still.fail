@@ -1,22 +1,24 @@
 // tiny-skia's Path: verbs and points, never empty, with its bounds.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum PathVerb {
   Move
   Line
   Quad
   Cubic
   Close
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum PathSegment {
   MoveTo(Point)
   LineTo(Point)
   QuadTo(Point, Point)
   CubicTo(Point, Point, Point)
   Close
-} derive(Eq, Debug)
+}
 
 ///|
 /// A path of at least one segment past its first move (PathBuilder::finish), its points' bounds.

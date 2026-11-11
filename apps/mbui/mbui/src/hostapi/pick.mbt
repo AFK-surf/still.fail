@@ -8,6 +8,7 @@
 
 ///|
 /// What the system's pickers offer.
+#derive(Eq)
 pub(all) enum PickKind {
   /// the photo picker: pictures, more than one
   Photos
@@ -15,7 +16,7 @@ pub(all) enum PickKind {
   Files
   /// a photo taken with the camera now
   Camera
-} derive(Eq)
+}
 
 ///|
 /// A file picked: its name and its bytes; or, one too big to be read whole (a video), held by the host: `held` its id

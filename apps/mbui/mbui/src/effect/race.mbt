@@ -1,8 +1,9 @@
 ///|
 /// Both sides of a `race` failed.
+#derive(Debug)
 pub suberror BothFailed {
   BothFailed(Error, Error)
-} derive(Debug)
+}
 
 ///|
 /// Which of `tasks` ended first (its index), waiting for one to.

@@ -152,11 +152,12 @@ fn rs_tile_node(t : @view.View, tv : () -> Json?) -> Unit {
 ///|
 /// A row of the table (rs_grouped's, rs_flat's), by what it is: a group (its key), a process under its group (the
 /// group's key and its), a process flat (its group's key and its).
+#derive(Eq, Hash)
 priv enum RsRow {
   RsGroup(String)
   RsUnder(String, String)
   RsFlat(String, String)
-} derive(Eq, Hash)
+}
 
 ///|
 /// The table (rs_grouped's, `flat` rs_flat's): its heads, then its rows, the most of the column sorted by first; laid

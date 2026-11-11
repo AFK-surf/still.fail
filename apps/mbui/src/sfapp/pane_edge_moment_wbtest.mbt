@@ -6,13 +6,14 @@
 /// What the sidebar's edge's run comes to (edge_run): held as it goes down; the sidebar's width after each move; held
 /// after it is let go; folded after a press of it let go without moving (no frame after it), and once its move had its
 /// while.
+#derive(Eq, Debug)
 priv struct PaneEdgeSeen {
   down : Bool
   widths : Array[Double]
   after : Bool
   folded : Bool
   folded_rest : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// 大屏 (1280 wide, a mouse's), the sidebar open at 240: down on its edge at `t0`, moved 10 wider each slow_drag_ms six

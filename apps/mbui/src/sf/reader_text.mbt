@@ -200,11 +200,12 @@ fn render_offset(chunk : String, start : Int, heads : Map[Int, Bool], raw : Int,
 
 ///|
 /// A place found: its block, where in the raw block, how long.
+#derive(Eq, Debug)
 pub(all) struct TextMatch {
   chunk : Int
   start : Int
   length : Int
-} derive(Eq, Debug)
+}
 
 ///|
 /// A book as the reader draws it: the core's (its id, for a search), the text, its blocks and where

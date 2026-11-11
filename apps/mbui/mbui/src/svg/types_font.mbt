@@ -1,6 +1,7 @@
 // svgtypes' font families and the `font` shorthand.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FontFamily {
   FSerif
   FSansSerif
@@ -8,7 +9,7 @@ pub(all) enum FontFamily {
   FFantasy
   FMonospace
   FNamed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// As a font's key says it (SFont::key): what `derive(Show)` wrote, a name as its text.

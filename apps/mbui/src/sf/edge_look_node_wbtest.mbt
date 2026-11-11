@@ -15,11 +15,12 @@ priv struct EdgeState {
 ///|
 /// What an edge's look draws, where its column is drawn from: its bar (top, height, ink), and its line's parts (how
 /// many, the ink of the one at its middle).
+#derive(Eq, Debug)
 priv struct EdgeDrawn {
   bar : Array[(Double, Double, Int64)]
   parts : Int
   middle : Int64?
-} derive(Eq, Debug)
+}
 
 ///|
 /// What is drawn of the column `handle_w` by 200 at (`x0`, 20).

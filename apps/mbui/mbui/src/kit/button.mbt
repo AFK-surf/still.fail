@@ -4,13 +4,14 @@
 // at), Danger (what cannot be undone).
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Variant {
   Solid
   Soft
   Outline
   Ghost
   Danger
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as the gallery's buttons say it: what `derive(Show)` wrote.

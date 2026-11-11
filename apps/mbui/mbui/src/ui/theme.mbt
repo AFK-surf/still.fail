@@ -735,10 +735,11 @@ pub fn Ctx::with_theme(self : Ctx, t : Theme, body : () -> Unit) -> Unit {
 
 ///|
 /// Which way words and rows run (Radix's DirectionProvider, CSS's `dir`).
+#derive(Eq, Debug)
 pub(all) enum Direction {
   Ltr
   Rtl
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as the gallery writes it: what `derive(Show)` wrote.

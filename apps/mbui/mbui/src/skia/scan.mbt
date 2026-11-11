@@ -15,10 +15,11 @@ priv trait Blitter {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FillRule {
   Winding
   EvenOdd
-} derive(Eq, Debug)
+}
 
 ///|
 fn fill_rect_nonaa(rect : Rect, clip : ScreenIntRect, blitter : &Blitter) -> Unit {

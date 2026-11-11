@@ -14,10 +14,11 @@ pub fn svc(key : String, args? : Array[(String, String)] = []) -> String {
 
 ///|
 /// A size the page is laid out at (null height: as high as the preview leaves it at its scale).
+#derive(Eq)
 pub(all) struct Viewport {
   width : Int
   height : Int?
-} derive(Eq)
+}
 
 ///|
 /// The sizes offered.

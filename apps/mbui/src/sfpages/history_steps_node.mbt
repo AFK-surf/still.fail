@@ -1498,6 +1498,7 @@ priv enum StepsRow {
 /// How an agent's history's steps stand (what builds them reads of it): read yet, why its read failed (read again),
 /// none, what its top says, whether there are pages before and how the page before stands (reading, failed, or ""),
 /// how many rows and its first item's key.
+#derive(Eq)
 priv struct StepsHead {
   waiting : Bool
   failed : String
@@ -1507,7 +1508,7 @@ priv struct StepsHead {
   older : String
   rows : Int
   first : String
-} derive(Eq)
+}
 
 ///|
 /// Each history's StepsHead, by its list's key: told only as it comes out otherwise.

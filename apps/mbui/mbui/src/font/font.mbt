@@ -4,13 +4,14 @@
 
 ///|
 /// A path command of a glyph's outline, in font units, y up.
+#derive(Eq, Debug)
 pub(all) enum PathCmd {
   MoveTo(Float, Float)
   LineTo(Float, Float)
   QuadTo(Float, Float, Float, Float)
   CubicTo(Float, Float, Float, Float, Float, Float)
   Close
-} derive(Eq, Debug)
+}
 
 ///|
 pub struct Face {

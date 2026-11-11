@@ -223,10 +223,11 @@ let tip_closed : Int = @ui.stable_hash("kit/tooltip closed").to_int()
 
 ///|
 /// A tooltip in an old view or at a node of the window's tree. Both share the same visible slot.
+#derive(Eq, Debug)
 pub(all) enum TipOwner {
   Built(Int)
   Node(Int)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A fresh identity for a tooltip made with a node. Two tips may name the same anchor.

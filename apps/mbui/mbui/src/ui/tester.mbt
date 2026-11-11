@@ -767,11 +767,12 @@ fn Tester::motion_period(self : Tester) -> Double {
 /// frame on run_for's way too, a fault failing its test; or that, each fault said and none failing.
 // Judge is made by tester_fps.mbt, a file of every target but wasm
 #warnings("-unused_constructor")
+#derive(Eq)
 pub enum MotionJudged {
   Results
   Judge
   Count
-} derive(Eq)
+}
 
 ///|
 /// The files whose Testers a run that counts motion only counts (test_motion_judged), not judges.

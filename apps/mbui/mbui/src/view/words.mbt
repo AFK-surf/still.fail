@@ -9,6 +9,7 @@
 /// system's size of words applied: -1.4, 1.4 times it), whether they wrap within
 /// the width they are given (else one line, as wide as they are, cut to what it is given ending in an ellipsis where it
 /// is given less: View::shrink; what is read out of them all of them).
+#derive(Eq, Debug)
 pub(all) struct WordsLook {
   size : Double
   weight : Int
@@ -23,18 +24,19 @@ pub(all) struct WordsLook {
   /// after it, measured and drawn so (ui's TextPatch `max_lines`, as Ctx::text's and Ctx::rich's); on one line, none of
   /// it. Said in the look, not on the node, so no node that does not say it carries it (2026-11-12)
   max_lines : Int
-} derive(Eq, Debug)
+}
 
 ///|
 /// How far apart a node's letters are set besides their own spacing (ui's Tracking as it is resolved): a share of
 /// their size as it is drawn (the system's size of words applied), so many points whatever their size, or so many
 /// points at the system's size of words, made larger by it as a size of their own is (an old view's `tracking` said
 /// with its words, Ctx::text: Ctx::sp of it).
+#derive(Eq, Debug)
 pub(all) enum Spacing {
   Ems(Double)
   Points(Double)
   ScaledPoints(Double)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Letters as their font sets them, nothing added.
@@ -51,6 +53,7 @@ pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: t
 /// the words' size, and whether they are a person's words (in the face chosen for those). What changes how big they
 /// are (`code_scale`, `words`, whether code has a ground at all: its room either side, a label kept whole on its line)
 /// lays them out again; their inks (a ground's colour for another) draw them again alone.
+#derive(Eq, Debug)
 pub(all) struct RunsLook {
   link : Int64
   pressed : Int64
@@ -58,7 +61,7 @@ pub(all) struct RunsLook {
   code_ground : Int64
   code_scale : Double
   words : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Pieces set as an old view's paragraph is where it says nothing of it (Ctx::rich's own).
@@ -721,12 +724,13 @@ pub fn View::fills_across(self : View, on : Live[Bool], loc~ : SourceLoc) -> Vie
 /// out between them (each line's, where it wraps; one alone at its start). Along is the other thing: which end of
 /// another thing (an anchor, the node across) something lines up with, where being spread between makes no sense, so
 /// the two are types of their own and neither is made of the other.
+#derive(Eq, Debug)
 pub(all) enum Lies {
   Start
   Middle
   End
   Between
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where what it holds lies along it, as it changes (its start, by default; their middle; its end; spread from its
@@ -806,13 +810,14 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
 /// How a glyph is drawn over how it is laid out: its opacity, offsets and uniform scale about its ink's middle. `sx`
 /// scales horizontally about its advance's middle. One type for an old view's glyphs (ui's Ctx::glyphs_by, @ui.GlyphLook)
 /// and a node's (View::glyphs_by).
+#derive(Debug, Eq)
 pub(all) struct GlyphLook {
   alpha : Double
   dx : Double
   dy : Double
   scale : Double
   sx : Double
-} derive(Debug, Eq)
+}
 
 ///|
 /// A glyph as it is painted, for its own look (View::glyphs_by; an old view's Ctx::glyphs_by):
@@ -827,6 +832,7 @@ pub(all) struct GlyphLook {
 ///   the points its words are laid out in (the system's size of words applied; not what places, moves or scales them,
 ///   nor a centred line's shift). What it is in the cells its words are cut into (ui's glyph_cells). 0 for what is not
 ///   a glyph.
+#derive(Debug, Eq)
 pub(all) struct GlyphAt {
   index : Int
   x : Double
@@ -836,7 +842,7 @@ pub(all) struct GlyphAt {
   foot : Double
   line : Int
   cx : Double
-} derive(Debug, Eq)
+}
 
 ///|
 /// Each glyph of its words drawn with what `f` gives for `state` as it is said now and that glyph (GlyphAt): words

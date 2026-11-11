@@ -54,12 +54,13 @@ priv enum SubSelector {
 }
 
 ///|
+#derive(Eq)
 priv enum Combinator {
   CNone
   Descendant
   Child
   Adjacent
-} derive(Eq)
+}
 
 ///|
 priv struct Component {

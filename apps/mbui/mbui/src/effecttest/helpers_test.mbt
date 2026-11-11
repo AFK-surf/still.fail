@@ -4,9 +4,10 @@
 
 ///|
 /// What the tests' code fails with.
+#derive(Debug)
 suberror Broke {
   Broke(String)
-} derive(Debug)
+}
 
 ///|
 /// An error as a test compares it.

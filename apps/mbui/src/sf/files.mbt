@@ -214,12 +214,13 @@ pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
 
 ///|
 /// What of a file's card a press was on: its ✕, its ↻ or its ✎, or (one that opens) the card itself.
+#derive(Eq, Debug)
 pub(all) enum FileCardPress {
   Remove
   Retry
   Restore
   Open
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as tests write what a file card's press asked: what `derive(Show)` wrote.

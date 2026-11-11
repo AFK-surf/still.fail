@@ -12,10 +12,11 @@ pub fn opt_number(v : Json?, key : String) -> Double? {
 
 ///|
 /// A moment in words, as the core says it (Stamp): `ago` (3 分钟前), `full` (9/20 14:05:09).
+#derive(Eq)
 pub(all) struct Stamp {
   ago : String
   full : String
-} derive(Eq)
+}
 
 ///|
 pub fn stamp_of(v : Json?, key : String) -> Stamp? {

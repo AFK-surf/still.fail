@@ -9,10 +9,11 @@
 
 ///|
 /// What says it is over (Turns::over): words sent, landed; messages out of avatars, none left.
+#derive(Eq, Debug)
 pub(all) enum TurnFor {
   Send
   Emits
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) struct Turns {

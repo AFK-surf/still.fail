@@ -8,11 +8,12 @@
 
 ///|
 /// How a picture is in its reveal: waiting (not decoded), going (brushed in), or there (as it is).
+#derive(Eq)
 priv enum RevealPhase {
   Waiting
   Going
   There
-} derive(Eq)
+}
 
 ///|
 /// A picture `key` (as it changes) `w` by `h` in `parent`, covering it (`cover`, else contained in it), brushed in from

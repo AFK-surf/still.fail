@@ -652,6 +652,7 @@ fn native_said(vw : Viewer, src : Source, width : Double) -> NativeSaid? {
 
 ///|
 /// What decides what viewer `vw` says to the system's bars (native_said).
+#derive(Eq)
 struct NativeSaid {
   marking : Bool
   shown : Bool
@@ -671,7 +672,7 @@ struct NativeSaid {
   /// a film turned sideways (its 全屏 there says so)
   sideways : Bool
   words : Array[String]
-} derive(Eq)
+}
 
 ///|
 /// A finger's event on the canvas of viewer `v` (node `canvas`), at its own moment: what the old view's stage worked
@@ -1500,6 +1501,7 @@ pub fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
 ///|
 /// What a flight is drawn by of the thumbnail it flies from (Thumb's but what it draws over its picture), to tell it
 /// changed.
+#derive(Eq)
 struct ThumbDrawn {
   box : (Double, Double, Double, Double)
   seen : (Double, Double, Double, Double)?
@@ -1508,18 +1510,19 @@ struct ThumbDrawn {
   letterbox : Bool
   top_crop : Bool
   picture : String
-} derive(Eq)
+}
 
 ///|
 /// What the stage of a viewer that shows no picture of its own shows (Viewer::content's, as it is told: its kind
 /// sniffed, its bytes, a read failed, what has come of it, 源码): told of (facts), coming, failed, or what the old views
 /// show of it (read in the reader, as it comes, a page, a table, code, a PDF).
+#derive(Eq)
 priv enum OuterStage {
   Hosted
   Coming
   Facts
   Failed
-} derive(Eq)
+}
 
 ///|
 fn Viewer::outer_stage(self : Viewer) -> OuterStage {

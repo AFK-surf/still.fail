@@ -2,11 +2,12 @@
 // is a byte a pixel.
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Pixmap {
   data : FixedArray[Byte]
   width : Int
   height : Int
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Pixmap::new(width : Int, height : Int) -> Pixmap? {
@@ -147,17 +148,19 @@ fn SubPixmap::offset_at(self : SubPixmap, dx : Int, dy : Int) -> Int {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum MaskType {
   Alpha
   Luminance
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Mask {
   data : FixedArray[Byte]
   width : Int
   height : Int
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Mask::new(width : Int, height : Int) -> Mask? {

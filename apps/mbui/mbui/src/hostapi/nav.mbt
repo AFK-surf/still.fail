@@ -10,6 +10,7 @@
 /// data has them, a 24 grid's strokes, sf's icon_data; none: its words' first letter), a dot over it (`dot`), set off in
 /// the accent (`prominent`: the one action most wanted); with `menu`, a menu of others (id, words, checked, icon as `icon` is; id "-": a line between rows) opened from
 /// it instead.
+#derive(Eq)
 pub(all) struct NavItem {
   id : String
   title : String
@@ -17,20 +18,22 @@ pub(all) struct NavItem {
   dot : Bool
   prominent : Bool
   menu : Array[(String, String, Bool, String)]
-} derive(Eq)
+}
 
 ///|
 /// A group of items on one piece of glass: at the column's foot (`foot`: where a thumb holding the device rests) or
 /// from its top in their order; folded into one menu (its first item's place) where the column has no room for all
 /// (`foldable`).
+#derive(Eq)
 pub(all) struct NavGroup {
   items : Array[NavItem]
   foot : Bool
   foldable : Bool
-} derive(Eq)
+}
 
 ///|
 /// A native glass button placed in the app's content, in view points. Its menu and accessibility belong to the host.
+#derive(Eq)
 pub(all) struct NavFloating {
   item : NavItem
   x : Double
@@ -38,13 +41,14 @@ pub(all) struct NavFloating {
   w : Double
   h : Double
   blocked : Bool
-} derive(Eq)
+}
 
 ///|
 /// What the app hands over: its groups, the item chosen (lit: its ground moves to it as it changes), the ink of what is
 /// in them and of the one chosen (RGBA), the icon of the menu a group folds into. No groups: none of the system's (the
 /// app draws its own). `bare`: the tabs put away while something is up over the whole window (a picture looked at),
 /// only the foldable group's items shown, `title` over them (none of them: the bar put away too).
+#derive(Eq)
 pub(all) struct NavBar {
   floating : Array[NavFloating]
   groups : Array[NavGroup]
@@ -54,7 +58,7 @@ pub(all) struct NavBar {
   more_icon : String
   bare : Bool
   title : String
-} derive(Eq)
+}
 
 ///|
 fn nav_item_json(i : NavItem) -> Json {

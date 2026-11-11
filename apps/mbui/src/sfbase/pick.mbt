@@ -39,12 +39,13 @@ let picked_at : Ref[Double] = Ref(-1.0)
 /// What is picked as told (picked): one passage at a time, by an identity of its own (`serial`: a number each passage
 /// picked takes, never one given again; 0 none), the message it is of and where it ran as it was picked (from, to:
 /// a finger's, in its words; -1 a mouse's, the page's selection holding it).
+#derive(Eq, Debug)
 pub(all) struct Picked {
   serial : Int
   ts : String
   a : Int
   b : Int
-} derive(Eq, Debug)
+}
 
 ///|
 /// Nothing picked.

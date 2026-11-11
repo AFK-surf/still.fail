@@ -102,6 +102,7 @@ pub(all) struct Core {
 
 ///|
 /// A page of the settings (the ones of these slices).
+#derive(Eq)
 pub(all) enum Route {
   /// settings itself, from the gear
   Home
@@ -173,7 +174,7 @@ pub(all) enum Route {
   UsagePrices(Int)
   /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
   RunSettings(String, String)
-} derive(Eq)
+}
 
 ///|
 /// How this build's update stands, as 关于's update row says it (sfbase updates.mbt update_stands): whether a newer

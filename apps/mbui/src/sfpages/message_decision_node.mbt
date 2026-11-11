@@ -10,6 +10,7 @@
 
 ///|
 /// What is under a post, as the message says it now.
+#derive(Eq)
 priv enum Asks {
   /// nothing to ask, or what is asked is in place of its words (a vault item, a phone, a sign-in, a rig: their cards')
   Nothing
@@ -21,7 +22,7 @@ priv enum Asks {
   Login
   /// a vault item's approval: not made as nodes yet
   NotYet
-} derive(Eq)
+}
 
 ///|
 /// What post `m` asks under it (message_decision's cases).

@@ -1270,12 +1270,13 @@ pub fn Flow::open_page(self : Flow, page : @sfapp.Page, loc~ : SourceLoc) -> Uni
 ///|
 /// The lowest `what` (`top`: the highest) on screen, or the test fails.
 /// An input as the strict pass worked it out of the screen (Flow::start): a pace pass's own, the same.
+#derive(Debug)
 priv enum Kept {
   Point(Double, Double)
   NoPoint
   Waited(Double)
   Amount(Double)
-} derive(Debug)
+}
 
 ///|
 /// What the strict pass worked its inputs out to, by the test's line that asked (a step there skipped or taken more

@@ -107,11 +107,12 @@ fn inst_owned(k : Int) -> Unit {
 ///|
 /// Who drew an instance (contrast.mbt's inst_owners): a node of the old view's (its index in the frame's nodes), a node
 /// of the window's tree's, or nothing known. What reads who drew what asks this, whichever drew it.
+#derive(Eq)
 priv enum InstBy {
   Nobody
   Old(Int)
   Node(@view.NodeId)
-} derive(Eq)
+}
 
 ///|
 /// Who drew instance `k`.

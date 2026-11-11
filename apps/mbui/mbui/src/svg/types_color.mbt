@@ -1,12 +1,13 @@
 // svgtypes' colours and transform lists.
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct SColor {
   red : Int
   green : Int
   blue : Int
   alpha : Int
-} derive(Eq, Debug)
+}
 
 ///|
 fn SColor::black() -> SColor {

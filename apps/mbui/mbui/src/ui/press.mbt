@@ -10,6 +10,7 @@
 /// not opened again by it); `moved`: past the slop (8) since; `long`: held still there for long_press_ms (what these
 /// two say kept until the next press: a long press let go is no tap); `mods`: the keys held as it went down (mod_cmd,
 /// mod_alt…: a press with ⌘ held is the desktop's other press), whatever is held or let go of after.
+#derive(Eq, Debug)
 pub(all) struct Press {
   down : Bool
   fresh : Bool
@@ -20,7 +21,7 @@ pub(all) struct Press {
   moved : Bool
   long : Bool
   mods : Int
-} derive(Eq, Debug)
+}
 
 ///|
 /// No press yet.

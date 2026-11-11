@@ -86,11 +86,12 @@ let workspaces_tall : Double = 0.7
 ///|
 /// What the list holds, top to bottom: the one in use (its label, its card, the invitations under it), the others'
 /// label, the others by their ids.
+#derive(Eq, Hash)
 priv enum WsBlock {
   InUse
   OthersLabel
   Other(String)
-} derive(Eq, Hash)
+}
 
 ///|
 /// The list in node `v` (the panel's body's): the one in use (checked) on a card, the invitations waiting, the others

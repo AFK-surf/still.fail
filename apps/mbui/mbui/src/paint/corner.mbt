@@ -11,6 +11,7 @@
 ///|
 /// Where a corner's radius comes from: the window's (its system's), a number of its own, or another followed `inset` in
 /// (concentric with it where the theme's ranges let it, else `alone`).
+#derive(Eq, Debug)
 pub(all) enum CornerOf {
   /// the window's corner as the system draws it now (0 square)
   Window
@@ -18,7 +19,7 @@ pub(all) enum CornerOf {
   Own(Double)
   /// `from` followed `inset` in from its edges, concentric with it; `alone` where the ranges do not let it be
   Follow(CornerOf, Double, Double)
-} derive(Eq, Debug)
+}
 
 ///|
 /// What lies in a rounded container's corner and what the corner rule may make of it to be concentric with it : its corner `least` at least and `most` at most, standing `near` to `far` from
@@ -26,21 +27,23 @@ pub(all) enum CornerOf {
 /// Mac's 16, Windows 11's 8, square full screen): where none of these makes a thing concentric with what it lies in
 /// (the container too square for it, or too round: a window's 8, a phone's screen), it stands as it would alone, its
 /// own corner where it is, and the rule asks nothing more of it there.
+#derive(Eq, Debug)
 pub(all) struct CornerFit {
   least : Double
   most : Double
   near : Double
   far : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// What every linked corner is worked out from: the window's corner in content points, the zoom at which those points
 /// are drawn, and the theme's ranges (None: any corner, any place).
+#derive(Eq, Debug)
 pub(all) struct CornerRoots {
   window : Double
   fit : CornerFit?
   zoom : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Its radius, from `at`.

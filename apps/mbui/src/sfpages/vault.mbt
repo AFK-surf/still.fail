@@ -867,10 +867,11 @@ fn vault_reset() -> Unit {
 
 ///|
 /// A row of 全部密钥: a vault's secret ("it/<vault>/<item>"), or those of a vault it does not name ("hidden/<vault>").
+#derive(Eq)
 priv enum VaultRow {
   Secret(Json, Json, Bool, Bool)
   Hidden(Json, String, String, Bool)
-} derive(Eq)
+}
 
 ///|
 /// 全部密钥 (LibraryItems), as a password manager's list (the user, 2026-10-26: a section a kind of one row each was

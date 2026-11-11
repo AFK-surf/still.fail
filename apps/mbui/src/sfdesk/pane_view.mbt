@@ -27,6 +27,7 @@
 /// sidebar's, 1 the closed bar's), the lists' marks on the rail; the block's margins in its column, its line, how much of
 /// the sidebar shows, its shadow (blur, fall, how much of its colour), its corner (0 open), its ground; the sidebar's
 /// box's width; the rail's width and padding (left, top, bottom) and its top row's height; where the edge's strip starts.
+#derive(Eq)
 priv struct FoldLook {
   x : Double
   col : Double
@@ -55,7 +56,7 @@ priv struct FoldLook {
   rail_pb : Double
   rail_top : Double
   edge : Double
-} derive(Eq)
+}
 
 ///|
 /// `a` at `k` of the way to `b`.
@@ -122,13 +123,14 @@ fn fold_far(a : FoldLook, b : FoldLook) -> Double {
 ///|
 /// The block's state, as what it is moved for (frame.mbt's `cause`): folded as chosen, shown a while, a place with no
 /// sidebar of its own (or none to show: gated), which sidebar (its workspace and group), beside the system's tabs.
+#derive(Eq)
 priv struct FoldIs {
   folded : Bool
   peeking : Bool
   bare : Bool
   side : String
   native : Bool
-} derive(Eq)
+}
 
 ///|
 /// What the frame off the tape is laid out by now, a window `ww` by `wh`: the place's sidebar gated or bare, its

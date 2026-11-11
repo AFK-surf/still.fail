@@ -132,12 +132,13 @@ fn mine_said_node(
 ///|
 /// What is under the viewer's message (mine_message's): nothing (followed), the runtime it waits for, that its agents
 /// have yet to take it, its time.
+#derive(Eq)
 priv enum MineUnder {
   MineNothing
   MineBlocked
   MineWaiting
   MineTime
-} derive(Eq)
+}
 
 ///|
 /// What is under the viewer's message `m` now (mine_message's order).

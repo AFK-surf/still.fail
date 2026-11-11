@@ -37,14 +37,16 @@ pub(all) enum Live[T] {
 
 ///|
 /// Who a node is: its index and its making there (an index made again is another node).
+#derive(Eq, Hash, Debug)
 pub(all) struct NodeId {
   at : Int
   gen : Int
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// What a node is drawn as, kept by the node: its ground (0: none), its words and their ink, how opaque, and how far it
 /// is drawn off where it is laid out (what it holds drawn off with it).
+#derive(Eq, Debug)
 pub(all) struct Look {
   mut ground : Int64
   mut ink : Int64
@@ -138,12 +140,13 @@ pub(all) struct Look {
   mut ellipsis_past : Bool
   /// the picture it draws as wide as it is laid out, its curves cut for the pixels it is drawn at (View::picture)
   mut picture : @pixels.Vector?
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a node draws, where it is its own (its origin its top left, as opaque as itself): which node, how big, its
 /// ground, its words. Made again only as one of these changes; where it is and how opaque it is drawn are its place's
 /// and its holders' (composed as the scene is gone through: Tree::each_drawn).
+#derive(Eq, Debug)
 pub(all) struct Content {
   id : NodeId
   w : Double
@@ -207,7 +210,7 @@ pub(all) struct Content {
   /// whether it draws anything of its own (Content::draws) or words of its own (its runs, what is drawn of its words),
   /// worked out once as it is made: what a walk of the scene asks of each in the order (ui's view_draws)
   draws_any : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Whether it draws anything of its own: a ground, words, shapes, lines, a picture, glass, or what hosts it (the one place that says what
@@ -247,6 +250,7 @@ fn look_draws_any(l : Look, hosted : Bool) -> Bool {
 ///|
 /// A node's content unfolded where the window draws it (what holds it drawn off and faded with it): for a test, or a
 /// host that takes the window whole.
+#derive(Eq, Debug)
 pub(all) struct Drawn {
   id : NodeId
   x : Double
@@ -307,7 +311,7 @@ pub(all) struct Drawn {
   bones : Int64
   /// in its bones, how (Content's)
   bone_as : Int
-} derive(Eq, Debug)
+}
 
 ///|
 /// What the tree did, counted from its making: nodes made and let go; bindings run, and of them those whose value came
@@ -315,6 +319,7 @@ pub(all) struct Drawn {
 /// (laid out, placed, looked at); words measured; instances made again; instances handed to the host as changed;
 /// orders made again; structure bindings run (show, pick, each). For a test to say what work a change did, not how long
 /// it took.
+#derive(Eq, Debug)
 pub(all) struct Work {
   /// what goes beside another placed by it (View::beside: each worked out)
   mut besides : Int
@@ -343,7 +348,7 @@ pub(all) struct Work {
   mut found_walked : Int
   /// of them, those drawn smaller than a press's room near the point, kept to ask whether it reaches them (reach.mbt)
   mut near_kept : Int
-} derive(Eq, Debug)
+}
 
 ///|
 /// A node of the pool.
@@ -4563,13 +4568,14 @@ pub fn View::drawn_off(self : View, d : Live[(Double, Double)], loc~ : SourceLoc
 /// How a node's own ground is drawn other than as it is laid out (View::ground_drawn): how far off where it is laid out
 /// across and down, how much wider and taller (points, from its top left), and how round its corners are drawn (top
 /// left, then round it; None: as it says, View::radius and View::corners).
+#derive(Eq, Debug)
 pub(all) struct GroundShape {
   dx : Double
   dy : Double
   dw : Double
   dh : Double
   corners : (Double, Double, Double, Double)?
-} derive(Eq, Debug)
+}
 
 ///|
 /// A ground drawn as it is laid out: off by nothing, as big, as round as it says.
@@ -5788,13 +5794,14 @@ pub fn View::words_runs(
 ///|
 /// Where the pointer's secondary button was pressed on a node (View::on_menu): in its own terms as it is drawn then, in
 /// the window's, and when (the event's own moment).
+#derive(Eq, Debug)
 pub(all) struct Menu {
   x : Double
   y : Double
   wx : Double
   wy : Double
   at : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// What the pointer's secondary button pressed on it asks for (its menu, where it was pressed): run as one change at
@@ -5824,6 +5831,7 @@ pub fn Tree::menu_at(self : Tree, x : Double, y : Double, at : Double) -> Bool {
 /// with it (`mods`, the host's wheel_mod_*), in the node's own terms as it is drawn then, in the window's, and when;
 /// how wide and how tall the node is laid out as of then, in its own terms (`w`, `h`: a Drag's, what the wheel zooms or
 /// pans within, nothing of its layout read back for it).
+#derive(Eq, Debug)
 pub(all) struct Wheel {
   x : Double
   y : Double
@@ -5835,7 +5843,7 @@ pub(all) struct Wheel {
   at : Double
   w : Double
   h : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a wheel turned over it does (its own, at the wheel's moment, as one change outside any tracking): what is
@@ -5972,11 +5980,12 @@ pub fn Tree::wheel_at(
 ///|
 /// A key, as a node is told it (View::on_key): its code and the modifiers held (the host's, as an old view reads them:
 /// ui's key codes), at its moment.
+#derive(Eq, Debug)
 pub(all) struct Key {
   code : Int
   mods : Int
   at : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a key does to it, while it takes input (living, not leaving nor said to take none, no modal layer over it that
@@ -6163,10 +6172,11 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
 ///|
 /// How fast a finger goes as of one of its events (Drag's): known (none, called off), or its trackers as they were
 /// then, worked out as it is asked.
+#derive(Eq, Debug)
 pub struct DragSpeed {
   priv across : TrackerSaid?
   priv down : TrackerSaid?
-} derive(Eq, Debug)
+}
 
 ///|
 /// No speed (a finger called off, or one that cannot tell).
@@ -6197,12 +6207,13 @@ pub fn Drag::vy(self : Drag) -> Double {
 /// A finger or the pointer held on a node (View::on_drag): put down, moved, let go or called off (the host took it:
 /// a gesture of the system's), where (in the node's own terms: from its top left as it is drawn then) and when (the
 /// event's own moment).
+#derive(Eq, Debug)
 pub(all) enum DragIs {
   Down
   Moved
   Up
   Off
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as tests write a drag's step: what `derive(Show)` wrote.
@@ -6218,6 +6229,7 @@ pub impl Show for DragIs with output(self, logger) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Drag {
   kind : DragIs
   /// where, in the node's own terms then (where it is drawn as of `at`)
@@ -6244,7 +6256,7 @@ pub(all) struct Drag {
   /// how fast the finger goes as of this event (Drag::vx, Drag::vy): its own events since it went down, kept as they
   /// were then, the speed worked out of them only where it is asked
   priv speed : DragSpeed
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a finger or the pointer held on it does as it goes: put down on it, it is the node's till it is let go or
@@ -10988,6 +11000,7 @@ pub fn Tree::hosting(self : Tree) -> NodeId? {
 ///|
 /// What a press at a point is for: a node that does something when pressed, the old view in the node hosting it, or
 /// nothing of the tree's.
+#derive(Eq, Debug)
 pub(all) enum Target {
   Pressed(NodeId)
   Dragged(NodeId)
@@ -10995,16 +11008,17 @@ pub(all) enum Target {
   /// a top row of the app's own, what moves the window (View::moves_window)
   TopRow(NodeId)
   Nothing
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where a node takes a finger as it is drawn now (Tree::finger_areas).
+#derive(Eq, Debug)
 pub(all) enum FingerAreas {
   /// rects of the window (x0, y0, x1, y1): none where it takes none
   InWindow(Array[(Double, Double, Double, Double)])
   /// all of it drawn, where what it hosts takes one (View::hosted_takes; a hosted node saying nothing of it)
   AsItHosts
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where in the window node `id` takes a finger as it is drawn now, at the logic's moment (Tree::target_at's): none where

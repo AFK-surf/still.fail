@@ -3,6 +3,7 @@
 
 ///|
 /// What a widget is (ARIA's roles, those the components use).
+#derive(Eq, Debug)
 pub(all) enum Role {
   Text
   Group
@@ -38,7 +39,7 @@ pub(all) enum Role {
   Form
   Heading
   ScrollArea
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as tests and the said tree's text write a node's role: what `derive(Show)` wrote.
@@ -85,11 +86,12 @@ pub impl Show for Role with output(self, logger) {
 
 ///|
 /// A checkbox's state (and a menu's checkbox item's): off, on, or neither (some of what it stands for is on).
+#derive(Eq, Debug)
 pub(all) enum Check {
   Off
   On
   Mixed
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as tests and the said tree's text write a checkbox's state: what `derive(Show)` wrote.
@@ -106,6 +108,7 @@ pub impl Show for Check with output(self, logger) {
 ///|
 /// What can be done to a widget: pressed (a click, a tap), moved up or down a step (a slider), opened or closed,
 /// sent away (a dialog, a menu: Escape), given the keyboard's focus.
+#derive(Eq, Debug)
 pub(all) enum Action {
   Activate
   Increment
@@ -117,13 +120,14 @@ pub(all) enum Action {
   /// words put in a field in place of what it held, as a screen reader writes them (UI Automation's SetValue,
   /// TalkBack's set text); among what a widget says it takes, its words are none's (SetText(""))
   SetText(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a node of the window's tree says it is (View::says): its role, its label (none: the words it holds), what
 /// describes it more, its value as words (and as a number in a range: a progress bar's, a slider's), its state, what can
 /// be done to it (Activate where it is pressed: its on_press,
 /// as a press there runs it). Whether it is disabled is what its presses say (View::presses), not said here.
+#derive(Eq, Debug)
 pub(all) struct Said {
   role : Role
   label : String
@@ -136,7 +140,7 @@ pub(all) struct Said {
   selected : Bool?
   pressed : Bool?
   actions : Array[Action]
-} derive(Eq, Debug)
+}
 
 ///|
 /// A node of `role`, what else it says as given.
@@ -324,10 +328,11 @@ pub fn Tree::words_within(
 ///|
 /// What one of what is read out holds, in its order (Tree::said_pass): a node read out, or one hosting an old view (what
 /// that old view says read out in its place, then what of the tree it holds).
+#derive(Eq, Debug)
 pub(all) enum SaidKid {
   Entry(NodeId)
   Hosts(NodeId)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A node read out as a pass found it (Tree::said_pass): what it says (None: it says nothing, the node what a column

@@ -6,13 +6,14 @@
 /// A shape: its outlines (each its points x0 y0 x1 y1 …, from the top left of the box it is drawn in, and whether it
 /// is closed), filled in `fill` (RRGGBBAA, 0: not filled) by the nonzero rule, or the even-odd one (`even_odd`), and
 /// stroked in `stroke` (0: not stroked) `width` wide. A fill closes every outline.
+#derive(Eq, Debug)
 pub(all) struct Shape {
   outlines : Array[(Array[Double], Bool)]
   fill : Int64
   even_odd : Bool
   stroke : Int64
   width : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// A shape (see `Shape`).

@@ -212,12 +212,13 @@ fn drive_init() -> Unit {
 
 ///|
 /// The moments of a script's line a run's tracer is told of (@ui.trace_steps).
+#derive(Eq, Debug)
 pub(all) enum StepMoment {
   /// the line begun, before anything of it is done (a tap still waiting for its words to be on screen)
   Began
   /// its input handed to the app as the host sends it (the press, the words typed, the key): the frame it goes in
   Acted
-} derive(Eq, Debug)
+}
 
 ///|
 /// Who is told each line of a script as it begins and as it acts (@ui.trace_steps): a run's record of it.

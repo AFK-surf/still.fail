@@ -6,11 +6,12 @@
 ///|
 /// How a chart stands as the core has said (mermaid_charts, as mermaid_made says it changed): made (its SVG, its
 /// picture, its width and height), refused, or coming (asked, or not yet).
+#derive(Eq)
 priv enum MermaidNow {
   NowComing
   NowMade(Bytes, String, Double, Double)
   NowRefused
-} derive(Eq)
+}
 
 ///|
 /// A ```mermaid block (viz_mermaid_block's) in `v`, its code as `code` says it as it changes: its chart, drawn as a

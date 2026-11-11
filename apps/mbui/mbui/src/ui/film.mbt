@@ -6,10 +6,11 @@
 
 ///|
 /// The first frame that could not be drawn or written.
+#derive(Eq, Debug)
 pub(all) enum FilmFailure {
   Draw
   Write(Int)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A filmed run's log and, if a frame failed, what happened.

@@ -9,6 +9,7 @@
 
 ///|
 /// What is in place of a post's words, as the message says it now.
+#derive(Eq)
 priv enum InPlace {
   /// its words (the agent's message's own)
   Words
@@ -18,7 +19,7 @@ priv enum InPlace {
   Rig
   /// a vault item's, a sign-in's: not made as nodes yet
   NotYet
-} derive(Eq)
+}
 
 ///|
 /// What is in place of post `m`'s words (prose_with_files' cases).

@@ -95,6 +95,7 @@ test "words laid out only as they are held, under a cover holding through: held 
 /// (handed_lost's): nothing; the press called off instead of let go; or, let go, before a frame: the words not shown in
 /// the frame it comes to (shown in the one after), a modal layer over them, their old view taking no presses, the
 /// window's tree made anew, a press on a button of the tree's (as it goes down now, or `same`: said to go down at the moment the first did).
+#derive(Debug)
 enum After {
   Nothing
   Off
@@ -103,7 +104,7 @@ enum After {
   Inert
   Anew
   Button(same~ : Bool)
-} derive(Debug)
+}
 
 ///|
 /// Words laid out only as they are held under a cover holding through (picked_through's), a button of the tree's below

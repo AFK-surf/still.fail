@@ -5,6 +5,7 @@
 
 ///|
 /// A file of a drive handed to the viewer that previews it (open_file): where it is and what it is.
+#derive(Eq)
 pub(all) struct DriveFile {
   station : String
   root : String
@@ -17,7 +18,7 @@ pub(all) struct DriveFile {
   kind : String
   /// its media type, by its name
   mime : String
-} derive(Eq)
+}
 
 ///|
 /// An entry of a folder (DriveEntry).

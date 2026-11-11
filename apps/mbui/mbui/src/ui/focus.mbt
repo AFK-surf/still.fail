@@ -14,11 +14,12 @@
 
 ///|
 /// How a roving group's items lie: the arrows that move along it.
+#derive(Eq, Debug)
 pub(all) enum Orientation {
   Horizontal
   Vertical
   Both
-} derive(Eq, Debug)
+}
 
 ///|
 /// What can take the focus, as built: its id, its roving group (0 none), the layer it is in (0 the page), its node,

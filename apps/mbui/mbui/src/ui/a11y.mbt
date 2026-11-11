@@ -40,6 +40,7 @@ let a11y_sep : String = "\u{1F}"
 
 ///|
 /// A node as the host is told it (see above): where it is from where what holds it is.
+#derive(Eq, Debug)
 struct A11yNode {
   id : Int
   role : String
@@ -55,7 +56,7 @@ struct A11yNode {
   actions : String
   widget : Int
   kids : Array[Int]
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a host keeps of what it was told (each node by its number, what holds each, which has the focus), as an update

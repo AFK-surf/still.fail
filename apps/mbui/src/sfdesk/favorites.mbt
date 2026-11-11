@@ -3,12 +3,13 @@
 
 ///|
 /// A folder kept at hand: its station, root, path under it, and its name.
+#derive(Eq)
 pub(all) struct Favorite {
   station : String
   root : String
   path : String
   name : String
-} derive(Eq)
+}
 
 ///|
 /// At most this many.

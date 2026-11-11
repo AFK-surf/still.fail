@@ -5,11 +5,12 @@
 
 ///|
 /// Which line to type in: one line, one a small panel's (`small`), lines (textarea).
+#derive(Debug)
 priv enum FieldKind {
   OneLine
   SmallLine
   ManyLines
-} derive(Debug)
+}
 
 ///|
 /// A line to type in of `kind` in a column 300 wide at the window's top left, started as `platform`, words `scale` as

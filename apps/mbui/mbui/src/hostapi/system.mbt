@@ -68,6 +68,7 @@ pub let system_channel : String = "system"
 
 ///|
 /// One thing the system said (a message on `system_channel` says one or more: see above).
+#derive(Eq, Debug)
 pub(all) enum SystemSaid {
   /// on screen again after `away` ms off it
   Shown(away~ : Double)
@@ -93,19 +94,21 @@ pub(all) enum SystemSaid {
   NavTapped(String)
   /// where the system's bars put the app's action of its own in the app's view (x, y, w, h in points; w 0: none)
   NavAction(x~ : Double, y~ : Double, w~ : Double, h~ : Double)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A window's room one way, as the system classes it (Android's WindowSizeClass; iOS's UIUserInterfaceSizeClass, whose
 /// regular is Expanded: it has nothing between).
+#derive(Eq, Debug)
 pub(all) enum SizeClass {
   Compact
   Medium
   Expanded
-} derive(Eq, Debug)
+}
 
 ///|
 /// A device's hinge as the system says it.
+#derive(Eq, Debug)
 pub(all) enum Hinge {
   /// no fold in the window (no hinge, or the outer screen of a folded phone)
   NoHinge
@@ -115,7 +118,7 @@ pub(all) enum Hinge {
   Half
   /// open flat, as far as it goes
   Open
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as a page and tests write the hinge: what `derive(Show)` wrote.

@@ -74,13 +74,14 @@ pub fn Tracker::reset(self : Tracker) -> Unit {
 ///|
 /// What a tracker holds as of a moment, kept as it was (its samples copied): its velocity as of then worked out only
 /// where it is asked (Drag::vx, Drag::vy), as Tracker::velocity_at would have then, whatever the tracker took since.
+#derive(Eq, Debug)
 pub struct TrackerSaid {
   priv times : FixedArray[Double]
   priv vals : FixedArray[Double]
   priv index : Int
   priv n : Int
   priv t : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// What it holds now, kept for its velocity as of `t` (Tracker::velocity_at).

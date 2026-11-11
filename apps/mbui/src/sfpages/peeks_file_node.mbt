@@ -7,11 +7,12 @@
 ///|
 /// What a file's card shows (file_card's): its bones while it is read (and the picture it names comes); why not, read
 /// and refused; the file as the core read it.
+#derive(Eq)
 priv enum FileShows {
   Bones
   Refused
   Shown
-} derive(Eq)
+}
 
 ///|
 /// What a file's card holds (file_card's) in `parent`: the file `path` (at `line`) that session `session` of station

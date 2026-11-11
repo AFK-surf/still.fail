@@ -119,10 +119,11 @@ pub struct Replay {
 /// (in its wall clock), times `scale` (1: as the run had it; 2: twice as slow; 0.5: twice as fast). A message's anchor
 /// is the latest event before it in the run that has happened again: an ask made again, a message given (Replay::
 /// due_at); a trace whose asks have no wall clock (an older one) anchors to the messages in only.
+#derive(Eq, Debug)
 pub(all) enum Pace {
   AtOnce
   AsRun(Double)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft and what is typed in it, where it was read to,

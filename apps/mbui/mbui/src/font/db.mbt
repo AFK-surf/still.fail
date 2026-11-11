@@ -2,11 +2,12 @@
 // CSS's font matching over them (CSS Fonts 3 §5.2, as fontdb does it after font-kit).
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FontStyle {
   Normal
   Italic
   Oblique
-} derive(Eq, Debug)
+}
 
 ///|
 /// By its name, as a font's key says it (svg's SFont::key): what `derive(Show)` wrote.
@@ -216,6 +217,7 @@ fn face_info(data : Bytes, index : Int, id : Int) -> FaceInfo? {
 
 ///|
 /// A CSS font family: a name or a generic one.
+#derive(Eq, Debug)
 pub(all) enum Family {
   Named(String)
   Serif
@@ -223,7 +225,7 @@ pub(all) enum Family {
   Cursive
   Fantasy
   Monospace
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn FontDb::family_name(self : FontDb, f : Family) -> String {

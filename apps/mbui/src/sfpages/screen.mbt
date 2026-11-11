@@ -22,12 +22,13 @@ priv struct DropTo {
 
 ///|
 /// A part of the screen (0..1 of its width and height): its left, top, width, height.
+#derive(Eq)
 priv struct Part {
   x : Double
   y : Double
   w : Double
   h : Double
-} derive(Eq)
+}
 
 ///|
 /// A config's part of the screen (`region`), when it says one.

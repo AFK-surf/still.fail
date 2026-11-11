@@ -39,6 +39,7 @@ pub struct Anim {
 
 ///|
 /// Where an Anim goes, all of it: what is built from where it is is built again only as this changes.
+#derive(Eq)
 priv struct AnimWay {
   running : Bool
   value : Double
@@ -50,7 +51,7 @@ priv struct AnimWay {
   v0 : Double
   start : Double
   dur : Double
-} derive(Eq)
+}
 
 ///|
 fn Anim::way(self : Anim, c : @ui.Ctx) -> AnimWay {
