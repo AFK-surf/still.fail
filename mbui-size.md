@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [9bea105e3](https://github.com/AFK-surf/still.fail/commit/9bea105e3af80832962d9b620a03d9ce129e6ad9) app: 添加 station as nodes (settings' station_add.mb | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.41 | 187.44 |
 | [0268f142d](https://github.com/AFK-surf/still.fail/commit/0268f142d5c4ea52a056b0f1046a0dc98ebc5e7c) app, mbui: a film or a song opened beside a chat,  | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.7 | 47.6 | 93.91 | 157.54 |
 | [0ef0e0bdb](https://github.com/AFK-surf/still.fail/commit/0ef0e0bdb37d46232e85484e876d4181d5f57b11) mbui, app: an abort says why first (@halt.saying), | 1.82 | 2.43 | 10.11 | 28.85 | 35.69 | 25.69 | 47.59 | 94.34 | 163.61 |
 | [21783afdd](https://github.com/AFK-surf/still.fail/commit/21783afdd082960dcfc4e136c6751df79d54016c) app: a picture waiting in the composer on an iPhon | 1.81 | 2.43 | 10.11 | 28.84 | 35.67 | 25.69 | 47.57 | 94.41 | 181.05 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [da1d0b203](https://github.com/AFK-surf/still.fail/commit/da1d0b2036a3012eca5ef47277f8adbf06526026) sf: a panel's body of nodes holding nothing takes  | 1.78 | 2.38 | 9.93 | 28.56 | 34.77 | 25.49 | 46.94 | 93.9 | 177.94 |
 | [da0d3f539](https://github.com/AFK-surf/still.fail/commit/da0d3f539c30bde5c7c79b246d6c353f27f0bfc7) app: how far a service page's resources came in a  | 1.78 | 2.38 | 9.93 | 28.55 | 34.77 | 25.49 | 46.94 | 94.27 | 161.73 |
 | [95aaca627](https://github.com/AFK-surf/still.fail/commit/95aaca627e60fcfd4220f740b5d8b53aca9c3686) mbui: what goes beside another may be as wide as i | 1.78 | 2.38 | 9.92 | 28.55 | 34.75 | 25.49 | 46.93 | 93.95 | 151.88 |
-| [fea8ca3d4](https://github.com/AFK-surf/still.fail/commit/fea8ca3d40f12d5161a5870b9cab507f1889a5e8) Fix pasted screenshots exceeding 8 MiB (#5299) | 1.78 | 2.38 | 9.92 | 28.55 | 34.74 | 25.49 | 46.93 | 94.01 | 129.35 |
