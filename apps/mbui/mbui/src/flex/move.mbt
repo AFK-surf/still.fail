@@ -100,46 +100,168 @@ pub fn move_stop_points(v : Double) -> Double {
 }
 
 ///|
-/// How slow (points a ms), at the least, a way set off again at speed has to have got, slowing, before it sets out for
-/// where it goes (come_turn_out): a hundredth of a point a ms, too slow to be seen turning; one set out no faster than
-/// that sets out for it at once, as one set out from rest does, so that a speed a little toward where it goes and a
-/// little away from it go nearly the same way.
-let come_turn_least : Double = 0.01
+/// How fast (points a ms) a thing turned back goes for its turn to be seen at all: a frame's twentieth of a point, all
+/// but still as it sets off (come_back_wbtest's judge of what hangs at its turn takes no turn slower). The scale over
+/// which a turn's way goes from a Move's from rest, slower than it, to a slowing as far as its speed carries it, faster
+/// (come_turn_w).
+pub let turn_judged_from : Double = 0.05
 
 ///|
-/// What share of the speed it set out at a way set off again at speed has slowed to as it sets out for where it goes
-/// (come_turn_out), where that is more than come_turn_least: 15%, while what it set off on is still seen going (a point
-/// or more a frame where it went fast), so that the two, added, round its turn: the way out slowing as the way back
-/// gains, never a frame of each seen still together, hanging at the turn (2.5%, set out once it was all but still, hung
-/// there 33 ms and more); no earlier, where the way back, gaining, all but cancels the way out still going fast, a frame
-/// of it stopped dead (25% did: come_back_wbtest). Held by come_back_wbtest's and sheet_let_go_wbtest's hung_at_turn (the
-/// coordinator of the migration, 2026-11-10).
-let come_turn_share : Double = 0.15
-
-///|
-/// When (ms after it set out) a way set off again at `v` turned away from where it goes sets out for it: once its
-/// slowing (come_turn, `t1` long, ω = move_k / t1) has brought it down to the more of come_turn_share of `v` and
-/// come_turn_least; at once where it went no faster than that. A moment of the way's own, worked out of its speed
-/// alone, and the same either side of where the two meet (|v| 1/15: ln(1/0.15) = 1.9, about a quarter of move_k).
-fn come_turn_out(v : Double, t1 : Double) -> Double {
-  let speed = v.abs()
-  let slow = fmax(come_turn_least, come_turn_share * speed)
-  if speed <= slow || t1 <= 0.0 {
-    0.0
-  } else {
-    fmin(t1, @dmath.ln(speed / slow) * t1 / move_k)
-  }
+/// How much of a Move from rest the turn of a way set off again at `v` is: 1 at rest, falling to none as it is faster
+/// than turn_judged_from, as (turn_judged_from/v)⁴, 1/(1 + x⁴), x = v / turn_judged_from; flat at rest and smooth all the
+/// way, no speed either side of which it goes two ways. The fourth power the least even one that holds both ends (the
+/// coordinator of the migration, 2026-11-11): two speeds a thousandth apart either side of rest go ways within that
+/// thousandth's worth of each other (come_way_wbtest; x² is 35 points off), and one turned at twice turn_judged_from, seen
+/// going, goes on a frame before it comes back (come_back_wbtest's called back at 0.8 of its closing, 0.098 a ms). x⁶
+/// holds them too, steeper.
+fn come_turn_w(v : Double) -> Double {
+  let x = v / turn_judged_from
+  let x2 = x * x
+  1.0 / (1.0 + x2 * x2)
 }
 
 ///|
-/// A way set off again at `v` (points a ms): how far it is carried on, slowing to rest (move_stop_points, signed as
-/// `v`), and how long that takes.
-fn come_turn(v : Double) -> (Double, Double) {
-  if v == 0.0 {
+/// A way set off again at `v` away from where it goes, `far` from there (signed, where it goes less where it is), its
+/// way back going `along` another (or none): slowing at one rate to rest, `t1` ms, carried `s` (signed as `v`), its
+/// gain then `a` (points a ms², toward where it goes), and its way back from there, `dur` ms, setting out at rest
+/// gaining `a` (come_back_path). How long it slows is what is weighed (come_turn_w), between how long a Move from rest
+/// there would take to take that speed up (v/ω²·D, ω = move_k / dur: all but none, where it is all but still) and how
+/// long that speed takes to be told to stop (2·move_stop_points/v: 54 ms at the least, move_ms's, where it is faster):
+/// t1 = (1 − w)·stop + w·move, `a` = v/t1 what follows of it. So at rest it is a Move from rest, and seen going it turns
+/// over frames, never within one. Steep, known and taken (the coordinator of the migration, 2026-11-11): far, a Move from
+/// rest gains at once and a turn seen must gain slowly, the two a few hundredths of a point a ms apart and the way back
+/// thirty or forty points a frame, so a 345-point way's frames at speeds 0.01 apart are as far as 51 points apart between
+/// 0 and 0.01 (15 to 24 on to 0.05): its way back setting out a frame later, no step in where it is (at rest a Move to
+/// the bit, a thousandth apart within its share, no speed taking another shape). Never steep only if a Move from rest
+/// set out gaining slowly too, every way's feel, not this. How far the way back goes is how far it is carried, and how
+/// long that takes how fast it slows: worked out again from what each says of the other, a few times over (each the
+/// nearer, the slowing being no more than a share of the way, and the length of a Move coming in whole frames: no step
+/// of it moves the carry past where the one before had it), a fixed number of times, so the same of the same way at any
+/// frame. `w` its come_turn_w.
+priv struct ComeTurn {
+  t1 : Double
+  s : Double
+  a : Double
+  dur : Double
+  w : Double
+}
+
+///|
+fn come_turned(v : Double, far : Double, along : ComeWith?) -> ComeTurn {
+  let speed = v.abs()
+  let w = come_turn_w(v)
+  let stop = move_stop_points(v)
+  let a_stop = speed * speed / (2.0 * stop)
+  let mut s = 0.0
+  let mut a = a_stop
+  let mut t1 = 0.0
+  let mut dur = 0.0
+  for _ in 0..<come_turn_rounds {
+    let d = far.abs() + s
+    t1 = speed / a
+    dur = come_move_ms(d, t1, along)
+    let om = if dur > 0.0 { move_k / dur } else { 0.0 }
+    let a_move = om * om * d * move_start_gain
+    if a_move <= 0.0 {
+      break
+    }
+    // (how long it slows weighed, its gain what follows: t1 = (1 − w)·v/a_stop + w·v/a_move)
+    let was = a
+    a = 1.0 / ((1.0 - w) / a_stop + w / a_move)
+    s = speed * speed / (2.0 * a)
+    if (a - was).abs() <= 1.0e-12 * a {
+      break
+    }
+  }
+  t1 = speed / a
+  dur = come_move_ms(far.abs() + s, t1, along)
+  { t1, s: if v > 0.0 { s } else { -s }, a, dur, w }
+}
+
+///|
+/// How much more than ω²·d a Move from rest gains as it sets out, d off its end (move_path's, what is left at its end
+/// taken off gaining too: (1 + move_k)·e^(−move_k)/move_end more): what a turn at rest sets out gaining, so that its way
+/// back is that Move to the bit (come_back_path).
+let move_start_gain : Double = 1.0 + (1.0 + move_k) * @dmath.exp(-move_k) / move_end
+
+///|
+/// How many times come_turned works out its slowing and its way back again from each other: enough for both to stand
+/// still to the last bit in the ways the tests go (four or five), a few more for any other.
+let come_turn_rounds : Int = 12
+
+///|
+/// How fast a way back set out still and not gaining dies away over its `dur` (come_back_path's ω·dur where it is all
+/// such a way): what a third-order spring has still to go at its end as little as a Move's has at its,
+/// (1 + k + k²/2)·e^(−k) = (1 + move_k)·e^(−move_k), so it comes to rest going as slowly as a Move does (1.14 times),
+/// not at 3.7 times its speed.
+let come_back_k : Double = come_back_k_of(move_k)
+
+///|
+/// How many times come_back_k_of halves where it looks: from k to 4k down to the last bit of a Double.
+let come_back_k_halvings : Int = 64
+
+///|
+fn come_back_k_of(k : Double) -> Double {
+  let left = (1.0 + k) * @dmath.exp(-k)
+  let mut lo = k
+  let mut hi = 4.0 * k
+  for _ in 0..<come_back_k_halvings {
+    let mid = (lo + hi) / 2.0
+    if (1.0 + mid + mid * mid / 2.0) * @dmath.exp(-mid) > left {
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  (lo + hi) / 2.0
+}
+
+///|
+/// Where a way back is `t` ms into its `dur`, `d` off its end (signed) as it sets out at rest gaining `a` (toward its end:
+/// points a ms²), `w` how much of a Move from rest its turn is (come_turn_w): a critically damped spring of the third
+/// order, (d + ω·d·t + c·t²)·e^(−ω·t), ω = k / dur (a Move's move_k as far as `w` to the fourth says, come_back_k for
+/// the rest), made to rest at `dur` as move_path is, what it would
+/// still have left there taken off by a curve that is a Move's from rest as far as `w` to the fourth says and one set
+/// out still and not gaining (1 − (1 + x + x²/2)·e^(−x)) for the rest. `c` such that, with what is taken off, it sets
+/// out gaining `a` to the bit: as it sets out its place, speed and gain are where the slowing left them; at rest (`a` a
+/// Move's own, ω²·d·move_start_gain, and `w` 1) a Move from rest, `c` none. Its offset from its end
+/// and how fast it goes.
+pub fn come_back_path(d : Double, a : Double, w : Double, t : Double, dur : Double) -> (Double, Double) {
+  if dur <= 0.0 || t >= dur {
     return (0.0, 0.0)
   }
-  let d = move_stop_points(v)
-  (if v > 0.0 { d } else { -d }, move_ms(d))
+  if t <= 0.0 {
+    return (d, 0.0)
+  }
+  // (how fast it dies away: a Move's as far as w to the fourth says, come_back_k's for the rest)
+  let wm = w * w * (w * w)
+  let k = wm * move_k + (1.0 - wm) * come_back_k
+  let om = k / dur
+  let c1 = om * d
+  let x = k * t / dur
+  let e = @dmath.exp(-x)
+  let end2 = 1.0 - (1.0 + k) * @dmath.exp(-k)
+  let end3 = 1.0 - (1.0 + k + k * k / 2.0) * @dmath.exp(-k)
+  // (what is taken off to rest at its end: a Move's from rest as far as w to the fourth says, all of it at rest and all
+  // but none once it is going at all, so it is a Move from rest there to the bit's worth; one set out still and not
+  // gaining for the rest)
+  let m = wm * (1.0 - (1.0 + x) * e) / end2 + (1.0 - wm) * (1.0 - (1.0 + x + x * x / 2.0) * e) / end3
+  let mv = wm * x * e * k / dur / end2 + (1.0 - wm) * x * x / 2.0 * e * k / dur / end3
+  // (c so that it sets out gaining `a` toward its end, what is taken off with it: its gain at the start 2c − ω²d less
+  // what is left at its end times a Move's gain at the start, ω²/move_end, as much as wm of it; what is left at its end
+  // (d + c1·dur + c·dur²)·e^(−move_k), so c of a line's: c = (ω²d − a + A·M)/(2 − B·M))
+  let left = @dmath.exp(-k)
+  let mm = wm * om * om / end2
+  let a_to = if d >= 0.0 { a } else { -a }
+  let c2 = (om * om * d - a_to + (d + c1 * dur) * left * mm) / (2.0 - dur * dur * left * mm)
+  let at = fn(t : Double) {
+    let e = @dmath.exp(-om * t)
+    let p = d + c1 * t + c2 * t * t
+    (p * e, (c1 + 2.0 * c2 * t - om * p) * e)
+  }
+  let (y, yv) = at(t)
+  let (yt, _) = at(dur)
+  (y - yt * m, yv - yt * mv)
 }
 
 ///|
@@ -183,29 +305,26 @@ fn come_on_ms(far : Double, along : ComeWith?) -> Double {
 }
 
 ///|
-/// How long (ms) a way from `from` tall to `goal`, set out at `v` (points a ms), takes: carried on slowing to rest
-/// (come_turn), and once slow (come_turn_out) a Move from rest to `goal`, as long as how far that is; set out toward
-/// `goal`, a Move on from `v` (come_toward). Going `along` another way: there as that one ends (its slowing, turned, no
-/// shorter).
+/// How long (ms) a way from `from` tall to `goal`, set out at `v` (points a ms), takes: turned away from `goal`, its
+/// slowing to rest and its way back from there, as long as how far that is (come_turned); from rest, a Move as long; set
+/// out toward `goal`, a Move on from `v` (come_toward). Going `along` another way: there as that one ends (its slowing,
+/// turned, no shorter).
 pub fn come_way_ms(from : Double, v : Double, goal : Double, along? : ComeWith) -> Double {
   if come_toward(from, v, goal) {
     return come_on_ms(goal - from, along)
   }
-  let (s, t1) = come_turn(v)
-  let t0 = come_turn_out(v, t1)
-  let t2 = come_move_ms(goal - from - s, t0, along)
   if v == 0.0 {
-    t2
-  } else {
-    fmax(t1, t0 + t2)
+    return come_move_ms(goal - from, 0.0, along)
   }
+  let tr = come_turned(v, goal - from, along)
+  tr.t1 + tr.dur
 }
 
 ///|
 /// Where a way from `from` tall to `goal`, set out at `v` (points a ms), has got `t` ms on, and how fast it goes (points
-/// a ms): on from `v`, slowing to rest as far as that speed carries it (come_turn), and once slow (come_turn_out) a
-/// Move from rest to `goal` (none set out at speed: that Move alone; set out toward `goal`: a Move on from `v`,
-/// come_toward). Its speed the same as `v` as it sets out, whichever way that is (the coordinator of the migration,
+/// a ms): turned away from `goal`, on from `v` slowing at one rate to rest and from there its way back, set out still and
+/// gaining as it slowed, its place, speed and gain going on where the two meet (come_turned, come_back_path); from rest,
+/// a Move from rest; set out toward `goal`, a Move on from `v` (come_toward). Its speed the same as `v` as it sets out, whichever way that is (the coordinator of the migration,
 /// 2026-11-10: a show's node called back as it closes its room, on from as fast as it went), turning over frames, never
 /// within one; a little toward `goal` and a little away from it, nearly the same way. `t` from the moment it set out
 /// (before it, where it was); going `along` another way, set out as that one does and there as it ends (come_way_ms).
@@ -233,25 +352,27 @@ pub fn come_way_by(
     let (off, ov) = move_path(from - goal, v, t, come_on_ms(plan - from, along))
     return (goal + off, ov)
   }
-  let (s, t1) = come_turn(v)
-  let (x, xv) = if v == 0.0 {
-    (from, 0.0)
-  } else {
-    let (off, ov) = move_path(-s, v, t, t1)
-    (from + s + off, ov)
+  // (from rest: a Move from rest, as ever)
+  if v == 0.0 {
+    let far = goal - from
+    if t <= 0.0 {
+      return (from, 0.0)
+    }
+    let dur = come_move_ms(plan - from, 0.0, along)
+    if dur <= 0.0 || t >= dur {
+      return (from + far, 0.0)
+    }
+    let (off, ov) = move_path(-far, 0.0, t, dur)
+    return (from + far + off, ov)
   }
-  let far = goal - from - s
-  let t0 = come_turn_out(v, t1)
-  let t2 = t - t0
-  if t2 <= 0.0 {
-    return (x, xv)
+  // (turned back: slowing at one rate to rest, then its way back from there set out still and gaining as it slowed)
+  let tr = come_turned(v, plan - from, along)
+  if t <= tr.t1 {
+    let g = if v > 0.0 { -tr.a } else { tr.a }
+    return (from + v * t + g * t * t / 2.0, v + g * t)
   }
-  let dur = come_move_ms(plan - from - s, t0, along)
-  if dur <= 0.0 || t2 >= dur {
-    return (x + far, xv)
-  }
-  let (off, ov) = move_path(-far, 0.0, t2, dur)
-  (x + far + off, xv + ov)
+  let (off, ov) = come_back_path(from + tr.s - goal, tr.a, tr.w, t - tr.t1, tr.dur)
+  (goal + off, ov)
 }
 
 ///|
@@ -259,8 +380,8 @@ pub fn come_way_by(
 /// change come while others go is put with what is left of theirs, one whole going to where it all ends): one way for
 /// all of it, each item its share. Its speed (`v`, points a ms) the items' toward where each goes, summed, and how far
 /// all of them go (`far`, the most of any); turned away from where it goes (v < 0), all of it slows as one first, each
-/// on along its own speed by that one slowing (come_turn of `v`: `s` and `t1`, setting out for where it goes from
-/// `t0`), then one Move from where each has come to, `dur` long; else one Move from rest or on from `v` (no faster
+/// on along its own speed by that one slowing (at one rate, `a`, `t1` long, carried `s`: as come_turned's), then one way
+/// back from where each has come to, `dur` long, set out still and gaining as all of it slowed (come_back_path); else one Move from rest or on from `v` (no faster
 /// than it goes past where it goes: ω·D), `dur` long. Said once, at the moment it is said for (come_group_set); read by
 /// flex alone, each item laid out by it (come_height).
 pub(all) struct ComeGroup {
@@ -271,14 +392,15 @@ pub(all) struct ComeGroup {
   mut d : Double
   mut s : Double
   mut t1 : Double
-  mut t0 : Double
+  mut a : Double
+  mut w : Double
   mut dur : Double
 }
 
 ///|
 /// A group said at moment `at`, none in it yet.
 pub fn ComeGroup::new(at : Double) -> ComeGroup {
-  { at, members: [], set: false, v: 0.0, d: 0.0, s: 0.0, t1: 0.0, t0: 0.0, dur: 0.0 }
+  { at, members: [], set: false, v: 0.0, d: 0.0, s: 0.0, t1: 0.0, a: 0.0, w: 0.0, dur: 0.0 }
 }
 
 ///|
@@ -298,22 +420,60 @@ pub fn come_group_set(g : ComeGroup) -> Unit {
     v = v + (if d >= 0.0 { m.come_v } else { -m.come_v })
   }
   g.v = v
-  let (s, t1) = if v < 0.0 { come_turn(v) } else { (0.0, 0.0) }
-  g.s = s
-  g.t1 = t1
-  g.t0 = if v < 0.0 { come_turn_out(v, t1) } else { 0.0 }
-  // (each from where its slowing leaves it: as far on as its own speed is of the group's)
+  // (turned away as a whole: slowing at one rate to rest, as one (come_turned's, of its speed and how far all of it
+  // goes back: its gain then a Move's from rest for all of it, ω²·D, where it is all but still), each carried as far as
+  // its own speed is of the group's, then its way back from there; what each then goes worked out again from how far
+  // that carries it, the same number of times)
+  let speed = -v
+  let w = if v < 0.0 { come_turn_w(v) } else { 0.0 }
+  let a_stop = if v < 0.0 { speed * speed / (2.0 * move_stop_points(v)) } else { 0.0 }
+  let mut s = 0.0
+  let mut a = a_stop
   let mut far = 0.0
   let mut dd = 0.0
-  for m in g.members {
-    let start = if v < 0.0 { m.come_from + m.come_v * s / v } else { m.come_from }
-    let d = (m.come_goal - start).abs()
-    far = fmax(far, d)
-    dd = dd + d
+  let mut t1 = 0.0
+  let mut dur = 0.0
+  let measure = fn(s : Double) {
+    let mut far = 0.0
+    let mut dd = 0.0
+    for m in g.members {
+      let start = if v < 0.0 { m.come_from + m.come_v * s / v } else { m.come_from }
+      let d = (m.come_goal - start).abs()
+      far = fmax(far, d)
+      dd = dd + d
+    }
+    (far, dd)
   }
+  if v < 0.0 {
+    for _ in 0..<come_turn_rounds {
+      let (f, d) = measure(s)
+      t1 = speed / a
+      let du = come_move_ms(f, t1, None)
+      let om = if du > 0.0 { move_k / du } else { 0.0 }
+      let a_move = om * om * d * move_start_gain
+      if a_move <= 0.0 {
+        break
+      }
+      let was = a
+      a = 1.0 / ((1.0 - w) / a_stop + w / a_move)
+      s = -(speed * speed / (2.0 * a))
+      if (a - was).abs() <= 1.0e-12 * a {
+        break
+      }
+    }
+    t1 = speed / a
+  }
+  let (f, d) = measure(s)
+  far = f
+  dd = d
+  dur = if v < 0.0 { come_move_ms(far, t1, None) } else if far < 0.5 { 0.0 } else { move_ms(far) }
+  g.s = s
+  g.t1 = t1
+  g.a = a
+  g.w = w
   g.d = dd
-  g.dur = if v < 0.0 { come_move_ms(far, g.t0, None) } else if far < 0.5 { 0.0 } else { move_ms(far) }
-  let ends = g.at + (if v < 0.0 { fmax(t1, g.t0 + g.dur) } else { g.dur })
+  g.dur = dur
+  let ends = g.at + (if v < 0.0 { t1 + g.dur } else { g.dur })
   for m in g.members {
     m.come_group = Some(g)
     m.come_ends = ends
@@ -327,25 +487,16 @@ pub fn come_group_set(g : ComeGroup) -> Unit {
 /// its share of the group's way.
 fn come_group_way(g : ComeGroup, s : Style, goal : Double, t : Double) -> (Double, Double) {
   if g.v < 0.0 {
-    // (slowing as one: carried as far as its own speed is of the group's)
-    let (x, xv) = if g.t1 <= 0.0 || t >= g.t1 {
-      (g.s, 0.0)
-    } else {
-      let (off, ov) = move_path(-g.s, g.v, t, g.t1)
-      (g.s + off, ov)
-    }
+    // (slowing as one at one rate: carried as far as its own speed is of the group's; then its share of one way back,
+    // set out still and gaining, as all of it, as it slowed: come_back_path of all of it, as a share)
     let k = s.come_v / g.v
-    let start = s.come_from + k * g.s
-    let t2 = t - g.t0
-    let (m, mv) = if t2 <= 0.0 {
-      (0.0, 0.0)
-    } else if g.dur <= 0.0 || t2 >= g.dur {
-      (1.0, 0.0)
-    } else {
-      let (off, ov) = move_path(-1.0, 0.0, t2, g.dur)
-      (1.0 + off, ov)
+    if t <= g.t1 {
+      let x = g.v * t + g.a * t * t / 2.0
+      return (s.come_from + k * x, k * (g.v + g.a * t))
     }
-    (s.come_from + k * x + (goal - start) * m, k * xv + (goal - start) * mv)
+    let start = s.come_from + k * g.s
+    let (y, yv) = if g.d > 0.0 { come_back_path(1.0, g.a / g.d, g.w, t - g.t1, g.dur) } else { (0.0, 0.0) }
+    (start + (goal - start) * (1.0 - y), -(goal - start) * yv)
   } else {
     // (one Move for all, on from the group's speed, as a share of how far all of it goes)
     let (p, pv) = if g.d <= 0.0 || g.dur <= 0.0 || t >= g.dur {

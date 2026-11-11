@@ -54,18 +54,10 @@ test "come_way set out a little toward where it goes and a little away from it: 
     let near = come_way_ms(100.0, 0.0, 300.0) * eps
     assert_true((up - down).abs() <= near && (up - rest).abs() <= near, msg="at \{t}: \{up} \{down} \{rest}")
   }
-  assert_eq(come_way_ms(100.0, eps, 300.0), come_way_ms(100.0, -eps, 300.0))
-}
-
-///|
-test "come_way turned back as fast either side of where its slowing's share and its least speed meet (0.4): nearly the same way" {
-  for t in [0.0, 20.0, 60.0, 150.0, 250.0, 400.0] {
-    let (a, _) = come_way(100.0, -0.399, 300.0, t)
-    let (b, _) = come_way(100.0, -0.401, 300.0, t)
-    // (as far apart as the speeds' difference goes in the way's length)
-    let near = come_way_ms(100.0, -0.4, 300.0) * 0.002
-    assert_true((a - b).abs() <= near, msg="at \{t}: \{a} \{b}")
-  }
+  // (as long, but for its slowing turned, all but none: as long as eps is of its gain then)
+  assert_true(
+    (come_way_ms(100.0, eps, 300.0) - come_way_ms(100.0, -eps, 300.0)).abs() <= come_way_ms(100.0, 0.0, 300.0) * eps,
+  )
 }
 
 ///|
@@ -122,4 +114,76 @@ test "come_way at speed toward where it goes, less than half a point from it: on
   assert_eq(come_way(0.0, 0.3, 0.4, w.ends - w.start, along=w).0, 0.4)
   // (from rest, as near: there at once, no speed to lose)
   assert_eq(come_way_ms(0.0, 0.0, 0.4), 0.0)
+}
+
+///|
+/// A way from 100 to 0 set out at `v`: where it is at each 60th of a second, 32 of them.
+fn turned_frames(v : Double) -> Array[Double] {
+  let out = []
+  let mut t = 0.0
+  while out.length() < 32 {
+    out.push(come_way(100.0, v, 0.0, t).0)
+    t = t + 1000.0 / 60.0
+  }
+  out
+}
+
+///|
+test "come_way at speeds either way, a hundredth of a point a ms apart: the ways near, none taking another shape; from rest a Move to the bit" {
+  // (in the place of the test of either side of where the slowing's share and its least speed met: no such place now,
+  // any two speeds near each other going near ways)
+  let ms = come_way_ms(100.0, 0.0, 0.0)
+  let mut was = turned_frames(-0.2)
+  let mut i = -19
+  while i <= 20 {
+    let v = i.to_double() / 100.0
+    let now = turned_frames(v)
+    let mut most = 0.0
+    for k in 0..<now.length() {
+      most = fmax(most, (now[k] - was[k]).abs())
+    }
+    // (no further apart than 13.5 points: 12.9 at the most, between 0 and 0.01 away, where how long it slows grows from
+    // all but none (come_turn_w): its way back setting out later; a way going on, 0.15)
+    assert_true(most <= 13.5, msg="\{v}: \{most}")
+    was = now
+    i = i + 1
+  }
+  let mut t = 0.0
+  for x in turned_frames(0.0) {
+    assert_eq(x, 0.0 + move_path(100.0, 0.0, t, ms).0)
+    t = t + 1000.0 / 60.0
+  }
+}
+
+///|
+test "come_way turned back: slowing at one rate and its way back meet with its place, speed and gain going on; never past where it goes" {
+  for c in [(345.0, 0.76, 0.0), (44.0, 0.3, 0.0), (10.0, 1.5, 0.0), (100.0, 0.08, 0.0), (100.0, 0.02, 0.0)] {
+    let (from, v, goal) = c
+    let tr = come_turned(v, goal - from, None)
+    // (a thousandth of a ms each side: its way back gains faster as it sets out than a Move does, so further off the
+    // join its gain has gone on changing)
+    let h = 0.001
+    let at = fn(t : Double) { come_way(from, v, goal, t) }
+    let (xa, va) = at(tr.t1 - h)
+    let (xb, vb) = at(tr.t1 + h)
+    assert_true((xa - xb).abs() < 0.01 && (va - vb).abs() <= 2.5 * h * tr.a + 1.0e-9, msg="\{c}: \{xa} \{xb}, \{va} \{vb}")
+    // (its gain each side: as it slowed, -a; as it sets back out, within what is taken off to rest at its end)
+    let before = (at(tr.t1 - h).1 - at(tr.t1 - 2.0 * h).1) / h
+    let after = (at(tr.t1 + 2.0 * h).1 - at(tr.t1 + h).1) / h
+    assert_true((before - after).abs() <= 0.02 * tr.a + 1.0e-6, msg="\{c}: gain \{before} then \{after}, a \{tr.a}")
+    let mut t = 0.0
+    while t <= come_way_ms(from, v, goal) {
+      assert_true(at(t).0 >= goal - 1.0e-9, msg="\{c} past \{goal} at \{t}: \{at(t).0}")
+      t = t + 1.0
+    }
+    assert_eq(at(come_way_ms(from, v, goal)).0, goal)
+  }
+}
+
+///|
+test "come_turn_w: a Move from rest's at rest, as far as its speed carries it fast" {
+  assert_eq(come_turn_w(0.0), 1.0)
+  assert_true(come_turn_w(0.76) < 0.005)
+  assert_eq(come_turn_w(0.05), 0.5)
+  assert_eq(come_turn_w(-0.05), come_turn_w(0.05))
 }

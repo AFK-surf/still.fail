@@ -481,3 +481,34 @@ test "新建 workspace's sheet closed by 取消 two frames into its invite code'
   }
   assert_true(new_ws_dialog(t) is None)
 }
+
+///|
+test "新建 workspace's sheet closed by 取消 three frames into its invite code's field opening: the field turned back as it sinks, its height slowing and gaining again without a step" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  let calls : Array[Made] = []
+  let t = new_ws_over(calls, platform=2, wide=false)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("例如：产品团队")
+  t.type_text("产品团队")
+  t.frame()
+  press_create(t)
+  (calls[0].done)(Err({ "code": "invite_code_required", "message": "code" }))
+  t.frame()
+  // (three frames of 60 a second of the field opening, 取消 then letting go of the error: the field called back as it
+  // opens, its room turned back as the sheet sinks)
+  let a_frame = 1000.0 / 60.0
+  let opened = t.time() + 3.0 * a_frame
+  while t.time() < opened - 0.001 {
+    t.run_for(a_frame)
+  }
+  let (bx, by, bw, bh) = t.get(Button, label="取消").rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  let till = t.time() + @ui.move_most_ms
+  while t.time() < till {
+    t.run_for(a_frame)
+  }
+  assert_true(new_ws_dialog(t) is None)
+}
