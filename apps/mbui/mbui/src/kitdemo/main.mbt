@@ -40,6 +40,8 @@ fn main {
   let font_scaled = @ui.env("MBUI_FONTSCALECHECK") == "1"
   // MBUI_POSTCHECK=1: what the host posts told between frames, said on the log (postcheck.mbt)
   let posted = @ui.env("MBUI_POSTCHECK") == "1"
+  // MBUI_PICKCHECK=1: what the system's picker gave told between frames, said on the log (pickcheck.mbt)
+  let picked = @ui.env("MBUI_PICKCHECK") == "1"
   if imaged != "" {
     @gallery.image_check_follow()
   }
@@ -52,6 +54,8 @@ fn main {
   @ui.run("mbui kit", fn(c) {
     if posted {
       @gallery.post_check_run(c)
+    } else if picked {
+      @gallery.pick_check_run(c)
     } else if updated != "" {
       @gallery.update_check_run(c, updated)
     } else if linked {

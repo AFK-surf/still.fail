@@ -28,6 +28,8 @@ pub fn notice_check_run(@ui.Ctx) -> Unit
 
 pub fn pdf_check_run(@ui.Ctx, String) -> Unit
 
+pub fn pick_check_run(@ui.Ctx) -> Unit
+
 pub fn play_check_run(@ui.Ctx, String) -> Unit
 
 pub fn secret_check_run(@ui.Ctx, String) -> Unit

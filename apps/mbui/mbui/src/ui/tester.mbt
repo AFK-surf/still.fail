@@ -161,6 +161,7 @@ fn reset_globals() -> Unit {
   update_told.set("")
   update_asked.clear()
   answers_waiting.clear()
+  outside_takers.clear()
   views_told.clear()
   code_fields.clear()
   code_clears.clear()

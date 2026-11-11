@@ -366,7 +366,7 @@ pub fn move_ms(Double) -> Double
 
 pub fn move_path(Double, Double, Double, Double) -> (Double, Double)
 
-pub fn native_call(String, Json) -> NativeCall
+pub fn native_call(String, Json, on_got? : (Result[Json, String]) -> Unit) -> NativeCall
 
 pub fn native_pointing() -> Pointing
 
@@ -1921,7 +1921,7 @@ pub struct NativeCall {
   name : String
   host : @hostapi.NativeCall?
   none : Bool
-  taken : @ref.Ref[Bool]
+  said : @signals.Signal[Result[Json, String]?]
 }
 pub fn NativeCall::got(Self) -> Result[Json, String]?
 pub fn NativeCall::name(Self) -> String

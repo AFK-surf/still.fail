@@ -1,11 +1,12 @@
 // An app's own calls of its host (@hostapi's native.mbt): what is the app's alone, by a name it gives (still.fail's
 // 共享调试 on Android: "adb.phone", "adb.open"…), answered by what the app's own host code put there for that name. A
 // call is an outside ticket of kind `native` (hostcall.mbt), asked from an event's handler or Ctx::tell, never while a
-// frame builds (detlint's build-effect), and answered at a frame's boundary: the app reads NativeCall::got as its
-// frames build. What the host says by itself (a setting changed, the app back from the system's settings) comes as a
+// frame builds (detlint's build-effect), and answered by the host's event between frames, which takes the answer into
+// the call's signal (NativeCall::take): what reads NativeCall::got, a node's binding or `reacts`, an old view's build,
+// is told then, and nothing looks for it frame by frame. What the host says by itself (a setting changed, the app back from the system's settings) comes as a
 // message on the channel "native:<name>" (messages.mbt: @ui.on_message; Tester::post).
 //
-// A real host's answer is kept on the run's tape as the app takes it, and given again to a Tester replaying it:
+// A real host's answer is kept on the run's tape as it is taken, and given again to a Tester replaying it:
 //
 //   NATIVESAID {"name":NAME,"ok":JSON}     or {"name":NAME,"error":WHY}
 //
@@ -20,7 +21,8 @@ pub struct NativeCall {
   host : @hostapi.NativeCall?
   /// a host without native calls: answered so at once
   none : Bool
-  taken : Ref[Bool]
+  /// its answer, taken as the host's event says it came (NativeCall::take): what reads it is told then
+  said : @signals.Signal[Result[Json, String]?]
 }
 
 ///|
@@ -37,64 +39,64 @@ pub let native_unsupported : String = "unsupported"
 
 ///|
 /// `name` asked of the host with `params`. Ask it from an event's handler (or Ctx::tell), not while a frame builds:
-/// a frame built again would ask it again.
-pub fn native_call(name : String, params : Json) -> NativeCall {
+/// a frame built again would ask it again. `on_got`: given its answer once, in the event that takes it (as a core
+/// call's `on_done`), outside any tracking, to write state: what a call asked of a press does with its answer, where no
+/// node waits on it (NativeCall::got is that). None: nobody reads it here.
+pub fn native_call(
+  name : String,
+  params : Json,
+  on_got? : (Result[Json, String]) -> Unit,
+) -> NativeCall {
   match @hostapi.native_call(name, params.stringify()) {
     Some(h) => {
-      let c : NativeCall = { name, host: Some(h), none: false, taken: Ref::new(false) }
+      let c : NativeCall = { name, host: Some(h), none: false, said: @signals.signal(None) }
       outside_start(outside_native, h.id(), "the native call \{name} \{h.id()}")
+      outside_takes(outside_native, h.id(), fn() { c.take(on_got) })
       c
     }
-    None => { name, host: None, none: true, taken: Ref::new(false) }
-  }
-}
-
-///|
-/// Its id as the host's event names it (outside_native; a Tester's its call's place, from 1).
-fn NativeCall::outside_id(self : NativeCall) -> Int {
-  match self.host {
-    Some(h) => h.id()
-    None => 0
-  }
-}
-
-///|
-/// Its answer, from the frame after the host gave it (None until then, and once taken: keep it): Ok its JSON, Err why
-/// not (`native_unsupported` on a host without native calls).
-pub fn NativeCall::got(self : NativeCall) -> Result[Json, String]? {
-  if self.taken.val {
-    return None
-  }
-  if self.none {
-    self.taken.val = true
-    return Some(Err(native_unsupported))
-  }
-  if !answer_here(outside_native, self.outside_id()) {
-    return None
-  }
-  let got = match self.host {
-    Some(h) =>
-      match h.got() {
-        Some((true, said)) =>
-          Some(
-            Ok(
-              @json.parse(said) catch {
-                _ => Json::string(said)
-              },
-            ),
-          )
-        Some((false, why)) => Some(Err(why))
-        None => None
+    None => {
+      let r : Result[Json, String] = Err(native_unsupported)
+      // (answered as it is asked: told so in the event that asks it)
+      match on_got {
+        Some(f) => @signals.untracked(fn() { f(r) })
+        None => ()
       }
-    None => None
+      { name, host: None, none: true, said: @signals.signal(Some(r)) }
+    }
   }
-  if got is Some(r) {
-    self.taken.val = true
-    answer_taken(outside_native, self.outside_id())
-    outside_end(outside_native, self.outside_id())
-    native_said(self.name, r)
+}
+
+///|
+/// The host's answer taken, as its event says it came (or, a host answering by the frame, as a frame begins): kept
+/// on the run's tape, the call's wait over, said (NativeCall::got), given to `on_got`. Whether it was there to take.
+fn NativeCall::take(self : NativeCall, on_got : ((Result[Json, String]) -> Unit)?) -> Bool {
+  guard self.host is Some(h) && self.said.untracked() is None else { return false }
+  let r = match h.got() {
+    Some((true, said)) =>
+      Ok(
+        @json.parse(said) catch {
+          _ => Json::string(said)
+        },
+      )
+    Some((false, why)) => Err(why)
+    None => return false
   }
-  got
+  outside_end(outside_native, h.id(), wake=false)
+  native_said(self.name, r)
+  self.said.set(Some(r))
+  match on_got {
+    Some(f) => @signals.untracked(fn() { f(r) })
+    None => ()
+  }
+  true
+}
+
+///|
+/// Its answer once the host has given it (None until then): Ok its JSON, Err why not (`native_unsupported` on a host
+/// without native calls). A signal's read: what reads it (a binding, a `reacts`, an old view's build) is told as the
+/// answer comes, and reads the same however often.
+pub fn NativeCall::got(self : NativeCall) -> Result[Json, String]? {
+  self.said.get()
 }
 
 ///|

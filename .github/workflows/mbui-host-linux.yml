@@ -114,6 +114,9 @@ jobs:
       - name: "What is posted's contract: a message posted from outside the frames told between frames, not taken as one begins"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux posted
+      - name: "What is picked's contract: the system's picker's answer told between frames, not taken as one begins"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux picked
       - name: "The pictures' contract over a new context: a picture told ready again and drawn again there"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux images
