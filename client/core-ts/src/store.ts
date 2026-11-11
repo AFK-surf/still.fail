@@ -260,11 +260,11 @@ export class Store {
       if (resumed) this.#source?.resume?.(topic);
       // A held topic only watched in the core so far (by a view) has never gone out: it does now, not when it next
       // changes (#flush sends nothing of one that has no subscriber).
-      if (cached === undefined && this.#held !== null && holds(topic)) this.invalidate(topic);
+      if (cached === undefined && this.#held !== null && holds(topic)) this.#sendHeld(entry);
     }
     if (entry.outputDirty && this.#held !== null && holds(topic)) {
       // Held values are read from Data, not kept in the entry while only watched.
-      this.invalidate(topic);
+      this.#sendHeld(entry);
     } else if (entry.outputDirty && !entry.emitScheduled) {
       entry.emitScheduled = true;
       this.#scheduleEmit(topic);
@@ -458,6 +458,19 @@ export class Store {
     const schedule = !entry.emitScheduled;
     entry.emitScheduled = true;
     if (schedule) this.#scheduleEmit(topic);
+  }
+
+  /// A held topic's value goes out to its subscribers as it is now: read as its emission goes (#flush, `stale`), from
+  /// Data, or what its source says where Data holds nothing. What reads it in the core is not told it changed: it reads
+  /// it from Data too (value()) and was told of each change as Data made it (changed), so it has what goes out already.
+  /// (`invalidate` here made every view that read it again, nothing changed: the app subscribing a workspace's record,
+  /// which the views of its chat list and marks read, made the marks of the workspace just left again, 8 ms in Hermes
+  /// on a Mac Studio, 2026-11-11.)
+  #sendHeld(entry: Entry): void {
+    entry.stale = true;
+    if (entry.emitScheduled) return;
+    entry.emitScheduled = true;
+    this.#scheduleEmit(entry.topic);
   }
 
   /// Invalidates every live topic `pick` chooses.

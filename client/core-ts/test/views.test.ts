@@ -3569,3 +3569,35 @@ test("an_agent_whose_card_is_answered_from_here_is_at_work_from_the_answer_on_ti
   // at work already: as it is
   assert.equal(answeredAt([agent("running", 50)], [card], [{ id: "o-1", state: "sending", quotes }])[0].status, "running");
 });
+
+test("subscribing_a_held_topic_views_read_sends_its_value_and_makes_none_of_them_again", async () => {
+  // The app, switching workspace, subscribes the workspace's record, which the chat list and the marks read already:
+  // that made the marks of the workspace just left again, nothing in it changed (8 ms in Hermes, 2026-11-11).
+  const t = setup();
+  const [chats, marks, record] = [ui(), ui(), ui()];
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.subscribe(2, { topic: "workspaceMarks", workspace: "ws" });
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  t.set(rows("ws/st"), [deciding("k1", 7, 5, now - 1000, false), row("r2", now - 2000)]);
+  await t.readAll([[chats, 1], [marks, 2]]);
+  assert.equal(marks.value.workspaces.ws.wait, 1);
+  const before = { ...work };
+  const computed = t.router.computed;
+  t.subscribe(3, workspace());
+  await t.readAll([[chats, 1], [marks, 2], [record, 3]]);
+  assert.deepEqual(record.value, oneStation(), "its value, whole");
+  assert.equal(record.messages, 1);
+  const since = workSince(before);
+  assert.deepEqual([t.router.computed - computed, since.workspaceMarks, since.listed, since.rows], [0, 0, 0, 0], "no view made again");
+  assert.deepEqual([chats.messages, marks.messages], [1, 1], "nor sent anything");
+  // What it holds changing still makes them again, and goes to its subscriber.
+  t.set(workspace(), { id: "ws", stations: [{ id: "st", name: "工作室", last_seen: null, version: null }] });
+  await t.readAll([[chats, 1], [marks, 2], [record, 3]]);
+  assert.equal(record.value.stations[0].name, "工作室");
+  assert.ok(t.router.computed > computed);
+  assert.equal(chats.value.days[0].items[0].stationName, "工作室");
+});
