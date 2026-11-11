@@ -233,3 +233,51 @@ test "scrolls_window reused: blocks taken for other keys by a wheel, the mark pu
   }
   assert_true(came >= 0.0, msg="the show after the wheel's blocks made no way in: \{came}")
 }
+
+///|
+test "scrolls_window reused: a block taken for another key as the column's fill runs in a frame's layout draws its new key's words in that frame" {
+  let scroll = @view.Scroll::list()
+  // (each block's line with what says its key)
+  let lines : Array[(@view.View, () -> Int)] = []
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(200.0))) |> ignore
+      o.scrolls_window(
+        scroll,
+        fn() { Array::makei(40, fn(i) { i }) },
+        est=22.0,
+        fn(_, _) { @halt.saying("every block is of a kind another may take") },
+        reused=fn(_) { Some(0) },
+        make_reused=fn(b, key) {
+          b.box(fn(line) {
+            lines.push((line, key))
+            line.height(Is(Some(22.0))).words(By(fn() { "row \{key()}" })) |> ignore
+          })
+          |> ignore
+        },
+      )
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0) |> ignore
+  // (one turn of 400: the window 18 rows down in one go, what it takes taken as the frame lays the column out)
+  tree.wheel_at(150.0, 50.0, 0.0, 400.0, 0, 10.0) |> ignore
+  tree.frame(390.0, 844.0) |> ignore
+  let wrong = []
+  let mut seen = 0
+  for l in lines {
+    let (line, key) = l
+    guard line.alive() else { continue }
+    let (_, y, _, h) = line.rect()
+    guard y + h > 0.0 && y < 200.0 else { continue }
+    seen = seen + 1
+    let k = @signals.untracked(key)
+    match tree.drawn_of(line.id()) {
+      Some(d) if d.words == "row \{k}" => ()
+      Some(d) => wrong.push("key \{k} drawn \{d.words}")
+      None => wrong.push("key \{k} not drawn")
+    }
+  }
+  assert_eq((seen > 0, wrong), (true, []))
+}

@@ -685,6 +685,9 @@ pub struct Tree {
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[Bound]
+  /// how deep the passes given to the bindings a layout told are, one inside another (Tree::laid_out: at most
+  /// `told_passes_most`)
+  mut told_passes : Int
   /// how many runs through `bindings_due` are under way (Tree::laid_out, Tree::measured_now): while one is, a room's
   /// layout come of a binding it ran leaves the queue as it stands (Tree::room_bindings_run)
   mut draining : Int
@@ -1117,6 +1120,7 @@ pub fn Tree::new(
     looks_due: [],
     places_due: [],
     bindings_due: [],
+    told_passes: 0,
     draining: 0,
     bindings: 0,
     pulls_marked: [],
@@ -8585,7 +8589,19 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   self.laid_out(upto)
+  // (a binding told and left for a frame nobody was asked for (told again by every layout of the passes it is given, or
+  // told where no pass is made): a fault, never drawn a frame late or not at all, nor laid out again without end; a
+  // frame asked for it where faults do not stop)
+  if !self.due && !self.bindings_due.is_empty() {
+    fault("a binding told as the window's tree was laid out, left with no frame asked for it: told again by each of the \{told_passes_most} passes given to what a layout tells, or where none is made")
+    self.marked()
+  }
 }
+
+///|
+/// How many passes, one inside another, the bindings a layout told are given (Tree::laid_out), each laid out
+/// again by what they set: one is what a list's fill taking blocks needs; more, something told by every layout it is in.
+let told_passes_most : Int = 4
 
 ///|
 /// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
@@ -8699,6 +8715,16 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
   self.part_ended("tree placing", t_placed)
   self.due = false
+  // (bindings told as it was laid out (a page's list's fill giving a block put by another key: what binds the key in
+  // it), told as this pass was due already, so marked for no frame: worked out, and laid out by what they set, in this
+  // same pass, as were they told before it; past `told_passes_most` of them one inside another, left queued, due no more,
+  // for Tree::brought to tell)
+  if !self.bindings_due.is_empty() && self.told_passes < told_passes_most {
+    self.told_passes = self.told_passes + 1
+    self.due = true
+    self.laid_out(upto)
+    self.told_passes = self.told_passes - 1
+  }
   // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
   // same pass: one result, the frame drawing all of it)
   if self.outs_changed {
