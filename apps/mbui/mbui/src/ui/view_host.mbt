@@ -275,6 +275,7 @@ let view_paint_work : ViewPaintWork = { made: 0, copied: 0, handed: 0 }
 ///|
 /// The window made once by `make` (its root given: put the old view in it with View::hosted), from this frame on.
 pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit {
+  @view.zz_point_hold.val = fn() { !g().moving_now().is_empty() }
   // (the same window's tree made anew: what the old views held of the one before called off at once, as it goes, the
   // rest of each nobody's (a press's till it is let go, a back gesture's till it ends), all else of it let go)
   view_captures_off(view_moment(), fn(_) { true })

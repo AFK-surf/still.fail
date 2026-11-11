@@ -11098,6 +11098,10 @@ pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
 }
 
 ///|
+/// EXPERIMENT (print branch only): whether a way that moves places goes now (set by ui).
+pub let zz_point_hold : Ref[() -> Bool] = Ref(fn() { false })
+
+///|
 /// What it does as the pointer moves onto it or over it (a mouse's, as it is pointed at: View::pointed), at that
 /// moment: the pointer's own moving alone, never the layout or the order putting it under a pointer that stays still.
 pub fn View::on_pointer_moved(self : View, f : () -> Unit) -> View {
@@ -11143,6 +11147,10 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   // which this one's number then no longer is)
   let mine = self.point_said
   let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
+    // (EXPERIMENT, print branch only: a still pointer finds nothing new while what moves places goes)
+    if !moved.val && zz_point_hold.val() {
+      return
+    }
     self.points_hover = found.1
     then(found.0)
   })
