@@ -792,13 +792,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (the slot as tall as it is counted, shown or not). Where that comes out another height than it is counted, the
   // column is laid out (Tree::alone_asks), and its fill measures it there. What is made is what shows, no more. Told
   // only as it comes to be past what is made or back, not each time the column is scrolled: a computed's same value
-  // telling nothing.
+  // telling nothing. Past it as soon as one more meets where it shows by any of it, as the window finds what meets it
+  // (`window`: a top over where it shows ends, a foot under where it starts): one meeting it by half a point or less,
+  // left for the scroll to go half a point further, showed the list's ground there for a frame.
   let past_made = @signals.computed(fn(_) {
     match s.seen.get() {
       Some((_, vh)) => {
         let x = at()
         let (lo, first_end, last_top, hi) = made.get()
-        x < lo - 0.5 || x + vh > hi + 0.5 || x >= first_end || x + vh <= last_top
+        x < lo || x + vh > hi || x >= first_end || x + vh <= last_top
       }
       None => false
     }
