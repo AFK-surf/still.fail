@@ -8,6 +8,7 @@ import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import * as reasoning from "../shapes/reasoning.ts";
 import { arr as arrU, equal, get as getU } from "../util.ts";
+import { work } from "../work.ts";
 import { profileServes } from "./profile-scope.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -243,6 +244,7 @@ export function servingIn(overview: J, workspace: string, joined: boolean): J {
 
 /// The models the station can run, each with the runtimes it runs on.
 export function models(overview: J, now: number): J[] {
+  work.models++;
   const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string>; profiles: Map<string, J[]> }>();
   for (const p of profilesOf(overview)) {
     const rts = [...new Set(arr(get(p, "runtimes")).filter((r): r is string => typeof r === "string"))];
@@ -419,15 +421,13 @@ export function borrowable(stations: J, here: string, have: J[], runtime: string
   const self = all.find((s) => s.station === here);
   if (self === undefined || self.joined) return [];
   const taken = new Set(have.map((o) => model.key(str(get(o, "model")) ?? "")));
-  const ownHere = new Set(allProfilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+  const ownHere = copiesHere(self.overview);
   const out: J[] = [];
   for (const s of all) {
     if (s.station === here || !s.online || s.joined || get(s.overview, "sharing") !== true) continue;
     for (const p of profilesOf(s.overview)) {
+      if (!lent(p, ownHere)) continue;
       const share = get(p, "share");
-      if (get(share, "role") === "user") continue;
-      // Shared with this station already: its copy is on its way (or here, and its models with it).
-      if (typeof get(share, "id") === "string" && ownHere.has(share.id)) continue;
       const lone = { ...s.overview, profiles: [p] };
       for (const o of models(lone, now)) {
         if (runtime !== null && !arr(o.runtimes).includes(runtime)) continue;
@@ -461,6 +461,24 @@ export function borrowable(stations: J, here: string, have: J[], runtime: string
     }
   }
   return out.sort((a, b) => model.compareOrder(model.key(a.model), model.key(b.model)));
+}
+
+/// The shares a station has copies of (its overview's profiles' `share.id`): what another station lends it already.
+const copiesHere = (overview: J): Set<string> => new Set(allProfilesOf(overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+
+/// Whether profile `p` (an enabled one) of another station would be lent to one with copies `ownHere`: its own, not a
+/// copy it borrows itself, and not shared with that one already (its copy on its way, or there and its models with it).
+const lent = (p: J, ownHere: Set<string>): boolean => {
+  const share = get(p, "share");
+  return get(share, "role") !== "user" && !(typeof get(share, "id") === "string" && ownHere.has(share.id));
+};
+
+/// Whether `borrowable` would offer a station whose overview is `here` any model at all, of any runtime, as a yes or
+/// no: some of `others` (the overviews of the workspace's other stations up now, its own, not joined) shares, and has a
+/// profile it would lend that runs one. Each walked as it is; none of their models made.
+export function lends(here: J, others: J[]): boolean {
+  const ownHere = copiesHere(here);
+  return others.some((o) => get(o, "sharing") === true && profilesOf(o).some((p) => lent(p, ownHere) && arr(get(p, "models")).some((m) => typeof m === "string")));
 }
 
 const isShared = (share: J) => typeof get(share, "id") === "string" && get(share, "role") === "host";

@@ -358,7 +358,6 @@ fn new_sample_view() -> Json {
     "model": "sample",
     "pick": {
       "value": { "runtime": "claude", "model": "sample" },
-      "options": [{ "model": "sample" }],
       "valueOption": { "name": Json::string(@sf.sample_words(6)) },
       "efforts": ["low"],
     },
@@ -367,7 +366,8 @@ fn new_sample_view() -> Json {
 
 ///|
 /// Where it runs and what it runs on: the station's control (its mark, its name; pressed, the stations through the
-/// presenters) and the model's (model_triple.mbt, its panel through them too); with nothing to run it with, the way to
+/// presenters) and the model's (model_triple.mbt, drawn of the face the page has of it, its panel through them too, asked
+/// as it opens); with nothing to run it with, the way to
 /// where models are enabled; while its profiles are read, what it runs on breathing in its place. `floating`: over
 /// the composer (narrow: capsules of its glass), else in its row (wide).
 fn new_controls(
@@ -389,12 +389,9 @@ fn new_controls(
   if flag(v, "waiting") {
     // (its profiles read: a made-up model's, in its bones)
     @sf.bones(c, fn() {
-      model_triple(c, @sfbase.sample_source, "sample", "new", page=field(Some(new_sample_view()), "pick"), small=true, floating~)
+      model_triple(c, @sfbase.sample_source, "sample", "new", face=field(Some(new_sample_view()), "pick"), small=true, floating~)
     })
-  } else if p is None ||
-    items(p, "options").length() == 0 ||
-    text(v, "runtime") == "" ||
-    field(v, "model") is None {
+  } else if p is None || text(v, "runtime") == "" || field(v, "model") is None {
     // nothing to run it with: the way to where models are enabled
     new_capsule(c, "new/models", @sf.t("web-main.newChat.noModels"), floating, fn() {
       c.text(@sf.t("web-main.newChat.noModels"), style=new_capsule_words) |> ignore
@@ -408,7 +405,8 @@ fn new_controls(
     if !c.in_bones() && take_asked("model") {
       open_triple(address, "new")
     }
-    model_triple(c, src, address, "new", page=p, small=true, floating~)
+    // (its face, as the page has it: its panel asked as the hand comes to it, opened whole once answered)
+    model_triple(c, src, address, "new", face=p, small=true, floating~)
   }
 }
 

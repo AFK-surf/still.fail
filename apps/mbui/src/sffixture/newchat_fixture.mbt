@@ -754,19 +754,13 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "model": fix_model(n.model),
     "runtime": Json::string(n.runtime),
     "waiting": false,
-    "pick": fix_pick(),
+    "pick": fix_pick_face(),
     "preset": Json::string(n.preset),
     "presets": Json::array(
       n.presets.map(fn(p) {
         {
           "id": field(Some(p), "id").unwrap_or(Json::string("")),
           "name": field(Some(p), "name").unwrap_or(Json::string("")),
-          "dirs": Json::number(
-            match field(Some(p), "dirs") {
-              Some(Array(a)) => a.length().to_double()
-              _ => 0.0
-            },
-          ),
           "station": Json::string(text(Some(fix_station(n.station)), "station")),
           "stationName": Json::string(text(Some(fix_station(n.station)), "name")),
         }
@@ -785,6 +779,43 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       },
     ),
   }
+}
+
+///|
+/// The new chat's model control as its page draws it closed (the core's NewChatPick, choose.ts `#face`): of the pick, what
+/// it runs on, its model's name, maker and runtimes, how hard it can think, Fast, the account it names.
+fn fix_pick_face() -> Json {
+  let p = Some(fix_pick())
+  let o : Map[String, Json] = {}
+  for k in ["value", "efforts", "fastText"] {
+    match field(p, k) {
+      Some(v) => o[k] = v
+      None => ()
+    }
+  }
+  let vo = field(p, "valueOption")
+  if vo is Some(Object(_)) {
+    let m : Map[String, Json] = {}
+    for k in ["name", "maker", "runtimes"] {
+      match field(vo, k) {
+        Some(v) => m[k] = v
+        None => ()
+      }
+    }
+    o["valueOption"] = Json::object(m)
+  }
+  let account = field(p, "account")
+  if account is Some(Object(_)) {
+    let m : Map[String, Json] = {}
+    for k in ["text", "level"] {
+      match field(account, k) {
+        Some(v) => m[k] = v
+        None => ()
+      }
+    }
+    o["account"] = Json::object(m)
+  }
+  Json::object(o)
 }
 
 ///|

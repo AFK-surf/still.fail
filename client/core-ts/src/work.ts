@@ -48,6 +48,13 @@ export const work = {
   overviewsRead: 0,
   /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.
   overviews: 0,
+  /// Stations' models listed from an overview's profiles (views/models.ts `models`), each with what every account of it
+  /// runs and has left: a new chat's page makes its one station's, a model control's panel every station's it could
+  /// borrow from too.
+  models: 0,
+  /// Models a control's panel annotated with how each runs picked there (choose.ts #pick: each option's `usual`, its
+  /// words, its star): a panel's, never a page's.
+  annotated: 0,
 };
 
 export type Work = typeof work;
