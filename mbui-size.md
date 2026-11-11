@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [16c0c777a](https://github.com/AFK-surf/still.fail/commit/16c0c777ace2f893323615cacc5ce638c0d5e694) app, mbui: a hang report says which kind of page w | 1.83 | 2.45 | 10.24 | 28.99 | 36.19 | 25.82 | 48 | 94.45 | 185.01 |
 | [1bf02b581](https://github.com/AFK-surf/still.fail/commit/1bf02b58130efa46b6b95f1bfa89070021955321) core: race a link at its first missed ping; a scre | 1.83 | 2.45 | 10.21 | 28.96 | 36.07 | 25.79 | 47.9 | 94.75 | 177.21 |
 | [1b37cbb32](https://github.com/AFK-surf/still.fail/commit/1b37cbb32ffad74d08d6e8f4775191a6e6f04f57) mbui: a motion's time as it is, on the moments' gr | 1.83 | 2.44 | 10.2 | 28.95 | 36.04 | 25.78 | 47.89 | 94.45 | 136.48 |
 | [f975f6544](https://github.com/AFK-surf/still.fail/commit/f975f65440b19a3edc2a8595567b477da37ddf73) sf: a code block's bar's words at the system's siz | 1.83 | 2.44 | 10.2 | 28.95 | 36.04 | 25.79 | 47.89 | 94.55 | 164.94 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [abfaa469a](https://github.com/AFK-surf/still.fail/commit/abfaa469ad49121f8c8ea1e22e163714af21a6bf) mbui, app: words that are part of a mark are drawn | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.14 | 175.39 |
 | [c9b3fdad5](https://github.com/AFK-surf/still.fail/commit/c9b3fdad545c280f168f6c9e5d78838a064c69f1) app, core, station: 共享调试 is its switch and the cha | 1.82 | 2.43 | 10.11 | 28.85 | 35.69 | 25.68 | 47.59 | 94.64 | 164.87 |
 | [62481b40c](https://github.com/AFK-surf/still.fail/commit/62481b40c7b55489d2357425a4240f5450753109) mbui: a way called back slows to rest and sets bac | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.64 | 94.41 | 185.91 |
-| [1609696a9](https://github.com/AFK-surf/still.fail/commit/1609696a9c136ac22f5dd8c1b356ffb68ad79e80) mbui: 投进来的消息在每个宿主上都在帧之间告知，帧里告知过节点树的改动在这一帧画出来 (#539 | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.01 | 187.12 |
