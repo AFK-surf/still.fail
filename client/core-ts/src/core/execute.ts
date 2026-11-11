@@ -135,8 +135,16 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         }
         break;
       case "prefsSet":
-        // (what is brought after everything else goes by them: fill.ts)
-        return Effect.try({ try: () => (prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs()), inner.fill?.poke(), null), catch: asCoreError });
+        return Effect.try({
+          try: () => {
+            prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs());
+            // (what is brought after everything else goes by these two, fill.ts `bounds`: looked at again only for
+            // them, not for every pref set: the workspace switched to waited on it, the chats' list behind it)
+            if (isObject(call.patch) && ("fillOff" in call.patch || "fillMax" in call.patch)) inner.fill?.poke();
+            return null;
+          },
+          catch: asCoreError,
+        });
       case "keysSet":
         return Effect.try({
           try: () => {
