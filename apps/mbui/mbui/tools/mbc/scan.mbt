@@ -72,7 +72,7 @@ fn write_spaces(buf : @buffer.Buffer, t : BytesView, i : Int, j : Int) -> Unit {
 /// /\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|^[ \t]*#[^\n]* (re.S, re.M)
 fn blank(t : BytesView) -> Bytes {
   let n = t.length()
-  let buf = @buffer.new(size_hint=n)
+  let buf = Buffer(size_hint=n)
   let mut last = 0
   let mut p = 0
   while p < n {
@@ -129,7 +129,7 @@ fn blank(t : BytesView) -> Bytes {
 fn top_level(t : BytesView) -> Bytes {
   let b = blank(t)
   let n = b.length()
-  let buf = @buffer.new(size_hint=n)
+  let buf = Buffer(size_hint=n)
   let mut depth = 0
   for i in 0..<n {
     let c = b[i]
@@ -415,7 +415,7 @@ fn rename(
 ) -> (Bytes, BSet) {
   let used = BSet::new()
   let locals : BTab[Bytes] = BTab::new()
-  let buf = @buffer.new(size_hint=t.length())
+  let buf = Buffer(size_hint=t.length())
   let mut last = 0
   let one = fn(s : Int, e : Int) {
     buf.write_bytesview(t[last:s])
@@ -442,7 +442,7 @@ fn rename(
               locals.vals[li]
             } else {
               let l = cat([b"_Ml", bint(locals.length())])
-              locals.set(t[s:e].to_bytes(), l)
+              locals.set(t[s:e].to_owned(), l)
               l
             }
             used.add(o)

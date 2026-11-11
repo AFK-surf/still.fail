@@ -56,7 +56,7 @@ fn hexval(c : Char) -> Int {
 fn P::string(self : P) -> String raise JsonError {
   // (at the opening quote)
   self.i += 1
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   while true {
     if self.i >= self.s.length() {
       raise JsonError("a string not ended")
@@ -363,7 +363,7 @@ pub fn dumps(
   ensure_ascii? : Bool = true,
   indent? : Int = 0,
 ) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   write_value(sb, v, compact, sort_keys, ensure_ascii, indent, 0)
   sb.to_string()
 }

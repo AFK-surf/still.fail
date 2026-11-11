@@ -3,7 +3,7 @@
 
 ///|
 fn bytes_text(b : Bytes) -> String {
-  let s = StringBuilder::new(size_hint=b.length())
+  let s = StringBuilder(size_hint=b.length())
   for x in b {
     s.write_char(x.to_int().unsafe_to_char())
   }

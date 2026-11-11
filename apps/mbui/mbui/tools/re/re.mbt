@@ -166,7 +166,7 @@ fn Parser::number(self : Parser) -> Int? {
 }
 
 ///|
-fn Parser::quantified(self : Parser, atom : Node) -> Node raise RegexError {
+fn Parser::quantified(self : Parser, atom : Node) -> Node {
   let mut node = atom
   while true {
     let (lo, hi) = match self.peek() {
@@ -277,7 +277,7 @@ fn Parser::atom(self : Parser) -> Node raise RegexError {
             raise RegexError("(?< what")
           }
         } else if self.eat('P') && self.eat('<') {
-          let sb = StringBuilder::new()
+          let sb = StringBuilder()
           while self.i < self.p.length() && self.p[self.i] != '>' {
             sb.write_char(self.p[self.i])
             self.i += 1
@@ -734,7 +734,7 @@ pub fn Regex::findall(self : Regex, text : String) -> Array[String] {
 /// re.sub with a function of each match
 pub fn Regex::sub_with(self : Regex, text : String, f : (Match) -> String) -> String {
   let t = text.to_array()
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   let mut last = 0
   for m in self.find_all(text) {
     for c in t[last:m.start()] {

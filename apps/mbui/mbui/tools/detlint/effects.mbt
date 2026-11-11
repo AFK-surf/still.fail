@@ -246,8 +246,8 @@ fn Eff::item_shapes(
     None => ()
   }
   let toks = f.toks
-  let values : Map[String, Unit] = Map::new()
-  let pressed_fields : Map[String, Unit] = Map::new()
+  let values : Map[String, Unit] = Map([])
+  let pressed_fields : Map[String, Unit] = Map([])
   for k in it.start..<(it.end - 2) {
     let t = toks[k]
     if t.kind == "ident" &&
@@ -354,13 +354,13 @@ fn Eff::under_input(self : Eff, f : MbtFile, k : Int) -> Bool {
   let (values, pressed_fields) = if it >= 0 {
     self.item_shapes(f, f.items[it])
   } else {
-    (Map::new(), Map::new())
+    (Map([]), Map([]))
   }
   for cond in f.enclosing_conditions(k) {
     if cond.iter().any(fn(i) { toks[i].kind == "ident" && input_words.contains(toks[i].text) }) {
       return true
     }
-    let names : Map[String, Unit] = Map::new()
+    let names : Map[String, Unit] = Map([])
     for i in cond {
       if toks[i].kind == "ident" {
         names[toks[i].text] = ()
@@ -455,8 +455,8 @@ fn Eff::sites(
 ///|
 fn lint_build_effects(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> Unit {
   let app = files.filter(fn(f) { !f.test_file && !under(f.rel, cfg.framework) })
-  let defs = Map::new()
-  let calls_at = Map::new()
+  let defs = Map([])
+  let calls_at = Map([])
   for f in app {
     for c in f.calls {
       calls_at[at_key(f.rel, c.at)] = c
@@ -469,9 +469,9 @@ fn lint_build_effects(files : Array[MbtFile], cfg : Config, out : Array[Finding]
     cfg,
     defs,
     calls_at,
-    handlers: Map::new(),
-    asking: Map::new(),
-    shapes: Map::new(),
+    handlers: Map([]),
+    asking: Map([]),
+    shapes: Map([]),
   }
   let fns : Array[(MbtFile, Item)] = []
   for f in app {
@@ -483,7 +483,7 @@ fn lint_build_effects(files : Array[MbtFile], cfg : Config, out : Array[Finding]
   }
   // what is done only on an input, an answer, after the build: a function every call of which is (an action: a
   // send, a pick's ask), its effects are the input's
-  let callers : Map[String, Array[(MbtFile, Item, Int)]] = Map::new()
+  let callers : Map[String, Array[(MbtFile, Item, Int)]] = Map([])
   for f in app {
     let pkg = pkg_of(f.rel)
     for c in f.calls {
@@ -497,7 +497,7 @@ fn lint_build_effects(files : Array[MbtFile], cfg : Config, out : Array[Finding]
       }
     }
   }
-  let actions : Map[String, Unit] = Map::new()
+  let actions : Map[String, Unit] = Map([])
   while true {
     let mut grew = false
     for x in fns {
@@ -520,14 +520,14 @@ fn lint_build_effects(files : Array[MbtFile], cfg : Config, out : Array[Finding]
       break
     }
   }
-  let views : Map[String, Unit] = Map::new()
+  let views : Map[String, Unit] = Map([])
   for x in fns {
     let (f, it) = x
     if is_view(f, it) && !actions.contains(reader_key(pkg_of(f.rel), it.name)) {
       views[at_key(f.rel, it.start)] = ()
     }
   }
-  let helpers : Map[String, Unit] = Map::new()
+  let helpers : Map[String, Unit] = Map([])
   while true {
     // (a bare call is to its package's own function: by its directory and name)
     let more = []

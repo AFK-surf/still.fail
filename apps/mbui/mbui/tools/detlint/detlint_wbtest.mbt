@@ -670,8 +670,9 @@ test "host-import" {
 test "library-import" {
   let cfg = Config::new(
     @rjson.parse(
-      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"], "imports": ["mbui/", "moonbitlang/", "app/sf", "app/kept"]}}
-      ,
+      (
+        #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"], "imports": ["mbui/", "moonbitlang/", "app/sf", "app/kept"]}}
+      ),
     ) catch {
       _ => panic()
     },
@@ -2359,8 +2360,9 @@ test "part-place" {
   // one that makes nothing in it (it only sets what it looks like), a page's, and a test's not
   let cfg = Config::new(
     @rjson.parse(
-      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"]}}
-      ,
+      (
+        #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"]}}
+      ),
     ) catch {
       _ => panic()
     },

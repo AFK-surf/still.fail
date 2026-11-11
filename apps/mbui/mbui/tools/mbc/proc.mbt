@@ -1,7 +1,7 @@
 // Processes: started, their output kept in a file of this process's own, waited for
 
 ///|
-let finished : Map[Int, Int] = Map::new() // slot: exit code, of those that ended while waiting for another
+let finished : Map[Int, Int] = Map([]) // slot: exit code, of those that ended while waiting for another
 
 ///|
 let tmp_count : Ref[Int] = { val: 0 }
@@ -28,7 +28,7 @@ fn tmp_path(what : String) -> Bytes {
 /// Starts argv, its output (stdout and stderr) into `out` (empty: this process's own): its slot, -1 when it could
 /// not be started
 fn spawn(argv : Array[Bytes], out : Bytes) -> Int {
-  let words = @buffer.new()
+  let words = Buffer()
   for w in argv {
     words.write_bytes(w)
     words.write_byte(b'\x00')

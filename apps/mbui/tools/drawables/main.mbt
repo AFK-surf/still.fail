@@ -160,7 +160,7 @@ fn num(el : El, name : String, default : Double) -> Double {
   match attr(el, name) {
     Some(v) => {
       // (a number as JSON writes one: what Android's attributes are)
-      let j = @json.parse(if v.has_prefix(".") { "0" + v } else if v.has_prefix("-.") { "-0" + v.view(start_offset=1).to_owned() } else { v }) catch {
+      let j = @json.parse(if v.has_prefix(".") { "0" + v } else if v.has_prefix("-.") { "-0" + v.exact_view(start=1).to_owned() } else { v }) catch {
         _ => Json::null()
       }
       match j {
@@ -197,7 +197,7 @@ fn hex(s : String) -> Int64 {
 ///|
 /// The colours named in apps/mbui/android's res/values/launcher.xml (`@color/name`), as written.
 // kept across runs: read once as the tool starts (main), then only read
-let named_colors : Map[String, String] = {}
+let named_colors : Map[String, String] = Map([])
 
 ///|
 /// The `<color name="…">#…</color>` of a resources file.
@@ -205,10 +205,10 @@ fn read_colors(xml : String) -> Unit {
   for part in xml.split("<color name=\"") {
     match part.find("\">") {
       Some(i) => {
-        let name = part.view(end_offset=i).to_owned()
-        let rest = part.view(start_offset=i + 2)
+        let name = part.exact_view(end=i).to_owned()
+        let rest = part.exact_view(start=i + 2)
         match rest.find("<") {
-          Some(j) => named_colors[name] = rest.view(end_offset=j).to_owned()
+          Some(j) => named_colors[name] = rest.exact_view(end=j).to_owned()
           None => ()
         }
       }
@@ -224,7 +224,7 @@ fn color(v : String?) -> Int64 {
     None => 0L
     Some("@android:color/transparent") => 0L
     Some(s) if s.has_prefix("@color/") =>
-      match named_colors.get(s.view(start_offset=7).to_owned()) {
+      match named_colors.get(s.exact_view(start=7).to_owned()) {
         Some(c) => color(Some(c))
         None => {
           fail("colour \{s}")
@@ -232,11 +232,11 @@ fn color(v : String?) -> Int64 {
         }
       }
     Some(s) => {
-      let h = if s.has_prefix("#") { s.view(start_offset=1).to_owned() } else { s }
+      let h = if s.has_prefix("#") { s.exact_view(start=1).to_owned() } else { s }
       if h.length() == 6 {
         hex(h + "FF")
       } else if h.length() == 8 {
-        hex(h.view(start_offset=2).to_owned() + h.view(end_offset=2).to_owned())
+        hex(h.exact_view(start=2).to_owned() + h.exact_view(end=2).to_owned())
       } else {
         fail("colour \{s}")
         0L
@@ -310,7 +310,7 @@ fn fmt(v : Double) -> String {
       f = "0" + f
     }
     while f.has_suffix("0") {
-      f = f.view(end_offset=f.length() - 1).to_owned()
+      f = f.exact_view(end=f.length() - 1).to_owned()
     }
     s.write_string(f)
   }

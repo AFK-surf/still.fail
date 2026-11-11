@@ -84,7 +84,7 @@ pub fn list_dir(path : String) -> Array[String] {
   let mut s = 0
   for i in 0..<all.length() {
     if all[i] == b'\x00' {
-      out.push(dec(all[s:i].to_bytes()))
+      out.push(dec(all[s:i].to_owned()))
       s = i + 1
     }
   }
@@ -142,7 +142,7 @@ pub fn join(a : String, b : String) -> String {
 ///|
 pub fn basename(p : String) -> String {
   match p.rev_find("/") {
-    Some(k) => p.view(start_offset=k + 1).to_string()
+    Some(k) => p.exact_view(start=k + 1).to_owned()
     None => p
   }
 }
@@ -150,7 +150,7 @@ pub fn basename(p : String) -> String {
 ///|
 pub fn dirname(p : String) -> String {
   match p.rev_find("/") {
-    Some(k) => p.view(end_offset=k).to_string()
+    Some(k) => p.exact_view(end=k).to_owned()
     None => ""
   }
 }
@@ -161,7 +161,7 @@ pub fn abspath(p : String) -> String {
   let full = if p.has_prefix("/") { p } else { cwd() + "/" + p }
   let parts : Array[String] = []
   for part in full.split("/") {
-    let part = part.to_string()
+    let part = part.to_owned()
     if part == "" || part == "." {
       continue
     }

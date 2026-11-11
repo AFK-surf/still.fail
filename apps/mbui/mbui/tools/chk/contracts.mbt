@@ -73,7 +73,7 @@ fn g6(x : Double) -> String {
     ""
   }
   while fs.has_suffix("0") {
-    fs = fs.view(end_offset=fs.length() - 1).to_string()
+    fs = fs.exact_view(end=fs.length() - 1).to_owned()
   }
   (if neg { "-" } else { "" }) + w.to_string() + (if fs == "" { "" } else { "." + fs })
 }
@@ -91,16 +91,16 @@ fn views(args : Array[String]) -> Int {
     @sys.eprintln("chk views LOG HOST")
     return 2
   }
-  let told : Map[String, Array[Double]] = Map::new()
-  let at : Map[String, Array[Double]] = Map::new()
+  let told : Map[String, Array[Double]] = Map([])
+  let at : Map[String, Array[Double]] = Map([])
   for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
     for kv in [("VIEWTOLD ", told), ("VIEWAT ", at)] {
       let (key, out) = kv
       match line.find(key) {
         Some(i) => {
-          let p = split_ws(line.view(start_offset=i + key.length()).to_string())
+          let p = split_ws(line.exact_view(start=i + key.length()).to_owned())
           if p.length() > 0 {
-            out[p[0]] = p[1:@cmp.minimum(14, p.length())].to_array().map(num_of)
+            out[p[0]] = p[1:@cmp.minimum(14, p.length())].to_owned().map(num_of)
           }
         }
         None => ()
@@ -124,10 +124,10 @@ fn views(args : Array[String]) -> Int {
   let mut stacked : Array[String]? = None
   for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
     match line.find("VIEWSTACKTOLD ") {
-      Some(i) => stack_told = Some(split_ws(line.view(start_offset=i + "VIEWSTACKTOLD ".length()).to_string()))
+      Some(i) => stack_told = Some(split_ws(line.exact_view(start=i + "VIEWSTACKTOLD ".length()).to_owned()))
       None =>
         match line.find("VIEWSTACK ") {
-          Some(i) => stacked = Some(split_ws(line.view(start_offset=i + "VIEWSTACK ".length()).to_string()))
+          Some(i) => stacked = Some(split_ws(line.exact_view(start=i + "VIEWSTACK ".length()).to_owned()))
           None => ()
         }
     }
@@ -197,7 +197,7 @@ fn site(args : Array[String]) -> Int {
   let steps = []
   for l in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
     match l.find("SITECHECK ") {
-      Some(i) => steps.push(trim(l.view(start_offset=i + "SITECHECK ".length()).to_string()))
+      Some(i) => steps.push(trim(l.exact_view(start=i + "SITECHECK ".length()).to_owned()))
       None => ()
     }
   }

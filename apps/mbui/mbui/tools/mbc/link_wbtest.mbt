@@ -11,11 +11,11 @@ test "MSVC receives every split object and linker option through one short comma
   let rsp = tmp_path("link with spaces.rsp")
   let command = msvc_link_command(args, rsp)
   let contents = read_file(rsp).unwrap()
-  let decoded = response_files(command[1:].to_array(), true)
+  let decoded = response_files(command[1:].to_owned(), true)
   let _ = c_remove(rsp)
   assert_eq(command.length(), 2)
   assert_true(list2cmdline(command).length() < 32767)
-  assert_eq(decoded, args[1:].to_array())
+  assert_eq(decoded, args[1:].to_owned())
   assert_eq(count(contents, b"\n"), 1)
   assert_true(ends(contents, b"/SUBSYSTEM:WINDOWS\n"))
 }

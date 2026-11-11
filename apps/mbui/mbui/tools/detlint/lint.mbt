@@ -128,7 +128,7 @@ fn Config::new(d : @rjson.Value) -> Config {
 fn Config::host_dirs(self : Config) -> Array[String] {
   self.framework.filter(fn(p) {
     let q = if p.has_suffix("/") {
-      p.view(end_offset=p.length() - 1).to_string()
+      p.exact_view(end=p.length() - 1).to_owned()
     } else {
       p
     }
@@ -144,7 +144,7 @@ fn pkg_of(rel : String) -> String {
 ///|
 fn last_name(name : String) -> String {
   let parts = name.split("::").to_array()
-  parts[parts.length() - 1].to_string()
+  parts[parts.length() - 1].to_owned()
 }
 
 ///|
@@ -870,13 +870,13 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
   }
   let toks = f.toks
   let tokens_file = matches(f.rel, cfg.style_tokens)
-  let counted : Map[Int, Unit] = Map::new()
+  let counted : Map[Int, Unit] = Map([])
   fn add(rule : String, k : Int, what : String) {
     out.push(finding(rule, f.rel, toks[k].line, what))
   }
 
   // each closing bracket's opening one (a pattern's groups stepped over whole, either way)
-  let opened : Map[Int, Int] = Map::new()
+  let opened : Map[Int, Int] = Map([])
   for i, t in toks {
     if t.end >= 0 {
       opened[t.end] = i
@@ -1128,7 +1128,7 @@ fn num_value_zero(text : String) -> Bool {
 /// are numbers and operators only, with a number among them
 fn literal_time(f : MbtFile, idx : Array[Int]) -> Bool {
   let toks = f.toks
-  let skip : Map[Int, Unit] = Map::new()
+  let skip : Map[Int, Unit] = Map([])
   for i in idx {
     let t = toks[i]
     if t.kind == "ident" &&
@@ -1297,7 +1297,7 @@ fn reads_query(
         return Some(t.text)
       }
       if t.text.has_prefix("h_") &&
-        cfg.queries.contains(t.text.view(start_offset=2).to_string()) {
+        cfg.queries.contains(t.text.exact_view(start=2).to_owned()) {
         return Some(t.text)
       }
     }
@@ -1309,7 +1309,7 @@ fn reads_query(
 /// The package's own functions that read the host or the layout, themselves or through another such function of
 /// their package: {(package dir, name): what they read}
 fn host_readers(files : Array[MbtFile], cfg : Config) -> Map[String, String] {
-  let bodies : Map[String, (MbtFile, Int, Int)] = Map::new()
+  let bodies : Map[String, (MbtFile, Int, Int)] = Map([])
   for f in files {
     if f.test_file {
       continue
@@ -1321,7 +1321,7 @@ fn host_readers(files : Array[MbtFile], cfg : Config) -> Map[String, String] {
       }
     }
   }
-  let readers : Map[String, String] = Map::new()
+  let readers : Map[String, String] = Map([])
   let mut changed = true
   while changed {
     changed = false
@@ -1344,14 +1344,14 @@ fn host_readers(files : Array[MbtFile], cfg : Config) -> Map[String, String] {
 
 ///|
 fn trim(s : String) -> String {
-  s.trim(chars=" \t\r\n").to_string()
+  s.trim(chars=" \t\r\n").to_owned()
 }
 
 ///|
 /// 7b: per package under globals.roots, every top-level let of a non-plain type is put back by the package's reset
 /// (reset, reset_globals, a function given to on_reset, and what those call) or says why not
 fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> Unit {
-  let pkgs : Map[String, Array[MbtFile]] = Map::new()
+  let pkgs : Map[String, Array[MbtFile]] = Map([])
   for f in files {
     if f.test_file || !under(f.rel, cfg.globals_roots) {
       continue
@@ -1362,11 +1362,11 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
       None => pkgs[p] = [f]
     }
   }
-  let alias : Map[String, String] = Map::new()
+  let pkg_by_name : Map[String, String] = Map([])
   for p, _ in pkgs {
-    alias[@sys.basename(p)] = p
+    pkg_by_name[@sys.basename(p)] = p
   }
-  let fns : Map[String, Array[Array[Tok]]] = Map::new() // (pkg, name) -> [token lists]
+  let fns : Map[String, Array[Array[Tok]]] = Map([]) // (pkg, name) -> [token lists]
   fn add_fn(key : String, body : Array[Tok]) {
     match fns.get(key) {
       Some(a) => a.push(body)
@@ -1379,7 +1379,7 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
   for pkg, fs in pkgs {
     for f in fs {
       for it in f.items {
-        let body = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_array()
+        let body = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_owned()
         if it.kind == "fn" {
           add_fn(reader_key(pkg, it.name), body)
           if it.name == "reset" || it.name == "reset_globals" {
@@ -1403,11 +1403,11 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
       }
     }
   }
-  let said : Map[String, Map[String, Unit]] = Map::new()
+  let said : Map[String, Map[String, Unit]] = Map([])
   for p, _ in pkgs {
-    said[p] = Map::new()
+    said[p] = Map([])
   }
-  let seen : Map[String, Unit] = Map::new()
+  let seen : Map[String, Unit] = Map([])
   // what reset sets a global's value to (NAME.val = …, its package's, or @pkg.NAME.val = …): (pkg, name, value)
   let sets : Array[(String, String, String)] = []
   let todo = roots.copy()
@@ -1436,7 +1436,7 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
           body[i + 3].text == "=" &&
           (i == 0 || body[i - 1].text != "." || (i >= 2 && body[i - 2].kind == "at")) {
           let owner = if i >= 2 && body[i - 1].text == "." && body[i - 2].kind == "at" {
-            alias.get(body[i - 2].text.view(start_offset=1).to_string())
+            pkg_by_name.get(body[i - 2].text.exact_view(start=1).to_owned())
           } else {
             Some(pkg)
           }
@@ -1479,7 +1479,7 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
             None
           }
           let p = match q {
-            Some(q) => alias.get(q.view(start_offset=1).to_string())
+            Some(q) => pkg_by_name.get(q.exact_view(start=1).to_owned())
             None => Some(pkg)
           }
           if p is Some(p) {
@@ -1487,7 +1487,7 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
           }
         }
         if i >= 2 && body[i - 1].text == "." && body[i - 2].kind == "at" {
-          match alias.get(body[i - 2].text.view(start_offset=1).to_string()) {
+          match pkg_by_name.get(body[i - 2].text.exact_view(start=1).to_owned()) {
             Some(p) => said[p][t.text] = ()
             None => ()
           }
@@ -1496,13 +1496,13 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
     }
   }
   // a Ref's value as its let gives it (Ref(V), Ref::new(V), { val: V }), by (pkg, name)
-  let firsts : Map[String, (MbtFile, Int, String)] = Map::new()
+  let firsts : Map[String, (MbtFile, Int, String)] = Map([])
   for l in lets {
     let (pkg, f, it) = l
-    let ts = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_array()
+    let ts = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_owned()
     match ts.search_by(fn(t) { t.text == "=" }) {
       Some(e) => {
-        let v = ts[e + 1:].to_array()
+        let v = ts[e + 1:].to_owned()
         let inner = if v.length() >= 3 && v[0].text == "Ref" && v[1].text == "(" {
           Some(2)
         } else if v.length() >= 5 && v[0].text == "Ref" && v[1].text == "::" && v[2].text == "new" && v[3].text == "(" {
@@ -1539,7 +1539,7 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
       None => ()
     }
   }
-  let wired : Map[String, Unit] = Map::new()
+  let wired : Map[String, Unit] = Map([])
   for s in sets {
     let (pkg, name, value) = s
     let key = reader_key(pkg, name)
@@ -1553,7 +1553,7 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
   }
   for l in lets {
     let (pkg, f, it) = l
-    let ts = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_array()
+    let ts = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_owned()
     // let NAME (: TYPE)? = VALUE
     let mut k = 0
     while k < ts.length() && ts[k].text != "let" {
@@ -1572,7 +1572,7 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
         j += 1
       }
     }
-    let value = if j < ts.length() { ts[j + 1:].to_array() } else { [] }
+    let value = if j < ts.length() { ts[j + 1:].to_owned() } else { [] }
     if ty.length() > 0 &&
       ty.iter().all(fn(t) { t.kind != "ident" || plain_types.contains(t.text) }) {
       continue
@@ -1676,7 +1676,7 @@ fn css_token_name(s : String, called : Bool) -> Bool {
 /// before a token are left out (the text reads a token as its property's type has it).
 fn css_value(f : MbtFile, idx : Array[Int]) -> String? {
   let toks = f.toks
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut n = 0
   while n < idx.length() {
     let i = idx[n]
@@ -1705,7 +1705,7 @@ fn css_value(f : MbtFile, idx : Array[Int]) -> String? {
         // as its text reads it: an Int64's L, a UInt's U left out
         let mut s = t.text
         while s.has_suffix("L") || s.has_suffix("U") {
-          s = s.view(end_offset=s.length() - 1).to_string()
+          s = s.exact_view(end=s.length() - 1).to_owned()
         }
         out.write_string(s)
       }
@@ -1870,7 +1870,7 @@ let paint_root_pkg : String = "src/ui"
 ///|
 /// The tokens of `f` given to a paint taker as what it reads as it paints (paint_takers' arguments)
 fn paint_args(f : MbtFile) -> Map[Int, Unit] {
-  let out : Map[Int, Unit] = Map::new()
+  let out : Map[Int, Unit] = Map([])
   for c in f.calls {
     if c.kind == "method" && !c.is_def && paint_takers.contains(c.name) {
       for a in c.args {
@@ -1902,9 +1902,9 @@ fn in_paint(f : MbtFile, k : Int, paint_at : Map[Int, Unit], painted : Map[Strin
 /// so called
 fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
   // each function's calls in its package: where (the file, the token)
-  let sites : Map[String, Array[(MbtFile, Int)]] = Map::new()
-  let defined : Map[String, Unit] = Map::new()
-  let args : Map[String, Map[Int, Unit]] = Map::new()
+  let sites : Map[String, Array[(MbtFile, Int)]] = Map([])
+  let defined : Map[String, Unit] = Map([])
+  let args : Map[String, Map[Int, Unit]] = Map([])
   for f in files {
     if f.test_file {
       continue
@@ -1927,7 +1927,7 @@ fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
       }
     }
   }
-  let painted : Map[String, Unit] = Map::new()
+  let painted : Map[String, Unit] = Map([])
   for name in paint_roots {
     if defined.contains(paint_root_pkg + "|" + name) {
       painted[paint_root_pkg + "|" + name] = ()
@@ -1944,7 +1944,7 @@ fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
         Some(a) if a.length() > 0 &&
           a.iter().all(fn(s) {
             let (f, k) = s
-            in_paint(f, k, args.get(f.rel).unwrap_or(Map::new()), painted)
+            in_paint(f, k, args.get(f.rel).unwrap_or(Map([])), painted)
           }) => {
           painted[key] = ()
           changed = true
@@ -1973,7 +1973,7 @@ let motion_readers : Array[String] = ["Anim::get", "Way::get", "animate", "press
 /// The fields of the files' structs of a type that moves by the clock (`fade : @motion.Anim`), by their name
 /// (build-motion: `s.fade.get()`)
 fn motion_fields(files : Array[MbtFile]) -> Map[String, Unit] {
-  let out : Map[String, Unit] = Map::new()
+  let out : Map[String, Unit] = Map([])
   for f in files {
     for it in f.items {
       if it.kind != "struct" {
@@ -2072,7 +2072,7 @@ let paint_labels : Array[String] = ["ground_by", "lit_by"]
 fn paint_flows(f : MbtFile, paint_at : Map[Int, Unit]) -> Map[Int, Unit] {
   let toks = f.toks
   let n = toks.length()
-  let out : Map[Int, Unit] = Map::new()
+  let out : Map[Int, Unit] = Map([])
   for k, _ in paint_at {
     out[k] = ()
   }
@@ -2153,7 +2153,7 @@ fn paint_flows(f : MbtFile, paint_at : Map[Int, Unit]) -> Map[Int, Unit] {
   // the names let to a closure, or to what holds one of them (deferred): those whose every use is where it is painted,
   // or in another such let's value, are painted. (Names by item and text: `item|name`.)
   let key = fn(x : Int) { "\{f.item_of[x]}|\{toks[x].text}" }
-  let uses : Map[String, Array[Int]] = Map::new()
+  let uses : Map[String, Array[Int]] = Map([])
   for x, t in toks {
     // (a name's uses: not a field, nor an argument's label, `name=` or `name?=`, which is no use of a let of that name)
     let label = x + 1 < n &&
@@ -2167,7 +2167,7 @@ fn paint_flows(f : MbtFile, paint_at : Map[Int, Unit]) -> Map[Int, Unit] {
     }
   }
   let deferred : Array[Bool] = Array::make(lets.length(), false)
-  let deferred_names : Map[String, Unit] = Map::new()
+  let deferred_names : Map[String, Unit] = Map([])
   let mut changed = true
   while changed {
     changed = false
@@ -2349,16 +2349,16 @@ fn lint_read_before_run(files : Array[MbtFile], cfg : Config, out : Array[Findin
     return
   }
   // each function by its name: where it is (its file, its item)
-  let fns : Map[String, Array[(Int, Int)]] = Map::new()
+  let fns : Map[String, Array[(Int, Int)]] = Map([])
   // what gives a Tester back (its type after `->` names Tester)
-  let makers : Map[String, Unit] = Map::new()
+  let makers : Map[String, Unit] = Map([])
   for fi, f in files {
     for i, it in f.items {
       if it.kind != "fn" || it.name == "" {
         continue
       }
       let parts = it.name.split("::").to_array()
-      let short = parts[parts.length() - 1].to_string()
+      let short = parts[parts.length() - 1].to_owned()
       match fns.get(short) {
         Some(a) => a.push((fi, i))
         None => fns[short] = [(fi, i)]
@@ -2385,7 +2385,7 @@ fn lint_read_before_run(files : Array[MbtFile], cfg : Config, out : Array[Findin
     }
   }
   // what an item does first: 1 starts a run, 2 reads, 0 neither; and the call that does it
-  let memo : Map[String, (Int, Int)] = Map::new()
+  let memo : Map[String, (Int, Int)] = Map([])
   fn first(fi : Int, i : Int, local_reads : Bool) -> (Int, Int) {
     let key = "\{fi}:\{i}:\{local_reads}"
     match memo.get(key) {
@@ -2455,7 +2455,7 @@ fn lint_reset_by_hand(files : Array[MbtFile], cfg : Config, out : Array[Finding]
     return
   }
   // what gives a Tester back, by name, in every file
-  let makers : Map[String, Unit] = Map::new()
+  let makers : Map[String, Unit] = Map([])
   for f in files {
     for it in f.items {
       if it.kind != "fn" || it.name == "" {
@@ -2472,7 +2472,7 @@ fn lint_reset_by_hand(files : Array[MbtFile], cfg : Config, out : Array[Finding]
           arrow = true
         } else if arrow && t.kind == "ident" && t.text == "Tester" {
           let parts = it.name.split("::").to_array()
-          makers[parts[parts.length() - 1].to_string()] = ()
+          makers[parts[parts.length() - 1].to_owned()] = ()
           break
         }
         k += 1
@@ -2483,7 +2483,7 @@ fn lint_reset_by_hand(files : Array[MbtFile], cfg : Config, out : Array[Finding]
     if !f.test_file {
       continue
     }
-    let last : Map[Int, Int] = Map::new() // item -> the last call putting the app back in it
+    let last : Map[Int, Int] = Map([]) // item -> the last call putting the app back in it
     for c in f.calls {
       if !c.is_def && c.kind == "bare" && c.item >= 0 && cfg.reset_by_hand.contains(c.name) {
         last[c.item] = c.at

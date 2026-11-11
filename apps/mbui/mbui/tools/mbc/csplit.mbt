@@ -374,20 +374,6 @@ fn classify(text : Bytes, line : Int) -> Decl raise SplitError {
 }
 
 ///|
-/// The name an item defines or declares
-fn name_of(text : Bytes) -> Bytes raise SplitError {
-  let t = strip(text)
-  if ends(t, b"}") {
-    return func_name(t, 0)
-  }
-  match classify(t, 0) {
-    Proto(n) => n
-    Data(n, _) => n
-    Type => b""
-  }
-}
-
-///|
 /// The package in a name moonc mangled (_M0FP24mbui2ui3run: mbui/ui; _M0MPC15array…: core/array; …PB…: the
 /// builtins), empty when it has none: _M0[A-Z]*?P(B|C\d|\d), then that many length-prefixed parts.
 fn package_of(name : BytesView) -> Bytes {
@@ -423,7 +409,7 @@ fn package_of(name : BytesView) -> Bytes {
       return b""
     }
   }
-  let buf = @buffer.new()
+  let buf = Buffer()
   if core {
     buf.write_bytes(b"core/")
   }
@@ -456,7 +442,7 @@ fn package_of(name : BytesView) -> Bytes {
 fn prelude_definitions(prelude : Bytes) -> (Bytes, Int) {
   let ls = line_starts(prelude)
   let nl = ls.length() - 1
-  let out = @buffer.new()
+  let out = Buffer()
   let mut count = 0
   let mut seg_lo = -1
   let flush = fn(lo : Int, hi : Int) {
@@ -515,7 +501,7 @@ fn prelude_definitions(prelude : Bytes) -> (Bytes, Int) {
   let mut depth = 0 // inside #ifdef __cplusplus … #endif
   for i in 0..<nl {
     let line = prelude[ls[i]:ls[i + 1]]
-    let d = strip(line.to_bytes())
+    let d = strip(line.to_owned())
     if depth > 0 {
       out.write_bytesview(line)
       if directive_is(d, [b"if", b"ifdef", b"ifndef"]) {
@@ -558,7 +544,6 @@ fn ifdef_cplusplus(d : Bytes) -> Bool {
 struct Func {
   name : Bytes
   text : Bytes
-  line : Int
 }
 
 ///|
@@ -622,7 +607,7 @@ fn split(src : Bytes, outdir : Bytes, unit_bytes? : Int = 0) -> Split raise Spli
   let decl_kinds : Array[(Int, Bytes)] = []
   let data_names : Array[Bytes] = []
   let static_names = BSet::new()
-  let seen : Map[Bytes, Int] = Map::new() // 1 proto, 2 func, 3 data
+  let seen : Map[Bytes, Int] = Map([]) // 1 proto, 2 func, 3 data
   let protos = BSet::new()
   let mut statics_dropped = 0
   let mut npp = 0
@@ -672,7 +657,7 @@ fn split(src : Bytes, outdir : Bytes, unit_bytes? : Int = 0) -> Split raise Spli
       if dropped {
         static_names.add(name)
       }
-      funcs.push({ name, text, line: it.line })
+      funcs.push({ name, text })
       if first_func < 0 {
         first_func = it.line
       }

@@ -83,7 +83,7 @@ fn sh(cmd : String, what : String) -> String {
 ///|
 /// `s` from `a` to `b` (UTF-16 offsets).
 fn sub(s : String, a : Int, b : Int) -> String {
-  s.view(start_offset=a, end_offset=b).to_string()
+  s.exact_view(start=a, end=b).to_owned()
 }
 
 ///|
@@ -96,7 +96,7 @@ fn sha256_file(path : String) -> String {
   let tool = if @sys.run_out("command -v shasum") is Some(_) { "shasum -a 256" } else { "sha256sum" }
   let out = sh(tool + " " + q(path), "sha256")
   match out.split(" ").next() {
-    Some(h) => h.to_string()
+    Some(h) => h.to_owned()
     None => ""
   }
 }
@@ -141,7 +141,7 @@ fn fetch(url : String, dest : String) -> Bool {
 
 ///|
 fn artifact_path(coord : String, ext : String) -> String {
-  let p = coord.split(":").map(fn(x) { x.to_string() }).to_array()
+  let p = coord.split(":").map(fn(x) { x.to_owned() }).to_array()
   let g = p[0].replace_all(old=".", new="/")
   // group:artifact:version[:classifier] (hermes-android's AAR is only its -release one)
   let c = if p.length() > 3 { "-" + p[3] } else { "" }
@@ -188,13 +188,13 @@ fn read_lock(path : String) -> Array[(String, String, String)] {
   let text = @sys.read_text(path).unwrap_or("")
   for raw in text.split("\n") {
     let line = match raw.find("#") {
-      Some(i) => raw.view(end_offset=i).trim(chars=" \t\r").to_string()
-      None => raw.trim(chars=" \t\r").to_string()
+      Some(i) => raw.exact_view(end=i).trim(chars=" \t\r").to_owned()
+      None => raw.trim(chars=" \t\r").to_owned()
     }
     if line == "" {
       continue
     }
-    let parts = line.split(" ").filter(fn(x) { x != "" }).map(fn(x) { x.to_string() }).to_array()
+    let parts = line.split(" ").filter(fn(x) { x != "" }).map(fn(x) { x.to_owned() }).to_array()
     out.push((parts[0], parts.get(1).unwrap_or(""), parts.get(2).unwrap_or("")))
   }
   out
@@ -205,7 +205,7 @@ fn cmd_lock(app : String) -> Unit {
   let (cfg, base) = load(app)
   let path = @sys.join(base, text_of(cfg, "lock"))
   let head = @sys.read_text(path).unwrap_or("").split("\n").filter(fn(l) { l.has_prefix("#") }).map(fn(l) {
-    l.to_string()
+    l.to_owned()
   }).to_array()
   let lines = []
   for d in read_lock(path) {
@@ -294,8 +294,8 @@ fn int_of(s : String) -> Int {
 ///|
 /// A version's numbers, compared as numbers.
 fn version_cmp(a : String, b : String) -> Int {
-  let na = a.split(".").map(fn(x) { int_of(x.to_string()) }).to_array()
-  let nb = b.split(".").map(fn(x) { int_of(x.to_string()) }).to_array()
+  let na = a.split(".").map(fn(x) { int_of(x.to_owned()) }).to_array()
+  let nb = b.split(".").map(fn(x) { int_of(x.to_owned()) }).to_array()
   for i in 0..<@cmp.maximum(na.length(), nb.length()) {
     let x = na.get(i).unwrap_or(0)
     let y = nb.get(i).unwrap_or(0)
@@ -428,7 +428,8 @@ fn manifest_text(
   }
   let left = rx("\\$\\{(\\w+)\\}").findall(text)
   if left.length() > 0 {
-    die("manifest placeholders not given: \{left}")
+    let names = left.join(", ")
+    die("manifest placeholders not given: [\{names}]")
   }
   let ns = text_of(cfg, "namespace")
   text = rx("(<(?:application|activity|activity-alias|service|receiver|provider)\\b[^>]*?android:name=\")\\.").sub_with(
@@ -475,7 +476,7 @@ fn manifest_text(
     // (one the app's manifest has merged by hand, APP.json's "merged": its components there as the app wants them)
     let by_hand = merged.iter().any(fn(p) { name.has_prefix(p) })
     if (rest.trim(chars=" \t\r\n") != "" || inner.trim(chars=" \t\r\n") != "") && !by_hand {
-      die("\{name}: its manifest adds more than <application> attributes; merge it here first:\n" + body.trim(chars=" \t\r\n").to_string())
+      die("\{name}: its manifest adds more than <application> attributes; merge it here first:\n" + body.trim(chars=" \t\r\n").to_owned())
     }
     match app {
       Some(m) =>
@@ -649,7 +650,7 @@ fn files_under(dir : String) -> Array[String] {
   out
   .split("\n")
   .filter(fn(l) { l.has_prefix("./") })
-  .map(fn(l) { sub(l.to_string(), 2, l.length()) })
+  .map(fn(l) { sub(l.to_owned(), 2, l.length()) })
   .to_array()
 }
 
@@ -712,7 +713,7 @@ fn cmd_build(a : BuildArgs) -> Unit {
   let min_sdk = text_of(cfg, "minSdk")
   let (android_jar, bt) = sdk_tools(text_of(cfg, "compileSdk"))
   let aapt2 = @sys.join(bt, "aapt2")
-  let work = sh("mktemp -d -t apk-XXXXXX", "mktemp").trim(chars=" \n").to_string()
+  let work = sh("mktemp -d -t apk-XXXXXX", "mktemp").trim(chars=" \n").to_owned()
   // the dependencies: AARs unpacked (classes, their res), jars as they are
   let deps = read_lock(@sys.join(base, text_of(cfg, "lock"))).filter(fn(d) { d.1 != "" && d.1 != "none" })
   let jars : Array[String] = []
@@ -842,7 +843,7 @@ fn cmd_build(a : BuildArgs) -> Unit {
     .unwrap_or("")
     .split("\n")
     .filter(fn(l) { !l.trim(chars=" \t").has_prefix("#") })
-    .map(fn(l) { l.to_string() })
+    .map(fn(l) { l.to_owned() })
     .to_array()
     .join("\n")
   ignore(@sys.write_text(aapt_rules, kept))
@@ -1018,7 +1019,7 @@ fn usage() -> Int {
 
 ///|
 fn main {
-  let args = @env.args()[1:].to_array()
+  let args = @env.args()[1:].to_owned()
   let code = match args {
     ["lock", app] => {
       cmd_lock(app)

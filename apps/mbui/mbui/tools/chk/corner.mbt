@@ -70,7 +70,7 @@ fn corner_web(text : String, lines : Array[String]) -> String? {
   }
   let start = rfind_char(t, '\n', a) + 1
   let indent = chars(t, start, a)
-  let body = StringBuilder::new()
+  let body = StringBuilder()
   for l in lines {
     if l == "" {
       body.write_string("\n")
@@ -173,9 +173,9 @@ fn corner_sl(args : Array[String]) -> Int {
   }
   let mut body = src
   while body.has_suffix("\n") {
-    body = body.view(end_offset=body.length() - 1).to_string()
+    body = body.exact_view(end=body.length() - 1).to_owned()
   }
-  let lines = body.split("\n").map(fn(l) { l.to_string() }).to_array()
+  let lines = body.split("\n").map(fn(l) { l.to_owned() }).to_array()
   // (web/host.js holds it in a template literal: no backquote, no ${)
   for i, l in lines {
     if l.contains("`") || l.contains("${") {
