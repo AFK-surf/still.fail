@@ -354,7 +354,7 @@ fn local_quote_visible(name : String) -> Unit raise {
   open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   @ui.add_image(picture, png_head())
-  @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+  @sfbase.sent_picture_kept(@sfbase.sent_key(station, path), picture)
   let file = attachment_of({
     "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900,
     "owner": "s-c1", "upload": "original-upload",
@@ -417,7 +417,7 @@ fn local_quote_uncovered(name : String) -> Unit raise {
   open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   @ui.add_image(picture, png_head())
-  @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+  @sfbase.sent_picture_kept(@sfbase.sent_key(station, path), picture)
   @sffixture.fix_put_up[path] = "original-upload"
   let file : Json = {
     "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900, "owner": "s-c1",

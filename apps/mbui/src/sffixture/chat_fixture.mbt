@@ -1525,7 +1525,7 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
     "chat-uploading" =>
       match outgoing_json("o-seed", { "text": "第二屏的截图，帮我看看", "attachments": [going_up_picture] }, "sending", "") {
         Object(m) => {
-          @sfbase.sent_pictures["upload\u{1}up-seed"] = fixture_file("compare.png")
+          @sfbase.sent_picture_kept("upload\u{1}up-seed", fixture_file("compare.png"))
           let o = m.copy()
           o["waits"] = Json::string("正在上传 42%")
           o["progress"] = Json::number(0.42)

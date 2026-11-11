@@ -1837,11 +1837,11 @@ fn remember_sent_pictures(src : Source, w : Writing, station : String) -> Unit {
     if picture == "" || picture == "!" { return }
     let id = text(v, "id")
     if id != "" {
-      @sfbase.sent_pictures["upload\u{1}" + id] = picture
+      @sfbase.sent_picture_kept("upload\u{1}" + id, picture)
     }
     let path = text(field(v, "done"), "path")
     if station != "" && path != "" {
-      @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+      @sfbase.sent_picture_kept(@sfbase.sent_key(station, path), picture)
     }
   }
   for file in w.files.get() {

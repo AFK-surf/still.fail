@@ -36,7 +36,7 @@ fn photo_sent(
   new_run()
   let photo = flight_photo()
   let a = if tall { { ..photo, width: 400.0, height: 2000.0 } } else { photo }
-  @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
+  @sfbase.sent_picture_kept(@sfbase.sent_key("ws1/st1", a.path), "sent-key")
   let base = fixture("chat")
   let src : Source = {
     ..base,

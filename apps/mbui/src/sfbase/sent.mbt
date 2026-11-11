@@ -24,6 +24,11 @@ pub fn sent_reset() -> Unit {
   sent_here_made.clear()
   local_sent_n.val = 0
   sent_pictures.clear()
+  let told = sent_pictures_told.keys().to_array()
+  for k in told {
+    sent_picture_tell(k)
+  }
+  sent_pictures_told.clear()
 }
 
 ///|
@@ -216,8 +221,49 @@ pub fn sent_local_gone(rk : String, key : String) -> Unit {
 /// The pictures of images sent from here, as they were picked: by station and the name
 /// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
 /// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
-/// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image).
-pub let sent_pictures : Map[String, String] = {}
+/// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image). Written only by
+/// sent_picture_kept, which tells what a node of the window's tree read of it (sent_picture_told).
+let sent_pictures : Map[String, String] = {}
+
+///|
+/// What a node read of sent_pictures (sent_picture_told), by its key: told as that one is kept, made as one is first
+/// read so, let go as nothing reads it any more. The old views' reads (sent_picture) track nothing.
+// kept across runs: let go with sent_pictures (sent_reset)
+let sent_pictures_told : Map[String, @signals.Signal[Int]] = {}
+
+///|
+/// The picture an image sent from here was picked as, kept by `key` (sent_key's, or "upload\u{1}" and its upload's
+/// id): what reads it by a node told.
+pub fn sent_picture_kept(key : String, picture : String) -> Unit {
+  sent_pictures[key] = picture
+  sent_picture_tell(key)
+}
+
+///|
+fn sent_picture_tell(key : String) -> Unit {
+  match sent_pictures_told.get(key) {
+    Some(s) =>
+      if s.watched() {
+        s.set(s.untracked() + 1)
+      } else {
+        sent_pictures_told.remove(key)
+      }
+    None => ()
+  }
+}
+
+///|
+fn sent_picture_track(key : String) -> Unit {
+  let s = match sent_pictures_told.get(key) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(0)
+      sent_pictures_told[key] = s
+      s
+    }
+  }
+  s.get() |> ignore
+}
 
 ///|
 pub fn sent_key(station : String, path : String) -> String {
@@ -231,4 +277,14 @@ pub fn sent_picture(station : String, a : Attachment) -> String? {
     Some(k) => Some(k)
     None => if a.upload != "" { sent_pictures.get("upload\u{1}" + a.upload) } else { None }
   }
+}
+
+///|
+/// sent_picture read by a node of the window's tree: told as the picture is kept under either of its keys.
+pub fn sent_picture_told(station : String, a : Attachment) -> String? {
+  sent_picture_track(sent_key(station, a.path))
+  if a.upload != "" {
+    sent_picture_track("upload\u{1}" + a.upload)
+  }
+  sent_picture(station, a)
 }
