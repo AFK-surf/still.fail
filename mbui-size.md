@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [11b5f0537](https://github.com/AFK-surf/still.fail/commit/11b5f0537f73d70a149e6c91403c9851598d826c) app: a chat's pictures told to the nodes that read | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.42 | 131.81 |
 | [8c287f13b](https://github.com/AFK-surf/still.fail/commit/8c287f13b4f51267ccc7bcb47503e5ffa8fdfec6) ci: preview's iOS build says its unsigned IPA's up | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 131.81 |
 | [26cd17c5c](https://github.com/AFK-surf/still.fail/commit/26cd17c5c188f674989699363a10a49d8c1760bc) cloud: a relay in Shanghai among still.fail's (#54 | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.32 | 123.25 |
 | [391fece48](https://github.com/AFK-surf/still.fail/commit/391fece48955a0b82e59fd5c195e2541ab7550e6) mbui: a node's words with links in them are a grou | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 152.78 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [3d78e06ad](https://github.com/AFK-surf/still.fail/commit/3d78e06ad6093c58df2818805b24c2e07351614e) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.54 | 179.33 |
 | [89ddb06c6](https://github.com/AFK-surf/still.fail/commit/89ddb06c630614459cb5acc1a81e7e6f8c7178aa) sf: the composer's least room is worked out of its | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.41 | 162.14 |
 | [a5accdbad](https://github.com/AFK-surf/still.fail/commit/a5accdbad8ac91788c618d28ebdd6e0fde00e90b) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.27 | 149.89 |
-| [7eb12a296](https://github.com/AFK-surf/still.fail/commit/7eb12a29623ab0f3dbe85dada5ea4f416cd6f435) sf: list_turns says what it does, and what did not | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.52 | 149.03 |
