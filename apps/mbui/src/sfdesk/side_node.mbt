@@ -40,12 +40,14 @@ fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideA
 /// What the chats' sidebar (lists_side_node) shows of workspace `ws` as it opens, asked of `ask` (sfbase's
 /// opens_answered): its list as it is filtered (sfbase's list_opens); the band's and the foot's of all its chats
 /// (what is catching up, whether it has stations to filter, their trouble: chats_all_opens); 待处理's count, of the
-/// core's marks; what is left up long, the foot's 运行中.
+/// core's marks; what is left up long, the foot's 运行中 (where the foot shows it).
 fn side_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
   let list = @sfbase.list_opens(src, ws, ask)
   let all = @sfbase.chats_all_opens(src, ws, ask)
   let marks = @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked(ws)))
-  let long = @sfbase.opens_answered(ask("longJobs", @sfbase.long_jobs_asked(ws)))
+  // (the foot's 运行中 reads it where the bell is not in the rail: in its panel then, read as that opens, lists_foot)
+  let long = rail_items(src, ws).contains("attention") ||
+    @sfbase.opens_answered(ask("longJobs", @sfbase.long_jobs_asked(ws)))
   list && all && marks && long
 }
 

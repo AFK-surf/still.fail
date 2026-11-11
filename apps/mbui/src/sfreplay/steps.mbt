@@ -549,6 +549,18 @@ pub fn Flow::check(self : Flow, so : Bool, why : String) -> Unit {
 }
 
 ///|
+/// As check, `so` asked only where it is judged: what it reads of the screen may not be there in a pass that is not
+/// (a pace pass split, its steps after taken as nothing: the list `Tester::at_end` reads never opened).
+pub fn Flow::check_by(self : Flow, so : () -> Bool, why : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
+  if self.judges() && !so() {
+    self.fail(why)
+  }
+}
+
+///|
 /// The test fails, saying what was not so and what is on screen.
 fn Flow::fail(self : Flow, why : String) -> Unit {
   // (and where the conversation stood: what the app asked that the run did not, what the next message waits for)

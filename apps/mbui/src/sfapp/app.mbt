@@ -576,6 +576,23 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             @sfbase.history_note(ws, wide && pages == [Home])
           },
         )
+        // what the workspace in view opens on, asked as it comes to be in view, the splash or the shell before it
+        // still shown (sfbase's opens_ahead_node): its shell's panes' (小屏's Home, home_opens; the wide frame's,
+        // sfdesk's frame_opens)
+        @sfbase.opens_ahead_node(v, src, fn() {
+          let width = v.window().0
+          if width <= 0.0 {
+            None
+          } else if @sf.layout(width) is Small && !@sf.native_able() {
+            Some(("narrow", home_opens))
+          } else {
+            // (a page open already, not Home: the pane opens on it, not on what it would land on)
+            match @signals.untracked(fn() { app.nav.top() }) {
+              Home => Some(("wide", @sfdesk.frame_opens))
+              p => Some(("wide", fn(src, ws, ask) { @sfdesk.frame_opens_on(src, ws, Some(p), ask) }))
+            }
+          }
+        })
         // signed in, the shell it is laid out in a node picked by the window's width and what is in view
         // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; on the tape, its panels' nodes
         // (tape_shell.mbt); the ways in, the splash, a window of its own; nothing before the window has a width

@@ -42,14 +42,11 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "send-text": [7],
   "service-page": [7, 120],
   "station-file-sent": [7],
-  // 9: sub {"topic":"workspace","workspace":…} | strict sub {"topic":"doing"}
+  // 6: sub {"topic":"workspace","workspace":…} | strict sub {"topic":"doing"}
   "drive-delete": [7],
   "drive-lend": [7],
-  "drive-list": [7],
   "drive-play": [7, 120],
-  "drive-read": [7],
   "drive-rename": [7],
-  "drive-sheet-closing": [7],
   "drive-zip": [7],
   "reader": [7],
   // 6: unsub {"topic":"status"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
@@ -78,7 +75,7 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // release in the frame at 1050 ms, notify.permission (sent once notify's values are in, which came after that
   // frame) in the next, at 1058.3; the strict pass sends all four in its frame at 1083.3, notify.permission before
   // machineSessions.list; gone with what a page reads said as it is made
-  "wide-answer-reply": [7, 120],
+  "wide-answer-reply": [7],
   "wide-send": [7],
   // 3: sub {"topic":"chat","compact":true,"session":…,"station":…} | strict sub
   // {"topic":"chat","compact":true,"session":…,"station":…}
@@ -100,8 +97,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "draft-restart": [7],
   // 1: sub {"topic":"filesTabs","workspace":…} | strict sub {"topic":"doing"}
   "drive-download-many": [7, 120],
-  // 1: - | strict sub {"path":…,"root":…,"topic":"drive","station":…}
-  "drive-upload": [7],
   // 1: - | strict call lock.pair {"workspace":…}
   "lock-wait": [7],
   // 1: sub {"scope":…,"topic":"stations"} | strict sub {"key":…,"topic":"composer"}
@@ -131,6 +126,14 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "wide-resize": [7, 120],
   // 1: - | strict call chat.pin {"pinned":true,"session":…,"station":…}
   "wide-row-menu": [7],
+  // 1: sub {"topic":"chat","compact":true,"session":…,"station":…} | strict sub {"limit":60,"scope":…,"topic":"archive"}
+  // (the replay's rig, not the app (#5589, measured): the strict pass's tap on the filter key at 1983.3 ms draws the
+  // frames it leaves owed at once, its clock on to 2016.7, the pace pass's draws none till the display's next; at 7 a
+  // second the menu is not up where 已归档 was at 2150, the tap on it falls on nothing, 已归档 never opens and 还原's at
+  // 2733.3 falls on Home's chat row. The menu itself stands the same at every rate a moment after its press (the
+  // library's presenters and Home's own, 60, 120, 24, 7). Taken out by the PR that gives the strict pass its inputs as
+  // the pace pass's are given, at their moments, frames drawn only as the clock passes them)
+  "archive-restore": [7],
   // 1: sub {"query":…,"scope":…,"topic":"search"} | strict call notify.permission {"state":"unknown"}
   "wide-switcher": [7],
   // 1: - | strict call cache.usage {}
@@ -144,16 +147,15 @@ let pace_splits_known : Map[String, Array[Int]] = {
 /// again over one).
 // kept across runs: a value
 let strict_diverged_known : Map[String, Array[(Double, String)]] = {
-  // lock-wait (#5519): what the lock says taken between frames, at the moment it comes, and the page it shows let
-  // go of what it read then, the page in its place taking it only in the next frame: at 1066 ms the lock's first
-  // value (safe mode on) takes Home away for the waiting page, Home's driveTransfers let go (the waiting page's frame
-  // at 1066.7 asks it again); at 22150 its delta (safe mode off) takes the waiting page away, its doing let go and
-  // asked again by Home's frame at 22166.7. The run's device took each in the frame that built the next page, behind
-  // a message before it, so nothing was let go. Gone with #5135 (what is read kept by its topic while a page is
-  // covered), whose merge takes this out.
+  // lock-wait (#5519; anew with what the first screen reads declared, #5589): at 22133.3 the lock's delta (safe
+  // mode off) takes the waiting page away and with it what it had taken over of what was declared as the workspace
+  // came in view, doing and driveTransfers (taken over, then its reader gone, the next not come yet: a gap a
+  // declaration does not mend); Home's frame at 22150 asks doing again. The run's device took it in the frame that
+  // built the next page, behind a message before it, so nothing was let go. Gone with #5135 (what is read kept by its
+  // topic while a page is covered), whose merge takes this out.
   "lock-wait": [
-    (1066.0, "{\"id\":13,\"unsubscribe\":true}"),
-    (22150.000000000004, "{\"id\":12,\"unsubscribe\":true}"),
-    (22166.666666666668, "{\"id\":25,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
+    (22133.333333333336, "{\"id\":12,\"unsubscribe\":true}"),
+    (22133.333333333336, "{\"id\":13,\"unsubscribe\":true}"),
+    (22150.000000000004, "{\"id\":24,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
   ],
 }

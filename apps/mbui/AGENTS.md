@@ -100,6 +100,13 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     by the function its panes open by, which their pages wait by too (小屏 sfapp's `home_opens`; 中屏 and 大屏
     sfdesk's `frame_opens`: the rail's, the sidebar's, the page the pane lands on): something a pane comes to show
     of a workspace as it opens goes in its function, never in a list of the switch's.
+  - What those functions say is declared as the workspace comes to be in view, between frames (sfbase's
+    `opens_ahead_node`, `declare_topic`): asked of the core then, not as the frame that builds the panes runs, and taken
+    over by the reader that comes to read it, the same subscription all along; what no reader took is let go of as
+    another workspace comes in view. So a shell's function says only what its first screen reads, all of it read once
+    it is at rest (`src/sfapp/declared_read_wbtest.mbt`). A bridge while pages are built by the old view: a page made
+    as nodes says what it reads where it is made, and writes nothing here (the coordinator of the migration,
+    2026-11-12).
   - A step further in is the presenters', never a page's (弹层里往里走: the user, 2026-11-02, and 2026-11-10 「系统性
     全修一下」 once the chat's own sheet and a menu's 分享… were found never to have had it). A page says `close()` and
     opens the next, and keeps no step number and no 返回 button of its own; `src/sf/presenters.mbt` does the rest on
