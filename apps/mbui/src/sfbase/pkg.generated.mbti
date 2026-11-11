@@ -504,6 +504,10 @@ pub fn file_key(Attachment) -> String
 
 pub fn file_peek_picture(Source, String, String, String, Int32?, @json.Json?) -> String
 
+pub fn file_peek_picture_ask(Source, String, String, String, Int32?, @json.Json?) -> Unit
+
+pub fn file_peek_picture_told(Source, String, String, String, Int32?, @json.Json?) -> String
+
 pub fn file_params(Viewer) -> Map[String, @json.Json]
 
 pub let file_progress_corner : Double
@@ -848,7 +852,13 @@ pub fn link_path(String) -> Bool
 
 pub fn link_picture(Source, String, String, @json.Json?, String) -> String
 
+pub fn link_picture_told(Source, String, String, @json.Json?, String) -> String
+
+pub fn link_pictures_ask(Source, String, String, @json.Json?) -> Unit
+
 pub fn link_pictures_here(Source, String, String, @json.Json?) -> Bool
+
+pub fn link_pictures_here_told(Source, String, String, @json.Json?) -> Bool
 
 pub fn link_port(Source, ServicePage, @ui.NativeView, @json.Json) -> Unit
 
