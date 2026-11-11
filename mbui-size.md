@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d2482190e](https://github.com/AFK-surf/still.fail/commit/d2482190e3650f97ce2a895f92a60a784a3765b2) app: what a person wrote made once as nodes: the v | 1.83 | 2.44 | 10.18 | 28.92 | 35.95 | 25.76 | 47.8 | 94.67 | 163.05 |
 | [11b5f0537](https://github.com/AFK-surf/still.fail/commit/11b5f0537f73d70a149e6c91403c9851598d826c) app: a chat's pictures told to the nodes that read | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.42 | 131.81 |
 | [8c287f13b](https://github.com/AFK-surf/still.fail/commit/8c287f13b4f51267ccc7bcb47503e5ffa8fdfec6) ci: preview's iOS build says its unsigned IPA's up | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 131.81 |
 | [26cd17c5c](https://github.com/AFK-surf/still.fail/commit/26cd17c5c188f674989699363a10a49d8c1760bc) cloud: a relay in Shanghai among still.fail's (#54 | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.32 | 123.25 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [4a3fdb277](https://github.com/AFK-surf/still.fail/commit/4a3fdb277585bbe3a57332422c2cdb7d29bd555d) native.ts: a release's assets that could not be li | 1.81 | 2.43 | 10.11 | 28.84 | 35.67 | 25.67 | 47.52 | 94.54 | 174.36 |
 | [3d78e06ad](https://github.com/AFK-surf/still.fail/commit/3d78e06ad6093c58df2818805b24c2e07351614e) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.54 | 179.33 |
 | [89ddb06c6](https://github.com/AFK-surf/still.fail/commit/89ddb06c630614459cb5acc1a81e7e6f8c7178aa) sf: the composer's least room is worked out of its | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.41 | 162.14 |
-| [a5accdbad](https://github.com/AFK-surf/still.fail/commit/a5accdbad8ac91788c618d28ebdd6e0fde00e90b) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.27 | 149.89 |
