@@ -360,8 +360,14 @@ export function install(inner: Inner): void {
   // The stations tell their locks' changes (station/src/mesh/lock-events.ts): the workspace's read of the one that told
   // (and of each as its link opens), the person's own of their stations.
   inner.stations.also.push({
-    // (only where there is a lock: one turned on meanwhile is told by the cloud's view as before)
-    read: (address) => (inner.provider.kind === "stillfail" && held(inner, ofAddress(address))?.head ? Effect.asVoid(readLockOf(inner, ofAddress(address), [address.slice(ofAddress(address).length + 1)])) : Effect.void),
+    // (only where there is a lock: one turned on meanwhile is told by the cloud's view as before. Held here, or none
+    // held and the cloud's view saying there is one: a device that let go of a lock its stations keep, #5540, or never
+    // read it of them, has it of the first of them it reaches again, not only once the cloud's view next changes)
+    read: (address) => {
+      const ws = ofAddress(address);
+      if (inner.provider.kind !== "stillfail" || !(held(inner, ws)?.head || cloudSays(view(inner, ws)))) return Effect.void;
+      return Effect.asVoid(readLockOf(inner, ws, [address.slice(ws.length + 1)]));
+    },
     event: (address, name, data) => {
       if (inner.provider.kind !== "stillfail") return;
       const ws = ofAddress(address);
@@ -478,7 +484,7 @@ function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refus
             entries = all._tag === "Success" ? (arr(get(all.success, "entries")) as Entry[]) : null;
           }
           const devices = yield* ask(id, "/lock/devices");
-          return { head, entries, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
+          return { id, head, entries, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
         }),
       ),
       () => OTHERS_MS,
@@ -497,10 +503,19 @@ function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refus
       head = a.head;
       entries = a.entries;
     }
-    // None keeps a lock (and none was held, or every one says so): none.
-    if (served.every((a) => a.head === null) && (was?.head == null || served.length === stations.length)) {
+    // None keeps a lock: none, where none was held, or where every station the held one names says so. A station the
+    // held lock does not name (added to the workspace and not protected yet: it goes by the cloud's word, lets the
+    // members in and answers that it keeps none) says nothing of it: asked alone as its link opened, its answer was
+    // every station's asked, and the device forgot a lock the others kept, with nothing to read it again (#5540).
+    const none = new Set(served.filter((a) => a.head === null).map((a) => a.id));
+    const named = was?.head ? [...fold(was.entries).stations.keys()] : [];
+    if (served.every((a) => a.head === null) && (was?.head == null || (named.length > 0 && named.every((id) => none.has(id))))) {
       head = null;
       entries = [];
+    } else if (named.some((id) => none.has(id)) && named.some((id) => !stations.includes(id))) {
+      // One the held lock names keeps none, and not all it names were asked (it told so, or its link opened): they
+      // are, now. Each of them reset on its own machine tells it alone, and no such read by itself is the lock's end.
+      return yield* readLockOf(inner, ws, lockStations(inner, ws), said);
     }
     yield* hold(inner, ws, sub, was, head, entries, mergeSeen(served.map((a) => a.seen)));
     return true;
