@@ -379,7 +379,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   assert_true(t.find("正在发送") is None)
   assert_true(t.find("测试一下") is Some(_))
   // (the station answers fix_answer_ms later: that time passes on the page too, the words landed and the agent's line
-  // come in their turns meanwhile)
+  // come in meanwhile)
   t.run_for(fix_answer_ms)
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
@@ -388,7 +388,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   assert_true(t.find("收到：「测试一下」") is Some(_))
   // (its avatar home: what comes out of avatars is over, its turn too (two frames on), the next words sent go in
   // their turn after it)
-  t.run_for(Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
+  t.run_for(Pose::Spit.ms() + Pose::Return.ms() + 2.0 * @ui.frame_period_default)
   // words with 失败 in them fail first
   t.tap_text("发消息")
   t.type_text("这条会失败")

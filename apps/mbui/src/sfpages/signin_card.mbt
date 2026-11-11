@@ -6,8 +6,8 @@
 // shown. A code the page asks that the password manager did not give is typed on the card; where only the person can go
 // on (a captcha, a code by mail), the card opens the tab's screen, and they say when they signed in. Signed in, kept in
 // their vault as they chose on the card (登录后存入密钥库, the default, or not), approved here in place: no card of its
-// own. Answered on screen, the card stays as it is until out of sight, then one line says how it went, as a vault
-// request's does (vault_ask_card).
+// own. Answered, on screen or not, the card goes as its room closes from that moment and one line saying how it went
+// comes in its place, as a vault request's does (vault_ask_card).
 
 ///|
 /// What the password manager is asked of for a sign-in's card, between frames: the run of `op` under way, the logins to
@@ -474,7 +474,7 @@ fn signin_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, as
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
-      let open = l.turns.in_turn(c, "signin/" + m.ts, !decided, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+      let open = l.turns.in_turn(c, "signin/" + m.ts, !decided)
       let start_at = l.turns.start("signin/" + m.ts)
       under_post(
         c,

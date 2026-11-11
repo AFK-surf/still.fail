@@ -448,7 +448,7 @@ test "words sent going up into the list tell the core where it is as the message
   t.run_for(fix_answer_ms)
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
-  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + 2.0 * @ui.frame_period_default)
   assert_true(t.find("收到：「测试一下」") is Some(_))
   // told as the message at the top changed, not as it moved under it
   let told = named(calls, "chat.place").map(fn(m) { field(Some(m.params), "seq") })

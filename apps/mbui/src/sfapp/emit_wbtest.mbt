@@ -18,7 +18,7 @@ fn emit_core(clock : Ref[Double], words~ : String = "看一下列表") -> @ui.Te
   fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // (the station answers fix_answer_ms after it took them: that time passes on the page too, the words sent landed
-  // and the agent's line come in their turns meanwhile)
+  // and the agent's line come in meanwhile)
   t.run_for(fix_answer_ms)
   t
 }
