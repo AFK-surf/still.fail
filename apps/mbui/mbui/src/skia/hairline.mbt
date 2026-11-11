@@ -1103,10 +1103,10 @@ impl Blitter for RectClipBlitter with blit_anti_v2(self, x, y, alpha0, alpha1) {
 
 ///|
 impl Blitter for RectClipBlitter with blit_h(_self, _x, _y, _w) {
-  abort("RectClipBlitter: blit_h")
+  @halt.saying("RectClipBlitter: blit_h")
 }
 
 ///|
 impl Blitter for RectClipBlitter with blit_rect(_self, _r) {
-  abort("RectClipBlitter: blit_rect")
+  @halt.saying("RectClipBlitter: blit_rect")
 }

@@ -9,3 +9,5 @@ import {
   "mbui/dmath",
   "mbui/view",
 }
+
+import { "mbui/halt" } for "test"

@@ -12,7 +12,7 @@ fn corners_drawn(kind : Double, x : Double, y : Double) -> ((Double, Double, Dou
       return ((c.inst[b + 36], c.inst[b + 37], c.inst[b + 38], c.inst[b + 39]), c.inst[b + 4])
     }
   }
-  abort("nothing of kind \{kind} drawn at \{x},\{y}")
+  @halt.saying("nothing of kind \{kind} drawn at \{x},\{y}")
 }
 
 ///|
@@ -103,7 +103,7 @@ fn foot_nodes() -> (Node, Node) {
   }
   match (panel, box) {
     (Some(p), Some(b)) => (p, b)
-    _ => abort("no panel and box at its foot")
+    _ => @halt.saying("no panel and box at its foot")
   }
 }
 
@@ -177,7 +177,7 @@ fn foot_nodes_filled() -> (Node, Node) {
   }
   match (panel, box) {
     (Some(p), Some(b)) => (p, b)
-    _ => abort("no panel and box filling it")
+    _ => @halt.saying("no panel and box filling it")
   }
 }
 

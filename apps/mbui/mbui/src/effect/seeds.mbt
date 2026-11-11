@@ -5,7 +5,7 @@ pub fn seeds(count? : Int = 20) -> Array[Int] {
   match @env.get_env_var("SEED") {
     Some(s) if s != "" =>
       try [@string.parse_int(s)] catch {
-        _ => abort("SEED is no number: \{s}")
+        _ => @halt.saying("SEED is no number: \{s}")
       }
     _ => Array::makei(count, i => i + 1)
   }

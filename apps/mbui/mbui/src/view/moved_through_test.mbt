@@ -77,7 +77,7 @@ fn moved_said(steps : Array[Hand], under? : Bool = true, held_first? : Bool = tr
         go(at)
         match t.target_at(x, 100.0) {
           Dragged(id) => t.drag_at(id, Down, x, 100.0, at) |> ignore
-          _ => abort("no cover")
+          _ => @halt.saying("no cover")
         }
       }
       Shift(x, at) => {

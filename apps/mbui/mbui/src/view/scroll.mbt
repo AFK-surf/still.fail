@@ -313,7 +313,7 @@ pub fn Scroll::drawn(self : Scroll, tree : Tree) -> Double {
 /// what it brings past that end from then, at rest then. No scroll of the hand's: nothing told as scrolled (its bar).
 /// What shows past an end stays as it is.
 pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
-  guard self.as_list else { abort("Scroll::grew_above: a page's list's (Scroll::list) alone") }
+  guard self.as_list else { @halt.saying("Scroll::grew_above: a page's list's (Scroll::list) alone") }
   if d == 0.0 {
     return
   }
@@ -868,7 +868,7 @@ pub fn View::scrolls(
                 (s.fill)(None, None, true)
                 rounds = rounds + 1
                 if rounds > 8 {
-                  abort("View::scrolls: how far it can go changes what it holds and that how far it can go, on and on")
+                  @halt.saying("View::scrolls: how far it can go changes what it holds and that how far it can go, on and on")
                 }
               }
             } else {

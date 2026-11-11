@@ -400,7 +400,7 @@ fn closing_under_coming(comes_ms~ : Double) -> Unit raise {
                   since[0] = at
                   way[0] = ms
                 }
-                None => abort("no rows' way as row 18 closes")
+                None => @halt.saying("no rows' way as row 18 closes")
               }
             }
             // (where it is at the frame's moment on its way, said to move till its end: built each frame of it)

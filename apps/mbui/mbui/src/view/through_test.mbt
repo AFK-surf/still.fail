@@ -127,7 +127,7 @@ fn through_said(
   let held = fn() {
     match t.holder() {
       Some(h) => h
-      None => abort("held by none")
+      None => @halt.saying("held by none")
     }
   }
   for s in steps {
@@ -136,7 +136,7 @@ fn through_said(
         go(at)
         match t.target_at(x, y) {
           Dragged(id) => t.drag_at(id, Down, x, y, at) |> ignore
-          other => abort("no cover: \{other is Nothing} \{t.drawn().map(fn(d) { (d.id.at, d.x, d.y, d.w, d.h) })}")
+          other => @halt.saying("no cover: \{other is Nothing} \{t.drawn().map(fn(d) { (d.id.at, d.x, d.y, d.w, d.h) })}")
         }
       }
       Move(x, y, at) => {

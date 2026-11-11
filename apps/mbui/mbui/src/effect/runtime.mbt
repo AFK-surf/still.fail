@@ -341,7 +341,7 @@ pub fn Runtime::trace_text(self : Runtime) -> String {
 fn current_task() -> Task {
   match current.val {
     Some(t) => t
-    None => abort("effect: not inside a task")
+    None => @halt.saying("effect: not inside a task")
   }
 }
 
@@ -652,7 +652,7 @@ fn Runtime::run_tasks(self : Runtime) -> Int {
     self.step_task(t)
     n += 1
     if n > 10_000_000 {
-      abort("effect: tasks kept each other ready without end (\{t.name})")
+      @halt.saying("effect: tasks kept each other ready without end (\{t.name})")
     }
   }
   n
@@ -791,7 +791,7 @@ fn Runtime::next_instant(self : Runtime) -> Int64? {
 ///|
 /// Moves virtual time on `ms`: every timer due meanwhile fires at its time.
 pub fn Runtime::advance(self : Runtime, ms : Int) -> Unit {
-  guard self.clock is None else { abort("effect: advance on the host's clock") }
+  guard self.clock is None else { @halt.saying("effect: advance on the host's clock") }
   let until = self.time + ms.to_int64()
   self.fire_until(until)
   self.time = until
@@ -812,7 +812,7 @@ pub fn Runtime::tick(self : Runtime) -> Unit {
 /// the clock's time, what is ready and what waits for a frame. What starts
 /// waiting for a frame in it waits for the next one.
 pub fn Runtime::frame(self : Runtime, at : Int64) -> Unit {
-  guard self.clock is None else { abort("effect: frame on the host's clock") }
+  guard self.clock is None else { @halt.saying("effect: frame on the host's clock") }
   let outer = self.turning
   self.turning = true
   defer {

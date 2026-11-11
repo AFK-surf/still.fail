@@ -45,8 +45,7 @@ fn Ctx::check_press_owners(self : Ctx) -> Unit {
     }
     if !over {
       let s = "Ctx::presses_to: area \{area}, said at \{loc}, takes no presses where its box is (\{n.x.to_int()},\{n.y.to_int()} \{n.fw.to_int()}x\{n.fh.to_int()})"
-      println(s)
-      abort(s)
+      @halt.saying(s)
     }
   }
 }

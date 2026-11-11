@@ -343,7 +343,7 @@ fn Ctx::flat_from(self : Ctx, i0 : Int) -> Unit {
 fn ride_draw_out(s : FixedArray[Double], at : Int) -> Unit {
   let b = at * inst_size
   let id = s[b + 12].to_int()
-  guard ride_groups.get(id) is Some(k) else { abort("flat_from: group \{id} let go") }
+  guard ride_groups.get(id) is Some(k) else { @halt.saying("flat_from: group \{id} let go") }
   if k.heads {
     ride_put_out(k, s, at, s[b], s[b + 1], s[b + 15], s[b + 16], s[b + 17], s[b + 18], s[b + 19]) |> ignore
   } else {
@@ -386,7 +386,7 @@ fn ride_put_out(
       i = j
       continue
     }
-    guard ride_groups.get(a[b + 12].to_int()) is Some(r) else { abort("ride_put_out: group let go") }
+    guard ride_groups.get(a[b + 12].to_int()) is Some(r) else { @halt.saying("ride_put_out: group let go") }
     // (its clip this one's where it says none, else as much of both)
     let none = a[b + 16] == 0.0 && a[b + 17] == 0.0 && a[b + 18] == 0.0 && a[b + 19] == 0.0
     let cut = !(h0 == 0.0 && h1 == 0.0 && h2 == 0.0 && h3 == 0.0)

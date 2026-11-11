@@ -155,6 +155,9 @@ yet and you can add one, add it.
   a host callback's order, a core answer's order, the network, an emulator's state, another job's files). Do not
   rerun it green and move on, do not call it "偶发", do not add retries or waits. Find what came in uncontrolled and
   route it through what is recorded and given again, or take it out of the run.
+- A failure says why. Nothing in mbui or an app calls `abort` itself: on wasm-gc, where the tests run off CI, it prints
+  none of its words. Stop with `@halt.saying(msg)` (`src/halt`), which prints them and the line that said them first;
+  detlint's `abort-unsaid` holds it, in the app as in mbui (the coordinator of the migration, 2026-11-11).
 
 ## Tools are MoonBit, not Python
 

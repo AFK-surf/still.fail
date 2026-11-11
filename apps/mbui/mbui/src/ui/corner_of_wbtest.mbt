@@ -54,7 +54,7 @@ fn linked_nodes() -> (Node, Node) {
   }
   match (panel, ground) {
     (Some(p), Some(b)) => (p, b)
-    _ => abort("no panel and ground")
+    _ => @halt.saying("no panel and ground")
   }
 }
 

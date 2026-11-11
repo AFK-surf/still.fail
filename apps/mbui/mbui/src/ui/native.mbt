@@ -515,8 +515,7 @@ pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
     // (one grab of a view at a time: its ticket is the view's)
     if outside_tickets.contains(outside_key(outside_grab, self.id)) {
       let s = "NativeView::grab_frame: view \{self.id} grabs a frame already: one at a time, its `grabbed` taken first"
-      println(s)
-      abort(s)
+      @halt.saying(s)
     }
     outside_start(outside_grab, self.id, "a frame of view \{self.id} grabbed")
     self.grab_since = view_now()
@@ -533,8 +532,7 @@ pub fn NativeView::grab_shown(self : NativeView, side : Double) -> Unit {
   if self.id != 0 && !self.closed {
     if outside_tickets.contains(outside_key(outside_grab, self.id)) {
       let s = "NativeView::grab_shown: view \{self.id} grabs a frame already: one at a time, its `grabbed` taken first"
-      println(s)
-      abort(s)
+      @halt.saying(s)
     }
     outside_start(outside_grab, self.id, "the frame view \{self.id} shows grabbed")
     self.grab_since = view_now()

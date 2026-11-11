@@ -260,7 +260,8 @@
     "click-read": {},
     "key-read": {},
     "part-place": {},
-    "layout-told": {}
+    "layout-told": {},
+    "abort-unsaid": {}
   },
   "excused": {
     "frame-request": {},
@@ -326,7 +327,10 @@
     "click-read": {},
     "key-read": {},
     "part-place": {},
-    "layout-told": {}
+    "layout-told": {},
+    "abort-unsaid": {
+      "src/halt/halt.mbt": 1
+    }
   },
   "tester": {
     "names": [

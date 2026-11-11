@@ -842,7 +842,7 @@ fn strip_box() -> Node {
       return c.nodes[i]
     }
   }
-  abort("no box")
+  @halt.saying("no box")
 }
 
 ///|

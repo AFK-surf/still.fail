@@ -945,8 +945,7 @@ fn Tester::hold_a11y_whole(self : Tester) -> Unit {
     return
   }
   let said = "what the host's accessibility was told is not what is read out, a frame drawn at \{self.fake.time} (mbui's src/ui/a11y.mbt: what changed not found):\n--- told\n\{has}--- read out\n\{whole}"
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }
 
 ///|
@@ -1028,8 +1027,7 @@ fn Tester::hold_named(self : Tester, tree : Array[SemNode]) -> Unit {
   }
   let said = "what can be done is named (mbui's src/ui/a11y.mbt, sem_unnamed), on a frame drawn at \{self.fake.time}:\n" +
     bad.map(fn(s) { "  \{s.describe()} at \{s.rect}, actions \{s.actions}" }).join("\n")
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }
 
 ///|

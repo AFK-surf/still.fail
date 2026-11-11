@@ -794,7 +794,7 @@ fn same_pieces(
 fn inst_hash(a : FixedArray[Double], k : Int) -> Int64 {
   let mut h = -3750763034362895579L
   let o = k * inst_size
-  guard o + inst_size <= a.length() else { abort("damage: an instance past its frame") }
+  guard o + inst_size <= a.length() else { @halt.saying("damage: an instance past its frame") }
   for j in 0..<inst_size {
     h = (h ^ a.unsafe_get(o + j).reinterpret_as_int64()) * 1099511628211L
   }

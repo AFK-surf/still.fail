@@ -164,7 +164,7 @@ fn slid_group(x : Ref[Double], v : Ref[Array[String]], last? : Ref[String] = Ref
 fn thumb_of(t : @ui.Tester) -> (Double, Double, Double, Double) {
   let rs = t.drawn_rects().filter(fn(r) { r.4 == 0x123456FFL })
   if rs.length() != 1 {
-    abort("the thumb drawn \{rs.length()} times")
+    @halt.saying("the thumb drawn \{rs.length()} times")
   }
   (rs[0].0, rs[0].1, rs[0].2, rs[0].3)
 }

@@ -101,8 +101,7 @@ fn Tree::clock_read_in_binding(self : Tree, how : String) -> Unit {
   let bar_key = how + " " + place_file(first.made)
   let found = clock_read_places.get(bar_key).unwrap_or([])
   if clock_read_fault(how, first.made, found) is Some(said) {
-    println(said)
-    abort(said)
+    @halt.saying(said)
   }
   if !found.contains(first.made) {
     found.push(first.made)

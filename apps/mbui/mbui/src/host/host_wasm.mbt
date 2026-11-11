@@ -15,7 +15,7 @@ let mbw_cb_mb_host_run_5 : Ref[FuncRef[(Int, String, Int, Int) -> Unit]?] = Ref(
 fn mbw_cb_mb_host_run_5_in(a0 : Int, a1 : Int, a2 : Int, a3 : Int) -> Unit {
   match mbw_cb_mb_host_run_5.val {
     Some(f) => f(a0, @wasmrt.string_at(a1), a2, a3)
-    None => abort("mb_host_run: no function")
+    None => @halt.saying("mb_host_run: no function")
   }
 }
 

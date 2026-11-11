@@ -95,6 +95,5 @@ fn Tree::grows_read_in_binding(self : Tree) -> Unit {
     None => "?"
   }
   let said = "GROWSNOW grows_now read in a binding: \{made}"
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }

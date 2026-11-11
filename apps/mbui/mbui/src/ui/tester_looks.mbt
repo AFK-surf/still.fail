@@ -199,8 +199,7 @@ fn looks_fail(s : String) -> Unit {
   let said = "a frame not built whole (frame_watch.mbt), the Tester made at \{looks_made_at.val}: " +
     s +
     " (built whole last at \{looks_base.built_at.to_int()} ms\{if wall_read.val { "; the time of day read as it was built" } else { "" }}; what is said to move: \{g().moving_now().join("; ")})"
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }
 
 ///|

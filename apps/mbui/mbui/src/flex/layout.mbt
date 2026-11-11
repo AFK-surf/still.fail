@@ -1679,7 +1679,7 @@ fn layout_flex(
           // its baseline is found by laying it out, while this one may be
           // only measured: a layout kept above it could hold that one
           if reusing.val {
-            abort("flex: compute(reuse=true) with an item aligned by baseline")
+            @halt.saying("flex: compute(reuse=true) with an item aligned by baseline")
           }
           let iw = f.unsafe_get(i + MAIN)
           let ih = f.unsafe_get(i + CROSS)
