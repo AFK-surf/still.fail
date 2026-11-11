@@ -726,6 +726,65 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("an allowance read stands while its provider gives no answer, half an hour at most; a person who asks it again is told it was not answered", async () => {
+    // One round's question not reaching Anthropic took every Claude account's allowance and resets off their pages
+    // until the next round (ccvm, 2026-11-11).
+    const time = testClock();
+    const ok = (used: number) => ({ state: "ok", windows: [{ label: "每周", usedPercent: used, resetsAt: null }], resetCount: 1, detail: null, checkedAt: 0 });
+    const none = { state: "unavailable", windows: [], detail: "无法连接服务商", checkedAt: 0, unanswered: true };
+    let answer: any = ok(40);
+    let asked = 0;
+    const t = await rig({ clock: time.clock, readQuota: async () => { asked++; return answer; }, resetQuota: async () => ({ outcome: "reset" }) });
+    try {
+      assert.equal((await t.call("POST", "/profiles/cc/quota"))[0], 200);
+      const read = t.view("cc")!.quota;
+      assert.deepEqual([read.state, read.windows[0].usedPercent, read.resetCount], ["ok", 40, 1]);
+      // No answer: what was read stands, with when it was read.
+      answer = none;
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.deepEqual(t.view("cc")!.quota, read);
+      // Told to a station borrowing it the same; not asked again before the next round.
+      const before = asked;
+      assert.deepEqual((await t.accounts.lentHealth("cc")).quota, read);
+      assert.equal(asked, before);
+      // Asked by a person: told it was not answered, what stands left as it is.
+      assert.deepEqual(await t.call("POST", "/profiles/cc/quota"), [502, { error: "无法连接服务商" }]);
+      assert.deepEqual(t.view("cc")!.quota, read);
+      // An answer again: the allowance as it is now, and a person asking is answered.
+      answer = ok(55);
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.equal(t.view("cc")!.quota.windows[0].usedPercent, 55);
+      assert.equal((await t.call("POST", "/profiles/cc/quota"))[0], 200);
+      // None for half an hour since it was read: the failure is said, the marker not kept in it.
+      answer = none;
+      await time.adjust(25 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.equal(t.view("cc")!.quota.windows[0].usedPercent, 55);
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      const failed = t.view("cc")!.quota;
+      assert.deepEqual([failed.state, failed.windows.length, failed.detail, "unanswered" in failed], ["unavailable", 0, "无法连接服务商", false]);
+      // What the provider says of the account itself (its sign-in over) is said at once, an allowance read or not.
+      answer = ok(60);
+      await t.accounts.refreshQuota("cc");
+      answer = { state: "unavailable", windows: [], detail: "登录已过期或失效", checkedAt: 0 };
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.deepEqual([t.view("cc")!.quota.state, t.view("cc")!.quota.detail], ["unavailable", "登录已过期或失效"]);
+      // Asked because it changed (a reset used): what was read before the reset does not stand through no answer.
+      await t.call("PUT", "/profiles/cx", { access: { kind: "subscription" } });
+      await settle();
+      answer = ok(100);
+      await t.accounts.refreshQuota("cx");
+      assert.equal(t.view("cx")!.quota.windows[0].usedPercent, 100);
+      answer = none;
+      assert.equal((await t.call("POST", "/profiles/cx/reset-quota", undefined, owner, { "Idempotency-Key": "k1" }))[0], 200);
+      assert.equal(t.view("cx")!.quota.state, "unavailable");
+    } finally { await t.close(); }
+  });
+
   test("a borrowed Codex subscription's allowance is read with the login its host lent while that is good, else its host's", async () => {
     const data = temp("borrowed-quota");
     const home = join(data, "homes", "bx");

@@ -106,8 +106,14 @@ async function refused(provider: string, response: Response, lang: Lang): Promis
     return quota("blocked", [], detail);
   }
   if (status === 401) return quota("unavailable", [], tr(lang, "station.quota.signInExpired"));
-  return quota("unavailable", [], tr(lang, "station.quota.providerStatus", { provider, status }));
+  return { ...quota("unavailable", [], tr(lang, "station.quota.providerStatus", { provider, status })), ...(troubled(status) ? { unanswered: true } : {}) };
 }
+
+/// A status that is the provider's own trouble or its asking to be asked later, not its answer about the account.
+const troubled = (status: number | undefined) => status === 429 || (typeof status === "number" && status >= 500);
+
+/// What a question that got no answer leaves: nothing known of the allowance, said as `detail`.
+const unansweredQuota = (detail: string): ProfileQuota => ({ ...quota("unavailable", [], detail), unanswered: true });
 
 const get = (url: string, headers: Record<string, string>) => profileFetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
 
@@ -246,7 +252,7 @@ function unanswered(error: unknown): boolean {
 
 function failed(error: unknown, lang: Lang): ProfileQuota {
   // One that never reached the provider said in words, not as Node says it.
-  if (unanswered(error)) return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (unanswered(error)) return unansweredQuota(tr(lang, "station.quota.unreachable"));
   const detail = error instanceof Error ? error.message : String(error);
   // Its login over: its profile is checked again, to say so (Accounts).
   if (error instanceof RenewRefused) return { ...quota("unavailable", [], detail), signedOut: true };
@@ -255,12 +261,12 @@ function failed(error: unknown, lang: Lang): ProfileQuota {
 
 /// Codex's app-server wraps the provider response in RPC JSON. Do not show that response as the reason.
 function codexFailed(error: unknown, lang: Lang): ProfileQuota {
-  if (unanswered(error)) return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (unanswered(error)) return unansweredQuota(tr(lang, "station.quota.unreachable"));
   const failure = codexQuotaFailure(error instanceof Error ? error.message : String(error));
   if (failure.kind === "login") return { ...quota("unavailable", [], tr(lang, "station.quota.codexLogin")), signedOut: true };
-  if (failure.kind === "network") return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (failure.kind === "network") return unansweredQuota(tr(lang, "station.quota.unreachable"));
   if (failure.kind === "blocked") return quota("blocked", [], tr(lang, "station.quota.codexBlocked"));
-  if (failure.kind === "status") return quota("unavailable", [], tr(lang, "station.quota.codexStatus", { status: failure.status }));
+  if (failure.kind === "status") return { ...quota("unavailable", [], tr(lang, "station.quota.codexStatus", { status: failure.status })), ...(troubled(failure.status) ? { unanswered: true } : {}) };
   return quota("unavailable", [], tr(lang, "station.quota.codexFailed"));
 }
 
