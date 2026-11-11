@@ -279,6 +279,25 @@ fn sheet_node(
       let placed_ms = fn(_w : Double, own : Double, stood : Double, least : Double) {
         dmax(least, @ui.move_ms((own - stood).abs()))
       }
+      // (that way, set out at `v` (how fast how far it is drawn off its place goes): a Move on from that speed where it
+      // goes toward its end, as long as placed_ms; turned away from it (a page put on as the sheet rose, to a page
+      // less tall), slowing at one rate first and back from there, as any way turned back does (come_way_by), as long
+      // as that takes: how far it is drawn off its place `t` ms on, and how fast that goes)
+      let placed_turned = fn(own : Double, stood : Double, v : Double) { v * (stood - own) < 0.0 }
+      let placed_path = fn(own : Double, stood : Double, v : Double, t : Double, least : Double) {
+        if placed_turned(own, stood, v) {
+          @ui.come_way_by(own - stood, v, 0.0, 0.0, t)
+        } else {
+          @ui.move_path(own - stood, v, t, placed_ms(0.0, own, stood, least))
+        }
+      }
+      let placed_end = fn(own : Double, stood : Double, v : Double, least : Double) {
+        if placed_turned(own, stood, v) {
+          @ui.come_way_ms(own - stood, v, 0.0)
+        } else {
+          placed_ms(0.0, own, stood, least)
+        }
+      }
       let back = EdgeWay::new(0.0)
       // (one that grows (`grows`): how tall it is where it was dragged or tapped to another height, or a finger has it;
       // as tall as what it holds till then)
@@ -302,15 +321,23 @@ fn sheet_node(
       // (its own height as it is laid out at the logic's moment, its foot's room past the window taken off: what a
       // cause reads, never what the frame drawn last had (drawn.val), which is the rate's: a way set off from it went one
       // way at 60 a second and another at 120 (history_test's closes); none where it is not laid out yet)
+      // (how fast its height went as it was last asked how tall it stands (stands_by's): what a page put on or taken
+      // off then sets out at from there, as a way set off again does, not from rest)
+      let stood_v : Ref[Double] = Ref(0.0)
+      // (and how fast that height goes then, what it holds growing or shrinking: grows_now's)
+      let own_growing = fn() -> (Double, Double) {
+        match sheet_box.val {
+          Some(b) if b.alive() => {
+            let (h, hv) = b.grows_now()
+            (dmax(h - reach.untracked(), 0.0), hv)
+          }
+          _ => (0.0, 0.0)
+        }
+      }
       // (its own height laid out as the presenters last asked how tall it stands (stands_by), before what it shows is
       // changed: what a page put on then takes its rise up from)
       let stood_own : Ref[Double] = Ref(0.0)
-      let own_now = fn() {
-        match sheet_box.val {
-          Some(b) if b.alive() => dmax(b.grows_now().0 - reach.untracked(), 0.0)
-          _ => 0.0
-        }
-      }
+      let own_now = fn() { own_growing().0 }
       // (how far up it is drawn back at `t`, and when that way ends)
       // (a rise taken up into a way from as tall as it was seen, as it was then and as tall as it was: what of that way
       // is its rise, which its foot rose with, not drawn back)
@@ -323,7 +350,7 @@ fn sheet_node(
               Some((r, d)) => r.shown(d, t)
               None => 0.0
             }
-            @ui.move_path(own - stood, v, t - at, placed_ms(0.0, own, stood, least)).0 - rise
+            placed_path(own, stood, v, t - at, least).0 - rise
           }
           // (closed on that way: drawn back as far as it was then, sinking away with the sheet from there)
           None => foot_carried.get()
@@ -332,7 +359,7 @@ fn sheet_node(
       let foot_back_end = fn() {
         let (_, own, _) = drawn.val
         match placed.get() {
-          Some((stood, at, least, _)) => at + placed_ms(0.0, own, stood, least)
+          Some((stood, at, least, v)) => at + placed_end(own, stood, v, least)
           None => -1.0
         }
       }
@@ -373,17 +400,17 @@ fn sheet_node(
       let seen_from = fn(at : Double, settles : Bool) -> (Double, Double, Double)? {
         // (drawn once at least: as tall as it is laid out at that moment, not as it was last drawn)
         let (_, drawn_own, _) = drawn.val
-        let own = own_now()
+        let (own, own_v) = own_growing()
         guard drawn_own > 0.0 && own > 0.0 else { return None }
         let (dx, dv, left) = match placed.untracked() {
           Some((stood, at0, least, v)) => {
-            let ms = placed_ms(0.0, own, stood, least)
-            let (dx, dv) = @ui.move_path(own - stood, v, at - at0, ms)
+            let ms = placed_end(own, stood, v, least)
+            let (dx, dv) = placed_path(own, stood, v, at - at0, least)
             (dx, dv, dmax(0.0, at0 + ms - at))
           }
           None => (0.0, 0.0, 0.0)
         }
-        let (u, uv) = below.top_at(own, 0.0, at)
+        let (u, uv) = below.top_at(own, own_v, at)
         let rising = own - u
         if settles && rising != 0.0 && @signals.untracked(live) {
           settle(own)
@@ -400,7 +427,7 @@ fn sheet_node(
           return (0.0, 0.0)
         }
         let at = layer.cause_at()
-        let (dx, dv) = @ui.move_path(own - stood, v, at - at0, placed_ms(0.0, own, stood, least))
+        let (dx, dv) = placed_path(own, stood, v, at - at0, least)
         guard dx != 0.0 || dv != 0.0 else { return (0.0, 0.0) }
         foot_carried.set(@signals.untracked(fn() { foot_back(at, own) }))
         placed.set(None)
@@ -495,7 +522,8 @@ fn sheet_node(
           settle(stood_own.val)
         }
         // (as long as the slide at least, longer where it has further to go: no way of a height cut short)
-        placed.set(Some((stood, at, dur, 0.0)))
+        placed.set(Some((stood, at, dur, stood_v.val)))
+        stood_v.val = 0.0
         reach.set(dmax(reach.untracked(), sheet_under + stood))
         sized.set(false)
         tall_held.set(None)
@@ -554,11 +582,15 @@ fn sheet_node(
         // (as tall as it is seen at that moment, on its way and rising, where it was drawn: its rise over from then)
         stands_by(fn() {
           match seen_from(layer.cause_at(), false) {
-            Some((h, _, _)) => {
+            Some((h, v, _)) => {
+              stood_v.val = v
               stood_own.val = own_now()
               h
             }
-            None => dmax(0.0, layer.window().1 - sheet.placed_window_now().1)
+            None => {
+              stood_v.val = 0.0
+              dmax(0.0, layer.window().1 - sheet.placed_window_now().1)
+            }
           }
         })
         sheet
@@ -601,7 +633,7 @@ fn sheet_node(
           fn(w, h, t) {
             let own = h - reach.get()
             let off = match placed.get() {
-              Some((stood, at, least, v)) => @ui.move_path(own - stood, v, t - at, placed_ms(w, own, stood, least)).0
+              Some((stood, at, least, v)) => placed_path(own, stood, v, t - at, least).0
               None => 0.0
             }
             drawn.val = (w, own, own - off)
@@ -610,7 +642,7 @@ fn sheet_node(
           fn(w, h) {
             let own = h - reach.get()
             match placed.get() {
-              Some((stood, at, least, _)) => dmax(below.ends(h=own), at + placed_ms(w, own, stood, least))
+              Some((stood, at, least, v)) => dmax(below.ends(h=own), at + placed_end(own, stood, v, least))
               None => below.ends(h=own)
             }
           },
@@ -634,7 +666,7 @@ fn sheet_node(
           let (_, own, _) = drawn.val
           let mut e = below.ends(h=own)
           match placed.untracked() {
-            Some((stood, at, least, _)) => e = dmax(e, at + placed_ms(0.0, own, stood, least))
+            Some((stood, at, least, v)) => e = dmax(e, at + placed_end(own, stood, v, least))
             None => ()
           }
           // (its pages' slides)

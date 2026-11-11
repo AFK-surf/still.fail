@@ -172,3 +172,64 @@ test "a sheet's sink, said at its moment, goes as it was said whatever what it h
     }
   }
 }
+
+///|
+/// A phone's sheet of nodes, 信息, growing by 200 as what it holds opens, its 看详情 pressed `into` that (the frames on
+/// the way `step` apart; none: in one jump to it), closing it for 详情, a step further in: where 详情's sheet's top is
+/// at moments on from then. What the step sets out from (how tall the sheet stands then, sheet_node's seen_from) is its
+/// height laid out at that moment, never the frame drawn last's.
+fn cause_own_tops(step : Double?, into : Double) -> Array[Double] raise {
+  let tall = @signals.signal(false)
+  let t = presenting_tester(phone, fn(_) {
+    panel_nodes(
+      "信息",
+      fn(v, close) {
+        words_node(v, fn() { "信息内容" }, fn() { paragraph }) |> ignore
+        v.box(fn(b) { b.height(Is(Some(80.0))) |> ignore }) |> ignore
+        v.show(fn() { tall.get() }, fn(b) { b.height(Is(Some(200.0))) |> ignore })
+        button_node(v, fn() { "看详情" }, fn() {
+          close()
+          panel_nodes("详情", fn(v, _) { words_node(v, fn() { "详情内容" }, fn() { paragraph }) |> ignore }, from=Unanchored)
+        })
+        |> ignore
+      },
+      from=Unanchored,
+    )
+  })
+  open_it(t)
+  t.run_for(@ui.move_most_ms)
+  tall.set(true)
+  let at = t.time() + into
+  match step {
+    Some(ms) =>
+      while t.time() + ms <= at + 0.001 {
+        t.frame(ms~)
+      }
+    None => t.run_for(into)
+  }
+  t.tap_text("看详情")
+  let from = t.time()
+  let tops = []
+  for ms in sink_moments {
+    t.run_for(from + ms - t.time())
+    tops.push(one_sheet(t).0)
+  }
+  tops
+}
+
+///|
+test "a sheet of nodes closed for a step further in as what it holds grows: the step the same whatever frames were drawn before it" {
+  if @ui.test_at_a_rate() {
+    return
+  }
+  // (three frames of 60 a second, six of 120: the press at the same moment however they fall, what it holds rising
+  // fast then)
+  let into = 3.0 * 1000.0 / 60.0
+  let jumped = cause_own_tops(None, into)
+  for ms in [1000.0 / 60.0, 1000.0 / 120.0] {
+    let walked = cause_own_tops(Some(ms), into)
+    for i in 0..<jumped.length() {
+      assert_true((jumped[i] - walked[i]).abs() < 1.0e-9, msg="frames \{ms} ms apart: \{walked} against \{jumped}")
+    }
+  }
+}
