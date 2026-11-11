@@ -5,11 +5,13 @@ import { test } from "node:test";
 import { dbName, holds } from "../src/data.ts";
 import { overviewPartOf, overviewRowOf } from "../src/db/schema.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import type { Topic } from "../src/protocol.ts";
+import { parseTopic, type Topic } from "../src/protocol.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { work, workSince } from "../src/work.ts";
+import { apply, call, subscribe, v } from "./helpers.ts";
 import { held } from "./real-size-asked.ts";
 import { CHAT, OPENS, fixture } from "./real-size.ts";
+import { started } from "./station-fixture.ts";
 import { setup, ui } from "./views-rig.ts";
 
 holdLanguage();
@@ -98,4 +100,35 @@ test("a_chat_opens_the_same_on_a_database_from_before_its_part_and_while_a_core_
   t.store.runner.shutdown();
   assert.deepEqual([made.overviewsRead, made.overviews], [0, 0]);
   assert.deepEqual(u.value, kept.value);
+});
+
+test("a_chat_shown_is_not_made_again_as_a_switch_of_workspace_commits_onto_it", async () => {
+  // As the app commits a switch of workspace that lands on a chat (apps/mbui/core/wsswitch.m `commit`), it writes the
+  // workspace to the prefs and tells the core where its focus is, twice. The chat read the prefs whole, and its UIs'
+  // focus with what it was made of: each made it again (3-6 ms in Hermes), the same.
+  const { host, core } = await started();
+  const client = core.connect();
+  const values = new Map();
+  const asked = (id: number, topic: Topic) => subscribe(core, client, id, parseTopic(topic)!);
+  asked(1, { topic: "chat", station: "ws/st", session: "k1", compact: true });
+  await host.settle();
+  apply(host, values);
+  const shown = JSON.stringify(v(values, 1));
+  assert.equal(v(values, 1).messages.length, 3);
+  const before = { ...work };
+  call(core, client, 2, "prefs.set", { workspace: "w2" });
+  call(core, client, 3, "client.focus", { visible: true, focused: true, workspace: "ws" });
+  asked(4, { topic: "chatJobs", station: "ws/st", session: "k1", summary: true, compact: true });
+  call(core, client, 5, "chat.place", { station: "ws/st", thread: 7 });
+  call(core, client, 6, "client.focus", { chat: { station: "ws/st", session: "k1", thread: 7, end: true, seen: 3 } });
+  await host.settle();
+  assert.equal(workSince(before).chats, 0, "not made again");
+  assert.ok(!host.takeEmitted().some(([, m]) => (m as { id?: number }).id === 1), "nothing sent of it");
+  // What it is made of changed: made again.
+  call(core, client, 7, "prefs.set", { chatTabs: { "ws/st:k1": { tabs: ["jobs"], active: "jobs" } } });
+  await host.settle();
+  apply(host, values);
+  assert.equal(workSince(before).chats, 1);
+  assert.notEqual(JSON.stringify(v(values, 1)), shown);
+  core.close();
 });

@@ -117,6 +117,12 @@ const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
 /// The viewer's `archiveHint` of the prefs (an error: none): what the chat list reads of them, made again only as it
 /// changes, not as the app writes another pref (`workspace`, at every switch of workspace).
 const archiveHintIn = (v: Value | undefined): ArchiveHint => archiveHintOf(v !== undefined && "ok" in v ? (v.ok ?? null) : null);
+/// What a chat's page reads of the prefs (its side panel's tabs, the station updates let be), so that another of them
+/// written (the workspace, at every switch of it) makes no chat again.
+const chatPrefsIn = (v: Value | undefined): J => {
+  const prefs = v !== undefined && "ok" in v ? v.ok : null;
+  return { chatTabs: get(prefs, "chatTabs"), stationUpdatesDismissed: get(prefs, "stationUpdatesDismissed") };
+};
 const profileOverview = (v: Value | undefined): J => v && "ok" in v ? v.ok : undefined;
 const sameProfileOverview = (a: J, b: J): boolean => {
   if (!isObject(a) || !isObject(b)) return equal(a, b);
@@ -1468,7 +1474,7 @@ export class Views implements Owner {
     const station = view.station as string;
     if (isObject(v.link)) v.connection = looks.linkShown(v.link, this.stationName(station));
     const overview = this.#chatOverview(station);
-    const prefs = this.ok({ topic: "prefs" }) ?? null;
+    const prefs = this.prefsPart(chatPrefsIn);
     const workspace = this.ok({ topic: "workspace", workspace: ofAddress(station) }) ?? null;
     const role = get(workspace, "role");
     const manager = role === "owner" || role === "admin";
@@ -1577,6 +1583,7 @@ export class Views implements Owner {
       case "connectCandidates":
         return this.#connectOf(view.scope as string, view.station as string, view.id as string, "candidates");
       case "chat": {
+        work.chats++;
         const station = view.station as string;
         // (its agents' Markdown read once on the device: kept by the chat it is read for)
         const draw = <V extends Value | undefined>(out: V) => {

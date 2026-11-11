@@ -274,6 +274,7 @@ export class Core {
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
+      inner.router.attends = (topic) => topic.topic === "chat";
       inner.attention.install();
       inner.choose = installChoose(inner);
       installShareIn(inner);
