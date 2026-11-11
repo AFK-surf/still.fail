@@ -7487,9 +7487,57 @@ fn Tree::swapped(self : Tree, v : View, going : Bool) -> Swap? {
   let now = self.cause_now()
   self.swaps.retain(fn(w) { w.at == now && w.node.alive() })
   let col = self.column_of(v.at)
-  match self.swaps.search_by(fn(w) { w.going == going && w.column == col }) {
+  // (only one next to it: one with something laid out between them is in no place of its, each making its own way)
+  match
+    self.swaps.search_by(fn(w) {
+      w.going == going && w.column == col && self.next_in_column(col, w.node.at, v.at)
+    }) {
     Some(i) => Some(self.swaps.remove(i))
     None => None
+  }
+}
+
+///|
+/// Whether nodes `a` and `b`, laid out in column `col` (past the slots holding them), stand next to each other in it:
+/// nothing of the column laid out between them that takes room (a box over what holds it, or a slot holding none such,
+/// is none).
+fn Tree::next_in_column(self : Tree, col : Int, a : Int, b : Int) -> Bool {
+  // (each as the column's own item: the slot holding it there, or it)
+  let item = fn(at : Int) {
+    let mut q = at
+    while q >= 0 && self.nodes[q].parent != col {
+      q = self.nodes[q].parent
+    }
+    q
+  }
+  let (ia, ib) = (item(a), item(b))
+  guard ia >= 0 && ib >= 0 else { return false }
+  let kids = self.nodes[col].kids
+  match (kids.search(ia), kids.search(ib)) {
+    (Some(i), Some(j)) => {
+      let (lo, hi) = if i < j { (i, j) } else { (j, i) }
+      for k in (lo + 1)..<hi {
+        if self.takes_room(kids[k]) {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Whether node `at` takes room in the column laying it out: a slot, as what it holds does; else unless it is over what
+/// holds it.
+fn Tree::takes_room(self : Tree, at : Int) -> Bool {
+  let n = self.nodes[at]
+  if !n.live {
+    false
+  } else if n.slot {
+    n.kids.iter().any(fn(k) { self.takes_room(k) })
+  } else {
+    n.flex.style.position != @flex.PositionType::Absolute
   }
 }
 
