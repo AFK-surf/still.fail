@@ -13,6 +13,11 @@ fn main {
     @film.run_bench(fn(_) {  }, tree=fn(root) { list_scene(root, list_scene_keys(mode)) })
     return
   }
+  // (a plain column alone, its rows 17 or 170: col_scene.mbt)
+  if mode.has_prefix("col:") {
+    @film.run_bench(fn(_) {  }, tree=fn(root) { col_scene(root, col_scene_rows(mode)) })
+    return
+  }
   let dark = @film.arg("MBUI_DARK") == "1"
   // (the app made as sffix makes it, at the Tester's first frame: the code face it carries given then, to the
   // Tester's text, which is this Mac's)

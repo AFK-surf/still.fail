@@ -28,7 +28,9 @@ type type chat-long 390x844
 table scroll-table chat-md 390x844
 send send chat-done-live 390x844
 list30 list list:30 390x844
-list1500 list list:1500 390x844"
+list1500 list list:1500 390x844
+col17 col col:17 390x844
+col170 col col:170 390x844"
 gas() { "$MBUI_DIR/scripts/wasmgas" "$@"; }
 if [ "${1:-run}" = compare ]; then
   [ $# = 3 ] || { echo 'instrbench.sh compare BEFORE_OUT AFTER_OUT' >&2; exit 2; }
