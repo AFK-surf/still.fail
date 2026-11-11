@@ -1120,8 +1120,8 @@ export class Data {
     return this.of(station)?.overviewPart(station);
   }
 
-  /// What a station's row reads of its overview (account.ts overviewRow), kept beside it with the list's part: read in
-  /// a computed, it is made again only as that changes.
+  /// What a station's row reads of its overview (account.ts overviewRow), kept beside it apart from the list's part:
+  /// read in a computed, it is made again only as that changes.
   overviewRow(station: string): unknown {
     this.#readQuery({ topic: "$overview-row", station });
     return this.of(station)?.overviewRow(station);

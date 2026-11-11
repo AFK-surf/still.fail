@@ -172,9 +172,7 @@ export function ensureSaid(sql: Sql): void {
 /// What the chat list reads of a station's overview, the JSON `j` (views.ts #chats), as SQL: who the viewer is in Slack
 /// (`slackUsers`, its strings), each connect's id, kind, connection state and Slack workspace and Feishu domain (a row's
 /// signature, its menu's links there; one not an object as it is), and how many agents its station runs (`running`, its
-/// state's line and the glyph's count). A field not there is null. And what a station's row reads of it (`row`: views.ts
-/// rowOf, OverviewRow): its `viewer` and `counts`, its `disk` and `drive` where they are not null, each as the overview has
-/// it, one absent left out; null where the overview is not an object. Made by SQLite itself, so that the triggers below
+/// state's line and the glyph's count). A field not there is null. Made by SQLite itself, so that the triggers below
 /// keep it whoever writes the overview; `ORDER BY` keeps each list in its order; json() takes a subquery's answer as
 /// JSON again (a scalar subquery loses that it is, and would be put in as a string). `j` is qualified by its table:
 /// json_each has a hidden column `json` of its own.
@@ -194,11 +192,17 @@ export const overviewPartOf = (j: string) => `json_object(
           THEN json_object('domain', c.value -> '$.feishu.domain')
           ELSE c.value -> '$.feishu' END)
       ELSE ${j} -> c.fullkey END ORDER BY c.key) FROM json_each(${j}, '$.connects') AS c))
-    ELSE json_array() END,
-  'row', CASE WHEN json_type(${j}) = 'object'
+    ELSE json_array() END)`;
+
+/// What a station's row reads of its overview, the JSON `j` (views.ts rowOf, OverviewRow), as SQL: its `viewer` and
+/// `counts`, its `disk` and `drive` where they are not null, each as the overview has it, one absent left out; NULL
+/// where the overview is not an object. Kept apart from the chat list's part (`station_part.row`), which the list reads
+/// and parses for every station of a workspace as it is first shown: the row's fields in it made that 1.4-1.7 KB a
+/// station for 0.8-1.1 KB (the real-size workspace), and the list's first answer later by as much.
+export const overviewRowOf = (j: string) => `CASE WHEN json_type(${j}) = 'object'
     THEN json((SELECT json_group_object(o.key, ${j} -> o.fullkey) FROM json_each(${j}) AS o
       WHERE o.key IN ('viewer', 'counts') OR (o.key IN ('disk', 'drive') AND o.type <> 'null')))
-    END)`;
+    END`;
 
 /// The triggers keeping each overview's part (station_part) and dropping its readers' verdicts (station_fit) as it
 /// changes or goes, whoever writes it, by name, as sqlite_master keeps them (no `IF NOT EXISTS`: SQLite keeps the
@@ -207,12 +211,12 @@ const overviewTriggers = (): [string, string][] => [
   ["station_part_put", `CREATE TRIGGER station_part_put AFTER INSERT ON station WHEN new.kind = 'overview'
       BEGIN
         DELETE FROM station_part WHERE address = new.address;
-        INSERT INTO station_part (address, part) SELECT new.address, ${overviewPartOf("new.json")} WHERE json_valid(new.json);
+        INSERT INTO station_part (address, part, row) SELECT new.address, ${overviewPartOf("new.json")}, ${overviewRowOf("new.json")} WHERE json_valid(new.json);
       END`],
   ["station_part_set", `CREATE TRIGGER station_part_set AFTER UPDATE OF json ON station WHEN new.kind = 'overview' AND old.json IS NOT new.json
       BEGIN
         DELETE FROM station_part WHERE address = new.address;
-        INSERT INTO station_part (address, part) SELECT new.address, ${overviewPartOf("new.json")} WHERE json_valid(new.json);
+        INSERT INTO station_part (address, part, row) SELECT new.address, ${overviewPartOf("new.json")}, ${overviewRowOf("new.json")} WHERE json_valid(new.json);
       END`],
   ["station_part_drop", `CREATE TRIGGER station_part_drop AFTER DELETE ON station WHEN old.kind = 'overview'
       BEGIN
@@ -235,26 +239,32 @@ const overviewTriggers = (): [string, string][] => [
 /// A statement as compared with sqlite_master's: its spaces and line breaks one space.
 const spaced = (s: string) => s.replace(/\s+/g, " ").trim();
 
-/// Each station's overview's part the chat list and a station's row read (overviewPartOf), beside it in a table of its
-/// own: they read a few hundred bytes, not an overview of some 150 KB (nor walk its pages to a column after it). Kept by
-/// triggers on `station`, as `said` is, so a core that knows nothing of it (a web page still open from before, an app put
-/// back to an older one) keeps it too: nothing it holds is older than its overview. And whether this core can read each
-/// overview (`station_fit`), judged as it is written (account.ts #overviewWritten) by the id of the shapes that judged
-/// it (views.ts OVERVIEW_FIT), dropped by triggers as the overview changes or goes, whoever writes it, so a core that
-/// knows nothing of it leaves no verdict on an overview it wrote. Made where missing at every open, as `said`; a
-/// trigger whose statement is not this core's (an earlier core's part, without the row's) made again, and every part
-/// with it; overviews from before get theirs at once, SQLite reading them itself (no overview crosses to the core). An
-/// older core opening the database after keeps these triggers (it makes its own only where they are missing) and reads
-/// of a part the fields it knows.
+/// Each station's overview's part the chat list reads (overviewPartOf) and what a station's row reads (overviewRowOf,
+/// its own column), beside it in a table of its own: they read a few hundred bytes, not an overview of some 150 KB (nor
+/// walk its pages to a column after it). Kept by triggers on `station`, as `said` is, so a core that knows nothing of it
+/// (a web page still open from before, an app put back to an older one) keeps it too: nothing it holds is older than
+/// its overview. And whether this core can read each overview (`station_fit`), judged as it is written (account.ts
+/// #overviewWritten) by the id of the shapes that judged it (views.ts OVERVIEW_FIT), dropped by triggers as the overview
+/// changes or goes, whoever writes it, so a core that knows nothing of it leaves no verdict on an overview it wrote.
+/// Made where missing at every open, as `said`; a trigger whose statement is not this core's (an earlier core's,
+/// without the row's) made again, the row's column added where it is not there, and every part made again with them;
+/// overviews from before get theirs at once, SQLite reading them itself (no overview crosses to the core). An older
+/// core opening the database after keeps these triggers (it makes its own only where they are missing) and reads of a
+/// part the fields it knows (its `part`, as it was).
 export function ensureOverviewParts(sql: Sql): void {
   sql.exec("BEGIN IMMEDIATE");
   try {
     sql.exec(`
-      CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL, row TEXT);
       CREATE TABLE IF NOT EXISTS station_fit (address TEXT NOT NULL, shapes TEXT NOT NULL, readable INTEGER NOT NULL, PRIMARY KEY (address, shapes)) WITHOUT ROWID;
     `);
     const had = new Map(sql.all("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'station'").map((r) => [String(r[0]), String(r[1])]));
     let remade = false;
+    // (a table an earlier core made: the row's column added, every part made again with it)
+    if (!sql.all("PRAGMA table_info(station_part)").some((r) => r[1] === "row")) {
+      sql.exec("ALTER TABLE station_part ADD COLUMN row TEXT");
+      remade = true;
+    }
     for (const [name, statement] of overviewTriggers()) {
       const was = had.get(name);
       if (was !== undefined && spaced(was) === spaced(statement)) continue;
@@ -269,7 +279,7 @@ export function ensureOverviewParts(sql: Sql): void {
     // (asked first by the rows' keys alone: an overview is read only where its part is missing)
     const missing = sql.all("SELECT s.address FROM station s WHERE s.kind = 'overview' AND NOT EXISTS (SELECT 1 FROM station_part p WHERE p.address = s.address)");
     for (const [address] of missing) {
-      sql.run(`INSERT INTO station_part (address, part) SELECT st.address, ${overviewPartOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [address]);
+      sql.run(`INSERT INTO station_part (address, part, row) SELECT st.address, ${overviewPartOf("st.json")}, ${overviewRowOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [address]);
     }
     sql.exec("COMMIT");
   } catch (e) {

@@ -1739,12 +1739,12 @@ test("a_verdict_kept_under_other_shapes_is_not_this_cores", async () => {
 test("a_database_from_before_the_rows_part_and_verdicts_is_brought_to_them_and_lists_the_same_stations", async () => {
   const first = await stationsFirst();
   const sql = first.t.host.sqls.get(dbName("s1"))!;
-  // As a core before them left it: no verdicts, the parts of the chat list alone, kept by its triggers.
-  const before = (j: string) => overviewPartOf(j).replace(/,\s*'row',[\s\S]*END\)$/, ")");
-  assert.notEqual(before("new.json"), overviewPartOf("new.json"));
+  // As a core before them left it: no verdicts, the parts of the chat list alone (no row's column), kept by its triggers.
+  const before = overviewPartOf;
   sql.exec(`
     DROP TRIGGER station_fit_put; DROP TRIGGER station_fit_set; DROP TRIGGER station_fit_drop; DROP TABLE station_fit;
-    DROP TRIGGER station_part_put; DROP TRIGGER station_part_set; DROP TRIGGER station_part_drop; DELETE FROM station_part;
+    DROP TRIGGER station_part_put; DROP TRIGGER station_part_set; DROP TRIGGER station_part_drop; DROP TABLE station_part;
+    CREATE TABLE station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL);
     CREATE TRIGGER IF NOT EXISTS station_part_put AFTER INSERT ON station WHEN new.kind = 'overview'
     BEGIN
       DELETE FROM station_part WHERE address = new.address;
@@ -1761,22 +1761,23 @@ test("a_database_from_before_the_rows_part_and_verdicts_is_brought_to_them_and_l
     END;
     INSERT INTO station_part (address, part) SELECT st.address, ${before("st.json")} FROM station AS st WHERE st.kind = 'overview';
   `);
-  const parts = () => sql.all("SELECT address, json_type(part, '$.row') FROM station_part ORDER BY address").map((r: J) => `${r[0]} ${r[1]}`);
-  // (no row: json_type of a path not there is NULL)
-  assert.deepEqual(parts(), ["ws/a null", "ws/b null", "ws/c null"]);
+  const parts = () => sql.all("SELECT address, json_type(row) FROM station_part ORDER BY address").map((r: J) => `${r[0]} ${r[1]}`);
+  const partsBefore = sql.all("SELECT address, part FROM station_part ORDER BY address");
   const again = await stationsAnew(first.t);
   // Brought to them as it opened, at its version (a core before them still writes it): the triggers made again, every
   // part with them, by SQLite.
   assert.equal(sql.all("PRAGMA user_version")[0][0], VERSION);
   assert.deepEqual(parts(), ["ws/a object", "ws/b object", "ws/c object"]);
-  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("'row'"));
+  // (what the chat list reads, and an older core reads, as it was)
+  assert.deepEqual(sql.all("SELECT address, part FROM station_part ORDER BY address"), partsBefore);
+  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row)"));
   assert.equal(again.made.overviewsRead, 3, "read only to be judged");
   assert.deepEqual(rowsOf(again.list), rowsOf(first.list));
   await again.t.host.time.pass(100);
   assert.deepEqual(verdicts(again.t), ["ws/a this 1", "ws/b this 1", "ws/c this 0"]);
   // A core before them writing an overview: its part made with the row all the same (the triggers are this core's).
   sql.run("UPDATE station SET json = ? WHERE address = 'ws/b' AND kind = 'overview'", [JSON.stringify(busyOverview(20, false, 6))]);
-  assert.equal(sql.all("SELECT part -> '$.row.counts.running' FROM station_part WHERE address = 'ws/b'")[0][0], "6");
+  assert.equal(sql.all("SELECT row -> '$.counts.running' FROM station_part WHERE address = 'ws/b'")[0][0], "6");
 });
 
 test("a_verdict_goes_as_its_overview_changes_or_goes_whoever_writes_it", async () => {

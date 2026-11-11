@@ -336,9 +336,9 @@ function firstRows(chats: J, window: number): J {
 /// The chats' rail card reads the list as it is: it counts by each row's `state` alone.
 const wholeRows = (chats: J): J => firstRows(chats, Infinity);
 
-/// What a station's row reads of its overview (OverviewRow), of what the database keeps of it beside it (the part's
-/// `row`: db/schema.ts overviewPartOf, those four as the overview has them): its row is made again only as these change,
-/// not with each of its profiles' quota or its decisions.
+/// What a station's row reads of its overview (OverviewRow), of what the database keeps of it beside it
+/// (`station_part.row`: db/schema.ts overviewRowOf, those four as the overview has them): its row is made again only as
+/// these change, not with each of its profiles' quota or its decisions.
 const rowOf = (o: J): J => ({ viewer: o.viewer, counts: o.counts, ...(o.disk != null ? { disk: o.disk } : {}), ...(o.drive != null ? { drive: o.drive } : {}) });
 
 /// How an overview's verdict is judged (`unreadable`: decorated, then put through `Overview`): another number whenever
