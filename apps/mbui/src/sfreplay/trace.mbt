@@ -3,6 +3,7 @@
 /// read as the test runs. Read, not compiled in: as constants they were every flow test's program's data (17 MB of a
 /// test's 25 MB data.c, all 78 traces in each), compiled again for each test and on any change.
 pub fn trace(name : String) -> String {
+  pass_trace.val = name
   // (a trace a flow plays has its bar of what the core sent for its subscriptions, where the bars are said:
   // topic_bytes.mbt)
   if !tape_bars.is_empty() && !tape_bars.contains(name) {

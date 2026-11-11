@@ -199,7 +199,26 @@ fn looks_fail(s : String) -> Unit {
   let said = "a frame not built whole (frame_watch.mbt), the Tester made at \{looks_made_at.val}: " +
     s +
     " (built whole last at \{looks_base.built_at.to_int()} ms\{if wall_read.val { "; the time of day read as it was built" } else { "" }}; what is said to move: \{g().moving_now().join("; ")})"
+  if looks_unjudged.val {
+    return
+  }
   @halt.saying(said)
+}
+
+///|
+/// Whether this Tester's frames are not judged (a frame not built whole, how what moves goes): a run whose frames are
+/// only the way to what it tells its core (sfreplay's pace passes, held to their strict pass's messages), every other
+/// run judging them.
+// kept across runs: set by the Tester that asks it (Tester::frames_unjudged), off as each Tester is made
+let looks_unjudged : Ref[Bool] = Ref(false)
+
+///|
+/// This Tester's frames not judged (looks_unjudged): `on` for its run.
+pub fn Tester::frames_unjudged(self : Tester, on : Bool) -> Unit {
+  looks_unjudged.val = on
+  if on {
+    self.motion = Results
+  }
 }
 
 ///|

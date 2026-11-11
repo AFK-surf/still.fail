@@ -293,8 +293,34 @@ pub fn app_version() -> Int {
 }
 
 ///|
+/// What has said the host's settings are the run's, given before its first frame (an app's replay of a recorded run:
+/// its trace's `{"settings":…}`), "" none: a Tester's setter of one of them after that stops, saying where it goes.
+// kept across runs: put back by each Tester (Tester::new)
+let host_settings_given : Ref[String] = Ref("")
+
+///|
+/// The host's settings (dark, the size of words, the window's buttons in its top row, maximized, motion and
+/// transparency reduced, something reading the widgets out) are `by`'s from here on, given before the first frame: a
+/// setter of them after this stops (`Time is declared`: a run's host's settings are its trace's, not a test's change
+/// after it started, whose frame would fall where the frames happen to).
+pub fn Tester::host_settings_from(self : Tester, by : String) -> Unit {
+  ignore(self)
+  host_settings_given.val = by
+}
+
+///|
+fn host_setting_set(what : String) -> Unit {
+  if host_settings_given.val != "" {
+    @halt.saying(
+      "Tester::\{what} after the run started: the host's settings are \{host_settings_given.val}'s, given before its first frame; say it there",
+    )
+  }
+}
+
+///|
 /// The system set to dark or light from the next frame on.
 pub fn Tester::set_dark(self : Tester, dark : Bool) -> Unit {
+  host_setting_set("set_dark")
   self.fake.dark = dark
   self.fake.wants = true
 }
@@ -302,6 +328,7 @@ pub fn Tester::set_dark(self : Tester, dark : Bool) -> Unit {
 ///|
 /// The system's size of words (as Android's fontScale), from the next frame on.
 pub fn Tester::set_font_scale(self : Tester, scale : Double) -> Unit {
+  host_setting_set("set_font_scale")
   self.fake.font_scale = scale
   self.fake.wants = true
 }
@@ -323,6 +350,7 @@ pub fn Tester::window_buttons_down(self : Tester) -> (Double, Double) {
 ///|
 /// The window's buttons in the app's top row, or not (full screen), from the next frame on.
 pub fn Tester::set_window_inset(self : Tester, inset : Bool) -> Unit {
+  host_setting_set("set_window_inset")
   self.fake.inset = inset
   self.fake.wants = true
 }

@@ -67,9 +67,15 @@ fn flag(params : Json, key : String) -> Bool {
 }
 
 ///|
+/// Whether an answer not kept is said for scripts/kept to keep (`kept-answers-ask`): not in a replay's pace pass, whose
+/// asks are the strict pass's or a finding of its own (said `PACE-UNKEPT`), never the run's to keep.
+// kept across runs: set as each replay's pass begins (sfreplay's Flow::start)
+pub let asks_kept : Ref[Bool] = Ref(true)
+
+///|
 /// An answer not kept: said on the output for scripts/kept, an error for the asker.
 fn not_kept(ask : Map[String, Json]) -> Result[(Json, Bytes?), Json]? {
-  println("kept-answers-ask " + Json::object(ask).stringify())
+  println((if asks_kept.val { "kept-answers-ask " } else { "PACE-UNKEPT " }) + Json::object(ask).stringify())
   Some(Err({ "code": "not_kept", "message": "the core's answer to \{ask.get("call").unwrap()} is not kept: apps/mbui/scripts/kept" }))
 }
 

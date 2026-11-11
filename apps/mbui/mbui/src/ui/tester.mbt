@@ -25,10 +25,13 @@ pub struct Tester {
   /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
   mut on_way : Bool
   /// whether how what moves goes is judged on those frames too (MBUI_TEST_MOTION: test_motion_judged)
-  motion : MotionJudged
+  mut motion : MotionJudged
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
+  /// when the next input comes, as a run's script gave it (Tester::inputs_next; +inf: none said): a host's frames after
+  /// it not drawn ahead of it, what is owed then left to be drawn on the way to it and after
+  mut inputs_next : Double
   /// what the test looks at after each frame it draws, as it is drawn (Tester::each_frame): a frame an input's draw
   /// passes over on its way (the one that takes it, before the ones after) seen too
   mut each : (() -> Unit)?
@@ -330,6 +333,8 @@ pub fn Tester::new(
   keeps_sources? : Bool = true,
   loc~ : SourceLoc,
 ) -> Tester {
+  host_settings_given.val = ""
+  frames_by_clock_on.val = false
   let f = {
     time,
     late: 0.0,
@@ -524,6 +529,7 @@ pub fn Tester::new(
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  looks_unjudged.val = false
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)
@@ -557,7 +563,7 @@ pub fn Tester::new(
   }
   let between = test_frames_between()
   tester_rested.clear()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, each: None, before }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -692,6 +698,10 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 /// A run that judges motion (MBUI_TEST_MOTION, test_motion_judged) judges those too, at a display's rate (60 a second
 /// or more): every frame a host at that rate draws while something moves.
 pub fn Tester::judges_motion(self : Tester) -> Bool {
+  // (a run whose frames are not judged: Tester::frames_unjudged)
+  if looks_unjudged.val {
+    return false
+  }
   if self.between > 0.0 {
     // (a run at a rate: none of its frames where it holds results only, its other frames (an input's, what is due)
     // not the default run's either; every one where it judges motion)
@@ -2062,6 +2072,7 @@ pub fn Tester::perf_said(self : Tester) -> (Array[Bool], Array[String]) {
 ///|
 /// The system asks for less transparency from now on, or no longer.
 pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
+  host_setting_set("set_reduce_transparency")
   self.fake.reduce_transparency = on
 }
 
@@ -2930,6 +2941,7 @@ pub fn Tester::window_snap_rect(self : Tester) -> (Double, Double, Double, Doubl
 ///|
 /// The window maximized or not, from the next frame on (@hostapi.window_zoomed).
 pub fn Tester::set_window_zoomed(self : Tester, zoomed : Bool) -> Unit {
+  host_setting_set("set_window_zoomed")
   self.fake.zoomed = zoomed
   self.fake.wants = true
 }

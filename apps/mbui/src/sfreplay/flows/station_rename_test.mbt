@@ -32,8 +32,8 @@ test "35-station-rename" {
     }
     // 已重命名 said for its time from the frame that took the last rename's answer, then gone (at a slower pace the name
     // can come after its time is out: it is going or gone by then)
-    let from = f.answer_taken("workspace.renameStation")
-    assert_true(from >= 0.0)
+    let from = f.measured(f.answer_taken("workspace.renameStation"))
+    f.check(from >= 0.0, "the rename's answer not taken")
     let out = from + @sfapp.toast_ms
     if f.t.time() < out {
       f.run_for(out - f.t.time())
