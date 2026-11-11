@@ -53,6 +53,8 @@ fn working_clock_words(since : Double, most : Double?, now : Double) -> String {
 /// its key in `steadies` (the row come into its list at `came`, None: there as the chat opened), its clock from then
 /// (seen from `came` over row_size_ms); the line pressed opens its history beside the chat; where the chat has more
 /// than one agent, its stop under the pointer (session.stop). Read out as who and what it does.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn working_said_node(
   v : @view.View,
   src : Source,
@@ -75,7 +77,7 @@ fn working_said_node(
   message_row_frame_node(v, key, side, top, over~, fn(r) {
     r.box(fn(area) {
       @sf.style_node(area, fn() { activity_row_box })
-      let line = area.box(fn(line) {
+      let _ = area.box(fn(line) {
         @sf.style_node(line, fn() { if message_inline(here) { activity_line_narrow } else { activity_line } })
         line.says(By(fn() { Some(@view.said(Button, label=a().who + "：" + said().words)) })) |> ignore
         @sf.presses_node(line, fn() {

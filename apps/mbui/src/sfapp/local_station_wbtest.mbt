@@ -52,7 +52,7 @@ test "添加这台 Mac in a workspace in safe mode: the installer is handed the 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       if name == "workspace.enroll" {
         // (as the core's views/lock.ts `enrolled` answers in a locked workspace)
         done(Ok({ "token": "made-up", "lock": Json::string(hash) }))

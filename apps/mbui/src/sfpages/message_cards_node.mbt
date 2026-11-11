@@ -35,6 +35,8 @@ fn in_place_of(m : Message) -> InPlace {
 ///|
 /// Post `m`'s request as its card in place of its words (prose_with_files' cards, as nodes) in `v`, of the chat `here`
 /// is, answered with `core` (None where nothing is answered); nothing where it has none.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn message_card_node(v : @view.View, here : MessageNodeHere, core : @settings.Core?, m : () -> Message) -> Unit {
   v.pick(fn() { in_place_of(m()) }, fn(p, k) {
     match k {

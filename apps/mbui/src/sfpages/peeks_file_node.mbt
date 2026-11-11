@@ -18,6 +18,8 @@ priv enum FileShows {
 /// `station` names, as `read` reads it (`filePeek`, held by whoever holds the card): in its bones while it is read and
 /// the picture it names comes (@sfbase.file_peek_picture_told: told as it comes, asked as the file is read, never as a
 /// binding runs), why not where it is refused, else as it is read.
+// a hover card as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn file_card_node(
   parent : @view.View,
   src : Source,

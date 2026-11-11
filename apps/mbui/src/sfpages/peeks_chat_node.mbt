@@ -19,6 +19,8 @@ priv enum ChatShows {
 /// What a chat's card holds (chat_card's) in `parent`: the chat `href` names (as it is now), read in a chat of station
 /// `here` (chat_named: asked once each, as it is made or its link changes, never as it is drawn); `linked`, the chat as
 /// its message says it. The message it names read for `scope` (let go of with it by whoever holds the card).
+// a hover card as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn chat_card_node(
   parent : @view.View,
   src : Source,

@@ -36,6 +36,8 @@ fn outbox_under(o : Outgoing) -> OutboxUnder {
 /// in their bubble; under them what outbox_under says, one in the other's place: 正在发送 seen once it has been on its
 /// way sending_shows_ms from `since` (when it was sent, a moment of the frames' clock: the caller's, sending_line_node)
 /// and not while its words fly here (`flying`: the list's); its time; what did not go (outbox_unsent_node).
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn outbox_said_node(
   v : @view.View,
   src : Source,
