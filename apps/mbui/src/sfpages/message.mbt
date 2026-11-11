@@ -466,10 +466,10 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     Some(s) => {
       let id = c.id("msg-time/" + key)
       c.on_press(id, fn() {
-        absolute_times.val = !absolute_times.val
+        absolute_times.set(!absolute_times.get())
       })
-      @sf.tip(c, "msg-time/" + key, id, if absolute_times.val { s.ago } else { s.full })
-      c.box(id~, keep=true, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
+      @sf.tip(c, "msg-time/" + key, id, if absolute_times.get() { s.ago } else { s.full })
+      c.box(id~, keep=true, fn() { c.text(if absolute_times.get() { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
     }
   }
 }
