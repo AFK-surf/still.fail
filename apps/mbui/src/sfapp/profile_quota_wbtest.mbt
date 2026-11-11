@@ -245,7 +245,7 @@ fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String]
     if found.length() == 0 && i == titles.length() - 1 {
       return None
     }
-    guard found.length() > 0 else { abort("no \{title} in \{runs.map(fn(r) { r.text })}") }
+    guard found.length() > 0 else { @halt.saying("no \{title} in \{runs.map(fn(r) { r.text })}") }
     Some(found.fold(init=found[0], fn(a, r) { if r.x0 < a.x0 { r } else { a } }))
   })
   let tops = title_runs.map(fn(r) {

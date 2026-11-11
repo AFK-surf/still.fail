@@ -206,7 +206,7 @@ fn reset_globals() -> Unit {
   reset_drawing()
   let left = leaked_state()
   if left.length() > 0 {
-    abort("state kept from an earlier test: " + left.join(", "))
+    @halt.saying("state kept from an earlier test: " + left.join(", "))
   }
 }
 
@@ -862,8 +862,7 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
     if !(at > before) {
       let s = "Tester::set_frame_times: time \{i} (\{at}) is not later than " +
         (if i == 0 { "now (\{before})" } else { "the one before it (\{before})" })
-      println(s)
-      abort(s)
+      @halt.saying(s)
     }
     before = at
   }
@@ -1138,7 +1137,7 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
 pub fn Tester::tap_text(self : Tester, s : String) -> Unit {
   match self.find(s) {
     Some((x, y)) => self.tap(x, y)
-    None => abort("no text \"\{s}\" on screen")
+    None => @halt.saying("no text \"\{s}\" on screen")
   }
 }
 
@@ -1653,7 +1652,7 @@ fn Tester::list_state(self : Tester) -> ListState {
       }
     }
   }
-  abort("no list on screen")
+  @halt.saying("no list on screen")
 }
 
 ///|
@@ -1765,7 +1764,7 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
       if name.length() == 1 {
         key_of_char(name.iter().next().unwrap())
       } else {
-        abort("no key \{name}")
+        @halt.saying("no key \{name}")
       }
   }
   self.key(code)
@@ -2328,7 +2327,7 @@ fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
 pub fn Tester::tap_run(self : Tester, s : String) -> Unit {
   let rs = self.run_rects(s)
   if rs.length() == 0 {
-    abort("no rich text \"\{s}\" on screen")
+    @halt.saying("no rich text \"\{s}\" on screen")
   }
   let (x, y, w, h) = rs[0]
   self.tap(x + w / 2.0, y + h / 2.0)
@@ -3145,8 +3144,7 @@ fn Tester::hold_corners(self : Tester) -> Unit {
   }
   let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; the rule: mbui's src/ui/corners.mbt):\n" +
     faults.join("\n")
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }
 
 ///|

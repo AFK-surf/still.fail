@@ -361,6 +361,11 @@ fn lint_mbt(
     if c.is_def {
       continue
     }
+    // an abort of its own, in a test too: on wasm-gc its words are never printed (@halt.saying prints them first)
+    if c.name == "abort" &&
+      (c.kind == "bare" || (c.kind == "pkg" && c.qual == "@builtin")) {
+      add("abort-unsaid", c.at, f.line_text(c.at))
+    }
     let in_t = f.in_test(c.at)
     let item = c.item
     // 1. the app asks for a frame (bare: the framework's own, in its package: h_request_frame, hostread's

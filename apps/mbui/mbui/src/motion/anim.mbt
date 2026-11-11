@@ -302,8 +302,7 @@ pub fn Anim::animate(
       // 4066.666666666667 for 4066.6666666666665, from now)
       if at > c.moment() + @ui.same_moment_ms {
         let s = "Anim::animate: start_at \{at} is later than now (\{c.moment()}), told at \{loc}"
-        println(s)
-        abort(s)
+        @halt.saying(s)
       }
       if at > c.moment() {
         c.moment()

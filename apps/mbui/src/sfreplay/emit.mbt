@@ -140,7 +140,7 @@ fn emit_wait(ms : Double) -> Unit {
 fn page_name(page : @sfapp.Page) -> String {
   match page {
     Files => "files"
-    _ => abort("flow: no MBUI_OPEN_PAGE for this page")
+    _ => @halt.saying("flow: no MBUI_OPEN_PAGE for this page")
   }
 }
 

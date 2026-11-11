@@ -107,7 +107,7 @@ test "a state ask added without changing its words moves the ask to the state an
           Some(v) => v
           None => {
             let need = @sffixture.with_need(raw)
-            let obj = match need { Object(m) => m.copy(); _ => abort("chat is not an object") }
+            let obj = match need { Object(m) => m.copy(); _ => @halt.saying("chat is not an object") }
             let all = items(Some(need), "messages")
             obj["messages"] = Json::array([all[all.length() - 1]])
             obj["agents"] = Json::array([])
@@ -120,7 +120,7 @@ test "a state ask added without changing its words moves the ask to the state an
             v
           }
         }
-        let obj = match original { Object(m) => m.copy(); _ => abort("chat is not an object") }
+        let obj = match original { Object(m) => m.copy(); _ => @halt.saying("chat is not an object") }
         if !asking {
           obj.remove("stateAsk") |> ignore
         }

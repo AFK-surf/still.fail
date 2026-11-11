@@ -6,14 +6,14 @@ pub fn trace(name : String) -> String {
   // (a trace a flow plays has its bar of what the core sent for its subscriptions, where the bars are said:
   // topic_bytes.mbt)
   if !tape_bars.is_empty() && !tape_bars.contains(name) {
-    abort(
+    @halt.saying(
       "e2e/traces/\{name}.trace has no bar in src/sfreplay/flows/topic_bytes_known_test.mbt: say what its run was sent (the flows' test \"what the core sends…\" prints it)",
     )
   }
   match read_trace(name) {
     Some(t) => t
     None =>
-      abort(
+      @halt.saying(
         "no e2e/traces/\{name}.trace (looked under $MBUI_APP_MOD, the module this was built in, and up from here)",
       )
   }

@@ -25,7 +25,7 @@ let faults_said : Map[String, Bool] = {}
 /// A fault with no boundary round it known (said outside any node): stopped where faults stop, else told.
 pub fn fault(said : String) -> Unit {
   if faults_stop.val {
-    abort(said)
+    @halt.saying(said)
   }
   if !faults_said.contains(said) {
     faults_said[said] = true

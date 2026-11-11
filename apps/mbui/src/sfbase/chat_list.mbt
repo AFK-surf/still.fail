@@ -553,7 +553,7 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
       // the old subscription ends; a reader still in use obtains a new input on its next read.
       match was {
         Some(before) => { source: before.source, read: before.read, topic: before.topic, live }
-        None => abort("a chat input was left before it was read")
+        None => @halt.saying("a chat input was left before it was read")
       }
     } else {
       let (read, topic) = chat_read.read(src, chat_params(r))

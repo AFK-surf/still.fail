@@ -452,7 +452,7 @@ fn fixture_station_files(src : Source) -> Unit {
 /// The screen's file read (`json`, its text): its topics and calls as a source over the made-up one's other parts
 /// (pictures, files), and its pages opened over Home.
 pub fn fixture_json(json : String) -> Source {
-  let screen = @json.parse(json) catch { _ => abort("the screen's JSON does not parse") }
+  let screen = @json.parse(json) catch { _ => @halt.saying("the screen's JSON does not parse") }
   let topics : Array[(Json, Json)] = []
   for t in items(Some(screen), "topics") {
     match (field(Some(t), "topic"), field(Some(t), "value")) {

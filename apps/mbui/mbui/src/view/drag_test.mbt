@@ -25,7 +25,7 @@ test "held: down, moved anywhere, up: the node's, each at its own moment, in its
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.drag_at(id, Down, 10.0, 10.0, 100.0) |> ignore
   t.drag_at(id, Moved, 300.0, 500.0, 120.0) |> ignore
@@ -45,7 +45,7 @@ test "held, then let go of as the finger moves: told nothing more" {
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.drag_at(id, Down, 10.0, 10.0, 100.0) |> ignore
   there.set(false)
@@ -95,7 +95,7 @@ test "held, then what holds it takes no press (or it leaves): the hold called of
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
   on.set(false)
@@ -122,7 +122,7 @@ test "held, its events told inside another event: at that one's moment; where it
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.event(50.0, fn() { t.drag_at(id, Down, 10.0, 10.0, 100.0) |> ignore })
   pad.set(20.0)
@@ -158,7 +158,7 @@ fn gesture_tree(said : Array[String]) -> @view.Tree {
 fn gesture_id(t : @view.Tree) -> @view.NodeId {
   match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
 }
 
@@ -308,7 +308,7 @@ fn held_then_lost(how : String, frames : Array[Double]) -> Array[String] {
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.drag_at(id, Down, 10.0, 10.0, 0.0) |> ignore
   t.event(20.0, fn() { on.set(false) })
@@ -348,7 +348,7 @@ test "held, told inside an event whose change moved it, before it ended: where i
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.event(50.0, fn() {
     pad.set(20.0)
@@ -802,7 +802,7 @@ test "held by two fingers: each told how fast it goes by its own events alone, t
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 400.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.drag_at(id, Down, 10.0, 400.0, 100.0, finger=0) |> ignore
   t.drag_at(id, Down, 380.0, 800.0, 105.0, finger=1) |> ignore
@@ -837,7 +837,7 @@ test "how fast a finger went as of an event, asked after it moved on, is what it
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 400.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   // (slow, then fast, then a pause and on: each event's speed another)
   t.drag_at(id, Down, 10.0, 400.0, 100.0) |> ignore
@@ -857,7 +857,7 @@ test "held: the same finger down again while it holds: nothing told, how fast it
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 10.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.drag_at(id, Down, 10.0, 90.0, 100.0) |> ignore
   t.drag_at(id, Moved, 10.0, 70.0, 110.0) |> ignore
@@ -891,7 +891,7 @@ fn let_go_speed(covered : Bool) -> Double {
   t.frame(390.0, 844.0) |> ignore
   let id = match t.target_at(10.0, 400.0) {
     Dragged(id) => id
-    _ => abort("not held")
+    _ => @halt.saying("not held")
   }
   t.drag_at(id, Down, 10.0, 400.0, 0.0) |> ignore
   let steps = [(398.0, 8.0), (380.0, 16.0), (350.0, 22.0), (300.0, 30.0), (240.0, 36.0)]

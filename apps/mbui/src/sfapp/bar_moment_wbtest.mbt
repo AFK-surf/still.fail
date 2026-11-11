@@ -90,7 +90,7 @@ fn bar_place_with(action : String) -> String {
   }
   match places.iter().find_first(fn(p) { bar_action(src, ws, Some(p), bar_place_add(src, ws, Some(p))) == action }) {
     Some(p) => p
-    None => abort("no place of the bar offers \"\{action}\"")
+    None => @halt.saying("no place of the bar offers \"\{action}\"")
   }
 }
 
@@ -102,7 +102,7 @@ fn bar_after_place(place : String, frames : Array[Double]) -> (String, Double, D
   let (t, t0) = bar_at_rest()
   t.advance(between_frames_ms)
   if !@sfbase.go_place(place) {
-    abort("not gone to \{place}")
+    @halt.saying("not gone to \{place}")
   }
   for f in frames {
     t.frame_at(t0 + f)
@@ -483,7 +483,7 @@ fn bar_tap_landing(
   let sent = bar.ball_x.to + 22.0
   for f in frames {
     if f <= tap_held_ms {
-      abort("a frame at \{f} ms, before the tap was let go")
+      @halt.saying("a frame at \{f} ms, before the tap was let go")
     }
     t.frame_at(t1 + f)
   }
@@ -543,7 +543,7 @@ fn bar_chosen_bare(frames : Array[Double]) -> (Double, String??, Double, String?
   let t = tester("home")
   bars_picked.set(Some(([["chats", "files", "profiles", "stations"], ["stations", "archive"]], 0)))
   if !@sfbase.go_place("stations") {
-    abort("not gone to stations")
+    @halt.saying("not gone to stations")
   }
   t.draw()
   bar.jump()
@@ -553,7 +553,7 @@ fn bar_chosen_bare(frames : Array[Double]) -> (Double, String??, Double, String?
   bar.jump()
   t.draw()
   if !bar.mode.get() {
-    abort("the panel not open")
+    @halt.saying("the panel not open")
   }
   let (top, _) = bar_panel_at()
   bar_tap_landing(t, t.time() + between_frames_ms, 195.0, top + over + bar_row / 2.0, frames)

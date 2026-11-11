@@ -103,5 +103,5 @@ pub async fn[X] never() -> X noraise {
   while true {
     park()
   }
-  abort("unreachable")
+  @halt.saying("unreachable")
 }

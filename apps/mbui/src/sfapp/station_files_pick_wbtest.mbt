@@ -69,7 +69,7 @@ let pick_screens : Array[(Int, Bool)] = [(2, false), (0, false), (0, true)]
 fn pick_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words && w.5 > 0.0 }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 

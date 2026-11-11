@@ -325,8 +325,7 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
     if words_over.pairs.length() > bar {
       let said = "words over words while it moves (words_over.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{pair} at (\{x.round()}, \{y.round()}); \{words_over.pairs.length()} pairs now, \{bar} known in \{words_over.file}"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
   }
 }

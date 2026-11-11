@@ -127,7 +127,7 @@ test "scrolls: a hold on what it holds moved up past the slop its own (across, o
   let short = k.tree.claimer_of(k.tree.claimers_at(150.0, 120.0), 0.0, -5.0)
   let id = match k.tree.claimer_of(k.tree.claimers_at(150.0, 120.0), 0.0, -20.0) {
     Some(id) => id
-    None => abort("not taken over")
+    None => @halt.saying("not taken over")
   }
   // (taken over as it went up 20 from 160: past the slop of 8 by 12 then; on by 20 more)
   k.tree.drag_at(id, Down, 150.0, 160.0, 100.0) |> ignore
@@ -573,7 +573,7 @@ test "a column's bar: its thumb held and moved: the column moved as far as the t
   let (x, y, w, h, _) = thumb_drawn(tree).unwrap()
   let id = match tree.target_at(x + w / 2.0, y + h / 2.0) {
     Dragged(id) => id
-    _ => abort("the thumb takes no hold")
+    _ => @halt.saying("the thumb takes no hold")
   }
   let at = scroll.at(tree)
   tree.drag_at(id, Down, x + w / 2.0, y + h / 2.0, 310.0) |> ignore

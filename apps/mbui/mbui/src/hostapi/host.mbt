@@ -385,7 +385,7 @@ impl Host with mods_held(_) {
 
 ///|
 impl Host with run(_, _, _, _, _, _, _) {
-  abort("mbui: no host: an app's main imports mbui/host")
+  @halt.saying("mbui: no host: an app's main imports mbui/host")
 }
 
 ///|

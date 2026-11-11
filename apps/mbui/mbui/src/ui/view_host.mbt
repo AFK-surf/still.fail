@@ -2308,7 +2308,7 @@ fn Ctx::view_blit(
   let k = clip_top()
   // (each instance's numbers written unchecked, every one composed each frame: the room for them grown above, the
   // clip's level whole)
-  guard k >= 0 else { abort("view_blit: no clip pushed") }
+  guard k >= 0 else { @halt.saying("view_blit: no clip pushed") }
   for i in 0..<n {
     let b = at + i * inst_size
     s.unsafe_set(b, s.unsafe_get(b) + x)

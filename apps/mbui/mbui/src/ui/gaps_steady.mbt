@@ -234,8 +234,7 @@ fn Tester::hold_gaps_steady(self : Tester) -> Unit {
     if gaps_steady.found.length() > bar {
       let said = "gaps not steady (gaps_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{gaps_steady.found.length()} now, \{bar} known in \{gaps_steady.file}"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
   }
 }

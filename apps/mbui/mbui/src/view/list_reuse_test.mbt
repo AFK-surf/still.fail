@@ -34,7 +34,7 @@ fn reuse_case() -> ReuseCase {
           scroll,
           fn() { Array::makei(30, fn(i) { i }) },
           est=80.0,
-          fn(_, _) { abort("every block is of a kind another may take") },
+          fn(_, _) { @halt.saying("every block is of a kind another may take") },
           reused=fn(_) { Some(0) },
           make_reused=fn(b, key) {
             made.val = made.val + 1

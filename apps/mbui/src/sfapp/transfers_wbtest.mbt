@@ -113,7 +113,7 @@ fn calls_named(calls : Array[(String, Json)], name : String) -> Array[Json] {
 fn transfer_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn: \{t.words().map(fn(w) { w.0 }).join("|")}")
+    None => @halt.saying("\{words} is not drawn: \{t.words().map(fn(w) { w.0 }).join("|")}")
   }
 }
 
@@ -121,7 +121,7 @@ fn transfer_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Dou
 /// The middle of button `label` (the `i`th of them).
 fn button_mid(t : @ui.Tester, label : String, i? : Int = 0) -> (Double, Double) {
   let all = t.all(Button, label~)
-  guard all.length() > i else { abort("no \{label} #\{i}: \{all.length()}") }
+  guard all.length() > i else { @halt.saying("no \{label} #\{i}: \{all.length()}") }
   let (x, y, w, h) = all[i].rect
   (x + w / 2.0, y + h / 2.0)
 }

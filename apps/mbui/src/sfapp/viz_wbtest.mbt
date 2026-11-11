@@ -543,7 +543,7 @@ test "a chat left keeps its pages, as the few left before it: gone back to, they
   let chat = key.unsafe_substring(start=0, end=key.length() - "release.html".length())
   let (station, session) = match chat.unsafe_substring(start=5, end=chat.length() - 1).split(":").collect() {
     [a, .. rest] => (a.to_owned(), rest.map(fn(v) { v.to_owned() }).join(":"))
-    _ => abort("no chat in \{key}")
+    _ => @halt.saying("no chat in \{key}")
   }
   viz_chat_left(station, session)
   assert_true(viz_frames.contains(key))

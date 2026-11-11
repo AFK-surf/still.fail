@@ -969,7 +969,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
       if ask {
         // started here, at this frame's time: its end said at once
         if v.ends_at() != c.moment() + fade_ms {
-          abort("an Anim told in a frame did not say its end there")
+          @halt.saying("an Anim told in a frame did not say its end there")
         }
       }
     }

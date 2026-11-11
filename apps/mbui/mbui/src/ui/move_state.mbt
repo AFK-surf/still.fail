@@ -237,7 +237,7 @@ pub fn Ctx::move_state(
       }
       match move_props.get(p) {
         Some(ks) => for k in ks { on[k] = true }
-        None => abort("move_state: \{name}'s \{p} is no property a box moves by")
+        None => @halt.saying("move_state: \{name}'s \{p} is no property a box moves by")
       }
     }
   }

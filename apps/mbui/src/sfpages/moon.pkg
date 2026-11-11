@@ -20,4 +20,4 @@ import {
   "stillfail/gallery",
 }
 
-import { "stillfail/sffixture", "stillfail/sfkept", "stillfail/core" } for "wbtest"
+import { "stillfail/sffixture", "stillfail/sfkept", "stillfail/core", "mbui/halt" } for "wbtest"

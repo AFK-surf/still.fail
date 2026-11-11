@@ -77,6 +77,5 @@ fn Tester::hold_placed(self : Tester) -> Unit {
     faults.length().to_string() +
     " nodes\n" +
     faults[0:(if faults.length() < 8 { faults.length() } else { 8 })].join("\n")
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }

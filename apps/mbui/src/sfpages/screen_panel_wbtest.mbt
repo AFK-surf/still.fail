@@ -375,7 +375,7 @@ test "the bar says how long it has been seen; pressed, the view's figures, and å
   assert_true(r.t.find("3") is Some(_))
   r.tap_label(tr("web-pages.screen.stat.copy"))
   r.t.draw()
-  let said = @json.parse(r.t.clipboard()) catch { _ => abort("not JSON") }
+  let said = @json.parse(r.t.clipboard()) catch { _ => @halt.saying("not JSON") }
   assert_eq(text(Some(said), "picture"), "1280x720")
   assert_eq(text(Some(said), "codec"), "jpeg")
   assert_eq(number(Some(said), "fps"), 3.0)

@@ -100,7 +100,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
           }
           let first = match days[0] {
             Object(d) => d
-            _ => abort("no day")
+            _ => @halt.saying("no day")
           }
           let rows = match first.get("items") {
             Some(Array(r)) => r.copy()

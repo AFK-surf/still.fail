@@ -109,7 +109,7 @@ fn Room::measure(self : Room, w : Double) -> Unit {
     if v.alive() {
       let h = self.height_at(v, w)
       if h != cell.untracked() {
-        abort(
+        @halt.saying(
           "Room::tall: what reads how tall a node made by its room comes to changed that (\{h} for \{cell.untracked()}): say it outside what is measured",
         )
       }
@@ -243,7 +243,7 @@ fn Tree::under_node(self : Tree, at : Int, top : Int) -> Bool {
 /// node, which is being laid out, marked so (what that layout measured of them before forgotten), nothing else.
 fn Tree::room_marked_at(self : Tree, at : Int) -> Unit {
   if at == self.rooming {
-    abort("View::by_room: its own box said by the room it is given, as it is laid out by it: say it of what it holds")
+    @halt.saying("View::by_room: its own box said by the room it is given, as it is laid out by it: say it of what it holds")
   }
   if self.under_node(at, self.rooming) {
     let mut i = at

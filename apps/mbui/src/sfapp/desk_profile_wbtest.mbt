@@ -61,7 +61,7 @@ test "wide: adding a profile picks its provider from the core's groups, the mach
   // a provider picked: told to the core
   match t.find("DeepSeek") {
     Some((x, y)) => t.tap(x, y)
-    None => abort("no DeepSeek")
+    None => @halt.saying("no DeepSeek")
   }
   t.draw()
   assert_true(
@@ -80,7 +80,7 @@ test "wide: the station's Hermes profile can be selected from its custom variabl
   desk_shown(t, "Hermes Agent")
   match t.find("Hermes Agent") {
     Some((x, y)) => t.tap(x, y)
-    None => abort("no Hermes Agent")
+    None => @halt.saying("no Hermes Agent")
   }
   t.draw()
   assert_true(

@@ -230,7 +230,7 @@ fn outside_asked(
   t.draw()
   tap_send(t)
   let asked = named(calls, "chat.outsideRefs")
-  guard asked.length() == 1 else { abort("the core asked \{asked.length()} times") }
+  guard asked.length() == 1 else { @halt.saying("the core asked \{asked.length()} times") }
   (asked[0].done)(Ok({ "chats": Json::array(chats) }))
   t.draw()
   t.frame()
@@ -382,7 +382,7 @@ test "分享对话 on a wide window: 取消, Escape and a press outside it send 
 fn outside_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 

@@ -10,7 +10,7 @@ fn laid_box(id : Int) -> (Double, Double, Double, Double, Double) {
       return (n.x, n.y, n.fw, n.fh, n.opacity)
     }
   }
-  abort("no box \{id}")
+  @halt.saying("no box \{id}")
 }
 
 ///|
@@ -426,7 +426,7 @@ fn laid_words(s : String) -> Node {
       return n
     }
   }
-  abort("no words \{s}")
+  @halt.saying("no words \{s}")
 }
 
 ///|
@@ -589,7 +589,7 @@ fn hint_now() -> TextLayout {
       }
     }
   }
-  abort("no field")
+  @halt.saying("no field")
 }
 
 ///|

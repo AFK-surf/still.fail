@@ -1923,9 +1923,9 @@ test "a chat let go of and asked again: nothing of it shown before the core answ
       Object(m) =>
         match m.get("id") {
           Some(Number(d, ..)) => (d.to_int(), last)
-          _ => abort("no id")
+          _ => @halt.saying("no id")
         }
-      _ => abort("not JSON")
+      _ => @halt.saying("not JSON")
     }
   }
   let follow = fn(seen : Array[Json?]) {

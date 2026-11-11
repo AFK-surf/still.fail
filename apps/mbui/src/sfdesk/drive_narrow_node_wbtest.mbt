@@ -48,7 +48,7 @@ fn narrow_drawn(t : @ui.Tester, x0 : Double) -> (Array[String], Array[String]) {
 /// Presses the words `words` in the column from `x0`, in their middle.
 fn narrow_press(t : @ui.Tester, x0 : Double, words : String) -> Unit {
   let w = t.words().filter(fn(w) { w.0 == words && w.1 >= x0 - 0.5 && w.1 < x0 + 399.5 })
-  guard w.length() == 1 else { abort("\{words} from \{x0}: \{w.length()}") }
+  guard w.length() == 1 else { @halt.saying("\{words} from \{x0}: \{w.length()}") }
   t.tap(w[0].1 + w[0].3 / 2.0, w[0].2 + w[0].4 / 2.0)
   t.run_for(@ui.move_most_ms)
 }

@@ -148,7 +148,7 @@ fn name_typed(t : @ui.Tester, words : String) -> Bool {
 /// 新建 at 新建 workspace's foot, as a screen reader finds it: the lowest of those so named.
 fn create_button(t : @ui.Tester) -> @ui.SemNode {
   let all = t.all(Button, label="新建")
-  guard all.length() > 0 else { abort("no 新建: \{t.semantics_dump()}") }
+  guard all.length() > 0 else { @halt.saying("no 新建: \{t.semantics_dump()}") }
   let mut low = all[0]
   for b in all {
     if b.rect.1 > low.rect.1 {

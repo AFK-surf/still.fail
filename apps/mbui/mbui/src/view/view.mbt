@@ -5775,7 +5775,7 @@ pub fn View::takes(
 pub fn View::hosted_takes(self : View, f : (Double, Double, Double) -> Bool) -> View {
   // (a node of the tree's own says where it takes one as rects, View::takes: what a host under it is told the same)
   if self.live() is Some(n) && !n.hosted {
-    abort("hosted_takes of a node hosting nothing: View::takes")
+    @halt.saying("hosted_takes of a node hosting nothing: View::takes")
   }
   self.takes_so(AsHosted(f))
 }
@@ -6150,7 +6150,7 @@ pub fn View::gesture(
   let hold_ms = match (hold, through) {
     (Some((ms, _)), None) | (None, Some(ms)) => Some(ms)
     (None, None) => None
-    _ => abort("a gesture's hold told or handed through, not both")
+    _ => @halt.saying("a gesture's hold told or handed through, not both")
   }
   // (where the finger is, within the slop: where a hold handed through is handed)
   let last = Ref((0.0, 0.0))

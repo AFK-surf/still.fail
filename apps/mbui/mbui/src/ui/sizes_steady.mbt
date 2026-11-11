@@ -495,8 +495,7 @@ fn Tester::hold_sizes_steady(self : Tester) -> Unit {
     if sizes_steady.found.length() > bar {
       let said = "sizes not steady (sizes_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{sizes_steady.found.length()} now, \{bar} known in \{sizes_steady.file}"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
   }
 }

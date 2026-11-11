@@ -118,7 +118,7 @@ fn ScreenRig::layered(self : ScreenRig, control? : Bool = false) -> @ui.Stream {
 ///|
 /// The state the view has now, its pointer at (x, y) in `shape` (the rest as it was): a value of the view.
 fn ScreenRig::cursor_moved(self : ScreenRig, x : Double, y : Double, shape? : String = "default") -> Json {
-  guard self.sess().state is Some(Object(m)) else { abort("no state") }
+  guard self.sess().state is Some(Object(m)) else { @halt.saying("no state") }
   let m = m.copy()
   m["cursor"] = { "x": Json::number(x), "y": Json::number(y), "shape": Json::string(shape) }
   { "state": Json::object(m) }
@@ -158,7 +158,7 @@ test "on a host whose pictures show on their own layer, the station's pointer is
   let (ibeam, _) = @sf.pointer_png(r.t.ctx(), shape="text")
   assert_eq(pointer_told(r, st).last(), Some("pointer \{ibeam} 20x20 hot=10,10"))
   // anything else of the state changed with it: not quiet, built
-  guard r.sess().state is Some(Object(m)) else { abort("no state") }
+  guard r.sess().state is Some(Object(m)) else { @halt.saying("no state") }
   let m = m.copy()
   m["title"] = Json::string("another")
   m["cursor"] = { "x": Json::number(0.3), "y": Json::number(0.3), "shape": Json::string("text") }

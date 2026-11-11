@@ -457,8 +457,7 @@ fn Tester::hold_rows_steady(self : Tester) -> Unit {
     if rows_steady.found.length() > bar {
       let said = "rows not steady (rows_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{rows_steady.found.length()} now, \{bar} known in \{rows_steady.file}"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
   }
 }

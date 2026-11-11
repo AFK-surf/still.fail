@@ -57,7 +57,7 @@ fn prompt_asked(ask : () -> Unit, platform? : Int = 2, wide? : Bool = false, res
     t.resize(1200.0, 800.0)
     t.run_for(@ui.move_most_ms)
   }
-  guard !@sf.presenting() else { abort("a panel up before it is asked") }
+  guard !@sf.presenting() else { @halt.saying("a panel up before it is asked") }
   ask()
   t.draw()
   if rest {
@@ -77,7 +77,7 @@ fn key_asked(platform? : Int = 2, wide? : Bool = false, rest? : Bool = true) -> 
 fn prompt_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 

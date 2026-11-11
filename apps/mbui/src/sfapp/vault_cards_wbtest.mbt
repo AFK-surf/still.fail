@@ -497,7 +497,7 @@ fn vt_allow_after(t : @ui.Tester) -> Unit {
 fn vt_allow(t : @ui.Tester) -> Unit {
   match t.find_last("允许") {
     Some((x, y)) => t.tap(x, y)
-    None => abort("no 允许")
+    None => @halt.saying("no 允许")
   }
   t.draw()
 }

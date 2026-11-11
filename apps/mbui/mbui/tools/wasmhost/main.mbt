@@ -265,10 +265,11 @@ fn moon_decl(d : Decl) -> String {
           t => fail("no Wasm way for a \{t} given to \{d.name}")
         }
       })
+      // called with no function kept, it says so before it stops (mbui/halt, which the package imports)
       out.write_string(
         "let \{slot} : Ref[\{p.ty}?] = Ref(None)\n\n///|\n" +
         "fn \{slot}_in(\{ins.join(", ")}) -> \{fret} {\n" +
-        "  match \{slot}.val {\n    Some(f) => f(\{outs.join(", ")})\n    None => abort(\"\{d.sym}: no function\")\n  }\n}\n\n///|\n",
+        "  match \{slot}.val {\n    Some(f) => f(\{outs.join(", ")})\n    None => @halt.saying(\"\{d.sym}: no function\")\n  }\n}\n\n///|\n",
       )
     }
     let wparams = d.params.map(fn(p) {

@@ -36,7 +36,7 @@ fn field_gone(tree : Bool, platform : Int) -> ((Bool, String, Int, Int), String)
   t.draw()
   t.type_text("a")
   t.draw()
-  guard f.text() == "a" else { abort("tree \{tree}, platform \{platform}: not typed into as it shows: \{f.text()}") }
+  guard f.text() == "a" else { @halt.saying("tree \{tree}, platform \{platform}: not typed into as it shows: \{f.text()}") }
   on.set(false)
   t.draw()
   t.draw()

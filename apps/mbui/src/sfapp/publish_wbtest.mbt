@@ -57,10 +57,10 @@ test "sharing a chat on a small screen: a table wider than the screen and the us
   ]]]
   let preview = fn() -> Json {
     let p = fix_preview()
-    guard p is Object(o) else { abort("missing preview") }
+    guard p is Object(o) else { @halt.saying("missing preview") }
     let copy = o.copy()
     let list = items(Some(p), "list").copy()
-    guard list[1] is Object(m) else { abort("missing agent message") }
+    guard list[1] is Object(m) else { @halt.saying("missing agent message") }
     let message = m.copy()
     message["text"] = "A wide table"
     message["md"] = tree

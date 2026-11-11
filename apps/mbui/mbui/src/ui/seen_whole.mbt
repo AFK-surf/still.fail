@@ -96,8 +96,7 @@ fn Tester::hold_seen_whole_now(self : Tester) -> Unit {
     Some((by, x, y)) => {
       let said = "words held seen whole (seen_whole.mbt) drawn over on a frame drawn \{self.w}×\{self.h} at " +
         "\{self.fake.time}: 「\{words}」 under 「\{by}」 at (\{x.round()}, \{y.round()})"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
     None => ()
   }

@@ -98,7 +98,7 @@ test "an account's windows and its models' own, five: where no line holds them t
       let at = fn(words : Array[String]) {
         match shown.filter(fn(w) { words.contains(w.0) }) {
           [w] => w
-          found => abort("\{room}: one of \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
+          found => @halt.saying("\{room}: one of \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
         }
       }
       // every window said once, whole, within the line's room

@@ -134,7 +134,7 @@ fn upped(ups : Map[String, Json], m : Made, path? : String = "") -> Unit {
 /// The send button: the capsule's bottom right (opened: under the field).
 fn tap_send(t : @ui.Tester) -> Unit {
   t.click(Button, label=@sf.t("web-main.composer.send")) catch {
-    e => abort("no send button: \{e}")
+    e => @halt.saying("no send button: \{e}")
   }
 }
 
