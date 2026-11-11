@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [f1beb4691](https://github.com/AFK-surf/still.fail/commit/f1beb4691cf38058bf9a1b541321fad71c757774) app, mbui: Show of a composed value, derive(Show), | 1.85 | 2.47 | 10.37 | 29.11 | 36.61 | 25.9 | 48.33 | 93.78 | 164.71 |
 | [e73742ee2](https://github.com/AFK-surf/still.fail/commit/e73742ee25f11038e9fb8bbba384fd288f9e3a53) app: 对话目录's rows as a pick's: the reader's in the  | 1.85 | 2.47 | 10.36 | 29.1 | 36.58 | 25.9 | 48.33 | 93.78 | 135.43 |
 | [e7dbca863](https://github.com/AFK-surf/still.fail/commit/e7dbca863bf05bae020682194910edb66eed442b) app, mbui: deprecated APIs and syntax said anew, n | 1.85 | 2.47 | 10.36 | 29.1 | 36.58 | 25.9 | 48.33 | 93.8 | 141.8 |
 | [f06a53f31](https://github.com/AFK-surf/still.fail/commit/f06a53f316e0107577e0dab7bb0d30aea93e14a6) mbui: tree_select_wbtest's words look says max_lin | 1.85 | 2.47 | 10.35 | 29.09 | 36.57 | 25.91 | 48.32 | 94.34 | 113.74 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0573e4a0b](https://github.com/AFK-surf/still.fail/commit/0573e4a0ba3e51418ca3e4db159bda349d595b39) core test: what each topic sends is the same put o | 1.82 | 2.43 | 10.16 | 28.89 | 35.84 | 25.73 | 47.7 | 94.37 | 173.43 |
 | [e537bd092](https://github.com/AFK-surf/still.fail/commit/e537bd092bceaada08e4c74b23680cee7fae4906) app: a workspace switch keeps the screen as it was | 1.82 | 2.43 | 10.16 | 28.89 | 35.84 | 25.73 | 47.7 | 94.36 | 182.55 |
 | [e6defc3ae](https://github.com/AFK-surf/still.fail/commit/e6defc3aec4ae431c7aff33554623b114031c5ca) chat: a notice gone to lights its own pill, not a  | 1.82 | 2.43 | 10.13 | 28.87 | 35.77 | 25.71 | 47.65 | 94.09 | 159.19 |
-| [a16ed7802](https://github.com/AFK-surf/still.fail/commit/a16ed780226e292b3a0f79f10ffcd877d1dc3daf) mbui: what a test runs to once a motion is over is | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.41 | 133.17 |
