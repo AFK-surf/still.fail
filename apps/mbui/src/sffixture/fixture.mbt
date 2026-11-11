@@ -476,6 +476,79 @@ fn with_opened(v : Json?) -> Json? {
 ///|
 /// The chats of the first workspace, newest first, by day.
 pub fn fixture_days(f : Fixture) -> Array[Json] {
+  let days = fixture_days_head(f)
+  for d in 0..<long_days(f) {
+    let items = Array::makei(6, fn(k) { long_row(d * 6 + k + 11) })
+    days.push({ "daysAgo": Json::number((d + 5).to_double()), "at": 0, "label": Json::string("\{d + 5} 天前"), "items": kept(f, items) })
+  }
+  days
+}
+
+///|
+/// The rows of `items` not archived.
+fn kept(f : Fixture, items : Array[Json]) -> Json {
+  Json::array(items.filter(fn(r) { !f.archived.contains(text(Some(r), "id")) }))
+}
+
+///|
+/// How many days more of made-up chats "long" and "long-paged" have after the first ones: weeks more, six chats a day,
+/// every word made up (long_row).
+fn long_days(f : Fixture) -> Int {
+  match f.mode {
+    "long" => 40
+    "long-paged" => 200
+    _ => 0
+  }
+}
+
+///|
+// kept across runs: a table, never written
+let long_topics : Array[String] = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
+
+///|
+// kept across runs: a table, never written
+/// (each with what leads it, as the core would say: none for words of their own)
+let long_states : Array[(String, String, String)] = [
+  ("做完了", "done", ""),
+  ("等你回复", "", ""),
+  ("监控中：每小时看一次", "watch", "监控中：每小时看一次"),
+  ("写到一半", "", ""),
+  ("要你帮忙看一眼", "", ""),
+  ("已经交给评审", "", ""),
+]
+
+///|
+/// Made-up chat `c<n>` of the days after the first ones (n from 11; long_days): the `k`th of six on day `d`.
+fn long_row(n : Int) -> Json {
+  let d = (n - 11) / 6
+  let k = (n - 11) % 6
+  let (said, lead, rest) = long_states[(d + k) % 6]
+  let state : Map[String, Json] = { "stateText": Json::string(said) }
+  if lead != "" {
+    state["stateLead"] = Json::string(lead)
+    state["stateRest"] = Json::string(rest)
+  }
+  row("c\{n}", "第 \{n} 个：" + long_topics[k], if k % 2 == 0 { "ws1/st1" } else { "ws1/st2" }, "\{d + 5} 天前", state)
+}
+
+///|
+/// The `n` of a chat of the days after the first ones that `session` (its session `s-c<n>` or its id `c<n>`) can name,
+/// in a mode that has them (long_days); None for any other.
+fn long_number(f : Fixture, session : String) -> Int? {
+  let id = if session.has_prefix("s-") { session.unsafe_substring(start=2, end=session.length()) } else { session }
+  guard id.has_prefix("c") && id.length() > 1 && id.length() < 9 else { return None }
+  let mut n = 0
+  for ch in id.unsafe_substring(start=1, end=id.length()) {
+    let digit = ch.to_int() - 48
+    guard digit >= 0 && digit <= 9 else { return None }
+    n = n * 10 + digit
+  }
+  if "c\{n}" == id && n >= 11 && n < 11 + long_days(f) * 6 { Some(n) } else { None }
+}
+
+///|
+/// The first days of made-up chats, of every mode (fixture_days: those and long_days more).
+fn fixture_days_head(f : Fixture) -> Array[Json] {
   if f.mode == "webdemo" {
     return webdemo_days()
   }
@@ -626,41 +699,11 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       })
     }
   }
-  let keep = fn(items : Array[Json]) -> Json {
-    Json::array(items.filter(fn(r) { !f.archived.contains(text(Some(r), "id")) }))
-  }
-  let days : Array[Json] = [
-    { "daysAgo": 0, "at": 0, "label": "今天", "items": keep(today) },
-    { "daysAgo": 1, "at": 0, "label": "昨天", "items": keep(yesterday) },
-    { "daysAgo": 4, "at": 0, "label": "星期三", "items": keep(earlier) },
+  [
+    { "daysAgo": 0, "at": 0, "label": "今天", "items": kept(f, today) },
+    { "daysAgo": 1, "at": 0, "label": "昨天", "items": kept(f, yesterday) },
+    { "daysAgo": 4, "at": 0, "label": "星期三", "items": kept(f, earlier) },
   ]
-  if f.mode == "long" || f.mode == "long-paged" {
-    // weeks more, six chats a day, every word made up
-    let topics = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
-    // (each with what leads it, as the core would say: none for words of their own)
-    let states : Array[(String, String, String)] = [
-      ("做完了", "done", ""),
-      ("等你回复", "", ""),
-      ("监控中：每小时看一次", "watch", "监控中：每小时看一次"),
-      ("写到一半", "", ""),
-      ("要你帮忙看一眼", "", ""),
-      ("已经交给评审", "", ""),
-    ]
-    for d in 0..<(if f.mode == "long-paged" { 200 } else { 40 }) {
-      let items = Array::makei(6, fn(k) {
-        let n = d * 6 + k + 11
-        let (said, lead, rest) = states[(d + k) % 6]
-        let state : Map[String, Json] = { "stateText": Json::string(said) }
-        if lead != "" {
-          state["stateLead"] = Json::string(lead)
-          state["stateRest"] = Json::string(rest)
-        }
-        row("c\{n}", "第 \{n} 个：" + topics[k], if k % 2 == 0 { "ws1/st1" } else { "ws1/st2" }, "\{d + 5} 天前", state)
-      })
-      days.push({ "daysAgo": Json::number((d + 5).to_double()), "at": 0, "label": Json::string("\{d + 5} 天前"), "items": keep(items) })
-    }
-  }
-  days
 }
 
 ///|
@@ -695,23 +738,69 @@ fn first_rows(days : Array[Json], limit : Int) -> (Array[Json], Int) {
 
 ///|
 /// One made-up chat's whole row (`chatRow {station, session}`): its row as the made-up lists make it, all of it (those
-/// lists send it cut: listed_chats); null where none lists it.
+/// lists send it cut: listed_chats); null where none lists it. That row alone is made or read, as the core answers it
+/// (its ChatItem): never the whole list it is found in, which a press on a row of a long list paid for in the
+/// benchmark's frames (#5483: 36M instructions a press on `home`, 362M on `paged`). The same row as the first one of
+/// `fixture_chats {scope, mine:false}`, then of the same with `hidden` (chat_row_wbtest.mbt holds it).
 fn fixture_chat_row(f : Fixture, params : Map[String, Json]) -> Json? {
   let p = Some(Json::object(params))
   let station = text(p, "station")
   let session = text(p, "session")
-  let scope = @settings.workspace_of(station)
-  for hidden in [false, true] {
-    let asked : Map[String, Json] = { "scope": Json::string(scope), "mine": Json::boolean(false) }
-    if hidden {
-      asked["hidden"] = Json::boolean(true)
+  // (as fixture_chats has them: the first workspace's alone, none while they are read or in a workspace with none)
+  if f.mode == "loading" || f.mode == "empty" || @settings.workspace_of(station) != "ws1" {
+    return Some(Json::null())
+  }
+  let asked = fn(r : Json) {
+    let r = Some(r)
+    text(r, "station") == station && (text(r, "session") == session || text(r, "id") == session)
+  }
+  // a long account's rows, made once (long_paged_days), as the app has them (paged_row)
+  if f.mode == "long-paged" {
+    for d in long_paged_days(f) {
+      for r in items(Some(d), "items") {
+        if asked(r) {
+          return Some(paged_row(r))
+        }
+      }
     }
-    match whole_row_in(fixture_chats(f, asked), station, session) {
-      Some(row) => return Some(row)
-      None => ()
+    return Some(Json::null())
+  }
+  // one of the days after the first ones, made alone (none of the first days is it)
+  match long_number(f, session) {
+    Some(n) => {
+      let r = long_row(n)
+      return Some(if asked(r) && !f.archived.contains(text(Some(r), "id")) { r } else { Json::null() })
+    }
+    None => ()
+  }
+  // of the first days: home-hide's shown rows first, then its hidden ones (fixture_chats with `hidden`); every other
+  // mode lists none hidden
+  let rows = fixture_days_head(f).map(fn(d) { items(Some(d), "items") }).flatten()
+  let hide = f.mode == "home-hide"
+  for hidden in [false, true] {
+    for r in rows {
+      if (!hide || flag(Some(r), "hidden") == hidden) && asked(r) {
+        return Some(r)
+      }
+    }
+    if !hide {
+      break
     }
   }
   Some(Json::null())
+}
+
+///|
+/// A long-paged account's days, made once (paged_days), as a core keeps its chats: what each page asks costs it no more.
+fn long_paged_days(f : Fixture) -> Array[Json] {
+  match paged_days.val {
+    Some(d) => d
+    None => {
+      let d = fixture_days(f)
+      paged_days.val = Some(d)
+      d
+    }
+  }
 }
 
 ///|
@@ -789,19 +878,7 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   let mine = params.get("mine") is Some(True)
   let watching = params.get("watching") is Some(True)
   let days = if scope == "ws1" && f.mode != "empty" && !watching {
-    // (a long account's made once, as a core keeps its chats: what each page asks costs it no more)
-    let all = if f.mode == "long-paged" {
-      match paged_days.val {
-        Some(d) => d
-        None => {
-          let d = fixture_days(f)
-          paged_days.val = Some(d)
-          d
-        }
-      }
-    } else {
-      fixture_days(f)
-    }
+    let all = if f.mode == "long-paged" { long_paged_days(f) } else { fixture_days(f) }
     if mine {
       // the viewer's: those they are in
       all.map(fn(d) {
@@ -1622,13 +1699,9 @@ fn of_wholes(names : Array[String]) -> Array[String] {
 }
 
 ///|
-/// A source of made-up chats (see the top of this file for `mode`).
-pub fn fixture(mode : String) -> Source {
-  fixture_answers.clear()
-  paged_days.val = None
-  paged_rows.clear()
-  fixture_preview(mode)
-  let f : Fixture = {
+/// A made-up core of `mode` as it begins (fixture: what it serves).
+fn made_fixture(mode : String) -> Fixture {
+  {
     mode: if mode == "" { "home" } else { mode },
     workspace: "ws1",
     appearance: if mode.has_suffix("-dark") || @ui.env("MBUI_DARK") == "1" {
@@ -1666,6 +1739,16 @@ pub fn fixture(mode : String) -> Source {
       ""
     },
   }
+}
+
+///|
+/// A source of made-up chats (see the top of this file for `mode`).
+pub fn fixture(mode : String) -> Source {
+  fixture_answers.clear()
+  paged_days.val = None
+  paged_rows.clear()
+  fixture_preview(mode)
+  let f = made_fixture(mode)
   if f.mode == "drive-motion" {
     // the folder changing on its own: a note made at 2 s, 发布清单.md taken out at 3.6 s (rows_view's rows coming and
     // going where they are)
