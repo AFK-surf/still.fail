@@ -450,6 +450,9 @@ struct Node {
   /// a hold on it is one what holds it may take over as it moves (View::claims), the hold not its own yet: a gesture
   /// waiting on a tap, a hold of the finger or its own slop (View::gesture)
   mut yields : Bool
+  /// a gesture that answers a hold alone (its moment, its slop: View::gesture): no target of a press or a drag of its
+  /// own, held long the finger its (hold_in.mbt)
+  mut hold_only : (Double, Double)?
   /// how far apart the lines of a row that wraps are laid out (View::wraps; None: as its gap says, or none wraps)
   mut line_gap : Double?
   /// what it says in place of its words, in order, where they have not the room on their line (View::shorter; none:
@@ -801,6 +804,10 @@ pub struct Tree {
   /// a finger held on a node a still hold of which is what lies under it's (View::holds_through): what lies there, as it
   /// was found as the finger went down, its hold's moment set going
   mut through : Through?
+  /// a hold waited for on a gesture that answers a hold alone, the finger another's till then (hold_in.mbt), and how
+  /// its moment is called off
+  mut hold_in : HoldIn?
+  mut hold_in_off : () -> Unit
   /// what hosts the tree told of a hold handed to what it hosts (Tree::on_through), and asked whether what it hosts
   /// takes a press at a point (Tree::hosts_at)
   mut on_through : (Target, Double, Double, Double, Handed) -> Unit
@@ -1171,6 +1178,8 @@ pub fn Tree::new(
     gesture_tapped: false,
     held_tracks: {},
     through: None,
+    hold_in: None,
+    hold_in_off: fn() {  },
     on_through: fn(_, _, _, _, _) {  },
     hosts_at: fn(_, _, _) { None },
     retarget: fn(t, _, _, _) { t },
@@ -1451,6 +1460,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.claims_from = None
       n.claims_said = 0
       n.yields = false
+      n.hold_only = None
       n.line_gap = None
       n.claims_scroll = false
       n.scroll_held = -1
@@ -1572,6 +1582,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         claims_from: None,
         claims_said: 0,
         yields: false,
+        hold_only: None,
         line_gap: None,
         shrink_said: None,
         min_w_said: None,
@@ -5787,6 +5798,8 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1, whole?
   n.fingers = if fingers < 1 { 1 } else { fingers }
   n.drags_whole = whole
   n.drag_said = n.drag_said + 1
+  // (a raw on_drag, or a gesture said anew: answering a hold alone only where the gesture says so after it)
+  n.hold_only = None
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
   match self.tree.held {
@@ -6244,7 +6257,12 @@ fn Tree::fingers_off(self : Tree) -> Array[Int] {
 /// found as the finger went down (through.mbt): its own told Off then, the finger that one's. `held_first`, asked as a
 /// finger goes down: whether it drags this node only once held (its `hold`'s while): moved past the slop before that,
 /// it is what lies under it's, as found as it went down, handed on as a hold going through is (its own told Off, the
-/// finger that one's where it is then; nothing there to take it, no drag of this one's either).
+/// finger that one's where it is then; nothing there to take it, no drag of this one's either). A `hold` alone (no
+/// `press`, `tap`, `drag`, `through` nor `held_first`): no press or drag of its own, a finger down on it the first's out
+/// from it that takes one, as were it not there; held still within the slop as long as its hold, the finger its from
+/// then, what had it told Off (no tap, no press of it), its hold told at once (hold_in.mbt). Not in a top row that moves
+/// the window (the window's drag begins as the press goes down) nor over an old view: a finger held on it there is
+/// theirs.
 pub fn View::gesture(
   self : View,
   slop : Double,
@@ -6448,6 +6466,10 @@ pub fn View::gesture(
     dead.val = true
     over()
   })
+  // (a hold alone, nothing else: a press or a drag on it the first's out from it that takes one, held long its own)
+  if hold is Some((ms, _)) && press is None && tap is None && drag is None && through is None && held_first is None {
+    n.hold_only = Some((ms, slop))
+  }
   self
 }
 
@@ -10609,6 +10631,10 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     order.val = o + 1
     self.work.found_walked = self.work.found_walked + 1
     let n = self.nodes[c.id.at]
+    // (a gesture answering a hold alone takes no press nor drag: what is under it does, as were it not there)
+    if n.hold_only is Some(_) {
+      return
+    }
     if self.finger_on(c, cx, cy, s, x, y, at, tracked~) {
       // (one that takes over holds (View::claims) takes none at its own down: it is found as it moves)
       let t = if n.on_drag is Some(_) && n.claims is None {
