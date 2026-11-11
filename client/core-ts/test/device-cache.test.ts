@@ -4,6 +4,7 @@
 // simulated clock (SimTime), the devices meet on a simulated network (sim-iroh.ts) on it: a test moves that clock.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { Core } from "../src/core.ts";
 import { SOON_MS } from "../src/data.ts";
@@ -14,12 +15,16 @@ import { HostWire } from "../src/station/wire.ts";
 import type { FakeHost, HostTime } from "../src/testing.ts";
 import * as format from "../src/format.ts";
 import { t } from "../src/i18n.ts";
+import { type Entry, entryHash, next, signedBytes } from "../src/lock.ts";
 import { CACHE_ALPN } from "../src/pair.ts";
+import { PersonalLock, personOf } from "../src/personal-lock.ts";
+import { hex, utf8 } from "../src/util.ts";
 import { Wake } from "../src/wake.ts";
 import { FILL_DIAL_MS, FILL_OPENED_AGAIN_MS, allowed, fillOver, serveCache, served } from "../src/views/device-cache.ts";
+import { fold, held, read } from "../src/views/lock.ts";
 import { down } from "../src/views/views.ts";
 import { run as runEffect } from "./run.ts";
-import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { ME, PHONE, elsewhere, genesis, grant, pipe, rig } from "./lock-rig.ts";
 import { SimNet, SimTime } from "./sim-iroh.ts";
 import { seeds } from "./sim-seeds.ts";
 import { base, entries, started, stationLater, threadView } from "./station-fixture.ts";
@@ -31,10 +36,53 @@ const CRED_EXP = 4102444800;
 /// A host on the shared clock (before its core is made on it).
 const on = (time: HostTime) => (host: FakeHost) => void ((host as { time: HostTime }).time = time);
 
+/// A key on the person's own lock, of nobody's here.
+type Key = { id: string; signBytes(b: Uint8Array): string };
+const personKey = (n: number): Key => {
+  const seed = new Uint8Array(32).fill(n);
+  return { id: `ed25519:${hex(ed25519.getPublicKey(seed))}`, signBytes: (b) => hex(ed25519.sign(b, seed)) };
+};
+/// `chain` (a person's own lock, `s1`'s) and one entry more, signed with `by`; none: its genesis, naming `by` as `id`.
+function signed(chain: Entry[], by: Key, kind: string, body: unknown): Entry[] {
+  const last = chain.at(-1);
+  const e = next(personOf("s1"), last === undefined ? null : { seq: last.seq, hash: entryHash(last), genesis: entryHash(chain[0]!) }, 1500, kind, body);
+  return [...chain, { ...e, sig: { key: by.id, alg: "Ed25519", sig: by.signBytes(signedBytes(entryHash(e))) } }];
+}
+const begun = (by: Key, id: string, label: string) => signed([], by, "genesis", { sub: "s1", device: { key: by.id, id, label } });
+
+/// `r`'s core given `chain` as its person's own lock, pinned, its own key `mine`; and the workspace's lock bound to it
+/// (a `person` entry, signed by `owner`, the device the lock names this one as signing with). Read before it returns.
+async function bind(time: SimTime, r: Awaited<ReturnType<typeof rig>>, owner: Key, chain: Entry[], mine: Key) {
+  const inner = r.core.inner;
+  const kept = { entries: chain };
+  r.host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(chain)));
+  r.host.storage.set("personal-signer-id", utf8(mine.id));
+  const personal = new PersonalLock({ host: r.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {}, cloud: () => Effect.sync(() => ({ entries: kept.entries })) });
+  inner.adb.personal = () => personal;
+  await time.settle(inner.runner.run(personal.refresh("s1")));
+  const ws = r.cloud.chains.get("ws")!;
+  const last = ws.at(-1)!;
+  const e = next("ws", { seq: last.seq, hash: entryHash(last), genesis: entryHash(ws[0]!) }, 1100, "person", { sub: "s1", person: personal.root("s1") });
+  r.cloud.chains.set("ws", [...ws, { ...e, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(signedBytes(entryHash(e))) } }]);
+  await time.settle(inner.runner.run(read(inner, "ws")));
+  assert.equal(fold(held(inner, "ws")!.entries).persons.get("s1"), personal.root("s1"), "the workspace's lock bound to it");
+  /// The person's lock as it goes on: pinned here as this device reads it.
+  const goesOn = async (longer: Entry[]) => {
+    kept.entries = longer;
+    await time.settle(inner.runner.run(personal.refresh("s1")));
+  };
+  return { personal, goesOn };
+}
+
 /// A device holding `held` messages of thread 7 (its last `last`), the phone (`peer`, the owner's or `sub`'s) in its lock.
-async function holder(time: HostTime, o: { sub?: string; me?: string; peer?: string; held?: [number, number][]; last?: number } = {}) {
+/// `more`: other devices in its lock. `person`: its person's own lock pinned here, its own key on it `mine`, the
+/// workspace's lock bound to it (the lock naming this device as signing with another key, so nothing here signs to
+/// keep that lock to the person's: what a test puts in it stays).
+async function holder(time: SimTime, o: { sub?: string; me?: string; peer?: string; held?: [number, number][]; last?: number; more?: Record<string, unknown>[]; person?: { chain: Entry[]; mine: Key } } = {}) {
   const g = grant();
-  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, o.me ?? ME, [{ id: o.peer ?? PHONE, sub: o.sub ?? "s1", kind: "app", label: "Pixel" }]) }), on(time));
+  const owner = elsewhere();
+  const r = await rig((me) => ({ ws: genesis("ws", o.person ? owner : me, true, [], g.keys, o.me ?? ME, [{ id: o.peer ?? PHONE, sub: o.sub ?? "s1", kind: "app", label: "Pixel" }, ...(o.more ?? [])]) }), on(time));
+  const bound = o.person ? await bind(time, r, owner, o.person.chain, o.person.mine) : null;
   // Its own link to the station gone too: what it holds is what it read before.
   stationLater(r.host, (req) => (req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
   r.gate.stream = "fail";
@@ -47,7 +95,7 @@ async function holder(time: HostTime, o: { sub?: string; me?: string; peer?: str
   r.core.inner.data.set({ topic: "chatRows", station: ST }, [row]);
   for (const [from, to] of o.held ?? [[1, 120]]) r.core.inner.data.putItems("entry", ST, "7", entries(from, to).map((e) => [e.n, e] as [number, unknown]));
   await time.pass(100);
-  return { ...r, g };
+  return { ...r, g, bound };
 }
 
 /// What `client` is answered to `m`, over a pipe a holder serves.
@@ -73,6 +121,62 @@ test("another member's device, though the lock names it, is told nothing", async
   const time = new SimTime();
   const r = await holder(time, { sub: "s2" });
   assert.equal(allowed(r.core.inner, "ws", r.g.credential("ws", PHONE, "s2", CRED_EXP, "member", "live"), PHONE), false);
+  r.core.close();
+});
+
+// ── bound to the person's own lock ──
+
+const GONE = "e1".repeat(32);
+const NEW = "e2".repeat(32);
+const WEB = "e3".repeat(32);
+const [K_ME, K_PHONE, K_GONE, K_NEW] = [personKey(0x31), personKey(0x32), personKey(0x33), personKey(0x34)];
+/// s1's own lock begun by this device: the phone on it, GONE put on and taken off again, NEW put on since.
+const ownLock = () => {
+  let c = begun(K_ME, ME, "this");
+  c = signed(c, K_ME, "device", { key: K_PHONE.id, id: PHONE, label: "Pixel" });
+  c = signed(c, K_ME, "device", { key: K_GONE.id, id: GONE, label: "Old Mac" });
+  c = signed(c, K_ME, "device", { key: K_NEW.id, id: NEW, label: "New Mac" });
+  return c;
+};
+/// The workspace's lock beside it: the phone, GONE (still), and a web page of s1's; NEW not (yet).
+const named = [{ id: GONE, sub: "s1", kind: "app", label: "Old Mac" }, { id: WEB, sub: "s1", kind: "web", label: "Chrome", exp: CRED_EXP }];
+
+test("bound to their own lock, an app device is its person's as that lock says, a web page as the workspace's lock says", async () => {
+  const time = new SimTime();
+  const r = await holder(time, { more: named, person: { chain: signed(ownLock(), K_ME, "device.remove", { key: K_GONE.id }), mine: K_ME } });
+  const inner = r.core.inner;
+  const token = (device: string) => r.g.credential("ws", device, "s1", CRED_EXP, "member", "live");
+  const ids = fold(held(inner, "ws")!.entries).devices;
+  assert.ok(ids.has(GONE) && !ids.has(NEW), "the workspace's lock names GONE, not NEW");
+  assert.equal(allowed(inner, "ws", token(PHONE), PHONE), true, "on both locks: answered");
+  assert.equal(allowed(inner, "ws", token(GONE), GONE), false, "taken off the person's lock, though the workspace's lock still names it: refused");
+  assert.equal(allowed(inner, "ws", token(NEW), NEW), true, "put on the person's lock, before the workspace's lock names it: answered");
+  assert.equal(allowed(inner, "ws", token(WEB), WEB), true, "a web page, by its entry in the workspace's lock");
+  assert.equal(allowed(inner, "ws", r.g.credential("ws", NEW, "s1", CRED_EXP, "member", "gone"), NEW), false, "its credential still checked: a session gone");
+  r.core.close();
+});
+
+test("bound, a device taken off the person's lock as this device reads it is refused from then on", async () => {
+  const time = new SimTime();
+  const r = await holder(time, { more: named, person: { chain: ownLock(), mine: K_ME } });
+  const inner = r.core.inner;
+  const token = r.g.credential("ws", GONE, "s1", CRED_EXP, "member", "live");
+  assert.equal(allowed(inner, "ws", token, GONE), true, "on it: answered");
+  await r.bound!.goesOn(signed(ownLock(), K_ME, "device.remove", { key: K_GONE.id }));
+  assert.ok(fold(held(inner, "ws")!.entries).devices.has(GONE), "the workspace's lock names it still");
+  assert.equal(allowed(inner, "ws", token, GONE), false, "taken off: refused");
+  r.core.close();
+});
+
+test("bound to a lock this device is not on, it answers no one", async () => {
+  const time = new SimTime();
+  // Begun by NEW, the phone on it; this device's own key is not.
+  const chain = signed(begun(K_NEW, NEW, "New Mac"), K_NEW, "device", { key: K_PHONE.id, id: PHONE, label: "Pixel" });
+  const r = await holder(time, { more: named, person: { chain, mine: K_ME } });
+  const inner = r.core.inner;
+  assert.equal(r.bound!.personal.standing("s1"), "outside");
+  assert.equal(allowed(inner, "ws", r.g.credential("ws", PHONE, "s1", CRED_EXP, "member", "live"), PHONE), false, "the phone, on both locks: refused");
+  assert.equal(allowed(inner, "ws", r.g.credential("ws", WEB, "s1", CRED_EXP, "member", "live"), WEB), false, "a web page too");
   r.core.close();
 });
 
@@ -159,8 +263,10 @@ test("a hole in what the device asked holds ends no page: both stretches come", 
 // ── over the simulated network ──
 
 /// A phone and the person's other devices on a simulated network: `holders` of them answer, holding 1–120 of thread 7;
-/// `silent` are in the lock but never reached. Every dial the phone makes is in `dials`.
-async function meeting(seed: number, o: { holders: number; silent: number }) {
+/// `silent` are in the lock but never reached. Every dial the phone makes is in `dials`. `bound`: the phone's lock bound
+/// to s1's own, which the phone is on: the holders on it but not in the workspace's lock, GONE in that lock but taken off
+/// the person's.
+async function meeting(seed: number, o: { holders: number; silent: number; bound?: boolean }) {
   const time = new SimTime();
   const net = new SimNet(time.clock, seed);
   const relay = net.relay("https://relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
@@ -186,8 +292,15 @@ async function meeting(seed: number, o: { holders: number; silent: number }) {
   }
   const silent = Array.from({ length: o.silent }, (_, i) => `${(0xe0 + i).toString(16)}`.repeat(32));
   // Those that never answer first: one after another, they would hold the one that does back.
-  const others = [...silent.map((id, i) => ({ id, sub: "s1", kind: "app", label: `off ${i + 1}` })), ...holding.map((h, i) => ({ id: h.end.id(), sub: "s1", kind: "app", label: i === 0 ? "Mac" : `Mac ${i + 1}` }))];
-  const phone = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, phoneEnd.id(), others) }), on(time));
+  const label = (i: number) => (i === 0 ? "Mac" : `Mac ${i + 1}`);
+  const others = [...silent.map((id, i) => ({ id, sub: "s1", kind: "app", label: `off ${i + 1}` })), ...(o.bound ? [{ id: GONE, sub: "s1", kind: "app", label: "Old Mac" }] : holding.map((h, i) => ({ id: h.end.id(), sub: "s1", kind: "app", label: label(i) })))];
+  const owner = elsewhere();
+  const phone = await rig((me) => ({ ws: genesis("ws", o.bound ? owner : me, true, [], g.keys, phoneEnd.id(), others) }), on(time));
+  if (o.bound) {
+    let chain = signed(begun(K_ME, phoneEnd.id(), "phone"), K_ME, "device", { key: K_GONE.id, id: GONE, label: "Old Mac" });
+    for (const [i, h] of holding.entries()) chain = signed(chain, K_ME, "device", { key: personKey(0x40 + i).id, id: h.end.id(), label: label(i) });
+    await bind(time, phone, owner, signed(chain, K_ME, "device.remove", { key: K_GONE.id }), K_ME);
+  }
   await phone.watch({ topic: "lock", workspace: "ws" });
   const inner = phone.core.inner;
   inner.mesh = () => Effect.succeed({ deviceId: () => phoneEnd.id(), endpoint: () => counted, lockClaim: () => null, link: () => Effect.fail(new CoreError("unsupported", "the station is reached another way here")) } as never);
@@ -321,6 +434,21 @@ sim("none of the other devices reached: unreached after FILL_DIAL_MS, not after 
   assert.ok(took >= FILL_DIAL_MS && took < 2 * FILL_DIAL_MS, `unreached after ${took} ms`);
   assert.deepEqual(inner.data.record("deviceFill", ST), { state: "unreached" });
   assert.ok(String((await chat()).offlineNote).includes(t("core-logic.looks.offline.fill.unreached")));
+  await m.close();
+});
+
+sim("bound to the person's own lock, the phone dials the devices on it: one the workspace's lock does not name yet, not one taken off", async (seed) => {
+  const m = await meeting(seed, { holders: 1, silent: 0, bound: true });
+  const { time, inner, span } = m;
+  const holder = m.holding[0]!.end.id();
+  const ids = fold(held(inner, "ws")!.entries).devices;
+  assert.ok(ids.has(GONE) && !ids.has(holder), "the workspace's lock names GONE, not the holder");
+  await m.goes();
+  await time.until(() => inner.data.record("deviceFill", ST) !== undefined);
+  assert.deepEqual(m.dials, [holder], "the holder alone");
+  assert.equal(span()?.count, 120);
+  assert.deepEqual(inner.data.record("deviceFill", ST), { state: "filled", from: "Mac", upTo: 120 }, "named as the person's lock names it");
+  assert.ok(fold(held(inner, "ws")!.entries).devices.has(GONE), "GONE named by the workspace's lock all the while");
   await m.close();
 });
 

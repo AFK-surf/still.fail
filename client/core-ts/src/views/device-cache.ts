@@ -1,6 +1,7 @@
 // A station down: the chats and messages the person's other devices hold of it, read from them face to face (iroh,
 // CACHE_ALPN), nothing kept beyond what a device keeps anyway, nothing through the cloud. Only in a workspace with a lock:
-// its chain, not the cloud, says which devices are whose (`allowed`: who is answered, and why each condition).
+// whose devices are whose is the person's own lock where they bound it there, else the workspace lock's list, never the
+// cloud (`ownDevices`; `allowed`: who is answered, and why each condition).
 //
 // Read only; what comes is the station's own rows, and entries never change, so the station back goes on from them and
 // its lists then replace what a device said. An agent's transcript and files stay on the station.
@@ -15,12 +16,13 @@ import type { Data } from "../data.ts";
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import type { IrohConnection } from "../iroh.ts";
+import type { Entry } from "../lock.ts";
 import { nOf } from "../entries.ts";
 import { CACHE_ALPN } from "../pair.ts";
 import { PAGE } from "../station/channel-kinds.ts";
 import { get, isObject } from "../util.ts";
 import { checkLock } from "../vault/lock-check.ts";
-import { fold, held, live } from "./lock.ts";
+import { type Folded, fold, held, live, onBoundPerson } from "./lock.ts";
 import { type Duplex, credentialOf, streamDuplex } from "./pair.ts";
 import { down } from "./views.ts";
 
@@ -64,6 +66,25 @@ export function fillNote(data: Data, station: string, now: number, offsetMin: nu
   }
 }
 
+// ── whose devices ──
+
+/// The workspace lock's devices of `sub`'s, as they stand at `now`.
+const listed = (f: Folded, sub: string, now: number): Map<string, J> => new Map([...f.devices.values()].filter((d) => d.sub === sub && live(d, now) !== undefined).map((d) => [d.id, d]));
+
+/// `sub`'s devices in `ws` as this device can tell, by id. Where they bound a lock of their own there, as the stations
+/// go (station/src/mesh/serve.ts `inLock`): an app device by that lock alone, so one taken off it is not theirs though
+/// the workspace's lock still names it, and one put on it is before that lock names it; a web page, which holds no key
+/// of it, by its entry. Null where they bound one and this device is not on it: it cannot tell.
+function ownDevices(inner: Inner, ws: string, sub: string, entries: Entry[], now: number): Map<string, J> | null {
+  const f = fold(entries);
+  const named = listed(f, sub, now);
+  if (!f.persons.has(sub)) return named;
+  if (!onBoundPerson(inner, ws)) return null;
+  const out = new Map([...named].filter(([, d]) => d.kind === "web"));
+  for (const d of inner.adb.personal().chain(sub)?.devices.values() ?? []) out.set(d.id, { id: d.id, sub, kind: "app", label: str(named.get(d.id)?.label) || d.label });
+  return out;
+}
+
 // ── the device asked ──
 
 /// Whether `peer` asks as this device's own person's, in `ws`.
@@ -78,7 +99,8 @@ export function allowed(inner: Inner, ws: string, token: string, peer: string): 
   } catch {
     return false;
   }
-  if (lock.disabled || live(lock.devices.get(peer), now)?.sub !== sub) return false;
+  // (an app off the lock its person bound here answers no one)
+  if (lock.disabled || !ownDevices(inner, ws, sub, h.entries, now)?.has(peer)) return false;
   const c = credentialOf(token, lock.cloudKeys, ws, peer, now);
   if (c === null || c.sub !== sub || c.sid === null) return false;
   return arr(get(inner.data.shared({ topic: "loginSessions", account: sub }), "sessions")).some((s) => get(s, "id") === c.sid);
@@ -216,7 +238,10 @@ function fill(inner: Inner, ws: string, sub: string, station: string): Effect.Ef
     const now = Math.floor(inner.host.nowMs() / 1000);
     const mesh = yield* inner.mesh();
     const me = mesh.deviceId();
-    const others = [...fold(h.entries).devices.values()].filter((o) => o.sub === sub && o.kind === "app" && o.id !== me && live(o, now) !== undefined);
+    // (where this device cannot tell, a web page or an app off its person's own lock, the workspace lock's: the one
+    // dialled decides)
+    const mine = ownDevices(inner, ws, sub, h.entries, now) ?? listed(fold(h.entries), sub, now);
+    const others = [...mine.values()].filter((o) => o.kind === "app" && o.id !== me);
     if (others.length === 0) return;
     const credential = (yield* inner.cloudSync.credential(ws, me, false, me, mesh.lockClaim(ws, me))).credential;
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...inner.cloudSync.workspaceRelays(ws)])];
