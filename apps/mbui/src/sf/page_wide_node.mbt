@@ -467,11 +467,12 @@ let desk_list_gap : Double = 2.0
 /// (on none: Xl2's); lit under the hand where it `goes`. Its words desk_list_title's (strong: bolder; one that `acts` in
 /// the link's ink), what it says wide_value's, its chevron (an arrow out where it goes `out`) 16 in the muted ink; its
 /// note and what is wrong under its first line, wide_list_note's, 2 apart; what is `below` as link_row_node has it.
+/// `press`: what is done as the row (given it) is pressed (link_row_made's `pressed_by`).
 #callsite(autofill(loc))
 fn wide_link_row_node(
   parent : @view.View,
   title : () -> String,
-  press : () -> Unit,
+  press : (@view.View) -> () -> Unit,
   value : () -> String,
   value_bad : () -> Bool,
   value_dot : () -> Bool,
@@ -566,7 +567,7 @@ fn wide_link_row_node(
     }
     if goes {
       (if reach { o } else { r }).ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-      presses_node(r, press)
+      presses_node(r, press(r))
       r.says(By(fn() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) })) |> ignore
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as a list's title's line at least,

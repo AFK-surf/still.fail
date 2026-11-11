@@ -520,7 +520,6 @@
       "src/sfpages/screen_panel.mbt": 1,
       "src/sfpages/screen_view.mbt": 1,
       "src/sfpages/settings_page.mbt": 1,
-      "src/sfpages/station_page.mbt": 1,
       "src/sfpages/stations_now.mbt": 1
     },
     "click-read": {},
