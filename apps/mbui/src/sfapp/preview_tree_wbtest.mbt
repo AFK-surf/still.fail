@@ -2106,7 +2106,7 @@ test "viewer on the tree, the bar across the top, a name far longer than its mid
             let (sbx, sbw) = get(short, "bar")
             let (_, sww) = get(short, "words")
             if sbx < 0.0 || sbw != 120.0 || sww <= 0.0 {
-              fail("\{at}: the short name's words and bar not there to measure by: \{get(short, "bar")} \{get(short, "words")}")
+              fail("\{at}: the short name's words and bar not there to measure by: \{Repr(get(short, "bar"))} \{Repr(get(short, "words"))}")
             }
             let (bx, bw) = get(long, "bar")
             let (wx, ww) = get(long, "words")

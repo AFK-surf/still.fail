@@ -399,16 +399,16 @@ test "分享对话: a chat and whose it is on one line, why it cannot be shared 
     // (its letter the one on its name's line: a wide window's rail draws the workspace in view's too)
     let name = outside_word(t, "个人")
     let letter = t.words().iter().find_first(fn(w) { w.0 == "个" && (w.2 + w.4 / 2.0 - mid(name)).abs() < 1.0 })
-    assert_true(letter is Some(w) && w.1 + w.3 <= name.0, msg="\{about}: 个 \{Repr(letter)}, 个人 \{name}")
+    assert_true(letter is Some(w) && w.1 + w.3 <= name.0, msg="\{about}: 个 \{Repr(letter)}, 个人 \{Repr(name)}")
     let (emoji, open) = (outside_word(t, "🌲"), outside_word(t, "开源"))
     // (an emoji on the baseline its line's face gives it: within a point or two of the words' middle)
-    assert_true(emoji.0 + emoji.2 <= open.0 && (mid(emoji) - mid(open)).abs() < 2.0, msg="\{about}: 🌲 \{emoji}, 开源 \{open}")
+    assert_true(emoji.0 + emoji.2 <= open.0 && (mid(emoji) - mid(open)).abs() < 2.0, msg="\{about}: 🌲 \{Repr(emoji)}, 开源 \{Repr(open)}")
     // the one that cannot be shared: its title, whose it is and why not on one line, why not after them out to
     // where the panel's words end
     let title = outside_word(t, "发布检查")
     let no = outside_word(t, "你没有分享权限，需由发起人或管理员分享")
-    assert_true((mid(title) - mid(open)).abs() < 1.0 && (mid(title) - mid(no)).abs() < 1.0, msg="\{about}: \{title}, \{open}, \{no}")
-    assert_true(no.0 > open.0 + open.2, msg="\{about}: \{open}, \{Repr(no)}")
+    assert_true((mid(title) - mid(open)).abs() < 1.0 && (mid(title) - mid(no)).abs() < 1.0, msg="\{about}: \{Repr(title)}, \{Repr(open)}, \{Repr(no)}")
+    assert_true(no.0 > open.0 + open.2, msg="\{about}: \{Repr(open)}, \{Repr(no)}")
     assert_true((no.0 + no.2 - (lead.0 + lead.2)).abs() < 1.0, msg="\{about}: \{Repr(no)}, the lead \{Repr(lead)}")
     // 取消 before 分享并发送: across a sheet, a half each; at a dialog's end
     let (cancel, yes) = (outside_word(t, "取消"), outside_word(t, "分享并发送"))

@@ -400,7 +400,7 @@ test "where the two panels' words stand on every screen: each under the one befo
       "移出 workspace",
     ].map(fn(w) { ws_word(t, w) })
     for k in 1..<order.length() {
-      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{order[k - 1]} over \{order[k]}")
+      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{Repr(order[k - 1])} over \{Repr(order[k])}")
       assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
     @sf.presenters_reset()

@@ -275,23 +275,23 @@ test "小屏: a sheet whose body is nodes opened by what a sheet's button does a
     })
     t.run_for(sheet_way_ms(t))
     let top0 = sheet_tops(t)
-    assert_eq(top0.length(), 1, msg="\{case}")
-    assert_eq(scrim_drawn(t).length(), 1, msg="\{case}")
+    assert_eq(top0.length(), 1, msg="\{Repr(case)}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{Repr(case)}")
     t.tap_text("看更多")
     // (the frame it was pressed in: the next where the first stood (a page of the same sheet, sliding in over the
     // first), the window as dim)
-    assert_true(t.find("更多") is Some(_), msg="\{case}")
-    assert_eq(sheet_tops(t).length(), 1, msg="\{case}: \{sheet_tops(t)}")
-    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{case}: \{sheet_tops(t)} \{Repr(top0)}")
-    assert_eq(scrim_drawn(t).length(), 1, msg="\{case}")
+    assert_true(t.find("更多") is Some(_), msg="\{Repr(case)}")
+    assert_eq(sheet_tops(t).length(), 1, msg="\{Repr(case)}: \{Repr(sheet_tops(t))}")
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{Repr(case)}: \{Repr(sheet_tops(t))} \{Repr(top0)}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{Repr(case)}")
     // (on its way to its own height, one way only, never two sheets, the window never brighter)
     let up = taller > tall && tall == 0.0
     let mut last = top0[0]
     for _ in 0..<40 {
       t.run_for(@ui.frame_period_default)
       let tops = sheet_tops(t)
-      assert_eq(tops.length(), 1, msg="\{case}: \{Repr(tops)}")
-      assert_eq(scrim_drawn(t).length(), 1, msg="\{case}")
+      assert_eq(tops.length(), 1, msg="\{Repr(case)}: \{Repr(tops)}")
+      assert_eq(scrim_drawn(t).length(), 1, msg="\{Repr(case)}")
       assert_true(if up { tops[0] <= last + 0.5 } else { tops[0] >= last - 0.5 }, msg="\{Repr(case)}: \{Repr(tops)} after \{last}")
       last = tops[0]
     }

@@ -584,7 +584,7 @@ test "前往文件夹 on each screen: its note, its field, its rows a row apart,
     let keys = go_word(t, "↑↓ 选择 · Tab 补全 · ⏎ 前往")
     let mid = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
     // top to bottom: the note, the field, the rows, the keys
-    assert_true(note.1 + note.3 <= field.1, msg="\{about}: \{note}, \{Repr(field)}")
+    assert_true(note.1 + note.3 <= field.1, msg="\{about}: \{Repr(note)}, \{Repr(field)}")
     assert_true(field.1 + field.3 <= first.1, msg="\{about}: \{Repr(field)}, \{Repr(first)}")
     assert_true(third.1 + third.3 <= keys.1, msg="\{about}: \{Repr(third)}, \{Repr(keys)}")
     // the rows' words lined up, as far apart each from the next
@@ -717,7 +717,7 @@ test "添加到收藏's stations: under what it says, one under another, 离线 
     let lead = which_word(t, "选择一台 station，然后选择要收藏的文件夹")
     let under = lead.1 + lead.3
     let (willow, maple, off) = (which_word(t, "Willow", below=under), which_word(t, "Maple", below=under), which_word(t, "离线", below=under))
-    assert_true(lead.1 + lead.3 <= willow.1 && willow.1 + willow.3 <= maple.1, msg="\{about}: \{lead}, \{willow}, \{Repr(maple)}")
+    assert_true(lead.1 + lead.3 <= willow.1 && willow.1 + willow.3 <= maple.1, msg="\{about}: \{Repr(lead)}, \{Repr(willow)}, \{Repr(maple)}")
     // (their names on one line down, in from the lead by their marks)
     assert_true((willow.0 - maple.0).abs() < 0.5 && willow.0 > lead.0, msg="\{about}: \{Repr(willow)}, \{Repr(maple)}")
     assert_true(off.0 > maple.0 + maple.2 && (mid(off) - mid(maple)).abs() < 2.0, msg="\{about}: \{Repr(maple)}, \{Repr(off)}")

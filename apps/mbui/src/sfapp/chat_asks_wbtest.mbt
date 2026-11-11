@@ -234,7 +234,7 @@ test "an agent's context: its title over its rows, each row's note under its nam
     let clear = context_word(t, "清空上下文")
     let clear_note = context_word(t, "结束当前进程，下一条消息开始新的会话")
     // top to bottom: the title, 压缩上下文 and its note, 清空上下文 and its note
-    assert_true(title.1 + title.3 <= compact.1, msg="\{about}: \{title}, \{Repr(compact)}")
+    assert_true(title.1 + title.3 <= compact.1, msg="\{about}: \{Repr(title)}, \{Repr(compact)}")
     assert_true(compact.1 + compact.3 <= compact_note.1, msg="\{about}: \{Repr(compact)}, \{Repr(compact_note)}")
     assert_true(compact_note.1 + compact_note.3 <= clear.1, msg="\{about}: \{Repr(compact_note)}, \{Repr(clear)}")
     assert_true(clear.1 + clear.3 <= clear_note.1, msg="\{about}: \{Repr(clear)}, \{Repr(clear_note)}")
