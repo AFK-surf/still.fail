@@ -1389,7 +1389,9 @@ static NSDictionary<NSString *, NSString *> *login_env(void) {
 // token (`install`: one-time, for a workspace: the core's workspace.enroll) it downloads the release, puts it in
 // ~/.stillfail/app, joins the workspace and runs the station as a launchd service; without one (`update`) it brings the
 // station here up to the latest release and runs it as a service (a station's data with none, as the desktop app ran
-// it, becomes one). `ask`: {"origin", "token"?, "channel": stable | beta}. nil when it did, else the last it said.
+// it, becomes one). `ask`: {"origin", "token"?, "lock"? (a safe-mode workspace's lock's hash, which the station pins
+// rather than take the cloud's word: workspace.enroll's `lock`), "channel": stable | beta}. nil when it did, else the
+// last it said.
 // How far it is, as it goes (local_station's `percent` and `said`): the percent its downloads' curl shows
 // (--progress-bar: "#### 45.2%", each redrawn after a \r), and the last other line it said (its step: downloading,
 // installing, starting): local_percent, local_said (above).
@@ -1423,7 +1425,11 @@ static NSString *local_install(NSDictionary *ask) {
     @"f=$(mktemp) && curl -fsSL \"$0/install.sh\" -o \"$f\" && sh \"$f\" \"$@\"; s=$?; rm -f \"$f\"; exit $s",
     origin
   ] mutableCopy];
-  if ([ask[@"token"] isKindOfClass:NSString.class] && [ask[@"token"] length]) [args addObject:ask[@"token"]];
+  if ([ask[@"token"] isKindOfClass:NSString.class] && [ask[@"token"] length]) {
+    [args addObject:ask[@"token"]];
+    // (install.sh's second: the workspace lock's hash it pins, after the token only)
+    if ([ask[@"lock"] isKindOfClass:NSString.class] && [ask[@"lock"] length]) [args addObject:ask[@"lock"]];
+  }
   NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
   [env addEntriesFromDictionary:login_env()];
   if ([ask[@"channel"] isEqual:@"beta"]) env[@"STILLFAIL_CHANNEL"] = @"beta";

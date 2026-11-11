@@ -39,6 +39,41 @@ test "本机 Station, none here: 添加这台 Mac asks the cloud for this worksp
   assert_eq(text(ask, "token"), "made-up")
   assert_eq(text(ask, "channel"), "stable")
   assert_true(text(ask, "origin").has_prefix("http"))
+  // (the fixture's workspace not in safe mode: its answer has no lock, so none is pinned)
+  assert_true(field(ask, "lock") is None)
+}
+
+///|
+test "添加这台 Mac in a workspace in safe mode: the installer is handed the lock's hash the answer carries, to pin" {
+  let calls : Array[Made] = []
+  new_run()
+  let base = fixture("home")
+  let hash = "3b9f0c2e7d41a8566e0f1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5"
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      if name == "workspace.enroll" {
+        // (as the core's views/lock.ts `enrolled` answers in a locked workspace)
+        done(Ok({ "token": "made-up", "lock": Json::string(hash) }))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
+  t.set_local_station("")
+  app.nav.replace(Setting(@settings.Route::LocalStation))
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = t.find("添加这台 Mac").unwrap()
+  t.tap(x, y)
+  t.frame()
+  let acts = t.local_acts()
+  assert_eq(acts.length(), 1)
+  let (verb, ask) = local_ask_of(acts[0])
+  assert_eq(verb, "install")
+  assert_eq(text(ask, "token"), "made-up")
+  assert_eq(text(ask, "lock"), hash)
 }
 
 ///|
@@ -140,6 +175,7 @@ test "本机 Station: the one here brought up to the latest release from its car
   let (verb, ask) = local_ask_of(acts[0])
   assert_eq(verb, "update")
   assert_eq(text(ask, "token"), "")
+  assert_true(field(ask, "lock") is None)
 }
 
 ///|

@@ -228,17 +228,20 @@ static int sh_plain(const char *s) {
 
 void mb_host_local_station_act(moonbit_string_t action) {
   char *a = utf8(action), *data = local_data();
-  // `install {…}`, `update {…}`: the station's installer, install.sh of the cloud (`origin`), a token or none, the
-  // channel the app is on
+  // `install {…}`, `update {…}`: the station's installer, install.sh of the cloud (`origin`), a token or none (with it
+  // the workspace lock's hash, if any), the channel the app is on
   int install = g_str_has_prefix(a, "install "), update = g_str_has_prefix(a, "update ");
   if (install || update) {
     jv ask = {0};
     const char *p = a + (install ? 8 : 7);
     int ok = jparse(&p, &ask, 0) && ask.kind == 'o';
     const char *origin = ok ? jtext(&ask, "origin") : "", *token = ok ? jtext(&ask, "token") : "";
+    // (a safe-mode workspace's lock's hash, install.sh's second after the token, which the station pins rather than take
+    // the cloud's word: refused as a bad token is, never dropped)
+    const char *lock = ok && token[0] ? jtext(&ask, "lock") : "";
     if ((g_str_has_prefix(origin, "https://") || g_str_has_prefix(origin, "http://")) && sh_plain(origin) &&
-        sh_plain(token)) {
-      char *script = g_strdup_printf("curl -fsSL '%s/install.sh' | sh -s -- %s", origin, token);
+        sh_plain(token) && sh_plain(lock)) {
+      char *script = g_strdup_printf("curl -fsSL '%s/install.sh' | sh -s -- %s %s", origin, token, lock);
       char **argv = g_new0(char *, 4);
       argv[0] = g_strdup("sh"), argv[1] = g_strdup("-c"), argv[2] = script;
       local_begin(install ? "install" : "update", argv, !strcmp(jtext(&ask, "channel"), "beta") ? "beta" : NULL);
