@@ -8028,6 +8028,39 @@ fn[T : Eq, K : Hash + Eq] each_change(
 }
 
 ///|
+/// Whether `order` is `kids` with only the nodes of `made` put elsewhere (the others in the same order among
+/// themselves): one walk of both together, `made` asked only where the two differ.
+fn made_alone_moved(kids : Array[Int], order : Array[Int], made : Array[Int]) -> Bool {
+  let mut i = 0
+  let mut j = 0
+  while i < kids.length() && j < order.length() {
+    if kids[i] == order[j] {
+      i = i + 1
+      j = j + 1
+    } else if made.contains(order[j]) {
+      j = j + 1
+    } else if made.contains(kids[i]) {
+      i = i + 1
+    } else {
+      return false
+    }
+  }
+  while i < kids.length() {
+    if !made.contains(kids[i]) {
+      return false
+    }
+    i = i + 1
+  }
+  while j < order.length() {
+    if !made.contains(order[j]) {
+      return false
+    }
+    j = j + 1
+  }
+  true
+}
+
+///|
 /// What View::each and View::each_of do last as their rows change: the rows in `order` (their nodes), what is leaving
 /// kept where it was, after what was before it; the slot's nodes put in that order where it differs. Where only rows
 /// made by this change (`made`) are out of their place, the others in theirs, each made one's box is taken out and put
@@ -8048,13 +8081,12 @@ fn each_place(slot : View, sn : Node, order : Array[Int], made? : Array[Int] = [
   let kids = sn.kids
   let moved = order.length() != kids.length() || order.mapi(fn(i, v) { kids[i] != v }).contains(true)
   if moved {
-    // (the others keep their order among themselves: only the made ones come where they go)
-    // (more made than are put in one at a time (each_change is always inside Tree::holding_boxes, whose cap that is):
-    // all put again at once, the others not compared, a walk of the kids for each made)
-    let fresh = fn(v : Int) { made.contains(v) }
+    // (the others keep their order among themselves: only the made ones come where they go. More made than are put in
+    // one at a time (each_change is always inside Tree::holding_boxes, whose cap that is): all put again at once, the
+    // others not compared)
     let few = made.length() > 0 &&
       made.length() <= boxes_one_by_one_most &&
-      kids.filter(fn(v) { !fresh(v) }) == order.filter(fn(v) { !fresh(v) })
+      made_alone_moved(kids, order, made)
     kids.clear()
     tree.marked_up(slot.at, true, true, false, false, true)
     for v in order {
