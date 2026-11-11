@@ -14,7 +14,7 @@ fn split_words(s : Bytes, posix? : Bool = !windows) -> Array[Bytes] {
     if i >= n {
       break
     }
-    let w = @buffer.new()
+    let w = Buffer()
     let mut any = false
     while i < n && !is_space(s[i]) {
       let c = s[i]
@@ -58,18 +58,13 @@ fn split_words(s : Bytes, posix? : Bool = !windows) -> Array[Bytes] {
 }
 
 ///|
-fn split_words_s(s : String) -> Array[Bytes] {
-  split_words(utf8(s))
-}
-
-///|
 /// shlex.quote
 fn quote(s : Bytes) -> Bytes {
   if s.length() == 0 {
     return b"''"
   }
   let safe = s.iter().all(fn(c) {
-    is_ident(c) && c != b'$' ||
+    (is_ident(c) && c != b'$') ||
     c == b'@' ||
     c == b'%' ||
     c == b'+' ||
@@ -89,7 +84,7 @@ fn quote(s : Bytes) -> Bytes {
 
 ///|
 fn quote_all(ws : Array[Bytes]) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   for i, w in ws {
     if i > 0 {
       buf.write_byte(b' ')
@@ -102,7 +97,7 @@ fn quote_all(ws : Array[Bytes]) -> Bytes {
 ///|
 /// subprocess.list2cmdline: a Windows command line the C runtime splits back into these words
 fn list2cmdline(ws : Array[Bytes]) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   for k, w in ws {
     if k > 0 {
       buf.write_byte(b' ')
@@ -146,7 +141,7 @@ fn list2cmdline(ws : Array[Bytes]) -> Bytes {
 ///|
 /// json.dumps of a string (ensure_ascii: what is past ASCII as \u escapes)
 fn json_dumps(s : Bytes) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   let hex = b"0123456789abcdef"
   let u = fn(cp : Int) {
     buf.write_bytes(b"\\u")

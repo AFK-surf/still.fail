@@ -56,13 +56,13 @@ fn contained(args : Array[String]) -> Int {
   for p in [(25, 80), (175, 80), (100, 25), (100, 135)] {
     let c = pic.rgb(p.0 * 2, p.1 * 2)
     if !near_max(c, (0, 0, 0), 40) {
-      bad.push("ink at \{p} lost: \{rgb_text(c)}")
+      bad.push("ink at (\{p.0}, \{p.1}) lost: \{rgb_text(c)}")
     }
   }
   for p in [(30, 170), (170, 170), (170, 270), (30, 270)] {
     let c = pic.rgb(p.0 * 2, p.1 * 2)
     if !near_max(c, (0x15, 0x59, 0xC4), 20) {
-      bad.push("outside colour reaches the rounded corner at \{p}: \{rgb_text(c)}")
+      bad.push("outside colour reaches the rounded corner at (\{p.0}, \{p.1}): \{rgb_text(c)}")
     }
   }
   if bad.length() > 0 {
@@ -219,13 +219,13 @@ fn views_round(args : Array[String]) -> Int {
   }
   let mut page : Array[Double]? = None
   // (the tall pages, by id: each as last told)
-  let talls : Map[String, Array[Double]] = Map::new()
+  let talls : Map[String, Array[Double]] = Map([])
   for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
     match line.find("VIEWTOLD ") {
       Some(i) => {
-        let ws = split_ws(line.view(start_offset=i + 9).to_string())
+        let ws = split_ws(line.exact_view(start=i + 9).to_owned())
         if ws.length() >= 10 {
-          let p = ws[1:10].to_array().map(fn(x) { double_of_signed(x) })
+          let p = ws[1:10].to_owned().map(fn(x) { double_of_signed(x) })
           if p[8] > 0.0 {
             page = Some(p)
           }
@@ -339,7 +339,7 @@ fn views_round(args : Array[String]) -> Int {
 /// A number as the log writes it: a sign, digits, a point and digits
 fn double_of_signed(s : String) -> Double {
   if s.has_prefix("-") {
-    -double_of(s.view(start_offset=1).to_string()).unwrap_or(0.0)
+    -double_of(s.exact_view(start=1).to_owned()).unwrap_or(0.0)
   } else {
     double_of(s).unwrap_or(0.0)
   }
@@ -426,7 +426,7 @@ fn images(args : Array[String]) -> Int {
   for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
     match line.find("IMAGECHECK drawn ") {
       Some(i) => {
-        let ws = split_ws(line.view(start_offset=i + 17).to_string())
+        let ws = split_ws(line.exact_view(start=i + 17).to_owned())
         if ws.length() >= 3 {
           drawn = Some(ws)
         }

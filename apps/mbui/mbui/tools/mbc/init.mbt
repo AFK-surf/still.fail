@@ -83,7 +83,7 @@ fn init_pieces(text : Bytes) -> Array[(Bytes, Bytes, Bytes)]? {
     return None
   }
   // the locals moonc declares (no initial value), and the statements in runs by the package they set
-  let floating : Map[Bytes, Bytes] = Map::new()
+  let floating : Map[Bytes, Bytes] = Map([])
   let runs : Array[Run] = []
   let mut pending : Array[Bytes] = []
   let mut pending_locals = BSet::new()
@@ -142,7 +142,7 @@ fn init_pieces(text : Bytes) -> Array[(Bytes, Bytes, Bytes)]? {
     r.locs.add_all(pending_locals)
   }
   // pieces sharing a local are one, and the pieces between them (the order kept)
-  let last : Map[Bytes, Int] = Map::new()
+  let last : Map[Bytes, Int] = Map([])
   for k, r in runs {
     for n in r.locs.items() {
       last[n] = k
@@ -181,7 +181,7 @@ fn init_pieces(text : Bytes) -> Array[(Bytes, Bytes, Bytes)]? {
   }
   let out = []
   for m in merged {
-    let decls = @buffer.new()
+    let decls = Buffer()
     for n, d in floating {
       if m.locs.has(n) {
         // (.strip('\n'))
@@ -230,12 +230,12 @@ fn defined_needed(
         need.add(n)
       }
     }
-    let local : Map[Bytes, (Bytes, Int)] = Map::new()
+    let locals : Map[Bytes, (Bytes, Int)] = Map([])
     for v in decl_vars(b) {
-      local[v.0] = (v.1, v.2)
+      locals[v.0] = (v.1, v.2)
     }
     let type_of = fn(n : Bytes) -> (Bytes, Int)? {
-      match local.get(n) {
+      match locals.get(n) {
         Some(v) => Some(v)
         None => globals.get(n)
       }
@@ -253,7 +253,7 @@ fn defined_needed(
     accesses(b, fn(name, steps) {
       let mut v = type_of(name)
       for st in steps {
-        let (op, member) = st
+        let (op, field) = st
         match v {
           None => break
           Some(tv) => {
@@ -262,7 +262,7 @@ fn defined_needed(
             }
             need.add(tv.0)
             v = match fields.get(tv.0) {
-              Some(f) => f.get(member)
+              Some(f) => f.get(field)
               None => None
             }
           }

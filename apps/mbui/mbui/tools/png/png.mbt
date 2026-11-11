@@ -34,10 +34,10 @@ pub fn read(path : String) -> Result[Picture, String] {
   let mut h = 0
   let mut depth = 0
   let mut ct = 0
-  let idat = @buffer.new()
+  let idat = Buffer()
   while i + 8 <= d.length() {
     let n = be32(d, i)
-    let t = d[i + 4:i + 8].to_bytes()
+    let t = d[i + 4:i + 8].to_owned()
     if t == b"IHDR" {
       w = be32(d, i + 8)
       h = be32(d, i + 12)
@@ -87,7 +87,7 @@ pub fn read(path : String) -> Result[Picture, String] {
       }
       line[x] = (o & 255).to_byte()
     }
-    rows.push(Bytes::from_fixedarray(line))
+    rows.push(Bytes::from_array(line[:]))
     prev = line
   }
   Ok({ w, h, bpp, rows })

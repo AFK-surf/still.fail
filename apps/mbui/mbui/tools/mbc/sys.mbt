@@ -64,7 +64,7 @@ fn list_dir(path : Bytes) -> Array[Bytes] {
   let mut s = 0
   for i in 0..<all.length() {
     if all[i] == b'\x00' {
-      out.push(all[s:i].to_bytes())
+      out.push(all[s:i].to_owned())
       s = i + 1
     }
   }
@@ -89,7 +89,7 @@ fn eprint(s : String) -> Unit {
 
 ///|
 fn utf8(s : String) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   buf.write_string_utf8(s)
   buf.to_bytes()
 }
@@ -97,7 +97,7 @@ fn utf8(s : String) -> Bytes {
 ///|
 /// Bytes as a String for a message (UTF-8; anything else as U+FFFD).
 fn str(b : BytesView) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   let n = b.length()
   let mut i = 0
   while i < n {

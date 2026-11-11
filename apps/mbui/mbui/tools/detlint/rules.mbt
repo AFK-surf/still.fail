@@ -262,19 +262,18 @@ priv struct Finding {
   line : Int
   mut what : String
   mut excused : String? // its det-ok's reason
-  mut excused_some : Bool
 }
 
 ///|
 fn finding(rule : String, file : String, line : Int, what : String) -> Finding {
-  { rule, file, line, what, excused: None, excused_some: false }
+  { rule, file, line, what, excused: None }
 }
 
 ///|
 fn under(rel : String, prefixes : Array[String]) -> Bool {
   prefixes.iter().any(fn(p) {
     let q = if p.has_suffix("/") {
-      p.view(end_offset=p.length() - 1).to_string()
+      p.exact_view(end=p.length() - 1).to_owned()
     } else {
       p
     }

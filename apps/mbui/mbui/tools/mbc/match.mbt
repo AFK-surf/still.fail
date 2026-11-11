@@ -20,7 +20,7 @@ fn tag_findall(t : BytesView) -> Array[Bytes] {
       if j >= 0 {
         let e = ident_at(t, j)
         if e >= 0 {
-          out.push(t[j:e].to_bytes())
+          out.push(t[j:e].to_owned())
           p = e
           continue
         }
@@ -54,7 +54,7 @@ fn by_value_all(t : BytesView) -> Array[Bytes] {
           l -= 1
         }
         if found >= 0 {
-          out.push(t[j:found].to_bytes())
+          out.push(t[j:found].to_owned())
           p = found
           continue
         }
@@ -93,7 +93,7 @@ fn decl_vars(t : BytesView) -> Array[(Bytes, Bytes, Int)] {
         if e2 >= 0 {
           let z = lskip(t, e2)
           if follows(z) {
-            out.push((t[r2:e2].to_bytes(), t[j:e1].to_bytes(), stars))
+            out.push((t[r2:e2].to_owned(), t[j:e1].to_owned(), stars))
             p = z
             continue
           }
@@ -106,7 +106,7 @@ fn decl_vars(t : BytesView) -> Array[(Bytes, Bytes, Int)] {
             l -= 1
           }
           if l > j {
-            out.push((t[l:e1].to_bytes(), t[j:l].to_bytes(), 0))
+            out.push((t[l:e1].to_owned(), t[j:l].to_owned(), 0))
             p = z
             continue
           }
@@ -130,12 +130,12 @@ fn var_uses(t : BytesView, f : (Bytes, Bytes) -> Unit) -> Unit {
       if is_start(c) && (p == 0 || !is_ident(t[p - 1])) {
         let k = lskip(t, e)
         if starts_at(t, k, b"->") {
-          f(t[p:e].to_bytes(), b"->")
+          f(t[p:e].to_owned(), b"->")
           p = k + 2
           continue
         }
         if k < n && (t[k] == b'[' || t[k] == b'.') {
-          f(t[p:e].to_bytes(), if t[k] == b'[' { b"[" } else { b"." })
+          f(t[p:e].to_owned(), if t[k] == b'[' { b"[" } else { b"." })
           p = k + 1
           continue
         }
@@ -174,11 +174,11 @@ fn accesses(t : BytesView, f : (Bytes, Array[(Bytes, Bytes)]) -> Unit) -> Unit {
           if e3 < 0 {
             break
           }
-          steps.push((op, t[k3:e3].to_bytes()))
+          steps.push((op, t[k3:e3].to_owned()))
           q = e3
         }
         if steps.length() > 0 {
-          f(t[p:e].to_bytes(), steps)
+          f(t[p:e].to_owned(), steps)
           p = q
           continue
         }
@@ -194,7 +194,7 @@ fn accesses(t : BytesView, f : (Bytes, Array[(Bytes, Bytes)]) -> Unit) -> Unit {
 /// HEADER_OF removed: Moonbit_object_header\s*\([^()]*\)\s*->
 fn drop_header_of(t : Bytes) -> Bytes {
   let w = b"Moonbit_object_header"
-  let buf = @buffer.new(size_hint=t.length())
+  let buf = Buffer(size_hint=t.length())
   let n = t.length()
   let mut last = 0
   let mut p = 0
@@ -278,7 +278,7 @@ fn cast_access_at(t : BytesView, p : Int) -> (Int, Int, Int)? {
 /// CAST_ACCESS's types, and the text without them
 fn cast_accesses(t : Bytes) -> (Array[Bytes], Bytes) {
   let out = []
-  let buf = @buffer.new(size_hint=t.length())
+  let buf = Buffer(size_hint=t.length())
   let mut last = 0
   let mut p = 0
   while true {
@@ -336,7 +336,7 @@ fn sizeof_all(t : BytesView) -> Array[Bytes] {
           if e >= 0 {
             let r = lskip(t, e)
             if r < n && t[r] == b')' {
-              out.push(t[j:e].to_bytes())
+              out.push(t[j:e].to_owned())
               p = r + 1
               continue
             }
@@ -419,7 +419,7 @@ fn line_file(t : BytesView) -> Bytes? {
             if e > d && e < n && t[e] == b'"' {
               let close = find_byte(t, b'"', e + 1)
               if close >= 0 {
-                return Some(t[e + 1:close].to_bytes())
+                return Some(t[e + 1:close].to_owned())
               }
             }
           }
@@ -440,7 +440,7 @@ fn line_file(t : BytesView) -> Bytes? {
 /// LINE_DIRECTIVE removed: ^[ \t]*#[ \t]*line\b[^\n]*\n  (re.M)
 fn drop_line_directives(t : Bytes) -> Bytes {
   let n = t.length()
-  let buf = @buffer.new(size_hint=n)
+  let buf = Buffer(size_hint=n)
   let mut p = 0
   while p < n {
     let e = eol(t, p)
@@ -515,7 +515,7 @@ fn init_decl(t : BytesView) -> Bytes? {
       }
       let r = lskip(t, e2)
       if r < n && t[r] == b';' && lskip(t, r + 1) == n {
-        return Some(t[q:e2].to_bytes())
+        return Some(t[q:e2].to_owned())
       }
     }
   }
@@ -533,12 +533,12 @@ fn init_owner(t : BytesView) -> Bytes? {
     if j < n && t[j] == b'(' {
       let k = lskip(t, j + 1)
       if starts_at(t, k, b"_M0F") {
-        return Some(t[k:ident_end(t, k + 4)].to_bytes())
+        return Some(t[k:ident_end(t, k + 4)].to_owned())
       }
     }
   }
   if starts_at(t, i, b"_M0F") {
-    return Some(t[i:ident_end(t, i + 4)].to_bytes())
+    return Some(t[i:ident_end(t, i + 4)].to_owned())
   }
   None
 }
@@ -570,7 +570,7 @@ fn ident_before_semi(t : BytesView, lo : Int) -> Bytes? {
   if s < 0 {
     None
   } else {
-    Some(t[s:e].to_bytes())
+    Some(t[s:e].to_owned())
   }
 }
 
@@ -595,7 +595,7 @@ fn tag_name(t : BytesView) -> Bytes? {
   if e < 0 {
     None
   } else {
-    Some(t[j:e].to_bytes())
+    Some(t[j:e].to_owned())
   }
 }
 
@@ -614,7 +614,7 @@ fn fn_type_def(t : BytesView) -> Bytes? {
   let e = ident_end(t, k + 5)
   let l = lskip(t, e)
   if l < n && t[l] == b'{' {
-    Some(t[k:e].to_bytes())
+    Some(t[k:e].to_owned())
   } else {
     None
   }
@@ -638,7 +638,7 @@ fn define_name(d : BytesView) -> Bytes? {
   if e < 0 {
     None
   } else {
-    Some(d[k:e].to_bytes())
+    Some(d[k:e].to_owned())
   }
 }
 
@@ -664,7 +664,7 @@ fn named_not_ptr(t : BytesView, name : Bytes) -> Bool {
 /// FN_TYPE.sub: \b(_M0TW[A-Za-z0-9_$]*)\b, each replaced by f's answer
 fn fn_type_sub(t : BytesView, f : (Bytes) -> Bytes) -> Bytes {
   let n = t.length()
-  let buf = @buffer.new(size_hint=n)
+  let buf = Buffer(size_hint=n)
   let mut last = 0
   let mut p = 0
   while true {
@@ -685,7 +685,7 @@ fn fn_type_sub(t : BytesView, f : (Bytes) -> Bytes) -> Bytes {
       }
       if found >= 0 {
         buf.write_bytesview(t[last:s])
-        buf.write_bytes(f(t[s:found].to_bytes()))
+        buf.write_bytes(f(t[s:found].to_owned()))
         last = found
         p = found
         continue
@@ -700,7 +700,7 @@ fn fn_type_sub(t : BytesView, f : (Bytes) -> Bytes) -> Bytes {
 ///|
 /// re.sub(r'[^A-Za-z0-9]+', '_', pkg).strip('_') or 'main'
 fn unit_label(pkg : Bytes) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   let mut gap = false
   let mut wrote = 0
   for i in 0..<pkg.length() {
@@ -733,7 +733,7 @@ fn unit_label(pkg : Bytes) -> Bytes {
 ///|
 /// re.sub(r'\s+', ' ', w)
 fn collapse_space(t : BytesView) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   let mut i = 0
   let n = t.length()
   while i < n {
@@ -754,7 +754,7 @@ fn collapse_space(t : BytesView) -> Bytes {
 /// A function's text with its lines as moonc broke them joined (a directive and what ends in a // comment keep
 /// theirs): moonc breaks a line by its length, which its made-up names' lengths changed.
 fn flatten(t : Bytes) -> Bytes {
-  let out = @buffer.new(size_hint=t.length())
+  let out = Buffer(size_hint=t.length())
   let mut any = false
   let mut cur_open = false
   let n = t.length()

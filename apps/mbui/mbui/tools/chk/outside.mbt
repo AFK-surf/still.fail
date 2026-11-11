@@ -50,7 +50,7 @@ let multi : @re.Flags = { ..@re.no_flags, multiline: true }
 ///|
 fn kinds_table(r : String) -> (Map[String, Int], Array[String]) {
   let src = @sys.read_text(@sys.join(r, "src/ui/hostcall.mbt")).unwrap_or("")
-  let lets : Map[String, Int] = Map::new()
+  let lets : Map[String, Int] = Map([])
   for m in rx("^let outside_([a-z]+) = (\\d+)$", flags=multi).find_all(src) {
     lets[m.get(1)] = parse_int(m.get(2))
   }
@@ -77,7 +77,7 @@ fn kinds_table(r : String) -> (Map[String, Int], Array[String]) {
       bad.push("hostcall.mbt: outside_\{n} not in outside_kinds")
     }
   }
-  let seen : Map[Int, String] = Map::new()
+  let seen : Map[Int, String] = Map([])
   for n, v in lets {
     match seen.get(v) {
       Some(o) => bad.push("hostcall.mbt: outside_\{o} and outside_\{n} both \{v}")
@@ -111,7 +111,7 @@ fn line_at(t : Array[Char], at : Int) -> Int {
 ///|
 fn host_bad(r : String, h : String, globs : Array[String], kinds : Map[String, Int]) -> Array[String] {
   let bad = []
-  let files : Map[String, Unit] = Map::new()
+  let files : Map[String, Unit] = Map([])
   for g in globs {
     for p in @sys.glob(r, g) {
       files[p] = ()

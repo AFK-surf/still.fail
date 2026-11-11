@@ -32,15 +32,15 @@ fn top_of(args : ArrayView[String]) -> Int {
 
 ///|
 fn main {
-  let args = @env.args()[1:].to_array()
+  let args = @env.args()[1:].to_owned()
   match args {
     ["profile", input, output, .. rest] => {
       // (focus=NAME: what each function ran where NAME called it itself, as its "all inside its calls"; callers=NAME:
       // what NAME ran where each called it itself)
       let looked = fn(a : String) { a.has_prefix("focus=") || a.has_prefix("callers=") }
       let (focus, callers) = match rest.iter().find_first(looked) {
-        Some(a) if a.has_prefix("focus=") => (a.view(start_offset=6).to_string(), false)
-        Some(a) => (a.view(start_offset=8).to_string(), true)
+        Some(a) if a.has_prefix("focus=") => (a.exact_view(start=6).to_owned(), false)
+        Some(a) => (a.exact_view(start=8).to_owned(), true)
         None => ("", false)
       }
       let rest : Array[String] = rest.iter().filter(fn(a) { !looked(a) }).collect()

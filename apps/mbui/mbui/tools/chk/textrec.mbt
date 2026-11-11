@@ -26,7 +26,7 @@ fn kept_names() -> Array[String] {
     Some(t) => t
     None => return []
   }
-  let set : Map[String, Unit] = Map::new()
+  let set : Map[String, Unit] = Map([])
   for l in text_lines(text) {
     let s = trim(l)
     if s != "" && !l.has_prefix("#") {
@@ -42,7 +42,7 @@ fn kept_names() -> Array[String] {
 /// A text's lines as Python's text mode reads them (\r\n and \r are \n), the last one's end not making another
 fn text_lines(text : String) -> Array[String] {
   let t = text.replace_all(old="\r\n", new="\n").replace_all(old="\r", new="\n")
-  let out = t.split("\n").map(fn(l) { l.to_string() }).to_array()
+  let out = t.split("\n").map(fn(l) { l.to_owned() }).to_array()
   if out.length() > 0 && out[out.length() - 1] == "" {
     let _ = out.pop()
   }
@@ -106,7 +106,7 @@ fn textrec_check() -> Int {
   match @sys.run_out("git -C '\{r}' ls-files 'src/kitdemo/gallery/textrec_*.mbt'") {
     Some(out) =>
       for f in out.split("\n") {
-        let f = trim(f.to_string())
+        let f = trim(f.to_owned())
         if f == "" {
           continue
         }
@@ -115,8 +115,8 @@ fn textrec_check() -> Int {
           continue
         }
         let n = b
-          .view(start_offset="textrec_".length(), end_offset=b.length() - ".mbt".length())
-          .to_string()
+          .exact_view(start="textrec_".length(), end=b.length() - ".mbt".length())
+          .to_owned()
         if !names.contains(n) {
           faults.push("\{f} is kept in git but not listed in textrec_runs.txt")
         }
@@ -147,7 +147,7 @@ fn num(x : String) -> String {
 /// From w's first place in l on
 fn tail(l : String, w : String) -> String {
   match l.find(w) {
-    Some(k) => l.view(start_offset=k).to_string()
+    Some(k) => l.exact_view(start=k).to_owned()
     None => l
   }
 }
@@ -175,7 +175,7 @@ fn frame_line(l : String) -> String? {
 ///|
 fn split_ws(s : String) -> Array[String] {
   let out = []
-  let cur = StringBuilder::new()
+  let cur = StringBuilder()
   let mut any = false
   for ch in s {
     if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\u{b}' || ch == '\u{c}' {
@@ -299,7 +299,7 @@ fn textrec(args : Array[String]) -> Int {
 /// says so. Fails when LOG says none.
 fn textrec_rehash(log : String) -> Int {
   let lines = text_lines(@sys.read_text(log).unwrap_or(""))
-  let by : Map[String, Map[String, String]] = Map::new()
+  let by : Map[String, Map[String, String]] = Map([])
   for l in lines {
     let p = split_ws(tail(l, "REHASH "))
     if p.length() != 4 || p[0] != "REHASH" || p[3].has_prefix("VIEWSCRIPT") {
@@ -308,7 +308,7 @@ fn textrec_rehash(log : String) -> Int {
     let m = match by.get(p[1]) {
       Some(m) => m
       None => {
-        let m = Map::new()
+        let m = Map([])
         by[p[1]] = m
         m
       }
@@ -333,7 +333,7 @@ fn textrec_rehash(log : String) -> Int {
     let mut changed = 0
     for l in text_lines(text) {
       if l.has_prefix("  #|DRAWHASH ") {
-        let p = split_ws(l.view(start_offset="  #|".length()).to_string())
+        let p = split_ws(l.exact_view(start="  #|".length()).to_owned())
         if p.length() >= 7 {
           match frames.get(p[1]) {
             Some(h) if h != p[6] => {

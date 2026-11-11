@@ -83,12 +83,11 @@ fn sub(s : Array[Char], i : Int, j : Int) -> String {
 }
 
 ///|
-/// Tokens (ident, num, str, op, at: @pkg) and the comments by line
-fn lex(src : String) -> (Array[Tok], Map[Int, String]) {
+/// Tokens (ident, num, str, op, at: @pkg)
+fn lex(src : String) -> Array[Tok] {
   let s = src.to_array()
   let n = s.length()
   let toks : Array[Tok] = []
-  let comments : Map[Int, String] = Map::new()
   let mut i = 0
   let mut line = 1
   let mut lstart = 0
@@ -110,7 +109,6 @@ fn lex(src : String) -> (Array[Tok], Map[Int, String]) {
       if j < 0 {
         j = n
       }
-      comments[line] = comments.get_or_default(line, "") + sub(s, i, j)
       i = j
       continue
     }
@@ -139,7 +137,7 @@ fn lex(src : String) -> (Array[Tok], Map[Int, String]) {
       let start_line = line
       let mut j = i + 1
       let mut depth = 0
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while j < n {
         let c = s[j]
         if c == '\\' && j + 1 < n {
@@ -233,7 +231,7 @@ fn lex(src : String) -> (Array[Tok], Map[Int, String]) {
       toks[stack.pop().unwrap()].end = k
     }
   }
-  (toks, comments)
+  toks
 }
 
 ///|
@@ -264,12 +262,9 @@ priv struct Call {
 
 ///|
 priv struct MbtFile {
-  path : String
   rel : String
-  src : String
   lines : Array[String]
   toks : Array[Tok]
-  comments : Map[Int, String]
   test_file : Bool
   mut items : Array[Item]
   item_of : Array[Int]
@@ -288,16 +283,13 @@ fn is_close(t : Tok) -> Bool {
 }
 
 ///|
-fn MbtFile::new(path : String, rel : String, src : String) -> MbtFile {
-  let (toks, comments) = lex(src)
+fn MbtFile::new(rel : String, src : String) -> MbtFile {
+  let toks = lex(src)
   let base = @sys.basename(rel)
   let f : MbtFile = {
-    path,
     rel,
-    src,
-    lines: src.split("\n").map(fn(l) { l.to_string() }).to_array(),
+    lines: src.split("\n").map(fn(l) { l.to_owned() }).to_array(),
     toks,
-    comments,
     test_file: base.has_suffix("_test.mbt") || base.has_suffix("_wbtest.mbt"),
     items: [],
     item_of: Array::make(toks.length(), -1),
@@ -316,7 +308,7 @@ fn MbtFile::new(path : String, rel : String, src : String) -> MbtFile {
 
 ///|
 fn MbtFile::line_text(self : MbtFile, k : Int) -> String {
-  self.lines[self.toks[k].line - 1].trim(chars=" \t\r\n").to_string()
+  self.lines[self.toks[k].line - 1].trim(chars=" \t\r\n").to_owned()
 }
 
 ///|
@@ -328,7 +320,7 @@ fn MbtFile::assert_args(self : MbtFile) -> Array[Map[Int, Unit]] {
       let out = []
       for c in self.calls {
         if asserts.contains(c.name) && !c.is_def {
-          let m : Map[Int, Unit] = Map::new()
+          let m : Map[Int, Unit] = Map([])
           for a in c.args {
             for i in a.1 {
               m[i] = ()
@@ -529,7 +521,7 @@ fn MbtFile::args_of(self : MbtFile, open : Int) -> Array[(String?, Array[Int])] 
       (
         Some(toks[a[0]].text),
         if toks[a[1]].text == "=" {
-          a[2:].to_array()
+          a[2:].to_owned()
         } else {
           []
         },
@@ -596,7 +588,7 @@ fn MbtFile::recv_type(
   let it = self.item_of[k]
   if name == "self" {
     if it >= 0 && self.items[it].name.contains("::") {
-      return Some(self.items[it].name.split("::").to_array()[0].to_string())
+      return Some(self.items[it].name.split("::").to_array()[0].to_owned())
     }
     return None
   }
@@ -644,7 +636,7 @@ fn MbtFile::recv_type(
 ///|
 /// fn name(…) -> T: {name: T} for this file's functions
 fn MbtFile::returns(self : MbtFile) -> Map[String, String] {
-  let out = Map::new()
+  let out = Map([])
   for it in self.items {
     if it.kind != "fn" || it.name == "" {
       continue
@@ -665,7 +657,7 @@ fn MbtFile::returns(self : MbtFile) -> Map[String, String] {
         match self.type_at(j + 1) {
           Some(ty) => {
             let parts = it.name.split("::").to_array()
-            out[parts[parts.length() - 1].to_string()] = ty
+            out[parts[parts.length() - 1].to_owned()] = ty
           }
           None => ()
         }
@@ -816,9 +808,4 @@ fn MbtFile::block_start(self : MbtFile, k : Int) -> Int {
     o -= 1
   }
   0
-}
-
-///|
-fn MbtFile::text_of(self : MbtFile, idx : Array[Int]) -> String {
-  idx.map(fn(i) { self.toks[i].text }).join(" ")
 }

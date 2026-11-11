@@ -182,7 +182,7 @@ fn Run::at(self : Run, q : Double) -> Double {
 fn k(v : Double) -> String {
   let t = (v.abs() / 100.0).round().to_int64()
   let whole = (t / 10L).to_string()
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   if v < 0.0 && t != 0L {
     sb.write_char('-')
   }
@@ -234,7 +234,7 @@ fn tenths(v : Double) -> String {
 
 ///|
 fn spaces(n : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for _ in 0..<n {
     sb.write_char(' ')
   }
@@ -261,7 +261,7 @@ fn padr(s : String, w : Int) -> String {
 
 ///|
 fn row(cells : Array[(String, Int)]) -> Unit {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for i, c in cells {
     sb.write_string(if i == 0 { padr(c.0, c.1) } else { " " + pad(c.0, c.1) })
   }
@@ -389,7 +389,7 @@ fn compare(a : Run, b : Run, top : Int) -> Unit {
 
 ///|
 fn by_name(run : Run) -> Map[String, Double] {
-  let m : Map[String, Double] = {}
+  let m : Map[String, Double] = Map([])
   for f, own in run.own {
     let n = run.name(f)
     m[n] = m.get(n).unwrap_or(0.0) + run.per_frame(own)

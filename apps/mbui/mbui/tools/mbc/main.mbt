@@ -26,7 +26,7 @@ fn json_str(buf : @buffer.Buffer, s : BytesView) -> Unit {
 ///|
 /// The split's numbers as JSON (--json)
 fn manifest_json(s : Split) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   buf.write_bytes(b"{\"units\": {")
   for i, f in s.files {
     if i > 0 {
@@ -183,7 +183,7 @@ fn main {
     die("usage: mbc csplit IN.c OUTDIR [--json MANIFEST]")
     return
   }
-  let rest = args[2:].to_array()
+  let rest = args[2:].to_owned()
   // (this program, by an absolute path: the shim runs it, and a split made by another build of it is not taken)
   let me = utf8(args[0])
   self_exe.val = if me.iter().any(fn(c) { is_sep(c) }) {
@@ -259,7 +259,7 @@ fn run_jobs(
       break
     }
     if pid == 0 {
-      let buf = @buffer.new()
+      let buf = Buffer()
       for i in mine[k] {
         let r = work(i)
         buf.write_bytes(

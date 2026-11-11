@@ -100,8 +100,8 @@ fn find_chars(s : Array[Char], w : String) -> Int {
 /// A library's package (moon.pkg `rel`): each import it names that is not among `allowed` (prefixes).
 fn lint_library(rel : String, src : String, allowed : Array[String], out : Array[Finding]) -> Unit {
   for n0, line in src.split("\n").to_array() {
-    let line = line.to_string()
-    let s = line.trim_start(chars=" \t\r\n\u{b}\u{c}").to_string()
+    let line = line.to_owned()
+    let s = line.trim_start(chars=" \t\r\n\u{b}\u{c}").to_owned()
     if s.has_prefix("//") {
       continue
     }
@@ -109,7 +109,7 @@ fn lint_library(rel : String, src : String, allowed : Array[String], out : Array
     let parts = line.split("\"").to_array()
     let mut i = 1
     while i < parts.length() {
-      let name = parts[i].to_string()
+      let name = parts[i].to_owned()
       if name.contains("/") && !name.contains(" ") && !allowed.iter().any(fn(a) { name.has_prefix(a) }) {
         out.push(finding("library-import", rel, n0 + 1, trim(line)))
         break
@@ -129,8 +129,8 @@ fn lint_lines(
   comment : String,
 ) -> Unit {
   for n0, line in src.split("\n").to_array() {
-    let line = line.to_string()
-    let s = line.trim_start(chars=" \t\r\n\u{b}\u{c}").to_string()
+    let line = line.to_owned()
+    let s = line.trim_start(chars=" \t\r\n\u{b}\u{c}").to_owned()
     if s.has_prefix(comment) && !s.contains("det-ok(") {
       continue
     }
@@ -165,7 +165,7 @@ fn excuse(findings : Array[Finding], texts : Map[String, Array[String]]) -> Unit
       }
       match exc_re.search(lines[ln - 1]) {
         Some(m) => {
-          let rules = m.get(1).split(",").map(fn(r) { trim(r.to_string()) }).to_array()
+          let rules = m.get(1).split(",").map(fn(r) { trim(r.to_owned()) }).to_array()
           if rules.contains(fd.rule) {
             let reason = trim(m.get(2))
             if reason == "" {
@@ -200,7 +200,7 @@ fn sorted(names : Array[String]) -> Array[String] {
 
 ///|
 fn lines_of(src : String) -> Array[String] {
-  src.split("\n").map(fn(l) { l.to_string() }).to_array()
+  src.split("\n").map(fn(l) { l.to_owned() }).to_array()
 }
 
 ///|
@@ -274,7 +274,7 @@ fn collect(root : String, cfg : Config) -> Array[Finding] {
 ///|
 fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding] {
   let findings = []
-  let texts : Map[String, Array[String]] = Map::new()
+  let texts : Map[String, Array[String]] = Map([])
   let mbts : Array[MbtFile] = []
   for x in files {
     let (rel, src) = x
@@ -293,7 +293,7 @@ fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding]
       }
       2 => {
         let t0 = @env.now()
-        mbts.push(MbtFile::new(rel, rel, src))
+        mbts.push(MbtFile::new(rel, src))
         lex_ms.val += @env.now() - t0
         lint_lines(rel, src, "unsettled-ok", [unsettled_ok], findings, "//")
         lint_lines(rel, src, "at-rest-wait", [drive_rest_text, shot_rest], findings, "//")
@@ -324,7 +324,7 @@ fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding]
     @sys.eprintln("detlint: of which MbtFile::new \{lex_ms.val} ms")
   }
   lap("lexed, lines")
-  let returns = Map::new()
+  let returns = Map([])
   for f in mbts {
     for k, v in f.returns() {
       returns[k] = v
@@ -366,7 +366,7 @@ priv struct Counts {
 
 ///|
 fn Counts::new() -> Counts {
-  { m: Map::new() }
+  { m: Map([]) }
 }
 
 ///|
@@ -385,7 +385,7 @@ fn Counts::total(self : Counts) -> Int {
 
 ///|
 fn tally(findings : Array[Finding], excused : Bool) -> Map[String, Counts] {
-  let counts = Map::new()
+  let counts = Map([])
   for r in rule_names {
     counts[r] = Counts::new()
   }
@@ -405,7 +405,7 @@ let swappable : Array[String] = ["app-clock"]
 
 ///|
 fn union_keys(a : Counts, b : Counts) -> Array[String] {
-  let s : Map[String, Unit] = Map::new()
+  let s : Map[String, Unit] = Map([])
   for k, _ in a.m {
     s[k] = ()
   }
@@ -713,7 +713,7 @@ fn run(argv : Array[String], out : Array[String], err : Array[String]) -> Int {
 fn normpath(p : String) -> String {
   let parts = []
   for s in p.split("/") {
-    let s = s.to_string()
+    let s = s.to_owned()
     if s == "" || s == "." {
       continue
     }
@@ -731,7 +731,7 @@ fn main {
   let argv = @env.args()
   let out = []
   let err = []
-  let code = run(argv[1:].to_array(), out, err)
+  let code = run(argv[1:].to_owned(), out, err)
   for l in err {
     @sys.eprintln(l)
   }

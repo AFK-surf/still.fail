@@ -44,7 +44,7 @@ fn Lines::next(self : Lines, last : Bool) -> String? {
       if b == b'\r' && i + 1 == self.buf.length() && !last {
         break
       }
-      let line = @utf8.decode_lossy(Bytes::from_array(self.buf[start:i].to_array())[:])
+      let line = @utf8.decode_lossy(Bytes::from_array(self.buf[start:i].to_owned())[:])
       i += if b == b'\r' && i + 1 < self.buf.length() && self.buf[i + 1] == b'\n' {
         2
       } else {
@@ -59,7 +59,7 @@ fn Lines::next(self : Lines, last : Bool) -> String? {
     }
     i += 1
   }
-  let rest = self.buf[start:].to_array()
+  let rest = self.buf[start:].to_owned()
   self.buf.clear()
   self.buf.append(rest)
   found
@@ -85,14 +85,14 @@ fn logwait_usage(why : String) -> Int {
 
 ///|
 fn logwait(args : Array[String]) -> Int {
-  let opts : Map[String, String] = Map::new()
+  let opts : Map[String, String] = Map([])
   let known = ["--log", "--line", "--pid", "--gone", "--fail-log", "--fail-line", "--deadline"]
   let mut i = 0
   while i < args.length() {
     let a = args[i]
     match a.find("=") {
       Some(k) if a.has_prefix("--") => {
-        opts[a.view(end_offset=k).to_string()] = a.view(start_offset=k + 1).to_string()
+        opts[a.exact_view(end=k).to_owned()] = a.exact_view(start=k + 1).to_owned()
         i += 1
         continue
       }
@@ -123,7 +123,7 @@ fn logwait(args : Array[String]) -> Int {
       }
     None => 600.0
   }
-  if log is Some(_) != line is Some(_) ||
+  if (log is Some(_)) != (line is Some(_)) ||
     !(log is Some(_) || pid is Some(_) || gone_path is Some(_)) {
     return logwait_usage("--log with --line, and/or --pid, or --gone")
   }

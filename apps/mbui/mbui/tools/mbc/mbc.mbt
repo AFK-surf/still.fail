@@ -94,7 +94,7 @@ fn default_init_flags(msvc : Bool) -> Array[Bytes] {
 
 ///|
 fn lower(b : Bytes) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   for c in b {
     buf.write_byte(if c >= b'A' && c <= b'Z' { c + b' ' } else { c })
   }
@@ -108,7 +108,7 @@ fn is_msvc(cc : Array[Bytes]) -> Bool {
 }
 
 ///|
-let kinds_cache : Map[Bytes, (Int, Bool)] = Map::new()
+let kinds_cache : Map[Bytes, (Int, Bool)] = Map([])
 
 ///|
 /// (0 msvc, 1 clang, 2 other (gcc…); whether it targets Apple's platforms: ld64)
@@ -198,7 +198,7 @@ fn with_link_flags(args : Array[Bytes], flags : Array[Bytes]) -> Array[Bytes] {
     for k, x in args {
       let l = lower(x)
       if l == b"/link" || l == b"-link" {
-        let out = args[0:k + 1].to_array()
+        let out = args[0:k + 1].to_owned()
         for i in 1..<flags.length() {
           out.push(flags[i])
         }
@@ -219,7 +219,7 @@ fn with_link_flags(args : Array[Bytes], flags : Array[Bytes]) -> Array[Bytes] {
 // ---------------------------------------------------------------- what files are, by content
 
 ///|
-let hash_cache : Map[Bytes, (Int64, Int64, Bytes)] = Map::new()
+let hash_cache : Map[Bytes, (Int64, Int64, Bytes)] = Map([])
 
 ///|
 /// A file's SHA-1 (by its content; kept while its size and mtime are the same), None when it cannot be read
@@ -243,7 +243,7 @@ fn file_hash(p : Bytes) -> Bytes? {
 }
 
 ///|
-let tools_cache : Map[Bytes, Bytes] = Map::new()
+let tools_cache : Map[Bytes, Bytes] = Map([])
 
 ///|
 /// What a compiler or linker is, beyond its command line: its own --version and the file it runs (a wrapper as the
@@ -275,7 +275,7 @@ fn tool_identity(tool : Array[Bytes]) -> Bytes {
     argv.push(b"--version")
     parts.push(run_capture(argv).1)
   }
-  let buf = @buffer.new()
+  let buf = Buffer()
   for i, p in parts {
     if i > 0 {
       buf.write_byte(b'\x00')
@@ -294,7 +294,7 @@ fn depfile_paths(dep : Bytes) -> Array[Bytes] {
   let colon = find_byte(text, b':', 0)
   let rest = if colon < 0 { b"" } else { strip(sub(text, colon + 1, text.length())) }
   let out = []
-  let w = @buffer.new()
+  let w = Buffer()
   let mut any = false
   let mut i = 0
   while i < rest.length() {
@@ -363,7 +363,7 @@ fn Job::new(
 
 ///|
 fn join_words(ws : Array[Bytes], s : Bytes) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   for i, w in ws {
     if i > 0 {
       buf.write_bytes(s)
@@ -392,7 +392,7 @@ fn lines(t : Bytes) -> Array[Bytes] {
 ///|
 /// (path, hash) lines: what a stamp or a store's entry says its object was made of
 fn deps_text(deps : Array[Bytes]) -> Bytes? {
-  let buf = @buffer.new()
+  let buf = Buffer()
   for d in deps {
     match file_hash(d) {
       Some(h) => {
@@ -552,7 +552,7 @@ fn Job::keep_in_store(self : Job, store : Bytes) -> Unit {
   }
   match read_file(self.stamp()) {
     Some(s) => {
-      let deps = lines(s)[2:].to_array().map(fn(l) { sub(l, 0, find_byte(l, b'\x1f', 0)) })
+      let deps = lines(s)[2:].to_owned().map(fn(l) { sub(l, 0, find_byte(l, b'\x1f', 0)) })
       deps.push(self.src)
       self.to_store(store, deps)
     }
@@ -631,7 +631,7 @@ fn run_jobs_c(jobs0 : Array[Job], j : Int, label : Bytes) -> Array[Bytes] {
     queue.push(x)
   }
   // (slot: the job, its lock, when it started, where its output goes)
-  let running : Map[Int, (Job, Int, Double, Bytes)] = Map::new()
+  let running : Map[Int, (Job, Int, Double, Bytes)] = Map([])
   let mut q = queue
   let mut deferred : Array[Job] = []
   let finish = fn(x : Job, fd : Int, started : Double, out : Bytes, code : Int) {
@@ -753,7 +753,7 @@ fn run_jobs_c(jobs0 : Array[Job], j : Int, label : Bytes) -> Array[Bytes] {
       0
     }
   })
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string(
     "\{str(label)}: \{built.length()} of \{jobs.length()} compiled (\{jobs.length() - built.length()} up to date",
   )
@@ -800,7 +800,7 @@ priv struct Made {
 
 ///|
 fn Made::text(self : Made) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   buf.write_bytes(
     utf8(
       "key \{str(self.key)}\nfunctions \{self.functions}\nglobals \{self.globals}\ninit_bytes \{self.init_bytes}\nmax_load \{self.max_load}\ndecls_h \{self.decls_h}\nstatics_dropped \{self.statics_dropped}\n",
@@ -823,7 +823,7 @@ fn Made::text(self : Made) -> Bytes {
 fn Made::parse(t : Bytes) -> Made? {
   let units = []
   let made = []
-  let nums : Map[Bytes, Int] = Map::new()
+  let nums : Map[Bytes, Int] = Map([])
   let mut key = b""
   for l in lines(t) {
     let k = find_byte(l, b' ', 0)
@@ -1018,9 +1018,9 @@ fn parse_args(
   remainder? : Bool = false,
 ) -> Args {
   let a : Args = {
-    vals: Map::new(),
-    lists: Map::new(),
-    flags: Map::new(),
+    vals: Map([]),
+    lists: Map([]),
+    flags: Map([]),
     pos: [],
     rest: [],
   }
@@ -1037,8 +1037,8 @@ fn parse_args(
     let mut value : String? = None
     match x.find("=") {
       Some(k) if x.has_prefix("-") => {
-        name = x.view(end_offset=k).to_string()
-        value = Some(x.view(start_offset=k + 1).to_string())
+        name = x.exact_view(end=k).to_owned()
+        value = Some(x.exact_view(start=k + 1).to_owned())
       }
       _ => ()
     }
@@ -1240,7 +1240,7 @@ fn cmd_work(args : Array[String]) -> Unit {
   let dst = utf8(args[1])
   let base = dirname(abspath(src))
   let text = read_file(src).unwrap_or(b"")
-  let buf = @buffer.new()
+  let buf = Buffer()
   let mut i = 0
   while i < text.length() {
     if text[i] == b'"' {
@@ -1340,7 +1340,7 @@ fn mirrored(src : Bytes, dirs : Array[Bytes]) -> Bytes? {
   if files.length() == 0 {
     return Some(t)
   }
-  let all = @buffer.new()
+  let all = Buffer()
   for f in files {
     match read_file(f) {
       Some(d) => {
@@ -1607,10 +1607,10 @@ fn link_inputs(argv : Array[Bytes], deps : Array[Bytes], out : Bytes) -> Array[B
 ///|
 fn link_key(argv : Array[Bytes], deps : Array[Bytes], out : Bytes) -> Bytes {
   let ins = sort_bytes(link_inputs(argv, deps, out))
-  let buf = @buffer.new()
+  let buf = Buffer()
   buf.write_bytes(join_words(argv, b"\x1f"))
   buf.write_byte(b'\n')
-  buf.write_bytes(tool_identity(argv[0:1].to_array()))
+  buf.write_bytes(tool_identity(argv[0:1].to_owned()))
   buf.write_byte(b'\n')
   let mut last = b""
   for p in ins {
@@ -1630,7 +1630,7 @@ fn link_key(argv : Array[Bytes], deps : Array[Bytes], out : Bytes) -> Bytes {
 /// Hundreds of split objects exceed Windows' process command-line limit. CL reads the same arguments from a
 /// response file. Keep them on one line: /link applies only to the rest of its line in a CL command file.
 fn msvc_link_command(argv : Array[Bytes], rsp : Bytes) -> Array[Bytes] {
-  if !write_file(rsp, cat([list2cmdline(argv[1:].to_array()), b"\n"])) {
+  if !write_file(rsp, cat([list2cmdline(argv[1:].to_owned()), b"\n"])) {
     fatal("cannot write link response file \{str(rsp)}")
   }
   [argv[0], cat([b"@", rsp])]
@@ -2024,7 +2024,7 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     c_exit(link(cmd, out, [], None))
     return
   }
-  let largs = wargs[0:cs[0]].to_array()
+  let largs = wargs[0:cs[0]].to_owned()
   for o in objs {
     largs.push(o)
   }
@@ -2272,7 +2272,7 @@ fn cmd_check(args : Array[String]) -> Unit {
       needs.add_all(u)
     }
   }
-  let counts : Map[Bytes, Int] = Map::new()
+  let counts : Map[Bytes, Int] = Map([])
   for x in many {
     counts[x] = counts.get_or_default(x, 0) + 1
   }
