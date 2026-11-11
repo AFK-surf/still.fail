@@ -503,6 +503,7 @@ fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes
     }
     nodes_run.told = true
     nodes_run.told_by = (list, item)
+    watch_told_moment()
     nodes_run.told_at = @signals.setting_at()
     // (between frames: one owed; in one, the next asked for as it ends: on_frame)
     if !frame_running.val {
