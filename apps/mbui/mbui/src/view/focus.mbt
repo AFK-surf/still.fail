@@ -339,6 +339,18 @@ pub fn View::takes_input(self : View) -> Bool {
 /// Each node whose taking input is read told it as it is now (View::takes_input): as what decides it changes (a modal
 /// layer, a node leaving, said to take no press), once the change is committed whole. Those let go dropped.
 fn Tree::inputs_told(self : Tree) -> Unit {
+  // (each told once all are, what reads them run after: one run as one is told, in the middle of the walk, can change
+  // what holds others not walked yet (laying the tree out at its moment, Tree::laid_now or settle_now: a page left out
+  // of its row, whose own telling says all of it takes none), and the rest of the walk, carrying down what it found
+  // above before that, told what that left out it takes input: a row of 小屏's Home under 设置 opened over it)
+  @signals.start_batch()
+  self.inputs_told_each()
+  @signals.end_batch()
+}
+
+///|
+/// Tree::inputs_told's telling, each set as one batch.
+fn Tree::inputs_told_each(self : Tree) -> Unit {
   // (where only what changed and what it holds may take input otherwise (Tree::modals_told's `within`): those alone)
   if !self.inputs_whole {
     let todo = self.inputs_in.copy()
