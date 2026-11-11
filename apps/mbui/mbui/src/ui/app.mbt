@@ -371,7 +371,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   take_messages()
   // (the probe's: how long the messages took, slow_probe)
   probe_msgs_ms.val = work_now() - t0
-  // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
+  // the runtime's fibers run up to this frame's time, outside the frame's reading (fx.mbt): the view reads what they
+  // left
   fx_frame_start(c)
   // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
   parts_frame_start(c)
