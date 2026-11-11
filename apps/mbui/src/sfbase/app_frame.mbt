@@ -139,7 +139,7 @@ pub fn attend(src : Source, workspace : String, new_chat : Bool) -> Unit {
   if new_chat {
     params["newChat"] = Json::string(workspace)
   }
-  (src.call)("client.focus", Json::object(params), fn(_) {  })
+  (src.call)("client.focus", Json::object(params), answer_unread)
 }
 
 ///|
@@ -194,7 +194,7 @@ fn system_said(json : String) -> Unit {
   for s in said {
     match s {
       Shown(away~) => {
-        (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
+        (src.call)("client.wake", { "away": Json::number(away) }, answer_unread)
         update_check(src, false)
       }
       // 检查更新 from the menu bar (menu_bar.mbt)

@@ -140,7 +140,7 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           c.semantics(b, Button, id~, label=name, selected=on)
           if !on {
             c.on_press(id, fn() {
-              (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+              (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, @sfbase.answer_unread)
             })
           }
         }

@@ -126,7 +126,7 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
       }
   }
   match push {
-    Some(false) => (src.call)("push.unregister", Json::object(Map::new()), fn(_) {  })
+    Some(false) => (src.call)("push.unregister", Json::object(Map::new()), answer_unread)
     Some(true) =>
       match (notice_host.val.token)() {
         "" => ()
@@ -148,7 +148,7 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
             _ => Some({ "kind": "fcm", "token": Json::string(token) })
           }
           if registration is Some(r) {
-            (src.call)("push.register", Json::object(r), fn(_) {  })
+            (src.call)("push.register", Json::object(r), answer_unread)
           }
         }
       }
@@ -181,7 +181,7 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
       // asked once, the first time signed in with notifications on (App.kt rememberNotificationAsk(once))
       if !notice_state.asked_once && flag(notify, "on") && field(notify, "asked") is Some(False) {
         notice_state.asked_once = true
-        (src.call)("notify.set", { "asked": Json::boolean(true) }, fn(_) {  })
+        (src.call)("notify.set", { "asked": Json::boolean(true) }, answer_unread)
         (h.ask)() |> ignore
       }
       // the registration for pushes, once at the start (MainActivity: Push.sync)
@@ -309,7 +309,7 @@ fn tell_permission(src : Source, notify : Json?) -> Unit {
     "ask" => if field(notify, "asked") is Some(False) { "default" } else { "denied" }
     s => s
   }
-  (src.call)("notify.permission", { "state": Json::string(state) }, fn(_) {  })
+  (src.call)("notify.permission", { "state": Json::string(state) }, answer_unread)
 }
 
 ///|

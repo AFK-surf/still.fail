@@ -27,7 +27,7 @@ pub fn changelog_node(
     fn(news) {
       if news != "" && news != changelog_seen.val {
         changelog_seen.val = news
-        (core.call)("changelog.seen", obj([]), fn(_) {  })
+        (core.call)("changelog.seen", obj([]), @sfbase.answer_unread)
       }
     },
   )

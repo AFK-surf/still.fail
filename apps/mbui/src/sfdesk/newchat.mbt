@@ -158,7 +158,7 @@ fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
   let open = new_files_open(src, ws)
   side_changing("new:" + ws, if open { ["files"] } else { [] }, if open { "files" } else { "" }, on)
   let call = if on { "chat.tabs.open" } else { "chat.tabs.close" }
-  (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, fn(_) {  })
+  (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, @sfbase.answer_unread)
 }
 
 ///|

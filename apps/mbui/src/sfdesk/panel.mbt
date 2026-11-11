@@ -79,7 +79,7 @@ pub fn side_ask(src : Source, r : ChatRef, action : String, tab : String?) -> Un
     Some(t) => params["tab"] = Json::string(t)
     None => ()
   }
-  (src.call)("chat.tabs." + action, Json::object(params), fn(_) {  })
+  (src.call)("chat.tabs." + action, Json::object(params), @sfbase.answer_unread)
 }
 
 ///|

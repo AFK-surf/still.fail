@@ -296,6 +296,29 @@ fn lint_mbt(
       }
     }
   }
+  // an empty `on_done` (or `done` of a source's call: `(src.call)(name, params, fn(_) {  })`) outside the tests: to the
+  // core it is a reader, its answer awaited and the frame after it built whole for nothing; a call nobody reads the
+  // answer of gives none (@core.call) or the app's answer_unread (still.fail's sfbase/source.mbt)
+  for k, tk in toks {
+    if tk.text == "fn" &&
+      k + 5 < toks.length() &&
+      toks[k + 1].text == "(" &&
+      toks[k + 2].text == "_" &&
+      toks[k + 3].text == ")" &&
+      toks[k + 4].text == "{" &&
+      toks[k + 5].text == "}" &&
+      k > 1 &&
+      !f.in_test(k) &&
+      (
+        (toks[k - 1].text == "=" && toks[k - 2].text == "on_done") ||
+        (toks[k - 1].text == "," &&
+        k + 6 < toks.length() &&
+        toks[k + 6].text == ")" &&
+        done_of_call(toks, k))
+      ) {
+      add("empty-on-done", k, f.line_text(k))
+    }
+  }
   // a key read by a build (`c.key_pressed(code)`, `c.keys_came()`, `@settings.action_pressed(…)`: a Bool the frame
   // after it) outside mbui's ui and kit, which take keys, and outside the tests: what a key does is an action's
   // (View::on_action) or a node's own (View::on_key)
@@ -2230,4 +2253,29 @@ fn paint_flows(f : MbtFile, paint_at : Map[Int, Unit]) -> Map[Int, Unit] {
 /// operator, an else)
 fn value_goes_on(t : Tok) -> Bool {
   [".", "|>", "&&", "||", "+", "-", "*", "/", "else"].contains(t.text)
+}
+
+///|
+/// Whether what is at `k` is the last argument of a source's call: its parenthesis opened right after `(….call)` or
+/// `(….call_bytes)` (empty-on-done).
+fn done_of_call(toks : Array[Tok], k : Int) -> Bool {
+  let mut depth = 0
+  let mut i = k - 1
+  while i >= 0 {
+    let t = toks[i].text
+    if t == ")" || t == "]" || t == "}" {
+      depth = depth + 1
+    } else if t == "(" || t == "[" || t == "{" {
+      if depth == 0 {
+        return t == "(" &&
+          i >= 3 &&
+          toks[i - 1].text == ")" &&
+          (toks[i - 2].text == "call" || toks[i - 2].text == "call_bytes") &&
+          toks[i - 3].text == "."
+      }
+      depth = depth - 1
+    }
+    i = i - 1
+  }
+  false
 }

@@ -19,5 +19,5 @@ pub fn set_font(core : Core, place : String, id : String?) -> Unit {
   }
   let fonts : Map[String, Json] = {}
   fonts[place] = v
-  (core.call)("prefs.set", Json::object({ "fonts": Json::object(fonts) }), fn(_) {  })
+  (core.call)("prefs.set", Json::object({ "fonts": Json::object(fonts) }), answer_unread)
 }

@@ -60,7 +60,7 @@ fn new_profile_left(core : Core, station : String) -> Unit {
     Some(n) if !n.dropped => {
       n.dropped = true
       drop_login(core, station, n)
-      (core.call)("profile.flow.drop", obj([("station", str(station)), ("form", str(n.form))]), fn(_) {  })
+      (core.call)("profile.flow.drop", obj([("station", str(station)), ("form", str(n.form))]), answer_unread)
     }
     _ => ()
   }
@@ -75,7 +75,7 @@ pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
       None => false
     }
     if !made {
-      (core.call)("login.drop", obj([("station", str(station)), ("id", str(n.login.get()))]), fn(_) {  })
+      (core.call)("login.drop", obj([("station", str(station)), ("id", str(n.login.get()))]), answer_unread)
     }
     n.login.set("")
   }

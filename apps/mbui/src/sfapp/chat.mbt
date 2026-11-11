@@ -187,7 +187,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   let kept = match saved { Some(view) => Some(view); None => @sfbase.chat_kept_from(src, r) }
   match (kept, readings.get(k)) {
     (Some(v), Some(rd)) if !src.read_only => {
-      (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
+      (src.call)("client.focus", { "left": focus_chat(r, v, None) }, @sfbase.answer_unread)
       match v.thread {
         Some(_) if rd.placed => tell_place(src, r, v, rd, exact=true)
         _ => ()

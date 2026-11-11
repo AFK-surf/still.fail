@@ -1894,7 +1894,7 @@ pub fn tell_focus(
       _ => ()
     }
   }
-  (src.call)("client.focus", { "chat": chat }, fn(_) {  })
+  (src.call)("client.focus", { "chat": chat }, answer_unread)
 }
 
 ///|
@@ -1970,7 +1970,7 @@ pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading, exact? 
   }
   rd.told_place = said
   rd.told_at = at
-  (src.call)("chat.place", Json::object(place), fn(_) {  })
+  (src.call)("chat.place", Json::object(place), answer_unread)
 }
 
 ///|

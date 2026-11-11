@@ -515,5 +515,5 @@ pub fn long_jobs_seen(src : Source, w : Workspace) -> Unit {
   let ids = field(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "ids").unwrap_or(Json::array([]))
   let m : Map[String, Json] = {}
   m[w.id] = ids
-  (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), answer_unread)
 }

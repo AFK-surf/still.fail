@@ -181,6 +181,11 @@ let core_source : @sfapp.Source = {
     if call_log {
       @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
+    // (one whose answer nobody reads: none given to the core, its answer taken as it comes, building nothing)
+    if @sfbase.unread_answer(done) {
+      @core.call(name, params~)
+      return
+    }
     @core.call(name, params~, on_done=fn(r) {
       if call_log {
         match r {
@@ -198,6 +203,10 @@ let core_source : @sfapp.Source = {
     }
     if call_log {
       @hostapi.log("CALL \{name} \{logged(name, params)} with \{bytes.length()} bytes")
+    }
+    if @sfbase.unread_answer(done) {
+      @core.call(name, params~, bytes=Some(bytes))
+      return
     }
     @core.call(name, params~, bytes=Some(bytes), on_done=fn(r) {
       if call_log {
