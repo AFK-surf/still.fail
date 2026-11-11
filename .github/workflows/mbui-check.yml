@@ -38,8 +38,11 @@ on:
 concurrency:
   group: ${{ github.event_name != 'workflow_run' && github.workflow == 'mbui-check' && github.ref == 'refs/heads/main' && format('mbui-check-{0}', github.ref) || format('mbui-check-call-{0}-{1}', github.run_id, github.run_attempt) }}
   cancel-in-progress: false
+# (actions: read: main's run reads the runs of the merged pull requests' branches for the units they compiled, and
+# rates-said main's runs before it, below; each caller grants it)
 permissions:
   contents: read
+  actions: read
 jobs:
   # The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh: still.fail's design system and pages over the
   # fixtures, the screens, the media screens, the core client, and the end-to-end flows seen again over their recorded
@@ -164,6 +167,43 @@ jobs:
           cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
           cp -a -n "$RUNNER_TEMP/store-arch/." "$MBC_STORE/"
           echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l), arch/next's $(find "$RUNNER_TEMP/store-arch" -mindepth 2 -maxdepth 2 -type d | wc -l))"
+      # Main's run after a merge: the units each pull request merged since the run its store came from compiled on its
+      # branch's last push (its pipeline run's artifact, below), beside them. Main's run is one at a time, the newest
+      # waiting, so one covers several merges and had all they changed to compile again: 486-487 of sfapp's 1002 units,
+      # 156-162 s, app build 267-311 s of its 5 minutes (1bf02b58, 16c0c777 stopped, f150a1db, 2026-11-11), the branch
+      # having compiled the same units by their content already. What is not found is compiled, as before.
+      - name: The units the merged branches compiled
+        if: env.OWN == 'm-' && github.event_name == 'push'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROM: ${{ steps.moon.outputs.cache-matched-key }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          r=$GITHUB_REPOSITORY
+          from=${FROM##*-}
+          [ ${#from} = 40 ] || from=$BEFORE
+          shas=$(gh api "repos/$r/compare/$from...$GITHUB_SHA" --jq '.commits[].sha' | tail -12)
+          mkdir -p "$MBC_STORE" "$RUNNER_TEMP/branches"
+          n0=$(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l)
+          got=0
+          for s in $shas; do
+            # (the pull request it merged, and that one's branch's last commit)
+            head=$(gh api "repos/$r/commits/$s/pulls" --jq '[.[] | select(.merged_at != null)][0].head.sha // ""')
+            [ -n "$head" ] || continue
+            for id in $(gh run list -R "$r" -w pipeline -c "$head" -L 3 --json databaseId --jq '.[].databaseId'); do
+              d="$RUNNER_TEMP/branches/$id"
+              gh run download "$id" -R "$r" -n "mbui-units-$CACHE_PREFIX$head" -D "$d" 2>/dev/null || continue
+              tar -xf "$d/units.tar" -C "$MBC_STORE" --skip-old-files
+              rm -rf "$d"
+              got=$((got + 1))
+              break
+            done
+          done
+          echo "units: $n0 of main's, $(( $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) - n0 )) more of $got merged branches' for $(echo $shas | wc -w) commits since ${from:0:8}"
+      - name: The units this run had before
+        if: env.OWN == 'b-'
+        run: (mkdir -p "$MBC_STORE" && cd "$MBC_STORE" && find . -mindepth 2 -maxdepth 2 -type d | sort) > "$RUNNER_TEMP/units-before"
       - name: The mbui app's tests and the flows seen again (native, ${{ env.PART }})
         id: tests
         run: |
@@ -206,6 +246,21 @@ jobs:
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
         # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
         run: moon version && bash apps/mbui/scripts/check.sh
+      # (a branch's: the units it compiled, for main's run once it is merged (above). Its own cache is its branch's
+      # alone; main's run is helped by it, never waits on it: a failed upload fails nothing)
+      - name: The units this run compiled, for main's
+        id: queue-units
+        if: always() && env.OWN == 'b-'
+        run: |
+          (cd "$MBC_STORE" && find . -mindepth 2 -maxdepth 2 -type d | sort) > "$RUNNER_TEMP/units-after"
+          comm -13 "$RUNNER_TEMP/units-before" "$RUNNER_TEMP/units-after" > "$RUNNER_TEMP/units-new"
+          echo "units compiled: $(wc -l < "$RUNNER_TEMP/units-new")"
+          mkdir -p "$RUNNER_TEMP/queue-units"
+          [ ! -s "$RUNNER_TEMP/units-new" ] || tar -cf "$RUNNER_TEMP/queue-units/units.tar" -C "$MBC_STORE" -T "$RUNNER_TEMP/units-new"
+      - if: always() && steps.queue-units.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with: { name: "mbui-units-${{ env.CACHE_PREFIX }}${{ github.sha }}", path: "${{ runner.temp }}/queue-units", retention-days: 1, compression-level: 1, if-no-files-found: ignore }
       - name: Where the build's time went (mbc)
         if: always()
         run: |
