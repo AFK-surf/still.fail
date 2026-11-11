@@ -21,7 +21,7 @@ fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
 /// (useStationDrive: as the view has its stations), on a station it can start on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   new_keys(c, src, w)
-  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
+  let v = src.topic("newChat", @sfpages.new_chat_asked(w.id)).get().value
   let frame = new_frame(src, w)
   let station = field(v, "station")
   let address = text(station, "station")
@@ -93,7 +93,7 @@ fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// The station workspace `w`'s new chat starts on, where the stations lend their files (useStationDrive: as the view
 /// has its stations): its 文件 tab is had; None where it is not (blocked, no station, none with a drive).
 fn new_drive_station(src : Source, w : Workspace) -> String? {
-  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
+  let v = src.topic("newChat", @sfpages.new_chat_asked(w.id)).get().value
   let station = field(v, "station")
   let address = text(station, "station")
   let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""

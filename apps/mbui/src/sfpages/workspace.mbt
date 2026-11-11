@@ -59,15 +59,10 @@ fn new_ws_cleared() -> Unit {
 }
 
 ///|
-/// The workspace `ws` the one in view, at its top (the prefs' `workspace`: the rail's switch, the list's row).
+/// The workspace `ws` the one in view, at its top (the prefs' `workspace`: the rail's switch, the list's row), once
+/// what its Home opens on is answered, switch_wait_ms at most (sfbase's switch_workspace_to).
 pub fn switch_workspace(src : Source, ws : String) -> Unit {
-  if ws == "" {
-    return
-  }
-  @sfbase.history_push()
-  app.picked.set(ws)
-  (src.call)("prefs.set", Json::object({ "workspace": Json::string(ws) }), @sfbase.answer_unread)
-  @sfbase.nav_home()
+  @sfbase.switch_workspace_to(src, ws)
 }
 
 // ── the workspaces ─────────────────────────────────────────────────────

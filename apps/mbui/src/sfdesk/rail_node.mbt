@@ -108,6 +108,13 @@ fn rail_menu_from(place : String, src : Source) -> (Double, Double, Double, Doub
 }
 
 ///|
+/// What the rail (rail_node) shows of workspace `ws` as it opens, asked of `ask` (sfbase's opens_answered): the core's
+/// marks (its places' tones, the workspaces' at its foot), what it reads of it but the prefs, which are the app's whole.
+fn rail_opens(ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked(ws)))
+}
+
+///|
 /// The rail in node `n` (as wide as the rail is drawn, the block's height), where `at` says it is drawn, in the workspace
 /// in view; its tips in `tips`, its places' cards in `cards` (a layer over all of the window).
 fn rail_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> RailAt) -> Unit {
@@ -476,7 +483,7 @@ fn rail_place_node(item : @view.View, src : Source, tips : @sf.TipLayer, place :
   let tone = fn() {
     match ws() {
       Some(w) => {
-        let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
+        let marks = src.topic("workspaceMarks", @sfbase.marks_asked(w.id)).get().value
         let here = field(field(marks, "workspaces"), w.id)
         match place {
           "chats" => text(here, "tone")
@@ -769,7 +776,7 @@ fn rail_workspaces_node(r : @view.View, src : Source, tips : @sf.TipLayer, at : 
   let ws = fn() { @sfbase.workspace_in_view(src).0 }
   let marks = fn() {
     match ws() {
-      Some(w) => field(src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value, "workspaces")
+      Some(w) => field(src.topic("workspaceMarks", @sfbase.marks_asked(w.id)).get().value, "workspaces")
       None => None
     }
   }

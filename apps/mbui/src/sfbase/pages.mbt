@@ -698,6 +698,7 @@ pub fn reset() -> Unit {
   history_reset()
   last_reset()
   ahead_reset()
+  switch_reset()
   app.picked.set("")
   @ui.set_motion_chosen(None)
   @ui.set_haptics(true)

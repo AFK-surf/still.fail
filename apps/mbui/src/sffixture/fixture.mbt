@@ -1318,8 +1318,14 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
 /// and none of it after the client lets it go (its unsubscribe, sent once no reader of it is left anywhere); so what is
 /// asked again and when is the client's to say, as on a device, never this made-up core's own count of who reads what.
 /// Calls are `base`'s, as they were (the client carries them too: answered so). What the client sends and what is
-/// answered are the same messages a run's trace keeps (src/core's trace.mbt), told to `heard` as they go.
-pub fn round_trip_again(base : Source, ms : Double, heard? : (String) -> Unit = fn(_) {  }) -> Source {
+/// answered are the same messages a run's trace keeps (src/core's trace.mbt), told to `heard` as they go. `late`, where
+/// said, how late each topic is answered by its name and params (as a page reads them), in `ms`'s place.
+pub fn round_trip_again(
+  base : Source,
+  ms : Double,
+  heard? : (String) -> Unit = fn(_) {  },
+  late? : (String, Map[String, Json]) -> Double,
+) -> Source {
   // (the topic and params a page read, by what the client puts on the wire for them: what to answer it with)
   let named : Map[String, (String, Map[String, Json])] = {}
   // (what is answered for each subscription the client holds, by its id: called to stop)
@@ -1364,8 +1370,12 @@ pub fn round_trip_again(base : Source, ms : Double, heard? : (String) -> Unit = 
           on.val = false
           (stop.val)()
         }
-        // its first value `ms` late, each change after as it comes
-        fix_later(ms, fn() {
+        // its first value `ms` late (or as `late` says), each change after as it comes
+        let due = match late {
+          Some(by) => by(name, params)
+          None => ms
+        }
+        fix_later(due, fn() {
           guard on.val else { return }
           let owner = @signals.set_owner(None)
           stop.val = @signals.effect(fn() {

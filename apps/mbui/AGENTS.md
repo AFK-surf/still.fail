@@ -93,6 +93,13 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     One exception (the user, 2026-11-10): how each station up is reached (`stationNet`, Station's network line) is
     sampled of the stations, so it is asked only from a finger on Station's tab, never while Home sits; the first time
     Station opens in a run, and before the core has said it, that line alone shows its bones.
+  - Nothing looks like loading within 300 ms of switching workspace (the user, 2026-11-11: 「在三百 ms 内都不应该让用户
+    感觉到加载」, 「按理说一帧就能处理完」): the screen stays as it was till all the new workspace's first screen reads
+    is answered, `switch_wait_ms` at most, and switches in the press's frame where it is answered already
+    (`src/sfbase/workspace_switch.mbt`; `src/sfapp/late_core_wbtest.mbt`, each screen). What that is, each shell says
+    by the function its panes open by, which their pages wait by too (小屏 sfapp's `home_opens`; 中屏 and 大屏
+    sfdesk's `frame_opens`: the rail's, the sidebar's, the page the pane lands on): something a pane comes to show
+    of a workspace as it opens goes in its function, never in a list of the switch's.
   - A step further in is the presenters', never a page's (弹层里往里走: the user, 2026-11-02, and 2026-11-10 「系统性
     全修一下」 once the chat's own sheet and a menu's 分享… were found never to have had it). A page says `close()` and
     opens the next, and keeps no step number and no 返回 button of its own; `src/sf/presenters.mbt` does the rest on

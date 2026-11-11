@@ -927,6 +927,21 @@ pub fn chat_params(r : ChatRef) -> Map[String, Json] {
 }
 
 ///|
+/// What chat `r`'s page opens on, asked of `ask` (opens_answered's): its view, answered once it is, or why it has none,
+/// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come.
+pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
+  let t = ask("chat", chat_params(r))
+  opens_answered(t) || t.waiting
+}
+
+///|
+/// The core's marks of workspace `ws`'s chats and the others' (`workspaceMarks`: the rail's, 待处理's, the chat it was
+/// left on), asked one way wherever a workspace opening reads them.
+pub fn marks_asked(ws : String) -> Map[String, Json] {
+  { "workspace": Json::string(ws) }
+}
+
+///|
 /// The bar needs only whether there are jobs and whether its button has an alarm; the jobs sheet reads the whole list.
 pub fn chat_jobs_summary_params(r : ChatRef) -> Map[String, Json] {
   let params = chat_params(r)
