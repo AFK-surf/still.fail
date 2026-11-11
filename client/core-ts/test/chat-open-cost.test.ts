@@ -65,6 +65,29 @@ test("a_chat_with_links_reads_of_each_other_station_what_a_link_is_taken_to_alon
   assert.ok(made.overviewPartChars - own <= 5 * 16, `${made.overviewPartChars - own} characters of parts besides its own station's chat part`);
 });
 
+test("a_chats_first_answer_waits_for_what_it_is_made_of_alone", async () => {
+  // Its sources were worked out twice before its first value (as it started, then as it was made), each looking
+  // through all its messages for the chats they link to, whose stations' lists it watches to keep them current:
+  // 2.3-5.5 ms in Hermes before a chat switched to could go out. Those lists are watched once it has gone out.
+  const { host, base } = await written();
+  const t = setup({ all: true, host });
+  let atFirst: typeof work | null = null;
+  const before = { ...work };
+  const told = t.router.opened.bind(t.router);
+  t.router.opened = (topic) => {
+    if (topic.topic === "chat" && atFirst === null) atFirst = workSince(before);
+    told(topic);
+  };
+  const u = ui();
+  t.subscribe(1, CHAT_TOPIC);
+  for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
+  await t.read(u, 1);
+  assert.equal(u.value.messages.length, OPENS);
+  assert.equal(atFirst!.linkScans, 0, "no message looked through for links before its first value");
+  assert.equal(workSince(before).linkScans, 1, "once after it");
+  t.store.runner.shutdown();
+});
+
 /// What a core before the chat's part keeps the parts by (schema.ts as #5619 left it): its triggers, made again in
 /// place of these, and every part made again of the overviews with them, none with a chat's.
 function olderTriggers(): string {

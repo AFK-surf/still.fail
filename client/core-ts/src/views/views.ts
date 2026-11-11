@@ -816,7 +816,7 @@ export class Views implements Owner {
   readonly #core: ViewsEnv;
   readonly local: Local;
   /// Per live view, the topics it watches.
-  readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
+  readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch>; opening: boolean }>();
   /// The latest chats' things read (`#things`), by station and thread, with what they were read from.
   readonly #thingsKept = new Map<string, Derived<{ messages: J[]; things: ReturnType<typeof thingsOf>; whole: boolean; title: unknown } | null>>();
   /// A chat's outline's rows (`outlineRows`), by the message each was made of, and what else it was made with.
@@ -874,9 +874,22 @@ export class Views implements Owner {
   // ── what the views watch ──
 
   start(view: Topic): void {
-    this.#views.set(topicKey(view), { topic: view, watches: new Map() });
+    // A chat's first value waits for what it is made of alone: what only keeps it current as it shows (the chats its
+    // messages link to, as their stations' lists have them) is watched once that value has gone out (`opened`), and
+    // its sources are not worked out again as it is first made. Both were 2.3-5.5 ms in Hermes before a chat switched
+    // to could go out (a Mac Studio, 2026-11-12: its links' stations found in all its messages).
+    const opening = view.topic === "chat";
+    this.#views.set(topicKey(view), { topic: view, watches: new Map(), opening });
     this.#sync(view);
     this.#core.store.invalidate(view);
+  }
+
+  /// A view's first value went out: what it keeps watched from now on (`start`).
+  opened(view: Topic): void {
+    const live = this.#views.get(topicKey(view));
+    if (live === undefined || !live.opening) return;
+    live.opening = false;
+    untracked(() => this.#sync(view));
   }
 
   /// Shown again while it was kept: a search asks its stations again (what they hold changes; station/sync.ts
@@ -989,7 +1002,7 @@ export class Views implements Owner {
   #sync(view: Topic): void {
     const live = this.#views.get(topicKey(view));
     if (!live) return;
-    const wanted = new Map(this.#sources(view).map((t) => [topicKey(t), t] as [string, Topic]));
+    const wanted = new Map(this.#sources(view, live.opening).map((t) => [topicKey(t), t] as [string, Topic]));
     for (const [key, w] of [...live.watches]) {
       if (!wanted.has(key)) {
         live.watches.delete(key);
@@ -1009,8 +1022,8 @@ export class Views implements Owner {
     }
   }
 
-  /// The topics a view is built from, given what is known now.
-  #sources(view: Topic): Topic[] {
+  /// The topics a view is built from, given what is known now; `opening`, what its first value reads alone (`start`).
+  #sources(view: Topic, opening = false): Topic[] {
     const topics: Topic[] = [];
     const station = typeof view.station === "string" ? view.station : "";
     // (and its station's screens, for its bar's way to them)
@@ -1169,13 +1182,13 @@ export class Views implements Owner {
         if (typeof view.thread !== "number" && session !== null && session.startsWith(PENDING_PREFIX)) {
           topics.push({ topic: "overview", station });
           const thread = this.local.pendingThread(station, session);
-          if (typeof thread === "number") return this.#sources({ topic: "chat", station, thread, session: null });
+          if (typeof thread === "number") return this.#sources({ topic: "chat", station, thread, session: null }, opening);
           topics.push({ topic: "link", station }, { topic: "workspace", workspace: ofAddress(station) });
           return topics;
         }
         if (typeof view.thread !== "number" && session !== null) {
           const bound = this.boundThread(station, session);
-          if (bound !== null) return this.#sources({ topic: "chat", station, thread: bound, session: null });
+          if (bound !== null) return this.#sources({ topic: "chat", station, thread: bound, session: null }, opening);
         }
         if (typeof view.thread !== "number") {
           // (an agent with no chat of its own here, one that has only been in Slack: what it shows, what it heard and
@@ -1214,6 +1227,7 @@ export class Views implements Owner {
         // archive: shown, a station's archive is read from it whole (sync.ts archivedShown), its thousands of rows the
         // most of opening a chat with a link in it (0.63 s on a phone, 2026-10-31); one archived meanwhile is said so
         // as the chat is made again.
+        if (opening) return topics;
         for (const s of this.#linkedStations(station, arr(get(this.ok({ topic: "thread", station, thread }), "entries")))) {
           if (s !== station) topics.push({ topic: "chatRows", station: s });
         }
@@ -1324,6 +1338,7 @@ export class Views implements Owner {
   /// The stations whose chats what was said in a chat on `station` links to (its entries' words): its own, and those of
   /// the viewer's workspaces online.
   #linkedStations(station: string, entries: J[]): string[] {
+    work.linkScans++;
     const out: string[] = [];
     for (const e of entries) {
       if (!mayLink(e)) continue;
@@ -1466,8 +1481,9 @@ export class Views implements Owner {
   }
 
   compute(view: Topic): Value | undefined {
-    if (!this.#views.has(topicKey(view))) return undefined;
-    timed(`${view.topic}.sources`, () => untracked(() => this.#sync(view)));
+    const live = this.#views.get(topicKey(view));
+    if (live === undefined) return undefined;
+    if (!live.opening) timed(`${view.topic}.sources`, () => untracked(() => this.#sync(view)));
     const out = timed(`${view.topic}.make`, () => this.#compute(view));
     if (view.topic !== "chat" || out === undefined || !("ok" in out)) return out;
     const v = out.ok as J;

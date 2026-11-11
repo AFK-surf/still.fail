@@ -20,6 +20,7 @@ export interface Owner {
   stop?(topic: Topic): void;
   compute?(topic: Topic): Value | undefined;
   waits?(topic: Topic): boolean;
+  opened?(topic: Topic): void;
 }
 
 /// Whether two values `after` made of one are the same: each field the very same, a list's items each the very same
@@ -63,6 +64,10 @@ export class Router implements Source {
 
   resume(topic: Topic): void {
     this.owners.find((o) => o.owns(topic))?.resume?.(topic);
+  }
+
+  opened(topic: Topic): void {
+    this.owners.find((o) => o.owns(topic))?.opened?.(topic);
   }
 
   stop(topic: Topic): void {

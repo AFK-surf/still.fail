@@ -77,6 +77,8 @@ export interface Source {
   /// Whether a topic with no value yet waits on a station for it (nothing it shows is on the device), not only on what
   /// it is computed from being computed: its subscribers are told so (`waiting`).
   waits?(topic: Topic): boolean;
+  /// The topic's first value has gone out to its subscribers: what only keeps it current from now on may start.
+  opened?(topic: Topic): void;
 }
 
 /// Keeps a watched topic subscribed; `drop` lets the topic go like a UI unsubscribing.
@@ -123,6 +125,8 @@ type Entry = {
   output?: Output;
   /// A page's first subscriber waiting for its first value (OPENED): its trace, and what the core spent making it.
   opening?: { span: Span; workMs: number; computes: number; mdFrom: number; spentFrom: Record<string, number> };
+  /// Its source told its first value went out (or was made where nobody subscribes): `Source.opened`, once.
+  openedTold?: boolean;
   /// Its subscribers told it waits on a station (Source.waits), while it has no value.
   waiting?: boolean;
 };
@@ -802,6 +806,7 @@ export class Store {
       // `profiles` shaped again (5 ms in Hermes, 2026-11-11). What is held is read from Data, not here: out of date.
       if (isHeld || !this.#sentHolds(now)) now.outputDirty = true;
       for (const w of changed) w();
+      if (now.value !== undefined) this.#opened(now);
       return;
     }
     if (!this.#inView && now.sent !== undefined && !UNSEEN.has(topic.topic)) {
@@ -861,6 +866,14 @@ export class Store {
       if (first) this.host.emit(client, first);
       else if (o) this.host.emit(client, to(o, id));
     }
+    this.#opened(now);
+  }
+
+  /// A topic's first value made and gone out where it has subscribers: its source told so, once (`Source.opened`).
+  #opened(entry: Entry): void {
+    if (entry.openedTold) return;
+    entry.openedTold = true;
+    this.#source?.opened?.(entry.topic);
   }
 
   /// Whether what went out of the topic last (`sent`) is what would go out of it now: an error that went out as it is,
