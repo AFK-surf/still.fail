@@ -44,7 +44,7 @@ fn late_pick_tester(sent : Array[String], w : Double, h : Double, platform : Int
 /// The ids the client asked the core for a model control's panel (`pick`) by, in `sent`.
 fn pick_asks(sent : Array[String]) -> Array[Int] {
   sent.filter_map(fn(m) {
-    let j = @json.parse(m[4:].to_string()) catch { _ => return None }
+    let j = @json.parse(m[4:].to_owned()) catch { _ => return None }
     match j {
       Object(o) =>
         match (o.get("id"), o.get("subscribe")) {
@@ -66,7 +66,7 @@ fn pick_asked(sent : Array[String]) -> Bool {
 /// Whether the client let go of each panel it asked for in `sent`.
 fn pick_let_go(sent : Array[String]) -> Bool {
   let gone : Array[Int] = sent.filter_map(fn(m) {
-    let j = @json.parse(m[4:].to_string()) catch { _ => return None }
+    let j = @json.parse(m[4:].to_owned()) catch { _ => return None }
     match j {
       Object(o) =>
         match (o.get("id"), o.get("unsubscribe")) {
@@ -201,7 +201,7 @@ test "a new chat's model control pressed over a core answering its panel 1 s lat
         }
       }
       if !pick_let_go(sent) {
-        faults.push(at + ": not let go of \{pick_asks(sent)} \{sent.filter(fn(m) { m.contains("unsubscribe") })}")
+        faults.push(at + ": not let go of \{Repr(pick_asks(sent))} \{Repr(sent.filter(fn(m) { m.contains("unsubscribe") }))}")
       }
     }
   }
