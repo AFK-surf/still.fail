@@ -294,7 +294,10 @@ for t in $targets; do
         case "${MBUI_TEST_FPS:-}" in
           # (the first's other runs at 60 436 s of its cores, not 560: the packages' 173 and preview_tree's halves 153
           # and 110, main 23971ce1 43066168046, 2026-11-11, where the fourth's pages were 288 s of its 300 on its four)
-          60) specs="4,4,440,1 4,4,20,1 1,4,600,1 4,4,0,1" ;;
+          # (dealt so, the first's 271 s, the fourth's 251, the second's 240 and the third's 121 at 60, main 4d4bc73a
+          # 43070391697: the third's pages on one program beside kept_rows' five runs took little. Its pages on two
+          # now, and the first's other runs between the two measures)
+          60) specs="4,4,520,1 4,4,20,1 2,4,560,1 4,4,0,1" ;;
           120) specs="4,4,160,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
           24 | 7) specs="4,4,90,2 4,4,14,2 1,4,840,2 4,4,120,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
