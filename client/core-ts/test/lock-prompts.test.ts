@@ -11,7 +11,8 @@ import { CoreError, HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
-import { BEHIND_MS, BEHIND_TRIES, held, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
+import { BEHIND_MS, BEHIND_TRIES, Lock, held, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
+import { jsonResponse } from "../src/testing.ts";
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
 
@@ -396,4 +397,57 @@ test("a member or a station taken out of a locked workspace, or a member given a
   await s.ask("workspace.removeMember", { account: "s1", workspace: "ws", member: "s2" });
   assert.deepEqual(said, ["cloud DELETE /v1/workspaces/ws/members/s2"]);
   assert.equal(s.cloud.chains.get("ws")!.length, 1);
+});
+
+test("people added to a locked workspace are in its lock with the role given: by their sub, or by their email until their first device is approved", async () => {
+  // (2026-11-11: someone added as an owner came in a member, the lock making them one as their device was approved)
+  const members = [
+    { sub: "s1", email: "a@x.com", role: "owner" }, { sub: "s2", email: "b@x.com", role: "member" },
+    { sub: "s3", email: "c@x.com", role: "admin" }, { sub: "s4", email: "e@x.com", role: "member" },
+  ];
+  const json = (b: unknown) => Promise.resolve(jsonResponse(200, b));
+  const seen = { members: false };
+  let r: Awaited<ReturnType<typeof rig>> | null = null;
+  r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: ST, name: "studio" }], {}, ME, [phone]) }), (host) => {
+    stationLater(host, (req) => {
+      const path = new URL(req.url).pathname;
+      if (req.method === "POST" && path === "/admin/api/lock") return new Promise(() => {});
+      if (req.method === "POST" && path === "/v1/workspaces/ws/members") {
+        seen.members = true;
+        return json({ joined: ["C@x.com"], added: ["d@x.com"], already: ["b@x.com"], view: { members } });
+      }
+      if (req.method === "DELETE" && path === "/v1/workspaces/ws/added/d%40x.com") return json({ members });
+      if (req.method === "PATCH" && path === "/v1/workspaces/ws/members/s4") return json({ ok: true });
+      if (req.method === "GET" && path === "/v1/workspaces/ws" && seen.members) {
+        return json({ id: "ws", name: "W", role: "owner", lock: r!.cloud.head("ws"), lock_requests: 0, stations: [{ id: ST, name: "studio", online: true, last_seen: null }], members });
+      }
+      return undefined;
+    });
+  }, ST);
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const last = (n: number) => r!.cloud.chains.get("ws")!.slice(-n).map((e) => [e.kind, e.body]);
+
+  await r.ask("workspace.addMembers", { account: "s1", workspace: "ws", role: "admin", emails: ["C@x.com", "d@x.com", "b@x.com"] });
+  // (b@x.com the cloud had already, and the lock has as a member: left as they are)
+  assert.deepEqual(last(2), [["member", { sub: "s3", email: "c@x.com", role: "admin" }], ["member", { sub: "pending:d@x.com", email: "", role: "admin" }]]);
+  // Not on the lock's page: no one there yet to show devices of.
+  const page = await (await r.watch({ topic: "lock", workspace: "ws" }))();
+  assert.ok(!page.members.some((m: { sub: string }) => m.sub.startsWith("pending:")), JSON.stringify(page.members));
+
+  // A role given to a member the lock has not heard of yet puts them in it with that role.
+  await r.ask("workspace.setRole", { account: "s1", workspace: "ws", member: "s4", role: "admin" });
+  assert.deepEqual(last(1), [["member", { sub: "s4", email: "e@x.com", role: "admin" }]]);
+
+  // Their first device approved: the role they were added with, the name held for them taken out.
+  const admitted = r.core.inner.runner.run(new Lock(r.core.inner, "ws", "s1", null).admit("s5", "d@x.com"));
+  let over = false;
+  void admitted.then(() => (over = true));
+  for (let i = 0; i < 2000 && !over; i++) await r.host.time.pass(10);
+  await admitted;
+  assert.deepEqual(last(2), [["member", { sub: "s5", email: "d@x.com", role: "admin" }], ["member.remove", { sub: "pending:d@x.com" }]]);
+
+  // One added and taken back before they signed in: out of the lock too.
+  await r.ask("workspace.addMembers", { account: "s1", workspace: "ws", role: "admin", emails: ["d@x.com"] });
+  await r.ask("workspace.removeAdded", { account: "s1", workspace: "ws", email: "d@x.com" });
+  assert.deepEqual(last(1), [["member.remove", { sub: "pending:d@x.com" }]]);
 });

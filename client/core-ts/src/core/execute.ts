@@ -38,6 +38,8 @@ export const hooks: {
   /// A member about to be taken out of a workspace or given another role, or a station taken out: so in its lock
   /// first, by this device's signature where it signs there (views/lock.ts).
   roster?: (inner: Inner, sub: string, workspace: string, what: Roster) => Effect.Effect<unknown, CoreError>;
+  /// People added to a workspace (the cloud's answer): so in its lock too, with the role given (views/lock.ts).
+  added?: (inner: Inner, sub: string, workspace: string, role: string, answer: unknown) => Effect.Effect<unknown, CoreError>;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
@@ -46,9 +48,11 @@ export const hooks: {
 /// role, a station out.
 export type Roster = { member: string; gone: true } | { member: string; role: string } | { station: string };
 function rosterOf(method: string, path: string, body: unknown): { ws: string; what: Roster } | null {
-  const m = /^\/v1\/workspaces\/([^/]+)\/(members|stations)\/([^/]+)$/.exec(path);
+  const m = /^\/v1\/workspaces\/([^/]+)\/(members|stations|added)\/([^/]+)$/.exec(path);
   if (m === null) return null;
   const [ws, kind, id] = [m[1]!, m[2]!, m[3]!].map((x) => decodeURIComponent(x)) as [string, string, string];
+  // (one added who has not signed in yet is held in the lock under their email: views/lock.ts `pendingOf`)
+  if (kind === "added") return method === "DELETE" ? { ws, what: { member: `pending:${id.trim().toLowerCase()}`, gone: true } } : null;
   if (method === "DELETE") return { ws, what: kind === "members" ? { member: id, gone: true } : { station: id } };
   const role = isObject(body) ? body.role : undefined;
   return method === "PATCH" && kind === "members" && typeof role === "string" ? { ws, what: { member: id, role } } : null;
@@ -120,6 +124,12 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
             const roster = rosterOf(op.method, op.path, op.body);
             if (roster && hooks.roster) yield* hooks.roster(inner, sub, roster.ws, roster.what);
             let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
+            // People added: so in a locked workspace's lock too, with the role given (views/lock.ts `added`).
+            const adding = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/members$/.exec(op.path) : null;
+            if (adding && hooks.added) {
+              const role = isObject(op.body) && typeof op.body.role === "string" ? op.body.role : "member";
+              yield* hooks.added(inner, sub, decodeURIComponent(adding[1]!), role, result);
+            }
             // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
             const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
             if (enrolling && hooks.enrolled) result = yield* hooks.enrolled(inner, sub, decodeURIComponent(enrolling[1]!), result);
