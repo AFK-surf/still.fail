@@ -4,8 +4,9 @@
 ///|
 /// What style `look` says (its base, the theme's as it is now: read again as that changes) laid on node `v`: a row or a
 /// column, its size (`in_row`: what holds it lays what it holds in a row, so `w=Full` takes what is left along it, else
-/// across it; `h=Full` the other way), its least and most, its padding and margin, the room between what it holds and
-/// how that lines up across it and lies along it, its corner, its ground and whether it cuts what it holds. What it
+/// across it; `h=Full` the other way; `w=Cut` cut short where it has not the room), its least and most, its padding and
+/// margin, the room between what it holds and how that lines up across it and lies along it (spread between its ends
+/// too), its corner, its ground and whether it cuts what it holds. What no node is laid out by is a fault (style_of). What it
 /// has never said is left as the node has it; what it said once and says no more is put back to none (no ground, a
 /// corner of 0, ...).
 #callsite(autofill(loc))
@@ -15,7 +16,7 @@ pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false
   // What it has said so far, at any time, decides what it sets: `was`'s `says`)
   let was : Ref[StyleSet?] = Ref(None)
   v
-  .sets_together(fn() { style_of(look().base, in_row) }, fn(s) {
+  .sets_together(fn() { style_of(look().base, in_row, loc) }, fn(s) {
     style_set(v, was.val, s, loc)
     was.val = Some(match was.val {
       Some(w) => { ..s, says: w.says.joined(s.says) }
@@ -34,7 +35,9 @@ priv struct StyleSet {
   w : Double?
   h : Double?
   grow : Double
+  cut : Bool
   min_w : Double?
+  min_w_within : Bool
   max_w : Double?
   min_h : Double?
   padding : (Double, Double, Double, Double)
@@ -53,6 +56,7 @@ priv struct StyleSays {
   w : Bool
   h : Bool
   grow : Bool
+  cut : Bool
   min_w : Bool
   max_w : Bool
   min_h : Bool
@@ -70,6 +74,7 @@ fn StyleSays::joined(self : StyleSays, more : StyleSays) -> StyleSays {
     w: self.w || more.w,
     h: self.h || more.h,
     grow: self.grow || more.grow,
+    cut: self.cut || more.cut,
     min_w: self.min_w || more.min_w,
     max_w: self.max_w || more.max_w,
     min_h: self.min_h || more.min_h,
@@ -87,14 +92,22 @@ fn StyleSays::joined(self : StyleSays, more : StyleSays) -> StyleSays {
 
 ///|
 /// Style `q` worked out (`in_row`: what holds it lays what it holds in a row), its corner and ground as the theme makes
-/// them now: the same tokens are another corner and colour in another.
-fn style_of(q : @ui.Patch, in_row : Bool) -> StyleSet {
+/// them now: the same tokens are another corner and colour in another. What of it a node cannot be laid out by (a share
+/// of what holds it as a size or a bound, a least across as a size) is a fault of the style said at `loc`
+/// (style_wrong), the node laid out as though it had not said it.
+fn style_of(q : @ui.Patch, in_row : Bool, loc : SourceLoc) -> StyleSet {
   let along = if in_row { q.w } else { q.h }
+  let w = style_size(q.w, "w", loc)
+  let h = style_size(q.h, "h", loc)
+  let min_w = style_bound(q.min_w, "min_w", loc)
+  let max_w = style_bound(q.max_w, "max_w", loc)
+  let min_h = style_bound(q.min_h, "min_h", loc)
   {
     says: {
-      w: style_points(q.w) is Some(_),
-      h: style_points(q.h) is Some(_),
+      w: w is Some(_),
+      h: h is Some(_),
       grow: along is Some(Full | Grow(_)),
+      cut: q.w is Some(Cut),
       min_w: q.min_w is Some(_),
       max_w: q.max_w is Some(_),
       min_h: q.min_h is Some(_),
@@ -110,16 +123,23 @@ fn style_of(q : @ui.Patch, in_row : Bool) -> StyleSet {
       clip: q.clip is Some(_),
     },
     row: q.row.unwrap_or(false),
-    w: style_points(q.w),
-    h: style_points(q.h),
+    w,
+    h,
+    // (no grow along it for the rest: none said, as what it holds, a size in points, or cut short (`cut`); a share or
+    // a least as its size is style_size's fault)
     grow: match along {
       Some(Full) => 1.0
       Some(Grow(k)) => k
       _ => 0.0
     },
-    min_w: style_points(q.min_w),
-    max_w: style_points(q.max_w),
-    min_h: style_points(q.min_h),
+    // (cut short where what holds it has not the room across, an old view's w=Cut: View::cuts, which gives way along a
+    // row and keeps its height in a column)
+    cut: q.w is Some(Cut),
+    min_w,
+    // (a least across: View::min_width's `within`)
+    min_w_within: q.min_w is Some(Within(_)),
+    max_w,
+    min_h,
     padding: style_sides(false, q.p, q.px, q.py, q.pl, q.pt, q.pr, q.pb),
     gap: style_room(q.gap).unwrap_or(0.0),
     lines_up: match q.align {
@@ -129,9 +149,10 @@ fn style_of(q : @ui.Patch, in_row : Bool) -> StyleSet {
       Some(AStretch) | None => None
     },
     lies_along: match q.justify {
+      Some(JStart) | None => Start
       Some(JCenter) => Middle
       Some(JEnd) => End
-      _ => Start
+      Some(JBetween) => Between
     },
     margin: style_sides(true, q.m, q.mx, q.my, q.ml, q.mt, q.mr, q.mb),
     corner: match q.radius {
@@ -145,6 +166,48 @@ fn style_of(q : @ui.Patch, in_row : Bool) -> StyleSet {
     },
     clip: q.clip.unwrap_or(false),
   }
+}
+
+///|
+/// Size `l` (its `w` or `h`, `name`) in points: none where it says none of its own (none said, as what it holds, grown
+/// along what holds it, cut short: style_of's grow and cut). A share of what holds it (`Pct`) and a least across
+/// (`Within`, a bound's) are no size a node is laid out by here: a fault of the style said at `loc`.
+fn style_size(l : @ui.Len?, name : String, loc : SourceLoc) -> Double? {
+  match l {
+    Some(Pct(_) | Within(_)) => {
+      style_wrong(loc, name, l)
+      None
+    }
+    _ => style_points(l)
+  }
+}
+
+///|
+/// Bound `l` (`name`: its min_w, max_w or min_h) in points (a least across, `Within`, its points: so much where what
+/// holds it has the room, a least width taking all of it where it has less by View::min_width's `within`, style_of's
+/// `min_w_within`; as an old view's bound took it). None where it says none (as what it holds, cut short, grown: no
+/// bound, as an old view's). A share of what holds it (`Pct`) is no bound: a fault of the style said at `loc`.
+fn style_bound(l : @ui.Len?, name : String, loc : SourceLoc) -> Double? {
+  match l {
+    Some(Pct(_)) => {
+      style_wrong(loc, name, l)
+      None
+    }
+    Some(Within(v)) => Some(v)
+    _ => style_points(l)
+  }
+}
+
+///|
+/// What the style said at `loc` (style_node's caller's) says of `name` that no node is laid out by: `l`. A fault
+/// (@view.fault): a test stops on it, naming where, what and how; an app's run is told it once and lays the node out
+/// as though it had not said it.
+fn style_wrong(loc : SourceLoc, name : String, l : @ui.Len?) -> Unit {
+  let said = match l {
+    Some(l) => l.to_string()
+    None => "none"
+  }
+  @view.fault("style_node at \{loc}: \{name}=\{said} is laid on no node")
 }
 
 ///|
@@ -176,8 +239,12 @@ fn style_set(v : @view.View, was : StyleSet?, s : StyleSet, loc : SourceLoc) -> 
       v.basis(loc~, Is(Some(0.0))) |> ignore
     }
   }
-  if style_first(new, before.min_w, now.min_w) || (before.min_w && w.min_w != s.min_w) {
-    v.min_width(loc~, Is(s.min_w)) |> ignore
+  if style_first(new, before.cut, now.cut) || (before.cut && w.cut != s.cut) {
+    v.cuts(loc~, Is(s.cut)) |> ignore
+  }
+  if style_first(new, before.min_w, now.min_w) ||
+    (before.min_w && (w.min_w != s.min_w || w.min_w_within != s.min_w_within)) {
+    v.min_width(loc~, Is(s.min_w), within=s.min_w_within) |> ignore
   }
   if style_first(new, before.max_w, now.max_w) || (before.max_w && w.max_w != s.max_w) {
     v.max_width(loc~, Is(s.max_w)) |> ignore

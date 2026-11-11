@@ -804,6 +804,52 @@ test "a station's 进程: what still.fail uses of it, whose by whose, the overvi
 }
 
 ///|
+test "a station's 进程: each total's line under its label at the tile's end, as far in as the label at its start" {
+  for case in [(390.0, 2), (720.0, 0), (1280.0, 0)] {
+    let (w, platform) = case
+    let t = station_tester("ws1/st1", part="processes", w~, platform~)
+    let label = drawn(t, "CPU")
+    let sub = drawn(t, "占 10 核的 2%")
+    let tile = ground_round(t, label)
+    let start = label.0 - tile.0
+    let end = tile.0 + tile.2 - (sub.0 + sub.2)
+    assert_true((start - end).abs() < 0.5, msg="\{w} platform \{platform}: the sub \{start} in at the start, \{end} at the end")
+  }
+}
+
+///|
+test "a station's 进程 on a wide page: the choice of whose at the bar's start, of how at its end, where the tiles end" {
+  for case in [(720.0, 0), (1280.0, 0)] {
+    let (w, platform) = case
+    assert_true(laid_wide(w))
+    let t = station_tester("ws1/st1", part="processes", w~, platform~)
+    let how = ground_round(t, drawn(t, "平铺"))
+    let last = ground_round(t, drawn(t, "↓ 1.6 KB/s"))
+    assert_true((how.0 + how.2 - (last.0 + last.2)).abs() < 0.5, msg="\{w} platform \{platform}: 分组/平铺 ends at \{how.0 + how.2}, the tiles at \{last.0 + last.2}")
+  }
+}
+
+///|
+/// The least ground drawn round words drawn at `r` (x, y, w, h): what they are on.
+fn ground_round(t : @ui.Tester, r : (Double, Double, Double, Double)) -> (Double, Double, Double, Double) raise {
+  let (cx, cy) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
+  let mut best : (Double, Double, Double, Double)? = None
+  for g in t.drawn_rects() {
+    let (x, y, gw, gh, _) = g
+    if cx >= x && cx <= x + gw && cy >= y && cy <= y + gh {
+      match best {
+        Some(b) if b.2 * b.3 <= gw * gh => ()
+        _ => best = Some((x, y, gw, gh))
+      }
+    }
+  }
+  match best {
+    Some(b) => b
+    None => fail("no ground round \{r}")
+  }
+}
+
+///|
 /// Where words `s` are drawn (x, y, w, h): the first words that are just them.
 fn drawn(t : @ui.Tester, s : String) -> (Double, Double, Double, Double) raise {
   match t.words().search_by(fn(w) { w.0 == s }) {
