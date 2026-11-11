@@ -710,10 +710,28 @@ fn size_uncached(
   perform : Bool,
 ) -> Double {
   let s = node.style
-  // an item coming or going: as tall as its way has got of what it comes to (as its style says, or what it holds comes
-  // to), what it holds laid out whole from its top in that (Style's come_*); not where what lays it out gives it its
-  // height
-  if known(s.come_now) && !known(kh) {
+  // an item coming or going along a row: as wide as its way has got of what it comes to, what it holds laid out whole
+  // from its start at that (Style's come_across), as tall as that makes it; given its width by what lays it out (a
+  // row's item at its basis), what it holds laid out whole all the same
+  if known(s.come_now) && s.come_across {
+    if !known(kw) {
+      let now = s.come_now
+      s.come_now = undef
+      let natural = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
+      s.come_now = now
+      let wide = come_height(s, natural)
+      if known(wide) {
+        size_uncached(node, natural, kh, aw, ah, cb_w, cb_h, perform) |> ignore
+        return wide
+      }
+    } else if perform && s.come_k < 1.0 && s.come_whole > kw {
+      size_uncached(node, s.come_whole, kh, aw, ah, cb_w, cb_h, perform) |> ignore
+      return kw
+    }
+  } else if known(s.come_now) && !known(kh) {
+    // an item coming or going: as tall as its way has got of what it comes to (as its style says, or what it holds comes
+    // to), what it holds laid out whole from its top in that (Style's come_*); not where what lays it out gives it its
+    // height
     let now = s.come_now
     s.come_now = undef
     let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
@@ -1338,6 +1356,8 @@ fn layout_flex(
     let mut cross_by_height = false
     let mut any_baseline = false
     let mut any_fits = false
+    // (an item on its way along this row: Style's come_across, its gap below)
+    let mut comes_across = false
     for j, c in flow {
       let cs = c.style
       if cs.position == Absolute {
@@ -1531,12 +1551,18 @@ fn layout_flex(
           f.unsafe_set(i + MAR_MAIN_START, cb.mar_t * k)
           f.unsafe_set(i + MAR_MAIN_END, cb.mar_b * k)
         }
-      } else {
+      } else if !(row && cs.come_across && known(cs.come_now)) {
+        // (along a row on its way: from nothing, its padding too, Style's come_across)
         basis = fmax(basis, pb_main)
       }
-      // (coming or going down a column, as tall as its way has got of what it comes to, however tall it is said to be,
-      // its least too: Style's come_*; as what it holds comes to, worked out so as it was sized above)
-      if !row && known(cs.come_now) {
+      // (coming or going down a column, or along a row (Style's come_across), as long along it as its way has got of
+      // what it comes to, however long it is said to be, its least too: Style's come_*; as what it holds comes to, worked
+      // out so as it was sized above)
+      if known(cs.come_now) && cs.come_across == row {
+        if row {
+          comes_across = true
+          f.unsafe_set(i + SOFT_MIN, undef)
+        }
         if said_main {
           let tall = come_height(cs, basis)
           if known(tall) {
@@ -1569,6 +1595,15 @@ fn layout_flex(
       for k in 0..<count {
         let cs = flow.unsafe_get(at.unsafe_get(k)).style
         if cs.come_k < 1.0 && (cs.come_fill || !known(cs.come_now)) {
+          comes = true
+          break
+        }
+      }
+    } else if comes_across {
+      // (along a row, only one on its way along it from nothing or to it: none such, nothing walked)
+      for k in 0..<count {
+        let cs = flow.unsafe_get(at.unsafe_get(k)).style
+        if cs.come_across && known(cs.come_now) && cs.come_k < 1.0 && cs.come_fill {
           comes = true
           break
         }
