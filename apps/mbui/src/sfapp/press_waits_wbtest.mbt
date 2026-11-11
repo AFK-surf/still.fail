@@ -170,6 +170,11 @@ test "the chat's … waiting for its whole row 1 s late, then the chat left, the
       let (t, src) = waits_tester(calls, sent, "home-pins", w, h, platform, late)
       @ui.view_tree().unwrap().event(t.time(), fn() { open_page(Chat(r)) })
       t.frame()
+      // (its "…" pressed when a hand can: once the chat's page has come in (a Move, move_most_ms at the most), its row
+      // still not answered then. Pressed a frame after the page was pushed, it was pressed on 小屏 with the page still
+      // off the screen, where no hand can, and the leave 100 ms on turned back the bottom bar still going down for the
+      // page: no part of what this test is about, at a moment no hand comes to by this way)
+      t.run_for(@ui.move_most_ms)
       @ui.view_tree().unwrap().event(t.time(), fn() { @sfpages.open_chat_menu(src, "ws1", r, [], from=@sf.at_point(w / 2.0, h / 2.0)) })
       t.run_for(press_step_ms)
       if t.find("重命名") is Some(_) {
