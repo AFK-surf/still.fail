@@ -51,7 +51,9 @@ test "presented_rest: a step further in whose page grows, asked before a frame d
   open_it(t)
   t.run_for(@ui.move_most_ms)
   t.tap_text("看详情")
-  // (the page put on at rest, then grown, no frame drawn since)
+  // (the page put on at rest, then grown, no frame drawn since. Grown while it still slides in, the sheet's place went
+  // back against its way a frame (2.97 points at 120 a second, sizes_steady at sheet_node.mbt's col, 2026-11-11): the
+  // smoothness line's to mend and to hold with a test of its own, judged, once it is; this one holds only the rest)
   t.run_for(@ui.move_most_ms)
   more.set(true)
   let end = presented_rest()
