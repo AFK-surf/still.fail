@@ -28,6 +28,7 @@ import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 import { version } from "./digest.ts";
+import { work } from "./work.ts";
 
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
@@ -47,6 +48,12 @@ const FLUSH_TOLD_EVERY_MS = 60_000;
 /// What an app acts on while none of its pages is in view (its notices, its icon's badge, a download ready saved, a
 /// copy between stations: the topics it watches whatever page shows): these go out then too.
 const UNSEEN = new Set(["notify", "workspaceMarks", "downloads", "driveTransfers"]);
+
+/// A topic's value's version (digest.ts), counted (work.ts `versions`).
+function versioned(v: unknown): string {
+  work.versions++;
+  return version(v);
+}
 
 /// A value or the error a topic shows.
 export type Value = { ok: unknown } | { err: CoreError };
@@ -348,7 +355,7 @@ export class Store {
     if (keep) {
       // (what went to it last: the value it holds, every message to it going out in order; none, where none went)
       const had = entry?.subscribers.some(([c, i]) => c === client && i === id) ? entry.sent : undefined;
-      const v = had !== undefined && "ok" in had ? version(had.ok) : null;
+      const v = had !== undefined && "ok" in had ? versioned(had.ok) : null;
       if (had !== undefined && "ok" in had && v !== null) this.#keep(client, topicKey(topic), had.ok, v);
       this.host.emit(client, { id, v });
     }
@@ -891,21 +898,21 @@ export class Store {
     const kept = this.#kept.get(client);
     const had = kept?.get(topicKey(topic));
     if (had !== undefined) kept!.delete(topicKey(topic));
-    if (have !== undefined && "ok" in value && version(value.ok) === have) {
+    // What the client holds, where it is remembered (#kept): what changed from it, worked out item by item, not by
+    // hashing the value whole (`version`: 4-5 ms in Hermes for a chat of 46 KB, longer than sending it whole took);
+    // none changed, the same version.
+    const spec = keyed ? specOf(topic) : null;
+    const ops = have !== undefined && had !== undefined && had.v === have && "ok" in value ? (spec ? diffKeyed(had.ok, value.ok, spec) : diff(had.ok, value.ok)) : null;
+    if (have !== undefined && "ok" in value && (ops !== null ? ops.length === 0 : versioned(value.ok) === have)) {
       this.#from.delete(at);
       return { id, same: true };
     }
     const from = keyed ? this.#firstFrom(client, id, topic, value) : null;
     this.#from.delete(at);
     if (from !== null) return from;
-    if (have === undefined || had === undefined || had.v !== have || !("ok" in value)) return null;
-    const spec = keyed ? specOf(topic) : null;
-    if (spec) {
-      const ops = diffKeyed(had.ok, value.ok, spec);
-      return heavier(ops, value.ok) ? null : { id, delta: ops, kept: true };
-    }
-    const ops = diff(had.ok, value.ok);
-    return largerThan(ops, value.ok) ? null : { id, delta: ops, kept: true };
+    if (ops === null || !("ok" in value)) return null;
+    if (spec) return heavier(ops as AnyOp[], value.ok) ? null : { id, delta: ops, kept: true };
+    return largerThan(ops as Op[], value.ok) ? null : { id, delta: ops, kept: true };
   }
 
   /// The first value `value` of topic `topic` going to subscriber `id` of `client` as what changed from what its

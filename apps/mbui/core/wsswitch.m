@@ -4,9 +4,11 @@
 // holds what the new workspace's first screen opens on (小屏: sfapp's home_opens; 大屏: sfdesk's frame_opens, the page
 // its pane lands on asked once workspaceMarks says it); once all of that is answered (or switch_wait_ms passed) it
 // commits: prefs.set, what the new screen asks besides, the old screen's topics let go of. The messages and their order
-// are the app's own client's, captured in the Tester (2026-11-11). For each switch: when each value comes, how long the
-// person waits (`waited`: press to all it waits for answered) and when the new screen is whole (`quiet`: press to the
-// last first value of what the commit asked).
+// are the app's own client's, captured in the Tester (2026-11-11); what it keeps of a topic it lets go of (a chat, the
+// lists a place opens on: kept_name) let go of with `keep` and asked again with `have`, as the app's client is told to
+// as it starts (src/stillfail's main: sfbase's topic_kept), a Tester's not. For each switch: when each value comes,
+// how long the person waits (`waited`: press to all it waits for answered) and when the new screen is whole (`quiet`:
+// press to the last first value of what the commit asked).
 //   wsswitch <data dir>   MB_CORE_BUNDLE: the core's script; SCREEN=small|wide (small); LIMIT: the list's first
 //                         window (30, sfbase first_window on both screens); AWAY_MS: how long away before the last switch;
 //                         STATIONS=up: the stations up (the seed's `link` records, as a device last found them) and the
@@ -24,7 +26,7 @@
 #define MOST 8192
 static os_unfair_lock lock = OS_UNFAIR_LOCK_INIT;
 // (each message as the core hands it over, its text kept for what an answer leads to: workspaceMarks' chat)
-static struct { double at; int id; size_t len; int value, delta, error, waiting; char *text; } got[MOST];
+static struct { double at; int id; size_t len; int value, delta, error, waiting, same; char *text; } got[MOST];
 static int got_n;
 static dispatch_semaphore_t told;
 
@@ -34,12 +36,44 @@ static double now_ms(void) {
   return (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
 }
 
+// What the app's client keeps of a topic as it lets it go (sfbase's topic_kept, @core.Client::keep): a chat however it
+// is asked, and the lists a place opens on (sfbase's `lasting`) asked with no `q`. Let go of with `keep`, the core
+// answers `{id, v}`, the version of what it sent; asked again, the topic says it (`have`) and is answered `same` where
+// it is that still, what changed from it where it is not (client/core-ts store.ts #first). Each kept by the topic as
+// asked, the version the core said.
+static int kept_name(const char *name) {
+  static const char *names[] = {"chat", "workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive", NULL};
+  for (int i = 0; names[i]; i++)
+    if (strcmp(names[i], name) == 0) return 1;
+  return 0;
+}
+#define KEPT 64
+static struct { int id; char topic[512]; char v[128]; } kept[KEPT];
+static int kept_n;
+
+// (`{"id":N,"v":"…"}`: the version of what a subscription let go of with `keep` holds, put by its topic)
+static void kept_said(const char *json, size_t len, int id) {
+  const char *v = memmem(json, len < 64 ? len : 64, "\"v\":\"", 5);
+  if (!v) return;
+  v += 5;
+  const char *end = memchr(v, '"', len - (size_t)(v - json));
+  if (!end) return;
+  for (int i = 0; i < kept_n; i++) {
+    if (kept[i].id != id) continue;
+    snprintf(kept[i].v, sizeof kept[i].v, "%.*s", (int)(end - v), v);
+    kept[i].id = -1;
+  }
+}
+
 static void on_message(const char *json, size_t len, const uint8_t *bytes, size_t blen, void *ctx) {
   double at = now_ms();
   // {"id":N,… without parsing the whole: the id is first
   int id = -1;
   if (len > 6 && strncmp(json, "{\"id\":", 6) == 0) id = atoi(json + 6);
   size_t head = len < 64 ? len : 64;
+  os_unfair_lock_lock(&lock);
+  kept_said(json, len, id);
+  os_unfair_lock_unlock(&lock);
   char *text = NULL;
   if (len < 256 * 1024) {
     text = malloc(len + 1);
@@ -55,6 +89,7 @@ static void on_message(const char *json, size_t len, const uint8_t *bytes, size_
     got[got_n].delta = memmem(json, head, "\"delta\"", 7) != NULL;
     got[got_n].error = memmem(json, head, "\"error\"", 7) != NULL;
     got[got_n].waiting = memmem(json, head, "\"waiting\"", 9) != NULL;
+    got[got_n].same = memmem(json, head, "\"same\"", 6) != NULL;
     got[got_n].text = text;
     got_n++;
     text = NULL;
@@ -80,8 +115,10 @@ static const char *roles[] = {"held", "follow", "commit", "start"};
 typedef struct {
   int id, role;
   char name[24];
+  char topic[512];
   double asked, first;
   size_t len;
+  int same;
 } Sub;
 #define SUBS 64
 static Sub subs[SUBS], prev[SUBS];
@@ -93,9 +130,16 @@ static void sub(const char *name, int role, NSString *topic) {
   s->id = next++;
   s->role = role;
   snprintf(s->name, sizeof s->name, "%s", name);
+  snprintf(s->topic, sizeof s->topic, "%s", topic.UTF8String);
   s->asked = now_ms() - t0;
   s->first = -1;
-  tell([NSString stringWithFormat:@"{\"id\":%d,\"subscribe\":%@,\"keyed\":true}", s->id, topic]);
+  // (kept as it was let go of: asked again with its version)
+  char have[160] = "";
+  os_unfair_lock_lock(&lock);
+  for (int i = 0; i < kept_n; i++)
+    if (kept[i].id < 0 && kept[i].v[0] && strcmp(kept[i].topic, s->topic) == 0) snprintf(have, sizeof have, ",\"have\":\"%s\"", kept[i].v);
+  os_unfair_lock_unlock(&lock);
+  tell([NSString stringWithFormat:@"{\"id\":%d,\"subscribe\":%@,\"keyed\":true%s}", s->id, topic, have]);
 }
 
 static void call(NSString *name, NSString *params) {
@@ -150,11 +194,30 @@ static int rank(const char *name) {
     if (strcmp(order[i], name) == 0) return i;
   return 99;
 }
+// (one the app keeps let go of with `keep`, its version taken as the core says it: kept_said)
+static void let_go(Sub *s) {
+  int keep = kept_name(s->name) && !strstr(s->topic, "\"q\":");
+  if (keep) {
+    os_unfair_lock_lock(&lock);
+    int at = -1;
+    for (int i = 0; i < kept_n; i++)
+      if (strcmp(kept[i].topic, s->topic) == 0) at = i;
+    if (at < 0 && kept_n < KEPT) at = kept_n++;
+    if (at >= 0) {
+      kept[at].id = s->id;
+      kept[at].v[0] = 0;
+      snprintf(kept[at].topic, sizeof kept[at].topic, "%s", s->topic);
+    }
+    os_unfair_lock_unlock(&lock);
+  }
+  tell([NSString stringWithFormat:@"{\"id\":%d,\"unsubscribe\":true%s}", s->id, keep ? ",\"keep\":true" : ""]);
+}
+
 // (the device's own, changelog among them, are not the screen's: kept)
 static void let_go_prev(void) {
   for (int r = 0; r < 99; r++)
     for (int i = 0; i < prev_n; i++)
-      if (rank(prev[i].name) == r) tell([NSString stringWithFormat:@"{\"id\":%d,\"unsubscribe\":true}", prev[i].id]);
+      if (rank(prev[i].name) == r) let_go(&prev[i]);
   prev_n = 0;
 }
 
@@ -300,14 +363,14 @@ static void show(const char *label, NSString *ws, int first) {
         if (strcmp(s->name, "chat") == 0) s->first = at;
         continue;
       }
-      if (!(got[k].value || got[k].delta || got[k].error)) continue;
+      if (!(got[k].value || got[k].delta || got[k].error || got[k].same)) continue;
       if (s->first >= 0) {
         printf("  +%7.1f ms  %-5s %-16s %7zu B\n", at, got[k].delta ? "delta" : "value", s->name, got[k].len);
         continue;
       }
       s->first = at;
       s->len = got[k].len;
-      printf("  +%7.1f ms  %-5s %-16s %7zu B  [%s, asked +%.1f]\n", at, got[k].error ? "error" : got[k].delta ? "delta" : "value", s->name, got[k].len, roles[s->role], s->asked);
+      printf("  +%7.1f ms  %-5s %-16s %7zu B  [%s, asked +%.1f]\n", at, got[k].error ? "error" : got[k].same ? "same" : got[k].delta ? "delta" : "value", s->name, got[k].len, roles[s->role], s->asked);
       if (wide_screen && !asked_land && strcmp(s->name, "workspaceMarks") == 0 && s->role == HELD) {
         land_from(got[k].text, ws);
         land(ws, FOLLOW, first);

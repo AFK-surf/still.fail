@@ -204,6 +204,23 @@ export const overviewRowOf = (j: string) => `CASE WHEN json_type(${j}) = 'object
       WHERE o.key IN ('viewer', 'counts') OR (o.key IN ('disk', 'drive') AND o.type <> 'null')))
     END`;
 
+/// What a chat's page reads of its station's overview, the JSON `j` (views.ts #chatOverview: its agents' accounts and
+/// connects, `#peopleOf`, `#shown`, `#whereIn`, `#sentElsewhere`, its station's update and context, and `stationNow`
+/// of a chat its messages link to), as SQL: its `profiles`, `connects`, `disk`, `slackUsers`, `updates`, `feedback`,
+/// `context` and `copies`, each as the overview has it, one absent left out; NULL where the overview is not an object.
+/// Kept apart from the list's part and the row's (`station_part.chat`): a chat's first answer read the whole overview
+/// of its station (25-27 KB of the real-size workspace's) and of every other station of its workspace for a link's
+/// `copies`. Its accounts are most of it (`profiles`, some 13 KB of the 17): what an agent's account shows is made of
+/// its profile whole, as on every page that shows one (present.ts profile, models.ts runnableOn), not of a copy.
+export const overviewChatOf = (j: string) => `CASE WHEN json_type(${j}) = 'object'
+    THEN json((SELECT json_group_object(o.key, ${j} -> o.fullkey) FROM json_each(${j}) AS o
+      WHERE o.key IN ('profiles', 'connects', 'disk', 'slackUsers', 'updates', 'feedback', 'context', 'copies')))
+    END`;
+
+/// The fields of an overview a chat's page reads (overviewChatOf), for where it is made of an overview in the core (one
+/// shown with what is being done to it here: data.ts overviewChat).
+export const OVERVIEW_CHAT = ["profiles", "connects", "disk", "slackUsers", "updates", "feedback", "context", "copies"] as const;
+
 /// The triggers keeping each overview's part (station_part) and dropping its readers' verdicts (station_fit) as it
 /// changes or goes, whoever writes it, by name, as sqlite_master keeps them (no `IF NOT EXISTS`: SQLite keeps the
 /// statement without it).
@@ -211,12 +228,12 @@ const overviewTriggers = (): [string, string][] => [
   ["station_part_put", `CREATE TRIGGER station_part_put AFTER INSERT ON station WHEN new.kind = 'overview'
       BEGIN
         DELETE FROM station_part WHERE address = new.address;
-        INSERT INTO station_part (address, part, row) SELECT new.address, ${overviewPartOf("new.json")}, ${overviewRowOf("new.json")} WHERE json_valid(new.json);
+        INSERT INTO station_part (address, part, row, chat) SELECT new.address, ${overviewPartOf("new.json")}, ${overviewRowOf("new.json")}, ${overviewChatOf("new.json")} WHERE json_valid(new.json);
       END`],
   ["station_part_set", `CREATE TRIGGER station_part_set AFTER UPDATE OF json ON station WHEN new.kind = 'overview' AND old.json IS NOT new.json
       BEGIN
         DELETE FROM station_part WHERE address = new.address;
-        INSERT INTO station_part (address, part, row) SELECT new.address, ${overviewPartOf("new.json")}, ${overviewRowOf("new.json")} WHERE json_valid(new.json);
+        INSERT INTO station_part (address, part, row, chat) SELECT new.address, ${overviewPartOf("new.json")}, ${overviewRowOf("new.json")}, ${overviewChatOf("new.json")} WHERE json_valid(new.json);
       END`],
   ["station_part_drop", `CREATE TRIGGER station_part_drop AFTER DELETE ON station WHEN old.kind = 'overview'
       BEGIN
@@ -239,30 +256,35 @@ const overviewTriggers = (): [string, string][] => [
 /// A statement as compared with sqlite_master's: its spaces and line breaks one space.
 const spaced = (s: string) => s.replace(/\s+/g, " ").trim();
 
-/// Each station's overview's part the chat list reads (overviewPartOf) and what a station's row reads (overviewRowOf,
-/// its own column), beside it in a table of its own: they read a few hundred bytes, not an overview of some 150 KB (nor
-/// walk its pages to a column after it). Kept by triggers on `station`, as `said` is, so a core that knows nothing of it
-/// (a web page still open from before, an app put back to an older one) keeps it too: nothing it holds is older than
-/// its overview. And whether this core can read each overview (`station_fit`), judged as it is written (account.ts
-/// #overviewWritten) by the id of the shapes that judged it (views.ts OVERVIEW_FIT), dropped by triggers as the overview
-/// changes or goes, whoever writes it, so a core that knows nothing of it leaves no verdict on an overview it wrote.
-/// Made where missing at every open, as `said`; a trigger whose statement is not this core's (an earlier core's,
-/// without the row's) made again, the row's column added where it is not there, and every part made again with them;
-/// overviews from before get theirs at once, SQLite reading them itself (no overview crosses to the core). An older
-/// core opening the database after keeps these triggers (it makes its own only where they are missing) and reads of a
-/// part the fields it knows (its `part`, as it was).
+/// Each station's overview's part the chat list reads (overviewPartOf), what a station's row reads (overviewRowOf, its
+/// own column) and what a chat's page reads (overviewChatOf, its own column), beside it in a table of its own: they
+/// read a few hundred bytes, or a chat's page some of the overview, not an overview of some 150 KB (nor walk its pages
+/// to a column after it). Kept by triggers on `station`, as `said` is, so a core that knows nothing of it (a web page
+/// still open from before, an app put back to an older one) keeps it too: nothing it holds is older than its overview.
+/// And whether this core can read each overview (`station_fit`), judged as it is written (account.ts #overviewWritten)
+/// by the id of the shapes that judged it (views.ts OVERVIEW_FIT), dropped by triggers as the overview changes or goes,
+/// whoever writes it, so a core that knows nothing of it leaves no verdict on an overview it wrote. Made where missing
+/// at every open, as `said`; a trigger whose statement is not this core's (an earlier core's, without the row's or the
+/// chat's) made again, their columns added where they are not there, and every part made again with them; overviews
+/// from before get theirs at once, SQLite reading them itself (no overview crosses to the core). An older core opening
+/// the database after keeps these triggers (one before the row's: it makes its own only where they are missing), or
+/// makes its own again in place of them (one since: these are not its statements), every part with them, a chat's left
+/// empty: what a chat reads is then made of the overview by SQLite as it is read (account.ts #chatText), till this core
+/// opens it again. Either reads of a part the fields it knows (its `part`, as it was).
 export function ensureOverviewParts(sql: Sql): void {
   sql.exec("BEGIN IMMEDIATE");
   try {
     sql.exec(`
-      CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL, row TEXT);
+      CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL, row TEXT, chat TEXT);
       CREATE TABLE IF NOT EXISTS station_fit (address TEXT NOT NULL, shapes TEXT NOT NULL, readable INTEGER NOT NULL, PRIMARY KEY (address, shapes)) WITHOUT ROWID;
     `);
     const had = new Map(sql.all("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'station'").map((r) => [String(r[0]), String(r[1])]));
     let remade = false;
-    // (a table an earlier core made: the row's column added, every part made again with it)
-    if (!sql.all("PRAGMA table_info(station_part)").some((r) => r[1] === "row")) {
-      sql.exec("ALTER TABLE station_part ADD COLUMN row TEXT");
+    // (a table an earlier core made: the row's and the chat's columns added, every part made again with them)
+    const columns = sql.all("PRAGMA table_info(station_part)").map((r) => r[1]);
+    for (const column of ["row", "chat"]) {
+      if (columns.includes(column)) continue;
+      sql.exec(`ALTER TABLE station_part ADD COLUMN ${column} TEXT`);
       remade = true;
     }
     for (const [name, statement] of overviewTriggers()) {
@@ -279,7 +301,7 @@ export function ensureOverviewParts(sql: Sql): void {
     // (asked first by the rows' keys alone: an overview is read only where its part is missing)
     const missing = sql.all("SELECT s.address FROM station s WHERE s.kind = 'overview' AND NOT EXISTS (SELECT 1 FROM station_part p WHERE p.address = s.address)");
     for (const [address] of missing) {
-      sql.run(`INSERT INTO station_part (address, part, row) SELECT st.address, ${overviewPartOf("st.json")}, ${overviewRowOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [address]);
+      sql.run(`INSERT INTO station_part (address, part, row, chat) SELECT st.address, ${overviewPartOf("st.json")}, ${overviewRowOf("st.json")}, ${overviewChatOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [address]);
     }
     sql.exec("COMMIT");
   } catch (e) {

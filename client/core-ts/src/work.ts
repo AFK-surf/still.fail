@@ -44,6 +44,12 @@ export const work = {
   rowMenus: 0,
   swipeAsks: 0,
   watches: 0,
+  /// Chats' pages made (views.ts `chat`): each made again only as something it is made of changed, not as a UI's focus
+  /// moves or a pref it does not read is written.
+  chats: 0,
+  /// Topics' values hashed whole for their version (store.ts, digest.ts `version`): as a client lets one go keeping it,
+  /// and as it asks it again where what it holds is not remembered.
+  versions: 0,
   /// Stations' whole overviews read from the database and parsed (db/account.ts `stationDoc`), not taken as kept.
   overviewsRead: 0,
   /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.

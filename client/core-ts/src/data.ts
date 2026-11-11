@@ -6,6 +6,7 @@
 // Topics of this data have no value of their own: their value is read from here (`shared`), by query, when it goes
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
+import { OVERVIEW_CHAT } from "./db/schema.ts";
 import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
@@ -753,6 +754,7 @@ export class Data {
     if (isObject(job) && loginAt(this.#rawOverview({ topic: "overview", station }), id) === from) this.#loginSteps.set(key, { id, job, from });
     this.#tell({ topic: "overview", station });
     this.#tellQuery({ topic: "$overview-fit", station });
+    this.#tellQuery({ topic: "$overview-chat", station });
   }
 
   /// The steps an overview of the station has gone past (or that it no longer has where they were): let go.
@@ -772,6 +774,7 @@ export class Data {
     this.#modelEdits.set(key, [models, changed]);
     this.#tell({ topic: "overview", station });
     this.#tellQuery({ topic: "$overview-fit", station });
+    this.#tellQuery({ topic: "$overview-chat", station });
     return true;
   }
 
@@ -779,6 +782,7 @@ export class Data {
     this.#modelEdits.delete(join([station, id]));
     this.#tell({ topic: "overview", station });
     this.#tellQuery({ topic: "$overview-fit", station });
+    this.#tellQuery({ topic: "$overview-chat", station });
   }
 
   /// A held topic's new value (read, or as an event left it). `confirmed`: it came from its source just now (else it
@@ -1125,6 +1129,19 @@ export class Data {
   overviewRow(station: string): unknown {
     this.#readQuery({ topic: "$overview-row", station });
     return this.of(station)?.overviewRow(station);
+  }
+
+  /// What a chat's page reads of a station's overview (account.ts overviewChat, schema.ts OVERVIEW_CHAT), kept beside
+  /// it: read in a computed, it is made again only as that changes, not with the rest of the overview. Where the
+  /// overview is shown with what is being done to it here (overlaid), made of that, anew.
+  overviewChat(station: string): unknown {
+    this.#readQuery({ topic: "$overview-chat", station });
+    if (!this.#overlaid(station)) return this.of(station)?.overviewChat(station);
+    const shown = this.shown({ topic: "overview", station });
+    if (!isObject(shown)) return undefined;
+    const out: Record<string, unknown> = {};
+    for (const k of OVERVIEW_CHAT) if (k in shown) out[k] = shown[k];
+    return frozen(out);
   }
 
   /// How the views judge whether this core can read an overview, for each database to judge one as it is written and
