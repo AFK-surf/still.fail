@@ -1,6 +1,8 @@
 // A row kept no narrower than what it holds that leaves out what has not the room (an old view's `keep` and `drop`,
 // a node's View::keeps_held and View::fits): its least is what is left once all it may leave out has left and its
-// words cut short are at their least, so what is beside it squeezes it to that, what may leave leaving on the way.
+// words cut short are at their least, so what is beside it squeezes it to that, what may leave leaving on the way; as
+// a last resort, where it and what is beside it are both at their least and still have not the room, its words cut
+// short come down under that by what is missing (flex's fit_soft_held).
 
 ///|
 /// The words of the row's title: longer than its row has room for at the narrower widths.
@@ -213,20 +215,15 @@ test "such a row as the system's words grow to 1.3: what its words cut short kee
 }
 
 ///|
-/// The known gap (mbui's AGENTS.md, Two views): where such a row and what is beside it are both at their least and still have
-/// not the room, an old view comes down further as a last resort (ui's squeeze.mbt, Node's soft_least: words cut short
-/// under four of their size, the widest first); a node's row stays at its least, what is beside it at its own, and the
-/// two reach past their row. Till nodes have a last resort of their own, it is held here as it is.
-test "such a row holding two words cut short: as an old view's but where it and what is beside it are both at their least and still have not the room (the known gap: no last resort for nodes), only there" {
+test "such a row holding two words cut short, it and what is beside it at their least and still without the room: as a last resort its words come down under four of their size by what is missing, as an old view's (Node's soft_least)" {
   let said = fits_least_differ(
     fits_least_old(fits_least_widths, two=true),
     fits_least_nodes(fits_least_widths, two=true),
   )
-  assert_eq(
-    said,
-    "old:   1 160: title: 0 24.3, d1: out, d2: out, d3: out, more: 60 20, row: 0 80, beside: 80 80\n" +
-    "nodes: 1 160: title: 0 44.18, d1: out, d2: out, d3: out, more: 96 20, row: 0 116, beside: 116 80",
-  )
+  assert_eq(said, "")
+  // (at 160 the row at 80, under the 116 it keeps of its words at four of their size)
+  let nodes = fits_least_nodes([160.0], two=true)
+  assert_true(nodes[0].contains("row: 0 80,"), msg=nodes[0])
 }
 
 ///|
@@ -276,9 +273,231 @@ test "what such a row may leave out is what it holds itself: what may leave in a
   let said = (
     p[0].left_out() || p[1].left_out() || p[2].left_out(),
     p[3].rect().2,
-    // (the row: its words at four of their size, 8, what it holds whole)
+    // (the row: as a last resort its words under four of their size, what it holds whole, what is beside it at its
+    // least, the two in their room)
     p[4].rect().2,
     p[5].rect().2,
   )
-  assert_eq(said, (false, 106.0, 40.0 + 8.0 + 106.0, 80.0))
+  assert_eq(said, (false, 106.0, 200.0 - 80.0, 80.0))
+}
+
+///|
+/// The title of a chat's bar in the tests of its last resort: longer than its row has room for at all their widths.
+let fits_bar_title : String = "a chat whose title is long enough to be cut short here"
+
+///|
+/// The words before a find's field where it has not looked in all (find_bar's note), in a box that clips them.
+let fits_bar_note : String = "held 300 of 1200 here so far"
+
+///|
+/// Each width a bar's title row and its find laid out: what the old view's and the nodes' are compared by (each part's
+/// place, or left out), and the title's width and the find's field's.
+struct FitsBar {
+  said : String
+  title : Double
+  field : Double
+}
+
+///|
+fn fits_bar_part(name : String, out : Bool, x : Double, w : Double) -> String {
+  let r = fn(v : Double) { (v * 10.0).round() / 10.0 }
+  if out {
+    "\{name} out"
+  } else {
+    "\{name} \{r(x)}+\{r(w)}"
+  }
+}
+
+///|
+/// The old view's: a chat's bar as its old view had it (chat_bar), a row as wide as the width given holding, 16 apart,
+/// its title's row that keeps what it holds (Fill, `keep`, 8 in, 4 at its end, 10 apart: chat_bar_title_row) and a
+/// find (find_bar: its field 320 wide giving way to 160, with the note before it where `note`). In the title's row: the
+/// title cut short (16) in a box at most 42% of the width, 80 at least; people 100 wide that leave first; an agent 120
+/// wide; another 60 wide that leaves next.
+fn fits_bar_old(widths : Array[Double], note? : Bool = false) -> Array[FitsBar] {
+  let width = @signals.signal(widths[0], same=fn(a, b) { a == b })
+  let ids : Ref[Array[Int]] = Ref([])
+  let t = Tester::new(
+    fn(c) {
+      let (row, tbox, people, a1, a2, find, field) = (
+        c.id("row"),
+        c.id("tbox"),
+        c.id("people"),
+        c.id("a1"),
+        c.id("a2"),
+        c.id("find"),
+        c.id("field"),
+      )
+      c.box(dir=Row, w=Px(width.get()), h=Px(32.0), gap=16.0, fn() {
+        let mut title = 0
+        c.box(dir=Row, w=Fill(1.0), keep=true, pl=8.0, pr=4.0, gap=10.0, id=row, taps=false, fn() {
+          c.box(dir=Row, max_w=dmax(80.0, width.get() * 0.42), id=tbox, taps=false, fn() {
+            title = c.text(fits_bar_title, size=16.0, w=Cut, wrap=false)
+          })
+          |> ignore
+          c.box(w=Px(100.0), h=Px(20.0), id=people, taps=false, drop=1, fn() {  }) |> ignore
+          c.box(w=Px(120.0), h=Px(20.0), id=a1, taps=false, fn() {  }) |> ignore
+          c.box(w=Px(60.0), h=Px(20.0), id=a2, taps=false, drop=2, fn() {  }) |> ignore
+        })
+        |> ignore
+        c.box(dir=Row, gap=8.0, id=find, taps=false, fn() {
+          if note {
+            c.box(max_w=320.0, clip=true, taps=false, fn() { c.text(fits_bar_note, size=12.0, wrap=false) |> ignore })
+            |> ignore
+          }
+          c.box(dir=Row, w=Px(320.0), min_w=160.0, h=Px(32.0), id=field, taps=false, fn() {  }) |> ignore
+        })
+        |> ignore
+        ids.val = [title, tbox, people, a1, a2, find, row, field]
+      })
+      |> ignore
+    },
+    w=1000.0,
+    h=100.0,
+  )
+  t.draw()
+  let out = []
+  for w in widths {
+    width.set(w)
+    t.frame()
+    let v = ids.val
+    let title = g().nodes[v[0]].fw
+    let parts = ["\{w}: title \{(title * 10.0).round() / 10.0}"]
+    for j, name in ["box", "people", "a1", "a2", "find", "row"] {
+      let (x, _, bw, _, o) = laid_box(v[j + 1])
+      parts.push(fits_bar_part(name, o == 0.0, x, bw))
+    }
+    let (_, _, field, _, _) = laid_box(v[7])
+    out.push({ said: parts.join(", "), title, field })
+  }
+  out
+}
+
+///|
+/// The same as nodes of the window's tree (chat_bar_wide_node's): the title's row grown from none, giving way, kept no
+/// narrower than what it holds and leaving out what has not the room; the title's box giving way; the find giving way
+/// down to what the old view's keeps (its field at 160, the note at none).
+fn fits_bar_nodes(widths : Array[Double], note? : Bool = false) -> Array[FitsBar] {
+  let t = Tester::new(fn(_c) {  }, w=1000.0, h=100.0)
+  t.check_looks(false)
+  let width = @signals.signal(widths[0], same=fn(a, b) { a == b })
+  let parts : Ref[Array[@view.View]] = Ref([])
+  let look : @view.WordsLook = { size: 16.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
+  set_view_app(fn(root) {
+    root.box(fn(outer) {
+      outer.row(Is(true)).width(By(fn() { Some(width.get()) })).height(Is(Some(32.0))).gap(Is(16.0)) |> ignore
+      let got = []
+      let row = outer.box(fn(k) {
+        k
+        .row(Is(true))
+        .basis(Is(Some(0.0)))
+        .grow(Is(1.0))
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        .keeps_held(Is(true))
+        .fits(Is(true))
+        .padding(Is((8.0, 0.0, 4.0, 0.0)))
+        .gap(Is(10.0))
+        |> ignore
+        let mut words : @view.View? = None
+        let tbox = k.box(fn(tb) {
+          tb.row(Is(true)).max_width(By(fn() { Some(dmax(80.0, width.get() * 0.42)) })).shrink(Is(1.0)) |> ignore
+          words = Some(tb.box(fn(w) { w.cuts(Is(true)).words(Is(fits_bar_title), ink=0x333333FFL, look~) |> ignore }))
+        })
+        got.push(words.unwrap())
+        got.push(tbox)
+        got.push(k.box(fn(d) { d.width(Is(Some(100.0))).height(Is(Some(20.0))).drops(Is(1)) |> ignore }))
+        got.push(k.box(fn(d) { d.width(Is(Some(120.0))).height(Is(Some(20.0))) |> ignore }))
+        got.push(k.box(fn(d) { d.width(Is(Some(60.0))).height(Is(Some(20.0))).drops(Is(2)) |> ignore }))
+      })
+      let mut field : @view.View? = None
+      let find = outer.box(fn(e) {
+        // (no narrower than the old view's: its field at its least, the note's at none, 8 apart)
+        e.row(Is(true)).shrink(Is(1.0)).min_width(Is(Some(if note { 168.0 } else { 160.0 }))).gap(Is(8.0)) |> ignore
+        if note {
+          e.box(fn(n) {
+            n.max_width(Is(Some(320.0))).clips(Is(true)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            n.box(fn(w) {
+              w.words(Is(fits_bar_note), ink=0x333333FFL, look={ ..look, size: 12.0, line: 16.0 }) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+        field = Some(
+          e.box(fn(f) {
+            f.row(Is(true)).width(Is(Some(320.0))).min_width(Is(Some(160.0))).height(Is(Some(32.0))).shrink(Is(1.0))
+            |> ignore
+          }),
+        )
+      })
+      parts.val = got + [find, row, field.unwrap()]
+    })
+    |> ignore
+  })
+  t.draw()
+  let out = []
+  for w in widths {
+    width.set(w)
+    t.frame()
+    let v = parts.val
+    let title = v[0].rect().2
+    let said = ["\{w}: title \{(title * 10.0).round() / 10.0}"]
+    for j, name in ["box", "people", "a1", "a2", "find", "row"] {
+      let (x, _, vw, _) = v[j + 1].rect()
+      said.push(fits_bar_part(name, v[j + 1].left_out(), x, vw))
+    }
+    out.push({ said: said.join(", "), title, field: v[7].rect().2 })
+  }
+  out
+}
+
+///|
+/// Where the old view's bar and the nodes' differ, each width's two lines.
+fn fits_bar_differ(old : Array[FitsBar], nodes : Array[FitsBar]) -> String {
+  let differ = []
+  for j, o in old {
+    if o.said != nodes[j].said {
+      differ.push("old:   \{o.said}\nnodes: \{nodes[j].said}")
+    }
+  }
+  differ.join("\n")
+}
+
+///|
+test "a chat's bar, its title's row beside a find: what may leave leaves, the title kept at four of its size while the find gives way, and as a last resort (the find at its least) the title under that by what is missing, each part where the old view's is" {
+  let widths = [680.0, 520.0, 400.0, 360.0]
+  let old = fits_bar_old(widths)
+  let nodes = fits_bar_nodes(widths)
+  assert_eq(fits_bar_differ(old, nodes), "")
+  // (at 520 and 400 the title at four of its size, the find giving way; at 360 the find at its least, the title 42)
+  let r = fn(v : Double) { (v * 10.0).round() / 10.0 }
+  assert_eq(
+    nodes.map(fn(b) { (r(b.title), r(b.field)) }),
+    [(132.0, 320.0), (64.0, 298.0), (64.0, 178.0), (42.0, 160.0)],
+  )
+}
+
+///|
+test "a chat's bar with the find's note before its field: as a last resort the title comes down by what is missing, the note at none and the field at its least, as the old view's" {
+  let widths = [360.0]
+  let old = fits_bar_old(widths, note=true)
+  let nodes = fits_bar_nodes(widths, note=true)
+  assert_eq(fits_bar_differ(old, nodes), "")
+  assert_eq(((nodes[0].title * 10.0).round() / 10.0, nodes[0].field), (34.0, 160.0))
+}
+
+///|
+test "a chat's bar narrowing: its title cut short is never under four of its size while the find has more to give" {
+  let widths = [820.0, 760.0, 720.0, 680.0, 640.0, 600.0, 560.0, 520.0, 480.0, 440.0, 400.0, 380.0, 370.0, 360.0]
+  let nodes = fits_bar_nodes(widths)
+  let under = []
+  for j, b in nodes {
+    if b.field > 160.0 + 0.01 && b.title < 4.0 * 16.0 - 0.01 {
+      under.push(nodes[j].said)
+    }
+  }
+  assert_eq(under.join("\n"), "")
+  // (and the last resort is reached: at 360 the title is under it)
+  assert_true(nodes[nodes.length() - 1].title < 64.0 - 0.01, msg=nodes[nodes.length() - 1].said)
 }

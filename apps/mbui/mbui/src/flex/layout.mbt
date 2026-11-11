@@ -1463,7 +1463,17 @@ fn layout_flex(
       }
       let max_main = if row { cb.max_w } else { cb.max_h }
       f.unsafe_set(i + MIN_MAIN, min_main)
-      f.unsafe_set(i + SOFT_MIN, if row && !(s.fits && cs.drop != 0) { cs.soft_min } else { undef })
+      f.unsafe_set(i + SOFT_MIN, if row && !(s.fits && cs.drop != 0) {
+        // (a row kept no narrower than what it holds that leaves out what has not the room: its words cut short under
+        // four of their size, fit_soft_held)
+        if cs.min_held {
+          fit_soft_held(c, cb)
+        } else {
+          cs.soft_min
+        }
+      } else {
+        undef
+      })
       f.unsafe_set(i + MAX_MAIN, max_main)
       f.unsafe_set(i + MIN_CROSS, if row { cb.min_h } else { cb.min_w })
       f.unsafe_set(i + MAX_CROSS, if row { cb.max_h } else { cb.max_w })
@@ -2275,7 +2285,7 @@ fn row_item_min(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
   if c.style.min_held {
     // (a row that leaves out what has not the room: what it keeps once all that may leave has, fit_least_held)
     let held = if c.style.fits && is_row(c.style.direction) {
-      fit_least_held(c, cb, cb_w, cb_h)
+      fit_least_held(c, cb, true)
     } else {
       size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
     }
@@ -2294,8 +2304,10 @@ fn row_item_min(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
 /// `fits`) and is never narrower than what it holds (Style's min_held) comes to along it, as an old view's `keep` has it:
 /// what it keeps once all it may leave out has left (its ⋯ then with it, as wide as it is), each of the rest at its
 /// least as such a row keeps it (part_least: words cut short four of their size), with their margins, its gaps and its
-/// padding and border; of ways of saying one thing (`one_of`), the last. What is beside it gives way past that.
-fn fit_least_held(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
+/// padding and border; of ways of saying one thing (`one_of`), the last. What is beside it gives way past that. Not
+/// `cut_kept`: the same with none of its words cut short kept (each part at its min-width, padding and border), the least
+/// it comes to as a last resort (fit_soft_held).
+fn fit_least_held(c : Node, cb : Box, cut_kept : Bool) -> Double {
   let parts = flow_children(c)
   if c.style.one_of {
     let mut last = -1
@@ -2329,7 +2341,7 @@ fn fit_least_held(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
     let least = if s.drop == -1 {
       size_node(k, undef, undef, undef, undef, undef, undef, false)
     } else {
-      part_least(k, kb, kept_of(k, undef, undef))
+      part_least(k, kb, if cut_kept { kept_of(k, undef, undef) } else { undef })
     }
     w = w + least + kb.mar_l + kb.mar_r
     n = n + 1
@@ -2338,6 +2350,24 @@ fn fit_least_held(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
     w = w + edge_of(c.style.gap_col_k, c.style.gap_col_v, undef) * (n - 1).to_double()
   }
   w
+}
+
+///|
+/// The least an item `c` (its box `cb`) of a row comes to as a last resort (SOFT_MIN, last_resort), where it and what is
+/// beside it are at their least and still have not the room: what it says (Style's soft_min, an old view's); a row of a
+/// node's never narrower than what it holds that leaves out what has not the room, what it keeps with none of its words
+/// cut short kept (fit_least_held), as an old view's `keep` comes down to its soft_least; NaN none.
+fn fit_soft_held(c : Node, cb : Box) -> Double {
+  let s = c.style
+  if known(s.soft_min) || !s.fits || s.one_of || !is_row(s.direction) {
+    return s.soft_min
+  }
+  let soft = fit_least_held(c, cb, false)
+  if known(cb.min_w) {
+    fmax(cb.min_w, soft)
+  } else {
+    soft
+  }
 }
 
 ///|
