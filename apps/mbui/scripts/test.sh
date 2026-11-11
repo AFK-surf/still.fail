@@ -292,7 +292,9 @@ for t in $targets; do
       # fourth's, preview_tree's halves, 123 and 99, not 170)
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
         case "${MBUI_TEST_FPS:-}" in
-          60) specs="4,4,560,1 4,4,20,1 1,4,600,1 4,4,0,1" ;;
+          # (the first's other runs at 60 436 s of its cores, not 560: the packages' 173 and preview_tree's halves 153
+          # and 110, main 23971ce1 43066168046, 2026-11-11, where the fourth's pages were 288 s of its 300 on its four)
+          60) specs="4,4,440,1 4,4,20,1 1,4,600,1 4,4,0,1" ;;
           120) specs="4,4,160,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
           24 | 7) specs="4,4,90,2 4,4,14,2 1,4,840,2 4,4,120,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
