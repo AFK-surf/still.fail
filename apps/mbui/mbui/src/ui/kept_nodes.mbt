@@ -18,6 +18,8 @@
 ///|
 /// A list's row kept as its nodes: what its build made and said, where it is in the frame's nodes, what it was built
 /// from (its list's room and what built the list), and whether it may be kept at all (`ok`; `why` not).
+// built_frame is read by its tests alone
+#warnings("-unused_field")
 priv struct RowNodes {
   /// its list's id, its item
   list : Int

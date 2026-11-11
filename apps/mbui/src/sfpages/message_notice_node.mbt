@@ -14,6 +14,8 @@
 /// One about a profile, what went wrong leads to the profile's page; one saying the station lacks the chat's runtime
 /// ends in · 安装; a failure the station takes reports of in · 上报 (asked first); one whose agent waits to retry, 取消
 /// after the pill. `pill_over`, told the pill's node and `key` once as it is made: what lights it as it is gone to.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn notice_said_node(
   v : @view.View,
   src : Source,

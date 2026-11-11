@@ -6,6 +6,8 @@
 ///|
 /// Where a message's file is shown, as it is now: its chat's station and session, and its view (whose session keeps a
 /// file the core names none for: its first agent's).
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-struct_never_constructed")
 priv struct MessageFilesAt {
   station : () -> String
   session : () -> String
@@ -33,6 +35,8 @@ fn MessageFilesAt::here(self : MessageFilesAt) -> MessageHere {
 /// (`mine`): in rows by the width given, 6 apart along a row and between rows, a picture's and a video's box their data's
 /// at most that width, a card as wide as what it says (236 at most, that width at most). `by`: whose message they are
 /// (author, role, ts), for 引用 in their menus; `place` says where they are shown, `at` names where they are (thumb_occurrence's).
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn message_files_node(
   parent : @view.View,
   src : Source,

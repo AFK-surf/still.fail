@@ -23,9 +23,13 @@ priv struct MdItem { task : Bool?; blocks : Array[MdBlock] }
 priv struct MdList { ordered : Bool; start : Int; tight : Bool; items : Array[MdItem] }
 ///|
 /// How a table's column is aligned (GFM's `:--`, `:-:`, `--:`; none said).
+// never drawn: a table's columns are not aligned as said
+#warnings("-unused_constructor")
 priv enum MdAlign { Plain; Left; Center; Right }
 ///|
 /// `md`, `csv`: the table to copy, as Markdown and as CSV, as the core wrote it (markdown.ts tableMarkdown, tableCsv).
+// align is never drawn: a table's columns are not aligned as said
+#warnings("-unused_field")
 priv struct MdTable { align : Array[MdAlign]; head : Array[Array[MdInline]]; rows : Array[Array[Array[MdInline]]]; md : String; csv : String }
 ///|
 priv enum MdBlock {

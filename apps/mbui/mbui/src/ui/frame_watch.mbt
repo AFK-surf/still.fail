@@ -466,6 +466,8 @@ fn frame_inputs_read() -> Unit {
 /// were applied (`looks`: it has some); whether the next may be built from nothing it did not read (it left nothing to
 /// come of its own: looks_left); the soonest moment anything but a look or a paint asked to be drawn at (-1: none),
 /// from its build on.
+// `built` is read by its tests alone
+#warnings("-unused_field")
 priv struct LooksBase {
   /// its instances, kept only where it has looks (a frame of the looks alone draws them again)
   mut inst : FixedArray[Double]

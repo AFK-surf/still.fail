@@ -205,6 +205,8 @@ pub let icon_swap_ms : Double = 300.0
 ///|
 /// One number on a spring (react-spring's tension and friction, mass 1), its way solved
 /// (@ui.SpringPath): `x`, `v` and `to` where it is, how fast it goes and where to, as of this frame (sample).
+// set_at is read by bar_moment_wbtest alone
+#warnings("-unused_field")
 priv struct Spr {
   mut path : @ui.SpringPath?
   /// riding something that moves itself (the ball on a bar chosen coming down: Ride), its way worked out as it set out

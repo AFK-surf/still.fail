@@ -3,6 +3,8 @@
 // advances.
 
 ///|
+// generation_asks and view_reads are read by tests alone
+#warnings("-unused_field")
 struct FakeHost {
   mut time : Double
   /// how late the frame drawn at `late_after` reached the screen, as said of it (Tester::frame_late, a run's LATE line):
@@ -939,6 +941,7 @@ let outside_perf = 14
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
 /// `outside_*` here in it: scripts/chk outside-kinds, host_contract.sh HOST kinds
+#warnings("-unused_value")
 fn outside_kinds() -> Array[(String, Int)] {
   [
     ("image", outside_image),

@@ -64,6 +64,8 @@ fn menu_under(
 ///|
 /// The menu over the page, while open and as it goes: mbui's dropdown menu (the arrows and Enter as a menu's; a tap
 /// beside it, Esc or back close it) at the line held, in MenuHost's look.
+// not called since #5233: a link's menu is never drawn
+#warnings("-unused_value")
 fn link_menu_layer(c : @ui.Ctx) -> Unit {
   // opened by a link held: felt as it opens
   if link_menu.open && link_menu.at == c.press().frame {

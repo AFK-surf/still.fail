@@ -347,6 +347,8 @@ pub(all) struct Work {
 
 ///|
 /// A node of the pool.
+// state_rev is never read: Tree::said_pass does not go through a node again for its state
+#warnings("-unused_field")
 struct Node {
   /// which making of this index it is (a handle on an earlier one finds it let go)
   mut gen : Int

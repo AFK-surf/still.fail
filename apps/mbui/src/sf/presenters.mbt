@@ -272,6 +272,8 @@ priv struct PanelPage {
 
 ///|
 /// How a presenter is drawn this frame (what a test reads).
+// Debug for its tests
+#warnings("-unused_value")
 priv enum How {
   AsSheet
   AsPopover

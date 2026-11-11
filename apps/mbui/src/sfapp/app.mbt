@@ -51,6 +51,8 @@ fn new_run() -> Unit {
 /// left set by a test that made none, the next test's Tester (in the same process, whichever test that is) took the app
 /// as that test had left it, not as at the start (2026-11-11). detlint's `reset-by-hand` holds new_run() to a Tester
 /// after it.
+// called by tests alone; here, as detlint's `reset-by-hand` wants it
+#warnings("-unused_value")
 fn fresh_app() -> Unit {
   new_run()
   reset_by_hand.val = false
