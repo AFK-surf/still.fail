@@ -28,6 +28,8 @@ on:
       - "apps/mbui/mbui/src/ui/a11y.mbt"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
+      - "apps/mbui/mbui/src/host/station_install.h"
+      - "apps/mbui/mbui/scripts/station_install_test.c"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/noticecheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/updatecheck.mbt"
@@ -75,6 +77,11 @@ jobs:
             libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
             fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - name: "What the host hands the station's installer: the token, the workspace lock's hash, nothing refused dropped (src/host/station_install.h)"
+        run: |
+          mkdir -p out
+          cc -Wall -Werror -Isrc/host scripts/station_install_test.c -o out/station_install_test
+          out/station_install_test
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Type-check every target; print errors only. First the determinism lint (tools/detlint): its
-# report, and a failure stops here; then the hosts' H.264 conversion (scripts/avc_test.c) and log files
-# (scripts/log_files_test.c).
+# report, and a failure stops here; then the hosts' H.264 conversion (scripts/avc_test.c), log files
+# (scripts/log_files_test.c) and what the desktops hand the station's installer (scripts/station_install_test.c).
 D="$(cd "$(dirname "$0")" && pwd)"
 "$D/detlint" || exit 1
 # the H.264 conversion the hosts share (src/host/avc.h), as still.fail's Android AvcTest tests it
@@ -9,6 +9,8 @@ mkdir -p "$D/../out"
 cc -Wall -I "$D/../src/host" "$D/avc_test.c" -o "$D/../out/avc_test" && "$D/../out/avc_test" || exit 1
 # what a host's log files may keep, the queue before them, which files (src/host/log_files.h)
 cc -Wall -I "$D/../src/host" "$D/log_files_test.c" -o "$D/../out/log_files_test" && "$D/../out/log_files_test" || exit 1
+# what the desktops' hosts hand the station's installer (src/host/station_install.h)
+cc -Wall -I "$D/../src/host" "$D/station_install_test.c" -o "$D/../out/station_install_test" && "$D/../out/station_install_test" || exit 1
 . "$D/env.sh"
 for t in ${TARGETS:-native}; do
   echo "=== $t"
