@@ -44,7 +44,7 @@ pub fn service_view(
   file? : FilePage? = None,
   close? : (() -> Unit)? = None,
 ) -> Unit {
-  svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
+  svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, @sfbase.answer_unread) }
   let p = service_page_for(station, job, prefs=src.topic("prefs", {}).get().value)
   p.port = port
   p.name = name

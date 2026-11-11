@@ -191,7 +191,7 @@ pub fn open_outline(
   at.field.set(typed)
   // (what is not on the device yet read onto it: the outline fills in as it comes)
   if !src.read_only {
-    (src.call)("chat.bring", Json::object(outline_params(r, thread)), fn(_) {  })
+    (src.call)("chat.bring", Json::object(outline_params(r, thread)), @sfbase.answer_unread)
   }
   @sf.panel_nodes(
     @sf.t("web-main.outline.title"),

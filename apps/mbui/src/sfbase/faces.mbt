@@ -262,7 +262,7 @@ fn face_files(
           Some(b) if @zip.sha256(b) == sha => {
             // kept unzipped from now on
             if flag(Some(v), "zipped") {
-              (src.call_bytes)("fonts.keep", Json::object({ "sha256": ToJson::to_json(sha) }), b, fn(_) {  })
+              (src.call_bytes)("fonts.keep", Json::object({ "sha256": ToJson::to_json(sha) }), b, answer_unread)
             }
             got.push((Held(b), weight))
             face_files(src, id, files, at + 1, got, fetched, had)

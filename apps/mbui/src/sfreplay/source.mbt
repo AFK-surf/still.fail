@@ -387,6 +387,11 @@ pub fn source() -> @sfapp.Source {
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
     // run's language, which only the run knows).
     call: fn(name, params, done) {
+      // (one whose answer nobody reads: asked as the app asks it, none given to the core, @sfbase.answer_unread)
+      if @sfbase.unread_answer(done) {
+        @core.call(name, params~)
+        return
+      }
       if name == "commands.find" {
         @core.call(name, params~, on_done=done)
         return
@@ -394,7 +399,7 @@ pub fn source() -> @sfapp.Source {
       match @sfkept.answer(name, params, None) {
         Some(Ok((v, _))) => {
           // (the tape told it was asked, its answer to it let go: the run's ask of it, if the run asked, is had)
-          @core.call(name, params~, on_done=fn(_) {  })
+          @core.call(name, params~)
           // (answered at once, as the core's answer comes from outside: what it changes of what is no signal taken so)
           @ui.came_from_outside()
           done(Ok(v))
@@ -405,6 +410,10 @@ pub fn source() -> @sfapp.Source {
       }
     },
     call_bytes: fn(name, params, bytes, done) {
+      if @sfbase.unread_answer(done) {
+        @core.call(name, params~, bytes=Some(bytes))
+        return
+      }
       match @sfkept.answer(name, params, Some(bytes)) {
         Some(Ok((v, _))) => {
           @ui.came_from_outside()

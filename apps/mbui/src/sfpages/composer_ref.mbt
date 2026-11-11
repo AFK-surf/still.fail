@@ -113,7 +113,7 @@ fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
   let own : Json = if on == (text(prefs, "dropAs") == "file") { Json::null() } else { Json::boolean(on) }
   let files : Map[String, Json] = {}
   files[key] = own
-  (src.call)("prefs.set", { "dropFiles": Json::object(files) }, fn(_) {  })
+  (src.call)("prefs.set", { "dropFiles": Json::object(files) }, @sfbase.answer_unread)
 }
 
 ///|

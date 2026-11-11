@@ -592,12 +592,16 @@ fn Client::retire_if_unused(self : Client, s : Sub) -> Unit {
 /// Returns the call's id. A value the call sends before its answer (how far it has got) is passed on only to a
 /// `stream`'s `on_value`.
 /// `bytes` go beside the call (a file's part: `station.upload.part`).
+/// No `on_done`: nobody reads its answer (a call told and let go: `client.focus`, `prefs.set`). It goes as any call,
+/// its id its own; its answer, taken as it comes, runs nothing, builds nothing and is awaited by nothing (Client::
+/// call_said), as one said unread by its name (Client::unread). One that reads it says so with an `on_done` that does
+/// something: an empty one is no reader (detlint's `empty-on-done`).
 pub fn Client::call(
   self : Client,
   name : String,
   params? : Json = Json::object({}),
   bytes? : Bytes? = None,
-  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+  on_done? : (Result[Json, Json]) -> Unit,
 ) -> Int {
   if name == "client.focus" {
     match params {
@@ -618,14 +622,17 @@ pub fn Client::call(
   }
   let id = self.next_id
   self.next_id += 1
-  self.calls[id] = on_done
+  match on_done {
+    Some(f) => self.calls[id] = f
+    None => ()
+  }
   // (its name, for what its answer is in the record and in a hang: Client::perf_name)
   self.perf_calls[id] = name
   if perf_counts() {
     perf_out(name)
   }
   // (one whose answer nobody reads is awaited by nothing: its answer, taken as it comes, asks for no frame)
-  if self.unread_names.contains(name) {
+  if on_done is None || self.unread_names.contains(name) {
     self.unread_calls[id] = true
   } else {
     self.call_waits[id] = (self.start_wait)("core: \{name} (call \{id})")
@@ -677,7 +684,7 @@ pub fn Client::stream(
   params? : Json = Json::object({}),
   bytes? : Bytes? = None,
   on_value~ : (Json, Bytes?) -> Unit,
-  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+  on_done? : (Result[Json, Json]) -> Unit,
 ) -> Int {
   let id = self.next_id
   self.progress[id] = on_value
@@ -685,10 +692,14 @@ pub fn Client::stream(
     Some(f) => self.quiet_calls[id] = f
     None => ()
   }
+  // (its values are read as they come: awaited till its answer, whether that is read or not)
   self.call(name, params~, bytes~, on_done=fn(r) {
     self.progress.remove(id)
     self.quiet_calls.remove(id)
-    on_done(r)
+    match on_done {
+      Some(f) => f(r)
+      None => ()
+    }
   })
 }
 

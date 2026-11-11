@@ -49,7 +49,7 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
     act(core, tr("web-pages.security.denyDevice"), "lockPrompt.deny", obj([("device", str(device))]))
   }
   let hide = fn() {
-    (core.call)("lockPrompt.hide", obj([("device", str(device))]), fn(_) {  })
+    (core.call)("lockPrompt.hide", obj([("device", str(device))]), answer_unread)
   }
   let who = match text(rv, "name") {
     "" => text(rv, "email")

@@ -149,5 +149,5 @@ fn reader_put(src : Source, change : @sf.ReaderStyleChange) -> Unit {
   reader_set[k] = v
   let o : Map[String, Json] = Map([])
   o[k] = v
-  (src.call)("prefs.set", Json::object({ "reader": Json::object(o) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "reader": Json::object(o) }), @sfbase.answer_unread)
 }

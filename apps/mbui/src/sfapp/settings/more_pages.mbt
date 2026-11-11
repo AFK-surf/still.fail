@@ -546,7 +546,7 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
     _ => fill_sizes[0]
   }
   let size_said = fn(n : Double) { if n == 0.0 { tr("android-settings.files.fill.any") } else { size_words(n) } }
-  let set = fn(name : String, value : Json) { (core.call)("prefs.set", obj([(name, value)]), fn(_) {  }) }
+  let set = fn(name : String, value : Json) { (core.call)("prefs.set", obj([(name, value)]), answer_unread) }
   blocks.push(fn() { section_header(c, tr("android-settings.files.fill.title"), start=S6) })
   blocks.push(fn() {
     list_card(c, fn() {
@@ -597,7 +597,7 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
     list_row(c, key="kept-fill-stop-all", piece=(false, true), fn() {
       row_title(c, tr("android-settings.files.fill.stopAll"), color=t.p.red)
     }, on_press=fn() {
-      (core.call)("fill.stopAll", obj([]), fn(_) {  })
+      (core.call)("fill.stopAll", obj([]), answer_unread)
     })
   })
 }

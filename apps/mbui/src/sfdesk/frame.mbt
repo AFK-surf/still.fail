@@ -1161,7 +1161,7 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   c.after_build("side-kept", fn() {
     wide.kept_w.set(kept_w)
     wide.kept_folded.set(kept_folded)
-    (src.call)("prefs.set", Json::object({ "sidebars": Json::object(said) }), fn(_) {  })
+    (src.call)("prefs.set", Json::object({ "sidebars": Json::object(said) }), @sfbase.answer_unread)
   })
 }
 

@@ -91,7 +91,7 @@ pub(all) struct Source {
   waits : (String, Map[String, Json]) -> Bool
   /// The core's lifetime and whether a retained topic value came from it; does not acquire the topic.
   generation : (String, Map[String, Json]) -> (Int, Bool)
-  /// a call to the core; `done` gets its answer or its error
+  /// a call to the core; `done` gets its answer or its error, or is `answer_unread`: nobody reads it
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
   /// a call with bytes beside it (a file's part going up: `station.upload.part`)
   call_bytes : (String, Json, Bytes, (Result[Json, Json]) -> Unit) -> Unit
@@ -524,3 +524,13 @@ pub fn made_source(
 /// picture.
 // kept across runs: a value (nothing in it is written: its topics none, its calls never answered)
 pub let sample_source : Source = { ..made_source(call=fn(_, _, _) {  }), read_only: true }
+
+///|
+/// The `done` of a call whose answer nobody reads (@settings.answer_unread, the one value for every page's calls).
+pub let answer_unread : (Result[Json, Json]) -> Unit = @settings.answer_unread
+
+///|
+/// Whether `done` is answer_unread: the call's answer read by nobody (a source's `call`, as it asks the core).
+pub fn unread_answer(done : (Result[Json, Json]) -> Unit) -> Bool {
+  physical_equal(done, answer_unread)
+}

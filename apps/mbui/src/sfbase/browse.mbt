@@ -198,7 +198,7 @@ pub fn dv_arrange(src : Source, by? : String, down? : Bool, hidden? : Bool) -> U
     Some(h) => o["hidden"] = Json::boolean(h)
     None => ()
   }
-  (src.call)("drive.arrange", Json::object(o), fn(_) {  })
+  (src.call)("drive.arrange", Json::object(o), answer_unread)
 }
 
 ///|

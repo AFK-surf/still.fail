@@ -159,14 +159,14 @@ pub fn refresh_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
 }
 
 ///|
-/// Calls `name` (see Client::call); `bytes` beside it.
+/// Calls `name` (see Client::call); `bytes` beside it. No `on_done`: nobody reads its answer (Client::call).
 pub fn call(
   name : String,
   params? : Json = Json::object({}),
   bytes? : Bytes? = None,
-  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+  on_done? : (Result[Json, Json]) -> Unit,
 ) -> Unit {
-  client.call(name, params~, bytes~, on_done~) |> ignore
+  client.call(name, params~, bytes~, on_done?) |> ignore
 }
 
 ///|
@@ -187,9 +187,9 @@ pub fn stream(
   params? : Json = Json::object({}),
   bytes? : Bytes? = None,
   on_value~ : (Json, Bytes?) -> Unit,
-  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+  on_done? : (Result[Json, Json]) -> Unit,
 ) -> Int {
-  client.stream(name, params~, bytes~, on_value~, on_done~)
+  client.stream(name, params~, bytes~, on_value~, on_done?)
 }
 
 ///|

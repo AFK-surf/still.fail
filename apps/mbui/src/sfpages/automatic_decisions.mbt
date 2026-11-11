@@ -611,7 +611,7 @@ fn policy_body_node(v : @view.View, core : Core, station : String, policy : () -
 /// of the window's tree (open_dialog_nodes), made once as it opens: what they show follows the draft as it changes.
 fn policy_dialog(core : Core, station : String, form : String, policy : Json?, id : String, key : String, ov : Json?) -> Unit {
   let edit = fn(input : Array[(String, Json)]) {
-    (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(_) {  })
+    (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), @sfbase.answer_unread)
   }
   let save = fn() {
     @settings.act(

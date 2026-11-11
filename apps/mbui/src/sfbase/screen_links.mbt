@@ -527,12 +527,12 @@ pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : By
               // station would wait on it); its pace is the station's own (an Android preview's 2 frames a second)
               shown=fn(ts) {
                 if p.view == view {
-                  (src.call)("screen.ack", { "view": Json::string(view), "ts": Json::number(ts) }, fn(_) {  })
+                  (src.call)("screen.ack", { "view": Json::string(view), "ts": Json::number(ts) }, answer_unread)
                 }
               },
               broken=fn() {
                 if p.view == view {
-                  (src.call)("screen.keyframe", { "view": Json::string(view) }, fn(_) {  })
+                  (src.call)("screen.keyframe", { "view": Json::string(view) }, answer_unread)
                 }
               },
             )
@@ -689,7 +689,7 @@ pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
         if p.view == view && p.acked == n && p.waiting.length() > 0 {
           p.waiting.remove(0) |> ignore
           p.acked = n + 1
-          (src.call)("screen.ack", { "view": Json::string(view), "ts": ts }, fn(_) {  })
+          (src.call)("screen.ack", { "view": Json::string(view), "ts": ts }, answer_unread)
         }
       })
     }

@@ -206,7 +206,7 @@ fn nc_close(core : Core, f : NcFlow, shut : () -> Unit) -> Unit {
 fn nc_drop(core : Core, f : NcFlow) -> Unit {
   if !f.gone {
     f.gone = true
-    (core.call)("connect.flow.drop", obj([("station", str(f.station)), ("form", str(f.form))]), fn(_) {  })
+    (core.call)("connect.flow.drop", obj([("station", str(f.station)), ("form", str(f.form))]), @sfbase.answer_unread)
     for k in slack_token_forms.keys().to_array() {
       if k.has_prefix("flow/" + f.form) {
         slack_token_forms.remove(k)

@@ -51,7 +51,7 @@ fn key_ask_sheet(core : Core, r : Json) -> Unit {
   key_asks_closed.push(ask)
   let on = [("workspace", ws), ("vault", vault), ("device", device)]
   let hide = fn() {
-    (core.call)("vault.hidePrompt", obj([("workspace", str(ws)), ("device", str(device)), ("at", Json::number(count(rv, "at").to_double()))]), fn(_) {  })
+    (core.call)("vault.hidePrompt", obj([("workspace", str(ws)), ("device", str(device)), ("at", Json::number(count(rv, "at").to_double()))]), answer_unread)
   }
   @sf.panel_nodes(fill("web-pages.vault.promptTitle", [("device", text(rv, "deviceText"))]), from=Unanchored, gone=hide, fn(v, close) {
     // given the key elsewhere, or put away there: gone here too, as the core says so

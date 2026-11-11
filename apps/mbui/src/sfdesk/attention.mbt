@@ -157,7 +157,7 @@ fn trouble_kept(src : Source, w : Workspace, what : String) -> String {
 fn trouble_keep(src : Source, w : Workspace, what : String, words : Json) -> Unit {
   let m : Map[String, Json] = {}
   m[w.id + "\n" + what] = words
-  (src.call)("prefs.set", Json::object({ "trouble": Json::object(m) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "trouble": Json::object(m) }), @sfbase.answer_unread)
 }
 
 ///|
@@ -179,7 +179,7 @@ fn trouble_forget(src : Source, w : Workspace) -> Unit {
   let patch : Map[String, Json] = {}
   patch[w.id + "\nseen"] = Json::null()
   patch[w.id + "\ngone"] = Json::null()
-  (src.call)("prefs.set", { "trouble": Json::object(patch) }, fn(_) {  })
+  (src.call)("prefs.set", { "trouble": Json::object(patch) }, @sfbase.answer_unread)
 }
 
 ///|
@@ -377,7 +377,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
             @sfbase.history_push()
             if g.0 != w.id {
               app.picked.set(g.0)
-              (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), fn(_) {  })
+              (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), @sfbase.answer_unread)
               desk_home()
             }
             let chat : ChatRef = {

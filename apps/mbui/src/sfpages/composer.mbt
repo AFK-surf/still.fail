@@ -930,7 +930,7 @@ fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
   }
   composing.warmed[spec.session] = n + 1
   c.tell("composer/warm", fn() {
-    (src.call)("session.warm", { "station": Json::string(spec.station), "key": Json::string(spec.session) }, fn(_) {  })
+    (src.call)("session.warm", { "station": Json::string(spec.station), "key": Json::string(spec.session) }, @sfbase.answer_unread)
   })
 }
 
@@ -2529,7 +2529,7 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
             "to": Json::number(o.thread),
             "on": Json::boolean(!o.on),
           }
-          c.tell("composer/cc", fn() { (src.call)("chat.cc", params, fn(_) {  }) })
+          c.tell("composer/cc", fn() { (src.call)("chat.cc", params, @sfbase.answer_unread) })
           // one: done once ticked; several: left as it is, open to tick the next (a tick never opens it: closed by
           // then, Escape after the tick, it stays closed)
           if to.length() <= 1 {

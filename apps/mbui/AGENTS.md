@@ -178,6 +178,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   (`connects`), a connect's page that connect (`@settings.connect_of`), and a single-session connect's page, while its
   更换 row shows, what its choice of a session lists (`connectCandidates`), so that choice opens whole; nothing else
   asks it.
+- A call whose answer nobody reads gives none to read it (`@core.call` with no `on_done`; a source's call
+  `answer_unread`, sfbase's `source.mbt`): its answer is taken as it comes, awaited by nothing, building nothing. An
+  empty `on_done` is no reader's and is refused (detlint's `empty-on-done`; the coordinator of the migration,
+  2026-11-11).
 - A replay asks the core what its run's app asked, so a way of asking brought in after a trace was recorded is
   switched by the trace's head (`@sfcore.trace_switch`, one of `trace_switches`; a recording says all of them on), and
   how many traces still replay without each only falls (`src/sfreplay/flows/trace_switches_test.mbt`; the user,
