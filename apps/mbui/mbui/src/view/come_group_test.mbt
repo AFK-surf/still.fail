@@ -1,0 +1,204 @@
+// What comes or goes down one column at one moment goes one way with what was on its way there then (flex's
+// ComeGroup; the user 2026-11-03: what is left of the ways under way put with the new one, one whole going to where it
+// all ends; 2026-11-09: 处理中 and the answer change places in one move): each its share, all of it setting out, turning
+// and coming to where it goes together, so what is under them goes one way, or turns once, slowing first.
+
+///|
+/// The word drawn `w`'s top and height, as the tree is drawn now; none: (-1, 0).
+fn cg_drawn(t : @view.Tree, w : String) -> (Double, Double) {
+  match t.drawn().filter(fn(d) { d.words == w }) {
+    [d, ..] => (d.y, d.h)
+    _ => (-1.0, 0.0)
+  }
+}
+
+///|
+/// A column of rows by `keys` (each as tall as `tall` says), 下 under them; 处理中 comes at 100, and at the `swap`th
+/// frame of 60 a second from then the rows are `then`. 下's top at each frame to 800, and when each row came to rest.
+fn cg_rows(swap : Int, then : Array[String], frames? : Double = 1000.0 / 60.0) -> (Array[Double], Map[String, Double]) {
+  let keys = @signals.signal(["头"], same=fn(a, b) { a == b })
+  let tall : Map[String, Double] = { "头": 20.0, "处理中": 44.0, "回复": 71.1, "另": 30.0 }
+  let t = @view.Tree::new(fn(root) {
+    root.each(fn() { keys.get() }, fn(k) { k }, fn(row, k) {
+      row.height(Is(Some(tall[k.get()]))).words(Is(k.get())) |> ignore
+    })
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  t.event(100.0, fn() { keys.set(["头", "处理中"]) })
+  let ys = []
+  let rest : Map[String, Double] = {}
+  let last : Map[String, Double] = {}
+  let mut i = 0
+  let mut at = 100.0
+  let mut swapped = false
+  while at <= 800.0 {
+    // (at the `swap`th frame of 60 a second, whatever frames are drawn)
+    if !swapped && at >= 100.0 + swap.to_double() * 1000.0 / 60.0 - 0.001 {
+      swapped = true
+      t.event(at, fn() { keys.set(then) })
+    }
+    t.at(at)
+    t.frame(390.0, 844.0) |> ignore
+    ys.push(cg_drawn(t, "下").0)
+    for w in ["处理中", "回复", "另"] {
+      let h = cg_drawn(t, w).1
+      if last.get(w) != Some(h) {
+        rest[w] = at
+        last[w] = h
+      }
+    }
+    i = i + 1
+    at = 100.0 + i.to_double() * frames
+  }
+  (ys, rest)
+}
+
+///|
+/// How many times `ys` turns back (by more than a hundredth of a point), and the most it goes in a frame more than the
+/// frame before (a step in its speed).
+fn cg_turns(ys : Array[Double]) -> (Int, Double) {
+  let mut turns = 0
+  let mut dir = 0
+  let mut most = 0.0
+  for i in 1..<ys.length() {
+    let d = ys[i] - ys[i - 1]
+    if i >= 2 {
+      most = cg_max(most, (d - (ys[i - 1] - ys[i - 2])).abs())
+    }
+    let s = if d > 0.01 { 1 } else if d < -0.01 { -1 } else { 0 }
+    if s != 0 && dir != 0 && s != dir {
+      turns = turns + 1
+    }
+    if s != 0 {
+      dir = s
+    }
+  }
+  (turns, most)
+}
+
+///|
+fn cg_max(a : Double, b : Double) -> Double {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+test "a row coming called back as another comes at once: what is under them one way, both there together" {
+  // (early: 处理中 a frame on its way; late: all but there)
+  for swap in [1, 11] {
+    let (ys, rest) = cg_rows(swap, ["头", "回复"])
+    let (turns, _) = cg_turns(ys)
+    assert_eq(turns, 0, msg="swap at \{swap}: \{ys}")
+    assert_eq(ys[ys.length() - 1], 91.1)
+    assert_eq(rest["处理中"], rest["回复"], msg="\{rest}")
+  }
+}
+
+///|
+test "a row coming called back as another comes, the whole turned back: it slows as one, then turns once" {
+  // (处理中 called back a third and most of the way open, 另 (30, less than it) coming in its place: all of it turned)
+  for swap in [3, 10] {
+    let (ys, rest) = cg_rows(swap, ["头", "另"])
+    let (turns, _) = cg_turns(ys)
+    assert_true(turns <= 1, msg="swap at \{swap}: \{ys}")
+    assert_eq(ys[ys.length() - 1], 50.0)
+    assert_eq(rest["处理中"], rest["另"], msg="\{rest}")
+  }
+}
+
+///|
+test "a group's way the same whether frames were drawn between its cause and after or not" {
+  let at_every = fn(frames : Double) {
+    let (ys, _) = cg_rows(4, ["头", "回复"], frames~)
+    ys
+  }
+  let a = at_every(1000.0 / 60.0)
+  let b = at_every(1000.0 / 120.0)
+  // (the same moments of each: every 60th of a second)
+  for i in 0..<a.length() {
+    assert_eq(a[i], b[i * 2], msg="at \{i}")
+  }
+}
+
+///|
+test "a show closing and another opening down a column at once with one between, nothing tall too: under them one way" {
+  for between in [40.0, 0.0] {
+    let a_on = @signals.signal(true, same=fn(a, b) { a == b })
+    let c_on = @signals.signal(false, same=fn(a, b) { a == b })
+    let t = @view.Tree::new(fn(root) {
+      root.show(fn() { a_on.get() }, fn(v) { v.height(Is(Some(40.0))).words(Is("A")) |> ignore })
+      root.box(fn(b) { b.height(Is(Some(between))).words(Is("B")) |> ignore }) |> ignore
+      root.show(fn() { c_on.get() }, fn(v) { v.height(Is(Some(60.0))).words(Is("C")) |> ignore })
+      root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+    })
+    t.frame(390.0, 844.0) |> ignore
+    t.event(100.0, fn() {
+      a_on.set(false)
+      c_on.set(true)
+    })
+    let ys = []
+    let mut i = 0
+    while i <= 40 {
+      t.at(100.0 + i.to_double() * 1000.0 / 120.0)
+      t.frame(390.0, 844.0) |> ignore
+      ys.push(cg_drawn(t, "下").0)
+      i = i + 1
+    }
+    let (turns, _) = cg_turns(ys)
+    assert_eq(turns, 0, msg="\{between}: \{ys}")
+    assert_eq(ys[ys.length() - 1], between + 60.0)
+  }
+}
+
+///|
+test "a group said as what one in it holds is on its way too: the same at each moment whatever frames are drawn" {
+  // (回复's own 里 opening 30 ms before it comes in 处理中's place: what it comes to measured at that moment)
+  let at_every = fn(frames : Double) -> Array[Double] {
+    let keys = @signals.signal(["头"], same=fn(a, b) { a == b })
+    let inner = @signals.signal(false, same=fn(a, b) { a == b })
+    let t = @view.Tree::new(fn(root) {
+      root.each(fn() { keys.get() }, fn(k) { k }, fn(row, k) {
+        if k.get() == "回复" {
+          row.box(fn(b) { b.height(Is(Some(40.0))).words(Is("回复")) |> ignore }) |> ignore
+          row.show(fn() { inner.get() }, fn(v) { v.height(Is(Some(30.0))).words(Is("里")) |> ignore })
+        } else {
+          row.height(Is(Some(if k.get() == "头" { 20.0 } else { 44.0 }))).words(Is(k.get())) |> ignore
+        }
+      })
+      root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+    })
+    t.frame(390.0, 844.0) |> ignore
+    t.event(100.0, fn() { keys.set(["头", "处理中", "回复"]) })
+    let ms = Ref(100.0)
+    let out = []
+    let step_to = fn(to : Double) {
+      if frames > 0.0 {
+        while ms.val + frames < to {
+          ms.val = ms.val + frames
+          t.at(ms.val)
+          t.frame(390.0, 844.0) |> ignore
+        }
+      }
+      ms.val = to
+      t.at(to)
+      t.frame(390.0, 844.0) |> ignore
+      out.push(cg_drawn(t, "下").0)
+    }
+    step_to(170.0)
+    t.event(170.0, fn() { inner.set(true) })
+    step_to(200.0)
+    t.event(200.0, fn() { keys.set(["头", "回复"]) })
+    for at in [220.0, 260.0, 320.0, 400.0, 900.0] {
+      step_to(at)
+    }
+    out
+  }
+  let jumped = at_every(0.0)
+  for frames in [1000.0 / 60.0, 1000.0 / 120.0, 1000.0 / 24.0, 1000.0 / 7.0] {
+    assert_eq(at_every(frames), jumped, msg="\{frames}")
+  }
+}

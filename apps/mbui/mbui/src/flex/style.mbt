@@ -202,6 +202,9 @@ pub(all) struct Style {
   // layout (size_uncached), its way's end the same; flex's alone, never read across layouts or by anything else.
   mut come_whole : Double
   mut come_plan : Double
+  // Not CSS's: the one way of its column it goes on with others come or going at the same moment (ComeGroup), none
+  // alone. flex's alone to read.
+  mut come_group : ComeGroup?
   // Not CSS's: what an item's come way is to the box holding it (come_*), where that box takes no room holding nothing
   // (`gone_empty`): whether this way is it going from holding nothing or to it (set out from none, going to none, or
   // turned back on such a way), not one in another's place (a pick's, from as tall as that one was).
@@ -311,6 +314,7 @@ pub fn Style::new() -> Style {
     come_goal: 0.0 / 0.0,
     come_whole: 0.0 / 0.0,
     come_plan: 0.0 / 0.0,
+    come_group: None,
     come_fill: false,
     gone_empty: false,
     structural: false,
