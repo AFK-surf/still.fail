@@ -299,7 +299,9 @@ for t in $targets; do
           # now, and the first's other runs between the two measures)
           # (its pages on two the third's at 60 were 259-266 s, kept_rows' runs slowed beside them: main 436755fc
           # 43074044573, f06a53f3 43076123102; on one 121-199. Reckoned at 800 of its cores, fewer pages)
-          60) specs="4,4,520,1 4,4,20,1 2,4,800,1 4,4,0,1" ;;
+          # (two programs gave the third 86 page files beside kept_rows at 60, 271 s of them, the job 281 s of its 5
+          # minutes, main e73742ee 43081853101: one again, as it was at 121-199 s)
+          60) specs="4,4,520,1 4,4,20,1 1,4,600,1 4,4,0,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           120) specs="4,4,500,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
