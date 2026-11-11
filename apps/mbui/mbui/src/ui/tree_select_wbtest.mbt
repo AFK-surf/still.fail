@@ -245,7 +245,7 @@ test "words picked held past a page's list's foot, the list shorter under a poin
   t.frame_at(t.time() + 16.0)
   let state = match tree_edge.val {
     Some(e) =>
-      match e.scroll.shown_by() {
+      match e.scroll.bind(fn(s) { s.shown_by() }) {
         Some(v) => "shown by a node, nowhere \{v.shown_nowhere()}, rect \{v.rect()}, speed \{e.speed}"
         None => "shown by none"
       }
@@ -291,4 +291,62 @@ test "a node's words in pieces in a page whose words are picked: a finger held s
   t.tap(200.0, 250.0)
   t.draw()
   assert_eq(t.ctx().selected_text(), "")
+}
+
+///|
+test "words picked in a row that scrolls across (a code block's line), held past its end: the row brought on toward the pointer, picked as they come, till the line's end; held past its start, back; let go, still" {
+  let line = "let total = items.map(fn(x) { x.price * x.count }).fold(init=0, fn(a, b) { a + b }) // the end"
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  let s = @view.Scroll::across()
+  set_view_app(fn(root) {
+    root.box(fn(page) {
+      page.lines_up(Is(Some(Start))) |> ignore
+      words_picked(page)
+      page.box(fn(b) {
+        b.width(Is(Some(200.0))) |> ignore
+        b.scrolls(s, fn(held) {
+          held.box(fn(n) {
+            n.words_runs(Is([plain(line)]), ink=0x333333FFL, look={ size: 12.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  // (pressed on its first glyph, held past its end at 300)
+  finger(0, 1.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  finger(1, 300.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  assert_true(tree_edge.val is Some({ speed_across, .. }) && speed_across > 0.0, msg="past its end: brought on")
+  let a0 = s.at(view_app.val.unwrap())
+  let p0 = t.ctx().selected_text()
+  t.frame_at(t.time() + 300.0)
+  let a1 = s.at(view_app.val.unwrap())
+  let p1 = t.ctx().selected_text()
+  assert_true(a1 > a0 + 40.0, msg="brought on: \{a0} \{a1}")
+  assert_true(p1.length() > p0.length() && p1.has_prefix(p0), msg="picked on: \{p0} -> \{p1}")
+  t.frame_at(t.time() + 5000.0)
+  t.frame_at(t.time() + 16.0)
+  assert_eq(t.ctx().selected_text(), line)
+  // (held past its start: back)
+  finger(1, -20.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  let a2 = s.at(view_app.val.unwrap())
+  t.frame_at(t.time() + 300.0)
+  assert_true(s.at(view_app.val.unwrap()) < a2, msg="back")
+  // (let go: still)
+  finger(2, -20.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  assert_true(tree_edge.val is None)
+  let a3 = s.at(view_app.val.unwrap())
+  t.frame_at(t.time() + 300.0)
+  assert_eq(s.at(view_app.val.unwrap()), a3)
 }

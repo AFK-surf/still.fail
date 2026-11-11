@@ -268,6 +268,9 @@ priv struct Picked {
   mut spans : Map[SelKey, SelSpan]
   mut dragging : Bool
   mut list : Int
+  /// the box scrolled sideways the press went down in (Ctx::sideways: a code block's line, a wide table; 0 none),
+  /// scrolled toward the pointer held past its start or its end
+  mut across : Int
   mut layer : SelLayer
   mut made : Int
   /// picked by a finger (finger_select.mbt): held on a word, its ends' handles, the system's text menu over it; the
@@ -290,6 +293,7 @@ let picked : Picked = {
   spans: {},
   dragging: false,
   list: 0,
+  across: 0,
   layer: OldLayer(0),
   made: 0,
   finger: false,
@@ -1200,6 +1204,7 @@ fn Ctx::select_after_layout(self : Ctx) -> Unit {
     self.select_to(self.px, self.py)
   }
   self.select_edge()
+  self.select_edge_across()
 }
 
 ///|
@@ -1244,12 +1249,77 @@ fn Ctx::select_edge(self : Ctx) -> Unit {
 }
 
 ///|
+/// Words being picked with the pointer held past the start or the end of the box scrolled sideways the press went
+/// down in (a code block's line, a wide table), as it was last laid out: it scrolls toward the pointer at
+/// select_edge's pace for how far past it is, words coming as it does (select_after_layout), till the pointer comes
+/// back in or lets go, as a browser's overflowing box does.
+fn Ctx::select_edge_across(self : Ctx) -> Unit {
+  let id = picked.across
+  if id == 0 {
+    return
+  }
+  guard sideways.get(id) is Some(st) else { return }
+  let mut v = 0.0
+  if picked.dragging && self.down {
+    let mut k = self.scroll_ids.length() - 1
+    while k >= 0 && self.scroll_ids[k] != id {
+      k = k - 1
+    }
+    if k >= 0 {
+      let (start, end) = (self.scroll_rects[k * 4], self.scroll_rects[k * 4 + 2])
+      v = if end <= start {
+        0.0
+      } else if self.px < start {
+        -(start - self.px + select_edge_least) * select_edge_rate
+      } else if self.px > end {
+        (self.px - end + select_edge_least) * select_edge_rate
+      } else {
+        0.0
+      }
+    }
+  }
+  let was = st.x
+  sideways_edge_to(self, st, v)
+  // (scrolled under a pointer that stays where it is: the words come to it now, drawn so in this frame)
+  if st.x != was && !tree_picking() {
+    self.select_to(self.px, self.py)
+  }
+}
+
+///|
+/// Box `st` gone on at the pace it was last said (px a ms) since then, said on at `v` from now (0: still where it is).
+fn sideways_edge_to(c : Ctx, st : Sideways, v : Double) -> Unit {
+  if st.edge_v != 0.0 {
+    let x = dclamp(st.x + st.edge_v * dmax(0.0, c.clock - st.edge_t), 0.0, dmax(st.max, 0.0))
+    if x != st.x {
+      st.x = x
+      st.rest = -1.0
+      st.vel = 0.0
+      c.sideways_scrolled(st)
+    }
+  }
+  st.edge_v = v
+  st.edge_t = c.clock
+  // (a motion while it goes (Sideways' rest_at): frames come, each taking it on and the words under the pointer there)
+  if v != 0.0 {
+    c.moving(st.mover, st as &Moving, what="a box scrolled sideways toward words picked past its edge")
+  }
+}
+
+///|
 /// The list words were picked in scrolls no more toward the pointer (it let go, or they did).
 fn select_edge_stop() -> Unit {
   tree_edge_stop()
   if picked.list != 0 {
     g().edge_scroll(picked.list, 0.0)
     picked.list = 0
+  }
+  if picked.across != 0 {
+    match sideways.get(picked.across) {
+      Some(st) => sideways_edge_to(g(), st, 0.0)
+      None => ()
+    }
+    picked.across = 0
   }
 }
 
@@ -1359,6 +1429,8 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
       picked.layer = target.layer
       // (the list it lies in: sideways boxes in it scroll it no way the pointer goes up or down)
       picked.list = if picked.dragging { outer_scroll(self, x, y) } else { 0 }
+      // (the box scrolled sideways it lies in, the same way across)
+      picked.across = if picked.dragging { across_scroll(self, x, y) } else { 0 }
       // (a paragraph of the window's tree's: the column it is in, the same way)
       if picked.dragging {
         tree_edge_from(target)

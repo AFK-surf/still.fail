@@ -34,6 +34,7 @@ let kept_answers : String =
   #|["markdown","Willow 上 codex 的登录已失效：请在设置里重新登录 — 后面还有很长的一段话：agent 把 run 40208168565 和 squeeze_wbtest 的结果都写在这里，一直写下去也没有停\nand then a second line in English, written on and on for longer than any window is wide",[["p",[[0,192]]]]]
   #|["markdown","Willow 上没有 codex",[["p",[[0,16]]]]]
   #|["markdown","Willow 上的 claude 已启动",[["p",[[0,20]]]]]
+  #|["markdown","```js\nlet total = items.map(fn(x) { x.price * x.count }).fold(init=0, fn(a, b) { a + b }) // a line longer than the message\n```\n\n之后的一段",[["pre",{"code":[6,123],"lang":"js","ink":"h4j6c2j5ci3ci2cic4jcj6h2jcj6c3i4cj4cfc2i2cic2jc4j2h2j2c3b33"}],["p",[[129,134]]]]]
   #|["markdown","agent 说做完了以后，看这个 chat 里用户要的东西现在怎么样了。只按用户实际要的判断：不替用户加要求，用户没要求部署或验证的就不算欠着。agent 说做完了但消息对不上时，以消息为准。看不到的东西（文件、线上状态）不要猜，看不出来就选「看不出来」。",[["p",[[0,128]]]]]
   #|["markdown","e2e-080726-b 打开实时更新",[["p",[[0,19]]]]]
   #|["markdown","e2e-080726-b 打开实时更新 ×2",[["p",[[0,22]]]]]

@@ -777,8 +777,8 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double, loc~ : S
 /// A code block (code_block's) in `p`: on the code ground, row_corner round, cut to it; its language and its copy key
 /// (a capsule, concentric with the block's corner) on a row of their own over the code with either input (code_block's);
 /// the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
-/// desktop's width 12 on 1.6), scrolled across rather than wrapped. Pressed, the key copies the code and says so
-/// copied_ms.
+/// desktop's width 12 on 1.6), scrolled across, or wrapped at its width once its wrap key (before the copy key) is
+/// pressed, till it is pressed again. Pressed, the copy key copies the code and says so copied_ms.
 #callsite(autofill(loc))
 pub fn code_block_node(
   p : @view.View,
@@ -790,6 +790,7 @@ pub fn code_block_node(
   let over = native_input() is Mouse
   let key_inset = @ui.capsule_in(row_corner, code_key_h)
   let copied = @signals.signal(false)
+  let wrapped = @signals.signal(false)
   let copied_off : Ref[() -> Unit] = Ref(fn() {  })
   p.owns(fn() { (copied_off.val)() }) |> ignore
   // (a column as wide as its room, its bar over the code)
@@ -817,6 +818,27 @@ pub fn code_block_node(
       |> ignore
     })
     |> ignore
+    // (wrapped at the block's width, or on its lines as written, scrolled across: a press each way)
+    b.box(fn(k) {
+      k
+      .row(Is(true))
+      .height(Is(Some(code_key_h)))
+      .padding(Is((7.0, 0.0, 7.0, 0.0)))
+      .lines_up(Is(Some(Middle)))
+      .radius(Is(code_key_h / 2.0))
+      .ground(By(fn() { alpha(theme().p.canvas, 0.8) }))
+      |> ignore
+      pressed_node(k, fn() { wrapped.set(!wrapped.get()) }, Is(code_key_h / 2.0), Button, fn() {
+        md_wrap_words(wrapped.get())
+      })
+      k.box(fn(n) {
+        n.words(By(fn() { md_wrap_words(wrapped.get()) }), look=md_plain_look(theme().t.caption, 0.0)).ink(By(fn() { web().muted })) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    // (apart as an old view's keys are: code_keys_apart)
+    b.box(fn(g) { g.width(Is(Some(code_keys_gap))) |> ignore }) |> ignore
     b.box(fn(k) {
       k
       .row(Is(true))
@@ -843,32 +865,57 @@ pub fn code_block_node(
     |> ignore
   }
   p.box(made_for=loc, bar) |> ignore
-  // (its code in a box of its own that scrolls across: what is over it stays)
+  // (its code in a box of its own: wrapped at its width, or on its lines as written in one that scrolls across, what
+  // is over it staying)
+  let words = fn(w : @view.View, wrap : Bool) {
+    let runs = fn() {
+      match colours() {
+        Some(ink) => core_ink(code(), ink, theme().dark)
+        None => [@ui.span(code(), mono=true)]
+      }
+    }
+    let look : @view.WordsLook = {
+      size: theme().t.caption,
+      weight: 400,
+      line: if over { code_line_wide } else { 18.0 },
+      wrap,
+      tracking: @view.letters_own,
+      balance: false,
+    }
+    w.words_runs(By(runs), look~).ink(By(fn() { theme().p.text })) |> ignore
+  }
   p.box(fn(sc) {
-    sc.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
-      held.padding(Is((14.0, 12.0, 14.0, 12.0))).lines_up(Is(Some(Start))) |> ignore
-      held.box(fn(w) {
-        let runs = fn() {
-          match colours() {
-            Some(ink) => core_ink(code(), ink, theme().dark)
-            None => [@ui.span(code(), mono=true)]
-          }
-        }
-        let look : @view.WordsLook = {
-          size: theme().t.caption,
-          weight: 400,
-          line: if over { code_line_wide } else { 18.0 },
-          wrap: false,
-          tracking: @view.letters_own,
-          balance: false,
-        }
-        w.words_runs(By(runs), look~).ink(By(fn() { theme().p.text })) |> ignore
-      })
-      |> ignore
+    sc.pick(fn() { if wrapped.get() { 1 } else { 0 } }, fn(q, kind) {
+      if kind == 1 {
+        q.padding(Is((14.0, 12.0, 14.0, 12.0))) |> ignore
+        q.box(fn(w) { words(w, true) }) |> ignore
+      } else {
+        q.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
+          held.padding(Is((14.0, 12.0, 14.0, 12.0))).lines_up(Is(Some(Start))) |> ignore
+          held.box(fn(w) { words(w, false) }) |> ignore
+        })
+        |> ignore
+      }
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// How far apart a code block's keys stand (code_keys_apart's 4).
+let code_keys_gap : Double = 4.0
+
+///|
+/// The wrap key's words: what pressing it does (wrapped, back on its lines as written).
+fn md_wrap_words(wrapped : Bool) -> String {
+  if language() == "en" {
+    if wrapped { "No wrap" } else { "Wrap" }
+  } else if wrapped {
+    "不换行"
+  } else {
+    "换行"
+  }
 }
 
 ///|

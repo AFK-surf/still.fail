@@ -194,13 +194,16 @@ fn tree_picking() -> Bool {
 }
 
 ///|
-/// The column of the window's tree words are being picked in (the nearest scrolling up and down that holds the
-/// paragraph the press went down in: View::scroll_holding; known by the column, not by that paragraph, whose node may
-/// scroll away and be made anew while picking goes on), and how fast it was last said to go toward the pointer
-/// (Scroll::edge_toward: px a ms, 0 still).
+/// What words of the window's tree are being picked in scrolls: the nearest column scrolling up and down that holds the
+/// paragraph the press went down in, and the nearest row scrolling across (a code block's, a wide table's), each
+/// View::scroll_holding (known by what scrolls, not by that paragraph, whose node may scroll away and be made anew
+/// while picking goes on), and how fast each was last said to go toward the pointer (Scroll::edge_toward: px a ms, 0
+/// still).
 priv struct TreeEdge {
-  scroll : @view.Scroll
+  scroll : @view.Scroll?
   mut speed : Double
+  across : @view.Scroll?
+  mut speed_across : Double
 }
 
 ///|
@@ -210,13 +213,20 @@ let tree_edge : Ref[TreeEdge?] = Ref(None)
 
 ///|
 /// Words of the window's tree being picked from paragraph `t` (a press on it, the pointer held): the column it is in
-/// scrolls toward the pointer held past its top or its foot (tree_edge_to), as an old view's list does (select_edge).
+/// scrolls toward the pointer held past its top or its foot, the row it is in past its start or its end (tree_edge_to),
+/// as an old view's list does (select_edge) and a browser's overflowing box does.
 fn tree_edge_from(t : SelTarget) -> Unit {
   tree_edge_stop()
   match (view_app.val, t.node) {
     (Some(tree), Some(id)) =>
-      match tree.view_of(id).bind(fn(v) { v.scroll_holding() }) {
-        Some(s) => tree_edge.val = Some({ scroll: s, speed: 0.0 })
+      match tree.view_of(id) {
+        Some(v) => {
+          let scroll = v.scroll_holding()
+          let across = v.scroll_holding(across=true)
+          if scroll is Some(_) || across is Some(_) {
+            tree_edge.val = Some({ scroll, speed: 0.0, across, speed_across: 0.0 })
+          }
+        }
         None => ()
       }
     _ => ()
@@ -224,52 +234,87 @@ fn tree_edge_from(t : SelTarget) -> Unit {
 }
 
 ///|
-/// The column words of the window's tree are being picked in toward the pointer (at the Ctx's py) while `held`: past
-/// where it shows (its top, its foot, as it is laid out and cut by what holds it now: as the window or the page
+/// How fast what scrolls (`s`) is to go toward the pointer at `at` (the Ctx's py down a column, px across a row) while
+/// `held`: past where it shows (its two ends, as it is laid out and cut by what holds it now: as the window or the page
 /// changes, those then), as fast as select_edge has an old view's list go that far past (select_edge_rate, from
-/// select_edge_least); within it, or let go, still. Said to it only as how fast changes (Scroll::edge_toward goes on as
-/// it is said, its place a function of time), never again for the same. The column let go, or shown nowhere (its page
-/// covered by another, or left): still, and known no more, at once.
+/// select_edge_least); within it, or let go, still. None: shown nowhere (its page covered by another, or left).
+fn tree_edge_speed(tree : @view.Tree, s : @view.Scroll, across : Bool, at : Double, held : Bool) -> Double? {
+  let shows = match s.shown_by() {
+    Some(v) if !v.shown_nowhere() => Some(v)
+    _ => None
+  }
+  guard shows is Some(col) else { return None }
+  let (x, y, w, h) = col.rect()
+  let (bx0, by0, bx1, by1) = tree.seen_bounds(col.id())
+  let (top, foot) = if across {
+    (dmax(x, bx0), dmin(x + w, bx1))
+  } else {
+    (dmax(y, by0), dmin(y + h, by1))
+  }
+  Some(
+    if !held || foot <= top {
+      0.0
+    } else if at < top {
+      -(top - at + select_edge_least) * select_edge_rate
+    } else if at > foot {
+      (at - foot + select_edge_least) * select_edge_rate
+    } else {
+      0.0
+    },
+  )
+}
+
+///|
+/// What words of the window's tree are being picked in toward the pointer (the Ctx's px, py) while `held`
+/// (tree_edge_speed): said to each only as how fast changes (Scroll::edge_toward goes on as it is said, its place a
+/// function of time), never again for the same. The column shown nowhere: all of it still, and known no more, at once;
+/// the row alone shown nowhere, it alone still.
 fn tree_edge_to(c : Ctx, held : Bool) -> Unit {
   guard tree_edge.val is Some(e) else { return }
   guard view_app.val is Some(tree) else { return }
   // (laid out and placed as of the moment it is asked: what changed since the last frame (the column moved, made
   // shorter, laid out nowhere) as it is then)
   tree.laid_as_now()
-  let shows = match e.scroll.shown_by() {
-    Some(v) if !v.shown_nowhere() => Some(v)
-    _ => None
+  match e.scroll {
+    Some(s) =>
+      match tree_edge_speed(tree, s, false, c.py, held) {
+        Some(v) =>
+          if v != e.speed {
+            e.speed = v
+            s.edge_toward(v)
+          }
+        None => {
+          tree_edge_stop()
+          return
+        }
+      }
+    None => ()
   }
-  guard shows is Some(col) else {
-    tree_edge_stop()
-    return
-  }
-  let (_, y, _, h) = col.rect()
-  let (_, by0, _, by1) = tree.seen_bounds(col.id())
-  let (top, foot) = (dmax(y, by0), dmin(y + h, by1))
-  let v = if !held || foot <= top {
-    0.0
-  } else if c.py < top {
-    -(top - c.py + select_edge_least) * select_edge_rate
-  } else if c.py > foot {
-    (c.py - foot + select_edge_least) * select_edge_rate
-  } else {
-    0.0
-  }
-  if v != e.speed {
-    e.speed = v
-    e.scroll.edge_toward(v)
+  match e.across {
+    Some(s) => {
+      let v = tree_edge_speed(tree, s, true, c.px, held).unwrap_or(0.0)
+      if v != e.speed_across {
+        e.speed_across = v
+        s.edge_toward(v)
+      }
+    }
+    None => ()
   }
 }
 
 ///|
-/// The column words of the window's tree were picked in still, and known no more (they are let go, the pointer let
-/// them be, or the column went).
+/// What words of the window's tree were picked in still, and known no more (they are let go, the pointer let them be,
+/// or the column went).
 fn tree_edge_stop() -> Unit {
   match tree_edge.val {
     Some(e) => {
-      if e.speed != 0.0 {
-        e.scroll.edge_toward(0.0)
+      match e.scroll {
+        Some(s) if e.speed != 0.0 => s.edge_toward(0.0)
+        _ => ()
+      }
+      match e.across {
+        Some(s) if e.speed_across != 0.0 => s.edge_toward(0.0)
+        _ => ()
       }
       tree_edge.val = None
     }
