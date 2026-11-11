@@ -3,7 +3,8 @@
 // from its info's 共享 row, for those who may change it (its starter, an owner or admin), the presenters' panel (a
 // sheet with touch short of Large, the web's dialog otherwise) ticks the workspaces it is shared with and
 // whether their agents may send in it; 完成 has the core tell its station (`chat.xshare`), the panel gone at once, the
-// row turning while it is told (its key: xshare_key). What it lists is the chat's `xshare`.
+// row turning while it is told (its key: xshare_key), and the chat's link copied at once when it is shared with any, to
+// paste there (pengxiao, 2026-11-11). What it lists is the chat's `xshare`.
 
 ///|
 /// The workspaces ticked (as it was shared as it opened), whether their agents may send; whether the chat's sharing was
@@ -96,7 +97,8 @@ pub fn open_xshare(src : Source, r : ChatRef, thread : Double?, from~ : @sf.Anch
 }
 
 ///|
-/// 完成: the station told, in the order the panel lists them.
+/// 完成: the station told, in the order the panel lists them; shared with any, the chat's link copied in the same
+/// press (a browser lets the clipboard be written only so), said by its toast.
 fn xshare_done(src : Source, r : ChatRef, thread : Double?) -> Unit {
   let share = field(src.topic("chat", chat_params(r)).get().value, "xshare")
   let ticked = xsharing.ticked.untracked()
@@ -111,6 +113,10 @@ fn xshare_done(src : Source, r : ChatRef, thread : Double?) -> Unit {
   match thread {
     Some(th) => p["thread"] = Json::number(th)
     None => ()
+  }
+  let link = @sfbase.chat_link(r.station, r.session)
+  if to.length() > 0 && link != "" {
+    @sfbase.copy_chat_link(r.title, link)
   }
   act(src, @sf.t("web-pages.chat.xshare.verb"), xshare_key(r.station, session), "chat.xshare", Json::object(p))
 }
