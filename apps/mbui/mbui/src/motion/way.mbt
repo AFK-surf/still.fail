@@ -118,6 +118,7 @@ pub fn Way::go(
   self.to = target
   self.spec = spec
   self.start = at
+  ways_said_count.val += 1
   // (motion reduced: there at once, the setting's, whoever tells it)
   self.dur = if @ui.reduced_motion() { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
@@ -171,4 +172,16 @@ pub fn Way::shown_on(self : Way, n : @view.View) -> Double {
   } else {
     self.value_at(t)
   }
+}
+
+///|
+/// How many ways were set going (Way::go), since the program began: what a test reads before and after a frame to hold
+/// that the frame set none going (a row taken for another key as its list is laid out is put, never set going), read
+/// as flex's `computes` is, the same on any host.
+// kept across runs: a count read only as a difference, before and after a frame, as flex's `generation`
+let ways_said_count : Ref[Int] = Ref(0)
+
+///|
+pub fn ways_said() -> Int {
+  ways_said_count.val
 }

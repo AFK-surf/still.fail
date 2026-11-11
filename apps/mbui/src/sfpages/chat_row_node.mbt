@@ -418,7 +418,7 @@ pub fn chat_row_node(
       if k == chosen_for.val {
         chosen.go(row, to, @sf.dur_ms)
       } else {
-        chosen.go_from(row, to, to, @motion.Snap(0.0))
+        chosen.put(to)
       }
       chosen_for.val = k
     })
@@ -441,10 +441,14 @@ pub fn chat_row_node(
       }
       opened.val = false
       down_at.val = None
+      // (put, never set going: a row taken for another chat is so as its list is laid out (a block given another key
+      // as the list scrolls), what a frame found, no cause; what it shows is put back as it would be were it made anew
+      // for that chat, as a list's reused row's looks always are (a way said here was the frame's, at 60 a second and
+      // 120 at other moments and other times over: tape_wbtest's ways, 2026-11-11))
       for w in [left, pressed, hand, off] {
-        w.go_from(row, 0.0, 0.0, @motion.Snap(0.0))
+        w.put(0.0)
       }
-      lift.go_from(slot, 0.0, 0.0, @motion.Snap(0.0))
+      lift.put(0.0)
     })
     if finger {
       if at != Whole {

@@ -141,3 +141,32 @@ test "a finger's row pressed beside the chat goes from its press's ground to the
   t.run_for(@sf.dur_ms)
   assert_eq(ground(), 0xFFL)
 }
+
+///|
+test "a chat row taken for another chat, as its list is laid out, sets no way going: what it shows is put as it would be made anew" {
+  @sfbase.reset()
+  @sf.set_words(@sfbase.fill)
+  let first = { ..sample_chat(0), title: "A chat", ago: "5 minutes ago", full: "A moment ago" }
+  let other = { ..sample_chat(1), title: "Another chat", ago: "an hour ago", full: "An hour ago" }
+  let item = @signals.signal(first)
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=320.0, h=200.0, platform=2)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let popup = root.box(fn(v) { v.over(Is(true)) |> ignore })
+    let tips = @sf.TipLayer::new(fn() { Some(popup) })
+    chat_row_node(root, @sfbase.sample_source, tips, fn() { item.get() }, "agents", fn() { false }, Side, fn() { 0 }) |> ignore
+  })
+  t.draw()
+  t.run_for(@sf.dur_ms)
+  // (the row given another chat, nothing else changed: as a list's block is given another key as the list scrolls)
+  let said = @motion.ways_said()
+  item.set(other)
+  t.frame()
+  assert_eq(@motion.ways_said() - said, 0, msg="ways set going as the row was taken for another chat")
+  assert_true(t.find(other.title) is Some(_))
+  assert_true(t.moving().length() == 0, msg="\{t.moving()}")
+  assert_true(
+    !t.drawn_rects().iter().any(fn(r) { r.2 > 100.0 && r.3 > 30.0 && r.4 == @sf.theme().p.selected }),
+    msg="no ground of the chat in view on a row not in view",
+  )
+}
