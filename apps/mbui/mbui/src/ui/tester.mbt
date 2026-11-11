@@ -1125,6 +1125,16 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   if @view.key_marks_left() {
     @halt.saying("a list's block's key mark (key_taking, key_taken) left set after a frame at \{at}")
   }
+  // (what the window's tree keeps held to what working it out whole gives, where the frame changed it: the drawing
+  // order, the boxes each node lays out, whether each takes input; view's kept_checks.mbt)
+  match view_app.val {
+    Some(tree) =>
+      match tree.kept_said() {
+        Some(why) => @halt.saying("after the frame at \{at}: \{why}")
+        None => ()
+      }
+    None => ()
+  }
 }
 
 ///|

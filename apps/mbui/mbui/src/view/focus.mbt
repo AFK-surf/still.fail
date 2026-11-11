@@ -388,6 +388,7 @@ fn Tree::inputs_told_each(self : Tree) -> Unit {
 fn Tree::inputs_down(self : Tree, at : Int, above : Bool) -> Unit {
   let n = self.nodes[at]
   guard n.live else { return }
+  self.work.inputs_walked += 1
   let off = above || n.left_at >= 0.0 || n.inert || n.out || n.bones != 0L
   match n.input_cell {
     Some(s) => s.set(!off)
@@ -405,6 +406,7 @@ fn Tree::inputs_down(self : Tree, at : Int, above : Bool) -> Unit {
 fn Tree::inputs_each(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   guard n.live else { return }
+  self.work.inputs_walked += 1
   match n.input_cell {
     Some(s) => s.set(!self.pressless_at(at))
     None => ()
