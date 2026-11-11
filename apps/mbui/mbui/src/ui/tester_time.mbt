@@ -76,6 +76,15 @@ fn Tester::frame_now(self : Tester) -> Unit {
 }
 
 ///|
+/// The last frame drawn again at its own moments (the host's and what is drawn's: Tester::frame_shown_at), the clock not
+/// moved on: for a check that draws a frame of its own to look at and then the screen back as it was (contrast's,
+/// Tester::audit).
+fn Tester::frame_again(self : Tester) -> Unit {
+  let c = g()
+  self.frame_shown_at(self.fake.time, c.clock)
+}
+
+///|
 /// The frames owed drawn (Tester::draw's, after `n` drawn already), each at the display's next frame: what a frame left
 /// owed is drawn as the Tester stands, at its making (Tester::new), not left to the next input.
 fn Tester::draw_owed(self : Tester, n : Int) -> Unit {

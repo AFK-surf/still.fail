@@ -190,7 +190,8 @@ test "the card to share in a 千恋＊万花 look, kept on a phone: the whole ca
 ///|
 /// The card to share as `t` shows it: laid out the one way.
 fn share_card_laid(t : @ui.Tester) -> Unit raise {
-  t.run_for(@kit.presence_in_ms)
+  // (the card come in and the edge of the column it is in shown, the longer of the two: what is seen at rest)
+  t.run_for(if @sf.edge_bar_ms > @kit.presence_in_ms { @sf.edge_bar_ms } else { @kit.presence_in_ms })
   let word = fn(s : String) { picture_words(t).filter(fn(w) { w.0 == s }) }
   // the first kind's said round its first model's tokens, read down: what leads it over the rings and the tokens, the
   // tokens large, the model and what they would cost under them; each other kind a line of its own, its ring's key: its
