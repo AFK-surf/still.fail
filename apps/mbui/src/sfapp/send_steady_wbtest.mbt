@@ -443,3 +443,77 @@ test "words sent: the chat's rows they fly past are kept, not built again each f
   let own = built.filter(fn(n) { n <= 1 }).length()
   assert_true(own * 4 >= built.length() * 3, msg="rows built each frame of their flight: \{built}")
 }
+
+///|
+test "words sent in a chat whose turn was over, to its agent's answer and its turn's end: each frame built once and laid out once, and only the rows that changed built again" {
+  // (2026-11-11: 40-90 ms frames on a phone as each thing came, the press, the station having them, the agent's line,
+  // its answer, its turn's end: what a frame's build had read set again as it was built or laid out, the frame built
+  // and laid out again, by itself or by the next, every row of the chat's list with it. instrbench's `send`. Judged on
+  // frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  new_run()
+  let src = fixture("chat-done-live")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  // (words the core's answers are kept for, src/sfkept: as the tests above type)
+  t.type_text("看一下列表")
+  t.run_for(@ui.move_most_ms)
+  ignore(t.rows_built())
+  let t0 = t.time()
+  let bad : Array[String] = []
+  let most_rows = Ref(0)
+  let many = Ref(0)
+  let look = fn() {
+    let at = (t.time() - t0).to_int()
+    let why = t.built_why()
+    if why.contains("set again as it was built") || why.contains("set again as it was laid out") {
+      bad.push("at \{at} ms: \{why}")
+    }
+    // (built again in the frame for what its layout said, left, each for a reason of its own: the press's, the words
+    // sent cut into the pieces their message's words are laid out in, made of that layout, flight_pieces; and where the
+    // chat's list stands as the round button to its outline reads it, outline_entries_of, whose second layout of the
+    // frame the rows' way takes in, ListRows' way_k: not built again for it, a row of three lines sent stood 0.5 pt
+    // elsewhere on its way)
+    let passes = t.frame_perf().passes
+    let again = t.ctx().read_back_key
+    if passes > 2 ||
+      (passes == 2 &&
+      !again.has_prefix("words_shape_of \"flight/landing-words/") &&
+      again != "list_info \"chat/ws1/st1/s-c1\"") {
+      bad.push("at \{at} ms: built \{passes} times, again for \{again}")
+    }
+    // (the rows of the chat's list built, not kept, in the frame; its parts not counted)
+    let rows = t.rows_built().filter(fn(r) { r.1 >= 0 }).length()
+    if rows > most_rows.val {
+      most_rows.val = rows
+    }
+    if rows > 2 {
+      many.val = many.val + 1
+    }
+  }
+  tap_send(t)
+  look()
+  // (the station has them, its agent answers, its turn ends: fix_pace; and its answer out of its avatar after that)
+  let end_at = t0 + fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms() + @ui.move_most_ms
+  while t.time() < end_at {
+    t.frame()
+    look()
+  }
+  for b in bad {
+    println("SENDBUILT " + b)
+  }
+  println("SENDROWS most \{most_rows.val} frames-with-more-than-two \{many.val}")
+  assert_eq(bad.length(), 0)
+  // (more than the row that came or changed and the Foot built in a frame, at most in these: those built whole for
+  // what came from outside or a moment the chat's page waits for, the made-up core's answers among them (the station
+  // having them, its agent's line, its answer, its turn's end), a row's room done opening or closing, a pose of the
+  // agent's avatar over; and those the chat's page, an old view, is built again in for a share of the words' way
+  // reached or their landing (shows_from, flight_land), its list's rows with it. Not fewer while the chat's list is
+  // an old view's Ctx::list whose rows are built anew with it, not View::each's. 25 such in the same walk before
+  // 2026-11-11's)
+  assert_true(many.val <= 18, msg="frames building more than two of the list's rows: \{many.val}")
+}

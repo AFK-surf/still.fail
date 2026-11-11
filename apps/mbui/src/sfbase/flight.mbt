@@ -653,26 +653,49 @@ fn flight_shares_gone(f : SendFlight) -> Unit {
 /// Each frame, before the chat's list is built: a flight landed, or whose row never came (its wait out: a frame then),
 /// is over. On its way it moves by itself (its `way`, told as it set off).
 pub fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
-  // (those sent before the last, landed: their rows' own from here, whichever chat's)
+  flights_landed(c)
+  match flight_of(chat) {
+    Some(f) => {
+      flight_timed(c, f)
+      flight_landed(c, f)
+    }
+    None => ()
+  }
+}
+
+///|
+/// As a chat's list begins to be built, before anything of it reads the words sent from it (list_frame): those landed
+/// are over (flight_frame's, written before what reads them, not after: what had read them was built again for it,
+/// every row of the list, in the frame after).
+pub fn flight_land(c : @ui.Ctx, chat : String) -> Unit {
+  // (what reads them reads them after this, as it was read before it: nothing more followed for it)
+  @signals.untracked(fn() {
+    flights_landed(c)
+    match flight_of(chat) {
+      Some(f) => flight_landed(c, f)
+      None => ()
+    }
+  })
+}
+
+///|
+/// Those sent before the last, landed: their rows' own from here, whichever chat's.
+fn flights_landed(c : @ui.Ctx) -> Unit {
   if flights_on.get().iter().any(fn(f) { f.way.over(c) }) {
     flights_on.get().each(fn(f) { if f.way.over(c) { flight_shares_gone(f) } })
     flights_on.set(flights_on.get().filter(fn(f) { !f.way.over(c) }))
   }
-  match flight_of(chat) {
-    Some(f) => {
-      let turns = turns_of(f.turns)
-      flight_timed(c, f)
-      // (landed: their way at the end it declared as it set out; till their row is in the list they wait for it, no
-      // moment of theirs said: it is in it from the press, sent_local)
-      let landed = f.placed && f.timed && f.way.over(c)
-      if landed {
-        send_flight.set(None)
-        flight_shares_gone(f)
-        // their turn over: where they were declared to land (or now, never having set out)
-        turns.over(c, Send, f.way.ends())
-      }
-    }
-    None => ()
+}
+
+///|
+/// Words sent `f`, landed (their way at the end it declared as it set out; till their row is in the list they wait for
+/// it, no moment of theirs said: it is in it from the press, sent_local): over.
+fn flight_landed(c : @ui.Ctx, f : SendFlight) -> Unit {
+  if f.placed && f.timed && f.way.over(c) {
+    send_flight.set(None)
+    flight_shares_gone(f)
+    // their turn over: where they were declared to land (or now, never having set out)
+    turns_of(f.turns).over(c, Send, f.way.ends())
   }
 }
 

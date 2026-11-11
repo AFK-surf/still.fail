@@ -861,10 +861,8 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     })
     let playing = em.current is Some(_) || em.queue.length() > 0
     let watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && in_front
-    if watched != em.watched {
-      em.watched = watched
-      em.changed()
-    }
+    // (read by what plays it on alone, here, as each build begins: nothing built from it is told, Emits::changed)
+    em.watched = watched
     let showing : Map[String, Bool] = {}
     for k, _ in running {
       showing[k] = true
@@ -892,7 +890,10 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   // the last of them leaves it, its room opening in the list (Float), on the list's way with it: no moment after, which closed
   // its room alone and took the list back the other way from where what its turn said had just moved it (2026-11-09
   // the user, of an answer at once to a card picked: 「点一个决策后上下摇晃」; 「处理中」不再单独收一次).
-  let keeps = emit_keeps(em)
+  // (what plays it on reads it as it stands, here, as each build begins, after it played it on: followed by nothing that
+  // reads it here, what reads it as it is drawn following it, Emits::read; so the first row of what was sent from here
+  // told it as the chat's list is built, list_frame, builds again what shows it, not the frame whole after it)
+  let keeps = @signals.untracked(fn() { emit_keeps(em) })
   // (the last message here, by seq: an answer past it is on its way)
   let here = v.messages.iter().fold(init=-1.0, fn(m, x) { if x.seq > m { x.seq } else { m } })
   let on_its_way = fn(a : Agent) {
@@ -975,7 +976,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       !m.mine &&
       !m.system &&
       m.ending != "" &&
-      !emit_goes(em, m.seq)
+      !@signals.untracked(fn() { emit_goes(em, m.seq) })
     })
     if came {
       rd.answered[k] = a.last_turn
@@ -2073,6 +2074,8 @@ pub fn list_frame(
   laid_at? : Double,
   foot_way? : (Double, Double),
 ) -> ListFrame {
+  // (words sent from it landed: over before anything of the list reads them, flight_land)
+  flight_land(c, draft)
   let rd = reading_of(r.station + "\u{1}" + r.session)
   // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
   // wait out of the list (emit.mbt)
