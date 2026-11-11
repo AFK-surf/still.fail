@@ -791,11 +791,11 @@ fn composer_text(
   // (what moves with the box is the words' own room, not the room round them: their margins in it are other on one
   // line than opened, and moved from where that room showed, the words jumped by the difference as it set out)
   let mut words = -1
-  // (what is typed set as its message will set it: the theme's words)
+  // (what is typed set as its message will set it: the theme's words, the system's size of words applied by the editor)
   let (size, line) = c.style_size(@sf.theme().t.words)
   // (held by words sent from it: as tall as the lines they took, whatever it holds meanwhile)
   let own = if held_lines > 0 {
-    text_own.then(@ui.style(min_h=Fixed(held_lines.to_double() * line)))
+    text_own.then(@ui.style(min_h=Fixed(held_lines.to_double() * field_line(c))))
   } else {
     text_own
   }
@@ -1500,9 +1500,9 @@ let text_most : Double = 480.0
 let text_window_share : Double = 0.4
 
 ///|
-/// How many lines the field grows to before it scrolls.
+/// How many lines the field grows to before it scrolls: as many of its lines as are as tall as it grows to at most.
 fn text_lines(c : @ui.Ctx) -> Int {
-  let n = (dmin(text_most, c.height * text_window_share) / c.style_size(@sf.theme().t.words).1).to_int()
+  let n = (dmin(text_most, c.height * text_window_share) / field_line(c)).to_int()
   if n < 1 {
     1
   } else {
@@ -1575,8 +1575,15 @@ fn capsule_h(c : @ui.Ctx) -> Double {
 /// they are, else as its line), so that they stand as far in at their ends as over and under them, concentric with it;
 /// none while its line is no taller than they are.
 fn capsule_extra(c : @ui.Ctx) -> Double {
-  let (_, line) = c.style_size(@sf.theme().t.words)
-  dmax(0.0, (c.sp(line) - @sf.theme().round.side) / 2.0)
+  dmax(0.0, (field_line(c) - @sf.theme().round.side) / 2.0)
+}
+
+///|
+/// The line the composer's field is laid out on: the theme's words' line (Ctx::style_size) at the system's size of
+/// words, as Ctx::editor takes the line it is given (Ctx::sp: at 1.3, 22 is 25). What is worked out of its lines (how
+/// tall it is opened, how many it grows to) is worked out of this one, not the theme's.
+fn field_line(c : @ui.Ctx) -> Double {
+  c.sp(c.style_size(@sf.theme().t.words).1)
 }
 
 ///|
@@ -1655,8 +1662,7 @@ let composer_box_open_base : @ui.Style = @ui.style(w=Full, p=@sf.composer_pad_ro
 /// as far in over and under as at their ends, concentric with the capsule, not pushed in by a taller line; a line
 /// taller than they are, as tall as it); opened, 8 in and 8 over (text_open).
 fn text_shut(c : @ui.Ctx) -> @ui.Style {
-  let (_, line) = c.style_size(@sf.theme().t.words)
-  @ui.style(w=@sf.grow, h=Fixed(dmax(@sf.theme().round.side, c.sp(line))), pr=S2, justify=JCenter)
+  @ui.style(w=@sf.grow, h=Fixed(dmax(@sf.theme().round.side, field_line(c))), pr=S2, justify=JCenter)
 }
 
 ///|
@@ -2184,7 +2190,7 @@ fn composer_least(c : @ui.Ctx, draft : String) -> Double {
 ///|
 /// How long the composer takes to open from a capsule or to be let go to one: its field passing by its ＋ and send is
 /// kept off them on this clock (composer_hint_wbtest).
-let composer_shape_ms : Double = 300.0
+pub let composer_shape_ms : Double = 300.0
 
 ///|
 /// Whether the composer opens or is let go at this moment: `head` (how roomy, a box or not) changed at it, from what
@@ -2915,9 +2921,10 @@ let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Dan
 
 ///|
 /// A chat's composer's place while it is a capsule at the foot of a pane `pane` wide: its buttons (the theme's round
-/// controls) 8 in, 12 over it and its foot's room under it (composer_foot_in).
+/// controls) 8 in, further while its field's line is taller than they are (capsule_extra), 12 over it and its foot's
+/// room under it (composer_foot_in).
 fn capsule_room(c : @ui.Ctx, pane : Double) -> Double {
-  @sf.theme().round.side + 2.0 * 8.0 + 12.0 + composer_foot_in(c, pane)
+  @sf.theme().round.side + 2.0 * (capsule_pad_alone + capsule_extra(c)) + 12.0 + composer_foot_in(c, pane)
 }
 
 ///|
@@ -3018,11 +3025,12 @@ let composer_foot_wide : Double = 16.0
 
 ///|
 /// Its box opened with one line (composer_open_room without what is over and under it): as composer_box_open lays it
-/// out, its padding over the line (text_open: 8 over it), its parts 10 apart, its buttons' row as far from its foot as
-/// makes them concentric with its corners (tools_row).
+/// out, its padding over the line (text_open: 8 over it), its field's one line as it is laid out at the system's size
+/// of words (field_line), its parts 10 apart, its buttons' row as far from its foot as makes them concentric with its
+/// corners (tools_row).
 fn composer_open_box(c : @ui.Ctx, corner? : Double = @sf.composer_corner()) -> Double {
   let t = @sf.theme()
-  @sf.composer_pad + (8.0 + c.style_size(t.t.words).1) + 10.0 + t.round.side + @ui.capsule_in(corner, t.round.side)
+  @sf.composer_pad + (8.0 + field_line(c)) + 10.0 + t.round.side + @ui.capsule_in(corner, t.round.side)
 }
 
 ///|

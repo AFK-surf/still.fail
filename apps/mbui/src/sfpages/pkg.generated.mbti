@@ -119,6 +119,8 @@ pub fn composer_place(@ui.Ctx, Double) -> ComposerPlace
 
 pub fn composer_room(@ui.Ctx, String, settled? : Bool, held? : Bool) -> Double
 
+pub let composer_shape_ms : Double
+
 pub fn composer_side() -> Double
 
 pub fn composer_take_focus() -> Unit
