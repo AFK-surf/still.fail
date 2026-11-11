@@ -752,8 +752,6 @@ pub fn relay_go(@sfbase.Source, @json.Json?, done? : () -> Unit) -> Unit
 
 pub fn relay_open(@sfbase.Source, String, Double) -> Unit
 
-pub fn relay_view(@ui.Ctx, @sfbase.Source) -> @json.Json?
-
 pub let relaying : @sfbase.Relaying
 
 pub let reporting_host : @signals.Signal[@sfbase.ReportingHost?]

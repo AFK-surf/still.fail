@@ -360,7 +360,6 @@ pub using @sfbase {
   type Relaying,
   relaying,
   relay_open,
-  relay_view,
   relay_connect,
   relay_go,
   long_jobs,

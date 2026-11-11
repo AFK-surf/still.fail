@@ -12,7 +12,10 @@ fn relay_via_at_right(t : @ui.Tester) -> Unit raise {
     None => t.rect_of("新 thread · 更换").unwrap()
   }
   assert_true(via_x > name_x)
-  assert_eq(end_x + end_w, change.0 + change.2)
+  // (in line as laid out, whole points alike; not assert_eq: on its way in, each end drawn is its own place and width
+  // each times the panel's scale, Tree::projected's, and two such sums may part in their last bit)
+  let ends = (end_x + end_w, change.0 + change.2)
+  assert_true((ends.0 - ends.1).abs() < 0.01, msg="\{ends}")
 }
 
 ///|
@@ -57,12 +60,17 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   assert_eq(relayed.length(), 1)
   assert_eq(text(Some(relayed[0].params), "connect"), "slack-1")
   assert_eq(text(Some(relayed[0].params), "channel"), "C1")
-  // the dialog gone, where it went said
-  assert_true(t.find("开头附一句（可选）") is None)
+  // the dialog leaving as it relayed: no more read out as one
+  assert_true(relay_dialog(t) is None, msg="the dialog not leaving once relayed")
+  // where it went said
   // (said at once, read out: seen as it has come in, toast_said)
   assert_true(toast_said(t, "已接力到 #dev"))
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已接力到 #dev") is Some(_))
+  // the dialog gone once its way out is over (asserted after it, not in the press's frame: what it showed, the note
+  // with it, is kept on that way, where it was emptied before it closed)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("开头附一句（可选）") is None)
 }
 
 ///|
