@@ -424,6 +424,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
     // (a hold handed an old view: the frame it comes to, as its build begins; gone once that frame is)
     view_handed_comes(c)
     root = frame_build(c, w, h)
+    // (the nodes this whole build came to: what the last frame's layers are held against from here, Ctx::modal_layer)
+    c.built_count = c.count
     perf_at[3] = perf_at[3] + 1
     let built_layers = c.layers.length()
     t1 = work_now()

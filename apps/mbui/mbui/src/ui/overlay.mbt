@@ -363,15 +363,28 @@ fn Ctx::layer_inert(self : Ctx, l : Int) -> Bool {
 ///|
 /// The node of the topmost modal layer the last frame built (-1 none): what is outside it is hidden.
 fn Ctx::modal_node(self : Ctx) -> Int {
+  match self.modal_layer() {
+    Some(l) => l.node
+    None => -1
+  }
+}
+
+///|
+/// The topmost modal layer the last frame built that still takes input, if any. Each held against the nodes the last
+/// whole build came to (`built_count`): mid-build the build before's, not the count of the build under way, which starts
+/// again from none and passed every layer over, the window under it said to have none (a change of the window's tree
+/// made in that build told all of the tree it takes input: publish_wbtest, #5620's CI); after the build this one's, a
+/// layer it made no more passed over at once (tree_hand, tree_focus, tree_cursor and layer_back's closing layers).
+fn Ctx::modal_layer(self : Ctx) -> Layer? {
   let mut k = self.last_layers.length() - 1
   while k >= 0 {
     let l = self.last_layers[k]
-    if l.modal && self.layer_takes(l) && l.node < self.count {
-      return l.node
+    if l.modal && self.layer_takes(l) && l.node < self.built_count {
+      return Some(l)
     }
     k = k - 1
   }
-  -1
+  None
 }
 
 ///|
@@ -791,6 +804,11 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
   self.last_layers = self.layers
   last.clear()
   self.layers = last
+  // (where each stands in the window's stack as this frame ends: Ctx::old_modal_stack, asked as the next frame is built)
+  self.last_stacks.clear()
+  for l in self.last_layers {
+    self.last_stacks[l.id] = self.node_layer_stack(l.node)
+  }
   // (what was dismissed of the layers published before: as these say now)
   self.layers_gone.clear()
 }

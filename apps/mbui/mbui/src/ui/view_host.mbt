@@ -5888,9 +5888,19 @@ fn old_hit_stack(k : Int) -> Int {
 /// Where the old frame's topmost modal layer is in the window's stack of layers (Ctx::old_layer_stack), -2 none: what of
 /// the tree is not over it takes no input (Tree::hold_under).
 fn Ctx::old_modal_stack(self : Ctx) -> Int {
-  let m = self.modal_node()
-  if m < 0 {
-    return -2
+  match self.modal_layer() {
+    // (where it stood as its frame ended: no node read, so the same asked as the next frame is built as after)
+    Some(l) => self.last_stacks.get(l.id).unwrap_or(-1)
+    None => -2
+  }
+}
+
+///|
+/// Where node `m` of the frame just built is in the window's stack of layers, by the layer of the root's that holds it
+/// (Ctx::old_layer_stack): -1 where the root holds none that does. Read as that frame ends (Ctx::layers_frame_end).
+fn Ctx::node_layer_stack(self : Ctx, m : Int) -> Int {
+  if m < 0 || m >= self.count {
+    return -1
   }
   // (the layer's own node, held by the root)
   let mut i = m
