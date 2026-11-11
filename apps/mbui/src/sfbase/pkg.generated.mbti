@@ -996,6 +996,8 @@ pub let menu_bar_given : @ref.Ref[String]
 
 pub fn menu_bar_json(@json.Json?, Bool) -> String
 
+pub fn message_items(String, String, () -> Unit) -> Array[@sf.MenuItem?]
+
 pub fn message_link(String, String, Double) -> String
 
 pub let message_menu : @signals.Signal[String]
@@ -1569,6 +1571,8 @@ pub fn share_face_whole_files(Int32) -> Array[(String, Int32)]
 pub let share_offered : @signals.Signal[(Double, Double, () -> Unit, String, String, String)?]
 
 pub let share_over : @signals.Signal[Bool]
+
+pub fn share_offer(Double, Double, () -> Unit, String, String, String) -> Unit
 
 pub fn share_turn_tool(@ui.Ctx, String, Int32, String, String, () -> Unit) -> Unit
 

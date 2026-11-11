@@ -7,15 +7,23 @@
 
 ///|
 /// Where a message's nodes are shown (MessageHere's, made once): its chat (its station, its session, its view as it
-/// changes), whether the heads are inline (no margin for the pictures: the list's narrow arrangement, as it changes),
-/// the window's tips, and the page's time on top (what the faces' pictures are asked for on).
+/// changes), how wide its list is laid out (as it changes: what says whether its heads are inline, message_inline, and
+/// how wide the viewer's words are at most, mine_most_of), the window's tips, and the page's time on top (what the
+/// faces' pictures are asked for on).
 pub(all) struct MessageNodeHere {
   station : String
   session : String
   view : () -> ChatView
-  inline : () -> Bool
+  width : () -> Double
   tips : @sf.TipLayer
   stint : () -> Int
+}
+
+///|
+/// Whether a message's head is inline where it is shown (MessageHere's `inline`: no margin for the pictures, each over
+/// its head's start), as its list's width says (the list's narrow arrangement, chat_narrow_w), as that changes.
+fn message_inline(here : MessageNodeHere) -> Bool {
+  (here.width)() <= chat_narrow_w
 }
 
 ///|
@@ -112,7 +120,8 @@ fn person_avatar_node(
 ///|
 /// A name over its message (message_name's) in `v`: `name` in the accent's ink, 240 at most, cut short past it; one of
 /// the chat's agents' (`agent`) opens its history beside the chat, another chat's agent's (`from`, its link) that chat;
-/// underlined then while the hand is on it (lit_node). Each as it changes.
+/// underlined then while the hand is on it (lit_node), and as wide as a press's least room less its head's gap at
+/// least (its words at its start). Each as it changes.
 fn message_name_node(
   v : @view.View,
   src : Source,
@@ -123,7 +132,16 @@ fn message_name_node(
 ) -> Unit {
   let goes = fn() { agent() != "" || from() != "" }
   v.box(fn(b) {
-    @sf.style_node(b, fn() { msg_name_room })
+    // (pressed, as wide as leaves it a press's least room beside the time after it, its head's gap apart: a name
+    // shorter than that ends in room of its own, the time after it; the old view's had a short one's under it, 「Ana」
+    // 30×36, coordinator 2026-11-11)
+    @sf.style_node(b, fn() {
+      if goes() {
+        msg_name_room.then(@ui.style(min_w=Fixed(@ui.room_least() - msg_head_gap), align=AStart))
+      } else {
+        msg_name_room
+      }
+    })
     @sf.presses_node(b, on=goes, fn() {
       let a = @signals.untracked(agent)
       if a != "" {
@@ -211,3 +229,7 @@ fn elsewhere_route_node(v : @view.View, s : () -> Elsewhere) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// How far apart a message's head's name, where it went and its time are (msg_head's gap, S1_5).
+let msg_head_gap : Double = 6.0
