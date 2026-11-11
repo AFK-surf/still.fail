@@ -17,6 +17,9 @@ export const work = {
   shapes: 0,
   /// Rows of a log (a thread's entries) read from the database rather than taken as parsed (db/account.ts).
   logRows: 0,
+  /// Rows (chats, sessions' summaries, threads, jobs) whose JSON was read from the database for a row kept by its key
+  /// (db/account.ts `#cached`, `#byKey`): parsed, or read for nothing where the row was kept already.
+  rowJson: 0,
   /// Numbers of a log's items read from the database (which it holds, to find what to read).
   logNumbers: 0,
   /// Items a log's span (its first, its last, how many) was counted over in the database rather than kept.
@@ -32,6 +35,8 @@ export const work = {
   /// Rows a chat list made of its records (views.ts #chatRow): those something shows, each once while its record is as
   /// it was.
   rows: 0,
+  /// Stations' whole overviews read from the database and parsed (db/account.ts `stationDoc`), not taken as kept.
+  overviewsRead: 0,
   /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.
   overviews: 0,
 };

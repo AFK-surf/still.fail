@@ -1050,6 +1050,53 @@ test("new_pages_and_background_updates_both_get_a_turn", async () => {
   assert.deepEqual(order, ["first", "page1", "background", "page2", "page3"]);
 });
 
+test("a_topic_nobody_subscribes_to_waits_behind_what_pages_wait_for", async () => {
+  // A workspace's marks let go of at a switch of workspace (kept for its page coming back) were made again, 8 ms in
+  // Hermes, ahead of the chat list and the jobs of the workspace switched to (2026-11-11).
+  const { host, store, pass } = setup();
+  const idle: Topic = { topic: "idle" };
+  const background: Topic = { topic: "background" };
+  const pages: Topic[] = [{ topic: "page1" }, { topic: "page2" }];
+  const order: string[] = [];
+  let made = 0;
+  store.setSource({
+    start() {},
+    stop() {},
+    compute(topic) {
+      order.push(topic.topic);
+      made++;
+      // (the first page opens the next as it is made, as a page's view asks for another)
+      if (topic.topic === "page1") {
+        store.subscribe(1, 5, pages[1]!);
+        store.invalidate(pages[1]!);
+      }
+      return { ok: `${topic.topic} ${made}` };
+    },
+  });
+  store.subscribe(1, 1, idle);
+  store.subscribe(1, 2, background);
+  store.invalidate(idle);
+  store.invalidate(background);
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.unsubscribe(1, 1);
+  order.length = 0;
+  // Let go of, then changed: queued first; then background work, then a page.
+  store.invalidate(idle);
+  store.invalidate(background);
+  store.subscribe(1, 4, pages[0]!);
+  store.invalidate(pages[0]!);
+  await pass(COALESCE_MS * 4);
+  // The pages and the background work take turns as before; the topic let go of after them all.
+  assert.deepEqual(order, ["page1", "background", "page2", "idle"]);
+  assert.deepEqual(host.takeEmitted().map(([, m]) => (m as { id: number }).id), [4, 2, 5]);
+  // Made for what reads it in the core all the same, and sent to a page that comes back for it.
+  assert.deepEqual(store.get(idle), "idle 6");
+  store.subscribe(1, 6, idle);
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(6, "idle 6")]]);
+});
+
 /// A page made from a dependency, kept live by a watch as a view would: what its source made of it, as many times.
 function madeFrom(t: ReturnType<typeof setup>, make: (dependency: Record<string, unknown>) => unknown) {
   const { store } = t;

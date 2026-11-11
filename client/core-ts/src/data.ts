@@ -1099,6 +1099,13 @@ export class Data {
     return [...by].flatMap(([db, list]) => db.chatHead(list, limit));
   }
 
+  /// What the chat list reads of a station's overview (account.ts overviewPart): read in a computed, it is made again
+  /// only as that part changes, not with the rest of the overview.
+  overviewPart(station: string): unknown {
+    this.#readQuery({ topic: "$overview-part", station });
+    return this.of(station)?.overviewPart(station);
+  }
+
   /// How many sidebar rows these stations have.
   chatCount(stations: string[]): number {
     const by = new Map<AccountDb, string[]>();

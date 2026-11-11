@@ -1163,6 +1163,31 @@ export class Views implements Owner {
     });
   }
 
+  /// The scope's stations by their address and name alone, the same array while those are the same: what reads no more
+  /// of them (a workspace's mark, views/marks.ts) is not made again as a station's link comes and goes, which
+  /// `stations` says of each (`online`). A workspace switched to has its stations' links tried anew: each going from
+  /// offline to connecting made both workspaces' marks again, 4-7 ms in Hermes on a Mac Studio at a workspace of real
+  /// size (2026-11-11).
+  readonly #stationsNamed = new Map<string, Derived<{ address: string; name: string }[]>>();
+  stationsNamed(scope: string): { address: string; name: string }[] {
+    let kept = this.#stationsNamed.get(scope);
+    if (kept === undefined) {
+      let last: { address: string; name: string }[] | undefined;
+      kept = computed(() => {
+        const v = this.value({ topic: "workspace", workspace: scope });
+        const next = v !== undefined && "ok" in v
+          ? arr(get(v.ok, "stations")).flatMap((s) => {
+            const id = str(get(s, "id"));
+            return id === null ? [] : [{ address: `${scope}/${id}`, name: str(get(s, "name")) ?? id }];
+          })
+          : [];
+        return last !== undefined && equal(last, next) ? last : (last = next);
+      });
+      this.#stationsNamed.set(scope, kept);
+    }
+    return kept.get();
+  }
+
   /// The station a link names now (`<workspace>/<station>`): one that took a lost one's place, where that is the one
   /// named (its overview's `copies.formerly`); the one named otherwise.
   stationNow(address: string): string {
@@ -1688,8 +1713,12 @@ export class Views implements Owner {
     for (const s of stations) {
       const read = head !== null && data.listed(s.address, "chats") ? ({ ok: head.get(s.address) ?? [] } as Value) : this.value({ topic: "chatRows", station: s.address });
       if (!(read && "ok" in read)) unread.push(s.address);
+      // What the list reads of its station's overview, kept beside it (account.ts overviewPart): not the whole of it,
+      // the largest record there is (3.25 ms of the list's 21.8 ms in Hermes, five stations read and parsed, 2026-11-11),
+      // and the list made again only as this changes, not with each quota, usage or job of the overview.
+      const part = data.overviewPart(s.address);
       if (read && "ok" in read) {
-        const slackUsers = arr(get(this.ok({ topic: "overview", station: s.address }), "slackUsers")).filter((u): u is string => typeof u === "string");
+        const slackUsers = arr(get(part, "slackUsers")).filter((u): u is string => typeof u === "string");
         this.local.settle(s.address, data.rowsRev(s.address));
         const listed = arr(read.ok);
         const asked = this.local.pendingRows(s.address);
@@ -1702,7 +1731,7 @@ export class Views implements Owner {
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
         // (its connects: a Slack or Feishu row's link there, #rowMenu)
-        const connects = arr(get(this.ok({ topic: "overview", station: s.address }), "connects"));
+        const connects = arr(get(part, "connects"));
         const sig = JSON.stringify([s.address, s.name, mark, me, slackUsers, members_, watching, hint, menu, connects.map((c) => [c.id, c.kind, get(get(c, "connection"), "state"), get(get(c, "connection"), "workspace"), get(get(c, "feishu"), "domain")])]);
         // One record's row, or null where the list does not show it.
         const make = (raw: J): J | null => {
@@ -1814,7 +1843,7 @@ export class Views implements Owner {
       const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
       // Refused for a security mode: why.
       if (cause === "lock") message = get(this.link(s.address), "message") ?? null;
-      const now = looks.doing(state, cause, this.ok({ topic: "overview", station: s.address }));
+      const now = looks.doing(state, cause, part === undefined ? undefined : { counts: { running: get(part, "running") } });
       states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}), ...now, ...rowWords(s, this.link(s.address)) });
     }
     const days = this.#daysOf(listKey, rows, { whole, gone, come });
@@ -2008,7 +2037,7 @@ export class Views implements Owner {
     if (c !== undefined && isObject(raw.origin)) {
       const o = raw.origin as J;
       const surface = str(get(c, "kind")) === "feishu" ? `feishu:${id}` : "slack";
-      const where = this.#whereIn(station, [{ connect: c }], surface, str(o.channel) ?? "", str(o.channelName) ?? "", str(o.threadTs) ?? "");
+      const where = this.#whereIn(station, [{ connect: c }], surface, str(o.channel) ?? "", str(o.channelName) ?? "", str(o.threadTs) ?? "", connects);
       if (where.slackUrl !== null) out.slackUrl = where.slackUrl;
       if (where.slackApp !== null) out.slackApp = where.slackApp;
       if (where.feishuUrl !== null) out.feishuUrl = where.feishuUrl;
@@ -3225,13 +3254,14 @@ export class Views implements Owner {
 
   /// Where a Slack or Feishu thread is, in words (placeName), and its link in Slack (while one of `agents`' Slack
   /// connects is signed in; `slackApp` into Slack's app) or in Feishu: none of them for a still.fail chat.
-  #whereIn(station: string, agents: J[], surface: string, channel: string, channelName: string, threadTs: string): { place: string | null; slackUrl: string | null; slackApp: string | null; feishuUrl: string | null } {
+  /// (`connects`: its station's, where they were read; else its overview's)
+  #whereIn(station: string, agents: J[], surface: string, channel: string, channelName: string, threadTs: string, connects?: J[]): { place: string | null; slackUrl: string | null; slackApp: string | null; feishuUrl: string | null } {
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
     const slack = !isOwnSurface(surface) && !feishu;
     const place = format.placeName(surface, channel, channelName);
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
-    const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
+    const feishuConnect = (connects ?? arr(get(this.ok({ topic: "overview", station }), "connects"))).find((c) => `feishu:${strOf(c, "id")}` === surface);
     const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
     let workspaceUrl: string | null = null;
     let team = "";

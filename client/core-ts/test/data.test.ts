@@ -19,6 +19,7 @@ import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { FakeHost, flush } from "../src/testing.ts";
 import { run } from "./run.ts";
+import { work, workSince } from "../src/work.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -585,6 +586,71 @@ test("the_rows_that_ask_something_and_the_first_screen_are_found_by_their_column
   data.putChat("w/a", { id: "unread", lastActiveAt: 5, unread: false, mine: true });
   assert.deepEqual(data.marked(["w/a"]).map(([, r]) => r.id), ["asks"]);
   runner.shutdown();
+});
+
+test("rows_kept_by_their_keys_are_not_read_from_the_database_again", async () => {
+  // A list asked for again, the first screen read again, read every row's JSON across the bridge to take the row kept
+  // by its key (account.ts #byKey): 2.5 ms for 80 rows in Hermes, every one of them kept (2026-11-11).
+  const { data, open, again, db, runner } = fresh();
+  try {
+    await open();
+    const chats = (st: string, from: number) => Array.from({ length: 30 }, (_, i) => ({ id: `${st}${i}`, title: `${st} ${i}`, lastActiveAt: from - i, unread: i % 3 === 0 }));
+    data.set(rows("w/a"), chats("a", 1000));
+    data.set(rows("w/b"), chats("b", 500));
+    data.set(sessions("w/a"), Array.from({ length: 6 }, (_, i) => ({ key: `k${i}`, lastActiveAt: i })));
+    data.set(threads("w/a"), Array.from({ length: 6 }, (_, i) => ({ id: i + 1, last: i, read: 0, unread: i, lastMessage: { createdAt: i }, sessions: [{ session: `k${i}` }] })));
+    data.set({ topic: "jobs", station: "w/a" }, Array.from({ length: 6 }, (_, i) => ({ id: `j${i}`, chat: { id: `a${i}` } })));
+    await run(data.written);
+    const lists = [rows("w/a"), rows("w/b"), sessions("w/a"), threads("w/a"), { topic: "jobs", station: "w/a" }];
+    const head = data.chatHead(["w/a", "w/b"], 40);
+    const loaded = lists.map((topic) => data.shared(topic) as J[]);
+    // Asked again with every row kept: no row's JSON read.
+    let from = { ...work };
+    const head2 = data.chatHead(["w/a", "w/b"], 40);
+    assert.equal(workSince(from).rowJson, 0, "the first screen again");
+    assert.deepEqual(head2.map(([s, r]) => `${s} ${r.id}`), head.map(([s, r]) => `${s} ${r.id}`));
+    assert.ok(head2.every(([, r], i) => r === head[i][1]), "each the row kept");
+    from = { ...work };
+    for (const topic of lists) data.release(topic);
+    const reloaded = lists.map((topic) => data.shared(topic) as J[]);
+    assert.equal(workSince(from).rowJson, 0, "the lists loaded again");
+    for (const [i, list] of reloaded.entries()) {
+      assert.equal(list.length, loaded[i].length);
+      assert.ok(list.every((r, j) => r === loaded[i][j]), `${lists[i].topic}: each the row kept, in order`);
+    }
+    // Read cold (another core on the same database): the rows as they were, the JSON of those not kept read once.
+    const cold = await again();
+    const sql = db();
+    from = { ...work };
+    let reads = sql.reads.length;
+    const coldA = cold.shared(rows("w/a")) as J[];
+    assert.equal(workSince(from).rowJson, 30, "a list read cold");
+    assert.equal(sql.reads.slice(reads).filter((q) => /\bjson\b/.test(q)).length, 1, "by one query");
+    assert.deepEqual(coldA, loaded[0]);
+    // Its first screen: those of w/a kept, w/b's ten alone read, by their keys.
+    from = { ...work };
+    reads = sql.reads.length;
+    const coldHead = cold.chatHead(["w/a", "w/b"], 40);
+    assert.equal(workSince(from).rowJson, 10);
+    assert.ok(sql.reads.slice(reads).some((q) => q.includes("json_each")), "by their keys");
+    assert.deepEqual(coldHead, head);
+    assert.ok(coldHead.slice(0, 30).every(([, r], i) => r === coldA[i]));
+    // One row written: the rest kept, it alone as written.
+    data.putChat("w/a", { id: "a1", title: "改了", lastActiveAt: 999 });
+    await run(data.written);
+    from = { ...work };
+    const after = data.chatHead(["w/a"], 5);
+    assert.equal(workSince(from).rowJson, 0);
+    assert.deepEqual(after.map(([, r]) => r.title), ["a 0", "改了", "a 2", "a 3", "a 4"]);
+    assert.equal(after[0][1], head[0][1]);
+    // A thread's read position, a column of its own, is in its row as kept.
+    data.setRead("w/a", 3, 2);
+    await run(data.written);
+    const threadRows = data.shared(threads("w/a")) as J[];
+    assert.deepEqual(threadRows.find((t) => t.id === 3), { id: 3, last: 2, read: 2, unread: 0, lastMessage: { createdAt: 2 }, sessions: [{ session: "k2" }] });
+  } finally {
+    runner.shutdown();
+  }
 });
 
 test("a_logs_items_are_written_once_and_read_by_range", async () => {
