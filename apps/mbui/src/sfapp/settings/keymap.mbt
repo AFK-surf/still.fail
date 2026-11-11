@@ -177,6 +177,9 @@ pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   bindings.append(@sf.reader_bindings())
   // (the files' own where they are: sfdesk's files.mbt)
   bindings.append(files_bindings())
+  // (↓ ↑ in a chat's outline, with the cursor in its field too: the row the keys are at, sfpages' outline.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_down, 0)], action: "outline.down", when: In("Outline") })
+  bindings.push({ keys: [stroke(@ui.key_code_up, 0)], action: "outline.up", when: In("Outline") })
   // (what a field offers as it is typed in, where it is open: sf's offers_node.mbt)
   bindings.append(@sf.offers_bindings())
   // (Escape where a search is up, with the cursor in a field too, or a picture's old viewer, not in a field: sfpages'

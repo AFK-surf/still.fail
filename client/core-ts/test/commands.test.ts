@@ -40,6 +40,8 @@ test("with_nothing_typed_the_list_offers_what_can_be_done_by_part_but_what_only_
 test("what_is_typed_finds_a_command_by_its_name_its_id_or_its_other_words", () => {
   // Its name.
   assert.deepEqual(shown(find("  查找 ", offered)), [["chat", "当前对话", ["chat.find"]]]);
+  // The chat's outline, as the list of shortcuts names it.
+  assert.deepEqual(shown(find("目录", [...offered, { id: "chat.outline" }])), [["chat", "当前对话", ["chat.outline"]]]);
   // Its id, without case.
   assert.deepEqual(shown(find("Chat.Arch", offered)), [["chat", "当前对话", ["chat.archive"]]]);
   // Its other words: one only found by typing too (looking for an update), a client's own (a settings page).
@@ -52,7 +54,7 @@ test("what_is_typed_finds_a_command_by_its_name_its_id_or_its_other_words", () =
 
 test("the_moves_only_worth_a_key_are_never_listed_and_what_has_no_name_or_part_is_left_out", () => {
   const r = find("chat", [
-    { id: "chat.switch" }, { id: "chat.prev" }, { id: "chat.next" }, { id: "chat.latest" }, { id: "nav.back" },
+    { id: "chat.switch" }, { id: "chat.prev" }, { id: "chat.next" }, { id: "chat.latest" }, { id: "nav.back" }, { id: "chat.said.prev" }, { id: "chat.said.next" },
     // One the core does not name, without words of its own; one in no part the list has; no id; one given twice.
     { id: "chat.mystery" }, { id: "chat.elsewhere", group: "nowhere", label: "chat" }, { label: "chat" }, "chat",
     { id: "chat.find" }, { id: "chat.find" },

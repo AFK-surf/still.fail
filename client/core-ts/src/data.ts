@@ -1326,6 +1326,13 @@ export class Data {
     return this.of(station)?.logNumbers(table, station, id) ?? [];
   }
 
+  /// The numbers put in a log since change `since`, and the change it is at now (AccountDb.logPutSince); `put` null:
+  /// not known, all of it to be read again.
+  logPutSince(table: LogTable, station: string, id: string, since: number): { rev: number; put: number[] | null } {
+    this.#readQuery({ topic: "$log", table, station, id });
+    return this.of(station)?.logPutSince(table, station, id, since) ?? { rev: 0, put: null };
+  }
+
   logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, unknown> {
     this.#readQuery({ topic: "$log", table, station, id });
     return this.of(station)?.logRange(table, station, id, from, to) ?? new Map();

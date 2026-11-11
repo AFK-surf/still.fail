@@ -140,6 +140,14 @@ test("parses_each_call", () => {
   assert.deepEqual(parseCall("chat.older", { station: "w/s", thread: 7 }), { kind: "chatOlder", station: "w/s", thread: 7 });
   assert.deepEqual(parseCall("chat.around", { station: "w/s", thread: 7, seq: 3 }), { kind: "chatAround", station: "w/s", thread: 7, seq: 3 });
   assert.deepEqual(parseCall("chat.find", { station: "w/s", thread: 7, query: "a b" }), { kind: "chatFind", station: "w/s", thread: 7, query: "a b", bring: false });
+  assert.deepEqual(parseCall("chat.bring", { station: "w/s", thread: 7 }), { kind: "chatBring", station: "w/s", thread: 7 });
+  assert.deepEqual(parseCall("chat.outline.find", { station: "w/s", thread: 7, query: "a", bring: true }), { kind: "chatOutlineFind", station: "w/s", thread: 7, query: "a", bring: true });
+  assert.deepEqual(parseCall("chat.outline.rows", { station: "w/s", thread: 7, seqs: [3, 1] }), { kind: "chatOutlineRows", station: "w/s", thread: 7, seqs: [3, 1] });
+  // A hundred seqs at most, each a seq.
+  assert.equal(parseCall("chat.outline.rows", { station: "w/s", thread: 7, seqs: Array.from({ length: 100 }, (_, i) => i + 1) }).kind, "chatOutlineRows");
+  assert.throws(() => parseCall("chat.outline.rows", { station: "w/s", thread: 7, seqs: Array.from({ length: 101 }, (_, i) => i + 1) }), /invalid length 101, expected at most 100 seqs/);
+  assert.throws(() => parseCall("chat.outline.rows", { station: "w/s", thread: 7, seqs: ["1"] }), /expected u64/);
+  assert.throws(() => parseCall("chat.outline.rows", { station: "w/s", thread: 7 }), /missing field `seqs`/);
   assert.deepEqual(parseCall("history.older", { station: "w/s", key: "chat:c-1" }), { kind: "historyOlder", station: "w/s", key: "chat:c-1" });
   assert.deepEqual(parseCall("station.measure", { station: "w/s" }), { kind: "stationMeasure", station: "w/s" });
   assert.deepEqual(parseCall("chat.read", { station: "w/s", thread: 7, seq: 12 }), { kind: "chatRead", station: "w/s", thread: 7, seq: 12 });

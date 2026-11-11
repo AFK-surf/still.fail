@@ -829,30 +829,50 @@ export class StationTopics implements Owner {
     });
   }
 
-  /// The messages of a chat that have every word of `query` (`chat.find`), oldest first, each with how many times the
-  /// words are in its text; and whether all the chat was looked in (`whole`: all of it is on the device), with how
-  /// many of its entries were (`held` of `of`). `bring`: what is not on the device is read first, while its station
-  /// answers.
-  find(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; hits: { seq: number; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+  /// How much of a chat is on the device: `held` of its `of` entries, `whole` once all of it is (nothing left to read
+  /// of it, none let go for room).
+  held(station: string, id: number): { held: number; of: number; whole: boolean } {
+    const data = this.#core.data;
+    const whole = !data.evicted("entry", station, String(id)) && this.#sync.channels.next(entriesOf(station, id)) === null;
+    return { held: data.logSpan("entry", station, String(id))?.count ?? 0, of: this.#latest(station, id), whole };
+  }
+
+  /// What of a chat is not on the device read onto it (`chat.bring`), while its station answers; how much of it is then.
+  bring(station: string, id: number): Effect.Effect<{ held: number; of: number; whole: boolean }, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const channel = entriesOf(station, id);
-      const data = this.#core.data;
-      const whole = () => !data.evicted("entry", station, String(id)) && this.#sync.channels.next(channel) === null;
-      if (bring && this.#sync.link(station) && this.#sync.reachable(station)) {
+      if (this.#sync.link(station) && this.#sync.reachable(station)) {
         for (let read = this.#sync.channels.next(channel); read !== null; read = this.#sync.channels.next(channel)) {
           const came = yield* Effect.result(this.#sync.channels.read(channel, read, { quiet: true }));
           if (came._tag === "Failure" || came.success === 0) break;
         }
       }
+      return this.held(station, id);
+    });
+  }
+
+  /// The messages of a chat that have every word of `query`, oldest first, with their words and how many times the
+  /// words are in them (`chat.find`, `chat.outline.find`); and how much of the chat was looked in (`held`). `bring`:
+  /// what is not on the device is read first (`bring`).
+  found(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; found: { seq: number; text: string; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+    return Effect.map(bring ? this.bring(station, id) : Effect.sync(() => this.held(station, id)), (held) => {
       const words = terms(query);
-      const hits = data.findInThread(station, id, words).map(({ seq, text }) => {
+      const found = this.#core.data.findInThread(station, id, words).map(({ seq, text }) => {
         const lower = text.toLowerCase();
         let count = 0;
         for (const w of words) for (let i = lower.indexOf(w); i >= 0; i = lower.indexOf(w, i + w.length)) count++;
-        return { seq, count };
+        return { seq, text, count };
       });
-      return { words, hits, held: data.logSpan("entry", station, String(id))?.count ?? 0, of: this.#latest(station, id), whole: whole() };
+      return { words, found, ...held };
     });
+  }
+
+  /// The messages of a chat that have every word of `query` (`chat.find`), oldest first, each with how many times the
+  /// words are in its text; and whether all the chat was looked in (`whole`: all of it is on the device), with how
+  /// many of its entries were (`held` of `of`). `bring`: what is not on the device is read first, while its station
+  /// answers.
+  find(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; hits: { seq: number; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+    return Effect.map(this.found(station, id, query, bring), ({ found, ...rest }) => ({ ...rest, hits: found.map(({ seq, count }) => ({ seq, count })) }));
   }
 
   /// Whether a thread topic's window reaches its end.

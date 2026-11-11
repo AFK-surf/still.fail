@@ -9,7 +9,7 @@
 /// that column its words go (words_in_now's), how far its rows reach out across the room the panel leaves (rows_out's),
 /// whether it is a small panel beside what opened it (in_small_panel's), whether it is a dialog in the middle of the
 /// window (in_dialog's) and how far clear of an untitled dialog's close button at its end its words keep
-/// (untitled_clear's); with its look (look_lent: a sheet's narrow, a small panel's and
+/// (untitled_clear's); whether it is a row of a panel's list (panel_list_node's: `listed`); with its look (look_lent: a sheet's narrow, a small panel's and
 /// a dialog's wide), so what the body makes reads them however late it is made.
 priv struct PanelIn {
   words : Double
@@ -20,6 +20,7 @@ priv struct PanelIn {
   small : Bool
   centred : Bool
   clear : Double
+  listed : Bool
 }
 
 ///|
@@ -39,9 +40,10 @@ fn panel_in_lend(
   small? : Bool = false,
   centred? : Bool = false,
   clear? : Double = 0.0,
+  listed? : Bool = false,
 ) -> Unit {
   look_lent(col, look)
-  col.lends(panel_in_lent, { words, sides, rows_out, small, centred, clear }) |> ignore
+  col.lends(panel_in_lent, { words, sides, rows_out, small, centred, clear, listed }) |> ignore
 }
 
 ///|
@@ -144,6 +146,7 @@ pub fn panel_opens_in_node(field : @view.View) -> Unit {
 ///
 /// | caller | its field | shown |
 /// |---|---|---|
+/// | sfpages outline.mbt, 对话目录 from its round button | what it finds | a sheet on 小屏, beside the button |
 /// | (the old frame's panels that say `field`, as they move over) | | |
 pub fn panel_search_at_hand_node(field : @view.View) -> Unit {
   match field.lent(panel_field_lent) {
@@ -155,7 +158,7 @@ pub fn panel_search_at_hand_node(field : @view.View) -> Unit {
 ///|
 /// Where node `v` of a panel's body is laid out (none outside a panel).
 fn panel_in_of(v : @view.View) -> PanelIn {
-  v.lent(panel_in_lent).unwrap_or({ words: 0.0, sides: 0.0, rows_out: 0.0, small: false, centred: false, clear: 0.0 })
+  v.lent(panel_in_lent).unwrap_or({ words: 0.0, sides: 0.0, rows_out: 0.0, small: false, centred: false, clear: 0.0, listed: false })
 }
 
 ///|
@@ -170,13 +173,31 @@ pub fn panel_group_node(
 ) -> Unit {
   parent.box(made_for=loc, fn(g) {
     style_node(g, fn() { panel_group_box })
-    g.show(fn() { label() != "" }, fn(l) {
-      style_node(l, fn() { panel_label_at })
-      words_node(l, label, fn() { panel_note_words }) |> ignore
-    })
+    g.show(fn() { label() != "" }, fn(l) { panel_label_in(l, label) })
     body(g)
   })
   |> ignore
+}
+
+///|
+/// A heading of a panel's rows in `parent`, standing alone (panel_group_node's label: where its rows are a list's, each
+/// made as it shows, panel_list_node's): 12, muted, in by a row's padding, 2 over the rows under it.
+#callsite(autofill(loc))
+pub fn panel_heading_node(parent : @view.View, label : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(l) { panel_label_in(l, label) }) |> ignore
+}
+
+///|
+/// What a group's label is (panel_group_node's, panel_heading_node's) in `l`.
+fn panel_label_in(l : @view.View, label : () -> String) -> Unit {
+  let at = panel_in_of(l)
+  // (in a sheet's list, its words said where the sheet's are: on that line, as the rows' words and faces are)
+  if at.listed && !at.small && at.words > 0.0 {
+    style_node(l, fn() { panel_label_at.then(@ui.style(px=room(at.words))) })
+  } else {
+    style_node(l, fn() { panel_label_at })
+  }
+  words_node(l, label, fn() { panel_note_words }) |> ignore
 }
 
 ///|
@@ -248,6 +269,9 @@ fn panel_row_by(
   danger : Bool,
   plain? : Bool = false,
   made? : (@view.View) -> Unit = fn(_) {  },
+  lit? : () -> Bool = fn() { false },
+  titled? : Bool = true,
+  face? : (Double, (@view.View) -> Unit),
   loc~ : SourceLoc,
 ) -> Unit {
   let at = panel_in_of(parent)
@@ -258,6 +282,14 @@ fn panel_row_by(
     // room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past its padding to
     // where it is concentric with them: menu_item's)
     let reach = fn() { menu_row_reach(t().rows.pick) }
+    // (a row of a list in a sheet, its words said where the sheet's are and no room to reach: its ground panel_card_in in
+    // from the sheet's sides, as a card the body lays out itself is (panel_card_out_node: `sides`), its words on the
+    // sheet's words' line; not a small panel's capsule at the list's edge)
+    let sheet_listed = at.listed && !at.small && at.words > 0.0 && (match panel_row_at(at) {
+      Some(p) => p.out == 0.0
+      None => false
+    })
+    let sheet_in = if sheet_listed { dmax(0.0, panel_card_in - at.sides) } else { 0.0 }
     // (its reach alone the rows' rule's, panel_row_at: where that is none, a small panel's or a sheet's, a menu's row's
     // capsule, menu_item's own, not a page row's padding; at a dialog's foot, out to its foot corners: foot_rows_lent)
     let across = match panel_row_at(at) {
@@ -267,16 +299,16 @@ fn panel_row_by(
     let out = fn() {
       match foot {
         Some(f) => f()
-        None => if across > 0.0 { across } else { reach() }
+        None => if sheet_listed { -sheet_in } else if across > 0.0 { across } else { reach() }
       }
     }
     let words_at = fn() {
       match foot {
         Some(f) => f()
-        None => if across > 0.0 { across } else { text_in + reach() }
+        None => if sheet_listed { at.words - sheet_in } else if across > 0.0 { across } else { text_in + reach() }
       }
     }
-    let corner = if across > 0.0 { card_corner } else { small_panel_inner(r_menu) }
+    let corner = if across > 0.0 || sheet_listed { card_corner } else { small_panel_inner(r_menu) }
     if foot is Some(_) {
       style_node(r, fn() { menu_row_capsule })
     } else {
@@ -286,16 +318,44 @@ fn panel_row_by(
     .row(Is(true))
     .min_height(By(fn() { Some(t().rows.pick) }))
     .margin(By(fn() { (-out(), 0.0, -out(), 0.0) }))
-    .padding(By(fn() { (words_at(), menu_row_over, words_at(), menu_row_over) }))
+    |> ignore
+    // (`face`: a round one `size` across first, in a column of its own: stood in from the row's start as far as its
+    // top is from the row's (concentric in its corner, the corner less its radius), the column reaching on to where an
+    // icon's ends, so what follows it stands where it does after an icon)
+    let face_in = fn() {
+      match face {
+        // (a sheet's list's ground stands as a sheet's rows' do: the face concentric in its corner, though that is
+        // further in than its words would be)
+        // (the corner as drawn: no rounder than half the row's least height, a capsule's)
+        Some((size, _)) if sheet_listed => dmin(corner, t().rows.pick / 2.0) - size / 2.0
+        Some((size, _)) => dmin(words_at(), dmin(corner, t().rows.pick / 2.0) - size / 2.0)
+        None => words_at()
+      }
+    }
+    r
+    .padding(By(fn() { (face_in(), menu_row_over, words_at(), menu_row_over) }))
     .gap(Is(if plain { menu_row_gap } else { panel_row_gap }))
     .lines_up(Is(Some(Middle)))
-    .ground(By(fn() { if lit_node(r) { t().p.hover } else { 0L } }))
+    .ground(By(fn() { if lit_node(r) || lit() { t().p.hover } else { 0L } }))
     .says(By(fn() {
       let n = note()
       Some(@view.said(Button, label=if n == "" { label() } else { label() + " " + n }))
     }))
     |> ignore
     presses_node(r, fn() { press(r) })
+    match face {
+      Some((face_size, fill)) =>
+        r.box(fn(col) {
+          style_node(
+            col,
+            fn() { panel_row_face.then(@ui.style(w=Fixed(dmax(face_size, panel_row_icon_w + words_at() - face_in())))) },
+            in_row=true,
+          )
+          fill(col)
+        })
+        |> ignore
+      None => ()
+    }
     r.show(fn() { icon() != "" }, fn(col) {
       if plain {
         // (a menu's row's: the icon alone, 16, in the red where `danger`)
@@ -306,17 +366,21 @@ fn panel_row_by(
         icon_node(col, "", panel_icon, By(fn() { t().p.muted }), name_now=icon) |> ignore
       }
     })
-    r.box(fn(w) {
-      w
-      .grow(Is(1.0))
-      .basis(Is(Some(0.0)))
-      .min_width(Is(Some(0.0)))
-      .words(By(label))
-      .words_look(By(fn() { { size: t().t.ui, weight: 400, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false } }))
-      .ink(By(fn() { if danger { t().p.red } else { t().p.text } }))
+    // (its label as its words; not where what it is made of says them: `titled` false, a said row's, its label read
+    // out only)
+    if titled {
+      r.box(fn(w) {
+        w
+        .grow(Is(1.0))
+        .basis(Is(Some(0.0)))
+        .min_width(Is(Some(0.0)))
+        .words(By(label))
+        .words_look(By(fn() { { size: t().t.ui, weight: 400, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false } }))
+        .ink(By(fn() { if danger { t().p.red } else { t().p.text } }))
+        |> ignore
+      })
       |> ignore
-    })
-    |> ignore
+    }
     r.show(fn() { note() != "" }, fn(w) {
       w
       .words(By(note))
@@ -337,6 +401,82 @@ fn panel_row_by(
 ///|
 /// A panel's row's line (menu_item's words: 20).
 let panel_row_line : Double = 20.0
+
+///|
+/// A row of a panel's that is something said (a chat's outline's, what was found in it) in `parent`, laid out as
+/// panel_row_node's (its reach past the panel's padding, its words a row's padding in, its corner, its ground under the
+/// hand or the keyboard's focus): `words` on one line, cut short where it has not the room; `end` at that line's end,
+/// quiet (a time); `lead` in the icon's column before them (a face), the column kept where it draws none, so the words
+/// of rows with and without one start together; `who`, a quiet line over the words (those words), its face in that column
+/// before both lines; each given how large a face is there (a row's icon's). `chosen`: the one the reader is at, in the accent's ink
+/// as a pick's chosen choice is (pick_row_node's). `lit`: the one the keys are at (a list's ↑ ↓ from its field), on
+/// the ground the hand's is. Read out a button named `label`; `press` as it is pressed (a press, Enter or Space with the focus on it).
+#callsite(autofill(loc))
+pub fn panel_said_row_node(
+  parent : @view.View,
+  words : () -> Array[@ui.Run],
+  press : () -> Unit,
+  label : () -> String,
+  lead? : (@view.View, Double) -> Unit,
+  end? : () -> String = fn() { "" },
+  who? : (() -> String, (@view.View, Double) -> Unit),
+  chosen? : () -> Bool = fn() { false },
+  lit? : () -> Bool = fn() { false },
+  made? : (@view.View) -> Unit = fn(_) {  },
+  loc~ : SourceLoc,
+) -> Unit {
+  let t = fn() { theme() }
+  let quiet = fn() -> @view.WordsLook {
+    { size: t().t.meta, weight: 400, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false }
+  }
+  let said = fn(into : @view.View) {
+    into.box(fn(w) {
+      w
+      .grow(Is(1.0))
+      .basis(Is(Some(0.0)))
+      .min_width(Is(Some(0.0)))
+      .words_runs(By(words))
+      .words_look(By(fn() {
+        { size: t().t.ui, weight: if chosen() { 500 } else { 400 }, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false }
+      }))
+      .ink(By(fn() { if chosen() { t().p.accent_text } else { t().p.text } }))
+      .allow_ellipsis(Is(true))
+      |> ignore
+    })
+    |> ignore
+    into.show(fn() { end() != "" }, fn(e) {
+      e.shrink(Is(0.0)).words(By(end)).words_look(By(quiet)).ink(By(fn() { t().p.muted })) |> ignore
+    })
+  }
+  // (the face in a column of its own before the words, a found row's before both its lines: the words of every row
+  // start together)
+  let face = match (who, lead) {
+    (Some((_, f)), _) | (None, Some(f)) => Some((panel_icon, fn(col : @view.View) { f(col, panel_icon) }))
+    _ => None
+  }
+  panel_row_by(loc~, parent, label, fn(_) { press() }, fn() { "" }, fn() { "" }, "", false, lit~, titled=false, face?, made=fn(r) {
+    match who {
+      Some((name, _)) =>
+        // (who over what they said, both as far in as the row's words)
+        r.box(fn(lines) {
+          lines.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).gap(Is(@ui.Space::px(S0_5))) |> ignore
+          lines.box(fn(n) {
+            n.min_width(Is(Some(0.0))).words(By(name)).words_look(By(quiet)).ink(By(fn() { t().p.muted })).allow_ellipsis(Is(true))
+            |> ignore
+          })
+          |> ignore
+          lines.box(fn(l) {
+            l.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(menu_row_gap)) |> ignore
+            said(l)
+          })
+          |> ignore
+        })
+        |> ignore
+      None => said(r)
+    }
+    made(r)
+  })
+}
 
 ///|
 /// A panel's row that turns something on or off in `parent` (switch_row's in a panel): `title`, its switch at its end,

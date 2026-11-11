@@ -842,7 +842,7 @@ pub fn ink_runs(String, String, Bool) -> Array[@text.Run]
 
 pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], field? : @ui.Field, on_submit? : (String) -> Unit, on_change? : (String) -> Unit) -> @kit.Field
 
-pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit, edited? : (String) -> Unit) -> @view.View
+pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit, edited? : (String) -> Unit, end? : (@view.View) -> Unit) -> @view.View
 
 pub let inset_room : @ui.Space
 
@@ -1436,6 +1436,8 @@ pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
 
+pub fn panel_field_in_node(@view.View) -> @ui.Style
+
 pub fn panel_foot(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn panel_go(String, (@ui.Ctx, () -> Unit) -> Unit, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, left? : () -> Unit, count? : String, back? : () -> Unit, live? : () -> (String, String, String)) -> Unit
@@ -1447,6 +1449,8 @@ pub fn panel_group(@ui.Ctx, () -> Unit, label? : String, lead? : (@ui.Ctx) -> Un
 pub fn panel_group_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
 
 pub fn panel_head(@ui.Ctx, String, note? : String, end? : (@ui.Ctx) -> Unit) -> Unit
+
+pub fn panel_heading_node(@view.View, () -> String) -> Unit
 
 pub fn panel_held() -> Bool
 
@@ -1462,7 +1466,7 @@ pub let panel_in : @ui.Radius
 
 pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : Bool, fills? : Bool) -> Int32
 
-pub fn[K : Hash + Eq] panel_list_node(@view.View, () -> Array[K], (@view.View, K) -> Unit, est~ : Double, fills? : Bool, most? : () -> Double) -> @view.View
+pub fn[K : Hash + Eq] panel_list_node(@view.View, () -> Array[K], (@view.View, K) -> Unit, est~ : Double, fills? : Bool, most? : () -> Double, place? : @view.ListPlace[K]) -> @view.View
 
 pub fn panel_nodes(String, (@view.View, () -> Unit) -> Unit, from~ : Anchor, w? : Double, description? : String, foot? : (@view.View, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, focus? : Bool, ruled? : Bool, form? : Bool, grows? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double, hugs? : Bool) -> Unit
 
@@ -1491,6 +1495,8 @@ pub fn panel_row_node(@view.View, () -> String, () -> Unit, icon? : () -> String
 pub fn panel_row_opens_node(@view.View, () -> String, (Anchor) -> Unit, icon? : () -> String, note? : () -> String) -> Unit
 
 pub fn panel_rule_over() -> Double
+
+pub fn panel_said_row_node(@view.View, () -> Array[@text.Run], () -> Unit, () -> String, lead? : (@view.View, Double) -> Unit, end? : () -> String, who? : (() -> String, (@view.View, Double) -> Unit), chosen? : () -> Bool, lit? : () -> Bool, made? : (@view.View) -> Unit) -> Unit
 
 pub fn panel_search_at_hand_node(@view.View) -> Unit
 

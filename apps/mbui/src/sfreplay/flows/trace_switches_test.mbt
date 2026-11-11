@@ -23,11 +23,14 @@
 /// it came.
 /// MBUI_HAVE_SAME (2026-11-11: what the places open on kept as it is let go of, asked again with its version) off in
 /// all 81 as it came, to be recorded again.
+/// MBUI_OUTLINE (对话目录, 2026-11-10: an open chat's page wide enough for its rail of ticks, and its outline's panel,
+/// ask for its outline) off in all 81 as it came.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 80,
   "MBUI_DEVICES": 81,
   "MBUI_STATION_ROWS": 81,
   "MBUI_HAVE_SAME": 81,
+  "MBUI_OUTLINE": 81,
 }
 
 ///|

@@ -146,17 +146,37 @@ export function thingsHaving(things: readonly Thing[], words: readonly string[])
   });
 }
 
+/// How many rows a chat's outline gives at once, at most (`chat.outline.rows`): a panel shows fewer; a hundred of long
+/// words stay under what a value may weigh (32 KB: test/topic-bytes.test.ts).
+export const OUTLINE_ROWS = 100;
+/// How many of what looking in a chat's outline finds it lists, at most, the newest (`chat.outline.find`): a found row
+/// weighs more than a row (an agent's `by`, its flags), and fifty of the heaviest stay under 32 KB.
+export const OUTLINE_FOUND = 50;
+
+/// Items in the order given, by the day each was said (`day`: its heading, 今天, 昨天, 9月20日; "" where when is not
+/// known), a day's in that order: a day for each run of them said on it.
+export function inDays<T>(items: readonly T[], createdAt: (item: T) => number | null, day: (ms: number) => string): { day: string; items: T[] }[] {
+  const days: { day: string; items: T[] }[] = [];
+  for (const item of items) {
+    const at = createdAt(item);
+    const d = at !== null ? day(at) : "";
+    const last = days[days.length - 1];
+    if (last !== undefined && last.day === d) last.items.push(item);
+    else days.push({ day: d, items: [item] });
+  }
+  return days;
+}
+
 /// Pictures and videos (`media`, the latest first) by the day (`day`: its heading) and the message (`clock`: its time)
 /// they were sent: the latest first, a message's in the order it has them.
 export function mediaDays(media: readonly Thing[], day: (ms: number) => string, clock: (ms: number) => string): ThingDay[] {
-  const days: ThingDay[] = [];
-  for (const t of media) {
-    const d = t.createdAt !== null ? day(t.createdAt) : "";
-    const last = days[days.length - 1];
-    const into = last !== undefined && last.day === d ? last : (days.push({ day: d, groups: [] }), days[days.length - 1]!);
-    const group = into.groups[into.groups.length - 1];
-    if (group !== undefined && group.seq === t.seq) group.items.unshift(t);
-    else into.groups.push({ seq: t.seq, clock: t.createdAt !== null ? clock(t.createdAt) : "", by: t.by, words: t.words ?? "", items: [t] });
-  }
-  return days;
+  return inDays(media, (t) => t.createdAt, day).map((d) => {
+    const groups: ThingGroup[] = [];
+    for (const t of d.items) {
+      const group = groups[groups.length - 1];
+      if (group !== undefined && group.seq === t.seq) group.items.unshift(t);
+      else groups.push({ seq: t.seq, clock: t.createdAt !== null ? clock(t.createdAt) : "", by: t.by, words: t.words ?? "", items: [t] });
+    }
+    return { day: d.day, groups };
+  });
 }

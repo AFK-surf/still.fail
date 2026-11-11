@@ -1945,6 +1945,7 @@ pub fn fixture(mode : String) -> Source {
     // (a made-up core's lists are set up as each test's page asks for them: asked ahead where a test says so)
     reads_ahead: fn() { false },
     asks_devices: fn() { true },
+    asks_outline: fn() { true },
   }
 }
 

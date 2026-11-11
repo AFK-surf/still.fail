@@ -86,6 +86,14 @@ export function setup(options: RigOptions = {}) {
     betaOf: (ws) => ws === "ws" && (data.record("me", "s1") as J)?.user?.beta === true,
     subOf: (ws) => (ws === "ws" ? "s1" : null),
     relayName: () => null,
+    // How much of a chat is on the device, as station/topics.ts `held` says it: its entries held of as far as it is
+    // known to go (its summary's last, or what is held past it); all of it once none is missing.
+    held: (station, thread) => {
+      const span = data.logSpan("entry", station, String(thread));
+      const last = (data.thread(station, thread) as J)?.last;
+      const of = Math.max(typeof last === "number" ? last : 0, span?.max ?? 0);
+      return { held: span?.count ?? 0, of, whole: (span?.count ?? 0) === of };
+    },
   });
   router.views = views;
   router.store = store;

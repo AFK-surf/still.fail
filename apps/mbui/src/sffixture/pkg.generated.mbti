@@ -375,6 +375,10 @@ pub fn fixture_new_call(Fixture, String, Json) -> Result[Json, Json]?
 
 pub fn fixture_new_topic(Fixture, String) -> Json?
 
+pub fn fixture_outline(Fixture, Map[String, @json.Json]) -> @json.Json?
+
+pub fn fixture_outline_call(Fixture, String, @json.Json) -> Result[@json.Json, @json.Json]?
+
 pub fn fixture_pdf() -> Bytes
 
 pub fn fixture_peek((Json, Bytes?) -> Unit) -> Int32
@@ -490,6 +494,14 @@ pub let new_fix : NewFix
 pub fn novel_text() -> String
 
 pub fn outgoing_json(String, Json, String, String) -> Json
+
+pub let outline_away_seq : Double
+
+pub fn outline_chat(String, around? : Bool) -> @json.Json
+
+pub let outline_long_away_seq : Double
+
+pub fn outline_mode(String) -> Bool
 
 pub let peeks_answer : String
 

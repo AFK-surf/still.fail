@@ -146,6 +146,9 @@ pub(all) struct Source {
   /// whether the stations' places and pages ask for the workspace's devices (`devices`): not of a run seen again that
   /// was recorded before the app did
   asks_devices : () -> Bool
+  /// whether an open chat's page asks for its outline (`chatOutline`: its rail of ticks, its outline's panel): not of a
+  /// run seen again that was recorded before the app did
+  asks_outline : () -> Bool
 }
 
 ///|
@@ -496,6 +499,7 @@ pub fn made_source(
     read_only: false,
     reads_ahead: fn() { true },
     asks_devices: fn() { true },
+    asks_outline: fn() { true },
   }
 }
 

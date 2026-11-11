@@ -699,11 +699,15 @@ pub let glyph_line_ms : Double
 
 pub fn go_back() -> Bool
 
+pub let go_back_offsets : Map[String, Double]
+
+pub fn go_back_to(ChatRef) -> Bool
+
 pub fn go_forward(Source) -> Bool
 
 pub fn go_place(String, way? : Int32) -> Bool
 
-pub fn go_to(ChatRef, Double, passage? : String) -> Unit
+pub fn go_to(ChatRef, Double, passage? : String, keep_place? : Bool) -> Unit
 
 pub let go_to_passages : Map[String, String]
 
@@ -1267,7 +1271,11 @@ pub let pin_open_scale : Double
 
 pub let pk : ChatPick
 
+pub fn place_forget(String) -> Unit
+
 pub fn place_icon(String) -> String
+
+pub fn place_kept(String) -> Bool
 
 pub fn place_key(String, String) -> String
 
@@ -1286,6 +1294,10 @@ pub fn places_ahead_node(@view.View, Source, () -> String?) -> Unit
 pub fn places_ahead_open() -> Bool
 
 pub let place_pick : @sf.LiveMap[String, @settings.Route]
+
+pub let places_back : Map[String, (Double, Double)]
+
+pub let places_back_said : @signals.Signal[Int32]
 
 pub let plain_small_foot : Double
 
@@ -3022,6 +3034,7 @@ pub(all) struct Reading {
   mut scale : Double
   mut jump : Bool
   mut jump_at : Double
+  mut far : Bool
   mut ask : Bool
   mut bench : Int32
   mut bench_phase : Int32
@@ -3306,6 +3319,7 @@ pub(all) struct Source {
   refresh : (String, Map[String, @json.Json]) -> Unit
   read_only : Bool
   reads_ahead : () -> Bool
+  asks_outline : () -> Bool
 }
 pub fn Source::lease_topic(Self, String, Map[String, @json.Json]) -> TopicLease
 pub fn Source::owned_by(Self, @view.View) -> Self

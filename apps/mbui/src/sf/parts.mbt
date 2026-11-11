@@ -924,6 +924,15 @@ let panel_icon_col : Double = 20.0
 // kept across runs: a value (no field of it changes)
 let panel_row_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
 
+///|
+/// How wide a panel's row's icon column is (panel_row_icon's), and its face's column: the face at its start, in the
+/// row's middle (panel_row_by's `face`, as wide as it reaches on to where the icon's column ends).
+let panel_row_icon_w : Double = @ui.Space::px(S5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_row_face : @ui.Style = @ui.css("align=AStart justify=JCenter")
+
 // ---------------------------------------------------------------------------
 // Pages (styles/pages.css.ts)
 
