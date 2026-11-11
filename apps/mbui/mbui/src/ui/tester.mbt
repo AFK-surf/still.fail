@@ -437,7 +437,7 @@ pub fn Tester::new(
     marks_out: [],
     marks_next: None,
     marks_by_hand: false,
-    rows_on_pixels: false,
+    rows_on_pixels: true,
     keeps_sources,
     shares: [],
     perf: -1,

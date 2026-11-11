@@ -2214,7 +2214,7 @@ impl @hostapi.Host for FakeHost with groups_here(_) {
 }
 
 ///|
-/// A list's rows set on its pixels as every platform's host sets them, where the test says so
+/// A list's rows set on its pixels as every platform's host sets them, unless the test says otherwise
 /// (Tester::set_rows_on_pixels).
 impl @hostapi.Host for FakeHost with rows_on_pixels(self) {
   self.rows_on_pixels

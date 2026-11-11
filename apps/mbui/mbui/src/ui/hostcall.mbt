@@ -215,8 +215,8 @@ struct FakeHost {
   /// the PNG each drawing of marks gives (Tester::marks_make: what the next is to give, else one clear pixel)
   marks_out : Array[Bytes]
   mut marks_next : Bytes?
-  /// a list's rows set on its pixels (rows_on_pixels): every platform's host does; a Tester's only where its test says
-  /// so (Tester::set_rows_on_pixels), its frames' layout else as it always was
+  /// a list's rows set on its pixels (rows_on_pixels): every platform's host does, and a Tester's unless its test says
+  /// otherwise (Tester::set_rows_on_pixels)
   mut rows_on_pixels : Bool
   /// the window's tree keeps where in the source each node was made (keeps_sources): a Tester's does, unless what it
   /// runs is measured as a device runs it (Tester::new's `keeps_sources`)
