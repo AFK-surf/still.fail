@@ -182,9 +182,11 @@ test("unknown_people_keep_their_usage_and_the_view_decodes", () => {
     assert.equal(decoded.ok.tiles[0].value, "$4.00");
     assert.equal(decoded.ok.tiles[1].value, "3 次");
     assert.equal(people[0].title, "未知用户");
-    assert.equal(people[0].person ?? null, null);
-    assert.equal(people[0].cost, 3.0);
-    assert.equal(people[1].person.via, "cloud");
+    // (who each is and what each cost are the view's own: what goes out says them in words)
+    assert.equal(v.lists[0].items[0].person ?? null, null);
+    assert.equal(v.lists[0].items[0].cost, 3.0);
+    assert.equal(v.lists[0].items[1].person.via, "cloud");
+    assert.deepEqual([people[0].person, people[0].cost], [undefined, undefined]);
   }
 });
 

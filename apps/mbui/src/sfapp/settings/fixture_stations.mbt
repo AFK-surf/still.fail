@@ -1,8 +1,9 @@
 // The made-up cores' stations as the core gives them (client/core-ts views.ts): each fixture describes a station whole
 // and answers every topic of it from that, here, so what a list is sent is what a device is sent. `stations` a row each
-// (station_row), `station` one whole without the models it can run (station_whole), `stationPart` a part of its
-// overview (station_part_said), `connects`' Slack apps and whether no station has a profile (connects_of_stations),
-// `profiles`' machine logins offered (profiles_of_stations).
+// (station_row), `station` one as its page is sent it (station_whole), `stationPart` a part of its overview
+// (station_part_said), `connects`' Slack apps and whether no station has a profile (connects_of_stations), `profiles`'
+// machine logins offered (profiles_of_stations) and its profiles (listed_profile_said): each as client/core-ts
+// schema.ts sends it.
 // Both fixtures' packages use these (sffixture, and these settings' own).
 
 ///|
@@ -58,15 +59,96 @@ pub fn station_row(whole : Json) -> Json {
 }
 
 ///|
-/// Station `whole` as its own page is sent it (`station`): all of it but the models it can run.
-pub fn station_whole(whole : Json) -> Json {
-  match whole {
+/// Of object `v`, all but its fields named in `drop`; anything else as it is.
+fn fields_dropped(v : Json, drop : Array[String]) -> Json {
+  match v {
     Object(o) => {
       let m : Map[String, Json] = {}
       for k, x in o {
-        if k != "models" {
+        if !drop.contains(k) {
           m[k] = x
         }
+      }
+      Json::object(m)
+    }
+    _ => v
+  }
+}
+
+///|
+/// Object `v` with its field `key` made by `f`, where it has one that is not null; anything else as it is.
+fn field_made(v : Json, key : String, f : (Json) -> Json) -> Json {
+  match v {
+    Object(o) =>
+      match o.get(key) {
+        Some(Null) | None => v
+        Some(x) => {
+          let m = o.copy()
+          m[key] = f(x)
+          Json::object(m)
+        }
+      }
+    _ => v
+  }
+}
+
+///|
+/// Each item of list `v` made by `f`; anything else as it is.
+fn each_made(v : Json, f : (Json) -> Json) -> Json {
+  match v {
+    Array(a) => Json::array(a.map(f))
+    _ => v
+  }
+}
+
+///|
+/// What the core sends of a station whole (client/core-ts schema.ts), field by field: what the station's page reads
+/// (StationView, StationOverview, StationProfile, StationConnect, StationDecisions) and what a part of it is
+/// (`stationPart`: Overview's parts, MachineLogin, SoftwareVersion, ArchivingView, ArchivePolicyView).
+// kept across runs: a table, never written
+let page_dropped : Array[String] = ["models", "face", "line", "lastSeen", "time"]
+
+///|
+// kept across runs: a table, never written
+let page_overview_dropped : Array[String] = [
+  "viewer", "mesh", "slackUsers", "slackTeams", "slackApps", "comma", "feishuRegistrations", "disk", "logins", "consoleSignIn",
+]
+
+///|
+// kept across runs: a table, never written
+let page_connect_fields : Array[String] = ["id", "name", "team", "presence", "statusText", "runText", "modelName"]
+
+///|
+// kept across runs: a table, never written
+let page_profile_dropped : Array[String] = [
+  "home", "homeExists", "models", "group", "groupTitle", "usesText", "modelsReading", "serves",
+]
+
+///|
+// kept across runs: a table, never written
+let quota_fields : Array[String] = ["state", "windows", "detail", "creditsText", "resetCount", "resets", "time"]
+
+///|
+// kept across runs: a table, never written
+let quota_window_fields : Array[String] = ["label", "scope", "mark", "left", "level", "refills"]
+
+///|
+/// Allowance `q` as a profile's row, chips and page are sent it (ProfileQuota): its windows as their chips draw them,
+/// its times in words as `ago` alone.
+pub fn quota_said(q : Json) -> Json {
+  fields_kept(q, quota_fields)
+  |> field_made("windows", fn(w) { each_made(w, fn(x) { fields_kept(x, quota_window_fields) }) })
+  |> field_made("time", ago_said)
+}
+
+///|
+/// Times in words (`time`: a Stamp by field) as a profile's page reads them: `ago` alone.
+fn ago_said(time : Json) -> Json {
+  match time {
+    Object(o) => {
+      let m : Map[String, Json] = {}
+      for k, x in o {
+        m[k] = fields_kept(x, ["ago"])
       }
       Json::object(m)
     }
@@ -75,11 +157,81 @@ pub fn station_whole(whole : Json) -> Json {
 }
 
 ///|
+/// A station's own login as the pages offering it for a profile are sent it (MachineLogin).
+fn machine_login_said(l : Json) -> Json {
+  fields_dropped(l, ["installed", "loggedIn", "plan", "text"]) |> field_made("quota", quota_said)
+}
+
+///|
+/// A station's archive policy as it is sent (ArchivePolicyView): each option's chats their session and title.
+fn policy_said(p : Json) -> Json {
+  fields_dropped(p, ["checked", "edited", "change"])
+  |> field_made("options", fn(os) {
+    each_made(os, fn(o) { field_made(o, "chats", fn(cs) { each_made(cs, fn(c) { fields_kept(c, ["session", "title"]) }) }) })
+  })
+}
+
+///|
+/// Part `part` of a station's overview as it is sent, on its page or alone (`stationPart`).
+fn part_said(part : String, v : Json) -> Json {
+  match part {
+    "archiving" => fields_dropped(v, ["summaryText", "reviewOn"])
+    "automaticDecisions" => field_made(v, "policy", policy_said)
+    "updates" => each_made(v, fn(u) { fields_dropped(u, ["version", "progress"]) })
+    "machineLogins" => each_made(v, machine_login_said)
+    _ => v
+  }
+}
+
+///|
+// kept across runs: a table, never written
+let listed_profile_fields : Array[String] = [
+  "id", "name", "email", "runtime", "access", "usedBy", "check", "checkText", "checkTone", "group", "quota", "usesText",
+  "kindText", "planText", "providerMark",
+]
+
+///|
+/// A station's profile as the workspace's list (`profiles`) is sent it (ListedProfile): its row's name, mark, check in
+/// words and allowance.
+pub fn listed_profile_said(p : Json) -> Json {
+  fields_kept(p, listed_profile_fields)
+  |> field_made("access", fn(a) { fields_kept(a, ["kind"]) })
+  |> field_made("check", fn(c) { fields_kept(c, ["detail"]) })
+  |> field_made("quota", quota_said)
+}
+
+///|
+/// A station's profile as its page is sent it (StationProfile): its check's state and when, its allowance as drawn.
+fn page_profile_said(p : Json) -> Json {
+  fields_dropped(p, page_profile_dropped)
+  |> field_made("check", fn(c) { fields_kept(c, ["state", "time"]) |> field_made("time", ago_said) })
+  |> field_made("quota", quota_said)
+}
+
+///|
+/// A station's overview as its page is sent it (StationOverview).
+fn page_overview_said(o : Json) -> Json {
+  let o = fields_dropped(o, page_overview_dropped)
+  let o = ["archiving", "updates", "machineLogins"].fold(init=o, fn(o, part) { field_made(o, part, fn(v) { part_said(part, v) }) })
+  o
+  |> field_made("automaticDecisions", fn(d) { fields_kept(d, ["canEdit", "policy"]) |> field_made("policy", policy_said) })
+  |> field_made("connects", fn(cs) { each_made(cs, fn(c) { fields_kept(c, page_connect_fields) }) })
+  |> field_made("profiles", fn(ps) { each_made(ps, page_profile_said) })
+}
+
+///|
+/// Station `whole` as its own page is sent it (`station`, StationView): all of it the page reads, not the models it can
+/// run, nor what a list's row says alone.
+pub fn station_whole(whole : Json) -> Json {
+  fields_dropped(whole, page_dropped) |> field_made("overview", page_overview_said)
+}
+
+///|
 /// One part of station `whole`'s overview (`stationPart`): null while its overview is not read or has none.
 pub fn station_part_said(whole : Json, part : String) -> Json {
   match field(field(Some(whole), "overview"), part) {
-    Some(v) => v
-    None => Json::null()
+    Some(Null) | None => Json::null()
+    Some(v) => part_said(part, v)
   }
 }
 
@@ -146,7 +298,7 @@ pub fn profiles_of_stations(v : Json?, all : Json?) -> Json? {
         if !flag(sv, "online") || !(field(sv, "overview") is Some(Object(_))) {
           continue
         }
-        let logins = items(field(sv, "overview"), "machineLogins").filter(fn(l) { flag(Some(l), "offered") })
+        let logins = items(field(sv, "overview"), "machineLogins").filter(fn(l) { flag(Some(l), "offered") }).map(machine_login_said)
         if logins.length() > 0 {
           out.push(obj([("station", str(text(sv, "station"))), ("stationName", str(text(sv, "name"))), ("logins", Json::array(logins))]))
         }

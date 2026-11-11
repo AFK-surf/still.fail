@@ -20,7 +20,7 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
-import { conformTy, type Ty } from "../conform.ts";
+import { conformTy } from "../conform.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
@@ -29,7 +29,7 @@ import { Moments } from "../clock.ts";
 import { chatsLinked, personWords } from "../refLinks.ts";
 import { timed } from "../spent.ts";
 import type { Value, Watch } from "../store.ts";
-import { arr as arrU, deepFreeze, equal, get as getU, isObject, shaped, sharedValue } from "../util.ts";
+import { arr as arrU, deepFreeze, equal, get as getU, isObject, shaped, shapedAs, sharedValue } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../prefs.ts";
@@ -3253,11 +3253,13 @@ export class Views implements Owner {
 const pinnedAt = new WeakMap<object, number>();
 
 /// `value` put through shape `ty` once, as it would go out, and marked so (`shaped`: shared, never changed, not copied or
-/// shaped again where it goes out inside another value); null when it does not fit (the station's row says so).
-function asShaped(ty: Ty, value: J): J {
+/// shaped again where it goes out inside another value as `ty`; where another struct is said there, made as that one,
+/// once: conform.ts `reshaped`); null when it does not fit (the station's row says so).
+function asShaped(ty: string, value: J): J {
   const out = conformTy(ty, value);
   if (!("ok" in out) || out.ok === null || typeof out.ok !== "object") return null;
   shaped.add(sharedValue(out.ok));
+  shapedAs.set(out.ok, ty);
   return out.ok;
 }
 

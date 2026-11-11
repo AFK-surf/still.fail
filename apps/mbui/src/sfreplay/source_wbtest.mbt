@@ -63,10 +63,11 @@ test "a run from before the stations' rows: the app's rows, a station and a part
     rows.value.unwrap().stringify(),
     "[{\"station\":\"w/a\",\"name\":\"A\",\"host\":{\"os\":\"mac\"},\"overview\":{\"disk\":{\"free\":1}}}]",
   )
+  // (as the core sends a station's page, StationView: not the models it can run, nor what only its row shows, its disk)
   let one = (src.topic_read)("station", one_p)
   assert_eq(
     one.value.unwrap().stringify(),
-    "{\"station\":\"w/a\",\"name\":\"A\",\"host\":{\"os\":\"mac\",\"cpu\":2},\"overview\":{\"disk\":{\"free\":1},\"profiles\":[{\"id\":\"p\"}]}}",
+    "{\"station\":\"w/a\",\"name\":\"A\",\"host\":{\"os\":\"mac\",\"cpu\":2},\"overview\":{\"profiles\":[{\"id\":\"p\"}]}}",
   )
   assert_eq((src.topic_read)("stationPart", part_p).value.unwrap().stringify(), "[{\"id\":\"p\"}]")
   assert_eq((src.topic_read)("station", { "scope": "w", "station": "w/b" }).value, Some(Json::null()))

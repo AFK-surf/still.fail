@@ -444,11 +444,10 @@ export interface AutomaticDecisionCheck {
 	error?: string;
 }
 
+/** A chat a check put under an option, as its dialog lists it (when, and whether it was recommended, the core's). */
 export interface ArchiveOptionChat {
 	session: string;
 	title: string;
-	at: number;
-	recommended: boolean;
 }
 
 export interface ArchiveOptionView {
@@ -462,34 +461,18 @@ export interface ArchiveOptionView {
 	chats: ArchiveOptionChat[];
 }
 
-export interface ArchivePolicyAuthor {
-	/** person or agent */
-	kind: string;
-	email?: string;
-	name?: string;
-	session?: string;
-	title?: string;
-	runtime?: string;
-}
-
-export interface ArchivePolicyChange {
-	at: number;
-	summary: string;
-	by: ArchivePolicyAuthor;
-}
-
+/**
+ * A station's archive policy, as its page and its automatic decisions' page read it. How many chats were checked,
+ * whether it was ever saved and its last change whole (`checked`, `edited`, `change`) are the core's: `summaryText` and
+ * `changeText` say them.
+ */
 export interface ArchivePolicyView {
 	/** The policy in words: what the decision model is told. */
 	text: string;
 	options: ArchiveOptionView[];
 	days: number;
-	/** Chats checked in the last `days` (each by its latest check). */
-	checked: number;
 	/** Of them, those whose latest check failed. */
 	failed: number;
-	/** Saved by someone; else the default. */
-	edited: boolean;
-	change?: ArchivePolicyChange;
 	/** The checks counted, in a line (core). */
 	summaryText?: string;
 	/** Who changed it last, where, when and what, in a line (core). */
@@ -534,8 +517,6 @@ export interface ArchivingView {
 	 * review).
 	 */
 	mode?: string;
-	/** That in a line with Slack's, as its row in 设置 › 归档 says it (core). */
-	summaryText?: string;
 	/** The days idle offered to choose from, the one kept among them when it is none of them (core). */
 	daysOffered?: number[];
 	/** The same of `slackDays` (core). */
@@ -544,13 +525,14 @@ export interface ArchivingView {
 	daysOfferedText?: string[];
 	/** Each of `slackDaysOffered` in words (core). */
 	slackDaysOfferedText?: string[];
-	/** Its archive review (自动决策 › 归档建议) is on (core). */
-	reviewOn?: boolean;
 	/** That said alone, by which model (core). */
 	reviewText?: string;
 	/** Set to go by its review, which is off: nothing goes (core). */
 	stalled?: boolean;
-	/** Its row's line: `summaryText`, or that it is `stalled` (core). */
+	/**
+	 * Its row's line: how it archives, with Slack's, or that it is `stalled` (core; its line alone, `summaryText`,
+	 * and whether its review is on, `reviewOn`, are the core's own).
+	 */
 	lineText?: string;
 	/** Each way to choose, in its order (core). */
 	modes?: ArchiveModeChoice[];
@@ -841,7 +823,11 @@ export interface ProfileShare {
 	users?: string[];
 }
 
-/** A profile, with its last check in words and its models' makers. */
+/**
+ * A profile, with its last check in words and its models' makers. What a topic sends of it is its own shape: a
+ * station's page `StationProfile`, the workspace's list `ListedProfile`; the whole is a station part's (`stationPart`
+ * `profiles`) and the core's.
+ */
 export interface Profile {
 	id: string;
 	name: string;
@@ -1044,28 +1030,62 @@ export interface PendingLogin {
 	error?: string;
 }
 
-/** Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over). */
+/** A window of an allowance as its chip draws it, its tip saying what is left and when it refills (QuotaWindow's). */
+export interface PickQuotaWindow {
+	label: string;
+	/** As QuotaWindow's. */
+	scope?: string;
+	mark: string;
+	left: number;
+	level: Level;
+	refills?: string;
+}
+
+/** A moment as a page says it: 3 分钟前. (A Stamp's other parts no page of a profile reads.) */
+export interface Ago {
+	ago: string;
+}
+
+/**
+ * An allowance as a profile's row, chips and page read it (quota_chip.mbt, profiles.mbt quota_section, accounts.mbt):
+ * each window's chip, why it cannot be read, its credits, its resets, when it was read. The rest of a Quota (its plan,
+ * its credits' figures, its windows' percentages and times) is the core's.
+ */
+export interface ProfileQuota {
+	/** As Quota's: chips only where ok. */
+	state: string;
+	windows: PickQuotaWindow[];
+	detail?: string;
+	creditsText?: string;
+	resetCount?: number;
+	/** As Quota's. */
+	resets?: QuotaReset[];
+	/** When it was read (`checkedAt`), in words. */
+	time?: Record<string, Ago>;
+}
+
+/**
+ * Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over),
+ * as the pages that offer it for a profile read it (profile_more.mbt, new_profile.mbt). Whether it is installed and
+ * signed in, its plan's id and its line in words are the core's (`offered` and `planText` say what the pages need).
+ */
 export interface MachineLogin {
 	runtime: RuntimeKind;
-	installed: boolean;
-	loggedIn: boolean;
 	email?: string;
-	plan?: string;
 	/** Its plan as a name, for its tag (pro: Pro; none: ""). */
 	planText?: string;
 	/** A profile can use it as it is (kept in a file, not only in the keychain). */
 	usable?: boolean;
 	/** Its allowance, as a profile on it would show (none until read, or when it cannot be). */
-	quota?: Quota;
-	/** In a line, as the pages show it. */
-	text: string;
+	quota?: ProfileQuota;
 	/** Offered for a profile: signed in, on a plan, and no profile on it yet. */
 	offered?: boolean;
 }
 
 /**
  * A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
- * runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`).
+ * runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`). What runs now and where an update is (`version`,
+ * `progress`) are said by `shownText` and `updatingText`; the core keeps them.
  */
 export interface SoftwareVersion {
 	/** station | claude | codex | dsh | grok | cursor | devin */
@@ -1073,8 +1093,6 @@ export interface SoftwareVersion {
 	name: string;
 	/** On the machine (a runtime may not be: then `updatable` says it can be installed from here). */
 	installed: boolean;
-	/** What runs now; none when it is not installed, or not a release (a clone). */
-	version?: string;
 	/** The latest out, when it could be read. */
 	latest?: string;
 	/** The latest is newer than what runs. */
@@ -1105,13 +1123,8 @@ export interface SoftwareVersion {
 	/** idle | updating | failed */
 	state: string;
 	/**
-	 * The station's, while it is updating: where the update is, in a line (正在下载新版本…). None from a station
-	 * older than it, or an installer that does not say.
-	 */
-	progress?: string;
-	/**
 	 * A runtime's, while what its install or update downloads comes in: how much of it is, 0–100 (drawn as a bar
-	 * beside `progress`). None when that is not known, and from a station older than it.
+	 * beside `updatingText`). None when that is not known, and from a station older than it.
 	 */
 	percent?: number;
 	/** The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断). */
@@ -1124,7 +1137,7 @@ export interface SoftwareVersion {
 	shownText?: string;
 	/** What is said of it on hover: up to date, or that the last check failed ("" nothing). */
 	tipText?: string;
-	/** While it updates, where that is (its `progress`, else 正在更新/正在安装). */
+	/** While it updates, where that is (the station's progress in a line, else 正在更新/正在安装). */
 	updatingText?: string;
 	/** Its last update or install failed, in words. */
 	failedText?: string;
@@ -1290,7 +1303,10 @@ export interface StationCopies {
 	formerly: string[];
 }
 
-/** A station's overview, with what the clients show of its connects and profiles. */
+/**
+ * A station's overview, with what the clients show of its connects and profiles: each part of it as `stationPart`
+ * sends it (STATION_PARTS). A station's page is sent its own, `StationOverview`.
+ */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
 	/** How its chats go to the archive on their own (`archiving.save`). Absent from stations before it. */

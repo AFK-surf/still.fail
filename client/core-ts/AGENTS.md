@@ -33,7 +33,10 @@ tables. Its `OVER` tables only fall. A topic the app lets go of keeping its valu
 sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`). What
 goes out is what the topic's shape declares, the rest dropped (`src/conform.ts`), while the core's own readers read its
 whole value (`store.value`): a field the core reads and no UI does stays out of the shape (a chat's agents' models,
-which `src/choose.ts` reads of `views.agent`).
+which `src/choose.ts` reads of `views.agent`). A part a view shapes once for every topic that holds it (views.ts
+`asShaped`) goes out as each topic's own shape says there (a station's overview to its page as `StationOverview`,
+conform.ts `reshaped`); where one shape is sent by several topics and only some pages read a field, the others get a
+shape of their own (`ListedProfile`, `StationProfile` beside `Profile`).
 
 ## What is shared is never written
 

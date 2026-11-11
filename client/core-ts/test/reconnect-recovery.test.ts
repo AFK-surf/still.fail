@@ -611,8 +611,11 @@ test("a_station_that_finds_this_core_too_old_says_to_update_the_app_or_reload_th
       assert.deepEqual([linkNow(s).state, linkNow(s).old], ["error", "app"]);
       const list = () => values.get(2) as Troubled;
       assert.deepEqual(list().trouble, { text: t(app ? "core-views.station.appOld" : "core-views.station.pageOld"), state: "error", retry: false, station: ST });
-      // The station's own sentence is still its message.
-      assert.deepEqual(list().stations.map((x) => [x.station, x.state, x.message]), [[ST, "error", "请更新 app"]]);
+      // The station's own sentence is still its message (the core's: the list's rows are sent what they read of it).
+      const held = s.core.inner.store.value({ topic: "chats", scope: "ws" });
+      const stations = (held !== undefined && "ok" in held ? held.ok : null) as Troubled;
+      assert.deepEqual(stations.stations.map((x) => [x.station, x.state, x.message]), [[ST, "error", "请更新 app"]]);
+      assert.deepEqual(list().stations.map((x) => [x.station, x.state, x.message]), [[ST, undefined, undefined]]);
       // Answering again (the page reloaded is a core anew; here the station's floor lowered), tried as the UI comes
       // back: nothing of it is left.
       s.gate.stream = "open";
