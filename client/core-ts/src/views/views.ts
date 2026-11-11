@@ -720,6 +720,11 @@ export class Views implements Owner {
   /// changed (present.ts reads the clock by their grain): a host reading of one station, every few seconds from each,
   /// made every station's anew, the list and the new chat's view after it (50-80 ms a time on a phone, 2026-10-31).
   readonly #stationShown = new Map<string, StationShown>();
+  /// Each workspace's mark (views/marks.ts `workspaceMark`), a computed with what of the prefs it reads (`prefsOf`, one
+  /// function for each, by which the store keeps that part): made again only as its own rows or that part change. Made
+  /// in the one topic that asks for the workspace shown, every workspace's was made anew at every switch (13-20 ms in
+  /// Hermes, 2 workspaces of 420 chats, 2026-11-11).
+  readonly #marks = new Map<string, Derived<J>>();
   /// What reads how the vault of a workspace answers agents' requests (a chat's cards): made again as it changes.
   readonly #vaultSeen = new Marks();
   /// What reads what the views keep of their own (an update notice open, copying to a thread, a scope's rows loaded).
@@ -1194,6 +1199,28 @@ export class Views implements Owner {
     return this.#core.relayName(host);
   }
 
+  /// A part of the prefs (store.ts `select`): what reads it is made again only as that part changes. `pick` is kept,
+  /// not made at each call: the store keeps the part by it.
+  prefsPart<T>(pick: (value: Value | undefined) => T): T {
+    return this.#core.store.select({ topic: "prefs" }, pick);
+  }
+
+  /// A workspace's mark (views/marks.ts `workspaceMark`), kept for the workspace (`#marks`): the same object while
+  /// what it is made of says the same.
+  markOf(workspace: string): J {
+    let kept = this.#marks.get(workspace);
+    if (kept === undefined) {
+      const pick = marks.prefsOf(workspace);
+      let last: J;
+      kept = computed(() => {
+        const next = marks.workspaceMark(this, this.local, workspace, this.prefsPart(pick));
+        return last !== undefined && equal(last, next) ? last : (last = next);
+      });
+      this.#marks.set(workspace, kept);
+    }
+    return kept.get();
+  }
+
   /// The rows of these stations that ask something of their person or are unread (views/marks.ts).
   marked(stations: string[]): [string, J][] {
     return this.#core.data.marked(stations);
@@ -1426,7 +1453,7 @@ export class Views implements Owner {
       case "archive":
         return archive(this, this.local, view.scope as string, this.#core.host, typeof view.q === "string" ? view.q : "", typeof view.limit === "number" ? view.limit : 0);
       case "workspaceMarks":
-        return marks.marks(this, this.local, typeof view.workspace === "string" ? view.workspace : null);
+        return marks.marks(this, typeof view.workspace === "string" ? view.workspace : null);
       case "chatJobs": {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) });
         if (chat === undefined || !("ok" in chat)) return chat;
@@ -1516,7 +1543,7 @@ export class Views implements Owner {
         switch (view.place) {
           case "chats": {
             const rows = arr(get(chats.ok, "days")).flatMap((d) => arr(get(d, "items")));
-            const mark = get(get(get(marks.marks(this, this.local, scope), "ok"), "workspaces"), scope);
+            const mark = marks.workspaceIds(this.ok({ topic: "workspaces" })).includes(scope) ? this.markOf(scope) : undefined;
             // when each archived chat was, as the archive has it (views/archive.ts)
             const archived = online.flatMap((s) =>
               arr(this.ok({ topic: "archivedRows", station: s.address }))

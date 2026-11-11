@@ -22,6 +22,11 @@ export const work = {
   /// Records a chat list made into rows, and rows it put into its days (views.ts #chats): those that changed, where
   /// the list is made from the last one.
   listed: 0,
+  /// Rows a workspace's mark made what they say of themselves of (views/marks.ts `rowMade`): those that changed, the
+  /// rest kept with the row.
+  marked: 0,
+  /// Workspaces' marks made (views/marks.ts `workspaceMark`): each made again only as what it is made of changed.
+  workspaceMarks: 0,
 };
 
 export type Work = typeof work;
