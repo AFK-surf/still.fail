@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7456d7f11](https://github.com/AFK-surf/still.fail/commit/7456d7f117a21e630e5cf7f741540ed40e945544) sf: a style said Full across fills what holds it a | 1.81 | 2.42 | 10.08 | 28.81 | 35.57 | 25.66 | 47.49 | 94.55 | 177.51 |
 | [5111040ef](https://github.com/AFK-surf/still.fail/commit/5111040ef78d86e8936eccbca41f2bc42725601c) app: a reader left where it last held still does n | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.66 | 47.47 | 94.32 | 178.63 |
 | [d61f237d6](https://github.com/AFK-surf/still.fail/commit/d61f237d694dc35aa680d4f3d804819771b81d48) sf: a style on a node draws its border, as its edg | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.42 | 134.74 |
 | [b805f72e7](https://github.com/AFK-surf/still.fail/commit/b805f72e7df416d481c5dbf7ea41265d4bc0247e) sf: a sheet's foot of nodes keeps its buttons whol | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.93 | 183.54 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6fe59f6a9](https://github.com/AFK-surf/still.fail/commit/6fe59f6a9297bc81d55d767780f43bc8b3fd4139) fix: forward Windows shortcuts from the remote scr | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 93.96 | 158.29 |
 | [b2fe04982](https://github.com/AFK-surf/still.fail/commit/b2fe04982d5071a1b4cc93e25598eeb1fbc0c9b5) core: a vault's items left under an earlier key ar | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 94.11 | 178.87 |
 | [994ca523b](https://github.com/AFK-surf/still.fail/commit/994ca523b8e2f79bb1f198d7167eaec088a2102a) mbui: what reads the time as a node's property is  | 1.78 | 2.38 | 9.91 | 28.52 | 34.71 | 25.47 | 46.89 | 94.03 | 162.93 |
-| [081eff020](https://github.com/AFK-surf/still.fail/commit/081eff020f54f2731df7566cf9e8323ad4bb05c6) core, app: a list's stations are rows; one station | 1.78 | 2.37 | 9.9 | 28.52 | 34.69 | 25.45 | 46.78 | 93.9 | 181.79 |
