@@ -2982,7 +2982,7 @@ export const SHAPES: Record<string, Shape> = {
   ChatsView: struct([
     ["stations", vec("StationState")],
     ["days", vec("ChatDay")],
-    ["more", opt("i64"), { client: opt("I54"), doc: "Asked with `limit`: how many rows the list has past the first `limit` (its days hold those alone);\nabsent when it has none." }],
+    ["more", opt("i64"), { client: opt("I54"), doc: "How many rows the list has past its window (`chats.window`: its days hold those alone); absent when\nit has none." }],
     ["trouble", opt("StationTrouble"), { doc: "The stations not working as they should, in a line (\"Maple 离线\", \"正在重连 Willow\", \"2 台 station 异常\"), for a\ncorner of the list; absent while all are (a station first connecting is not one)." }],
     ["members", opt("i64"), { client: opt("I54"), doc: "How many people the scope has, for how rows are pictured; absent until known." }],
     ["leading", opt("Lead"), { doc: "Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone)." }],

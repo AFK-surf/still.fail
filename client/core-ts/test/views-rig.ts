@@ -5,7 +5,7 @@ import { CoreError } from "../src/error.ts";
 import type { Owner } from "../src/core/routing.ts";
 import { Data, holds } from "../src/data.ts";
 import { apply as applyOps, type Op } from "../src/delta.ts";
-import { topicKey, type Topic } from "../src/protocol.ts";
+import { parseTopic, topicKey, type Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -115,6 +115,8 @@ export function setup(options: RigOptions = {}) {
     router,
     views,
     subscribe: (id: number, topic: Topic) => store.subscribe(1, id, topic),
+    /// Chat list `list` (`chats`' params) told its window, as `chats.window` tells it (views/calls.ts).
+    window: (list: Topic, rows: number) => views.setChatsWindow(parseTopic(list)!, rows),
     async readAll(uis: [Ui, number][]) {
       await host.time.pass(100);
       for (const [, message] of host.takeEmitted()) {

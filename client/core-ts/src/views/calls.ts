@@ -289,6 +289,10 @@ export class ViewCalls {
       const c = call as Of<"chatCc">;
       return Effect.andThen(parse(c.station), Effect.sync(() => (views.setCc(c.station, c.thread, c.to, c.on), null)));
     };
+    handlers.chatsWindow = (_inner, call) => {
+      const c = call as Of<"chatsWindow">;
+      return Effect.sync(() => (views.setChatsWindow(c.list, c.rows), null));
+    };
     handlers.chatCreate = (_inner, call) => {
       const c = call as Of<"chatCreate">;
       return Effect.andThen(

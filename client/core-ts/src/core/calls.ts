@@ -14,7 +14,7 @@ import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import * as keymap from "../keymap.ts";
 import * as ops from "../ops.ts";
-import type { Topic } from "../protocol.ts";
+import { parseTopic, type Topic } from "../protocol.ts";
 import { LOOK_COLOURS, type MermaidLook } from "../mermaid.ts";
 import { draftAt } from "../refs.ts";
 import { OUTLINE_ROWS } from "../things.ts";
@@ -67,6 +67,8 @@ export type Call =
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
   | { kind: "chatCc"; station: string; thread: number; to: number; on: boolean }
+  /// How many of a chat list's rows go out (views.ts `chatsWindow`): the list as its topic `chats` names it, its rows.
+  | { kind: "chatsWindow"; list: Topic; rows: number }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
   /// A chat's outline: the rest of the chat read onto the device; what it lists for words looked for.
@@ -588,6 +590,18 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
         ["on", "bool", "req"],
       ]);
       return { kind: "chatCc", station: p.station as string, thread: p.thread as number, to: p.to as number, on: p.on as boolean };
+    }
+    case "chats.window": {
+      const p = read(params, [
+        ["scope", S, "req"],
+        ["mine", "bool", "default"],
+        ["watching", "bool", "default"],
+        ["hidden", "bool", "default"],
+        ["rows", "u32", "req"],
+      ]);
+      const list = parseTopic({ topic: "chats", scope: p.scope, mine: p.mine, watching: p.watching, hidden: p.hidden });
+      if (list === null || p.scope === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "scope" }));
+      return { kind: "chatsWindow", list, rows: p.rows as number };
     }
     case "chat.around": {
       const p = read(params, [
