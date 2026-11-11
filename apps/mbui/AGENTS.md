@@ -266,6 +266,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   (~600 lines of boilerplate); and 29, an unused package, since an import kept for its effect (every main's of
   `mbui/host`) or for one target's files cannot be told from an unused one in a `moon.pkg`. The rest of the off list
   is what is not mended yet: it only shrinks, each kind going to an error in the change that mends the last of it.
+- What is kept unused for a reason says so where it is declared: `#warnings("-unused_value")` (a function, a derive),
+  `-unused_field`, `-unused_constructor` or `-struct_never_constructed` on that declaration alone, the reason on the
+  line above (its tests alone use it; not used by the app yet; a state matched only by `_`). On a struct it hushes every
+  field's, so the reason names the field. Anything else unused is deleted.
 - The modules with a `moon.mod` of their own (`mbui/tools`, `tools`, `mbui/bench/signals`) carry the same kind of line.
 - CI's MoonBit is the latest release, taken each hour (`.github/workflows/mbui-moonbit.yml`), so a release that
   deprecates something, or warns of something new, fails every pull request with no commit of ours, till its places are
