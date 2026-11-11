@@ -1,11 +1,11 @@
 // The station's commands other than `run` (the Rust station's main.rs `main`): enroll, status, id. Their output is what
 // people and `bin/stillfail` read, so its words are the catalog's, as the Rust station says them.
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadKey } from "./cloud/key.ts";
-import { Cloud, joinedPendingPath, pendingLockPath, readLock, readState, writeState, type CloudState } from "./cloud/state.ts";
-import { writePrivate } from "./ops/files.ts";
-import { shortCode } from "./cloud/lock.ts";
+import { Cloud, joinedLockPath, joinedPendingPath, pendingLockPath, readLock, readState, writeState, type CloudState } from "./cloud/state.ts";
+import { nowSecs, writePrivate } from "./ops/files.ts";
+import { entryHash, shortCode } from "./cloud/lock.ts";
 import { rmSync } from "node:fs";
 import { type Provider, specOf } from "./cloud/provider.ts";
 import { stationLang, tr } from "./ops/i18n.ts";
@@ -68,8 +68,10 @@ export function isRig(data: string): boolean {
 /// Joins one more workspace with its one-time token, staying in those the station is in:
 /// at the control plane it is enrolled with, which then names it in its `state` frames. Kept in cloud.json's `joined`
 /// at once, so `status` says it before the running station hears. A locked station joins none: its lock is one
-/// workspace's. What it joined.
-export async function joinWorkspace(data: string, token: string, lock?: string): Promise<{ workspace: string; workspace_name: string; name: string }> {
+/// workspace's. What it joined. `atMachine`: asked on this machine (the command line), whose person may set aside a lock
+/// kept here for that workspace by naming another (nameJoinedLock); asked over the mesh, where who asks is the control
+/// plane's word unless the home is locked, a kept lock not holding `lock` stays and the join throws KeptLock once done.
+export async function joinWorkspace(data: string, token: string, lock?: string, { atMachine = false } = {}): Promise<{ workspace: string; workspace_name: string; name: string }> {
   const state = readState(data);
   if (state === null || !state.workspace || state.removed_at !== undefined) throw new Error("this station is in no workspace: enroll it first");
   if (state.rig !== undefined) throw new Error(tr(stationLang(), "station.cli.rig.isRig", { workspace: state.workspace_name || state.workspace }));
@@ -82,19 +84,48 @@ export async function joinWorkspace(data: string, token: string, lock?: string):
   const text = (k: string) => (typeof body[k] === "string" ? body[k] : "");
   const joined = { workspace: text("workspace"), workspace_name: text("workspace_name"), name: text("name") };
   if (joined.workspace === "") throw new Error(`${specOf(provider).name} did not say which workspace was joined`);
-  // Its lock to pin once the control plane brings it: until then the station takes nobody of it.
-  if (lock !== undefined && joined.workspace !== state.workspace) {
-    mkdirSync(dirname(joinedPendingPath(data, joined.workspace)), { recursive: true });
-    writePrivate(joinedPendingPath(data, joined.workspace), JSON.stringify({ hash: lock }));
-  }
+  const named = lock !== undefined && joined.workspace !== state.workspace ? nameJoinedLock(data, joined.workspace, lock, atMachine) : "pending";
   const now = readState(data) ?? state;
   // The plane's `state` frame may have named it already (it tells the station before it answers): that is kept, its
   // roster and whether it is locked with it, not put back to none until the next frame.
   if (joined.workspace !== now.workspace && !(now.joined ?? []).some((j) => j.workspace === joined.workspace)) {
-    now.joined = [...(now.joined ?? []).filter((j) => j.workspace !== joined.workspace), { ...joined, peers: [], revocations: [] }];
+    now.joined = [...(now.joined ?? []), { ...joined, peers: [], revocations: [] }];
     writeState(data, now);
   }
+  // Joined all the same (the token is spent): the one asking is told the station goes by the lock it keeps there.
+  if (named === "kept another") throw new KeptLock(joined.workspace);
   return joined;
+}
+
+/// A join asked over the mesh named a lock other than the one this station keeps for that workspace: it joined, and
+/// goes by the lock it keeps until that is reset on this machine.
+export class KeptLock extends Error {
+  readonly workspace: string;
+  constructor(workspace: string) {
+    super(`this station joined the workspace but keeps another security mode record for it, which it goes by there; to take the one you named, run \`stillfail lock reset --workspace ${workspace}\` on that computer first`);
+    this.workspace = workspace;
+  }
+}
+
+/// Joining `ws` named the lock to pin there (`hash`, the joining person's word, as `enroll --lock`): pinned once the
+/// control plane brings a lock holding that entry, the station taking nobody of `ws` till then (`pending`). A lock kept
+/// here from before (the plane's word that the station left `ws` lets none go) stays when its chain holds `hash`
+/// (`kept`). One that does not: set aside beside its file, as `lock reset` does the home one's, when asked on this
+/// machine (`set aside`); else left as it is with nothing written (`kept another`): over the mesh, who asks is the
+/// control plane's word where the home is not locked, and it would swap the lock for a chain of its own.
+export function nameJoinedLock(data: string, ws: string, hash: string, atMachine = false): "pending" | "kept" | "set aside" | "kept another" {
+  const kept = readLock(data, ws);
+  if (kept?.entries.some((e) => entryHash(e) === hash)) {
+    rmSync(joinedPendingPath(data, ws), { force: true });
+    return "kept";
+  }
+  if (kept !== null && !atMachine) return "kept another";
+  // What to pin first: at no moment is there neither, which would leave `ws` to the plane's word.
+  mkdirSync(dirname(joinedPendingPath(data, ws)), { recursive: true });
+  writePrivate(joinedPendingPath(data, ws), JSON.stringify({ hash }));
+  if (kept === null) return "pending";
+  renameSync(joinedLockPath(data, ws), `${joinedLockPath(data, ws)}.reset-${nowSecs()}`);
+  return "set aside";
 }
 
 /// A one-time token redeemed at `path` (enroll or join): proves this station holds its key; the control plane's answer.
@@ -134,14 +165,29 @@ async function redeem(data: string, origin: string, token: string, provider: Pro
 
 /// `lock status`: whether a workspace lock is pinned here and how far it goes; `lock reset`: takes it away (kept beside
 /// it), the control plane trusted again — for when every device that could sign is lost. The running station follows.
-export function lockCommand(data: string, what: "status" | "reset"): string {
+/// `workspace`: of a workspace it joined, its lock (and the one joining named to pin) taken away alike: the lock the
+/// control plane's word alone never lets go (Cloud.leftJoined), reset by the person at the machine.
+export function lockCommand(data: string, what: "status" | "reset", workspace?: string): string {
   const say = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
+  if (what === "reset" && workspace !== undefined && workspace !== readState(data)?.workspace) {
+    return say(resetJoinedLock(data, workspace) ? "station.cli.lock.resetWorkspace" : "station.cli.lock.noneWorkspace", { workspace });
+  }
   if (what === "reset") return say(Cloud.resetLock(data) ? "station.cli.lock.reset" : "station.cli.lock.none");
   const lock = readLock(data);
   if (lock === null) return say("station.cli.lock.none");
   if (lock.state === null) return say("station.cli.lock.broken");
   const s = lock.state;
   return say("station.cli.lock.status", { seq: s.seq, hash: s.head.slice(0, 16), members: s.members.size, devices: s.devices.size, stations: s.stations.size });
+}
+
+/// A joined workspace's lock taken away on this machine, kept beside as <file>.reset-<time>, and the lock joining named
+/// to pin there forgotten; the running station reads it again (Cloud.reloadJoined). Whether there was either.
+export function resetJoinedLock(data: string, ws: string): boolean {
+  const lock = joinedLockPath(data, ws);
+  const had = existsSync(lock) || existsSync(joinedPendingPath(data, ws));
+  if (existsSync(lock)) renameSync(lock, `${lock}.reset-${nowSecs()}`);
+  rmSync(joinedPendingPath(data, ws), { force: true });
+  return had;
 }
 
 export function id(data: string) {

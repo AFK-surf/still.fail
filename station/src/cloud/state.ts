@@ -275,6 +275,7 @@ export class Cloud {
   private listeners = new Set<(s: CloudState | null) => void>();
   private writing = false;
   private watcher: FSWatcher | undefined;
+  private locksWatcher: FSWatcher | undefined;
   readonly data: string;
 
   /// `watchFiles`: whether the files are watched for others' changes (tests that start and stop many stations leave it out:
@@ -302,6 +303,16 @@ export class Cloud {
         this.watcher?.close();
         this.watcher = undefined;
       });
+      // The joined workspaces' locks: `lock reset --workspace`, or a join on this machine setting one aside.
+      mkdirSync(join(meshDir(data), "locks"), { recursive: true }); // sync: once, as the station starts
+      this.locksWatcher = watch(join(meshDir(data), "locks"), { persistent: false }, () => {
+        if (!this.writing) this.reloadJoined();
+      });
+      this.locksWatcher.on("error", (error) => {
+        log.warn("cloud", "the joined workspaces' locks no longer watched", { error: error.message });
+        this.locksWatcher?.close();
+        this.locksWatcher = undefined;
+      });
     } catch {
       // No mesh directory yet: `enroll` makes it, and the station is started anew after.
     }
@@ -309,6 +320,7 @@ export class Cloud {
 
   close() {
     this.watcher?.close();
+    this.locksWatcher?.close();
     this.listeners.clear();
   }
 
@@ -335,6 +347,20 @@ export class Cloud {
     this.lock = next;
     log.info("lock", next === null ? "the workspace lock was taken away on this machine; the control plane is trusted again" : "the workspace lock was read anew");
     this.refilter();
+  }
+
+  /// The joined workspaces' locks read again from their files (another process changed one: `lock reset --workspace`, a
+  /// join on this machine); told when one did.
+  reloadJoined() {
+    const locks = (this.joinedLocks ??= new Map());
+    const changed = [...locks].filter(([ws, was]) => {
+      const now = readLock(this.data, ws);
+      return JSON.stringify(now?.entries ?? null) !== JSON.stringify(was?.entries ?? null) || (now?.state === null) !== (was?.state === null);
+    });
+    if (changed.length === 0) return;
+    for (const [ws] of changed) locks.delete(ws);
+    log.info("lock", "a joined workspace's lock was changed on this machine", { workspaces: changed.map(([ws]) => ws) });
+    this.tell();
   }
 
   /// Whether `ws` names the home workspace (none named does).
@@ -375,15 +401,16 @@ export class Cloud {
     }
   }
 
-  /// A joined workspace the station is no longer in: its lock and what it was to pin forgotten.
-  forgetJoined(ws: string) {
-    rmSync(joinedLockPath(this.data, ws), { force: true });
-    rmSync(joinedPendingPath(this.data, ws), { force: true });
-    this.joinedLocks.delete(ws);
+  /// A joined workspace the control plane no longer names: not served (memberships), but its lock and what joining
+  /// named to pin are kept, and go on deciding once it is named again. Only the plane said so, which may hold the
+  /// workspace back for a frame and name it again unlocked: the lock is let go only by its own `disable`, on this machine
+  /// (`lock reset --workspace`, a join there naming another: cli.ts), or by `succeed`.
+  leftJoined(ws: string) {
     this.planeLockSeqs.delete(ws);
   }
 
-  /// A workspace it joined takes over as its home one, the home it was taken out of gone: that
+  /// A workspace it joined takes over as its home one, the home it was taken out of gone (or, its home not locked, any
+  /// the plane makes its home that it keeps a lock for: presence.ts `took`): that
   /// workspace's lock, pinned or named by joining, is the home one's now (lock.json, lock-pending.json), the old home's
   /// forgotten. Refused (false) while the home one is locked and that workspace's lock is not pinned here: the station
   /// stays where its lock keeps it.

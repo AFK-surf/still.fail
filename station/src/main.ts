@@ -5,7 +5,7 @@
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
 //   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--rig HASH] [--join | --stay] [--data DIR]   status [--data DIR]   id [--data DIR]
 //   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
-//   lock status|reset [--data DIR]
+//   lock status|reset [--workspace ID] [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { type AddressInfo, setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
@@ -84,7 +84,7 @@ const args = process.argv.slice(2);
 const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
 /// Flags that take a value: what follows them is no command's argument.
-const VALUED = ["--data", "--provider", "--lock", "--rig"];
+const VALUED = ["--data", "--provider", "--lock", "--rig", "--workspace"];
 /// How often the main thread's longest hold is looked at, and from how long a hold is said.
 const HELD_EVERY_MS = 10_000;
 const HELD_MS = 1_000;
@@ -96,7 +96,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--rig HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--rig HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status | lock reset [--workspace ID] | heap");
   process.exit(2);
 }
 
@@ -374,7 +374,8 @@ switch (command) {
         console.error(`this station is enrolled at ${now.origin}; it joins workspaces there only`);
         process.exit(1);
       }
-      const joined = await joinWorkspace(data, token, lock).catch((error) => {
+      // On this machine: its person may set aside a lock kept here for that workspace by naming another.
+      const joined = await joinWorkspace(data, token, lock, { atMachine: true }).catch((error) => {
         if (stay) console.error(`this station is in workspace ${now?.workspace_name || now?.workspace} (${now?.origin}): it was to join this one beside it, which did not go through. To move it here instead, remove it from that workspace first.`);
         throw error;
       });
@@ -389,8 +390,9 @@ switch (command) {
   // The workspace lock on this machine: what is pinned, or taking it away.
   case "lock": {
     const [, what] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
-    if (what !== "status" && what !== "reset") usage();
-    console.log(lockCommand(data, what));
+    const workspace = flag(args, "--workspace");
+    if ((what !== "status" && what !== "reset") || (workspace !== undefined && what !== "reset")) usage();
+    console.log(lockCommand(data, what, workspace));
     break;
   }
   case "status":
