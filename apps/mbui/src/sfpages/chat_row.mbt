@@ -587,7 +587,7 @@ let row_left : Ref[(String, Bool)] = Ref(("", false))
 let lift_ms : Double = 480.0
 
 ///|
-/// A finger's row's height.
+/// A finger's row's height at the default size of words (higher at the system's set larger: sf's list_row_node).
 pub let touch_row_h : Double = @sf.touch_list_row_h
 
 ///|
