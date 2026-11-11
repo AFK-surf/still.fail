@@ -135,3 +135,21 @@ test "wide, by touch: the profiles' place opens on a page placed as it is laid o
     assert_true(wide.length() == 1 && wide[0] > 200.0, msg="\{words}: \{wide} wide")
   }
 }
+
+///|
+test "wide: a machine's login not made a profile yet shows its allowance in the profiles' sidebar" {
+  // (the fixture's place-profiles-offer, as sffix opens it; the Tester opens the place itself)
+  let t = wide_tester([], mode="settings")
+  @settings.fixture_page("settings-profiles-offer") |> ignore
+  app.nav.replace(Place("profiles"))
+  t.draw()
+  // Willow's own Codex login, last in the sidebar: its week's capsule under its row as a profile's row has it
+  let side = fn() { t.text_runs().filter(fn(r) { r.x0 < 300.0 }) }
+  let use = side().filter(fn(r) { r.text == "使用此账号" })
+  assert_eq(use.length(), 1, msg="the machine's login offered: \{side().map(fn(r) { r.text })}")
+  let under = side().filter(fn(r) { r.top >= use[0].bottom }).map(fn(r) { r.text })
+  for words in ["5H", "62%", "W", "19%"] {
+    assert_true(under.contains(words), msg="\{words} under the offered login: \{under}")
+  }
+  assert_eq(t.squeeze_faults(), [])
+}

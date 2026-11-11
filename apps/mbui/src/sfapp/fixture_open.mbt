@@ -610,6 +610,10 @@ pub fn open_mode(mode : String) -> Unit {
   } else if mode == "place-stations-devices" {
     // the stations' place with the workspace's devices under its stations (the settings' devices_fixture.mbt)
     app.nav.replace(Place("stations"))
+  } else if mode == "place-profiles-offer" {
+    // the profiles' place with Willow's own Codex login offered with its allowance (settings-profiles-offer's)
+    @settings.fixture_page("settings-profiles-offer") |> ignore
+    app.nav.replace(Place("profiles"))
   } else if mode.has_prefix("place-") {
     // a place of the rail's in the wide frame: place-stations, place-profiles, place-connects,
     // place-usage
