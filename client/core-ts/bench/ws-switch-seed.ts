@@ -1,6 +1,7 @@
 // Two workspaces of real size (test/real-size.ts) of one account, in the former records store, which the core imports
 // as it first starts: what apps/mbui/core/wsswitch.m switches between (apps/mbui/scripts/core.sh ws-switch).
-// `node bench/ws-switch-seed.ts <dir> [scale]`; KEPT=<files>x<parts>: files of chats kept on the device as well.
+// `node bench/ws-switch-seed.ts <dir> [scale]`; KEPT=<files>x<parts>: files of chats kept on the device as well;
+// WS2_LANDS=new: ws2 left with no chat open, so 大屏's frame lands on a new chat there (what reads `stations` first).
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -30,8 +31,10 @@ db.exec("BEGIN");
 // (the device's prefs as a device that was used has them: without, the first switch's write of `workspace` is the
 // first prefs there are, and everything reading a part of them is made again for it, which no real switch does. ws2 was
 // left on its chat of real size (`openChat`, workspaceMarks' `chat`): the wide frame lands on it there, on a new chat
-// in ws)
-rec("prefs", "device", { workspace: "ws", lang: "zh", openChat: { ws2: { station: "ws2/maple", key: CHAT.keys[0] } } });
+// in ws; with WS2_LANDS=new on a new chat there too)
+const ws2Lands = process.env.WS2_LANDS ?? "chat";
+if (ws2Lands !== "chat" && ws2Lands !== "new") throw new Error(`WS2_LANDS=${ws2Lands}: chat or new`);
+rec("prefs", "device", { workspace: "ws", lang: "zh", ...(ws2Lands === "chat" ? { openChat: { ws2: { station: "ws2/maple", key: CHAT.keys[0] } } } : {}) });
 rec("me", SUB, { workspaces: [{ id: "ws", name: "Acme" }, { id: "ws2", name: "Second" }], invitations: [], relay_url: null, user: { email: "me@x.com" } });
 const counts: Record<string, number> = {};
 for (const ws of ["ws", "ws2"]) {
