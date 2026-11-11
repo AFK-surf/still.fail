@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b74057fd8](https://github.com/AFK-surf/still.fail/commit/b74057fd8d0d593b09d966dddb0071e3e5144d50) mbui: each bar set beside the most one Tester of i | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94 | 138.34 |
 | [a02efcc16](https://github.com/AFK-surf/still.fail/commit/a02efcc16431cd4a623b9be3b8e31a3082a0dbdf) test: new_pick_whole says a string's view owned an | 1.85 | 2.47 | 10.37 | 29.12 | 36.62 | 25.92 | 48.37 | 93.83 | 174.41 |
 | [f1beb4691](https://github.com/AFK-surf/still.fail/commit/f1beb4691cf38058bf9a1b541321fad71c757774) app, mbui: Show of a composed value, derive(Show), | 1.85 | 2.47 | 10.37 | 29.11 | 36.61 | 25.9 | 48.33 | 93.78 | 164.71 |
 | [e73742ee2](https://github.com/AFK-surf/still.fail/commit/e73742ee25f11038e9fb8bbba384fd288f9e3a53) app: 对话目录's rows as a pick's: the reader's in the  | 1.85 | 2.47 | 10.36 | 29.1 | 36.58 | 25.9 | 48.33 | 93.78 | 135.43 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [af3361193](https://github.com/AFK-surf/still.fail/commit/af33611938021707c27c6c0d74a4cd5cf453bb31) app tests: late_core's switch tests begin their ru | 1.82 | 2.43 | 10.16 | 28.9 | 35.85 | 25.73 | 47.72 | 94.42 | 167.88 |
 | [cfc0e8fde](https://github.com/AFK-surf/still.fail/commit/cfc0e8fde50ebe7082861a75ebd79d2b6f72caf9) ci: the mbui app's tests at the rates once before  | 1.82 | 2.43 | 10.16 | 28.9 | 35.85 | 25.73 | 47.72 | 94.42 | 177.1 |
 | [0573e4a0b](https://github.com/AFK-surf/still.fail/commit/0573e4a0ba3e51418ca3e4db159bda349d595b39) core test: what each topic sends is the same put o | 1.82 | 2.43 | 10.16 | 28.89 | 35.84 | 25.73 | 47.7 | 94.37 | 173.43 |
-| [e537bd092](https://github.com/AFK-surf/still.fail/commit/e537bd092bceaada08e4c74b23680cee7fae4906) app: a workspace switch keeps the screen as it was | 1.82 | 2.43 | 10.16 | 28.89 | 35.84 | 25.73 | 47.7 | 94.36 | 182.55 |
