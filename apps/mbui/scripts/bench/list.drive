@@ -1,0 +1,12 @@
+# 小屏, a finger: a page's list alone (src/sfbench/list_scene.mbt: 30 or 1,500 keys, following its foot, a spinner over
+# it). At rest, a key appended at its foot (the scene's 1000 ms), two drags up and a fling, coasting; then the scene asks
+# it to its top (6000 ms) and back to its foot (6500 ms), each at once.
+timeout 20000
+until message
+log measure
+wait 1300
+drag 195 300 0 430 1000
+drag 195 300 0 430 1000
+drag 195 300 0 600 90
+wait 3700
+exit

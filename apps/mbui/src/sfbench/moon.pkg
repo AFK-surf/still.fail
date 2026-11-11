@@ -6,6 +6,8 @@ import {
   "stillfail/sfapp",
   "stillfail/sffixture",
   "mbui/wasmrt",
+  "mbui/view",
+  "mbui/signals",
 }
 
 options(

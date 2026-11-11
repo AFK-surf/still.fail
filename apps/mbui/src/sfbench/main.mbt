@@ -8,6 +8,11 @@ fn main {
   // no core here: the real core's answers to its pure calls, kept (src/sfkept), as sffix's
   @sf.kept_call.val = Some(@sfkept.answer)
   let mode = @film.arg("MBUI_FIXTURE")
+  // (a page's list alone, its keys 30 or 1,500: list_scene.mbt)
+  if mode.has_prefix("list:") {
+    @film.run_bench(fn(_) {  }, tree=fn(root) { list_scene(root, list_scene_keys(mode)) })
+    return
+  }
   let dark = @film.arg("MBUI_DARK") == "1"
   // (the app made as sffix makes it, at the Tester's first frame: the code face it carries given then, to the
   // Tester's text, which is this Mac's)
