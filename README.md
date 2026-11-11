@@ -22,3 +22,19 @@
 | new_chat | `activity-fades` 的头 | 待补（同上） | 待定 |
 
 #5446 之后 `rerecord.sh` 不再删：不过的那一遍留在 `out/rerecord.*/NAME.failed.trace`。
+
+## main 上 60/120 帧逐帧判定下不过的（在 `motion_counted` 里被数着、CI 不红）
+
+2026-11-11，main `f611394ac0`，Studio 上 wasm-gc 跑单个文件（`MBUI_TEST_FPS=60|120 MBUI_TEST_MOTION=judge`）。没有录像：这些是仓库里已有的测试和回放，按下面的帧率跑就复现。迁移协调：不要让它们只是计数里的一个数。
+
+| 测试 | 帧率 | 原话 | 归谁 |
+|---|---|---|---|
+| `src/sfapp/composer_wbtest.mbt`（Tester 建在 `:368` 那条，#5450 之后是 `:427`） | 60 | `rows not steady`：row `m:ts8` went -0.23902829762847394 a frame between -0.3113047038570983 and 13.1137079477179 at 4750；seen −144.00、−144.31、−144.55、然后 4760 处 −136.68；causes `o:local:2=comes@4384.8/395.2 foot=changed@4384.8/395.2`，way 4384.8–4780 | 待定（看着是路的最后一帧一步到位） |
+| 同上 | 120 | 同一行：-0.11159721517879413 a frame between -0.1274310824496798 and 6.55685397385895 at 4750 | 同上 |
+| `mbui/src/motion/motion_test.mbt:555` | 60、120 | `sizes_steady`：−40 at 1083.33 | 待定（sizes_steady 的已知条数 1） |
+| 回放 `send_paced` | 60 | `sizes_steady`：height step at 1104.09（早先一次记的是 "height went 0 a frame"） | 待定 |
+| 回放 `offline_retry` | 60 | `rows not steady`：row `top` went -6.661377287408474 a frame between -2.5274687069706037 and -4.6578095707352825 at 2250；seen 456.65、454.12、447.46（2216.67、2233.33、2250） | 待定（看着是「起因的时刻」或「掉头」） |
+| 回放 `offline_retry` | 120 | `rows not steady`：row `o:local:1` went 59.877135951566174 one way, stood 33.33333333333303 ms, came back 3.4296286847662714 at 3216.6666666666665 | 待定 |
+| 回放 `chinese_enter` | 120 | `sizes_steady`：发消息 的输入框 at 2227.73 | 待定 |
+
+早先（main `1609696a9c`）同样方式量到、这次没有重跑的：`activity_wbtest:152`@60（stop dead）、`emit_wbtest:59`@60（一行一帧 −246）、回放 `new_chat`@60（间距 37.9 → 43.6 → 40.7）、回放 `send_card_paced`@120（foot went 6.9, stood 33 ms, back 4.6）、`cards_wbtest`@60（row `m:ts6` went 29.486785119823537 one way, stood 1366 ms, came back 4.967318880290122 at 3116）。
