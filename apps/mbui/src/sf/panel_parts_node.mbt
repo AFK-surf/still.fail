@@ -333,7 +333,9 @@ fn panel_row_by(
         None => if sheet_listed { at.words - sheet_in } else if across > 0.0 { across } else { text_in + reach() }
       }
     }
-    let corner = if across > 0.0 || sheet_listed { card_corner } else { small_panel_inner(r_menu) }
+    // (a sheet's list's: a sheet's row's corner, as a pick's rows are (pick_row_node), its words a row's padding in; a
+    // card's corner there made a capsule of it, its words in the curve of its ends)
+    let corner = if sheet_listed { row_corner } else if across > 0.0 { card_corner } else { small_panel_inner(r_menu) }
     if foot is Some(_) {
       style_node(r, fn() { menu_row_capsule })
     } else {
@@ -361,7 +363,9 @@ fn panel_row_by(
     .padding(By(fn() { (face_in(), menu_row_over, words_at(), menu_row_over) }))
     .gap(Is(if plain { menu_row_gap } else { panel_row_gap }))
     .lines_up(Is(Some(Middle)))
-    .ground(By(fn() { if lit_node(r) || lit() { t().p.hover } else { 0L } }))
+    // (the hand's ground, and the one the keys are at only where the hand rests (a pointer and keys): a finger moves no
+    // keys' row, and on it that ground stood under the reader's row at rest, a second beside the one pressed)
+    .ground(By(fn() { if lit_node(r) || (lit() && pointer_rests()) { t().p.hover } else { 0L } }))
     .says(By(fn() {
       let n = note()
       Some(@view.said(Button, label=if n == "" { label() } else { label() + " " + n }))
@@ -434,7 +438,7 @@ let panel_row_line : Double = 20.0
 /// quiet (a time); `lead` in the icon's column before them (a face), the column kept where it draws none, so the words
 /// of rows with and without one start together; `who`, a quiet line over the words (those words), its face in that column
 /// before both lines; each given how large a face is there (a row's icon's). `chosen`: the one the reader is at, in the accent's ink
-/// as a pick's chosen choice is (pick_row_node's). `lit`: the one the keys are at (a list's ↑ ↓ from its field), on
+/// as a pick's chosen choice is (pick_row_node's). `lit`: the one the keys are at (a list's ↑ ↓ from its field), where the hand rests on
 /// the ground the hand's is. Read out a button named `label`; `press` as it is pressed (a press, Enter or Space with the focus on it).
 #callsite(autofill(loc))
 pub fn panel_said_row_node(

@@ -129,6 +129,7 @@ fn outline_tester(
   w? : Double = 1280.0,
   h? : Double = 800.0,
   platform? : Int = 0,
+  pointing? : @ui.Pointing,
   outline? : @signals.Signal[Json?] = @signals.signal(None),
   newer? : Bool = false,
   top? : Double = -1.0,
@@ -180,7 +181,7 @@ fn outline_tester(
   if top >= 0.0 {
     @sfbase.kept_places["ws1/st1\u{1}s-c1"] = { top, offset: 0.0, bottom: -1.0 }
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, pointing?)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   t
@@ -689,7 +690,8 @@ test "对话目录: a found row gone to marks its words in its message, nothing 
 ///|
 test "对话目录: in the sheet its day headings on the title's line, the rows' grounds in from its sides as a sheet's rows are, the faces round in their corners" {
   let calls : Array[Made] = []
-  let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2)
+  // (a pointer's hand, where the row the keys are at is lit)
+  let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2, pointing=Mouse)
   let glyph = fn(words : String) {
     outline_drawn(t, "glyphs").iter().find_first(fn(g) { g.5 == words }).map(fn(g) { g.0 }).unwrap_or(-1.0)
   }
@@ -704,6 +706,22 @@ test "对话目录: in the sheet its day headings on the title's line, the rows'
   let (gx, _, gw, _, _, _) = grounds[0]
   assert_eq(gx, @sf.panel_card_in)
   assert_eq(gx + gw, 390.0 - @sf.panel_card_in)
+  // (round as a pick's rows are, row_corner, not a card's corner that made a capsule of it)
+  let r = @sf.row_corner.to_int()
+  let lines = t.frame_export().filter(fn(l) { l.has_prefix("rect ") && l.contains(" " + hover + " ") })
+  assert_true(lines.iter().any(fn(l) { l.contains(" r=\{r},\{r},\{r},\{r}") }), msg="\{lines}")
+  assert_eq(outline_faults(t), [])
+}
+
+///|
+test "对话目录: in the sheet to a finger no row has a ground at rest, the reader's in the accent's ink alone, as a pick's chosen choice" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2)
+  let hover = outline_hex(@sf.theme().p.hover)
+  let grounds = outline_drawn(t, "rect").filter(fn(r) { r.4 == hover && r.2 > 200.0 })
+  assert_eq(grounds.length(), 0, msg="\{grounds}")
+  let accent = outline_hex(@sf.theme().p.accent_text)
+  assert_true(outline_drawn(t, "glyphs").iter().any(fn(g) { g.4 == accent }), msg="\{outline_drawn(t, "glyphs")}")
   assert_eq(outline_faults(t), [])
 }
 
