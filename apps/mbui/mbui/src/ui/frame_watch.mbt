@@ -407,8 +407,8 @@ fn init {
 ///|
 /// An effect made as the frame's watch reads (a build, an after_build, a Ctx::tell: frame_body under frame_watch_of's
 /// read) is that watch's, let go as it reads the next frame, whatever owner is set: a fault (@signals.effect_in_watch).
-/// (What the window's runtime runs as the frame begins, its timers and fibers, runs outside that reading:
-/// fx_frame_start.)
+/// (What is handed on as the frame begins, the messages left for it and the window's runtime's timers and fibers, runs
+/// outside that reading: take_messages, fx_frame_start.)
 fn init {
   @signals.effect_in_watch.val = Some(fn(loc) {
     @view.fault(

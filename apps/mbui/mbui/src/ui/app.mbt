@@ -367,7 +367,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   rows_frame_start()
   let t0 = work_now()
   // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
-  // order it came, before anything reads it (messages.mbt)
+  // order it came, before anything reads it, outside the frame's reading (messages.mbt)
   take_messages()
   // (the probe's: how long the messages took, slow_probe)
   probe_msgs_ms.val = work_now() - t0

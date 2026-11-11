@@ -213,15 +213,26 @@ let said_left : Ref[Int] = Ref(0)
 ///|
 /// As a frame is built: all that was posted since the last (messages_arrive), handed to their handlers in the order
 /// posted (app.mbt frame_body). What is posted meanwhile (a handler's own post, the other thread's) is the next frame's.
+/// They are handed on outside the frame's reading, as a handler of the hand's runs and as the runtime's timers do
+/// (fx_frame_start; frame_body runs under the frame's watch): what a handler reads is not the frame's to follow, so its
+/// changing later builds no frame whole (it did, once, till the next frame built whole read the watch anew), and what
+/// it changes is drawn by this frame all the same, read by the view after it. An effect one makes is owned by nothing
+/// (no owner set, whatever was set around the frame), let go only by the function `@signals.effect` gave back: never
+/// the frame's watch's, which let it go as it read the next frame (#5594's fault: files let go on 文件's folder,
+/// taken here, sent up by an effect that waits for their reading).
 fn take_messages() -> Unit {
   if messages_in.length() == 0 {
     return
   }
   let taken = messages_in.copy()
   messages_in.clear()
+  let was = @signals.set_active_sub(None)
+  let owner = @signals.set_owner(None)
   for m in taken {
     hand_on(m.0, m.1, m.2)
   }
+  @signals.set_active_sub(was) |> ignore
+  @signals.set_owner(owner) |> ignore
 }
 
 ///|

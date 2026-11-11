@@ -1,8 +1,8 @@
 // An effect made as a frame is read (frame_body under the frame's watch: a build, an after_build, a Ctx::tell) is the
 // watch's whatever owner is set, let go as it reads the next frame: told as it is made (@signals.effect_in_watch, a
 // fault: frame_watch.mbt). kitdemo's pick and op checks made one so and never heard the host's word (2026-11-12). One
-// made in a timer or a fiber of the window's runtime is not: they run outside the frame's reading (fx_frame_start,
-// fx_untracked_wbtest.mbt).
+// made in a timer or a fiber of the window's runtime, or in the handler of a message left for the frame, is not: they
+// run outside the frame's reading (fx_frame_start, fx_untracked_wbtest.mbt; take_messages, take_untracked_wbtest.mbt).
 
 ///|
 /// A Tester whose first build makes an effect in an after_build as kitdemo's checks did (`untracked`: made outside the
