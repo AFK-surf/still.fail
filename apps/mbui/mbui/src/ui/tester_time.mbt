@@ -207,6 +207,29 @@ pub fn rest_of(name : String) -> Double {
 }
 
 ///|
+/// The clock brought to `at` (a moment on it, not a length) for an input to come at it, as a host's event comes
+/// between two of its frames: the display's frames drawn up to the last at or before `at` (where its frames are said,
+/// Tester::set_frame_period), then the host's clock put at `at` itself, no frame drawn there. So the same input given
+/// at the same moments comes at those moments at any display rate, only more or fewer frames between; an input's own
+/// frame (Tester::wheel's, drawn on the display's next frame, which moves the clock there) leaves the next input's
+/// moment as it is. A moment already past: nothing.
+pub fn Tester::input_at(self : Tester, at : Double) -> Unit {
+  if self.host_frames {
+    let last = self.origin + ((at - self.origin) / self.period + 1.0e-9).floor() * self.period
+    if last > self.fake.time + 1.0e-9 {
+      self.run_for(last - self.fake.time)
+    }
+  } else if at > self.fake.time {
+    self.run_for(at - self.fake.time)
+  }
+  // (at it to the bit, where a frame of the display's fell on it: its moment on the frames' grid can be a few last bits
+  // off `at`, and an input given from there, its moves each an input_step on, would come that much off at every rate)
+  if at >= self.fake.time - 1.0e-6 {
+    self.fake.time = at
+  }
+}
+
+///|
 /// `ms` on the frames' clock, straight to it: a frame at each moment something is due (a wake the view asked for, the
 /// end of what is said to move), and the last at `ms` itself, what is so at `ms` drawn there; with frames between (MBUI_TEST_FPS: a run at a frame rate, which comes
 /// out the same) a frame at each of the display's frames too. None after it: what that frame leaves owed (an input's
