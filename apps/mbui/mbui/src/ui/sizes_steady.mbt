@@ -10,8 +10,11 @@
 // another. Only while some of it shows. Not across a gap of more than a few frames,
 // the window made another size (or words by the system's setting), a frame with the pointer down, whoever holds the
 // press (the old frame's, Ctx::down, or a node of the window's tree, view_holds: what the hand moves goes as it goes),
-// nor while it does not show. Held on every frame a Tester draws, as rows_steady.mbt's rule; its known faults a file at a time
-// (`sizes_steady_known`), each bar only falling.
+// nor, in a frame the hand did something since the one before (the wheel, a key: rows_steady_hand), what a column of the
+// tree's moves by how far it is scrolled alone other than what it holds (its bar's thumb): a trackpad's wheel or a page
+// key takes the column as far as it says in that frame, its thumb along with it, as what it holds is measured with the
+// scroll taken out; nor while it does not show. Held on every frame a Tester draws, as rows_steady.mbt's rule; its
+// known faults a file at a time (`sizes_steady_known`), each bar only falling.
 
 ///|
 priv struct SizesSteady {
@@ -26,6 +29,8 @@ priv struct SizesSteady {
   /// how much bigger the system's setting made words as the last frame was drawn (font_scale): all laid out anew for it
   /// at once, as for the window made another size
   mut words : Double
+  /// when the hand last did something (rows_steady_hand) as the last frame was judged: what it did since is this frame's
+  mut hand : Double
 }
 
 ///|
@@ -38,6 +43,7 @@ let sizes_steady : SizesSteady = {
   found: Set::new(),
   window: (-1.0, -1.0),
   words: -1.0,
+  hand: -1.0e9,
 }
 
 ///|
@@ -62,6 +68,7 @@ fn sizes_steady_begin(loc : String, held : Bool) -> Unit {
   sizes_steady.found.clear()
   sizes_steady.window = (-1.0, -1.0)
   sizes_steady.words = -1.0
+  sizes_steady.hand = -1.0e9
   sizes_steady.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -261,8 +268,12 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
   let resized = sizes_steady.window != (self.width, self.height) || sizes_steady.words != words
   sizes_steady.window = (self.width, self.height)
   sizes_steady.words = words
+  // (the hand did something since the frame before was judged (rows_steady_hand: the wheel, a key, a press, let go))
+  let hand_now = rows_steady.hand != sizes_steady.hand
+  sizes_steady.hand = rows_steady.hand
   let here : Set[(Int, Int, Int64, Bool)] = Set::new()
   self.with_tree_nodes(steady=true, fn() {
+    let tree = view_tree()
     // (one ident twice in the frame: who either is, unsaid)
     let count : Map[Int, Int] = {}
     for i in 0..<self.count {
@@ -292,6 +303,10 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     let in_row = Array::make(k, false)
     // (and when the rows' way of the list it is in last set out: list_size.mbt's RowCauses, -1 none)
     let set_out = Array::make(k, -1.0)
+    // (and whether it is moved by how far a column of the tree's is scrolled, by its offset alone (Node's scroll_off,
+    // Tree::scroll_off_by), other than as the one node the column holds: its bar's thumb and what that holds, along its
+    // track as the column goes, so in a frame the hand scrolled it as far in one frame as the hand did)
+    let by_scroll = Array::make(k, false)
     // (what holds each before it: a node of the window's tree put among the frame's may come after what it holds)
     let order : Array[Int] = []
     let ordered = Array::make(k, false)
@@ -324,6 +339,15 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       ya[i] = pa * la
       yb[i] = pa * lb + pb
       al[i] = palpha * n.opacity * lalpha
+      by_scroll[i] = (p >= 0 && p < k && by_scroll[p]) ||
+        (match (tree, tree_frame_ids.get(i)) {
+          (Some(tr), Some(id)) => {
+            let by = tr.scroll_off_by(id)
+            // (not the one node the column holds, laid out in it: what is in that is measured with the scroll taken out)
+            by >= 0 && !(tree_frame_ids.get(p) is Some(pid) && pid.at == by)
+          }
+          _ => false
+        })
       if p >= 0 && p < k {
         let pn = self.nodes[p]
         c_top[i] = c_top[p]
@@ -414,7 +438,8 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           }
         }
         let gap = seen.length() > 0 && now - seen[seen.length() - 1].1 > 2.5 * period
-        if gap || resized || !shows || self.down || view_holds() {
+        // (what the hand's scroll moves by its offset alone, in the frame it did: as far as the hand took it)
+        if gap || resized || !shows || self.down || view_holds() || (hand_now && by_scroll[i]) {
           seen.clear()
           continue
         }

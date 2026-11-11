@@ -62,6 +62,71 @@ test "sizes steady in what a node of the tree's scrolls: a box gone at once over
   assert_eq((scroll.at(view_tree().unwrap()), wheeled), (100.0, []))
 }
 
+// Its bar's thumb (View::scroll_bar) goes along its track as far as the column is scrolled (Node's scroll_off): the
+// wheel of a trackpad taking the column 100 down in one frame takes the thumb its share of that in the same frame, the
+// hand's, as it takes the rows (as the sidebar's chats' list on 大屏 is wheeled while its bar still shows from the turn
+// before, chats_window_wbtest.mbt). The thumb stepping with nothing done by the hand, what scrolls come to hold another
+// height at once under it, is still a jolt.
+
+///|
+/// steady_scroll_case's column (the box 100 tall over its rows while `over` says so) with these bars, a mouse over it:
+/// sizes steady said but not held (steady_faults).
+fn steady_bar_case(over : @signals.Signal[Bool]) -> (Tester, @view.Scroll) {
+  let scroll = @view.Scroll::new()
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0, words_over_held=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(v) {
+      v
+      .width(Is(Some(400.0)))
+      .height(Is(Some(200.0)))
+      .scrolls(scroll, bar=tree_scroll_bar(), fn(held) {
+        held.show(at_once=true, fn() { over.get() }, fn(o) { o.box(fn(b) { b.height(Is(Some(100.0))) |> ignore }) |> ignore })
+        for i in 0..<12 {
+          held.box(fn(r) {
+            r.width(Is(Some(160.0))).height(Is(Some(40.0))).ground(Is(0x336699FFL)).words(Is("第\{i}行")) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.move(80.0, 100.0)
+  (t, scroll)
+}
+
+///|
+test "sizes steady in what a node of the tree's scrolls with a bar: the wheel taking it 100 down at once while its bar shows, its thumb along with it, none; the thumb stepping as what it holds comes to another height at once, a jolt" {
+  let thumb = fn(faults : Array[String]) { faults.filter(fn(f) { !f.contains("行") }) }
+  // (the wheel 100 down: its bar coming in; out all of it a third of a second on, the wheel 100 down again at once)
+  let still = @signals.signal(true, same=fn(a, b) { a == b })
+  let (t, scroll) = steady_bar_case(still)
+  let rest = steady_faults(t, 4)
+  t.wheel(80.0, 100.0, 100.0)
+  let came = steady_faults(t, 20)
+  t.wheel(80.0, 100.0, 100.0)
+  let wheeled = steady_faults(t, 8)
+  let shown = thumb_opacity(t, 380.0).unwrap_or(0.0)
+  let at = scroll.at(view_tree().unwrap())
+  // (the same, and the box over its rows gone at once, nobody scrolling, as its bar shows: the thumb longer and further
+  // down its track in one frame)
+  let over = @signals.signal(true, same=fn(a, b) { a == b })
+  let (w, _) = steady_bar_case(over)
+  steady_faults(w, 4) |> ignore
+  w.wheel(80.0, 100.0, 100.0)
+  steady_faults(w, 20) |> ignore
+  w.wheel(80.0, 100.0, 100.0)
+  steady_faults(w, 8) |> ignore
+  over.set(false)
+  let gone = thumb(steady_faults(w, 8))
+  assert_eq((at, shown > 0.0), (200.0, true))
+  assert_eq((rest, came, wheeled), ([], [], []))
+  assert_true(gone.length() > 0, msg="the thumb stepping with nothing done by the hand: no jolt found")
+}
+
 // An old list put elsewhere at once by the app (Ctx::list_scroll_to: put_at): what its rows hold at its top, a head
 // stuck under its edge (Ctx::stick), steps in its row with the list's put, for no cause of its own; that same head
 // stepping in its row with the list where it was is a jolt, as is a step of it a few frames after a put.
