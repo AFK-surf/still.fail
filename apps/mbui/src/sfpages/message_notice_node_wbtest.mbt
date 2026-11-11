@@ -505,3 +505,36 @@ test "the pill told with the row's key as it is made, for what lights it as the 
   let faults = nt_audit(t, 0, 0, 0, 0)
   assert_true(faults.is_empty(), msg=faults.join(" | "))
 }
+
+///|
+test "取消 makes its way along the row as a retry begins and as it ends: the pill moved aside on the way, centred again once it is gone" {
+  let calls : Array[(String, Json)] = []
+  let retry = @signals.signal(false)
+  let words = "模型满载，自动重试，与额度无关"
+  let m = fn() { nt_msg(words~, failed=true, retry=retry.get()) }
+  let t = nt_new(760.0, nt_src(None, calls), m)
+  t.run_for(@ui.move_most_ms)
+  let alone = t.rect_of(words).unwrap().0
+  assert_true(t.find("取消") is None)
+  // (a retry begins: 取消 comes along the row, the pill moved aside as it does)
+  retry.set(true)
+  t.frame()
+  t.frame()
+  let coming = t.rect_of(words).unwrap().0
+  t.run_for(@ui.move_most_ms)
+  let beside = t.rect_of(words).unwrap().0
+  assert_true(beside < coming && coming < alone, msg="the pill on its way aside: \{(alone, coming, beside)}")
+  let (px, _, pw, _) = t.rect_of(words).unwrap()
+  assert_true(t.rect_of("取消").unwrap().0 > px + pw, msg="取消 after the pill")
+  // (the retry over: 取消 goes along the row, the pill back to the middle as it does)
+  retry.set(false)
+  t.frame()
+  t.frame()
+  let going = t.rect_of(words).unwrap().0
+  assert_true(beside < going && going < alone, msg="the pill on its way back: \{(beside, going, alone)}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("取消") is None, msg="gone once its way is over")
+  assert_true((t.rect_of(words).unwrap().0 - alone).abs() < 0.01, msg="the pill centred again")
+  let faults = nt_audit(t, 0, 0, 0, 0)
+  assert_true(faults.is_empty(), msg=faults.join(" | "))
+}
