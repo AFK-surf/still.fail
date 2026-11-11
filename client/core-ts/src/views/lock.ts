@@ -65,14 +65,14 @@ export const BEHIND_TRIES = 5;
 export const TAKEN_MS = 15_000;
 /// How long a call a person waits on waits on the workspace's stations for its lock, all told: the lock read again
 /// before it is signed, a station taking what was signed, and the read after. Those are the lock's own calls (`run`: a
-/// device taken out or renewed, the lock turned off, the page read) and the writes to the cloud the lock has a part in
-/// (a member added, taken out or given a role, a station taken out or enrolled: `roster`, `added`, `enrolled`). Past
-/// it the lock is signed as held here (the stations' events keep that level, and no read brings more of ones that do
-/// not answer), what is signed goes to the cloud as where no station took it, and the reads go on behind. 2026-11-11 a
-/// member added in a locked workspace whose stations were not reached turned its button for minutes; 2026-11-12, with
-/// a workspace's one station asleep, 移除设备, turning safe mode off and approving a device each took 45 s, three waits
-/// of TAKEN_MS, and with the cloud's reads unanswered too never answered (a device approved face to face, views/pair.ts
-/// `approve`, still waits by TAKEN_MS).
+/// device taken out or renewed, the lock turned off, the page read; a device approved face to face, views/pair.ts
+/// `approve`, its person made a member first where the lock has not heard of them) and the writes to the cloud the lock
+/// has a part in (a member added, taken out or given a role, a station taken out or enrolled: `roster`, `added`,
+/// `enrolled`). Past it the lock is signed as held here (the stations' events keep that level, and no read brings more
+/// of ones that do not answer), what is signed goes to the cloud as where no station took it, and the reads go on
+/// behind. 2026-11-11 a member added in a locked workspace whose stations were not reached turned its button for
+/// minutes; 2026-11-12, with a workspace's one station asleep, 移除设备, turning safe mode off and approving a device each
+/// took 45 s, three waits of TAKEN_MS, and with the cloud's reads unanswered too never answered.
 export const ASKED_MS = 3_000;
 /// A device of the person's own added this recently is pointed out on their other devices.
 const RECENT_SECS = 7 * 86400;
@@ -133,8 +133,8 @@ const silentOf = new WeakMap<Inner, Set<string>>();
 /// person asked first (turning the lock off: a fingerprint, seconds of theirs) would have used it up, and stations that
 /// answer would not be waited on at all, the cloud alone taking the entry (the root AGENTS.md, The cloud is the account
 /// system).
-type Asked = { wait<A>(work: Effect.Effect<A>): Effect.Effect<A | undefined> };
-function asked(inner: Inner): Asked {
+export type Asked = { wait<A>(work: Effect.Effect<A>): Effect.Effect<A | undefined> };
+export function asked(inner: Inner): Asked {
   const late = Deferred.makeUnsafe<void>();
   let over = false;
   let begun = false;
@@ -2063,11 +2063,11 @@ export class Lock {
   /// What a person does (a call): the cloud's "too many requests" waited out (the account's devices share a budget a
   /// minute), not said at once as the call's failure.
   readonly #byHand: boolean;
-  /// A call a person waits on (`run`, `roster`, `added`): its waits on the stations end with that call's ASKED_MS,
-  /// and what it signs is held here as signed, so the next entry follows it and the pages show it whether or not a
-  /// station took it. None: a change no one waits on (a person's own lock bound, their devices kept to it), and a device
-  /// approved face to face (views/pair.ts `approve`), which wait for the stations by TAKEN_MS and read the cloud as long
-  /// as it takes.
+  /// A call a person waits on (`run`, a device approved face to face in views/pair.ts `approve`, `roster`, `added`):
+  /// its waits on the stations end with that call's ASKED_MS, and what it signs is held here as signed, so the next
+  /// entry follows it and the pages show it whether or not a station took it. None: a change no one waits on (a
+  /// person's own lock bound, their devices kept to it), which waits for the stations by TAKEN_MS and reads the cloud as
+  /// long as it takes.
   readonly #within: Asked | null;
   /// Whether the lock is still to be read before the first entry signed (within that wait): not where the call that
   /// made it read it already (`managed`).
@@ -2299,8 +2299,9 @@ export class Lock {
       });
       const signed: Head = { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis };
       // A call a person waits on reads nothing between the entries it signs one after another (`added` signs one for
-      // each person): the chain is held here with this one on it, so the next follows it, and the pages show it though
-      // no station answered. Where what is held moved on meanwhile, a read brought more already, and it is left as it is.
+      // each person, `admit` a member before their device): the chain is held here with this one on it, so the next
+      // follows it, and the pages show it though no station answered. Where what is held moved on meanwhile, a read
+      // brought more already, and it is left as it is.
       if (self.#within !== null) {
         const was = held(self.#inner, self.ws);
         if (was?.head?.hash === head.hash) yield* hold(self.#inner, self.ws, self.sub, signed, chain, was.seen ?? null);

@@ -1,5 +1,5 @@
 // The workspace lock's own calls a person waits on (views/lock.ts `run`: the page's `state`, a device taken out or
-// renewed, the lock turned off) wait on its stations for ASKED_MS at most, all told (2026-11-12: with the one station
+// renewed, the lock turned off; a device approved face to face, views/pair.ts `approve`) wait on its stations for ASKED_MS at most, all told (2026-11-12: with the one station
 // asleep, each took 45 s, three waits of TAKEN_MS; with the cloud's reads unanswered too, none answered). Its station
 // served the lock and then went silent (its machine asleep: asked, it neither answers nor closes), the cloud (a)
 // answering everything, (b) leaving its reads unanswered: each answers within ASKED_MS, what it signed on the cloud's
@@ -13,8 +13,9 @@ import { Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, entryHash } from "../src/lock.ts";
 import { ASKED_MS, held, lockView, read } from "../src/views/lock.ts";
+import { serveTrusted, tryOne } from "../src/views/pair.ts";
 import { call } from "./helpers.ts";
-import { ME, PHONE, genesis, grant, rig } from "./lock-rig.ts";
+import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
 import { stationLater } from "./station-fixture.ts";
 
 /// The lock's one station.
@@ -83,7 +84,7 @@ async function setUp(more: Record<string, unknown>[]) {
   await run(inner.adb.personal().makeKey());
   await run(read(inner, "ws"));
   assert.equal(held(inner, "ws")?.head?.seq, 0);
-  return { r, inner, st };
+  return { r, inner, st, g };
 }
 
 /// The cloud from now on: "all" answered as the rig's does, "reads" its GETs never answered, "down" nothing answered.
@@ -165,6 +166,36 @@ for (const cond of CONDITIONS) {
       if (c.call === "lock.disable") assert.equal((lockView(inner, "ws") as { locked: boolean }).locked, false, "the lock's page says it is off");
     });
   }
+
+  test(`a device approved face to face answers within ASKED_MS, the lock's station silent, ${cond.name}`, async (t) => {
+    // As lock-pair.test.ts's `met`: s2's phone, not on the lock, met over a stream of its own; the code shown read off
+    // the prompt while the station still answers, then the station silent and the code typed.
+    const { r, inner, st, g } = await setUp([]);
+    const prompts = await r.watch({ topic: "lockPrompts" });
+    const [trusted, phone] = await pipe();
+    inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
+    const sign_key = "ed25519:" + "11".repeat(32);
+    const hello = { t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", PHONE, "s2") }], kind: "app", label: "Pixel 8", sign_key };
+    let first: unknown;
+    inner.runner.fork(Effect.map(Effect.andThen(phone.send(hello), phone.next()), (m) => { first = m; }));
+    await until(r, () => first !== undefined);
+    assert.deepEqual(first, { t: "code", workspaces: ["ws"] });
+    const shown = (await prompts()).pairing;
+    assert.equal(shown.length, 1);
+    cloudAs(r, cond.mode);
+    st.say.silent = true;
+    const before = r.cloud.chains.get("ws")!.length;
+    let out: { ok: unknown } | { err: unknown } | undefined;
+    inner.runner.fork(Effect.map(Effect.result(tryOne(inner, { id: ME, d: phone, workspaces: ["ws"] } as never, PHONE, shown[0].code)), (x) => {
+      out = x._tag === "Success" ? { ok: x.success } : { err: x.failure };
+    }));
+    const ms = await until(r, () => out !== undefined);
+    const what = `approved face to face, ${cond.name}`;
+    t.diagnostic(`${what}: ${ms} ms`);
+    answeredWithin(what, ms, out === undefined ? undefined : "ok" in out ? { ok: out.ok } : { error: String((out.err as Error)?.message ?? out.err) }, ASKED_MS + SLACK_MS);
+    assert.deepEqual((out as { ok: { approved: { workspaces: string[] } } }).ok.approved.workspaces, ["ws"], what);
+    signedOn(what, r, inner, before, (e) => e.kind === "device" && (e.body as { id?: string; sign_key?: string }).id === PHONE && (e.body as { sign_key?: string }).sign_key === sign_key);
+  });
 }
 
 test("the cloud keeping the entry, its answer lost on the way back, the lock's station silent: the device is taken out, not said to have failed", async (t) => {
