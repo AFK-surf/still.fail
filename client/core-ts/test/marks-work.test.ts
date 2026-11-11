@@ -143,3 +143,21 @@ test("what_the_badge_counts_changes_every_workspaces_mark_and_the_badge", async 
   assert.deepEqual(a.value.workspaces.wb.items.map((i: J) => i.session), ["g1", "g2", "v2"]);
   assert.deepEqual([a.value.workspaces.ws.badge, a.value.workspaces.wb.badge, a.value.badge, a.value.badgeKinds.done], [4, 2, 6, false]);
 });
+
+test("a_mark_made_again_reads_of_the_database_only_the_row_that_changed", async () => {
+  // Made again, a workspace's mark read the JSON of every row it counts to take each one kept (account.ts #byKey): 5.6
+  // ms in Hermes for 123 rows, each time one of them changed (2026-11-11).
+  const { t, a, home } = await twoWorkspaces();
+  const list = ui();
+  t.subscribe(3, { topic: "chats", scope: "ws" });
+  await t.readAll([[a, 1], [list, 3]]);
+  assert.equal(list.value.days.flatMap((d: J) => d.items).length, home.length);
+  const before = { ...work };
+  // k2 looked at: one marked row changed, as a station's event says it.
+  t.data.putChat("ws/st", { ...home[1], unread: false, title: "看过了" });
+  await t.readAll([[a, 1], [list, 3]]);
+  const spent = workSince(before);
+  assert.equal(spent.workspaceMarks, 1, "the mark made again");
+  assert.ok(spent.rowJson <= 1, `rows whose JSON was read: ${spent.rowJson}`);
+  assert.ok(list.value.days.flatMap((d: J) => d.items).some((i: J) => i.title === "看过了"));
+});
