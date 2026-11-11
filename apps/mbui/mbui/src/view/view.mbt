@@ -2875,6 +2875,7 @@ priv enum Prop {
   Picture
   Drop
   Fits
+  OneOf
   FitWhole
   Turn
   Lines
@@ -2991,6 +2992,7 @@ fn Prop::ord(self : Prop) -> Int {
     Comes => 81
     GoneEmpty => 82
     FillsAcross => 83
+    OneOf => 84
   }
 }
 
@@ -5260,6 +5262,29 @@ pub fn View::drops(self : View, k : Live[Int], loc~ : SourceLoc) -> View {
 #callsite(autofill(loc))
 pub fn View::fits(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
   self.bind(loc~, Fits, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fits = on })
+  self
+}
+
+///|
+/// A row of ways of saying one thing, each shorter than the one before (the old views' `one_of`, ui's node.mbt), as
+/// it changes: of what it holds only the first that fits its room whole is laid out and drawn, the last where none
+/// does; it needs at least what the last needs. Which it is, is worked out by the width the row is given as it is laid
+/// out (flex's first_fit), told back to nothing: a width that changes makes it another at once (no coming or going: an
+/// arrangement by the room, not something shown or hidden). Those not laid out are left out as a row that fits leaves
+/// them (View::fits, which it says too, as the old views' does): drawn, pressed and read out nowhere. Layout's.
+#callsite(autofill(loc))
+pub fn View::one_of(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, OneOf, on, Layout, fn(on) {
+    let n = self.tree.nodes[self.at]
+    n.flex.style.one_of = on
+    // (a row that fits as well, what it does not lay out left out; turned off, fits as View::fits says, none where it
+    // says nothing)
+    if on {
+      n.flex.style.fits = true
+    } else if n.props.get(Prop::Fits.ord()) is None {
+      n.flex.style.fits = false
+    }
+  })
   self
 }
 
