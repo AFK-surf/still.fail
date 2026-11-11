@@ -2596,7 +2596,7 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
   const u = ui();
   t.subscribe(1, agentPage("ws/a", "k"));
   await t.read(u, 1);
-  sameTopics(t.started(), [sessionOf("ws/a", "k"), rows("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs(), { topic: "screens", station: "ws/a" }]);
+  sameTopics(t.started(), [sessionOf("ws/a", "k"), { topic: "live", station: "ws/a", key: "k" }, rows("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs(), { topic: "screens", station: "ws/a" }]);
   t.set(sessionOf("ws/a", "k"), { session: fullSession("k"), threads: [slackThread(3)], turns: [turn("t1")] });
   await t.read(u, 1);
   assert.equal(u.value === undefined, true, "its title is the station's: it waits for the items");
