@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [19d52998a](https://github.com/AFK-surf/still.fail/commit/19d52998ac2d6af2f0dcefb77273736cae8997b6) mbui: a right click on what has no menu of its own | 1.83 | 2.44 | 10.2 | 28.94 | 36.03 | 25.79 | 47.87 | 94.34 | 184.61 |
 | [ebbf50a92](https://github.com/AFK-surf/still.fail/commit/ebbf50a920ab55bb799d6b59bacab25689892c1c) mbui: what goes beside a link of a node's words (V | 1.83 | 2.44 | 10.19 | 28.94 | 36 | 25.78 | 47.85 | 94.96 | 177.29 |
 | [ccdd9e4ff](https://github.com/AFK-surf/still.fail/commit/ccdd9e4ff72b50e83e4dc47e5120547d66d61225) app tests: every screen of real size is given each | 1.83 | 2.44 | 10.18 | 28.93 | 35.95 | 25.77 | 47.8 | 94.42 | 133.77 |
 | [b1e394b22](https://github.com/AFK-surf/still.fail/commit/b1e394b22589646f7b2449edcf5ba230e1682d75) app: the pictures sent from here written through o | 1.83 | 2.44 | 10.18 | 28.92 | 35.95 | 25.77 | 47.8 | 94.45 | 178.83 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [acc4dd528](https://github.com/AFK-surf/still.fail/commit/acc4dd528a0538d72e55dedcd321be3662bf7d33) core: a pref set looks at the files kept only for  | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.7 | 163.67 |
 | [9bea105e3](https://github.com/AFK-surf/still.fail/commit/9bea105e3af80832962d9b620a03d9ce129e6ad9) app: 添加 station as nodes (settings' station_add.mb | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.41 | 187.44 |
 | [0268f142d](https://github.com/AFK-surf/still.fail/commit/0268f142d5c4ea52a056b0f1046a0dc98ebc5e7c) app, mbui: a film or a song opened beside a chat,  | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.7 | 47.6 | 93.91 | 157.54 |
-| [0ef0e0bdb](https://github.com/AFK-surf/still.fail/commit/0ef0e0bdb37d46232e85484e876d4181d5f57b11) mbui, app: an abort says why first (@halt.saying), | 1.82 | 2.43 | 10.11 | 28.85 | 35.69 | 25.69 | 47.59 | 94.34 | 163.61 |
