@@ -521,12 +521,14 @@ test "对话目录: the rail's ticks, one for each said, the reader's (the 16th:
   // (31 said by people in the long chat, all of them in half the list's height)
   assert_eq(ticks.length(), 31, msg="\{ticks}")
   let p = @sf.theme().p
-  let long = ticks.mapi(fn(i, k) { (i, k) }).filter(fn(k) { k.1.0 > 8.5 })
+  let long = ticks.mapi(fn(i, k) { (i, k) }).filter(fn(k) { k.1.1 == outline_hex(p.text) })
   assert_eq(long.map(fn(k) { k.0 }), [15], msg="\{ticks}")
-  assert_eq(long[0].1.1, outline_hex(p.text))
-  // (the rest one colour, quieter than the ink)
-  let short = ticks.filter(fn(k) { k.0 <= 8.5 })
-  assert_true(short.iter().all(fn(k) { k.1 == short[0].1 }) && short[0].1 != long[0].1.1, msg="\{ticks}")
+  assert_eq(long[0].1.0, 16.0)
+  // (the rest one colour, quieter than the ink, each as long as its turn: shorter than the reader's, 4 for one message,
+  // longer as more answered it: 林's first (Claude answering, then Ana) longer than Ana's next (林 straight after))
+  let short = ticks.filter(fn(k) { k.1 != long[0].1.1 })
+  assert_true(short.iter().all(fn(k) { k.1 == short[0].1 && k.0 >= 4.0 && k.0 <= 12.0 }), msg="\{ticks}")
+  assert_true(ticks[0].0 > ticks[1].0 && ticks[1].0 == 4.0, msg="\{ticks}")
   // three said: the rail as tall as a press at least, its ticks in its middle
   let three : Json = {
     "days": [{ "date": "2026-11-10", "day": "今天", "seqs": [2, 4, 6] }],
@@ -941,7 +943,7 @@ fn outline_tick_places(t : @ui.Tester) -> Array[(Double, Bool)] {
     r.0 >= rx && r.0 + r.2 <= rx + rw + 0.5 && r.1 >= ry && r.1 + r.3 <= ry + rh + 0.5 && r.3 <= 2.5
   })
   ticks.sort_by(fn(a, b) { a.1.compare(b.1) })
-  ticks.map(fn(r) { (r.1, r.2 > 8.5) })
+  ticks.map(fn(r) { (r.1, r.2 > 12.5) })
 }
 
 ///|
@@ -1008,5 +1010,54 @@ test "对话目录: the longer chat's rail a steady map, its ticks where they we
   let p = outline_tick_places(t)
   assert_eq(ys(p), ys(first))
   assert_eq(long(p), [m - 1])
+  assert_eq(outline_faults(t), [])
+}
+
+///|
+test "对话目录: scrolled to its end, its last row whole in the panel, over its foot" {
+  // (the panel a share of the window: what holds its list grown from none under its head, not as tall as its rows,
+  // which stood past the panel's foot and cut its last row there)
+  for h in [800.0, 1080.0] {
+    let calls : Array[Made] = []
+    let t = outline_tester(calls, mode="chat-outline-long", h~)
+    let (px, py, pw, ph) = outline_panel(t).unwrap()
+    t.wheel(px + pw / 2.0, py + ph / 2.0, 100000.0)
+    t.run_for(@ui.move_most_ms)
+    let rows = t.semantics().filter(fn(s) { s.role == Button && s.rect.0 >= px && s.rect.2 > pw / 2.0 && s.rect.1 > py + 60.0 && s.rect.1 < py + ph })
+    let last = rows.iter().fold(init=0.0, fn(m, s) { if s.rect.1 + s.rect.3 > m { s.rect.1 + s.rect.3 } else { m } })
+    assert_true(rows.length() > 5, msg="h \{h}: \{rows.length()} rows")
+    assert_true(last <= py + ph - @sf.panel_pad + 0.5, msg="h \{h}: last row's foot \{last}, panel's \{py + ph}")
+    assert_eq(outline_faults(t), [])
+  }
+}
+
+///|
+test "对话目录: a tick of the rail pointed at says its message's first line and time, its chunk asked for then, once" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  let rail = outline_buttons(t)[0]
+  let (rx, ry, rw, rh) = rail
+  let ticks = outline_drawn(t, "rect").filter(fn(r) {
+    r.0 >= rx && r.0 + r.2 <= rx + rw + 0.5 && r.1 >= ry && r.1 + r.3 <= ry + rh + 0.5 && r.3 <= 2.5
+  })
+  ticks.sort_by(fn(a, b) { a.1.compare(b.1) })
+  let asked = outline_rows_asked(calls).length()
+  // (the first tick: 林's 星期六 09:12; pointed at beside it, in its room across the press)
+  t.move(rx + rw / 2.0, ticks[0].1 + 1.0)
+  t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
+  assert_eq(outline_rows_asked(calls).length(), asked + 1)
+  let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
+  assert_eq(tip.length(), 1, msg="\{tip}")
+  assert_true(tip[0].has_prefix("早，今天想把发布清单") && tip[0].has_suffix("09:12"), msg="\{tip}")
+  // (the next: Ana's 09:40, its words held already, nothing asked)
+  t.move(rx + rw / 2.0, ticks[1].1 + 1.0)
+  t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
+  assert_eq(outline_rows_asked(calls).length(), asked + 1)
+  let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
+  assert_true(tip.length() == 1 && tip[0].has_prefix("签名证书下周三过期") && tip[0].has_suffix("09:40"), msg="\{tip}")
+  // (pressed there, the outline as from the rail)
+  t.click(Button, label="对话目录")
+  t.run_for(@ui.move_most_ms)
+  assert_true(outline_panel(t) is Some(_))
   assert_eq(outline_faults(t), [])
 }

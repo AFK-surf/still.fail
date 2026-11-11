@@ -11,8 +11,8 @@
 // not all of the chat is on the device, the rest is read (`chat.bring`) and said so over the rows.
 //
 // What opens it, on the chat's page (chat_list.mbt, the old view's, beside the way to the newest): on a page whose
-// column leaves room at its right (rail_fits), a rail of ticks there, one for each person's message, the reader's
-// longer and in the ink; on a narrower one a round button over the way to the newest, coming and going with it.
+// column leaves room at its right (rail_fits), a rail of ticks there, one for each person's message, as long as its
+// turn, the reader's longest and in the ink, a tick pointed at saying its message's first line; on a narrower one a round button over the way to the newest, coming and going with it.
 // ⌘G (chat.outline) opens it from either, its field taking the keys; ⌥⇧↑ and ⌥⇧↓ go to the message a person said
 // before and after the reader's.
 
@@ -710,9 +710,10 @@ let rail_need : Double = rail_press_w + @ui.scroll_bar_room + rail_clear
 
 ///|
 /// A tick of the rail, drawn as the library's rules are (a line of the line's colour, square): S0_5 (2) thick, S1 apart,
-/// a day S3 from the one before; S2 long, the reader's S4 and in the ink; the press's room over and under them
-/// (rail_pad). The rail at most half the list's height; where its ticks do not fit, a steady map of the whole chat
-/// (rail_ticks). The styles and rail_ticks' sums are of these alone.
+/// a day S3 from the one before; as long as its turn (rail_turns: how many messages from it to the next said, the
+/// agents' answers among them) from S1 (one) to S3 (32 or more), the reader's S4 and in the ink; the press's room over
+/// and under them (rail_pad). The rail at most half the list's height; where its ticks do not fit, a steady map of the
+/// whole chat (rail_ticks). The styles and rail_ticks' sums are of these alone.
 let tick_thick : Double = @ui.Space::px(S0_5)
 
 ///|
@@ -724,10 +725,17 @@ let tick_gap : @ui.Space = S1
 let tick_day_gap : @ui.Space = S3
 
 ///|
-let tick_short : Double = @ui.Space::px(S2)
+let tick_least : Double = @ui.Space::px(S1)
+
+///|
+let tick_most : Double = @ui.Space::px(S3)
 
 ///|
 let tick_long : Double = @ui.Space::px(S4)
+
+///|
+/// How many doublings of a turn's messages reach tick_most (32).
+let tick_steps : Int = 5
 
 ///|
 // kept across runs: a value (a token)
@@ -737,26 +745,67 @@ let rail_pad : @ui.Space = S2
 let rail_share : Double = 0.5
 
 ///|
-/// The rail's ticks for `days` (how many people said on each, oldest first), the `at`th of them all the reader's, in
-/// `most` tall: where one a message fits, one each, a day's together, the days further apart; where they do not, a steady
-/// map of the whole chat: as many as fit, evenly, no days, tick i the messages [i·n/m, (i+1)·n/m) of the n in order, so
-/// nothing moves as the reader does (only which is long), nor as a message comes (only what each stands for) till how
-/// many fit changes. Each day's ticks (one group, the map's), each whether it is the reader's.
-fn rail_ticks(days : Array[Int], at : Int, most : Double) -> Array[Array[Bool]] {
+/// A tick of the rail: the message it stands for (its place among what people said: the first of a map's tick's), its
+/// turn (a map's tick's: the longest of those it stands for), whether it is the reader's.
+priv struct RailTick {
+  at : Int
+  turn : Int
+  reader : Bool
+}
+
+///|
+/// How long the turn of each of `said` (what people said, oldest first) is: the messages from it to the next said, the
+/// last's to `latest` (the chat's newest message), one at least.
+fn rail_turns(said : Array[Double], latest : Double) -> Array[Int] {
+  said.mapi(fn(i, s) {
+    let next = match said.get(i + 1) {
+      Some(n) => n
+      None => if latest > s { latest + 1.0 } else { s + 1.0 }
+    }
+    let n = (next - s).to_int()
+    if n < 1 {
+      1
+    } else {
+      n
+    }
+  })
+}
+
+///|
+/// How long a tick of a turn of `turn` messages is: tick_least for one, a step longer at each doubling, tick_most at
+/// 2^tick_steps and more.
+fn tick_w(turn : Int) -> Double {
+  let mut k = 0
+  let mut t = turn
+  while t > 1 && k < tick_steps {
+    t = t / 2
+    k += 1
+  }
+  tick_least + (tick_most - tick_least) * k.to_double() / tick_steps.to_double()
+}
+
+///|
+/// The rail's ticks for `days` (how many people said on each, oldest first), the `at`th of them all the reader's, each
+/// one's turn `turns`, in `most` tall: where one a message fits, one each, a day's together, the days further apart;
+/// where they do not, a steady map of the whole chat: as many as fit, evenly, no days, tick i the messages
+/// [i·n/m, (i+1)·n/m) of the n in order, so nothing moves as the reader does (only which is long), nor as a message
+/// comes (only what each stands for) till how many fit changes. Each day's ticks (one group, the map's).
+fn rail_ticks(days : Array[Int], at : Int, turns : Array[Int], most : Double) -> Array[Array[RailTick]] {
   let n = days.fold(init=0, fn(a, k) { a + k })
   guard n > 0 else { return [] }
   let at = if at < 0 || at >= n { n - 1 } else { at }
+  let turn = fn(i : Int) { turns.get(i).unwrap_or(1) }
   let groups = days.filter(fn(k) { k > 0 })
   let whole = n.to_double() * tick_thick +
     (n - groups.length()).to_double() * tick_gap.px() +
     (groups.length() - 1).to_double() * tick_day_gap.px()
   if whole <= most {
-    let out : Array[Array[Bool]] = []
+    let out : Array[Array[RailTick]] = []
     let mut i = 0
     for k in groups {
-      let g : Array[Bool] = []
+      let g : Array[RailTick] = []
       for _ in 0..<k {
-        g.push(i == at)
+        g.push({ at: i, turn: turn(i), reader: i == at })
         i += 1
       }
       out.push(g)
@@ -767,14 +816,78 @@ fn rail_ticks(days : Array[Int], at : Int, most : Double) -> Array[Array[Bool]] 
   let m = ((most + tick_gap.px()) / (tick_thick + tick_gap.px())).to_int()
   let m = if m < 1 { 1 } else if m > n { n } else { m }
   let long = at * m / n
-  [Array::makei(m, fn(i) { i == long })]
+  [
+    Array::makei(m, fn(i) {
+      let from = i * n / m
+      let to = (i + 1) * n / m
+      let mut most_turn = 1
+      for j in from..<to {
+        if turn(j) > most_turn {
+          most_turn = turn(j)
+        }
+      }
+      { at: from, turn: most_turn, reader: i == long }
+    }),
+  ]
+}
+
+///|
+/// What people said in each chat as its rail's tips say it (`chat.outline.rows`' rows, asked a chunk at a time as a
+/// tick is pointed at): its first line and time of day, by the chat's key and the message's seq.
+// kept across runs: let go of by the package's reset (chat_list.mbt)
+let rail_said : @signals.Signal[Map[String, (String, String)]] = @signals.signal({})
+
+///|
+/// The chunks of rail_said asked for whose answer has not come, by the chat's key and the chunk.
+// kept across runs: let go of by the package's reset (chat_list.mbt)
+let rail_asking : Map[String, Bool] = {}
+
+///|
+/// What a tick of chat `k`'s rail standing for its message `seq` says: its first line and time, "" till the core gave
+/// them.
+fn rail_tip_words(k : String, seq : Double) -> String {
+  match rail_said.get().get(k + "/" + seq.to_int().to_string()) {
+    Some((words, clock)) => if clock == "" { words } else { words + "  " + clock }
+    None => ""
+  }
+}
+
+///|
+/// The rows of chat `r`'s outline (its thread `thread`, its said `said`) of the chunk the `at`th of them is in, asked for
+/// rail_said unless held or asked already.
+fn rail_ask(src : Source, r : ChatRef, thread : Double, said : Array[Double], at : Int) -> Unit {
+  let k = chat_key(r)
+  let chunk = at / outline_chunk
+  let asking = k + "/" + chunk.to_string()
+  guard !src.read_only && !rail_asking.contains(asking) else { return }
+  let from = chunk * outline_chunk
+  let to = if from + outline_chunk < said.length() { from + outline_chunk } else { said.length() }
+  guard from < to else { return }
+  rail_asking[asking] = true
+  let asked = outline_params(r, thread)
+  asked["seqs"] = Json::array(said[from:to].to_array().map(fn(q) { Json::number(q) }))
+  (src.call)("chat.outline.rows", Json::object(asked), fn(res) {
+    match res {
+      Ok(j) => {
+        let now = rail_said.untracked().copy()
+        for row in items(Some(j), "rows") {
+          let item = outline_item(row, false)
+          now[k + "/" + item.seq.to_int().to_string()] = (item.words, item.clock)
+        }
+        rail_said.set(now)
+      }
+      // (its station away: asked again as a tick of it is next pointed at)
+      Err(_) => rail_asking.remove(asking) |> ignore
+    }
+  })
 }
 
 ///|
 /// The rail of chat `r`'s outline (its thread `thread`) at the list's right (an old view's, beside to_latest), the
 /// list's visible room `top` under its top and `room` over its foot: shown while the outline has three said or more;
-/// one tick for each, the one at `index` the reader's. Pressed, the outline beside it, at its left, its field taking
-/// the keys. Whether it shows.
+/// one tick for each, as long as its turn (`latest`: the chat's newest message, where the last turn ends), the one at
+/// `index` the reader's. Pointed at, a tick's tip says its message's first line and time (asked for as it is). Pressed,
+/// the outline beside it, at its left, its field taking the keys. Whether it shows.
 fn outline_rail(
   c : @ui.Ctx,
   src : Source,
@@ -783,6 +896,7 @@ fn outline_rail(
   value : Json?,
   top_seq : Double,
   at_end : Bool,
+  latest : Double,
   top : Double,
   room : Double,
 ) -> Bool {
@@ -793,19 +907,37 @@ fn outline_rail(
   let at = said.search(current).unwrap_or(said.length() - 1)
   // (its share of the list's height, less the press's own room over and under its ticks)
   let most = dmax(0.0, dmax(0.0, c.height - top - room) * rail_share - 2.0 * rail_pad.px())
-  let shown = rail_ticks(days, at, most)
+  let shown = rail_ticks(days, at, rail_turns(said, latest), most)
   let id = c.id("chat-outline-rail")
   let stint = c.page_stint()
+  let k = chat_key(r)
   c.on_press(id, fn() { open_outline(src, r, thread, current, from=Of(id), side=Left, along=Middle, keys=true, stint~) })
-  @sf.tip(c, "chat-outline-rail", id, @sf.t("web-main.keymap.chat.outline"), shortcut="chat.outline", side=Left)
+  // (the tick pointed at: its id and the message it stands for)
+  let pointed : Ref[(Int, Int)?] = Ref(None)
   c.layer(fn() {
     c.box(style=rail_place.then(@ui.style(pt=@sf.room_of(top), pb=@sf.room_of(room))), fn() {
       let b = c.box(style=rail_press, id~, fn() {
-        // (a day's ticks together, the days further apart; the map's, one group)
+        // (a day's ticks together, the days further apart; the map's, one group; each in a room as tall as it and the
+        // gap to the next, the press's width, for the pointer to rest on)
+        let n = Ref(0)
         for ticks in shown {
           c.box(style=rail_day, fn() {
-            for on in ticks {
-              c.box(style=if on { tick_on } else { tick_off }, fn() {  }) |> ignore
+            for tick in ticks {
+              let tid = c.id("chat-outline-tick/" + n.val.to_string())
+              n.val += 1
+              // (only pointed at, for its tip: a press there the rail's)
+              c.box(style=tick_room, id=tid, taps=false, points=true, fn() {
+                let line = if tick.reader {
+                  @ui.style(w=Fixed(tick_long), h=Fixed(tick_thick), bg=Fg)
+                } else {
+                  @ui.style(w=Fixed(tick_w(tick.turn)), h=Fixed(tick_thick), bg=Line)
+                }
+                c.box(style=line, fn() {  }) |> ignore
+              })
+              |> ignore
+              if c.hovered(tid) {
+                pointed.val = Some((tid, tick.at))
+              }
             }
           })
           |> ignore
@@ -816,6 +948,18 @@ fn outline_rail(
     |> ignore
   })
   |> ignore
+  match pointed.val {
+    // (a tick pointed at: its message, asked for where it is not held, at the moment of the build's end)
+    Some((tid, i)) => {
+      let words = rail_tip_words(k, said[i])
+      if words == "" {
+        c.tell("outline/rail-ask/" + k, fn() { rail_ask(src, r, thread, said, i) })
+      }
+      @sf.tip(c, "chat-outline-tick/" + tid.to_string(), tid, words, side=Left)
+    }
+    None =>
+      @sf.tip(c, "chat-outline-rail", id, @sf.t("web-main.keymap.chat.outline"), shortcut="chat.outline", side=Left)
+  }
   true
 }
 
@@ -843,18 +987,14 @@ let rail_press : @ui.Style = @ui.style(
 )
 
 ///|
-/// A day's ticks: tick_gap apart, at the press's right.
+/// A day's ticks, one under the other at the press's right, across it.
 // kept across runs: a value (no field of it changes)
-let rail_day : @ui.Style = @ui.style(align=AEnd, gap=tick_gap)
+let rail_day : @ui.Style = @ui.css("w=Full align=AEnd")
 
 ///|
-/// A tick: a rule, the reader's long in the ink, the rest short in the line's.
+/// A tick's room: across the press, half the gap over it and under it (tick_gap), the tick at its right.
 // kept across runs: a value (no field of it changes)
-let tick_off : @ui.Style = @ui.style(w=Fixed(tick_short), h=Fixed(tick_thick), bg=Line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let tick_on : @ui.Style = @ui.style(w=Fixed(tick_long), h=Fixed(tick_thick), bg=Fg)
+let tick_room : @ui.Style = @ui.css("w=Full py=S0_5 align=AEnd")
 
 ///|
 /// The round button to chat `r`'s outline (its thread `thread`), over the way to the newest (`lift` over the foot,
@@ -936,7 +1076,8 @@ fn outline_entries_of(
   let railed = match v.thread {
     Some(th) if wide && offered => {
       let value = src.topic("chatOutline", outline_params(r, th)).get().value
-      outline_rail(c, src, r, th, value, top_seq, at_end, top, room)
+      let latest = v.messages.fold(init=-1.0, fn(m, x) { if x.seq > m { x.seq } else { m } })
+      outline_rail(c, src, r, th, value, top_seq, at_end, latest, top, room)
     }
     _ => false
   }

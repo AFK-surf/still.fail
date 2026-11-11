@@ -676,6 +676,8 @@ fn list_reset() -> Unit {
   find_around.val = -1.0
   outline_entries.clear()
   outline_presets.clear()
+  rail_said.set({})
+  rail_asking.clear()
 }
 
 ///|
