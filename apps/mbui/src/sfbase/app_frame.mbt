@@ -169,7 +169,7 @@ fn system_said(json : String) -> Unit {
   for s in said {
     match s {
       // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-      Link(url) => link_later.push(app_link(url))
+      Link(url) => link_opened_with(app_link(url))
       // shown over another app, or in its own window again (share.mbt)
       Over(over) => share_over.set(over)
       // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
