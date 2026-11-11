@@ -213,7 +213,7 @@ pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) 
   }
   guard j is Some(Object(_)) else { return (name, "", false) }
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   let at = match dv_stations(src, ws).0 {

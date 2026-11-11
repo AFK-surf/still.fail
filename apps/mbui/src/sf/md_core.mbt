@@ -59,7 +59,7 @@ fn md_words(j : Json, text : String) -> String? {
   match j {
     String(s) => Some(s)
     Array([Number(a,..),Number(b,..)]) if a >= 0.0 && b >= a && b <= text.length().to_double() =>
-      Some(text.view(start_offset=a.to_int(), end_offset=b.to_int()).to_owned())
+      Some(text.clamped_view(start=a.to_int(), end=b.to_int()).to_owned())
     _ => None
   }
 }

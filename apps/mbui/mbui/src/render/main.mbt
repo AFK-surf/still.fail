@@ -58,7 +58,7 @@ fn num(s : String) -> Double {
 fn quoted(line : String) -> String {
   match line.find("\"") {
     Some(k) => {
-      let j = @json.parse(line.view(start_offset=k).to_owned()) catch { _ => return "" }
+      let j = @json.parse(line.exact_view(start=k).to_owned()) catch { _ => return "" }
       match j {
         String(s) => s
         _ => ""
@@ -108,7 +108,7 @@ fn parse(text : String) -> Dl {
         let last = t[t.length() - 1]
         let bytes = if last.has_suffix("\"") { -1 } else { num(last).to_int() }
         let src = match (line.find("\""), line.rev_find("\"")) {
-          (Some(k), Some(e)) if e > k => quoted(line.view(start_offset=0, end_offset=e + 1).to_owned())
+          (Some(k), Some(e)) if e > k => quoted(line.exact_view(start=0, end=e + 1).to_owned())
           _ => ""
         }
         dl.images[num(t[1]).to_int()] = (num(t[2]).to_int(), src, bytes)
@@ -226,7 +226,7 @@ fn main {
       tell_parts(damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b))
       let (si, sn) = seen(inst, n, dl)
       draw(si, sn, r, gg, b)
-      let whole = (if out.has_suffix(".png") { out.view(end_offset=out.length() - 4).to_owned() } else { out }) +
+      let whole = (if out.has_suffix(".png") { out.exact_view(end=out.length() - 4).to_owned() } else { out }) +
         ".whole.png"
       if !snapshot_drawn(out) {
         say("mbui-render: \{out}: not written")

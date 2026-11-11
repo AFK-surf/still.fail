@@ -10,7 +10,7 @@ fn wire_subs(heard : Array[String]) -> Array[String] {
   let out : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }
-    let text = h.view(start_offset=4).to_owned()
+    let text = h.exact_view(start=4).to_owned()
     let j = @json.parse(text) catch { _ => continue }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
     match (m.get("subscribe"), m.get("unsubscribe")) {
@@ -221,7 +221,7 @@ fn wire_chats(heard : Array[String]) -> Array[String] {
   let out : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }
-    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => continue }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => continue }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
     match (m.get("subscribe"), m.get("unsubscribe")) {
       (Some(Object(t)), _) if t.get("topic") == Some(Json::string("chats")) => {

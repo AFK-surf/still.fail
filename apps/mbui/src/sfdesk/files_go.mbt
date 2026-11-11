@@ -122,7 +122,7 @@ fn place_of(stations : Array[DvStation], station : String, abs : String) -> Driv
           Some({
             station,
             root: Some(r.path),
-            path: if abs == r.path { "" } else { abs.view(start_offset=r.path.length() + 1).to_owned() },
+            path: if abs == r.path { "" } else { abs.exact_view(start=r.path.length() + 1).to_owned() },
           })
         None => None
       }

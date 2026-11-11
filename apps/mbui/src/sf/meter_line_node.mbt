@@ -50,7 +50,7 @@ fn meter_chip_node(c : @view.View, m : () -> Json?, figure : Bool, tips : TipLay
   let words = fn() {
     let unit = chip_str(m(), "unit")
     if figure && chip_str(m(), "big") != "" {
-      chip_str(m(), "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_owned() })
+      chip_str(m(), "big") + (if unit == "%" || unit == "" { unit } else { unit.clamped_view(end=1).to_owned() })
     } else {
       chip_str(m(), "remaining")
     }

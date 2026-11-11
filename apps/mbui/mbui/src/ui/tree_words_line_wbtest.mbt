@@ -111,8 +111,8 @@ fn breaks_read(
   words : String,
   cut : Int,
 ) -> ((Double, Double), Array[String], Array[String], Array[String]) {
-  let first = words.view(end_offset=cut).to_owned()
-  let second = words.view(start_offset=cut).to_owned()
+  let first = words.exact_view(end=cut).to_owned()
+  let second = words.exact_view(start=cut).to_owned()
   let t = if node {
     Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   } else {

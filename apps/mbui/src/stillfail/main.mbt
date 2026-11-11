@@ -320,9 +320,9 @@ let core_source : @sfapp.Source = {
 /// localhost.example.com, 127.0.0.1.nip.io, a user's part before an @).
 fn local_cloud(url : String) -> Bool {
   let rest = if url.has_prefix("http://") {
-    url.view(start_offset=7).to_owned()
+    url.exact_view(start=7).to_owned()
   } else if url.has_prefix("https://") {
-    url.view(start_offset=8).to_owned()
+    url.exact_view(start=8).to_owned()
   } else {
     return false
   }
@@ -333,12 +333,12 @@ fn local_cloud(url : String) -> Bool {
       _ => ()
     }
   }
-  let authority = rest.view(end_offset=end).to_owned()
+  let authority = rest.exact_view(end=end).to_owned()
   if authority.contains("@") {
     return false
   }
   let host = match authority.rev_find(":") {
-    Some(i) => authority.view(end_offset=i).to_owned()
+    Some(i) => authority.exact_view(end=i).to_owned()
     None => authority
   }
   host == "127.0.0.1" || host == "localhost"

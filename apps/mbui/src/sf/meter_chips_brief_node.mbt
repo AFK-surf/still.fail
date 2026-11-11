@@ -138,7 +138,7 @@ pub fn meter_chips_brief_node(parent : @view.View, meters : () -> Array[Json], l
 fn meter_brief_figure(m : Json?) -> String {
   let unit = chip_str(m, "unit")
   if chip_str(m, "big") != "" {
-    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_owned() })
+    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.clamped_view(end=1).to_owned() })
   } else {
     chip_str(m, "remaining")
   }

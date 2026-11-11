@@ -90,7 +90,7 @@ fn file_name_node(parent : @view.View, name : () -> String, loc~ : SourceLoc) ->
     let n = name()
     match n.rev_find(".") {
       Some(i) if i > 0 && n.length() - i <= name_ext_most =>
-        (n.view(end_offset=i).to_owned(), n.view(start_offset=i).to_owned())
+        (n.exact_view(end=i).to_owned(), n.exact_view(start=i).to_owned())
       _ => (n, "")
     }
   }

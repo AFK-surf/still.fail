@@ -392,9 +392,9 @@ fn Flow::settle_start(self : Flow) -> Unit {
 fn notice_permission_of(trace : String) -> String? {
   let key = "\"call\":\"notify.permission\",\"params\":{\"state\":\""
   guard trace.find(key) is Some(i) else { return None }
-  let rest = trace.view(start_offset=i + key.length())
+  let rest = trace.exact_view(start=i + key.length())
   guard rest.find("\"") is Some(j) else { return None }
-  Some(rest.view(end_offset=j).to_owned())
+  Some(rest.exact_view(end=j).to_owned())
 }
 
 ///|

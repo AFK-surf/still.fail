@@ -17,7 +17,7 @@ fn window_wire(heard : Array[String]) -> Array[String] {
   }
   for h in heard {
     guard h.has_prefix("out ") else { continue }
-    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => continue }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => continue }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
     match (m.get("subscribe"), m.get("unsubscribe"), m.get("call")) {
       (Some(Object(t)), _, _) if t.get("topic") == Some(Json::string("chats")) && ours(t) => {
@@ -65,7 +65,7 @@ fn window_drawn(t : @ui.Tester, titles : Array[String], h : Double) -> Array[Str
   let words = t.words().filter(fn(w) { w.2 + w.4 > 0.0 && w.2 < h && w.5 > 0.0 })
   titles.filter(fn(title) {
     words.iter().any(fn(w) {
-      let said = if w.0.has_suffix("…") { w.0.view(end_offset=w.0.length() - 1).to_owned() } else { w.0 }
+      let said = if w.0.has_suffix("…") { w.0.exact_view(end=w.0.length() - 1).to_owned() } else { w.0 }
       said.length() >= 4 && title.has_prefix(said)
     })
   })

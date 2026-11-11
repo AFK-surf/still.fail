@@ -726,7 +726,7 @@ fn vault_first_node(
     "not-signer" => vault_gate_node(b, core, "web-pages.vault.notSigner", "web-pages.vault.notSignerWhy")
     "off" => vault_off_node(b, core, ws)
     k if k.has_prefix("named/") => {
-      let id = k.view(start_offset=6).to_owned()
+      let id = k.exact_view(start=6).to_owned()
       vault_named_node(b, core, ws, fn() { items(view().value, "vaults").iter().find_first(fn(r) { text(Some(r), "id") == id }) })
     }
     _ => return false

@@ -74,9 +74,9 @@ pub fn station_mark_node(
   let glyph = fn() -> (String, Array[String], Array[String], String)? {
     let i = icon()
     guard i.has_prefix("glyph:") else { return None }
-    let rest = i.view(start_offset=6).to_owned()
+    let rest = i.exact_view(start=6).to_owned()
     let (name, colour) = match rest.find(":") {
-      Some(k) => (rest.view(end_offset=k).to_owned(), rest.view(start_offset=k + 1).to_owned())
+      Some(k) => (rest.exact_view(end=k).to_owned(), rest.exact_view(start=k + 1).to_owned())
       None => (rest, "")
     }
     glyph_paths(name).map(fn(p) { (name, p.0, p.1, colour) })

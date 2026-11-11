@@ -14,7 +14,7 @@ fn ahead_phone(ms : Double, said : Array[String]) -> @ui.Tester {
   let names : Map[Int, String] = Map([])
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }
-    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => return }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => return }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { return }
     match (m.get("subscribe"), m.get("unsubscribe")) {
       (Some(Object(sub)), _) =>

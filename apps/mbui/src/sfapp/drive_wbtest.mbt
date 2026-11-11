@@ -248,7 +248,7 @@ test "a Markdown file read as a chat's Markdown is drawn, its words searched whe
   t.draw()
   assert_eq(r.matches.length(), 1)
   assert_eq(r.matches[0].chunk, 0)
-  assert_eq(fixture_markdown().view(start_offset=r.matches[0].start).has_prefix("每一项"), true)
+  assert_eq(fixture_markdown().exact_view(start=r.matches[0].start).has_prefix("每一项"), true)
 }
 
 ///|

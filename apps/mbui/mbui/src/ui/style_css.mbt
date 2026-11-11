@@ -120,7 +120,7 @@ fn Css::name(self : Css) -> StringView raise CssError {
   if self.i == a {
     self.fail("a name wanted")
   }
-  self.s.view(start_offset=a, end_offset=self.i)
+  self.s.exact_view(start=a, end=self.i)
 }
 
 ///|

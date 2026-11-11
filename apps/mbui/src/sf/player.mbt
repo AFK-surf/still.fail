@@ -616,7 +616,7 @@ fn take_grab(c : @ui.Ctx, v : PlayerView, p : @kit.Media, name : String) -> Unit
         Some(png) => {
           v.grabbing = false
           let base = match name.rev_find(".") {
-            Some(i) if i > 0 => name.view(end_offset=i).to_owned()
+            Some(i) if i > 0 => name.exact_view(end=i).to_owned()
             _ => name
           }
           if png.length() > 0 {
@@ -868,7 +868,7 @@ fn player_cue(c : @ui.Ctx, words : String, up : Bool, right : Double, over~ : Do
 /// A familiar container name, only when the media type says which it is.
 fn player_format(mime : String) -> String? {
   let raw = match mime.find(";") {
-    Some(i) => mime.view(end_offset=i).to_owned()
+    Some(i) => mime.exact_view(end=i).to_owned()
     None => mime
   }
   match raw.trim(chars=" \t\r\n").to_lower() {

@@ -32,7 +32,7 @@ fn connect_asked(said : Array[String], page : String) -> @ui.Tester {
   new_run()
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }
-    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => return }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => return }
     guard j is Object(m) && m.get("subscribe") is Some(Object(sub)) && sub.get("topic") is Some(String(topic)) else {
       return
     }

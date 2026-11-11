@@ -13,7 +13,7 @@ fn reused_words_drawn(t : Tester) -> Array[Int] {
   rows.sort_by(fn(a, b) { a.0.compare(b.0) })
   rows.map(fn(r) {
     let mut n = 0
-    for c in r.1.view(start_offset=4) {
+    for c in r.1.exact_view(start=4) {
       n = n * 10 + (c.to_int() - '0'.to_int())
     }
     n

@@ -34,7 +34,7 @@ fn rig_station_node(
   tips : @sf.TipLayer,
 ) -> Unit {
   let id = match address.find("/") {
-    Some(i) => address.view(start_offset=i + 1).to_owned()
+    Some(i) => address.exact_view(start=i + 1).to_owned()
     None => address
   }
   @sf.page_node(

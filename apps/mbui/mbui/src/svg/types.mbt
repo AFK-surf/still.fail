@@ -100,12 +100,12 @@ fn Stream::consume_string(self : Stream, t : String) -> Bool {
 
 ///|
 fn Stream::slice_back(self : Stream, start : Int) -> String {
-  self.text.view(start_offset=start, end_offset=self.pos).to_owned()
+  self.text.exact_view(start=start, end=self.pos).to_owned()
 }
 
 ///|
 fn Stream::slice_tail(self : Stream) -> String {
-  self.text.view(start_offset=self.pos).to_owned()
+  self.text.exact_view(start=self.pos).to_owned()
 }
 
 ///|

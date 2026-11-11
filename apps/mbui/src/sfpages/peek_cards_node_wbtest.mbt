@@ -207,21 +207,21 @@ fn peek_new(change : (String, Json?) -> Json?, body : (@view.View) -> Unit, padd
 /// is (at x,y) and what is wrong (after its last "): "), so that one of the old view's and one of the nodes' compare.
 fn peek_fault_said(f : String) -> String {
   let what = match f.find(" (") {
-    Some(i) => f.view(end_offset=i).to_owned()
+    Some(i) => f.exact_view(end=i).to_owned()
     None => f
   }
   let at = match f.find(" at ") {
     Some(i) => {
-      let rest = f.view(start_offset=i + 4)
+      let rest = f.exact_view(start=i + 4)
       match rest.find(" ") {
-        Some(j) => rest.view(end_offset=j).to_owned()
+        Some(j) => rest.exact_view(end=j).to_owned()
         None => rest.to_owned()
       }
     }
     None => ""
   }
   let wrong = match f.rev_find("): ") {
-    Some(i) => f.view(start_offset=i + 3).to_owned()
+    Some(i) => f.exact_view(start=i + 3).to_owned()
     None => ""
   }
   what + " at " + at + ": " + wrong

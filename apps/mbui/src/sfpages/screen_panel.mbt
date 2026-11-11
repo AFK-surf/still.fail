@@ -50,7 +50,7 @@ fn combos_for(os : String) -> Array[Combo] {
 /// The system the screen's station runs on, in words (its host's `os`, the workspace's stations' view); "" until known.
 fn screen_os(src : Source, station : String) -> String {
   let scope = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   match @sfbase.station_rows(src, scope).value {

@@ -94,7 +94,7 @@ fn create_workspace(src : Source, account : Json?, code : String) -> Unit {
   let name = match text(account, "name") {
     "" =>
       match text(account, "email").find("@") {
-        Some(i) => text(account, "email").view(end_offset=i).to_owned()
+        Some(i) => text(account, "email").exact_view(end=i).to_owned()
         None => text(account, "email")
       }
     n => n

@@ -209,7 +209,7 @@ pub fn Replay::parse(log : String) -> Replay {
       Some(i) => i + 10
       None => if line.has_prefix("{") { 0 } else { continue }
     }
-    let j = @json.parse(line.view(start_offset=start).to_owned()) catch {
+    let j = @json.parse(line.exact_view(start=start).to_owned()) catch {
       _ => continue
     }
     guard j is Object(m) else { continue }
@@ -723,15 +723,15 @@ pub fn Replay::host(self : Replay, said : (String) -> Unit) -> Unit {
 /// test to have said it (Replay::step_taken): a player's state its host told once the run was past `until 0:02 /` is
 /// not given before.
 pub fn step_of(line : String) -> String? {
-  let l0 = if line.has_prefix("now ") { line.view(start_offset=4).to_owned() } else { line }
+  let l0 = if line.has_prefix("now ") { line.exact_view(start=4).to_owned() } else { line }
   // (`=words`, words alone: the drive says the line it took as it parsed it)
   // (and without the spaces after it: the drive's line as it took it, trimmed)
   let mut l = l0.replace_all(old=" =", new=" ")
   while l.has_suffix(" ") {
-    l = l.view(end_offset=l.length() - 1).to_owned()
+    l = l.exact_view(end=l.length() - 1).to_owned()
   }
   let verb = match l.find(" ") {
-    Some(k) => l.view(end_offset=k).to_owned()
+    Some(k) => l.exact_view(end=k).to_owned()
     None => l
   }
   if said_steps.contains(verb) {

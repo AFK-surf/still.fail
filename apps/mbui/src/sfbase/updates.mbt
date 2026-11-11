@@ -270,7 +270,7 @@ pub fn update_auto_on() -> Unit {
 fn update_file_name(v : Json) -> String {
   let file = text(Some(v), "file")
   match file.rev_find("/") {
-    Some(i) => file.view(start_offset=i + 1).to_owned()
+    Some(i) => file.exact_view(start=i + 1).to_owned()
     None => file
   }
 }
@@ -430,7 +430,7 @@ pub fn update_error(e : String) -> String {
   match e {
     "incomplete" => @sf.t("android-misc.updates.incomplete")
     e if e.has_prefix("status ") =>
-      @sf.t("android-misc.updates.httpStatus", args=[("status", e.view(start_offset=7).to_owned())])
+      @sf.t("android-misc.updates.httpStatus", args=[("status", e.exact_view(start=7).to_owned())])
     e => e
   }
 }

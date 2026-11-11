@@ -61,7 +61,7 @@ pub fn preview_kind(name : String) -> (PKind?, String, String) {
     _ => ()
   }
   let ext = match lower.rev_find(".") {
-    Some(i) if i > 0 => lower.view(start_offset=i + 1).to_owned()
+    Some(i) if i > 0 => lower.exact_view(start=i + 1).to_owned()
     _ => ""
   }
   let media : (PKind, String)? = match ext {
@@ -1050,7 +1050,7 @@ pub fn Viewer::id(self : Viewer) -> String {
 /// The row in an occurrence's place and the file or quote within it.
 fn place_parts(at : String) -> (String, String) {
   match at.rev_find("/") {
-    Some(i) => (at.view(end_offset=i).to_owned(), at.view(start_offset=i).to_owned())
+    Some(i) => (at.exact_view(end=i).to_owned(), at.exact_view(start=i).to_owned())
     None => (at, "")
   }
 }
@@ -1995,7 +1995,7 @@ pub fn Viewer::finish_marks(self : Viewer, to_draft : Bool) -> Unit {
       marking.error = ""
       marking.to_draft = to_draft
       let base = match self.file.name.rev_find(".") {
-        Some(i) if i > 0 => self.file.name.view(end_offset=i).to_owned()
+        Some(i) if i > 0 => self.file.name.exact_view(end=i).to_owned()
         _ => self.file.name
       }
       let stamp = clock_stamp((src_now.val)())
@@ -3102,7 +3102,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
     let page = match v.page {
       Some(p) => p
       None => {
-        let head = words.view(end_offset=if words.length() < 2048 { words.length() } else { 2048 }).to_owned()
+        let head = words.clamped_view(end=if words.length() < 2048 { words.length() } else { 2048 }).to_owned()
         let low = @sf.lower(head)
         let html = if low.contains("<!doctype") || low.contains("<html") {
           words

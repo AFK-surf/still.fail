@@ -235,7 +235,7 @@ fn preset_then(src : Source, address : String, stations : Array[Json], e : Prese
   if then == "browse" {
     preset_browse(src, address, stations, e, None)
   } else if then.has_prefix("browse:") {
-    preset_browse(src, address, stations, e, Some(then.view(start_offset=7).to_owned()))
+    preset_browse(src, address, stations, e, Some(then.exact_view(start=7).to_owned()))
   } else if then == "clone" {
     preset_clone_open(src, address, stations, e)
   } else {
@@ -391,7 +391,7 @@ fn preset_dirs_node(
           opens=true,
         )
       } else if k.has_prefix("h\n") {
-        let s = k.view(start_offset=2).to_owned()
+        let s = k.exact_view(start=2).to_owned()
         let saved = @signals.untracked(fn() {
           match e.dirs.get().iter().find_first(fn(d) { dir_station(Some(d), address) == s }) {
             Some(d) => text(Some(d), "stationName")
@@ -400,7 +400,7 @@ fn preset_dirs_node(
         })
         @sf.panel_heading_node(row, fn() { preset_station_name(s, saved, stations) })
       } else if k.has_prefix("d\n") {
-        let at = k.view(start_offset=2).to_owned()
+        let at = k.exact_view(start=2).to_owned()
         guard @signals.untracked(fn() { e.dirs.get().iter().find_first(fn(d) { dir_key(Some(d)) == at }) }) is Some(was) else {
           return
         }
@@ -426,7 +426,7 @@ fn preset_dirs_node(
           },
         )
       } else {
-        let cid = k.view(start_offset=2).to_owned()
+        let cid = k.exact_view(start=2).to_owned()
         guard @signals.untracked(fn() { e.clones.get().iter().find_first(fn(x) { x.id == cid }) }) is Some(c) else {
           return
         }
@@ -799,7 +799,7 @@ fn preset_add_node(
       } else if k == "a\nclone" {
         preset_action_row(r, "download", fn() { @sf.t("web-main.preset.clone") }, clone)
       } else if k.has_prefix("h\n") {
-        let s = k.view(start_offset=2).to_owned()
+        let s = k.exact_view(start=2).to_owned()
         let saved = @signals.untracked(fn() {
           match offered_dirs(src, address, stations).iter().find_first(fn(o) { dir_station(Some(o), address) == s }) {
             Some(o) => text(Some(o), "stationName")
@@ -808,7 +808,7 @@ fn preset_add_node(
         })
         @sf.panel_heading_node(r, fn() { preset_station_name(s, saved, stations) })
       } else {
-        let at = k.view(start_offset=2).to_owned()
+        let at = k.exact_view(start=2).to_owned()
         let find = fn() { offered_dirs(src, address, stations).iter().find_first(fn(o) { dir_key(Some(o)) == at }) }
         guard @signals.untracked(find) is Some(was) else { return }
         let one = fn() { Some(find().unwrap_or(was)) }

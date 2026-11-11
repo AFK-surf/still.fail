@@ -95,7 +95,7 @@ let subtitle_extensions : Array[String] = ["srt", "vtt", "ass", "ssa"]
 /// A name's extension, lower case ("" when it has none).
 pub fn extension_of(name : String) -> String {
   match name.rev_find(".") {
-    Some(i) => name.view(start_offset=i + 1).to_owned().to_lower()
+    Some(i) => name.exact_view(start=i + 1).to_owned().to_lower()
     None => ""
   }
 }
@@ -105,7 +105,7 @@ pub fn extension_of(name : String) -> String {
 /// first, then one with a tag between (`E01.zh.srt`), the whole name winning a tie.
 pub fn side_subtitle(base : String, names : Array[String]) -> String? {
   let stem = match base.rev_find(".") {
-    Some(i) => base.view(end_offset=i).to_owned()
+    Some(i) => base.exact_view(end=i).to_owned()
     None => base
   }
   let stems = if stem == base { [base] } else { [base, stem] }
@@ -128,7 +128,7 @@ pub fn side_subtitle(base : String, names : Array[String]) -> String? {
       Some(r) => r
       None => continue
     }
-    let tag = name.view(start_offset=found.length()).to_owned()
+    let tag = name.clamped_view(start=found.length()).to_owned()
     let exact = tag.length() == ext.length() + 1
     let full = found == base
     let better = match best {

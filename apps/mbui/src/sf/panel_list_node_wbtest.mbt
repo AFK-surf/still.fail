@@ -130,7 +130,7 @@ fn lists_words_of(t : @ui.Tester, side : String) -> Map[String, (Double, Double,
   for w in t.words() {
     // (a row's words where they meet its room: those past it cut away, whether made or not)
     if w.0.has_prefix(side + " ") && (w.0 == side + " end" || (w.2 + w.4 > 0.0 && w.2 < lists_room)) {
-      out[w.0.view(start_offset=side.length() + 1).to_owned()] = (w.1 - dx, w.2, w.5)
+      out[w.0.exact_view(start=side.length() + 1).to_owned()] = (w.1 - dx, w.2, w.5)
     }
   }
   out

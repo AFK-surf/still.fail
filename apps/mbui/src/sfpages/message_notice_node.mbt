@@ -210,8 +210,8 @@ fn notice_words_node(v : @view.View, here : MessageNodeHere, m : () -> Message, 
       let runs = fn() {
         let now = m()
         [
-          @ui.span(now.notice_words.view(end_offset=now.notice_link).to_owned()),
-          @ui.span(now.notice_words.view(start_offset=now.notice_link).to_owned(), underline=true, link="profile"),
+          @ui.span(now.notice_words.clamped_view(end=now.notice_link).to_owned()),
+          @ui.span(now.notice_words.clamped_view(start=now.notice_link).to_owned(), underline=true, link="profile"),
         ]
       }
       v.box(fn(w) {

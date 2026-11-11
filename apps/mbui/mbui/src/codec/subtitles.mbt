@@ -16,7 +16,7 @@ pub fn parse_subtitles(name : String, bytes : Bytes) -> Array[Cue] {
   let text = @utf8.decode_lossy(bytes[:], ignore_bom=true)
   let text = text.replace_all(old="\r\n", new="\n").replace_all(old="\r", new="\n")
   let ext = match name.rev_find(".") {
-    Some(i) => name.view(start_offset=i + 1).to_owned().to_lower()
+    Some(i) => name.exact_view(start=i + 1).to_owned().to_lower()
     None => ""
   }
   match ext {
@@ -35,11 +35,11 @@ pub fn parse_timed(text : String) -> Array[Cue] {
     let line = lines[i]
     match line.find("-->") {
       Some(at) => {
-        let a = line.view(end_offset=at).to_owned().trim().to_owned()
+        let a = line.exact_view(end=at).to_owned().trim().to_owned()
         // WebVTT's settings after the time (align:start …)
-        let rest = line.view(start_offset=at + 3).to_owned().trim().to_owned()
+        let rest = line.exact_view(start=at + 3).to_owned().trim().to_owned()
         let b = match rest.find(" ") {
-          Some(k) => rest.view(end_offset=k).to_owned()
+          Some(k) => rest.exact_view(end=k).to_owned()
           None => rest
         }
         i += 1
@@ -78,7 +78,7 @@ pub fn parse_ass(text : String) -> Array[Cue] {
     }
     if line.to_lower().has_prefix("format:") {
       fields = line
-        .view(start_offset=7)
+        .exact_view(start=7)
         .to_owned()
         .split(",")
         .map(fn(f) { f.to_owned().trim().to_owned().to_lower() })
@@ -88,7 +88,7 @@ pub fn parse_ass(text : String) -> Array[Cue] {
     if !line.to_lower().has_prefix("dialogue:") {
       continue
     }
-    let body = line.view(start_offset=9).to_owned()
+    let body = line.exact_view(start=9).to_owned()
     let n = fields.length()
     // the first n - 1 fields, then the text whole
     let parts : Array[String] = []
@@ -189,7 +189,7 @@ pub fn subtitle_time(s : String) -> Double? {
     return None
   }
   let (whole, frac) = match s.find(".") {
-    Some(k) => (s.view(end_offset=k).to_owned(), s.view(start_offset=k + 1).to_owned())
+    Some(k) => (s.exact_view(end=k).to_owned(), s.exact_view(start=k + 1).to_owned())
     None => (s, "")
   }
   let parts = whole.split(":").map(fn(p) { p.to_owned() }).to_array()

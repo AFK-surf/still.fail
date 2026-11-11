@@ -249,7 +249,7 @@ fn GlyphPainter::outline_glyph(self : GlyphPainter, glyph : Int) -> @skia.Rect? 
         }
       }
       let s = sb.to_string()
-      self.path = if s.length() > 0 { s.view(end_offset=s.length() - 1).to_owned() } else { s }
+      self.path = if s.length() > 0 { s.exact_view(end=s.length() - 1).to_owned() } else { s }
       if min_x <= max_x && min_y <= max_y {
         bounds = @skia.Rect::from_ltrb(min_x, min_y, max_x, max_y)
       }

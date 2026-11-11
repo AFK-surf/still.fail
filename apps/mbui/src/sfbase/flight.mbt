@@ -1024,10 +1024,10 @@ fn words_without(s : String, gone : Array[Int]) -> String {
   let sb = StringBuilder()
   let mut at = 0
   for g in gone {
-    sb.write_string(s.view(start_offset=at, end_offset=g).to_owned())
+    sb.write_string(s.clamped_view(start=at, end=g).to_owned())
     at = g + 1
   }
-  sb.write_string(s.view(start_offset=at).to_owned())
+  sb.write_string(s.clamped_view(start=at).to_owned())
   sb.to_string()
 }
 
@@ -1184,7 +1184,7 @@ fn field_lines_of(field : @ui.Field, words : String) -> (@ui.FieldLines?, Int) {
         lead = lead + 1
       }
       if lead + words.length() <= l.text.length() &&
-        l.text.view(start_offset=lead, end_offset=lead + words.length()).to_owned() == words {
+        l.text.clamped_view(start=lead, end=lead + words.length()).to_owned() == words {
         (Some(l), lead)
       } else {
         (None, 0)

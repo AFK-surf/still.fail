@@ -508,7 +508,7 @@ fn outline_drawn(t : @ui.Tester, kind : String) -> Array[(Double, Double, Double
       }
     }
     let words = match l.find("\"") {
-      Some(i) => l.view(start_offset=i + 1).to_owned().trim_end(chars="\"").to_owned()
+      Some(i) => l.exact_view(start=i + 1).to_owned().trim_end(chars="\"").to_owned()
       None => ""
     }
     Some((n(p[1]), n(p[2]), n(p[3]), n(p[4]), p[5], words))
@@ -867,7 +867,7 @@ test "对话目录: a person's message said while it is open adds its row, askin
   // (its words in the panel, as the core cuts a row's: they begin as it does)
   let shows = fn() {
     let (px, _, _, _) = outline_panel(t).unwrap()
-    outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.5.has_prefix(row.view(end_offset=20).to_owned()) }).length()
+    outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.5.has_prefix(row.exact_view(end=20).to_owned()) }).length()
   }
   assert_eq(shows(), 0)
   live.set(Some(full))
@@ -1025,7 +1025,7 @@ test "对话目录: the longer chat's rail a steady map, its ticks where they we
   t.run_for(@ui.move_most_ms)
   let p = outline_tick_places(t)
   assert_eq(ys(p), ys(first))
-  let went = (try Some(@json.parse(outline_reading().flash.view(start_offset=2).to_owned())) catch { _ => None })
+  let went = (try Some(@json.parse(outline_reading().flash.exact_view(start=2).to_owned())) catch { _ => None })
     .bind(fn(j) { (if j is Number(n, ..) { Some(n) } else { None }) })
     .unwrap_or(-1.0)
   assert_eq(long(p), [outline_long_tick(m, went)])

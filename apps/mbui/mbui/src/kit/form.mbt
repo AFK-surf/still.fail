@@ -81,7 +81,7 @@ pub fn field_error(f : FormField, text : String, words? : FormWords = form_words
     Email => {
       let at = s.find("@")
       let ok = match at {
-        Some(i) => i > 0 && s.view(start_offset=i + 1).contains(".") && !s.contains(" ")
+        Some(i) => i > 0 && s.exact_view(start=i + 1).contains(".") && !s.contains(" ")
         None => false
       }
       if !ok {

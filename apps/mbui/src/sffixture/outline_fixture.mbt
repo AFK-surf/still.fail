@@ -418,11 +418,11 @@ fn outline_snippet(said : String, words : Array[String]) -> String {
   if at > outline_snippet_lead && at < line.length() {
     // (at a word's start where there is one near, as the core's: not in a word's middle)
     let from = at - outline_snippet_lead
-    let from = match line.view(start_offset=from).find(" ") {
+    let from = match line.clamped_view(start=from).find(" ") {
       Some(i) if from + i < at => from + i + 1
       _ => from
     }
-    outline_cut("…" + line.view(start_offset=from).to_owned())
+    outline_cut("…" + line.clamped_view(start=from).to_owned())
   } else {
     outline_cut(line)
   }

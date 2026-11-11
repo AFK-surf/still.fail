@@ -123,7 +123,7 @@ fn native_said(name : String, r : Result[Json, String]) -> Unit {
 /// A NATIVESAID line's call and answer (None: not one).
 fn native_of_line(line : String) -> (String, Result[Json, String])? {
   guard line.find("NATIVESAID ") is Some(i) else { return None }
-  let j = @json.parse(line.view(start_offset=i + 11).to_owned()) catch { _ => return None }
+  let j = @json.parse(line.exact_view(start=i + 11).to_owned()) catch { _ => return None }
   guard j is Object(m) else { return None }
   guard m.get("name") is Some(String(name)) else { return None }
   match (m.get("ok"), m.get("error")) {

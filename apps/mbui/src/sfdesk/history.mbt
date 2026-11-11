@@ -324,7 +324,7 @@ fn wh_transcript_node(v : @view.View, src : Source, station : String, key : Stri
         None => whole.rev_find("\\")
       }
       match cut {
-        Some(i) => whole.view(start_offset=i + 1).to_owned()
+        Some(i) => whole.exact_view(start=i + 1).to_owned()
         None => whole
       }
     }
@@ -415,7 +415,7 @@ let wh_mark_side : Double = 16.0
 /// A station's workspace, from its address (ws/station).
 fn scope_of(station : String) -> String {
   match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
 }

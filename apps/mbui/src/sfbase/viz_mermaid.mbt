@@ -163,7 +163,7 @@ fn mermaid_ways(c : @ui.Ctx, station : String, place : String, svg : Bytes, w : 
     c.on_press(full, fn() {
       let a : Attachment = {
         name: "Mermaid.svg",
-        path: "draft:mermaid/" + @zip.sha256(svg).view(end_offset=16).to_owned(),
+        path: "draft:mermaid/" + @zip.sha256(svg).exact_view(end=16).to_owned(),
         size: svg.length().to_double(),
         width: w,
         height: h,

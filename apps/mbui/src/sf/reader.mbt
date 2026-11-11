@@ -750,7 +750,7 @@ fn reader_marked(
           bg = g.2
         }
       }
-      out.push({ ..run, text: run.text.view(start_offset=a, end_offset=b).to_owned(), bg })
+      out.push({ ..run, text: run.text.clamped_view(start=a, end=b).to_owned(), bg })
     }
     at += len
   }
@@ -805,7 +805,7 @@ fn reader_headings(runs : Array[@ui.Run], raw : String, start : Int, heads : Map
         continue
       }
       let heading = ranges.iter().any(fn(g) { at + a >= g.0 && at + a < g.1 })
-      let text = run.text.view(start_offset=a, end_offset=b).to_owned()
+      let text = run.text.clamped_view(start=a, end=b).to_owned()
       out.push(if heading { { ..run, text, weight: reader_heading_weight, scale: reader_heading_scale } } else { { ..run, text } })
     }
     at += len

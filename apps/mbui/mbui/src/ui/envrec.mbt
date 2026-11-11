@@ -113,7 +113,7 @@ fn settings_at_frame(w : Double, h : Double, scale : Double) -> Unit {
 /// One ENV line set again on the fake host (Tester::replay_frames).
 fn replay_env(f : FakeHost, line : String) -> Unit {
   guard line.find("ENV ") is Some(i) else { return }
-  let j = @json.parse(line.view(start_offset=i + 4).to_owned()) catch { _ => return }
+  let j = @json.parse(line.exact_view(start=i + 4).to_owned()) catch { _ => return }
   guard j is Object(m) else { return }
   let on = fn(k : String, was : Bool) -> Bool {
     match m.get(k) {
@@ -160,7 +160,7 @@ fn env_before_frames(f : FakeHost, run : String) -> Unit {
       replay_env(f, line)
     }
     match line.find("VIEWSAID ") {
-      Some(i) => ignore(fake_view_said(f, line.view(start_offset=i + 9).to_owned()))
+      Some(i) => ignore(fake_view_said(f, line.exact_view(start=i + 9).to_owned()))
       None => ()
     }
     // what came from outside before it (the system's bars round an edge-to-edge window): the first frame takes it

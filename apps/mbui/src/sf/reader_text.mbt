@@ -40,7 +40,7 @@ fn tx_nl(s : String, from : Int) -> Int {
 
 ///|
 fn tx_sub(s : String, from : Int, to : Int) -> String {
-  s.view(start_offset=from, end_offset=to).to_owned()
+  s.clamped_view(start=from, end=to).to_owned()
 }
 
 // ── chunking ─────────────────────────────────────────────────────────────

@@ -251,7 +251,7 @@ fn clip_said(c : Clipboard) -> Unit {
 /// A CLIPSAID line's clipboard (None: not one).
 fn clip_of_line(line : String) -> Clipboard? {
   guard line.find("CLIPSAID ") is Some(i) else { return None }
-  let j = @json.parse(line.view(start_offset=i + 9).to_owned()) catch { _ => return None }
+  let j = @json.parse(line.exact_view(start=i + 9).to_owned()) catch { _ => return None }
   guard j is Object(m) else { return None }
   let str = fn(k : String) -> String {
     match m.get(k) {

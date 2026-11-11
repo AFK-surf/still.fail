@@ -448,7 +448,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
       // (its first number: where it is across, in 1/64 px)
       let mut x = 0
       let mut sign = 1
-      for ch in line.view(start_offset=5) {
+      for ch in line.exact_view(start=5) {
         if ch == '-' {
           sign = -1
         } else if ch >= '0' && ch <= '9' {

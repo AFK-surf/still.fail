@@ -67,7 +67,7 @@ pub fn station_pick_set(at : PickAt, ticked : Array[Dragged]) -> Unit {
 /// The workspace of draft `key` (`<station>:<chat>`, its station's; `new:<workspace>`).
 fn draft_workspace(key : String) -> String {
   if key.has_prefix("new:") {
-    key.view(start_offset=4).to_owned()
+    key.exact_view(start=4).to_owned()
   } else {
     workspace_of(key)
   }

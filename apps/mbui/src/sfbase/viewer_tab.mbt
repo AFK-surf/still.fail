@@ -100,7 +100,7 @@ pub(all) struct ViewTab {
 /// The file tab `tab` is (None: no file's tab, or one that does not read).
 pub fn view_tab_file(tab : String) -> ViewTab? {
   guard tab.has_prefix("view:") else { return None }
-  let v = @json.parse(tab.view(start_offset="view:".length()).to_owned()) catch { _ => return None }
+  let v = @json.parse(tab.exact_view(start="view:".length()).to_owned()) catch { _ => return None }
   guard v is Array(xs) && xs.length() >= 6 else { return None }
   guard xs[0] is String(of) &&
     xs[1] is String(station) &&

@@ -117,7 +117,7 @@ pub fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
 /// far as their tabs go, whether it has a chat yet, its session; the `change`, when one is made), as kept.
 pub fn fixture_tabs_ask(f : Fixture, key : String, chat : Json?, change : Json?) -> Json {
   let (station, rest) = match key.find(":") {
-    Some(i) => (key.view(end_offset=i).to_owned(), key.view(start_offset=i + 1).to_owned())
+    Some(i) => (key.exact_view(end=i).to_owned(), key.exact_view(start=i + 1).to_owned())
     None => ("", "")
   }
   let agents = items(chat, "agents").map(fn(a) {
@@ -167,15 +167,15 @@ pub fn fixture_with_tabs(f : Fixture, params : Map[String, Json], value : Json?)
 pub fn fixture_tabs_call(f : Fixture, name : String, params : Json) -> Result[Json, Json] {
   let key = text(Some(params), "chat")
   let chat = match key.find(":") {
-    Some(i) if key.view(end_offset=i).contains("/") =>
+    Some(i) if key.exact_view(end=i).contains("/") =>
       fixture_topic_inner(f, "chat", {
-        "station": Json::string(key.view(end_offset=i).to_owned()),
-        "session": Json::string(key.view(start_offset=i + 1).to_owned()),
+        "station": Json::string(key.exact_view(end=i).to_owned()),
+        "session": Json::string(key.exact_view(start=i + 1).to_owned()),
       })
     _ => None
   }
   let change : Json = {
-    "action": Json::string(name.view(start_offset="chat.tabs.".length()).to_owned()),
+    "action": Json::string(name.exact_view(start="chat.tabs.".length()).to_owned()),
     "tab": match field(Some(params), "tab") {
       Some(String(t)) => Json::string(t)
       _ => Json::null()
@@ -1113,7 +1113,7 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
     "stationNet" => {
       let address = text(Some(Json::object(params)), "station")
       let ws = match address.find("/") {
-        Some(i) => address.view(end_offset=i).to_owned()
+        Some(i) => address.exact_view(end=i).to_owned()
         None => address
       }
       let mut net = None
@@ -1960,7 +1960,7 @@ pub fn fixture(mode : String) -> Source {
       }
       // asked back (a toast's 撤销, the archive's 还原): in the lists again, as well as out of the archive
       if name == "chat.archive" && field(Some(params), "archived") is Some(False) {
-        f.archived.remove(text(Some(params), "session").view(start_offset=2).to_owned())
+        f.archived.remove(text(Some(params), "session").clamped_view(start=2).to_owned())
         f.changed()
       }
       match @settings.fixture_call(name, params) {
@@ -2025,7 +2025,7 @@ pub fn fixture(mode : String) -> Source {
         }
         "chat.archive" => {
           let session = text(Some(params), "session")
-          f.archived[session.view(start_offset=2).to_owned()] = true
+          f.archived[session.clamped_view(start=2).to_owned()] = true
           f.changed()
           done(Ok(Json::object({})))
         }

@@ -75,7 +75,7 @@ fn host_answers_of(lines : String) -> Map[String, Json] {
       Some(i) => i + 8
       None => if line.has_prefix("{") { 0 } else { continue }
     }
-    let j = @json.parse(line.view(start_offset=start).to_owned()) catch {
+    let j = @json.parse(line.exact_view(start=start).to_owned()) catch {
       _ => continue
     }
     guard j is Object(m) else { continue }

@@ -126,7 +126,7 @@ pub fn Path::to_svg(self : Path) -> String {
 fn fs(x : Float) -> String {
   let s = x.to_string()
   if s.has_suffix(".0") {
-    s.view(end_offset=s.length() - 2).to_owned()
+    s.exact_view(end=s.length() - 2).to_owned()
   } else {
     s
   }

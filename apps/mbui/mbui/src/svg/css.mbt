@@ -166,7 +166,7 @@ fn CStream::skip_bytes(self : CStream, f : (Int) -> Bool) -> Unit {
 
 ///|
 fn CStream::slice(self : CStream, a : Int, b : Int) -> String {
-  self.text.view(start_offset=a, end_offset=b).to_owned()
+  self.text.exact_view(start=a, end=b).to_owned()
 }
 
 ///|
@@ -333,7 +333,7 @@ fn consume_rule_set(s : CStream, rules : Array[CssRule]) -> Bool {
     if s.cur() == 0x2C {
       s.pos += 1
     }
-    let (selector, offset) = parse_selector(s.text.view(start_offset=s.pos).to_owned())
+    let (selector, offset) = parse_selector(s.text.exact_view(start=s.pos).to_owned())
     s.pos += offset
     s.skip_spaces()
     match selector {
@@ -446,7 +446,7 @@ fn consume_declaration(s : CStream) -> Declaration? {
     if !s.skip_spaces_and_comments() {
       return None
     }
-    if s.text.view(start_offset=s.pos).has_prefix("important") {
+    if s.text.exact_view(start=s.pos).has_prefix("important") {
       s.pos += 9
       important = true
     }

@@ -457,17 +457,17 @@ fn parse_font_variation_settings(doc : SDoc, node : Int) -> Array[(String, Float
     if q != 0x22 && q != 0x27 {
       continue
     }
-    let rest = part.view(start_offset=1).to_owned()
+    let rest = part.exact_view(start=1).to_owned()
     let close = match rest.find(Int::unsafe_to_char(q).to_string()) {
       Some(i) => i
       None => rest.length()
     }
-    let tag = rest.view(end_offset=close).to_owned()
+    let tag = rest.exact_view(end=close).to_owned()
     if tag.length() != 4 {
       continue
     }
     let num = if close + 1 <= rest.length() {
-      rest.view(start_offset=if close < rest.length() { close + 1 } else { close }).to_owned().trim(chars=" \t\n\r").to_owned()
+      rest.exact_view(start=if close < rest.length() { close + 1 } else { close }).to_owned().trim(chars=" \t\n\r").to_owned()
     } else {
       ""
     }

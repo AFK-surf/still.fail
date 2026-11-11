@@ -231,7 +231,7 @@ fn run_first_frame(run : String) -> Double? {
   for line in run.split("\n") {
     match line.find("DRAWHASH ") {
       Some(i) => {
-        let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
+        let parts = line.exact_view(start=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
         if parts.length() >= 2 {
           match (try Some(@json.parse(parts[1])) catch { _ => None }) {
             Some(Number(d, ..)) => return Some(d)
@@ -281,7 +281,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     }
     match line.find("VIEWSCRIPT ") {
       Some(i) => {
-        scripts.push(line.view(start_offset=i + 11).to_owned())
+        scripts.push(line.exact_view(start=i + 11).to_owned())
         continue
       }
       None => ()
@@ -291,7 +291,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     match line.find("VIEWSAID ") {
       Some(i) => {
         if framed {
-          self.view_said(line.view(start_offset=i + 9).to_owned()) |> ignore
+          self.view_said(line.exact_view(start=i + 9).to_owned()) |> ignore
         }
         continue
       }
@@ -325,7 +325,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     // h_frame_late): the next drawn
     match line.find("LATE ") {
       Some(i) =>
-        match num(line.view(start_offset=i + 5).to_owned()) {
+        match num(line.exact_view(start=i + 5).to_owned()) {
           Some(late) => {
             self.fake.late = late
             self.fake.late_after = self.fake.time
@@ -338,7 +338,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     }
     guard line.find("DRAWHASH ") is Some(i) else { continue }
     framed = true
-    let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
+    let parts = line.exact_view(start=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
     guard parts.length() >= 6 else { continue }
     guard (num(parts[0]), num(parts[1]), num(parts[2]), num(parts[3]), num(parts[4]))
       is (Some(n), Some(t), Some(w), Some(h), Some(scale)) else {

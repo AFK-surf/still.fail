@@ -481,8 +481,8 @@ fn relay_note(parent : @view.View, src : Source) -> Unit {
       },
       fn(x) {
         let (at, t, k) = x
-        let before = if at >= 0 && at < t.length() { t.view(end_offset=at + 1).to_owned() } else { "" }
-        let after = if k >= 0 && k <= t.length() { t.view(start_offset=k).to_owned() } else { "" }
+        let before = if at >= 0 && at < t.length() { t.clamped_view(end=at + 1).to_owned() } else { "" }
+        let after = if k >= 0 && k <= t.length() { t.clamped_view(start=k).to_owned() } else { "" }
         then.val = (at, before, after)
       },
     )
@@ -516,7 +516,7 @@ fn relay_note(parent : @view.View, src : Source) -> Unit {
         let caret = relaying.note.selection().1
         let name = text(Some(p), "name")
         relaying.note.set(
-          now.view(end_offset=at).to_owned() + "@" + name + " " + now.view(start_offset=caret).to_owned(),
+          now.clamped_view(end=at).to_owned() + "@" + name + " " + now.clamped_view(start=caret).to_owned(),
           caret=at + name.length() + 2,
         )
         relaying.mention_closed.set(at)

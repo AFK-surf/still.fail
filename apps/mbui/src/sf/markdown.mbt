@@ -210,14 +210,14 @@ pub fn path_link(path : String, line : Int?) -> String {
 /// The path and the line a file's chip's link (path_link) carries; None for any other link.
 pub fn path_of_link(href : String) -> (String, Int?)? {
   guard href.has_prefix(path_scheme) else { return None }
-  let rest = href.view(start_offset=path_scheme.length()).to_owned()
+  let rest = href.exact_view(start=path_scheme.length()).to_owned()
   guard rest.find(":") is Some(i) else { return None }
   let mut line : Int? = None
-  for ch in rest.view(end_offset=i) {
+  for ch in rest.exact_view(end=i) {
     guard ch >= '0' && ch <= '9' else { return None }
     line = Some(line.unwrap_or(0) * 10 + (ch.to_int() - '0'.to_int()))
   }
-  Some((rest.view(start_offset=i + 1).to_owned(), line))
+  Some((rest.exact_view(start=i + 1).to_owned(), line))
 }
 
 ///|
@@ -263,14 +263,14 @@ let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, cor
 pub fn file_name_of(url : String) -> String {
   let mut u = url.trim(chars=" ").to_owned()
   if u.has_prefix("file://") {
-    u = u.view(start_offset=7).to_owned()
+    u = u.exact_view(start=7).to_owned()
   }
   let u = @codec.percent_decoded(u)
   let mut i = u.length()
   while i > 0 && u.at(i - 1).to_int() != 47 {
     i = i - 1
   }
-  u.view(start_offset=i).to_owned()
+  u.exact_view(start=i).to_owned()
 }
 
 
@@ -1301,7 +1301,7 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
   let n = s.length()
   let piece = fn(a : Int, b : Int) {
     if b > a {
-      let w = @ui.text_advance(s.view(start_offset=a, end_offset=b).to_owned(), size~, weight~)
+      let w = @ui.text_advance(s.clamped_view(start=a, end=b).to_owned(), size~, weight~)
       if w > least {
         least = w
       }

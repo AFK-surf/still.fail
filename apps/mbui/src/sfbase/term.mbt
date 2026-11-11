@@ -20,7 +20,7 @@ let term_dark : Array[Int64] = [
 pub fn term_color(c : String, dark : Bool) -> Int64 {
   if c.has_prefix("#") && c.length() == 7 {
     let mut v = 0L
-    for ch in c.view(start_offset=1) {
+    for ch in c.exact_view(start=1) {
       let d = match ch {
         '0'..='9' => ch.to_int() - '0'.to_int()
         'a'..='f' => ch.to_int() - 'a'.to_int() + 10

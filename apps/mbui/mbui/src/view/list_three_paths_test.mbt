@@ -86,7 +86,7 @@ fn three_apart(a : Array[(String, Int64, Int64, Int64, Int64)], b : Array[(Strin
 fn three_paths(g : Double) -> Array[Array[(String, Int64, Int64, Int64, Int64)]] {
   let row_of = fn(w : String) {
     let mut k = 0
-    for ch in w.view(start_offset=4) {
+    for ch in w.exact_view(start=4) {
       k = k * 10 + (ch.to_int() - '0'.to_int())
     }
     k

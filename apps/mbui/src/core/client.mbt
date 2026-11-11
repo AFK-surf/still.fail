@@ -874,7 +874,7 @@ fn head_id(text : String) -> Int? {
     i += 1
   }
   guard i > from else { return None }
-  let rest = text.view(start_offset=i)
+  let rest = text.exact_view(start=i)
   if rest.has_prefix(",\"value\":") || rest.has_prefix(",\"delta\":") {
     Some(id)
   } else {

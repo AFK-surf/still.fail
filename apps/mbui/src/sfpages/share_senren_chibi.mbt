@@ -71,13 +71,13 @@ fn sb_said(
     match rest.find("{") {
       None => break
       Some(i) => {
-        let after = rest.view(start_offset=i + 1).to_owned()
+        let after = rest.exact_view(start=i + 1).to_owned()
         match after.find("}") {
           None => break
           Some(j) => {
-            let name = after.view(end_offset=j).to_owned()
+            let name = after.exact_view(end=j).to_owned()
             if i > 0 {
-              runs.push(@ui.span(rest.view(end_offset=i).to_owned()))
+              runs.push(@ui.span(rest.exact_view(end=i).to_owned()))
             }
             let value = sr_arg(args, name)
             if plain.contains(name) {
@@ -85,7 +85,7 @@ fn sb_said(
             } else {
               runs.push(@ui.span(value, color=hi, weight=if bold { 700 } else { 0 }, scale~))
             }
-            rest = after.view(start_offset=j + 1).to_owned()
+            rest = after.exact_view(start=j + 1).to_owned()
           }
         }
       }
@@ -1137,7 +1137,7 @@ fn parfait_kind(name : String, key : String) -> String {
   for e in @sf.t(key + "kindEnd").split("|") {
     let end = e.to_owned()
     if end != "" && name.has_suffix(end) && name.length() > end.length() {
-      return name.view(end_offset=name.length() - end.length()).to_owned()
+      return name.exact_view(end=name.length() - end.length()).to_owned()
     }
   }
   name

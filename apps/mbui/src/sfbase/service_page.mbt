@@ -214,7 +214,7 @@ pub fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply
     @ui.log("service: the page asks \{req.verb} \{req.path}")
   }
   let bare = match req.path.find("?") {
-    Some(i) => req.path.view(end_offset=i).to_owned()
+    Some(i) => req.path.exact_view(end=i).to_owned()
     None => req.path
   }
   if bare == page_js_path {
@@ -252,7 +252,7 @@ pub fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply
         None => ""
       }
       let base = match kind.find(";") {
-        Some(i) => kind.view(end_offset=i).to_owned()
+        Some(i) => kind.exact_view(end=i).to_owned()
         None => kind
       }
       let mime = base.trim().to_owned().to_lower()
@@ -483,11 +483,11 @@ pub fn cookie_jar(header : String, set : Array[(String, String)]) -> String {
     let one = one.trim().to_owned()
     match one.find("=") {
       Some(i) if i > 0 => {
-        let k = one.view(end_offset=i).to_owned()
+        let k = one.exact_view(end=i).to_owned()
         if !values.contains(k) {
           names.push(k)
         }
-        values[k] = one.view(start_offset=i + 1).to_owned()
+        values[k] = one.exact_view(start=i + 1).to_owned()
       }
       _ => ()
     }
@@ -495,13 +495,13 @@ pub fn cookie_jar(header : String, set : Array[(String, String)]) -> String {
   for h in set {
     for one in split_cookies(h.1) {
       let first = match one.find(";") {
-        Some(i) => one.view(end_offset=i).to_owned()
+        Some(i) => one.exact_view(end=i).to_owned()
         None => one
       }
       match first.find("=") {
         Some(i) if i > 0 => {
-          let k = first.view(end_offset=i).to_owned().trim().to_owned()
-          let v = first.view(start_offset=i + 1).to_owned().trim().to_owned()
+          let k = first.exact_view(end=i).to_owned().trim().to_owned()
+          let v = first.exact_view(start=i + 1).to_owned().trim().to_owned()
           let lower = one.to_lower()
           if v == "" || lower.contains("max-age=0") || lower.contains("expires=thu, 01 jan 1970") {
             values.remove(k)
@@ -525,13 +525,13 @@ pub fn cookie_jar(header : String, set : Array[(String, String)]) -> String {
 pub fn service_keep_cookie(p : ServicePage, header : String) -> Unit {
   for one in split_cookies(header) {
     let first = match one.find(";") {
-      Some(i) => one.view(end_offset=i).to_owned()
+      Some(i) => one.exact_view(end=i).to_owned()
       None => one
     }
     match first.find("=") {
       Some(i) if i > 0 => {
-        let k = first.view(end_offset=i).to_owned().trim().to_owned()
-        let v = first.view(start_offset=i + 1).to_owned().trim().to_owned()
+        let k = first.exact_view(end=i).to_owned().trim().to_owned()
+        let v = first.exact_view(start=i + 1).to_owned().trim().to_owned()
         let lower = one.to_lower()
         // one that has expired is let go
         if v == "" || lower.contains("max-age=0") || lower.contains("expires=thu, 01 jan 1970") {
@@ -585,17 +585,17 @@ pub fn service_redirect(path : String, location : String) -> Result[String, Stri
   let loc = location
   let (base_path, _) = split_query(path)
   if loc.has_prefix("http://") || loc.has_prefix("https://") {
-    let rest = loc.view(start_offset=if loc.has_prefix("https://") { 8 } else { 7 }).to_owned()
+    let rest = loc.exact_view(start=if loc.has_prefix("https://") { 8 } else { 7 }).to_owned()
     let (host, tail) = match rest.find("/") {
-      Some(i) => (rest.view(end_offset=i).to_owned(), rest.view(start_offset=i).to_owned())
+      Some(i) => (rest.exact_view(end=i).to_owned(), rest.exact_view(start=i).to_owned())
       None =>
         match rest.find("?") {
-          Some(i) => (rest.view(end_offset=i).to_owned(), "/" + rest.view(start_offset=i).to_owned())
+          Some(i) => (rest.exact_view(end=i).to_owned(), "/" + rest.exact_view(start=i).to_owned())
           None => (rest, "/")
         }
     }
     let bare = match host.find(":") {
-      Some(i) => host.view(end_offset=i).to_owned()
+      Some(i) => host.exact_view(end=i).to_owned()
       None => host
     }
     if bare != "localhost" && bare != "127.0.0.1" && bare != "preview.stillfail.invalid" && bare != "svc" {
@@ -620,13 +620,13 @@ pub fn service_redirect(path : String, location : String) -> Result[String, Stri
   }
   // a scheme of its own (mailto:, javascript:…): no path of the service's
   match loc.find(":") {
-    Some(i) if !loc.view(end_offset=i).contains("/") && !loc.view(end_offset=i).contains("?") =>
+    Some(i) if !loc.exact_view(end=i).contains("/") && !loc.exact_view(end=i).contains("?") =>
       return Err(svc("android-chat.web.badRedirect", args=[("location", location)]))
     _ => ()
   }
   // relative to the path's folder
   let dir = match base_path.rev_find("/") {
-    Some(i) => base_path.view(end_offset=i + 1).to_owned()
+    Some(i) => base_path.exact_view(end=i + 1).to_owned()
     None => "/"
   }
   let (lp, lq) = split_query(loc)
@@ -637,7 +637,7 @@ pub fn service_redirect(path : String, location : String) -> Result[String, Stri
 /// A path and its query ("?…", or "").
 pub fn split_query(path : String) -> (String, String) {
   match path.find("?") {
-    Some(i) => (path.view(end_offset=i).to_owned(), path.view(start_offset=i).to_owned())
+    Some(i) => (path.exact_view(end=i).to_owned(), path.exact_view(start=i).to_owned())
     None => (path, "")
   }
 }
@@ -646,7 +646,7 @@ pub fn split_query(path : String) -> (String, String) {
 /// A link without its fragment (#…: the page's own, never asked of the service).
 pub fn no_fragment(s : String) -> String {
   match s.find("#") {
-    Some(i) => s.view(end_offset=i).to_owned()
+    Some(i) => s.exact_view(end=i).to_owned()
     None => s
   }
 }

@@ -25,7 +25,7 @@ pub fn file_tile(c : @ui.Ctx, name : String, dir? : Bool = false, progress? : Do
   }
   let dot = name.rev_find(".")
   let ext = match dot {
-    Some(i) if i > 0 && name.length() - i <= tile_ext_most => name.view(start_offset=i + 1).to_owned().to_upper()
+    Some(i) if i > 0 && name.length() - i <= tile_ext_most => name.exact_view(start=i + 1).to_owned().to_upper()
     _ => ""
   }
   let shapes = match progress {
@@ -200,7 +200,7 @@ let tile_ext_failed : @ui.TextStyle = tile_ext.then(@ui.text_style(color=Danger)
 pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
   let (stem, ext) = match name.rev_find(".") {
     Some(i) if i > 0 && name.length() - i <= name_ext_most =>
-      (name.view(end_offset=i).to_owned(), name.view(start_offset=i).to_owned())
+      (name.exact_view(end=i).to_owned(), name.exact_view(start=i).to_owned())
     _ => (name, "")
   }
   c.box(style=name_row, fn() {

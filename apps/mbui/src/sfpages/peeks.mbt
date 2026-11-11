@@ -165,19 +165,19 @@ fn link_card(
 /// Where a link goes, as a card says it: its host and path (Peeks.tsx destination).
 fn destination(href : String) -> String {
   let rest = match href.find("://") {
-    Some(i) => href.view(start_offset=i + 3).to_owned()
+    Some(i) => href.exact_view(start=i + 3).to_owned()
     None => href
   }
   let rest = match rest.find("?") {
-    Some(i) => rest.view(end_offset=i).to_owned()
+    Some(i) => rest.exact_view(end=i).to_owned()
     None => rest
   }
   let rest = match rest.find("#") {
-    Some(i) => rest.view(end_offset=i).to_owned()
+    Some(i) => rest.exact_view(end=i).to_owned()
     None => rest
   }
   if rest.has_suffix("/") {
-    rest.view(end_offset=rest.length() - 1).to_owned()
+    rest.exact_view(end=rest.length() - 1).to_owned()
   } else {
     rest
   }
@@ -633,9 +633,9 @@ fn file_head(c : @ui.Ctx, name : String, dir : Bool, path : String, ago : String
 fn shown_path(path : String) -> String {
   for home in ["/Users/", "/home/"] {
     if path.has_prefix(home) {
-      let rest = path.view(start_offset=home.length()).to_owned()
+      let rest = path.exact_view(start=home.length()).to_owned()
       return match rest.find("/") {
-        Some(i) => "~" + rest.view(start_offset=i).to_owned()
+        Some(i) => "~" + rest.exact_view(start=i).to_owned()
         None => "~"
       }
     }
@@ -704,7 +704,7 @@ fn file_entries(c : @ui.Ctx, entries : Array[Json]) -> Unit {
           c.box(style=peek_file_entry, fn() {
             @sf.icon(c, if dir { "folder" } else { "file" }, size=peek_file_entry_icon, color=p.muted) |> ignore
             c.box(style=peek_ref, fn() {
-              mono(c, if dir { name.view(end_offset=name.length() - 1).to_owned() } else { name }, peek_file_code)
+              mono(c, if dir { name.exact_view(end=name.length() - 1).to_owned() } else { name }, peek_file_code)
             })
             |> ignore
           })
@@ -781,16 +781,16 @@ fn chat_named(src : Source, here : String, href : String) -> Named {
       _ =>
         match href.find("/chats/") {
           Some(i) => {
-            let id = href.view(start_offset=i + 7).to_owned()
+            let id = href.exact_view(start=i + 7).to_owned()
             let id = match id.find("?") {
-              Some(k) => id.view(end_offset=k).to_owned()
+              Some(k) => id.exact_view(end=k).to_owned()
               None => id
             }
             let id = match id.find("#") {
-              Some(k) => id.view(end_offset=k).to_owned()
+              Some(k) => id.exact_view(end=k).to_owned()
               None => id
             }
-            let id = if id.has_suffix("/") { id.view(end_offset=id.length() - 1).to_owned() } else { id }
+            let id = if id.has_suffix("/") { id.exact_view(end=id.length() - 1).to_owned() } else { id }
             if id == "" {
               NoChat
             } else {

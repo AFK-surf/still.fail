@@ -202,7 +202,7 @@ pub fn data_image(url : String) -> String {
       let key = "mem:sf/station/\{url.length()}/\{@ui.stable_hash(url)}"
       if !made.contains(key) {
         made[key] = true
-        @ui.add_image(key, @codec.from_base64(url.view(start_offset=i + 7).to_owned()))
+        @ui.add_image(key, @codec.from_base64(url.exact_view(start=i + 7).to_owned()))
       }
       key
     }
@@ -231,12 +231,12 @@ pub fn station_mark(
   still? : Bool = false,
 ) -> Unit {
   if icon.has_prefix("glyph:") {
-    let rest = icon.view(start_offset=6).to_owned()
+    let rest = icon.exact_view(start=6).to_owned()
     let (name, colour) = match rest.find(":") {
       Some(i) =>
         (
-          rest.view(end_offset=i).to_owned(),
-          rest.view(start_offset=i + 1).to_owned(),
+          rest.exact_view(end=i).to_owned(),
+          rest.exact_view(start=i + 1).to_owned(),
         )
       None => (rest, "")
     }

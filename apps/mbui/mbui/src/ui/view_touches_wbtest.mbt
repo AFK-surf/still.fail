@@ -157,7 +157,7 @@ test "touches kept on the tape as the app took them (the first let go as such, e
   // (the app's kinds kept, the first let go as 8, never the host's own)
   let kinds = lines
     .filter(l => l.has_prefix("INPUT "))
-    .map(l => @json.parse(l.view(start_offset=6).to_owned()) catch { _ => Json::null() })
+    .map(l => @json.parse(l.exact_view(start=6).to_owned()) catch { _ => Json::null() })
     .map(j => match j {
       Object(m) =>
         match m.get("a") {

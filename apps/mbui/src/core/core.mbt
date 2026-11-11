@@ -611,11 +611,11 @@ fn web_auth_done(m : Map[String, Json]) -> Unit {
 /// A URL's query string, without its `?` (and without a `#fragment`).
 pub fn query_of(url : String) -> String {
   let q = match url.find("?") {
-    Some(i) => url.view(start_offset=i + 1)
+    Some(i) => url.exact_view(start=i + 1)
     None => return ""
   }
   match q.find("#") {
-    Some(j) => q.view(end_offset=j).to_owned()
+    Some(j) => q.exact_view(end=j).to_owned()
     None => q.to_owned()
   }
 }

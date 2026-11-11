@@ -201,10 +201,10 @@ fn gap_without_nodes(s : String) -> String {
   let mut rest = s
   let mut out = ""
   while rest.find(", node ") is Some(i) {
-    let after = rest.view(start_offset=i + 7)
+    let after = rest.exact_view(start=i + 7)
     guard after.find(")") is Some(j) else { return out + rest }
-    out = out + rest.view(end_offset=i).to_owned() + ")"
-    rest = after.view(start_offset=j + 1).to_owned()
+    out = out + rest.exact_view(end=i).to_owned() + ")"
+    rest = after.exact_view(start=j + 1).to_owned()
   }
   out + rest
 }

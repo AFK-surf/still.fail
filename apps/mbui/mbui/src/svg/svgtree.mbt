@@ -1290,13 +1290,13 @@ fn last_cu(s : String) -> Int {
 ///|
 fn SDoc::remove_first_space(self : SDoc, id : Int) -> Unit {
   let t = self.nodes[id].text
-  self.nodes[id].text = t.view(start_offset=1).to_owned()
+  self.nodes[id].text = t.exact_view(start=1).to_owned()
 }
 
 ///|
 fn SDoc::remove_last_space(self : SDoc, id : Int) -> Unit {
   let t = self.nodes[id].text
-  self.nodes[id].text = t.view(end_offset=t.length() - 1).to_owned()
+  self.nodes[id].text = t.exact_view(end=t.length() - 1).to_owned()
 }
 
 ///|

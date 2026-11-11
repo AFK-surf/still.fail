@@ -93,7 +93,7 @@ fn gaps_steady_begin(loc : String, held : Bool) -> Unit {
 fn gaps_said(s : String) -> String {
   let one = s.replace_all(old="\n", new=" ")
   if one.length() > 24 {
-    one.view(end_offset=24).to_owned() + "…"
+    one.clamped_view(end=24).to_owned() + "…"
   } else {
     one
   }

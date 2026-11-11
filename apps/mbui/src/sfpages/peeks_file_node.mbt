@@ -310,7 +310,7 @@ fn file_entries_node(parent : @view.View, entries : () -> Array[Json]) -> Unit {
             b,
             fn() {
               let n = name(k.get())
-              [@ui.span(if dir() { n.view(end_offset=n.length() - 1).to_owned() } else { n }, mono=true)]
+              [@ui.span(if dir() { n.exact_view(end=n.length() - 1).to_owned() } else { n }, mono=true)]
             },
             peek_file_code,
           )

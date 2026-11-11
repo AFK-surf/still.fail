@@ -617,7 +617,7 @@ pub fn open_mode(mode : String) -> Unit {
   } else if mode.has_prefix("place-") {
     // a place of the rail's in the wide frame: place-stations, place-profiles, place-connects,
     // place-usage
-    app.nav.replace(Place(mode.view(start_offset=6).to_owned()))
+    app.nav.replace(Place(mode.exact_view(start=6).to_owned()))
   } else if mode.has_prefix("files-") {
     // the files' page in the wide frame at Willow's 文档: files-columns (设计稿 open beside it, chosen),
     // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two

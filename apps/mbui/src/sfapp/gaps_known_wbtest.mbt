@@ -65,10 +65,10 @@ fn gaps_wrong(lang : String, gaps : Array[String]) -> String? {
   for f in gaps {
     match f.find(": rule ") {
       Some(start) => {
-        let rest = f.view(start_offset=start + 2).to_owned()
+        let rest = f.exact_view(start=start + 2).to_owned()
         match rest.find(": ") {
           Some(end) => {
-            let key = "\{lang} " + rest.view(end_offset=end).to_owned()
+            let key = "\{lang} " + rest.exact_view(end=end).to_owned()
             counts[key] = counts.get(key).unwrap_or(0) + 1
           }
           None => off.push("unrecognized spacing fault: \{f}")

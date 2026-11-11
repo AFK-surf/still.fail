@@ -1432,7 +1432,7 @@ pub fn file_progress_node(
             // the size so far in bold, where the sentence has it
             let words = pv("android-chat.file.loading.size")
             let (before, after) = match words.find("{size}") {
-              Some(i) => (words.view(end_offset=i).to_owned(), words.view(start_offset=i + 6).to_owned())
+              Some(i) => (words.exact_view(end=i).to_owned(), words.exact_view(start=i + 6).to_owned())
               None => (words, "")
             }
             [

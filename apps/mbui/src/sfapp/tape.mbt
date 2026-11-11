@@ -84,7 +84,7 @@ fn tape_topic_key(name : String, params : Map[String, Json]) -> Json {
     match (k, v) {
       ("session", String(s)) if s.has_prefix("thread:") => {
         let mut n = 0.0
-        for ch in s.view(start_offset=7) {
+        for ch in s.exact_view(start=7) {
           n = n * 10.0 + (ch.to_int() - 48).to_double()
         }
         key["thread"] = Json::number(n)

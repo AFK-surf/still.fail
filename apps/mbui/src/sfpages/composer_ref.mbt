@@ -50,7 +50,7 @@ fn ref_panel_body(v : @view.View, close : () -> Unit, src : Source, key : String
       fn() {
         let path = text(r(), "path")
         let folder = match path.rev_find("/") {
-          Some(i) if i > 0 => path.view(end_offset=i).to_owned()
+          Some(i) if i > 0 => path.exact_view(end=i).to_owned()
           _ => path
         }
         text(r(), "stationName") + " · " + folder

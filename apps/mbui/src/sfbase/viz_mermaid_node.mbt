@@ -111,7 +111,7 @@ fn mermaid_ways_node(
 fn mermaid_full(station : String, svg : Bytes, w : Double, h : Double) -> Unit {
   let a : Attachment = {
     name: "Mermaid.svg",
-    path: "draft:mermaid/" + @zip.sha256(svg).view(end_offset=16).to_owned(),
+    path: "draft:mermaid/" + @zip.sha256(svg).exact_view(end=16).to_owned(),
     size: svg.length().to_double(),
     width: w,
     height: h,

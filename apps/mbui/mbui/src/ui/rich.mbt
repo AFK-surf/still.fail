@@ -1023,7 +1023,7 @@ fn cut_rich(r : Rich, lay : RichLayout, w : Double) -> Rich {
     if off + n <= cut {
       runs.push(run)
     } else if off < cut {
-      runs.push({ ..run, text: run.text.view(end_offset=cut - off).to_owned() })
+      runs.push({ ..run, text: run.text.clamped_view(end=cut - off).to_owned() })
     }
     off = off + n
   }

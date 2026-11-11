@@ -83,7 +83,7 @@ pub fn local_machine_name() -> String {
   for name in ["MBUI_MACHINE", "COMPUTERNAME"] {
     let v = @ui.env(name).trim(chars=" \t\n").to_owned()
     if v != "" {
-      return if v.has_suffix(".local") { v.view(end_offset=v.length() - 6).to_owned() } else { v }
+      return if v.has_suffix(".local") { v.exact_view(end=v.length() - 6).to_owned() } else { v }
     }
   }
   if @settings.local_machine_pc() { "PC" } else { "Mac" }

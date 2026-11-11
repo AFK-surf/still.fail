@@ -1182,14 +1182,14 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
     // (its first line, as a made-up agent would take it up)
     let lead = words.trim(chars=" \n\r\t").to_owned()
     let first = match lead.find("\n") {
-      Some(i) => lead.view(end_offset=i).to_owned()
+      Some(i) => lead.exact_view(end=i).to_owned()
       None => lead
     }
     let said = if first == "" {
       "收到文件了，我看一下。"
     } else {
       let cut = if first.length() > 40 {
-        first.view(end_offset=40).to_owned() + "…"
+        first.clamped_view(end=40).to_owned() + "…"
       } else {
         first
       }
@@ -1368,7 +1368,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
         for w in words {
           let mut from = 0
           while from <= said.length() {
-            match said.view(start_offset=from).to_owned().find(w) {
+            match said.exact_view(start=from).to_owned().find(w) {
               Some(i) => {
                 count += 1
                 from = from + i + w.length()

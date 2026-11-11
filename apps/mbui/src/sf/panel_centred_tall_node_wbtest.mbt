@@ -87,7 +87,7 @@ test "a dialog in the middle of the window a share of it tall, holding nodes: as
     // the other dialogs of nodes have it, not compared)
     let place = fn(s : String) {
       match s.find(" first row ") {
-        Some(i) => s.view(end_offset=i).to_owned()
+        Some(i) => s.exact_view(end=i).to_owned()
         None => s
       }
     }

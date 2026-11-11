@@ -103,7 +103,7 @@ pub fn login_for_host(href : String, host : String) -> Bool {
   let h = host.to_lower()
   let mut rest = href.to_lower()
   match rest.find("://") {
-    Some(i) => rest = rest.view(start_offset=i + 3).to_owned()
+    Some(i) => rest = rest.exact_view(start=i + 3).to_owned()
     None => ()
   }
   let mut end = rest.length()
@@ -113,7 +113,7 @@ pub fn login_for_host(href : String, host : String) -> Bool {
       None => ()
     }
   }
-  let site = rest.view(end_offset=end).to_owned()
+  let site = rest.exact_view(end=end).to_owned()
   site != "" && (site == h || h.has_suffix("." + site) || site.has_suffix("." + h))
 }
 
