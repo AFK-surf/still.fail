@@ -124,8 +124,21 @@ open_tests() {
   # (One file each: the runner above them names them all.)
   for p in $(below $$); do ps -o args= -p "$p" 2>/dev/null | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") != 1 { exit 1 }' && kill -USR2 "$p" 2>/dev/null && hung="$hung $p"; done
   [ -n "$hung" ] || return 0
-  sleep 1
+  # Until each has answered, half a second at most: the runner ends the job about a second after its signal, and a
+  # whole second waited here was all of it (42939482348: test/screens.test.ts, hung with every test passed, was named
+  # and the job ended before what it had open was said).
+  w=0
+  while [ $w -lt 5 ]; do
+    answered=1
+    for p in $hung; do [ -e "$STILLFAIL_TEST_HUNG/$p" ] || answered=0; done
+    [ $answered = 0 ] || break
+    sleep 0.1
+    w=$((w + 1))
+  done
   for p in $hung; do
+    # (One that wrote nothing did not get to the signal: its thread held in a call, or the process ending. Its state
+    # and the CPU it takes say which.)
+    [ -e "$STILLFAIL_TEST_HUNG/$p" ] || ps -o pid= -o stat= -o pcpu= -o etime= -p "$p" 2>/dev/null | sed 's/^/    did not answer (pid, state, CPU %, since): /'
     sed 's/^/    /' "$STILLFAIL_TEST_HUNG/$p" 2>/dev/null
     for c in $(below "$p"); do ps -o pid= -o etime= -o args= -p "$c" 2>/dev/null | cut -c1-200 | sed 's/^/      under it: /'; done
   done
