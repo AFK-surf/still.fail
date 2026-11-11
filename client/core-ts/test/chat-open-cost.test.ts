@@ -6,6 +6,7 @@ import { dbName, holds } from "../src/data.ts";
 import { overviewPartOf, overviewRowOf } from "../src/db/schema.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { parseTopic, type Topic } from "../src/protocol.ts";
+import type { Sql } from "../src/host.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { work, workSince } from "../src/work.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
@@ -52,17 +53,43 @@ test("a_core_started_anew_opens_a_chat_reading_and_decorating_no_overview", asyn
   assert.equal(value.messages.length, OPENS);
 });
 
+/// What the chat reads of its own station's overview, in characters: its chat part and the profiles its agents run on.
+function ownReads(sql: Sql): number {
+  const chat = String(sql.all("SELECT chat FROM station_part WHERE address = ?", [CHAT.station])[0]![0]).length;
+  const ids = new Set(CHAT.keys.flatMap((key) => {
+    const r = sql.all("SELECT coalesce(json_extract(detail, '$.session.profile'), json_extract(summary, '$.profile')) FROM session WHERE station = ? AND key = ?", [CHAT.station, key])[0];
+    return typeof r?.[0] === "string" ? [r[0]] : [];
+  }));
+  const profiles = [...ids].reduce((n, id) => n + String(sql.all("SELECT profiles -> ? FROM station_part WHERE address = ?", [`$.${JSON.stringify(id)}`, CHAT.station])[0]?.[0] ?? "").length, 0);
+  return chat + profiles;
+}
+
+test("a_chats_agents_read_of_their_stations_profiles_those_they_run_on_alone", async () => {
+  // A chat's part held its station's every profile (13 KB of its 17), read and parsed for its one or two agents' own:
+  // what its page shows of an agent's account is the profile it runs on. Each is read alone, by its id.
+  const { host, base } = await written();
+  const sql = host.sqls.get(dbName("s1"))!;
+  const chat = String(sql.all("SELECT chat FROM station_part WHERE address = ?", [CHAT.station])[0]![0]);
+  assert.ok(!chat.includes('"profiles"'), "the chat's part holds no profile");
+  const whole = String(sql.all("SELECT profiles FROM station_part WHERE address = ?", [CHAT.station])[0]![0]).length;
+  const own = ownReads(sql);
+  const { value, made } = await chatAnew(host, base);
+  assert.ok(value.agents.length > 0 && value.agents.every((a: { profile?: { name?: string } }) => typeof a.profile?.name === "string"));
+  assert.ok(own - chat.length < whole / 2, `its agents' profiles ${own - chat.length} of ${whole} characters`);
+  assert.ok(made.overviewPartChars <= own + 5 * 16, `${made.overviewPartChars} characters read of parts, its own ${own}`);
+});
+
 test("a_chat_with_links_reads_of_each_other_station_what_a_link_is_taken_to_alone", async () => {
   // Where a link to a chat goes (views.ts stationNow) read each other station's `copies.formerly` out of its chat's
   // part: 4 parts of some 17 KB parsed for a few bytes (82.7 KB in Hermes with its own). They are kept apart
   // (station_part.formerly): its own station's chat part, and a few bytes of each other's.
   const { host, base } = await written();
   const sql = host.sqls.get(dbName("s1"))!;
-  const own = String(sql.all("SELECT chat FROM station_part WHERE address = ?", [CHAT.station])[0]![0]).length;
+  const own = ownReads(sql);
   const { value, made } = await chatAnew(host, base);
   assert.ok(value.messages.some((m: { text?: string }) => (m.text ?? "").includes("still.fail/o/")), "it has links to chats");
   assert.equal(made.overviewsRead, 0);
-  assert.ok(made.overviewPartChars - own <= 5 * 16, `${made.overviewPartChars - own} characters of parts besides its own station's chat part`);
+  assert.ok(made.overviewPartChars - own <= 5 * 16, `${made.overviewPartChars - own} characters of parts besides its own station's`);
 });
 
 test("a_chats_first_answer_waits_for_what_it_is_made_of_alone", async () => {
@@ -119,7 +146,7 @@ test("a_chat_opens_the_same_on_a_database_from_before_its_part_and_while_a_core_
   // Brought to it as it opens: the column added, the triggers and every part made again, by SQLite.
   const anew = await chatAnew(host, base);
   assert.deepEqual(sql.all("SELECT count(*), count(chat) FROM station_part")[0], [5, 5]);
-  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly)"));
+  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly, profiles)"));
   assert.deepEqual([anew.made.overviewsRead, anew.made.overviews], [0, 0]);
   assert.deepEqual(anew.value, kept.value);
   // A core from before it opening the database meanwhile (a web page still open from before) keeps the parts by its

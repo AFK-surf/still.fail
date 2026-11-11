@@ -204,21 +204,29 @@ export const overviewRowOf = (j: string) => `CASE WHEN json_type(${j}) = 'object
       WHERE o.key IN ('viewer', 'counts') OR (o.key IN ('disk', 'drive') AND o.type <> 'null')))
     END`;
 
-/// What a chat's page reads of its station's overview, the JSON `j` (views.ts #chatOverview: its agents' accounts and
-/// connects, `#peopleOf`, `#shown`, `#whereIn`, `#sentElsewhere`, its station's update and context), as SQL: its
-/// `profiles`, `connects`, `disk`, `slackUsers`, `updates`, `feedback` and `context`, each as the overview has it, one
-/// absent left out; NULL where the overview is not an object. Kept apart from the list's part and the row's
-/// (`station_part.chat`): a chat's first answer read the whole overview of its station (25-27 KB of the real-size
-/// workspace's). Its accounts are most of it (`profiles`, some 13 KB of the 17): what an agent's account shows is made
-/// of its profile whole, as on every page that shows one (present.ts profile, models.ts runnableOn), not of a copy.
+/// What a chat's page reads of its station's overview, the JSON `j` (views.ts #chatOverview: its agents' connects,
+/// `#peopleOf`, `#shown`, `#whereIn`, `#sentElsewhere`, its station's update and context), as SQL: its `connects`,
+/// `disk`, `slackUsers`, `updates`, `feedback` and `context`, each as the overview has it, one absent left out; NULL
+/// where the overview is not an object. Kept apart from the list's part and the row's (`station_part.chat`): a chat's
+/// first answer read the whole overview of its station (25-27 KB of the real-size workspace's). Its agents' accounts
+/// are not in it: each agent's own profile is read alone (overviewProfilesOf).
 export const overviewChatOf = (j: string) => `CASE WHEN json_type(${j}) = 'object'
     THEN json((SELECT json_group_object(o.key, ${j} -> o.fullkey) FROM json_each(${j}) AS o
-      WHERE o.key IN ('profiles', 'connects', 'disk', 'slackUsers', 'updates', 'feedback', 'context')))
+      WHERE o.key IN ('connects', 'disk', 'slackUsers', 'updates', 'feedback', 'context')))
     END`;
 
 /// The fields of an overview a chat's page reads (overviewChatOf), for where it is made of an overview in the core (one
 /// shown with what is being done to it here: data.ts overviewChat).
-export const OVERVIEW_CHAT = ["profiles", "connects", "disk", "slackUsers", "updates", "feedback", "context"] as const;
+export const OVERVIEW_CHAT = ["connects", "disk", "slackUsers", "updates", "feedback", "context"] as const;
+
+/// An overview's profiles (the JSON `j`), each whole, by its id, as SQL: what a chat's agent reads of the one it runs
+/// on, read by its key (account.ts overviewProfile: `profiles -> '$."<id>"'`, SQLite taking that one of them), never
+/// the station's every profile (13 KB of the 17 of a chat's part, #5634, for its one or two agents); `{}` where it has
+/// none. A profile with no id is no agent's.
+export const overviewProfilesOf = (j: string) => `CASE WHEN json_type(${j}, '$.profiles') = 'array'
+    THEN json((SELECT json_group_object(p.value ->> '$.id', p.value) FROM json_each(${j}, '$.profiles') AS p
+      WHERE p.type = 'object' AND json_type(p.value, '$.id') = 'text'))
+    ELSE json_object() END`;
 
 /// The stations a station took the place of, as its overview says (`copies.formerly`, its strings), the JSON `j`, as
 /// SQL: what a link to a chat of one of them is taken to (views.ts `stationNow`), read of every station of a
@@ -229,7 +237,7 @@ export const overviewFormerlyOf = (j: string) => `CASE WHEN json_type(${j}, '$.c
     ELSE json_array() END`;
 
 /// Each column of an overview's part (`station_part`) and how SQLite makes it of the overview's JSON.
-export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overviewPartOf], ["row", overviewRowOf], ["chat", overviewChatOf], ["formerly", overviewFormerlyOf]];
+export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overviewPartOf], ["row", overviewRowOf], ["chat", overviewChatOf], ["formerly", overviewFormerlyOf], ["profiles", overviewProfilesOf]];
 /// What makes each column of a station's part of the overview `j` (the triggers', and where one is missing).
 const partInsert = (j: string, address: string) =>
   `INSERT INTO station_part (address, ${PART_COLUMNS.map(([c]) => c).join(", ")}) SELECT ${address}, ${PART_COLUMNS.map(([, of]) => of(j)).join(", ")}`;
@@ -270,8 +278,8 @@ const overviewTriggers = (): [string, string][] => [
 const spaced = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /// Each station's overview's part the chat list reads (overviewPartOf), what a station's row reads (overviewRowOf, its
-/// own column), what a chat's page reads (overviewChatOf) and the stations it took the place of (overviewFormerlyOf),
-/// each its own column, beside it in a table of its own: they
+/// own column), what a chat's page reads (overviewChatOf), the stations it took the place of (overviewFormerlyOf) and
+/// its profiles by id (overviewProfilesOf), each its own column, beside it in a table of its own: they
 /// read a few hundred bytes, or a chat's page some of the overview, not an overview of some 150 KB (nor walk its pages
 /// to a column after it). Kept by triggers on `station`, as `said` is, so a core that knows nothing of it (a web page
 /// still open from before, an app put back to an older one) keeps it too: nothing it holds is older than its overview.
@@ -289,7 +297,7 @@ export function ensureOverviewParts(sql: Sql): void {
   sql.exec("BEGIN IMMEDIATE");
   try {
     sql.exec(`
-      CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL, row TEXT, chat TEXT, formerly TEXT);
+      CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL, row TEXT, chat TEXT, formerly TEXT, profiles TEXT);
       CREATE TABLE IF NOT EXISTS station_fit (address TEXT NOT NULL, shapes TEXT NOT NULL, readable INTEGER NOT NULL, PRIMARY KEY (address, shapes)) WITHOUT ROWID;
     `);
     const had = new Map(sql.all("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'station'").map((r) => [String(r[0]), String(r[1])]));

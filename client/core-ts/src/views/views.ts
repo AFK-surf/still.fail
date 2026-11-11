@@ -3550,9 +3550,9 @@ export class Views implements Owner {
         detail = { session: agent };
       }
     }
-    const overview = forChat ? this.#chatOverview(station) : this.ok({ topic: "overview", station });
     const now = this.#core.host.nowMs();
     const session = present.session(get(detail, "session") ?? null);
+    const overview = forChat ? this.#chatOverviewFor(station, str(get(session, "profile"))) : this.ok({ topic: "overview", station });
     const connect = present.connect(find(get(overview, "connects"), get(session, "connect")));
     const profile = present.profile(find(get(overview, "profiles"), get(session, "profile")));
     const runnable = runnableOn(overview, session, now);
@@ -3589,6 +3589,17 @@ export class Views implements Owner {
   /// automatic decisions, a sign-in's step) makes no chat again.
   #chatOverview(station: string): J {
     return this.#core.data.overviewChat(station);
+  }
+
+  /// What a chat's agent that runs on profile `profile` reads of its station's overview: the chat's part, and of the
+  /// station's profiles that one alone (data.ts overviewProfile), read by its id. What its page shows of an agent's
+  /// account is that profile's (its name and what is left of it, `account` of those running its model the current
+  /// one): the others are what a model control's panel shows (`pick`, asked as it opens).
+  #chatOverviewFor(station: string, profile: string | null | undefined): J {
+    const part = this.#chatOverview(station);
+    if (!isObject(part)) return part;
+    const own = typeof profile === "string" ? this.#core.data.overviewProfile(station, profile) : undefined;
+    return { ...part, profiles: own === undefined ? [] : [own] };
   }
 
   /// An agent as its sidebar row lists it, with the connect its row came from.

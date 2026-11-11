@@ -755,6 +755,7 @@ export class Data {
     this.#tell({ topic: "overview", station });
     this.#tellQuery({ topic: "$overview-fit", station });
     this.#tellQuery({ topic: "$overview-chat", station });
+    this.#tellQuery({ topic: "$overview-profiles", station });
   }
 
   /// The steps an overview of the station has gone past (or that it no longer has where they were): let go.
@@ -775,6 +776,7 @@ export class Data {
     this.#tell({ topic: "overview", station });
     this.#tellQuery({ topic: "$overview-fit", station });
     this.#tellQuery({ topic: "$overview-chat", station });
+    this.#tellQuery({ topic: "$overview-profiles", station });
     return true;
   }
 
@@ -783,6 +785,7 @@ export class Data {
     this.#tell({ topic: "overview", station });
     this.#tellQuery({ topic: "$overview-fit", station });
     this.#tellQuery({ topic: "$overview-chat", station });
+    this.#tellQuery({ topic: "$overview-profiles", station });
   }
 
   /// A held topic's new value (read, or as an event left it). `confirmed`: it came from its source just now (else it
@@ -1142,6 +1145,17 @@ export class Data {
     const out: Record<string, unknown> = {};
     for (const k of OVERVIEW_CHAT) if (k in shown) out[k] = shown[k];
     return frozen(out);
+  }
+
+  /// Profile `id` of a station's overview (account.ts overviewProfile), alone: read in a computed, it is made again as
+  /// the station's profiles change. Where the overview is shown with what is being done to it here (overlaid), that
+  /// one of what is shown.
+  overviewProfile(station: string, id: string): unknown {
+    this.#readQuery({ topic: "$overview-profiles", station });
+    if (!this.#overlaid(station)) return this.of(station)?.overviewProfile(station, id);
+    const shown = this.shown({ topic: "overview", station });
+    const found = isObject(shown) && Array.isArray(shown.profiles) ? shown.profiles.find((p) => isObject(p) && p.id === id) : undefined;
+    return found === undefined ? undefined : frozen(found);
   }
 
   /// The stations a station took the place of (account.ts overviewFormerly), kept beside its overview: read in a

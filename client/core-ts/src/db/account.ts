@@ -20,7 +20,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, PART_COLUMNS, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -314,6 +314,8 @@ export class AccountDb {
   #parts = false;
   /// The columns of each overview's part this database keeps (schema.ts PART_COLUMNS: `station_part`'s).
   #columns = new Set<string>();
+  /// The profiles read of each station's overview, one by one (overviewProfile): let go of as its profiles change.
+  readonly #profilesRead = new Map<string, Set<string>>();
   /// How this core judges an overview as it is written, and keeps the verdict beside it (`station_fit`, made with
   /// `station_part`); none: judged as it is read, nothing kept.
   fit: OverviewFit | null = null;
@@ -679,6 +681,29 @@ export class AccountDb {
     return this.#overviewColumn(station, "formerly");
   }
 
+  /// The profile `id` of a station's overview, whole, undefined where it has none such (schema.ts overviewProfilesOf):
+  /// that one alone read out of the column of its profiles by SQLite, not the overview, nor its other profiles.
+  overviewProfile(station: string, id: string): J {
+    const key = K("profile", station, id);
+    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+    let read = this.#profilesRead.get(station);
+    if (read === undefined) this.#profilesRead.set(station, (read = new Set()));
+    read.add(id);
+    const path = `$.${JSON.stringify(id)}`;
+    const kept = this.#columns.has("profiles") ? this.sql.all("SELECT profiles IS NOT NULL, profiles -> ? FROM station_part WHERE address = ?", [path, station])[0] : undefined;
+    const r = kept !== undefined && kept[0] === 1
+      ? kept[1]
+      : this.sql.all(`SELECT (${overviewProfilesOf("st.json")}) -> ? FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [path, station])[0]?.[0];
+    const text = typeof r === "string" ? r : undefined;
+    if (text !== undefined) {
+      work.overviewParts++;
+      work.overviewPartChars += text.length;
+    }
+    const v = text === undefined ? undefined : frozen(JSON.parse(text));
+    this.#cache.set(key, v ?? null);
+    return v;
+  }
+
   /// Column `column` of a station's part (schema.ts PART_COLUMNS), parsed, kept till it changes.
   #overviewColumn(station: string, column: string): J {
     const key = K(column, station);
@@ -749,7 +774,9 @@ export class AccountDb {
       for (const [i, [column]] of PART_COLUMNS.entries()) {
         const after = this.#columnText(station, column);
         if (after === before[i]) continue;
-        this.#cache.set(K(column, station), after === undefined ? null : frozen(JSON.parse(after)));
+        // (its profiles read one by one, not parsed whole: each read again of them)
+        if (column === "profiles") for (const id of this.#profilesRead.get(station) ?? []) this.#cache.delete(K("profile", station, id));
+        else this.#cache.set(K(column, station), after === undefined ? null : frozen(JSON.parse(after)));
         this.#tell({ topic: `$overview-${column}`, station });
       }
       const now = this.#cache.get(key);
