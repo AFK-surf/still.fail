@@ -163,9 +163,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     laid_grid.val = g
     heights_changed.clear()
+    // (each top on the rows' grid where they are on one, as flex puts them there (layout_flex's rows_grid): a sum of
+    // whole pixels put on the grid's own number for the one it comes to, the same number whatever was added again from
+    // where)
     let mut top = if from > 0 {
       let b = laid_out[from - 1]
-      b.top + b.h
+      if g > 0.0 {
+        ((b.top + b.h) * g + 0.5).floor() / g
+      } else {
+        b.top + b.h
+      }
     } else {
       0.0
     }
@@ -182,7 +189,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       } else {
         laid_out.push({ key: ks[i], top, h, known })
       }
-      top = top + h
+      top = if g > 0.0 { ((top + h) * g + 0.5).floor() / g } else { top + h }
     }
     laid_out
   }, same=fn(_, _) { false })
