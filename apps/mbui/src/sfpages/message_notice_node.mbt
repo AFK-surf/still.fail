@@ -3,9 +3,9 @@
 // in red); pressed, all of them, what failed said of it and its time under it. Each read through what it is given, as
 // that changes; whether it is open, and when its 复制 was pressed, kept by the message (`opened`, `copied`: the
 // caller's, by its ts), not on the nodes.
-// Not here yet: its 取消 making its way along the row as a retry begins or ends (the framework's way along a row, to
-// come: shown at once till then); which node lights as the notice is gone to is the line drawing what is laid over
-// rows' (`pill_over`).
+// Its 取消 makes its way along the row as a retry begins or ends (the framework's, along_row), the pill moved aside by
+// as much. Not here yet: which node lights as the notice is gone to is the line drawing what is laid over rows'
+// (`pill_over`).
 
 ///|
 /// What still.fail said (system_notice's) in its row's room (message_row_frame_node: `key`, its list's Entry::id; `side`,
@@ -50,8 +50,9 @@ fn notice_body_node(
     across.box(fn(beside) {
       @sf.style_node(beside, fn() { notice_with_action })
       notice_pill_node(beside, src, here, m, open, opened, copied, pill_made)
-      // (shown at once: its way along the row is the framework's, to come)
-      beside.show(retry, fn(a) {
+      // (its way along the row the framework's: from nothing to as wide as it is as a retry begins, and back as it
+      // ends, the pill, centred in the chat, moved aside by half as much)
+      beside.show(retry, along_row=true, fn(a) {
         @sf.style_node(a, fn() { notice_action_room }, in_row=true)
         a.box(fn(inner) {
           @sf.style_node(inner, fn() { notice_action_in })
