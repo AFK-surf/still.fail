@@ -820,6 +820,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-next-moon-mac-${{ github.sha }}
           restore-keys: mbui-next-moon-mac-
       - uses: actions/cache/restore@v4
@@ -829,6 +830,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-mac-moon-${{ github.sha }}
           restore-keys: mbui-mac-moon-
       - run: |
@@ -888,6 +890,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-mac-moon-${{ github.sha }}
   # The expensive build is already handed over; keep signing, notarization and release checks in their own budget.
   desktop:
