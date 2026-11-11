@@ -23,11 +23,12 @@ import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Ty } from "../src/conform.ts";
 import { shapeOf } from "../src/present.ts";
-import { parseTopic, TOPICS } from "../src/protocol.ts";
+import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
 import { SHAPES } from "../src/shapes/schema.ts";
-import { isObject } from "../src/util.ts";
+import { equal, isObject } from "../src/util.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, JOB, JOB_LOG_LINES, OUTLINED, OUTLINED_ENTRIES, hostReading, jobLogOf, messageAdded, outlinedEdit, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { CHAT, JOB, JOB_LOG_LINES, OUTLINED, OUTLINED_ENTRIES, hostReading, jobLogOf, liveOf, messageAdded, outlinedEdit, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { base, started } from "./station-fixture.ts";
 import { applyKeyed } from "../src/collections.ts";
 import { logged } from "../src/log-lines.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
@@ -60,7 +61,6 @@ const OVER: Record<string, number> = {
   "history": 56,
   "chat": 56,
   "chat compact": 56,
-  "live": 40,
   "chatLetters": 40,
 };
 
@@ -466,6 +466,108 @@ test("what each topic the app asks is sent as the workspace changes holds to its
   const faults = judge(heaviestOf, DELTA_BAR_KB, OVER_DELTA, "OVER_DELTA");
   if (print || faults.length > 0) console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
   assert.deepEqual(faults, []);
+});
+
+// ── a working agent's stream ──
+//
+// While an agent works in an open chat, the chat's activity line (apps/mbui src/sfpages/chat_rows.mbt `activity_row`)
+// holds its agent's `live` and reads `activity.now` of it, nothing else. What the agent's stream brings is told here
+// as its station tells it (station/src/sessions/live.ts `LiveMessage`) and taken as the core takes it (station/sync.ts
+// `#onLive`, station/topics.ts `#live`, the store, output.ts): on the real-size agent's state (real-size.ts `liveOf`),
+// a turn of twenty events: a step's words growing (a call's input, its `start` told again), steps ended and their
+// transcript entries come (`timeline` one entry longer), the rate changing, its work told whole. Each message at most
+// `DELTA_BAR_KB`, and an event that leaves the line as it was sends nothing.
+
+/// A turn of a working agent's stream after `live` (as `liveOf` makes it, its transcript `live.timeline`), each event
+/// named by what it is.
+function turnOf(live: J, at: (n: number) => string): [string, J][] {
+  const from = live.timeline.length;
+  const used = (k: number) => ({ ...live.usage, modelCalls: live.usage.modelCalls + k, outputTokens: live.usage.outputTokens + 280 * k, contextTokens: live.usage.contextTokens + 900 * k });
+  const entry = (k: number, e: J): J => ({ type: "timeline", start: from + k, entries: [{ at: at(k), ...e }], usage: used(k + 1) });
+  const step = (event: J): J => ({ type: "step", event });
+  const rate = (n: number): J => ({ type: "rate", tokensPerSecond: n });
+  const command = "pnpm exec tsgo --noEmit && TOPIC_BYTES_PRINT=1 node --test test/topic-bytes.test.ts";
+  const call = (n: number) => JSON.stringify({ command: command.slice(0, n), description: "Type-check, then weigh what each topic sends" });
+  return [
+    ["step start (text)", step({ kind: "start", id: "s-2", step: "text", input: "" })],
+    ["rate", rate(41)],
+    ["rate", rate(44)],
+    ["step end", step({ kind: "end", id: "s-2" })],
+    ["rate", rate(0)],
+    ["timeline +1", entry(0, { kind: "assistant", text: "先跑类型检查，再看 live 在一轮里发了多少。" })],
+    ["step start (call)", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: "" })],
+    ["step words", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: call(20) })],
+    ["step words", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: call(50) })],
+    ["step words", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: call(command.length) })],
+    ["step end", step({ kind: "end", id: "s-3" })],
+    ["timeline +1", entry(1, { kind: "tool_call", tool: "Bash", callId: "call-turn-1", text: call(command.length) })],
+    ["work", { type: "work", tasks: live.tasks.map((t: J) => ({ ...t, elapsedMs: t.elapsedMs + 9_000 })), plan: live.plan }],
+    ["timeline +1", entry(2, { kind: "tool_result", tool: "Bash", callId: "call-turn-1", ok: true, text: "✔ 9 tests passed (41.2s)" })],
+    ["step start (thinking)", step({ kind: "start", id: "s-4", step: "thinking", input: "" })],
+    ["rate", rate(52)],
+    ["rate", rate(55)],
+    ["step end", step({ kind: "end", id: "s-4" })],
+    ["rate", rate(0)],
+    ["timeline +1", entry(3, { kind: "thinking", text: "live 只剩下一行要发：这一行没变的事件什么也不发。" })],
+  ];
+}
+
+test("what a working agent's stream sends its chat's activity line holds to the change's bar, and nothing where the line stays", async () => {
+  const answers = base();
+  answers["GET /chats"] = [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [{ key: "k1", process: "running" }], lastActiveAt: 1 }];
+  const { host, core, push } = await started(answers);
+  try {
+    const topic = { topic: "live", station: "ws/st", key: "k1" };
+    const ui = core.connect();
+    // (as the app holds it: keyed, sfbase's source.mbt)
+    core.receive(ui, { kind: "subscribe", id: 1, subscribe: topic, keyed: true });
+    await host.settle();
+    // The agent as the real-size rig has it at work, told as its stream opens.
+    const now = host.nowMs();
+    const live = liveOf(now);
+    push("live", { key: "k1", type: "timeline", start: 0, entries: live.timeline, usage: live.usage });
+    push("live", { key: "k1", type: "steps", steps: [], phase: { phase: "working", elapsedMs: 40_000 } });
+    push("live", { key: "k1", type: "work", tasks: live.tasks, plan: live.plan });
+    await host.time.pass(100);
+    host.takeEmitted();
+    // What a chat opened now is sent whole.
+    core.receive(ui, { kind: "subscribe", id: 2, subscribe: topic, keyed: true });
+    await host.time.pass(100);
+    const whole = host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === 2 && "value" in m);
+    core.receive(ui, { kind: "unsubscribe", id: 2, unsubscribe: true });
+    await host.time.pass(100);
+    host.takeEmitted();
+    const activity = () => (core.inner.store.value(topic as Topic) as J)?.ok?.activity;
+    const rows: { name: string; bytes: number; bar: number; value?: unknown }[] = [];
+    const faults: string[] = [];
+    let all = 0;
+    let changed = 0;
+    const turn = turnOf(live, (k) => new Date(now + (k + 1) * 3000).toISOString());
+    for (const [i, [name, message]] of turn.entries()) {
+      const was = activity();
+      push("live", { key: "k1", ...message });
+      await host.time.pass(100);
+      const sent = host.takeEmitted().map(([, m]) => m as J).filter((m) => m.id === 1);
+      const n = sent.reduce((a, m) => a + bytes(m), 0);
+      all += n;
+      const same = equal(was, activity());
+      if (!same) changed++;
+      rows.push({ name: `${String(i + 1).padStart(2)} ${name}${same ? "" : " (the line changes)"}`, bytes: n, bar: DELTA_BAR_KB, value: sent[0]?.value ?? sent[0]?.delta });
+      if (same && sent.length > 0) faults.push(`${i + 1} ${name}: the line stays, and ${n} B are sent: ${JSON.stringify(sent).slice(0, 160)}`);
+      if (!same && sent.length !== 1) faults.push(`${i + 1} ${name}: the line changes, and ${sent.length} messages are sent`);
+      for (const m of sent) if (bytes(m) > DELTA_BAR_KB * 1024) faults.push(`${i + 1} ${name}: ${kb(bytes(m)).toFixed(1)} KB, over the bar of ${DELTA_BAR_KB} KB`);
+    }
+    if (whole === undefined || bytes(whole) > BAR_KB * 1024) faults.push(`live whole: ${whole === undefined ? "none came" : `${kb(bytes(whole)).toFixed(1)} KB`}`);
+    // (the turn moves the line: what it changes to comes)
+    if (changed < 8) faults.push(`the line changed ${changed} times in the turn`);
+    if (print || faults.length > 0) {
+      console.log(`A working agent's stream to its chat's activity line (\`live\`): sent whole ${whole === undefined ? "-" : bytes(whole)} B; a turn of ${turn.length} events, ${all} B in all, the line changing ${changed} times`);
+      for (const r of rows) console.log(`  ${r.bytes > r.bar * 1024 ? "!" : " "} ${r.name.padEnd(48)} ${String(r.bytes).padStart(9)} B${r.bytes > 0 && print ? `  ${JSON.stringify(r.value).slice(0, 140)}` : ""}`);
+    }
+    assert.deepEqual(faults, []);
+  } finally {
+    core.close();
+  }
 });
 
 // ── a page more ──

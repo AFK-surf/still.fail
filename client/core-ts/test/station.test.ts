@@ -260,8 +260,11 @@ test("a_session_at_work_is_followed_live", async () => {
   push("live", { key: "k1", type: "steps", steps: [{ id: "s1", step: "thinking", input: "", startedAt: 1 }], phase: { phase: "thinking", elapsedMs: 0 } });
   await host.time.pass(100);
   apply(host, values);
-  assert.equal(v(values, 1).loaded, true);
-  assert.deepEqual(v(values, 1).timeline, [{ kind: "text", text: "hi" }]);
+  // (what is loaded and the transcript are the core's own, read by its views: a chat is sent what it shows, activity)
+  const live = (core.inner.store.value({ topic: "live", station: "ws/st", key: "k1" }) as { ok: { loaded: boolean; timeline: unknown[] } }).ok;
+  assert.equal(live.loaded, true);
+  assert.deepEqual(live.timeline, [{ kind: "text", text: "hi" }]);
+  assert.deepEqual(Object.keys(v(values, 1)), ["activity"]);
   assert.equal(v(values, 1).activity.now.key, "think");
   core.close();
 });

@@ -236,3 +236,81 @@ test "activity: an agent given words it has yet to take is at work: its line the
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
   fix_clock.val = None
 }
+
+///|
+/// The working agent's chat on 小屏, its agent's `live` as the core client holds it (`live`: its version one more each
+/// time it is another value), the rest the fixture's.
+fn activity_live_chat(live : @signals.Signal[Json]) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat-working")
+  let version = Ref(0)
+  let seen : Ref[Json?] = Ref(None)
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "live" && text(Some(Json::object(params)), "key") == "s-c1" {
+        let value = live.get()
+        if !(seen.val is Some(v) && physical_equal(v, value)) {
+          seen.val = Some(value)
+          version.val += 1
+        }
+        return { value: Some(value), error: None, version: version.val }
+      }
+      base.topic(name, params).get().snapshot()
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// What the frame drawn after `come` built, made and laid out: why it was built ("" its looks alone), the tree's work.
+fn activity_frame_after(t : @ui.Tester, come : () -> Unit) -> (String, @ui.TreeFrame, @ui.FramePerf) {
+  t.tree_frames_from_now()
+  come()
+  t.frame()
+  let f = t.tree_frames()
+  let why = t.built_why()
+  let perf = t.frame_perf()
+  (why, f.get(0).unwrap_or({ made: 0, let_go: 0, laid: 0, measured: 0 }), perf)
+}
+
+///|
+/// What its agent's stream changes beside the line (its rate where the line does not say it, a call's input growing, a
+/// step ended before its entry comes, its work) the core sends a chat nothing of (`live` is its `activity` alone,
+/// client/core-ts topic-bytes.test.ts: a working agent's stream): nothing is built in the frame after. Before, it was
+/// sent the rest of the agent's state as it changed, and each such message built the chat's row of the line again as
+/// one that changed the line did (a list's row read changed): shown here by such a value told, the line's words as
+/// they were. What changes the line, the line.
+test "activity: what its agent's stream changes beside the line builds nothing in the chat; what changes the line builds its row and says it" {
+  fn now(key : String, words : String) -> Json {
+    { "key": Json::string(key), "text": Json::string(words), "mono": true }
+  }
+  let live = @signals.signal(
+    ({ "activity": { "now": now("call:1", @sffixture.working_step) } } : Json),
+    same=fn(a, b) { physical_equal(a, b) },
+  )
+  let t = activity_live_chat(live)
+  assert_true(t.find(@sffixture.working_step) is Some(_), msg="the line says its step")
+  // a rate, a call's input growing, a step ended: nothing comes
+  let none = activity_frame_after(t, fn() { () })
+  assert_eq(none.0, "", msg="nothing built: \{none}")
+  assert_true(none.1 == { made: 0, let_go: 0, laid: 0, measured: 0 }, msg="nothing made: \{none}")
+  // as the core sent it before: the rest of the agent's state changed, the line's words as they were
+  let before = activity_frame_after(t, fn() {
+    live.set({
+      "activity": { "now": now("call:1", @sffixture.working_step) },
+      "rate": 52,
+      "steps": [{ "id": "s-3", "step": "tool", "tool": "Bash", "input": "{\"command\":\"pnpm exec tsgo", "startedAt": 1 }],
+    })
+  })
+  t.run_for(@ui.move_most_ms)
+  let changed = activity_frame_after(t, fn() { live.set({ "activity": { "now": now("call:2", "整理下一步") } }) })
+  t.run_for(@ui.move_most_ms * 4.0)
+  println("nothing told: \{none}\nthe rest of its state told, the line as it was (before): \{before}\nthe line changed: \{changed}")
+  assert_true(before.0 != "", msg="before, the line's row was built again for what it does not show: \{before}")
+  assert_true(changed.0 != "", msg="the line's row built for its words: \{changed}")
+  assert_true(t.find("整理下一步") is Some(_), msg="the line says what it does now")
+}
