@@ -15,18 +15,7 @@ import { account, answers, call, nowS } from "./helpers.ts";
 
 /// Writes that do not answer while the reads hang, each with why. Only falls: one that answers now fails the test until
 /// it is taken out.
-const KNOWN: Record<string, string> = {
-  // views/lock.ts `roster`: the workspace's lock read again first (`managed` → `read`, the stations' and the cloud's
-  // GET /lock), unbounded, before the cloud is asked at all.
-  "workspace.removeAdded": "the lock read before the write (lock.ts roster → managed)",
-  "workspace.setRole": "the lock read before the write (lock.ts roster → managed)",
-  "workspace.removeMember": "the lock read before the write (lock.ts roster → managed)",
-  "workspace.removeStation": "the lock read before the write (lock.ts roster → managed)",
-  // views/lock.ts `added`: after the cloud took them, the lock read again to sign them in (`managed`), unbounded.
-  "workspace.addMembers": "the lock read after the write (lock.ts added → managed)",
-  // views/lock.ts `enrolled`: the lock's head read for the install command's `--lock`, unbounded.
-  "workspace.enroll": "the lock's head read for the command (lock.ts enrolled → Lock.head)",
-};
+const KNOWN: Record<string, string> = {};
 
 /// The services ops.ts sends to the cloud (`CLOUD_SERVICES`).
 const CLOUD = ["workspace", "invitation", "loginSession", "account", "admin"];

@@ -63,6 +63,13 @@ export const BEHIND_MS = 3_000;
 export const BEHIND_TRIES = 5;
 /// How long what is signed waits for one of the stations serving the lock to take it, before the cloud is what does.
 export const TAKEN_MS = 15_000;
+/// How long a person's write to the cloud (a member added, taken out or given a role, a station taken out or enrolled:
+/// `roster`, `added`, `enrolled`) waits on the workspace's stations for its lock, all told: the lock read again before
+/// it is signed, and a station taking what was signed. Past it the lock is signed as held here (the stations' events
+/// keep that level, and no read brings more of ones that do not answer) and what is signed goes to the cloud as where
+/// no station took it. 2026-11-11 a member added in a locked workspace whose stations were not reached turned its
+/// button for minutes: each of these waits had no end, or TAKEN_MS each.
+export const ASKED_MS = 3_000;
 /// A device of the person's own added this recently is pointed out on their other devices.
 const RECENT_SECS = 7 * 86400;
 /// Once one station answered a read of the locks, how much longer the others are waited for.
@@ -115,6 +122,25 @@ export function answersOf<A, E>(inner: Inner, asks: Effect.Effect<A, E>[], after
 }
 /// The stations that did not answer a read in time (answersOf `at`), until they answer one.
 const silentOf = new WeakMap<Inner, Set<string>>();
+
+/// One call's wait on the stations (ASKED_MS from when it was made): `wait(work)` runs `work` to its end in a fiber of
+/// the core's (what it reads is held when it comes, whoever still waits) and gives its answer if that came by then,
+/// else none; once it is over nothing more is waited for.
+type Asked = { wait<A>(work: Effect.Effect<A>): Effect.Effect<A | undefined> };
+function asked(inner: Inner): Asked {
+  const late = Deferred.makeUnsafe<void>();
+  let over = false;
+  inner.runner.fork(Effect.andThen(Effect.sleep(ASKED_MS), Effect.sync(() => { over = true; Deferred.doneUnsafe(late, Effect.void); }))); // timer: a deadline on what a call waits for
+  return {
+    wait: <A>(work: Effect.Effect<A>) =>
+      Effect.suspend((): Effect.Effect<A | undefined> => {
+        const done = Deferred.makeUnsafe<A>();
+        inner.runner.fork(Effect.flatMap(work, (a) => Effect.sync(() => { Deferred.doneUnsafe(done, Effect.succeed(a)); })));
+        if (over) return Effect.succeed(undefined);
+        return Effect.raceFirst(Deferred.await(done), Effect.as(Deferred.await(late), undefined));
+      }),
+  };
+}
 
 /// Of a station's answer to what is brought: done once one took it, the others waited for OTHERS_MS once one refused.
 export const tookOrRefused = (r: Result.Result<unknown, unknown>): number => (r._tag === "Success" ? 0 : OTHERS_MS);
@@ -1862,15 +1888,40 @@ function checkSigned(entries: Entry[], chain: Entry[], key: string, at: number):
   });
 }
 
+/// Whether a workspace has a lock to read again: one held on here, or the workspace's view naming one (a lock turned
+/// on meanwhile is told by it), as `install`'s `stations.also.read` asks. Neither: there is nothing to read, and a
+/// person's write is not held up asking the stations for it.
+function lockToRead(inner: Inner, ws: string): boolean {
+  const was = held(inner, ws);
+  return (!!was?.head && !fold(was.entries).disabled) || !!cloudSays(view(inner, ws));
+}
+
 /// A station's enrollment in a locked workspace: its commands name the lock's head, which it pins (`--lock`), as the
-/// stations this device reaches have it (the cloud's word only when none answers). A control plane that keeps no lock
-/// (Comma, a cloud from before locks): the commands as they were.
-export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): Effect.Effect<unknown, CoreError> {
+/// stations this device reaches said it, the lock read again for ASKED_MS at most (see `ASKED_MS`), and as held here
+/// past that or where none said it (as the workspace's view says it where none is held). A head a little behind does
+/// as well: a station pins any entry of the chain (station/src/cloud/presence.ts checks the hash against every entry).
+/// A control plane that keeps no lock (Comma, a cloud from before locks): the commands as they were.
+export function enrolled(inner: Inner, _sub: string, ws: string, made: unknown): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
-    if (inner.provider.kind !== "stillfail") return made;
-    const lock = new Lock(inner, ws, sub, null);
-    const head = yield* Effect.orElseSucceed(lock.head(), () => null);
+    if (inner.provider.kind !== "stillfail" || !lockToRead(inner, ws)) return made;
+    yield* asked(inner).wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read for an enrollment" }));
+    const h = held(inner, ws);
+    const on = !!h?.head && !fold(h.entries).disabled;
+    // None held on here (a device that has not read it yet, and did not just now) and the workspace's view saying it is
+    // locked: its head as the view says it, the cloud's word as where no station answered. Never the commands without
+    // it there: they would enroll a station the lock does not protect (#5540).
+    const v = view(inner, ws);
+    let head = on ? h!.head : get(v, "locked") === true ? readHead(get(v, "lock")) : null;
     if (head === null || !isObject(made)) return made;
+    // Held: as a station of the lock last said it this run (part(inner, ws).heads, which the read just made sets for
+    // each that answered), where that is on the chain held.
+    for (const id of on ? fold(h!.entries).stations.keys() : []) {
+      const theirs = part(inner, ws).heads.get(id);
+      if (theirs != null && onChain(h, theirs)) {
+        head = theirs;
+        break;
+      }
+    }
     const out: J = { ...made, lock: head.hash };
     if (typeof out.install === "string") out.install = `${out.install} ${head.hash}`;
     if (typeof out.installWindows === "string") out.installWindows = `${out.installWindows} ${head.hash}`;
@@ -1904,12 +1955,15 @@ function signerRole(inner: Inner, sub: string, entries: Entry[]): string | null 
   }
 }
 
-/// The workspace's lock, read again, where this device signs it for an owner or an admin of it; null otherwise (a web
-/// page, one not let in, no lock or one turned off): the cloud's word is all there is there, as before.
-function managed(inner: Inner, sub: string, ws: string): Effect.Effect<{ entries: Entry[]; role: string } | null> {
+/// The workspace's lock, read again for ASKED_MS at most (`within`, the call's) and what is held here taken past that,
+/// where this device signs it for an owner or an admin of it; null otherwise (a web page, one not let in, no lock or
+/// one turned off): the cloud's word is all there is there, as before.
+function managed(inner: Inner, sub: string, ws: string, within: Asked): Effect.Effect<{ entries: Entry[]; role: string } | null> {
   return Effect.gen(function* () {
     if (inner.provider.kind !== "stillfail" || inner.workspaces.owner(ws) !== sub) return null;
-    yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a roster change" });
+    // No lock held on here and the workspace's view naming none: nothing to read, and none to sign.
+    if (!lockToRead(inner, ws)) return null;
+    yield* within.wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a roster change" }));
     const h = held(inner, ws);
     if (!h?.head || fold(h.entries).disabled) return null;
     const role = signerRole(inner, sub, h.entries);
@@ -1925,13 +1979,15 @@ function managed(inner: Inner, sub: string, ws: string): Effect.Effect<{ entries
 /// has not heard of yet (their first device not approved) puts them in it with that role: else the lock made them a
 /// member as their device was approved, whatever they had been given (2026-11-11: made an owner, they were one in the
 /// cloud alone). Where this device signs nothing there, the cloud's word is all there is, as before; once the lock is
-/// to say it, a failure here is the call's, and the cloud is not asked.
+/// to say it, a failure here is the call's, and the cloud is not asked. What it waits on of the stations ends with
+/// ASKED_MS (see `ASKED_MS`).
 export function roster(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
-    const m = yield* managed(inner, sub, ws);
+    const within = asked(inner);
+    const m = yield* managed(inner, sub, ws, within);
     if (m === null) return null;
     const f = fold(m.entries);
-    const lock = new Lock(inner, ws, sub, null);
+    const lock = new Lock(inner, ws, sub, null, false, within);
     if ("station" in what) return f.stations.has(what.station) ? yield* lock.append("station.remove", { key: what.station }) : null;
     const member = f.members.get(what.member);
     if ("gone" in what) return member === undefined ? null : yield* lock.append("member.remove", { sub: what.member });
@@ -1946,10 +2002,12 @@ export function roster(inner: Inner, sub: string, ws: string, what: Roster): Eff
 /// that role, by this device's signature where it signs there for an owner or an admin. One with an account under their
 /// sub, as the answer's view names them; one who has not signed in yet under `pendingOf` their email. One the cloud
 /// had already is left as the lock has them, unless it has not heard of them. As `roster`, a failure is the call's (the
-/// cloud has them then: added again, the lock is asked again).
+/// cloud has them then: added again, the lock is asked again). What it waits on of the stations ends with ASKED_MS
+/// (see `ASKED_MS`).
 export function added(inner: Inner, sub: string, ws: string, role: string, answer: unknown): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
-    const m = yield* managed(inner, sub, ws);
+    const within = asked(inner);
+    const m = yield* managed(inner, sub, ws, within);
     if (m === null || (role === "owner" && m.role !== "owner")) return null;
     const members = arr(get(get(answer, "view"), "members"));
     const emails = (k: string) => arr(get(answer, k)).flatMap((e) => (typeof e === "string" ? [e.toLowerCase()] : []));
@@ -1964,7 +2022,7 @@ export function added(inner: Inner, sub: string, ws: string, role: string, answe
         return name === null ? [] : [{ sub: name, email: "" }];
       }),
     ];
-    const lock = new Lock(inner, ws, sub, null);
+    const lock = new Lock(inner, ws, sub, null, false, within);
     for (const w of wanted) {
       const has = fold(held(inner, ws)?.entries ?? m.entries).members.get(w.sub);
       if (has?.role === role) continue;
@@ -1989,13 +2047,16 @@ export class Lock {
   /// What a person does (a call): the cloud's "too many requests" waited out (the account's devices share a budget a
   /// minute), not said at once as the call's failure.
   readonly #byHand: boolean;
+  /// A write to the cloud's (`roster`, `added`): its waits on the stations end with that call's ASKED_MS.
+  readonly #within: Asked | null;
 
-  constructor(inner: Inner, ws: string, sub: string, ctx: SpanContext | null, byHand = false) {
+  constructor(inner: Inner, ws: string, sub: string, ctx: SpanContext | null, byHand = false, within: Asked | null = null) {
     this.#inner = inner;
     this.ws = ws;
     this.sub = sub;
     this.#ctx = ctx;
     this.#byHand = byHand;
+    this.#within = within;
   }
 
   #cloud(method: string, path: string, body: unknown = null) {
@@ -2028,6 +2089,11 @@ export class Lock {
   #chain(): Effect.Effect<{ head: Head | null; entries: Entry[] }, CoreError> {
     const self = this;
     return Effect.gen(function* () {
+      // A write to the cloud's: `managed` read it for this call, within its wait, and what is held is what it signs after.
+      if (self.#within !== null) {
+        const h = held(self.#inner, self.ws);
+        return { head: h?.head ?? null, entries: h?.entries ?? [] };
+      }
       if (yield* readLockOf(self.#inner, self.ws, lockStations(self.#inner, self.ws))) {
         const h = held(self.#inner, self.ws);
         return { head: h?.head ?? null, entries: h?.entries ?? [] };
@@ -2044,22 +2110,6 @@ export class Lock {
     if (!took) return asked;
     this.#inner.runner.fork(Effect.ignore(asked));
     return Effect.void;
-  }
-
-  /// How far the lock goes, as a station of it this device reaches says (it checked every entry), else as the cloud
-  /// does; null without a lock.
-  head(): Effect.Effect<Head | null, CoreError> {
-    const self = this;
-    return Effect.gen(function* () {
-      const { head, entries } = yield* self.#chain();
-      if (head === null || fold(entries).disabled) return null;
-      for (const id of fold(entries).stations.keys()) {
-        const r = yield* Effect.result(self.#station(id, "GET", "/lock?after=999999999"));
-        const theirs = r._tag === "Success" ? readHead(get(r.success, "head")) : null;
-        if (theirs !== null) return theirs;
-      }
-      return head;
-    });
   }
 
   /// Someone the cloud has made a member, in the lock now, as a person approves their first device: a member, whatever
@@ -2206,19 +2256,31 @@ export class Lock {
       const took = Object.values(pinned).some(taken) || (yield* self.#firstTaken(chain, others.filter((s) => serving.has(s)), taken));
       // Not taken as far as this device heard: the cloud may have kept it all the same, its answer lost on the way
       // back (a gateway's 502, the line gone). Then it is done: asked again, it would say it failed while it went.
-      yield* Effect.catch(self.#toCloud([entry], took), (e) =>
-        Effect.flatMap(Effect.orElseSucceed(Effect.map(self.#cloud("GET", "/lock"), (r) => arr(get(r, "entries")) as Entry[]), () => null), (kept) => {
+      // (a write to the cloud's waits on that read only till its ASKED_MS is over: not known kept then, the failure is
+      // the call's)
+      yield* Effect.catch(self.#toCloud([entry], took), (e) => {
+        const reread = Effect.orElseSucceed(Effect.map(self.#cloud("GET", "/lock"), (r) => arr(get(r, "entries")) as Entry[]), () => null);
+        return Effect.flatMap(self.#within === null ? reread : Effect.map(self.#within.wait(reread), (k) => k ?? null), (kept) => {
           const there = kept?.find((x) => x.seq === entry.seq);
           return there !== undefined && entryHash(there) === entryHash(entry) ? Effect.void : Effect.fail(e);
-        }),
-      );
-      return { head: { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis }, stations: pinned };
+        });
+      });
+      const signed: Head = { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis };
+      // A write to the cloud's reads nothing between the entries it signs one after another (`added` signs one for each
+      // person): the chain is held here with this one on it, so the next follows it. Where what is held moved on
+      // meanwhile, a read brought more already, and it is left as it is.
+      if (self.#within !== null) {
+        const was = held(self.#inner, self.ws);
+        if (was?.head?.hash === head.hash) yield* hold(self.#inner, self.ws, self.sub, signed, chain, was.seen ?? null);
+      }
+      return { head: signed, stations: pinned };
     });
   }
 
   /// Entries brought to each of `stations`, each on its own (one offline hears of them later): whether one of them
   /// took them (`taken`, as its answer says), as soon as one did; false once none did, there are none, or none
-  /// answered by TAKEN_MS (the cloud then is what takes them, as before).
+  /// answered by TAKEN_MS, or by the end of its ASKED_MS for a write to the cloud's (the cloud then is what takes them,
+  /// as before).
   #firstTaken(entries: Entry[], stations: string[], taken: (head: unknown) => boolean): Effect.Effect<boolean> {
     const self = this;
     return Effect.gen(function* () {
@@ -2230,6 +2292,8 @@ export class Lock {
           if (r._tag === "Success" && taken(get(r.success, "head"))) Deferred.doneUnsafe(done, Effect.succeed(true));
           else if (--left === 0) Deferred.doneUnsafe(done, Effect.succeed(false));
         })));
+      // (the stations are brought it still, each in a fiber of its own)
+      if (self.#within !== null) return yield* Effect.map(self.#within.wait(Deferred.await(done)), (took) => took === true);
       return yield* Effect.map(Effect.timeoutOption(Deferred.await(done), TAKEN_MS), (o) => o._tag === "Some" && o.value); // timer: a deadline
     });
   }
