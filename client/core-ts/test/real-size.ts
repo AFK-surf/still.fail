@@ -12,6 +12,7 @@
 // job's log, the chat's letters, screens, the cards of what messages name. Every family of
 // fields is filled as a station fills it, none made larger than a station makes it. Made of the test's clock and
 // indexes alone: the same every run.
+import { activity } from "../src/history.ts";
 import type { Topic } from "../src/protocol.ts";
 import { PAGE } from "../src/station/channel-kinds.ts";
 import { localDay } from "../src/views/usage.ts";
@@ -723,7 +724,7 @@ function detailOf(now: number, key: string, i: number): J {
   };
 }
 
-function liveOf(now: number): J {
+export function liveOf(now: number): J {
   const tools = ["Bash", "Read", "Edit", "Grep", "mcp__stillfail__chat_post"];
   const timeline: J[] = [];
   for (let i = 0; i < 160; i++) {
@@ -859,7 +860,9 @@ export function fixture(now: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
   out.push([{ topic: "thread", station: CHAT.station, thread: CHAT.thread }, chatPage(now, chat)]);
   for (const [i, key] of CHAT.keys.entries()) {
     out.push([{ topic: "session", station: CHAT.station, key }, detailOf(now, key, i)]);
-    out.push([{ topic: "live", station: CHAT.station, key }, liveOf(now)]);
+    // (with what the chat's line shows of it, as station/topics.ts `#live` puts it)
+    const live = liveOf(now);
+    out.push([{ topic: "live", station: CHAT.station, key }, { ...live, activity: activity(live) }]);
   }
   return out;
 }
