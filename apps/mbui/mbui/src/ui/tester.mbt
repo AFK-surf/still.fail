@@ -513,6 +513,7 @@ pub fn Tester::new(
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  looks_said_only.val = false
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)
