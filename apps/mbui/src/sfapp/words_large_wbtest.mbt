@@ -20,7 +20,7 @@ fn words_large_check(lang : String) -> Unit raise {
   let win = corner_windows[i]
   for mode in corner_modes {
     let at = "\{win.0}-\{lang} \{mode}"
-    let t = screen_in(mode, win, lang, font_scale=words_large_scale)
+    let t = screen_in(mode, win, lang, font_scale=words_large_scale, motion_judged=false)
     match outgrown_wrong(at, t.fixed_outgrown(), words_large_outgrown_known, "words_large_known_wbtest.mbt") {
       Some(w) => wrong.push(w)
       None => ()

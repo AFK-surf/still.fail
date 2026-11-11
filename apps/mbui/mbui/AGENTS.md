@@ -96,7 +96,8 @@ yet and you can add one, add it.
   the day's run: main's run after a merge is at the default rate alone), and must come out the same; the app's sweeps of
   each screen at rest (screens, squeeze_said, words_large, corners, contrast) only at the default rate, a rate having
   found nothing in them the default run did not (the user, 2026-11-11: each part of the tests is run for what it is
-  for). Only
+  for); and for now how what moves goes is not judged on those sweeps' frames (`Tester::motion_unjudged`: their screens
+  open with motion reduced; the user, 2026-11-12: 「先省吧，明天加机器，再改回来」, judged again once CI has more runners). Only
   `run_for`'s way gets them: what a test walks itself (inputs, `frame()`) is on the display's frames as ever. Those runs
   hold results only; how a motion goes frame to frame (`sizes_steady`, `rows_steady`, `words_over`, `gaps_steady`) is
   judged on the default run's frames (the user, 2026-11-09: 平滑度另开一条线), and a test that walks its frames itself to judge that

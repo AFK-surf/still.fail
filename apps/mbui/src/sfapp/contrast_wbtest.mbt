@@ -26,7 +26,7 @@ test "contrast: every screen in every window draws its words, icons and what has
       continue
     }
     for mode in corner_modes {
-      match contrast_wrong("\{win.0}-dark \{mode}", screen_in(mode, win, "zh", dark=true).contrast_faults()) {
+      match contrast_wrong("\{win.0}-dark \{mode}", screen_in(mode, win, "zh", dark=true, motion_judged=false).contrast_faults()) {
         Some(w) => wrong.push(w)
         None => ()
       }

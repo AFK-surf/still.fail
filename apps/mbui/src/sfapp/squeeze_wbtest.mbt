@@ -39,6 +39,7 @@ fn screen_in(
   dark? : Bool = false,
   font_scale? : Double = 1.0,
   moves_held? : Bool = true,
+  motion_judged? : Bool = true,
 ) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
@@ -90,6 +91,11 @@ fn screen_in(
     // (`dark`: the app's dark theme, the fixture's prefs saying so: the contrast test's, contrast_wbtest.mbt)
     env=[("MBUI_LOCALE", lang), ("MBUI_REDUCE_MOTION", "1")] + (if dark { [("MBUI_DARK", "1")] } else { [] }),
   )
+  // (`motion_judged` false: how what moves goes not judged on its frames, the sweeps' (corners, contrast, squeeze_said,
+  // words_large): mbui's Tester::motion_unjudged says why and till when)
+  if !motion_judged {
+    t.motion_unjudged(true)
+  }
   if font_scale != 1.0 {
     t.set_font_scale(font_scale)
   }
