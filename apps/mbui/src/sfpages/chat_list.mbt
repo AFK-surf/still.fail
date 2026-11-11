@@ -3,7 +3,7 @@
 // at most in the pane's middle, running on under the composer; following its end, the pages before and after brought
 // in near its edges, put in place once (the unread line, where it was left, where the core opened it), what is read and
 // where the reader is told the core: all of that as the phone's list has it too (sfbase's chat_list.mbt: list_frame
-// before the rows are drawn, list_after once they are). What comes in does so in its turn (list_turns.mbt): a message
+// before the rows are drawn, list_after once they are). What comes in does so at once (list_turns.mbt): a message
 // eases in, an agent's comes out of its activity's picture (emit.mbt), the viewer's own flies in from the composer the
 // frame it is sent (flight.mbt), existing messages show at once. Over it, the way to its end
 // (⌘↓) and to what waits to be decided.

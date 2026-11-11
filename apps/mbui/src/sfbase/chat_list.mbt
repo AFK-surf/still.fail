@@ -79,13 +79,6 @@ pub(all) struct Reading {
   mut top_seq : Double
   /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between
   mut bottom_seq : Double
-  /// whether those were worked out (read_place: once a build that showed its list was over) since its list last came
-  /// to show (let go as a build begins that it was not shown in before: linger_tick), whether where the chat stands
-  /// (its State row) was in view then, and whether the list was still then (not gliding, nothing in its turns under
-  /// way or waiting): what is on screen (Reading::sees)
-  mut view_read : Bool
-  mut state_seen : Bool
-  mut view_still : Bool
   /// how far that message's top is below the list's (points: above it, less than 0)
   mut top_off : Double
   mut at_end : Bool
@@ -137,11 +130,8 @@ pub(all) struct Reading {
   /// the newest row that came in over rows at its end while it was followed (what is at the end stays where it shows,
   /// the rows over it go up for it: sfpages chat_list; "" none yet)
   mut over : String
-  /// rows asked a turn to come in
+  /// rows that came into it new (Turns::admit)
   admitted : Map[String, Bool]
-  /// its list, read as it was last laid out (its glide after what came set out there): a turn waits for that glide's
-  /// end (ListInfo's `glide_rest`), not for the reader's hand (and there)
-  mut list_read : @ui.ListReader?
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
   /// anchor: a message arriving while it is followed is read from its start)
   mut newest : String
@@ -219,7 +209,7 @@ pub(all) struct Reading {
 
 ///|
 /// What row_keys made of a chat's entries (`all`, of view `v`, nothing sent from here waiting for its
-/// row, no row waiting its turn), and the rows it knew then.
+/// row), and the rows it knew then.
 pub struct RowsMade {
   all : Array[Entry]
   v : ChatView
@@ -256,9 +246,6 @@ pub fn reading_of(key : String) -> Reading {
         seen_whole: -1.0,
         top_seq: -1.0,
         bottom_seq: -1.0,
-        view_read: false,
-        state_seen: false,
-        view_still: true,
         top_off: 0.0,
         at_end: true,
         told_place: "",
@@ -286,7 +273,6 @@ pub fn reading_of(key : String) -> Reading {
         makes_way: {},
         over: "",
         admitted: {},
-        list_read: None,
         newest: "",
         following_row: false,
         follow_key: "",
@@ -802,10 +788,6 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     rd.played = false
     rd.ticked = false
     rd.floor_counted = false
-    // (not shown: where its reader was is worked out anew once it shows again, Reading::sees)
-    if !rd.was_shown {
-      rd.view_read = false
-    }
     // every chat kept whose data the page read: its activities whose turn is over let go, its page shown or not
     // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
@@ -849,16 +831,9 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   let em = emits_of(rk)
   if shown && !played {
     rd.played = true
-    // what changes the list's height, one at a time: each whose turn has come starts
+    // messages out of avatars: their turn, asked by now, starts (list_turns.mbt)
     let turns = turns_of(rk)
-    turns.step(c, match rd.list_read {
-      Some(lr) =>
-        match lr.info() {
-          Some(i) => i.glide_rest
-          None => -1.0
-        }
-      None => -1.0
-    })
+    turns.step(c)
     let playing = em.current is Some(_) || em.queue.length() > 0
     let watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && in_front
     if watched != em.watched {
@@ -1300,21 +1275,6 @@ pub fn read_place(
 ) -> Unit {
   let n = list.length()
   let info = lr.info()
-  rd.view_read = true
-  rd.state_seen = match info {
-    Some(i) if i.first >= 0 => {
-      let mut k = i.first
-      let mut seen = false
-      while k <= i.last && k < n {
-        if list[k] is State(_, _, _) {
-          seen = true
-        }
-        k = k + 1
-      }
-      seen
-    }
-    _ => false
-  }
   match (info, lr.place()) {
     (Some(i), Some((first, past, _))) if i.first >= 0 && !v.newer => {
       let foot = i.height - room
@@ -1374,31 +1334,11 @@ pub fn read_place(
 }
 
 ///|
-/// Whether the row of message `seq` (None: where the chat stands, its State row) was on screen as the build before
-/// left the list, its page shown then and where its reader was worked out from it since it came to show: what
-/// changes in it is seen changing (Turns::in_turn's `seen`). The chat left and opened again, or the row scrolled
-/// away and back, it was not. While the list moves (gliding, a turn under way or waiting) it counts as seen whatever
-/// is in view: what goes out of sight goes once the list is still, never changing the rows' places while they are on
-/// their way.
-pub fn Reading::sees(self : Reading, seq : Double?) -> Bool {
-  if !self.was_shown || !self.view_read {
-    return false
-  }
-  if !self.view_still {
-    return true
-  }
-  match seq {
-    Some(s) => self.top_seq >= 0.0 && s >= self.top_seq && s <= self.bottom_seq
-    None => self.state_seen
-  }
-}
-
-///|
 /// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
 /// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
-/// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
-/// among what changes the list's height, kept out of the list till then. What was sent
-/// from here never waits: in the list the frame it is sent, before the core has it (LocalSent).
+/// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) is in the list at
+/// once, its room opening from then (Turns::admit), as is what was sent from here, the frame it is sent, before the
+/// core has it (LocalSent).
 pub fn row_keys(
   c : @ui.Ctx,
   rd : Reading,
@@ -1423,10 +1363,9 @@ pub fn row_keys(
     Some(i) => i.following_row
     None => false
   }
-  rd.list_read = Some(c.list_reader(key))
   rd.foot_sign = if ask_clears(v) { "+ask" } else { "" }
-  // The same entries and message-to-outbox mapping as last time, nothing sent from here waiting for its row and no
-  // row for its turn: what it made then, its rows not gone over again. Other view fields may change without changing
+  // The same entries and message-to-outbox mapping as last time, nothing sent from here waiting for its row: what it
+  // made then, its rows not gone over again. Other view fields may change without changing
   // those inputs (the chat's title, for example). Whether the list follows its end is not asked: it only lets in rows
   // not known yet, and with the same entries every row was made known then.
   // (a page read in, before the window or reaching the chat's end: what it brings was said long ago, there at once,
@@ -1443,11 +1382,10 @@ pub fn row_keys(
         ask_clears(m.v) == ask_clears(v))) &&
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
-      sending.is_empty() &&
-      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, watched, flight, laid~, laid_at~, foot_way~)
+      sending.is_empty() => return shown_rows(c, rd, m.list, m.keys, watched, flight, laid~, laid_at~, foot_way~)
     _ => ()
   }
-  let made_whole = sending.is_empty() && turns.waiting.is_empty()
+  let made_whole = sending.is_empty()
   let given = all
   for o in v.outbox {
     if o.seq >= 0.0 {
@@ -1571,23 +1509,15 @@ pub fn row_keys(
         if e is Working(_) {
           rd.acts[k] = true
         }
-        match e {
-          // (after what closes under a post as its agent starts)
-          Working(_) => turns.admit(c, k, working_turn_ms, after=true)
-          _ => turns.admit(c, k, rise_ms)
-        }
+        turns.admit(c, k)
       }
     }
   }
   let list : Array[Entry] = []
   let keys : Array[String] = []
   for i, e in all {
-    let k = all_keys[i]
-    if turns.waiting.contains(k) {
-      continue
-    }
     list.push(e)
-    keys.push(k)
+    keys.push(all_keys[i])
   }
   if rd.drawn && following && rd.floor > 0.0 {
     for k in came_new {
@@ -1672,7 +1602,7 @@ pub fn row_keys(
     }
   }
   rd.drawn = true
-  rd.rows_made = if made_whole && turns.waiting.is_empty() {
+  rd.rows_made = if made_whole {
     Some({ all: given, v, rise_ms, known: rd.known.length(), list, keys })
   } else {
     None
@@ -2473,13 +2403,7 @@ pub fn list_after(
     // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
     let lr = c.list_reader(key)
-    // (still: what goes out of sight goes only then, never shifting rows on their way: Reading::sees)
-    let tu = turns_of(r.station + "\u{1}" + r.session)
-    let still = !c.list_moving(key) && tu.asks.is_empty() && !tu.open
-    c.after_build_or_scroll("reading", fn() {
-      read_place(rd, v, list, lr, bar, room)
-      rd.view_still = still
-    })
+    c.after_build_or_scroll("reading", fn() { read_place(rd, v, list, lr, bar, room) })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
     // from memory never leaves the page)
     rd.scale = c.scale

@@ -1,6 +1,11 @@
 // A chat's cards answered from the chat, over the fixture's own answers (chat_fixture.mbt: a card answered or let go
-// at once): on screen the card stays as it is, none of it pressed any more; out of sight it is how it went
-// (sfbase's list_turns.mbt Turns::in_turn; the user, 2026-10-29: what is answered moves nothing in the list).
+// at once): answered or let go, on screen or not, what is under the post closes from that moment and how it went
+// comes in its place (sfbase's list_turns.mbt Turns::in_turn, sfpages' decision.mbt).
+
+///|
+/// How long on from an answer these tests look (3 s, past every motion it sets off): what list_turns.mbt once said was
+/// the most a turn held the next back (turn_most_ms), these moments kept.
+let answer_over_ms : Double = 3000.0
 
 ///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
@@ -40,7 +45,7 @@ test "answered options can be read again by pressing the outcome, without answer
     let t = cards_core(calls, platform~)
     scroll_to_words(t, "把首页和聊天页的截图都更新")
     tap_now(t, "把首页和聊天页的截图都更新")
-    t.run_for(turn_most_ms)
+    t.run_for(answer_over_ms)
     out_of_sight(t)
     scroll_to_words(t, "你 选择了「一起换」")
     assert_true(t.find("这次只改列表，截图下次再说") is None)
@@ -170,7 +175,7 @@ test "an option answered on screen: its options close at once, how it went in th
   tap_now(t, "这次只改列表，截图下次再说")
   assert_eq(named(calls, "decision.answer").length(), 1)
   // on screen as out of sight: its room closed with what came of it, one move (mbui's view/list_motion.mbt)
-  t.run_for(turn_most_ms)
+  t.run_for(answer_over_ms)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("你 选择了「一起换」") is Some(_))
   t.assert_idle()
@@ -183,7 +188,7 @@ test "忽略 on screen: let go at once (decision.dismiss), the card's options an
   scroll_to_words(t, "忽略")
   tap_now(t, "忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  t.run_for(turn_most_ms)
+  t.run_for(answer_over_ms)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("忽略") is None)
   t.assert_idle()

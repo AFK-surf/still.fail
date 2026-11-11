@@ -86,7 +86,7 @@ fn rows_follow_run(made : Bool, period : Double) -> Array[Array[String]] {
   changed()
   look()
   back()
-  // one coming at the end: in its turn
+  // one coming at the end: in at once, its room opening
   messages.push(said(62, "在末尾时来的一句"))
   changed()
   t.run_for(@sf.enter_ms / 2.0)

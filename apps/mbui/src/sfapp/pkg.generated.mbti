@@ -132,8 +132,6 @@ pub fn clock_stamp(Double) -> String
 
 pub let close_gap : @motion.Spec
 
-pub let close_turn_ms : Double
-
 pub fn cloud_origin() -> String
 
 pub fn cloud_updates(@sfbase.Source, String, String) -> @sfbase.UpdateSource
@@ -155,8 +153,6 @@ pub let dark_muted : Int64
 pub let dark_text : Int64
 
 pub let desktop_face : String
-
-pub let dismiss_turn_ms : Double
 
 pub fn doing(String) -> Bool
 
@@ -766,8 +762,6 @@ pub fn row_name(@sfbase.ChatItem) -> String
 
 pub fn row_tone(@sfbase.ChatItem) -> String
 
-pub let row_turn_ms : Double
-
 pub fn runs_by_line(Array[@text.Run]) -> Array[Array[@text.Run]]
 
 pub fn say(@ui.Ctx, String) -> Unit
@@ -940,19 +934,11 @@ pub fn tr(String, args? : Array[(String, String)]) -> String
 
 pub fn trim_slash(String) -> String
 
-pub let turn_calm_ms : Double
-
-pub let turn_most_ms : Double
-
 pub let turns_by : Map[String, @sfbase.Turns]
 
 pub fn turns_of(String) -> @sfbase.Turns
 
 pub fn under_rest() -> Double
-
-pub fn under_turn(String) -> Double
-
-pub let unseen_at : Double
 
 pub let update : @sfbase.Update
 
@@ -1079,8 +1065,6 @@ pub fn viz_tr(String, args? : Array[(String, String)]) -> String
 pub fn with_lingering(@sfbase.Reading, Array[@sfbase.Entry]) -> Array[@sfbase.Entry]
 
 pub fn words_runs(Array[@json.Json], Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
-
-pub let working_turn_ms : Double
 
 pub fn workspace_in_view(@sfbase.Source) -> (@sfbase.Workspace?, Array[@sfbase.Workspace], Bool, Bool)
 
@@ -1252,8 +1236,6 @@ pub using @sfbase {type Station}
 pub using @sfbase {type Tagging}
 
 pub using @sfbase {type Topic}
-
-pub using @sfbase {type TurnAsk}
 
 pub using @sfbase {type TurnFor}
 

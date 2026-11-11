@@ -28,7 +28,7 @@ fn activity_glyph_alphas(t : @ui.Tester, words : String) -> Array[Int64] {
 test "activity: the first words of a newly seen turn arrive a glyph at a time" {
   let t = linger_core()
   t.run_for(fix_deliver_ms)
-  let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
+  let at = turns_of("ws1/st1\u{1}s-c1").started_at("act:s-c1")
   assert_true(at >= 0.0 && at < @double.infinity, msg="\{at}")
   t.run_for(dmax(at - t.time(), 0.0) + @sfbase.glyph_line_in_ms / 2.0)
   let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
@@ -39,7 +39,7 @@ test "activity: the first words of a newly seen turn arrive a glyph at a time" {
 }
 
 ///|
-test "activity: a row reserved for later reveals its words in its own turn" {
+test "activity: a row whose coming is set for later reveals its words from then" {
   new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
@@ -52,13 +52,13 @@ test "activity: a row reserved for later reveals its words in its own turn" {
   tap_send(t)
   fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
-  // The row itself follows the flight's landing; the chat's turn and the row's reserved time are distinct.
+  // (its coming set where the flight lands, later than now: ListRows' `came`, not Turns::started_at)
   let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap()
-  assert_true(at > t.time(), msg="its turn is reserved for later: \{at}, now \{t.time()}")
+  assert_true(at > t.time(), msg="its coming is set for later: \{at}, now \{t.time()}")
   let words = tr("android-chat.chat.working")
   assert_eq(activity_glyphs_shown(t, words), 0)
   t.run_for(at - t.time() + @ui.move_most_ms + @sfbase.glyph_line_in_ms)
-  assert_true(activity_glyphs_shown(t, words) > 0, msg="the activity's words come in during its turn")
+  assert_true(activity_glyphs_shown(t, words) > 0, msg="the activity's words come in once it has come")
   emit_restore()
 }
 

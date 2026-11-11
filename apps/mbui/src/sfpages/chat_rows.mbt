@@ -57,7 +57,7 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   match (here.list, here.view.thread) {
     (Some(l), Some(thread)) if asking is Some(_) || lead == "dismissed" => {
       let key = here.station + "/" + thread.to_int().to_string()
-      let open = l.turns.in_turn(c, "need/" + key, asking is Some(_), close_turn_ms, seen=seen_in(c, here, None))
+      let open = l.turns.in_turn(c, "need/" + key, asking is Some(_))
       let start_at = l.turns.start("need/" + key)
       under_post(
         c,
@@ -546,8 +546,8 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
     st.important_next = None
     swap.snap(c, 1.0)
     reveal.snap(c, 0.0)
-    // A list can reserve this row's turn in the future, while the message above it is still landing. A delayed
-    // tween waits for that turn; an already-started turn catches up from its declared start.
+    // Its coming can be set later than now (ListRows' `from`: words sent above it still landing): the tween is
+    // delayed to it; one already set out goes on from its declared start.
     let later = dmax(at - c.moment(), 0.0)
     reveal.animate(c, 1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
   } else {

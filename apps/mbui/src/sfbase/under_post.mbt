@@ -1,6 +1,6 @@
 // What comes and goes under a post in a chat's list (its options, how a card went, 忽略; ListMotion.kt, Chat.kt
 // ArchiveEase; Decisions.css.ts): its room opening and closing as what is in it comes and goes, each on its own curve,
-// in its turn among what changes the list's height (list_turns.mbt).
+// from the moment it changed, with whatever else changes the list's height (list_turns.mbt).
 
 ///|
 /// The room under a post going to its new height: a Move as long as its way is far, as every row's height in a chat's
@@ -54,7 +54,7 @@ pub fn under_rest() -> Double {
 /// `open`, going by `exit` as its room closes by `close`; turned back mid-way from where it is; the first time as it
 /// is. Its room is laid out (`@motion.reveal`, as the Android app's shrinkVertically lays it out, so what is under it
 /// in the chat closes up); what is in it is only drawn while it goes (a tap is what is under it's). `start_at`: when
-/// it was changed in its turn (Turns::in_turn), its motion from then.
+/// it was changed (Turns::in_turn), its motion from then.
 pub fn under_post(
   c : @ui.Ctx,
   key : String,

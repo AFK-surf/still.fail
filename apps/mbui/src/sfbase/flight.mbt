@@ -304,9 +304,9 @@ pub fn flight_start(
         set_out: -1.0,
         after: 0.0,
       }))
-      // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
-      // wait for nothing (list_turns.mbt)
-      turns_of(turns).send(c, flight_wait_ms + flight_len(desk))
+      // (they wait for nothing, nor does anything wait for them: the chat's list's turns told they set out,
+      // list_turns.mbt)
+      turns_of(turns).send(c)
     }
     None => ()
   }
@@ -417,7 +417,7 @@ pub fn flight_carry_into(
       f.chat = chat
       f.turns = turns
       f.key = key
-      turns_of(turns).send(c, flight_wait_ms + flight_len(f.desk))
+      turns_of(turns).send(c)
     }
     _ => ()
   }
@@ -669,7 +669,7 @@ pub fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
         send_flight.set(None)
         flight_shares_gone(f)
         // their turn over: where they were declared to land (or now, never having set out)
-        turns.over(c, Send, f.way.ends())
+        turns.over(c, Send)
       }
     }
     None => ()

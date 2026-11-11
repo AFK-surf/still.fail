@@ -266,8 +266,8 @@ pub fn vault_card(
 /// A card's answer at its foot (`answer`), answered while the card shows (`ended`: whether it was granted, and how it
 /// went in words): its answer fades out where it is (answered_fade_ms, Leave), only drawn, then how it went fades in
 /// after it over the room it leaves, its dot and its words in the middle of it. The answer stays laid out (unseen):
-/// the card keeps its size to the point, and the list it is in changes its height only once it is out of sight
-/// (sfbase's list_turns.mbt Turns::in_turn).
+/// the card keeps its size to the point. In a chat's list the card itself goes as its room closes from the moment it
+/// was decided, one line in its place (sfpages' decision.mbt vault_ask_card, Turns::in_turn).
 pub fn answered_in_place(c : @ui.Ctx, key : String, ended : (Bool, Array[@ui.Run])?, answer : () -> Unit) -> Unit {
   let was = @motion.presence(
     c,
