@@ -1,7 +1,7 @@
 // A message's files as nodes of the window's tree (message_files.mbt's message_files and card_item): laid in rows by
 // the width the message is given, a row going on in the next where it has not the room; each file its own, any other
 // than a picture or a video as its card, its download's state as the core says it, its menu where it is held or right
-// clicked. Pictures and videos (their own PR) take their box here, as their data says, nothing drawn in it yet.
+// clicked; a picture or a video in the box its data says (message_media_node.mbt).
 
 ///|
 /// Where a message's file is shown, as it is now: its chat's station and session, and its view (whose session keeps a
@@ -62,24 +62,20 @@ fn message_files_node(
             item.max_width(By(fn() { Some(room.width()) })).shrink(Is(0.0)) |> ignore
             item.pick(fn() { file_kind(a().name) }, fn(p, kind) {
               match kind {
-                "image" | "video" =>
-                  // (its box as its data says it, at most the width given: what draws in it is its own PR's)
-                  p.box(fn(b) {
-                    b
-                    .width(By(fn() {
-                      let least = if kind == "image" { image_least } else { video_least }
-                      let side = if kind == "image" { image_min_side } else { 0.0 }
-                      let (bw, _, _) = image_box(a(), least, min_side=side)
-                      Some(dmin(bw, room.width()))
-                    }))
-                    .height(By(fn() {
-                      let least = if kind == "image" { image_least } else { video_least }
-                      let side = if kind == "image" { image_min_side } else { 0.0 }
-                      let (bw, bh, _) = image_box(a(), least, min_side=side)
-                      Some(bh * dmin(bw, room.width()) / bw)
-                    }))
-                    |> ignore
+                "image" =>
+                  // (its box as its data says it, at most the width given; made again only for another size, as
+                  // the width given or its data changes: a block given another picture of its size keeps its nodes)
+                  p.pick(at_once=true, fn() { media_size(a(), image_least, image_min_side, room.width()) }, fn(q, size) {
+                    message_image_node(q, src, place, a, by, at, size.0, size.1)
                   })
+                  |> ignore
+                "video" =>
+                  // (made anew for another file, or another size: its still is read for the file it is made for)
+                  p.pick(
+                    at_once=true,
+                    fn() { (@sfbase.file_key(a()), media_size(a(), video_least, 0.0, room.width())) },
+                    fn(q, made) { message_video_node(q, src, tips, place, a, by, at, made.1.0, made.1.1) },
+                  )
                   |> ignore
                 _ => message_file_card_node(p, src, tips, place, a, by, at) |> ignore
               }
@@ -92,6 +88,15 @@ fn message_files_node(
     })
     |> ignore
   })
+}
+
+///|
+/// A picture's or a video's box in a message (image_box's, `least` thick, `side` its least where it is cut), at most
+/// `room` wide: (width, height).
+fn media_size(a : Attachment, least : Double, side : Double, room : Double) -> (Double, Double) {
+  let (bw, bh, _) = image_box(a, least, min_side=side)
+  let w = dmin(bw, room)
+  (w, bh * w / bw)
 }
 
 ///|
