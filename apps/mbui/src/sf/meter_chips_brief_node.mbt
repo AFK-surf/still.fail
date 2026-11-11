@@ -130,7 +130,7 @@ pub fn meter_chips_brief_node(parent : @view.View, meters : () -> Array[Json], l
     })
     |> ignore
   })
-  style_node(line, fn() { meter_brief_room })
+  style_node(line, fn() { meter_brief_room }, in_row=true)
 }
 
 ///|

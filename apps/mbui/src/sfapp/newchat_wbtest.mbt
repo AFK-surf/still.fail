@@ -629,3 +629,64 @@ test "a new chat's stations on every screen, Maple pressed: picked (newChat.pick
     assert_eq(calls[before:].to_array().filter(fn(c) { c.has_prefix("newChat.pick") }), ["newChat.pick {\"station\":\"st2\",\"scope\":\"ws1\"}"], msg=at)
   }
 }
+
+///|
+/// What is wrong with each station's row of where a new chat runs as `t` shows it (`at` says where): its name's line as
+/// high as its words, so the row's padding is as much over its name as under its last line (the old panel's), and its
+/// machine's chips in the middle of their line, between the name's foot and the line under them, their words inside
+/// them; "" where nothing is.
+fn ns_rows_wrong(t : @ui.Tester, at : String) -> String {
+  let words = t.words().filter(fn(w) { w.5 > 0.0 })
+  let wrong : Array[String] = []
+  for name in ["Willow", "Maple"] {
+    guard t.semantics().filter(fn(n) { n.role == @ui.Role::Button && n.label == name && n.check is Some(_) && !n.hidden }).last() is Some(r) else {
+      wrong.push("\{at}: no row of \{name}")
+      continue
+    }
+    let (_, ry, _, rh) = r.rect
+    let inside = words.filter(fn(w) { w.2 >= ry - 0.01 && w.2 + w.4 <= ry + rh + 0.01 })
+    guard inside.iter().find_first(fn(w) { w.0 == name }) is Some(n) else {
+      wrong.push("\{at}: no \{name} in its row")
+      continue
+    }
+    let foot = n.2 + n.4
+    let under = inside.filter(fn(w) { w.2 > n.2 + 0.5 })
+    guard under.iter().find_first(fn(w) { w.0 == "CPU" }) is Some(chip) else {
+      wrong.push("\{at}: no chips under \{name}")
+      continue
+    }
+    let last = under.fold(init=chip, fn(a, w) { if w.2 > a.2 { w } else { a } })
+    let over_name = n.2 - ry
+    let under_last = ry + rh - (last.2 + last.4)
+    if (over_name - under_last).abs() > 0.01 {
+      wrong.push("\{at}: \{name}'s row \{over_name} over its name, \{under_last} under 「\{last.0}」")
+    }
+    let (above, below) = (chip.2 - foot, last.2 - (chip.2 + chip.4))
+    if above < -0.01 || (above - below).abs() > 0.01 {
+      wrong.push("\{at}: \{name}'s chips \{above} under its name's foot, \{below} over 「\{last.0}」")
+    }
+    // (its chip: the ground under its words, no taller than a line, the one round them where any is)
+    let ground = t
+      .drawn_rects()
+      .filter(fn(g) { g.3 < 30.0 && g.0 <= chip.1 && chip.1 < g.0 + g.2 && g.1 <= chip.2 + chip.4 && chip.2 < g.1 + g.3 })
+    if ground.is_empty() || ground.iter().all(fn(g) { chip.2 < g.1 - 0.01 || chip.2 + chip.4 > g.1 + g.3 + 0.01 }) {
+      wrong.push("\{at}: \{name}'s 「CPU」 \{chip.2}..\{chip.2 + chip.4} outside its chip (\{ground})")
+    }
+  }
+  wrong.join("\n")
+}
+
+///|
+test "where a new chat runs, on every screen at the default size of words and on a phone at 1.3: each station's name's line as high as its words, its chips in the middle of their line and their words inside them" {
+  for s in ns_screens {
+    let (platform, wide) = s
+    let calls : Array[String] = []
+    let t = ns_open(calls, platform~, wide~)
+    assert_eq(ns_rows_wrong(t, "platform \{platform} wide \{wide}"), "")
+  }
+  guard corner_windows.search_by(w => w.0 == "phone") is Some(i) else { fail("no phone window in corner_windows") }
+  for lang in ["zh", "en"] {
+    let t = screen_in("newchat-station", corner_windows[i], lang, font_scale=1.3)
+    assert_eq(ns_rows_wrong(t, "phone \{lang} at 1.3"), "")
+  }
+}

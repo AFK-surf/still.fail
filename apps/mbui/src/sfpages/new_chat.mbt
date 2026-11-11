@@ -512,9 +512,6 @@ fn station_rows_node(n : @view.View, src : Source, w : Workspace, v : Json?, clo
         col.min_width(Is(Some(0.0))) |> ignore
         col.box(fn(head) {
           @sf.style_node(head, fn() { station_row_head })
-          // (as high as its name's line at the system's size of words, where that is higher than the theme's: what is under it
-          // then under that, not under its words, as a list's row's lines are, list_looks_at)
-          head.min_height(By(fn() { Some(@ui.sp_at(head.words_scale(), station_row_name_line)) })) |> ignore
           // (as long as there is room, what follows it at the line's end: station_row_name's w=grow, a node's own)
           @sf.words_node(head, fn() { text(st, "name") }, fn() { station_row_name })
           .grow(Is(1.0))
@@ -1159,10 +1156,6 @@ let station_row_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let station_row_name : @ui.TextStyle = @ui.text_style(size=Body, leading=L6, color=Fg, wrap=false, w=@sf.grow)
-
-///|
-/// How high station_row_name's line is at the default size of words (its L6).
-let station_row_name_line : Double = 24.0
 
 ///|
 /// newChat: what it holds in the middle of the pane; newChatInner: its parts 10 apart, centred.
