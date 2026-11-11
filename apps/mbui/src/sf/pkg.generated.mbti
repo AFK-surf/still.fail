@@ -826,7 +826,7 @@ pub let home_workspace_title_look : @view.WordsLook
 pub let hover_card_close_ms : Double
 
 #callsite(autofill(loc))
-pub fn hover_card_node(TipLayer, @view.View, (@view.View) -> Unit, tile? : Bool, padded? : Bool, side? : @view.Side, along? : @view.Along, held? : () -> Bool, press? : () -> Unit, tapped? : () -> Unit, loc~ : SourceLoc) -> HoverHand
+pub fn hover_card_node(TipLayer, @view.View, (@view.View) -> Unit, tile? : Bool, padded? : Bool, side? : @view.Side, along? : @view.Along, along_offset? : Double, piece? : (Double, Double) -> (Double, Double, Double, Double)?, held? : () -> Bool, press? : () -> Unit, tapped? : () -> Unit, loc~ : SourceLoc) -> HoverHand
 
 pub let hover_card_open_ms : Double
 
@@ -2885,6 +2885,7 @@ pub struct HoverHand {
   hold : () -> Unit
   close : () -> Unit
   open : () -> Bool
+  card : () -> @view.View?
 }
 
 pub(all) struct Items {

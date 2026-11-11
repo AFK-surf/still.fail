@@ -41,19 +41,23 @@ pub let hover_card_out_ms : Double = 90.0
 
 ///|
 /// What is done with a card (hover_card_node's) by what it is of or by what is in it: opened as a finger's hold opens
-/// it (`hold`: till a press outside it and what it is of, or Escape), closed (`close`), and whether it is open now
-/// (`open`, followed).
+/// it (`hold`: till a press outside it and what it is of, or Escape), closed (`close`), whether it is open now
+/// (`open`, followed), and the card while it is made (`card`, followed: what is opened from what it holds stands beside
+/// it, `Node(card)`).
 pub struct HoverHand {
   hold : () -> Unit
   close : () -> Unit
   open : () -> Bool
+  card : () -> @view.View?
 }
 
 ///|
 /// A card holding what `body` makes, of node `anchor`, drawn in `layer` (the window's layer over all of it, a tip's:
 /// its node as the card is first opened), opened and closed as the file's head says. `tile`: as wide as what it holds
 /// (220 to 420), not 320; `padded`: what it holds 10 in from its padding, else at it (for rows to lie there); `side`,
-/// `along`: where it stands of `anchor`. `held`: kept open meanwhile, whatever the pointer does, through a press
+/// `along`: where it stands of `anchor`; `along_offset`: that much further along its side (a card of words, its own
+/// words starting where they start: sfpages' hover's `words_along`); `piece`: beside that piece of `anchor`, not all of
+/// it (a link in its words: View::beside's). `held`: kept open meanwhile, whatever the pointer does, through a press
 /// outside, Escape and its anchor taking no input (what was pressed in it opened something beside it the pointer goes
 /// on to, a modal panel over its anchor, pressed in), as kit's hover_card's `held`; let go, as the pointer is then.
 /// `press`: what a press on `anchor` does, every input's (a tap, a click, Enter), `anchor` then taking presses;
@@ -74,6 +78,8 @@ pub fn hover_card_node(
   padded? : Bool = true,
   side? : @view.Side = Bottom,
   along? : @view.Along = Start,
+  along_offset? : Double = 0.0,
+  piece? : (Double, Double) -> (Double, Double, Double, Double)?,
   held? : () -> Bool = fn() { false },
   press? : () -> Unit,
   tapped? : () -> Unit,
@@ -149,7 +155,7 @@ pub fn hover_card_node(
         (if way.target() > 0.5 { hover_card_in } else { hover_card_out }).at(p, p)
       }
       small_panel_node(t)
-      .beside(anchor.id(), side~, along~, offset=hover_card_offset, padding=8.0)
+      .beside(anchor.id(), side~, along~, offset=hover_card_offset, padding=8.0, piece?, along_offset~)
       .width(Is(if tile { None } else { Some(hover_card_px) }))
       .min_width(Is(if tile { Some(hover_tile_least_px) } else { None }))
       .max_width(By(fn() { Some(if tile { dmin(hover_tile_most_px, t.window().0 - 16.0) } else { t.window().0 - 16.0 }) }))
@@ -340,7 +346,7 @@ pub fn hover_card_node(
     way.put(0.0)
   })
   |> ignore
-  { hold, close: fn() { (set_open.val)(false) }, open: fn() { open.get() } }
+  { hold, close: fn() { (set_open.val)(false) }, open: fn() { open.get() }, card: fn() { card.get() } }
 }
 
 ///|

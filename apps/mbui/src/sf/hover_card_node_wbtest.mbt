@@ -19,9 +19,11 @@ struct HoverRig {
 /// and its key, and after them 丙 (60 by 20, pressed for nothing) in 外 (a button 120 wide, 44 high, as a bar's name in
 /// its bar; `cramped`, 32 high: less room than a press takes), in a window 800 by 500 (`platform` 0 a mouse's, 1 a
 /// touch screen's): 甲's and 乙's holders taking input while `takes` says, a modal layer over all of it while `modal`,
-/// 甲's card kept open while `held`.
+/// 甲's card kept open while `held`; 甲's and 乙's cards `along_offset` along and beside their `piece`.
 fn hover_rig(
   platform? : Int = 0,
+  along_offset? : Double = 0.0,
+  piece? : (Double, Double) -> (Double, Double, Double, Double)?,
   takes? : @signals.Signal[Bool] = @signals.signal(true),
   modal? : @signals.Signal[Bool] = @signals.signal(false),
   held? : @signals.Signal[Bool] = @signals.signal(false),
@@ -52,6 +54,8 @@ fn hover_rig(
             k,
             fn(b) { hover_card_body(b, name, pressed) },
             held=fn() { name == "甲" && held.get() },
+            along_offset~,
+            piece?,
             press=fn() { pressed[name] = pressed.get(name).unwrap_or(0) + 1 },
           )
           hands[name] = hand
@@ -551,4 +555,55 @@ test "a trigger only a finger's tap is said for (a station's name in a bar that 
   assert_eq(f.pressed.get("拖").unwrap_or(0), 0, msg="a finger: not what holds it's")
   assert_false(f.open("丁"), msg="a finger's tap: no card")
   assert_eq(f.t.audit(), [], msg="a finger")
+}
+
+///|
+/// The card drawn and read out as wide as a card is, below trigger `name`'s top (its rect), wherever along it, if one is.
+fn HoverRig::card_along(self : HoverRig, name : String) -> (Double, Double, Double, Double)? raise {
+  let r = self.trigger(name)
+  let cards = self.t
+    .semantics()
+    .filter(fn(s) { s.role == Group && !s.hidden && s.rect.1 > r.1 && (s.rect.2 - hover_card_px).abs() < 0.5 })
+  match cards {
+    [c, ..] => Some(c.rect)
+    [] => None
+  }
+}
+
+///|
+test "a card said along_offset stands that much further along its trigger's side: back by it, its words starting where the trigger's do (sfpages' words_along); on the mouse's rest, as ever" {
+  for off in [-16.0, 24.0] {
+    let h = hover_rig(along_offset=off)
+    h.move_to(h.on("甲"))
+    h.t.run_for(hover_card_open_ms + hover_settled_ms)
+    assert_true(h.open("甲"), msg="\{off}: open")
+    let r = h.trigger("甲")
+    match h.card_along("甲") {
+      Some(c) => assert_eq((c.0, c.1), (r.0 + off, r.1 + r.3 + hover_card_offset), msg="\{off}: \{c}, its trigger \{r}")
+      None => fail("\{off}: open, none drawn")
+    }
+    assert_eq(h.t.audit(), [], msg="\{off}")
+  }
+}
+
+///|
+test "a card said a piece of its trigger stands beside that piece (a link in its words), not all of it; along_offset from the piece's start; its hand says the card while it is made" {
+  let h = hover_rig(piece=fn(_w, _h) { Some((30.0, 4.0, 40.0, 12.0)) }, along_offset=-5.0)
+  h.move_to(h.on("乙"))
+  h.t.run_for(hover_card_open_ms + hover_settled_ms)
+  assert_true(h.open("乙"), msg="open")
+  let r = h.trigger("乙")
+  match h.card_along("乙") {
+    Some(c) => assert_eq((c.0, c.1), (r.0 + 30.0 - 5.0, r.1 + 4.0 + 12.0 + hover_card_offset), msg="\{c}, its trigger \{r}")
+    None => fail("open, none drawn")
+  }
+  // (its hand says the card while it is made: what is opened from what it holds stands beside it)
+  let card = fn() { @signals.untracked(h.hands["乙"].card) }
+  assert_true(card() is Some(_), msg="open: its card said")
+  assert_true(@signals.untracked(h.hands["甲"].card) is None, msg="the other's none")
+  assert_eq(h.t.audit(), [])
+  h.move_to(hover_away)
+  h.t.run_for(hover_card_close_ms + hover_settled_ms)
+  assert_false(h.open("乙"), msg="left: closed")
+  assert_true(card() is None, msg="gone: none said")
 }

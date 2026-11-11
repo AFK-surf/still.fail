@@ -335,7 +335,11 @@ pub let station_parts : @sf.LiveMap[String, String]
 
 pub fn station_peek_card(@ui.Ctx, String) -> Unit
 
+pub fn station_peek_card_node(@view.View, String, () -> Int32) -> Unit
+
 pub fn station_peek_part(@ui.Ctx, String) -> Unit
+
+pub fn station_peek_part_node(@view.View, String, () -> Int32) -> Unit
 
 pub fn station_via(@json.Json?) -> String
 

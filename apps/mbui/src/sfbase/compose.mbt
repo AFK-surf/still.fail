@@ -587,6 +587,11 @@ pub let folder_pick_asked : Ref[(Source, FolderPick) -> Unit] = Ref(fn(_, _) {  
 pub let chat_jobs_asked : Ref[(@ui.Ctx, Source, ChatRef) -> Unit] = Ref(fn(_, _, _) {  })
 
 ///|
+/// The same from what is made once (an agent's card as nodes), the window's width given (what its screen is of).
+// kept across runs: what the app says once as it starts
+pub let chat_jobs_open : Ref[(Source, ChatRef, Double) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
 /// Files and folders dragged in from where they are (a station's files: `ref` with its station, its name and path, a
 /// folder or not; `drive` where it is in that station's drive), named by their path unless this chat takes files
 /// dragged in as files (the core's `composer.add`, nothing of them going up yet).

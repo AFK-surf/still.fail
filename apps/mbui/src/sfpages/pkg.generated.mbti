@@ -29,6 +29,8 @@ pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
 
 pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @json.Json, across? : Bool) -> Unit
 
+pub fn agent_card_node(@view.View, @sfbase.Source, @sfbase.ChatRef, String, @sf.TipLayer, () -> @view.View?, across? : Bool) -> () -> Bool
+
 pub fn agent_mark(@ui.Ctx, String, String, String, side? : Double, said? : String, ground? : Int64, corner? : @ui.Radius, joined? : Bool) -> Unit
 
 pub fn agent_work(@ui.Ctx, @sfbase.Source, @json.Json?) -> Unit
