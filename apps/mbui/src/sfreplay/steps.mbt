@@ -77,6 +77,11 @@ let pass_outs : Ref[Array[String]] = Ref([])
 let pass_trace : Ref[String] = Ref("")
 
 ///|
+/// C811: the core's frame-taken counts as the strict pass began (Flow::end's TAKEN line).
+// kept across runs: written as each strict pass begins
+let pass_taken_at : Ref[Array[Int]] = Ref([0, 0])
+
+///|
 /// Whether the pass that began last is one of orders' pace passes (pace_between), and whether it failed yet: a failure
 /// in it said (`PACE-FAIL`), not ended on, while what fails at a rate is counted.
 // kept across runs: written as each pass begins
@@ -207,7 +212,33 @@ pub fn Flow::start(
   // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
+  // (C811 startup counts: the strict pass's first second from its first frame, what came and how it was taken)
+  let startup_from = t.time()
+  let startup_at : Array[Int] = @ui.messages_counted.copy()
+  let startup_core : Array[Int] = @core.frame_taken_counts.copy()
+  if seed == 0 {
+    @core.frame_taken_kinds.clear()
+    pass_taken_at.val = @core.frame_taken_counts.copy()
+  }
+  let startup_said = Ref(false)
+  let startup_frames = Ref(0)
+  let startup_most = Ref(0)
+  let startup_left = Ref(0)
   t.between_frames(fn() {
+    if seed == 0 && !startup_said.val {
+      startup_frames.val += 1
+      let left = @ui.messages_counted[1] - startup_at[1]
+      if left - startup_left.val > startup_most.val {
+        startup_most.val = left - startup_left.val
+      }
+      startup_left.val = left
+      if t.time() - startup_from >= 1000.0 {
+        startup_said.val = true
+        let c = @ui.messages_counted
+        let k = @core.frame_taken_counts
+        println("STARTUP \{pass_trace.val}: in \{(t.time() - startup_from).round()} ms, \{startup_frames.val} frames: \{c[0] - startup_at[0]} taken as they came, \{c[1] - startup_at[1]} left for a frame (\{k[0] - startup_core[0]} only behind one, \{k[1] - startup_core[1]} not its own), handed on in \{c[2] - startup_at[2]} frames (at most \{startup_most.val} in one)")
+      }
+    }
     if followed.val != "" {
       match t.find(followed.val) {
         Some((_, y)) => follow_ys.push((t.time(), y))
@@ -740,6 +771,12 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   }
   // (what it told the core, kept for orders' pace passes)
   pass_outs.val = self.r.outs()
+  if self.strict && !pace_pass.val {
+    let k = @core.frame_taken_counts
+    let kinds = @core.frame_taken_kinds.to_array()
+    kinds.sort_by(fn(a, b) { b.1.compare(a.1) })
+    println("TAKEN \{pass_trace.val}: a frame took \{k[0] - pass_taken_at.val[0]} only behind one, \{k[1] - pass_taken_at.val[1]} not its own: " + kinds.map(fn(e) { "\{e.1} \{e.0}" }).join(", "))
+  }
   if pace_pass.val {
     println("PACE-END \{pass_trace.val}")
   }

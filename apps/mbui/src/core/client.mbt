@@ -737,6 +737,18 @@ pub fn Client::cancel(self : Client, id : Int) -> Unit {
 }
 
 ///|
+/// C811: whether message `m` is for a subscription or a call an echo wait holds (Client::echo_waits).
+pub fn Client::echo_waited(self : Client, m : Map[String, Json]) -> Bool {
+  match m.get("id") {
+    Some(Number(d, ..)) => {
+      let id = d.to_int()
+      self.echo_waits.contains(id) || self.echo_waits.values().any(fn(w) { w.0 == id })
+    }
+    _ => false
+  }
+}
+
+///|
 /// Whether message `m` is a topic's change alone, its value or what changed of it (its first too: the runtime's wait
 /// for it ended as it is taken, Runtime::outside_end being only that; no edit's draft come with it): what it changes is
 /// said by its topic's signal and nothing else (Sub::changed), so it may be taken as it comes, before the frame decides

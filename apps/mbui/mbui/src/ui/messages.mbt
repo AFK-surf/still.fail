@@ -49,6 +49,12 @@ let post_wakes : Ref[Int] = Ref::new(0)
 let messages_handed : Ref[Int] = Ref::new(0)
 
 ///|
+/// How many messages were taken as they came (changing only signals), how many were left for a frame, and how many
+/// frames handed such on, since the program began (C811 startup counts: what taking each as it comes would cost).
+// kept across runs: counted as messages come
+pub let messages_counted : Array[Int] = [0, 0, 0]
+
+///|
 /// What a Tester keeps of its run, as a host's log keeps it with MBUI_DRAW_LOG=1 (Tester::start_tape): DRAWHASH,
 /// INPUT and MSG lines. None: nothing kept.
 let tape : Ref[Array[String]?] = Ref::new(None)
@@ -185,6 +191,7 @@ fn messages_take_now(came : Array[(String, String, Bytes?)]) -> Unit {
           }
           if said(m.1, m.2) {
             messages_handed.val += 1
+            messages_counted[0] += 1
             continue
           }
           // (left: handed on as the frame is built, its MSG line on the tape already)
@@ -192,6 +199,9 @@ fn messages_take_now(came : Array[(String, String, Bytes?)]) -> Unit {
         }
         None => ()
       }
+    }
+    if m.0 == "core" {
+      messages_counted[1] += 1
     }
     messages_in.push(m)
   }
@@ -212,6 +222,9 @@ fn take_messages() -> Unit {
   }
   let taken = messages_in.copy()
   messages_in.clear()
+  if taken.iter().any(fn(m) { m.0 == "core" }) {
+    messages_counted[2] += 1
+  }
   for m in taken {
     hand_on(m.0, m.1, m.2)
   }
