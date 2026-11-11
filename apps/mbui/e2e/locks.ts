@@ -1205,12 +1205,15 @@ try {
     if (row.removable !== true) throw new Error("B's page offers no 移除 beside W");
     await b.call("lock.removeDevice", { workspace, device: wId });
   });
-  await check("W out: the station's lock lists it no more, the station refuses it for the lock, its page says it waits", async () => {
+  await check("W out: the station refuses it for the lock, the station's lock lists it no more, its page says it waits", async () => {
     const t1 = Date.now();
-    let said = "";
-    await whenChanged([stationData], () => deviceIn((said = stationSays("lock-state")), wId) === null, 60_000, () => `W still in the station's lock: ${JSON.stringify(deviceIn(said, wId))}`);
-    log(`  W out of the station's lock after ${Date.now() - t1} ms`);
-    log(`  W sees the first: ${short(await wDev.stationState(workspace, (s) => s.state !== "online" && s.cause === "lock", 60_000))} after ${Date.now() - t1} ms`);
+    // (W's refusal is waited for, the station's lock then read once: the station writes an entry to its lock's file as
+    // it takes it, before it closes anyone for it (station/src/cloud/state.ts `takeLock`). W's page says so up to
+    // RECONNECT_MS (2 s) after: the station closes W's stream at once (13 ms after the entry, by its log), and W's link
+    // opens the stream again, and is refused, after its wait unless something wakes it (the core's station/link.ts).)
+    log(`  W sees the first: ${short(await wDev.stationState(workspace, (s) => s.state !== "online" && s.cause === "lock", 60_000))} ${Date.now() - t1} ms after B took it out`);
+    const still = deviceIn(stationSays("lock-state"), wId);
+    if (still !== null) throw new Error(`W still in the station's lock: ${JSON.stringify(still)}`);
     await wDev.lock(workspace, (l) => !l.me?.confirmed && l.me?.waiting, 60_000);
   });
   await check("B, alice's app, untouched: let in, signing, opens the item", async () => {

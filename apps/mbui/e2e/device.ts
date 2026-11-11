@@ -23,23 +23,55 @@ export type J = any;
 /// What `p` gives, or nothing once `ms` have gone by (a deadline: a core or a process that would not end).
 export const within = <T>(p: Promise<T>, ms: number): Promise<T | undefined> => Promise.race([p, new Promise<undefined>((r) => setTimeout(r, ms))]);
 
+/// The watch of a directory waited on, kept for the rest of the run and shared by its waits. A watch begun as a wait
+/// begins sees nothing for a moment after `watch` returns (libuv starts the FSEvents stream on a thread of its own, from
+/// when that thread gets to it), so what is written in that moment is lost to the wait, which ends by the next thing
+/// written there or not at all. A run on a Mac with a load of 20 (2026-11-11) failed with what it waited for there
+/// ("alice's own lock 16 long, not 16", its minute gone by): taken to be that moment, which was not shown. Kept, only
+/// a directory's first wait has it.
+const watches = new Map<string, Set<() => void>>();
+function watching(d: string, changed: () => void): () => void {
+  let told = watches.get(d);
+  if (told === undefined) {
+    const all = (told = new Set<() => void>());
+    watches.set(d, all);
+    const w = watch(d, { recursive: true }, () => {
+      for (const f of [...all]) f();
+    });
+    // (a watch that fails, its directory gone: the next wait there begins another; those waiting keep their deadlines)
+    w.on("error", () => {
+      if (watches.get(d) === all) watches.delete(d);
+      w.close();
+    });
+    w.unref();
+  }
+  told.add(changed);
+  const mine = told;
+  return () => void mine.delete(changed);
+}
+
 /// What `ok` gives, looked at again as each of `dirs` changes (the file system's events, as scripts/waitfor.mjs waits:
-/// a station's database and the lock chains it keeps), or an error saying `what` by `ms`.
+/// a station's database and the lock chains it keeps), or an error saying `what` by `ms`. Looked at once more at `ms`:
+/// what holds by then is not failed for no change having been seen of it, and the run says that it was so.
 export function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | false, ms: number, what: () => string): Promise<T> {
   return new Promise((resolve, reject) => {
     let done = false;
-    const watchers = dirs.map((d) => watch(d, { recursive: true }, () => look()));
     const end = () => {
       done = true;
       clearTimeout(deadline);
-      for (const w of watchers) w.close();
+      for (const stop of stops) stop();
     };
-    const deadline = setTimeout(() => (end(), reject(new Error(what()))), ms);
-    const look = () => {
-      if (done) return;
+    const look = (): boolean => {
+      if (done) return false;
       const got = ok();
       if (got) (end(), resolve(got));
+      return !!got;
     };
+    const deadline = setTimeout(() => {
+      if (look()) log(`  (seen only as its ${ms} ms ended: no change of ${dirs.join(", ")} was seen for it)`);
+      else if (!done) (end(), reject(new Error(what())));
+    }, ms);
+    const stops = dirs.map((d) => watching(d, () => void look()));
     look();
   });
 }
