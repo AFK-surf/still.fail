@@ -100,6 +100,49 @@ pub fn Ctx::held(
     w.build = g().build_no
   })
   self.sweep_helds()
+  // (no `since` said, seen off and on now: since the moment its build's watch was first told of a change since it
+  // was last read, not this frame's clock (the coordinator of the migration, 2026-11-11), the latest of those of the
+  // watches that told it. A watch is told once till it is read: a second change told it before the build has no moment
+  // here, and the wait may count from the first and end early by their distance, under a frame (the first telling asks
+  // for one); said so (MOTION held_causes, wait_look) wherever more than one told it or more was set after the
+  // telling, over-said rather than missed)
+  // (only where it was seen off and is on now, coming on since then: one on all along is not told on again by what
+  // else came)
+  let since = if since >= 0.0 || !(on && w.last < 0.0 && w.off >= 0.0) {
+    since
+  } else if build_causes.is_empty() {
+    // (told by nothing: turned by the clock alone (another wait falling due, the clock compared as it is built), this
+    // frame's clock and so the rate's: said, a place to say its `since` or to be a node's)
+    match wait_look.val {
+      Some(f) => f("held_no_cause", loc, build_causes)
+      None => ()
+    }
+    since
+  } else {
+    let mut m = build_causes[0]
+    for x in build_causes {
+      if x.0 > m.0 {
+        m = x
+      }
+    }
+    // (told by more than one, or more set after what told it (a watch is told once till it is read: what came after
+    // the first has no moment of its own here, and may be what turned it on): said, over-said rather than missed)
+    if build_causes.length() > 1 || build_told_more.val {
+      match wait_look.val {
+        Some(f) => f("held_causes", loc, build_causes)
+        None => ()
+      }
+    }
+    // (told as a frame began (a message a Tester's host posted, handed over then): the frame's moment, the rate's,
+    // till each message is handed over as it comes)
+    if m.1 == "frame" {
+      match wait_look.val {
+        Some(f) => f("held_frame", loc, [m])
+        None => ()
+      }
+    }
+    m.0
+  }
   if !on {
     w.last = -1.0
     w.off = self.clock
@@ -146,6 +189,13 @@ pub fn Ctx::held(
     false
   }
 }
+
+///|
+/// What looks at a wait asked without its own `since` that counts from no cause, from a frame's moment as it began, or
+/// from the latest of several (Ctx::held), where something does (a Tester's: wait_looked, MOTION held_* lines): its
+/// kind, where it was asked and the moments it was told by. None on a device: nothing made or kept for it.
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let wait_look : Ref[((String, SourceLoc, Array[(Double, String)]) -> Unit)?] = Ref(None)
 
 ///|
 /// When the wait `key` (Ctx::held, asked in this scope this frame) will have held: the time of its wake, while it
