@@ -25,4 +25,4 @@ import {
   "stillfail/sffixture",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens", "stillfail/core" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens", "stillfail/core", "stillfail/sfrealsize" } for "wbtest"

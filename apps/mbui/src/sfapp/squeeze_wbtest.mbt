@@ -35,6 +35,7 @@ fn screen_in(
   win : (String, Double, Double, Int, String),
   lang : String,
   said? : Bool = false,
+  real? : Bool = false,
   dark? : Bool = false,
   font_scale? : Double = 1.0,
 ) -> @ui.Tester {
@@ -48,6 +49,8 @@ fn screen_in(
         // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
         let s = fixture_app(mode)
         let s = if said { said_longest_source(s) } else { s }
+        // (`real`: what the core sends each topic on a workspace of real size: real_size_wbtest.mbt)
+        let s = if real { @sfrealsize.real_size_source(s) } else { s }
         src.val = Some(s)
         s
       }
