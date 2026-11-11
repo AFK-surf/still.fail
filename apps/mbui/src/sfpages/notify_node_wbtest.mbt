@@ -306,6 +306,6 @@ test "通知 made once: the preview's banner says the last notice's words on two
     t.draw()
     let lines = t.lines_of("智能体已经")
     assert_eq(lines.length(), 2, msg="\{at}: \{lines}")
-    assert_true(lines[1].has_suffix("…"), msg="\{at}: \{lines}")
+    assert_true(lines[1].has_suffix("…"), msg="\{at}: \{Repr(lines)}")
   }
 }

@@ -245,7 +245,7 @@ test "an agent's context: its title over its rows, each row's note under its nam
     assert_true(((clear.1 - compact.1) - (clear_note.1 - compact_note.1)).abs() < 1.0, msg=about)
     if screen.1 {
       // in the middle of the window: neither at its foot nor at its side
-      assert_true(title.0 > 200.0 && title.0 < 800.0 && title.1 > 100.0 && title.1 < 500.0, msg="\{about}: \{title}")
+      assert_true(title.0 > 200.0 && title.0 < 800.0 && title.1 > 100.0 && title.1 < 500.0, msg="\{about}: \{Repr(title)}")
       // (the corner rule's faults there, those known and no more: context_corners_known)
       assert_eq(
         t.corner_faults().map(@ui.corner_fault_unplaced),

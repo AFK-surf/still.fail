@@ -235,7 +235,7 @@ test "a message's pictures and videos as nodes drawn as the old view draws them,
       assert_eq(old_alpha, [1.0], msg="the old view's likeness: whole")
       assert_true(
         new_alpha.length() == 1 && (new_alpha[0] - breath).abs() < 0.01 && breath < 0.99,
-        msg="the node's likeness breathing: \{new_alpha}, wanted \{breath}",
+        msg="the node's likeness breathing: \{Repr(new_alpha)}, wanted \{breath}",
       )
       // (its picture where it is, as big, the same part of it: all of it but how opaque)
       let unbreathed = fn(l : Array[String]) {

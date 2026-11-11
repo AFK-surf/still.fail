@@ -112,7 +112,7 @@ test "corners of the window's tree: a node's ground shown only while pointed at,
   assert_eq(
     (wants(rest, follow), wants(lit, follow), tree.pointed, tree.pressing, wants(after, follow)),
     (true, true, None, None, true),
-    msg="\{rest}\n\{lit}",
+    msg="\{Repr(rest)}\n\{Repr(lit)}",
   )
 }
 

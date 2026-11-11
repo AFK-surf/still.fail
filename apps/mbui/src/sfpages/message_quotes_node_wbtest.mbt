@@ -305,7 +305,7 @@ test "what a message quotes as nodes is drawn as the old view draws it, state by
         assert_true(
           new_capsule.any(fn(x) { x.has_prefix("rect ") && x.contains("x20.2 ") }) &&
           old_capsule.any(fn(x) { x.has_prefix("rect ") && x.contains("x18 ") }),
-          msg="\{s.name}: \{old_capsule} \{new_capsule}",
+          msg="\{s.name}: \{Repr(old_capsule)} \{Repr(new_capsule)}",
         )
         (old, new)
       } else {

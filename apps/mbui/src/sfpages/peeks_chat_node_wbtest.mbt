@@ -161,7 +161,7 @@ test "a chat's card made once as nodes cuts long words where the old view's did:
     assert_eq(pf_drawn(t), was, msg=name)
     let lines = t.lines_of("这一条消息")
     assert_eq(lines, was_lines, msg=name)
-    assert_true(lines.length() == (if linked is None { 6 } else { 3 }) && lines[lines.length() - 1].has_suffix("…"), msg="\{name}: \{lines}")
+    assert_true(lines.length() == (if linked is None { 6 } else { 3 }) && lines[lines.length() - 1].has_suffix("…"), msg="\{name}: \{Repr(lines)}")
   }
 }
 

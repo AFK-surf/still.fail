@@ -109,9 +109,9 @@ test "words saying how many lines at most, plain and in pieces: cut after the la
           assert_eq(made.3, old.3, msg="\{at}: rects")
           // (cut so: no more lines than it says)
           let (said, lines, _, _) = made
-          assert_eq(said.length(), 1, msg="\{at}: \{said}")
+          assert_eq(said.length(), 1, msg="\{at}: \{Repr(said)}")
           if who is None {
-            assert_true(lines.length() >= 1 && lines.length() <= most, msg="\{at}: \{lines}")
+            assert_true(lines.length() >= 1 && lines.length() <= most, msg="\{at}: \{Repr(lines)}")
           }
         }
       }
@@ -143,9 +143,9 @@ test "long Chinese words saying two lines at most, 150 wide: two lines, the seco
   assert_true(two.1[1].has_suffix("…"), msg="\{two.1}")
   // (as tall as two of its lines)
   let one = max_lines_read(true, "短短一行", "短短", None, text_style(size=Meta, leading=L5), 150.0, 1.0)
-  assert_eq(two.0[0].4, 2.0 * one.0[0].4, msg="\{two.0} | \{one.0}")
+  assert_eq(two.0[0].4, 2.0 * one.0[0].4, msg="\{Repr(two.0)} | \{Repr(one.0)}")
   let all = max_lines_read(true, words, probe, None, text_style(size=Meta, leading=L5), 150.0, 1.0)
-  assert_true(all.1.length() > 3 && !all.1.iter().any(fn(l) { l.has_suffix("…") }), msg="\{all.1}")
+  assert_true(all.1.length() > 3 && !all.1.iter().any(fn(l) { l.has_suffix("…") }), msg="\{Repr(all.1)}")
 }
 
 ///|
@@ -168,7 +168,7 @@ test "words saying how many lines at most read whole, and told cut short (View::
   })
   t.draw()
   t.draw()
-  assert_true(t.find(words) is Some(_), msg="\{t.words()}")
-  assert_true(t.semantics().iter().any(fn(s) { s.role == Group && s.label == words }), msg="\{t.semantics()}")
+  assert_true(t.find(words) is Some(_), msg="\{Repr(t.words())}")
+  assert_true(t.semantics().iter().any(fn(s) { s.role == Group && s.label == words }), msg="\{Repr(t.semantics())}")
   assert_true(node.val.unwrap().words_cut_now())
 }
