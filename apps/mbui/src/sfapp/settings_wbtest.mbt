@@ -8,13 +8,15 @@ fn settings_tester(
   mode? : String = "settings",
   shows? : String = "",
   platform? : Int = 0,
+  w? : Double = 390.0,
+  h? : Double = 844.0,
 ) -> @ui.Tester {
   new_run()
   if shows != "" {
     @settings.fixture_page(shows) |> ignore
   }
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   open_setting(page)
   // the pages opened slide in from the frame that takes them
   t.draw()
@@ -576,6 +578,26 @@ test "添加成员: what is typed counts at once, 添加 lit by it" {
   t.click(Button, label="添加")
   // the fixture adds them: the sheet says what came of it
   assert_true(t.find("完成") is Some(_))
+}
+
+///|
+test "添加成员: 完成 closes what came of it, opened again and again in one run" {
+  let t = settings_tester("workspace", w=1280.0, h=800.0)
+  for i in 0..<3 {
+    let (x, y, w, h) = t.query(Button, label="添加成员").unwrap().rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.run_for(@ui.move_most_ms + 600.0)
+    t.tap_text("name@example.com")
+    t.type_text("he\{i}@example.com")
+    t.click(Button, label="添加")
+    t.run_for(@ui.move_most_ms + 600.0)
+    assert_true(t.find("添加成员") is Some(_))
+    t.click(Button, label="完成")
+    t.run_for(@ui.move_most_ms + 600.0)
+    if t.find("完成") is Some(_) {
+      fail("round \{i}: 完成 pressed, what came of it still shown")
+    }
+  }
 }
 
 ///|
