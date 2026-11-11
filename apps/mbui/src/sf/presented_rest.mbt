@@ -7,7 +7,7 @@
 /// What each sheet of the window's tree presented says of when its motions end, by a number of its own, let go with its
 /// layer.
 // kept across runs: each let go with its sheet's layer; presenters_reset empties it
-let presented_sheet_rests : Map[Int, (Bool) -> Double] = {}
+let presented_sheet_rests : Map[Int, (Bool) -> Double] = Map([])
 
 ///|
 // kept across runs: only counts; presenters_reset puts it back

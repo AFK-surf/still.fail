@@ -89,7 +89,7 @@ test "wide: an @ typed in the relay's note offers the people there in a popover 
         "chat.relayMentions" => {
           let note = text(Some(params), "note")
           let (at, rows) : (Int, Array[Json]) = if note.has_suffix("@p") {
-            let before = note.view(end_offset=note.length() - 2).to_string()
+            let before = note.view(end_offset=note.length() - 2).to_owned()
             (note.length() - 2, [
               { "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": before + "@pengxiao " },
               { "id": "U2", "name": "peter", "note": before + "@peter " },

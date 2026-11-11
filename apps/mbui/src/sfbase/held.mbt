@@ -16,7 +16,7 @@ priv struct HeldTopic {
 
 ///|
 /// Each legacy scope holds its own graph reader, so leaving one scope does not end another scope's topic.
-let held_topics : Map[String, Map[String, HeldTopic]] = {}
+let held_topics : Map[String, Map[String, HeldTopic]] = Map([])
 
 ///|
 /// What was let go of in the build going on though that build read it (held_build): what is read in the build its
@@ -29,7 +29,7 @@ let held_deferred : Ref[Array[HeldTopic]] = Ref([])
 let held_read_now : Ref[Array[HeldTopic]] = Ref([])
 
 ///|
-let held_building : Ref[Bool] = Ref::new(false)
+let held_building : Ref[Bool] = Ref(false)
 
 ///|
 /// This watch belongs to its legacy scope, not to the particular build which first read that scope.
@@ -71,7 +71,7 @@ pub fn hold(src : Source, scope : String, name : String, params : Map[String, Js
   let topics = match held_topics.get(scope) {
     Some(m) => m
     None => {
-      let m : Map[String, HeldTopic] = {}
+      let m : Map[String, HeldTopic] = Map([])
       held_topics[scope] = m
       m
     }

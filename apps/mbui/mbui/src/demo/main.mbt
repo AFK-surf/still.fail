@@ -94,7 +94,7 @@ fn message_row(c : @ui.Ctx, i : Int) -> Unit {
         justify=JCenter,
         fn() {
           c.text(
-            names[m.author].substring(start=0, end=1),
+            names[m.author][0:1].to_owned(),
             size=15.0,
             weight=600,
             color=0xFFFFFFFFL,

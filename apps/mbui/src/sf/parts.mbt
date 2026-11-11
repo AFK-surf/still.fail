@@ -15,7 +15,7 @@ pub fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
 fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? : Bool = false) -> Unit {
   // (a runtime's mark by its runtime, `runtime:<runtime>`: its maker's, as maker_mark draws it)
   if name.has_prefix("runtime:") {
-    maker_mark(c, "", name.view(start_offset=8).to_string(), size) |> ignore
+    maker_mark(c, "", name.view(start_offset=8).to_owned(), size) |> ignore
   } else {
     icon(c, name, size~, color~, by_ink~) |> ignore
   }
@@ -259,7 +259,7 @@ fn button_part(
 
 ///|
 /// How a button whose words changed goes to its new width (button): a Move as long as its width changes.
-let button_reshape : @motion.Spec = @motion.move()
+let button_reshape : @motion.Spec = @motion.moved()
 
 ///|
 /// How far a button's words are in from its sides.
@@ -1534,7 +1534,7 @@ fn menu_items(
 ) -> Bool {
   let open = menu_is(key)
   let entries : Array[@kit.Entry] = []
-  let icons : Map[String, String] = {}
+  let icons : Map[String, String] = Map([])
   let danger : Array[String] = []
   for i, x in items {
     match x {
@@ -2818,10 +2818,10 @@ let input_size : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let input_box : @ui.Style = @ui.css(
+let input_box : @ui.Style = @ui.css((
   #|row w=Full px=S4 py=S1_5 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
   #|disabled{opacity=O55}
-)
+))
 
 ///|
 /// Pointed at or written in: the field's hover grey round it.
@@ -2917,10 +2917,10 @@ pub fn select(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let select_box : @ui.Style = @ui.css(
+let select_box : @ui.Style = @ui.css((
   #|row w=Full px=S4 py=S1_5 gap=S2 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
   #|justify=JBetween disabled{opacity=O55}
-)
+))
 
 ///|
 /// Pointed at, open or focused: the field's hover grey round it.
@@ -3171,9 +3171,9 @@ let choice_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mu
 ///|
 /// The radio mark: 18 round, edged 1.5 (the strong grey; the ink chosen), its dot 8 in the ink.
 // kept across runs: a value (no field of it changes)
-let radio_mark : @ui.Style = @ui.css(
+let radio_mark : @ui.Style = @ui.css((
   #|w=S4_5 h=S4_5 radius=Full border=B1 border_color=Border align=ACenter justify=JCenter
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3478,9 +3478,9 @@ let panel_foot_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_button_box : @ui.Style = @ui.css(
+let panel_button_box : @ui.Style = @ui.css((
   #|row h=S6 px=S2_5 gap=S1 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O50}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3500,9 +3500,9 @@ let panel_button_quiet : @ui.TextStyle = panel_button_words.then(@ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_icon_box : @ui.Style = @ui.css(
+let panel_icon_box : @ui.Style = @ui.css((
   #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O35}
-)
+))
 
 ///|
 /// Where a small panel's icon button stands in its top end corner (its ×): as far in as makes its circle
@@ -3645,9 +3645,9 @@ pub fn chooser(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chooser_box : @ui.Style = @ui.css(
+let chooser_box : @ui.Style = @ui.css((
   #|row h=S7 px=S2 gap=S1_25 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3691,7 +3691,7 @@ priv struct Handling {
 
 ///|
 /// The edges in hand, by their ids.
-let handlings : Map[Int, Handling] = {}
+let handlings : Map[Int, Handling] = Map([])
 
 ///|
 /// What the pointer does with the edge `id` of a column `width` wide, on its `edge`, a drag area across (Ctx::drag_on:
@@ -3790,7 +3790,7 @@ fn edge_state(over : Bool, on : Bool, active : Bool, line : Bool) -> Int {
 
 ///|
 /// How each edge showed last, by its key: as it changes, its look moves to the new one (the web's transitions).
-let edges_shown : Map[String, Int] = {}
+let edges_shown : Map[String, Int] = Map([])
 
 ///|
 /// A column's edge as it looks (parts.css.ts resizeHandle), 7 wide and as high as what holds
@@ -3899,7 +3899,7 @@ let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.css("bg=FieldHover"))
 /// The edges whose tip is put away, by their keys: pressed since the pointer came onto them (the web's tip.hide() as the
 /// pointer goes down: back only once it has left and come again). None while in hand; once let go, where the pointer
 /// was let go (on the edge, which followed it, wherever the edge was last drawn).
-let edge_tips_away : Map[String, (Double, Double)?] = {}
+let edge_tips_away : Map[String, (Double, Double)?] = Map([])
 
 ///|
 /// A tip that follows the pointer along a tall thin thing (usePointerTip: an edge), `id`: shown 300 ms after the pointer

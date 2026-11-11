@@ -212,7 +212,7 @@ fn pointed_now() -> @view.NodeId? {
 test "a button of the tree's own over a native view, pointed at, where it takes a finger read of its own: let go, at once followed no more; changed after, nothing woken" {
   let src = @signals.signal(true, same=fn(a, b) { a == b })
   let k = tree_cover(over=true, areas=Some(fn(w, h, _) { if src.get() { [(0.0, 0.0, w, h)] } else { [] } }))
-  k.t.move(60.0, 20.0)
+  k.t.move_to(60.0, 20.0)
   assert_eq(pointed_now(), Some(k.button.val.unwrap().id()), msg="pointed at")
   assert_true(src.watched(), msg="followed")
   k.shown.set(false)
@@ -227,7 +227,7 @@ test "a button of the tree's own over a native view, pointed at, where it takes 
   let first = @signals.signal(true, same=fn(a, b) { a == b })
   let next = @signals.signal(true, same=fn(a, b) { a == b })
   let k = tree_cover(over=true, areas=Some(fn(w, h, _) { if first.get() { [(0.0, 0.0, w, h)] } else { [] } }))
-  k.t.move(60.0, 20.0)
+  k.t.move_to(60.0, 20.0)
   let id = k.button.val.unwrap().id()
   assert_eq(pointed_now(), Some(id), msg="pointed at")
   k.button.val.unwrap().takes(fn(w, h, _) { if next.get() { [(w / 2.0, 0.0, w, h)] } else { [] } }) |> ignore
@@ -395,7 +395,7 @@ test "a button of the tree's own over a native view saying nothing of where it t
   k.t.frames_owed()
   assert_eq(covers_of(k.page), [], msg="none told")
   let p = tree_cover(over=true)
-  p.t.move(60.0, 20.0)
+  p.t.move_to(60.0, 20.0)
   assert_eq(pointed_now(), Some(p.button.val.unwrap().id()), msg="pointed at")
   p.button.val.unwrap().takes(fn(_, _, _) { [] }) |> ignore
   p.t.frames_owed()

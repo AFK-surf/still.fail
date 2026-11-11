@@ -132,7 +132,7 @@ fn tape_source(tape : Tape, at : () -> Double, base : Source) -> Source {
       }
       // (the device's prefs, which Android's tapes kept none of: a new device's, as the core has them from the start)
       if name == "prefs" && value is None {
-        return { value: Some(Json::object(Map::new())), error: None, version: 1 }
+        return { value: Some(Json::object(Map([]))), error: None, version: 1 }
       }
       // (its values as the tape set them by now: followed by its moment as it moves on, `at`)
       { value, error: None, version }
@@ -207,7 +207,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
   let t0 = t.time()
   let out : Array[String] = []
   // each word's frames that differ: from, to, how many, how many not drawn here, the worst offset (here less Android's)
-  let runs : Map[String, TapeRun] = {}
+  let runs : Map[String, TapeRun] = Map([])
   let order : Array[String] = []
   // what the person did: taps (by their words or where they were), a finger's down, moves and up, pages pushed, back
   let taps = tape.events.filter(fn(e) {
@@ -232,7 +232,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
           let (x, y) = (number(Some(e), "x"), number(Some(e), "y"))
           match kind {
             "down" => t.press_at(x, y)
-            "move" => t.move(x, y)
+            "move" => t.move_to(x, y)
             _ => t.release(x, y)
           }
         }

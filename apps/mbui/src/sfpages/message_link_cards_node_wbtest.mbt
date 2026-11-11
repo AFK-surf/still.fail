@@ -12,12 +12,12 @@ fn lc_seen(t : @ui.Tester, s : String) -> Array[String] {
   let short = 20.0
   let (x, y) = said_piece(t, s)
   t.run_for(@ui.move_most_ms)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(hover_open_ms - short)
   let before = lc_drawn(t)
   t.run_for(short + @ui.move_most_ms)
   let open = lc_drawn(t)
-  t.move(756.0, 316.0)
+  t.move_to(756.0, 316.0)
   t.run_for(hover_close_ms - short)
   let leaving = lc_drawn(t)
   t.run_for(short + @ui.move_most_ms)
@@ -27,7 +27,7 @@ fn lc_seen(t : @ui.Tester, s : String) -> Array[String] {
 ///|
 /// What `t` draws (ag_drawn's), each line in order of what it says: as a set.
 fn lc_drawn(t : @ui.Tester) -> String {
-  let lines = ag_drawn(t).split("\n").map(fn(l) { l.to_string() }).collect()
+  let lines = ag_drawn(t).split("\n").map(fn(l) { l.to_owned() }).collect()
   lines.sort()
   lines.join("\n")
 }

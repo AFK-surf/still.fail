@@ -699,7 +699,7 @@ test "a page's title with 分享 and a choice of days at its line's end, where e
 test "a page's title with what it does at its line's end, its window narrowed and widened across where their least has the room beside each other (words twice as large): on one line, the title at its least or more, then under it, each width as it was coming either way; nothing made again" {
   let (t, made, _, _, share, seg) = titled_ends(390.0)
   // (each width, from 390 down to 220 and up again: one line or two, and where each is)
-  let seen : Map[Int, String] = {}
+  let seen : Map[Int, String] = Map([])
   let mut lines_at : Int? = None
   let widths = []
   for w = 390; w >= 220; w = w - 2 {

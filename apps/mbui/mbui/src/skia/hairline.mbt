@@ -1086,7 +1086,7 @@ impl Blitter for RectClipBlitter with blit_anti_h2(self, x, y, alpha0, alpha1) {
   let runs = FixedArray::make(3, 0)
   runs[0] = 1
   runs[1] = 1
-  self.blit_anti_h(x, y, aa, runs)
+  Blitter::blit_anti_h(self, x, y, aa, runs)
 }
 
 ///|
@@ -1094,11 +1094,11 @@ impl Blitter for RectClipBlitter with blit_anti_v2(self, x, y, alpha0, alpha1) {
   let a0 = FixedArray::make(1, alpha0)
   let r0 = FixedArray::make(2, 0)
   r0[0] = 1
-  self.blit_anti_h(x, y, a0, r0)
+  Blitter::blit_anti_h(self, x, y, a0, r0)
   let a1 = FixedArray::make(1, alpha1)
   let r1 = FixedArray::make(2, 0)
   r1[0] = 1
-  self.blit_anti_h(x, y + 1, a1, r1)
+  Blitter::blit_anti_h(self, x, y + 1, a1, r1)
 }
 
 ///|

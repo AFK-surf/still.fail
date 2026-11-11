@@ -36,11 +36,11 @@ test "a pointer moved with nothing down: a frame for it, built only where what i
   t.draw()
   let built = builds.val
   // (moved within the window, over nothing that lights: nothing built)
-  t.move(80.0, 80.0)
-  t.move(90.0, 90.0)
+  t.move_to(80.0, 80.0)
+  t.move_to(90.0, 90.0)
   assert_eq(builds.val, built)
   // (over the box: it lights)
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   assert_true(builds.val > built)
   assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0xFF0000FFL }))
 }

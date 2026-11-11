@@ -2,7 +2,7 @@
 
 ///|
 test "a box sized by another's laid height follows it in the frame it changes, not a frame late" {
-  let tall = Ref::new(40.0)
+  let tall = Ref(40.0)
   let seen : Array[(Double, Double)] = []
   let t = @ui.Tester::new(
     fn(c) {
@@ -35,7 +35,7 @@ test "a box sized by another's laid height follows it in the frame it changes, n
 
 ///|
 test "a row's height read as the view builds is this frame's, in the frame it changes" {
-  let tall = Ref::new(40.0)
+  let tall = Ref(40.0)
   let t = @ui.Tester::new(
     fn(c) {
       let h = c.list_row_height("rows", 0)
@@ -99,7 +99,7 @@ test "words read before they are first laid out are there in the frame that lays
 
 ///|
 test "a list in a scope of its own is read back by the id it has there" {
-  let tall = Ref::new(40.0)
+  let tall = Ref(40.0)
   let t = @ui.Tester::new(
     fn(c) {
       c.scope(7, fn() {
@@ -129,9 +129,9 @@ test "a list in a scope of its own is read back by the id it has there" {
 
 ///|
 test "a box sized by another's laid size is built once a frame while that box only moves, again as it grows" {
-  let x = Ref::new(0.0)
-  let tall = Ref::new(40.0)
-  let builds = Ref::new(0)
+  let x = Ref(0.0)
+  let tall = Ref(40.0)
+  let builds = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       builds.val += 1
@@ -170,7 +170,7 @@ test "a box sized by another's laid size is built once a frame while that box on
 
 ///|
 test "a tap taken into state in the build that sees it holds when the frame is built again for a read back" {
-  let open = Ref::new(false)
+  let open = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       let b = c.id("button")
@@ -213,7 +213,7 @@ fn builds_a_frame(seen : Map[Int, Int], c : @ui.Ctx) -> Unit {
 
 ///|
 test "a list dragged that the view reads nothing of is built once a frame" {
-  let seen : Map[Int, Int] = {}
+  let seen : Map[Int, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       builds_a_frame(seen, c)
@@ -259,7 +259,7 @@ test "a list's rows in view read as the view builds are this frame's, built agai
 
 ///|
 test "what is built from a list's end alone is built again as it gets there, not at every step before" {
-  let seen : Map[Int, Int] = {}
+  let seen : Map[Int, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       builds_a_frame(seen, c)
@@ -290,7 +290,7 @@ test "what is built from a list's end alone is built again as it gets there, not
 
 ///|
 test "words kept on a row dragged that nothing reads are built once a frame" {
-  let seen : Map[Int, Int] = {}
+  let seen : Map[Int, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       builds_a_frame(seen, c)

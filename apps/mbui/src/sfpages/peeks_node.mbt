@@ -734,4 +734,4 @@ fn link_copy_node(parent : @view.View, href : () -> String) -> Unit {
 /// When each link's address was last copied from its card (link_copy_node's), by the link: what a card of it made again
 /// says, as link_copy's mark by the link is kept.
 // kept across runs: let go as the app begins anew (hover_reset)
-let peek_copied_at : Map[String, Double] = {}
+let peek_copied_at : Map[String, Double] = Map([])

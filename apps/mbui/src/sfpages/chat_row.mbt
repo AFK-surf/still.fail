@@ -903,7 +903,7 @@ fn rule_after(items : Array[@sf.MenuItem?]) -> Unit {
 ///|
 /// A chat renamed `title` (`chat.rename`): nothing when it is no different.
 fn rename(src : Source, item : ChatItem, title : String) -> Unit {
-  let words = title.trim(chars=" \n\t").to_string()
+  let words = title.trim(chars=" \n\t").to_owned()
   if words == "" || words == item.title {
     return
   }
@@ -1184,7 +1184,7 @@ fn swipe_to_archive(
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
             unghost(true)
-            off.animate(c, -width, @motion.move(), velocity=v)
+            off.animate(c, -width, @motion.moved(), velocity=v)
           }
         } else {
           back(v)

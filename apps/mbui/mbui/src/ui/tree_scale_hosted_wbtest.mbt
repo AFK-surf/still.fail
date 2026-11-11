@@ -78,7 +78,7 @@ fn hosted_pressed(pressed : Map[String, Int], k : String) -> Int {
 ///|
 test "an old view hosted in a node drawn half as big: read out and pressed where it is drawn, as big; nothing where it is laid out but not drawn; back to whole, where it is laid out again" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = hosted_scaled(s, pressed, Field::new())
   // (the button laid out at (120, 40) 100 by 50, drawn at (70, 30) 50 by 25)
   let blue = fn() {
@@ -104,7 +104,7 @@ test "an old view hosted in a node drawn half as big: read out and pressed where
 ///|
 test "an old view hosted in a node whole inside one drawn half as big (what holds it scaled, it offset in it): read out and pressed where it is drawn, as big" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = hosted_scaled(s, pressed, Field::new(), nested=true)
   // (the holder at (40, 40) in what is drawn half as big at the window's top left: drawn at (20, 20); the button laid
   // out at (100, 20) in it: drawn at (70, 30) 50 by 25)
@@ -117,7 +117,7 @@ test "an old view hosted in a node whole inside one drawn half as big (what hold
 ///|
 test "an old view hosted in a node drawn half as big: what runs past it cut where it is drawn, pressed only where it shows" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = hosted_scaled(s, pressed, Field::new())
   // (the one at its right edge laid out at (180, 90) 60 by 30, 20 past the holder's 220: drawn at (100, 55) 30 by 15,
   // cut at the holder's drawn right edge, 120: 100 to 120 shows, 120 to 130 is cut)
@@ -132,7 +132,7 @@ test "an old view hosted in a node drawn half as big: what runs past it cut wher
 ///|
 test "an old view hosted in a node drawn half as big, a press held on its button as the node is drawn as nothing, then moved off and let go: nothing pressed, nothing divided by its scale; whole again, pressed where it is laid out" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = hosted_scaled(s, pressed, Field::new())
   t.touch(0, 80.0, 40.0)
   t.draw()
@@ -156,14 +156,14 @@ test "an old view hosted in a node drawn half as big, a press held on its button
 }
 
 ///|
-/// The hosted editor tapped `local` points along its line (in its own terms) where it is drawn at scale `scale`: the
+/// The hosted editor tapped `along` points along its line (in its own terms) where it is drawn at scale `scale`: the
 /// caret it puts down, and where the host is told the caret is.
-fn hosted_caret(scale : Double, local : Double) -> (Int, (Double, Double, Double, Double)) {
+fn hosted_caret(scale : Double, along : Double) -> (Int, (Double, Double, Double, Double)) {
   let s = @signals.signal(scale, same=fn(a, b) { a == b })
   let field = Field::new(text="abcdefghij")
   let t = hosted_scaled(s, {}, field)
   // (the editor laid out at (20, 20) 200 by 20, drawn at (20, 20) 200 s by 20 s)
-  t.tap(20.0 + local * scale, 20.0 + 10.0 * scale)
+  t.tap(20.0 + along * scale, 20.0 + 10.0 * scale)
   t.draw()
   t.draw()
   (field.selection().1, t.ime_rect())
@@ -290,7 +290,7 @@ test "an old view hosted in a node drawn half as big, then moved and drawn whole
   let (whole, _) = hosted_caret(1.0, 33.0)
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
   let moved = @signals.signal((0.0, 0.0), same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let field = Field::new(text="abcdefghij")
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   set_view_app(fn(root) {
@@ -499,10 +499,10 @@ test "an old view hosted in a node drawn half as big, the mouse's pointer on it:
     t.drawn_rects().filter(fn(r) { r.4 == hosted_lit }).map(fn(r) { (r.0, r.1, r.2, r.3) })
   }
   // (the button laid out at (120, 40) 100 by 50, drawn at (70, 30) 50 by 25)
-  t.move(80.0, 40.0)
+  t.move_to(80.0, 40.0)
   t.draw()
   assert_eq(lit(), [(70.0, 30.0, 50.0, 25.0)], msg="on it where it is drawn: lit")
-  t.move(150.0, 60.0)
+  t.move_to(150.0, 60.0)
   t.draw()
   assert_eq(lit(), [], msg="where it is laid out but not drawn: not lit")
   s.set(1.0)
@@ -519,7 +519,7 @@ test "an old view hosted in a node drawn half as big, the mouse's pointer on it:
 ///|
 test "an old view hosted in a node drawn half as big, a button in it cut round (its corners' radius 40 of 80): pressed inside its corner's curve as drawn, half as round; not outside it" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let clicks = Ref::new(0)
+  let clicks = Ref(0)
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0, platform=0)
   set_view_app(fn(root) {
     root.box(fn(h) {
@@ -692,7 +692,7 @@ let under_lit : Int64 = 0x998877FFL
 ///|
 test "an old view taking a finger only where it builds what takes one, hosted in a node drawn half as big over a node of the tree's: its button pressed where it is drawn, what is under it pressed elsewhere; drawn whole with no frame between, where it is laid out" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = hosted_own(s, pressed)
   // (the button laid out at (120, 40) 100 by 50, drawn at (70, 30) 50 by 25; in the holder's own terms (120, 40) there)
   t.tap(80.0, 40.0)
@@ -721,10 +721,10 @@ test "an old view taking a finger only where it builds what takes one, hosted in
       r.any(fn(r) { r.4 == under_lit }),
     )
   }
-  t.move(80.0, 40.0)
+  t.move_to(80.0, 40.0)
   t.draw()
   assert_eq(lit(), ([(70.0, 30.0, 50.0, 25.0)], false), msg="on it where it is drawn: it lit, not what is under it")
-  t.move(150.0, 60.0)
+  t.move_to(150.0, 60.0)
   t.draw()
   assert_eq(lit(), ([], true), msg="where it is laid out but not drawn: what is under it lit")
   s.set(1.0)
@@ -771,13 +771,13 @@ fn hosted_bar(scale : Double, gone? : Bool = false) -> (Bool, Double) raise {
   t.wheel(20.0 + 100.0 * scale, 20.0 + 50.0 * scale, 120.0)
   t.run_for(scrollbar_fade_ms)
   // (its edge where it is drawn: 4 in of its own terms)
-  t.move(20.0 + 196.0 * scale, 20.0 + 50.0 * scale)
+  t.move_to(20.0 + 196.0 * scale, 20.0 + 50.0 * scale)
   t.run_for(scrollbar_fade_ms)
   let near = g().bar_near != 0
   let thumb = t.drawn_rects().filter(fn(r) { r.2 <= scroll_bar_size && r.3 > 3.0 * r.2 && r.0 > 20.0 + 150.0 * scale }).get(0)
   guard thumb is Some((tx, ty, tw, th, _)) else { fail("no thumb drawn") }
   let p = (tx + tw / 2.0, ty + th / 2.0)
-  t.move(p.0, p.1)
+  t.move_to(p.0, p.1)
   let before = t.list_offset()
   t.press_at(p.0, p.1)
   assert_eq(g().bar_drag, g().nodes[list.val].id, msg="pressed: taken by its bar")
@@ -787,7 +787,7 @@ fn hosted_bar(scale : Double, gone? : Bool = false) -> (Bool, Double) raise {
     t.draw()
   }
   for i in 1..=2 {
-    t.move(p.0, p.1 + 10.0 * scale * i.to_double())
+    t.move_to(p.0, p.1 + 10.0 * scale * i.to_double())
     t.run_for(drag_step_ms)
   }
   t.release(p.0, p.1 + 20.0 * scale)
@@ -844,7 +844,7 @@ test "an old view hosted in a node drawn half as big, a native view in it all of
   let placed = fn() {
     match t.views().iter().filter(fn(l) { l.has_prefix("place \{page.id} ") }).last() {
       Some(l) => {
-        let w = l.split(" ").map(fn(v) { v.to_string() }).collect()
+        let w = l.split(" ").map(fn(v) { v.to_owned() }).collect()
         (said_number(w[2]), said_number(w[3]), said_number(w[4]), said_number(w[5]))
       }
       None => (-1.0, -1.0, -1.0, -1.0)
@@ -989,7 +989,7 @@ test "a press's room in an old view hosted in a node drawn whole, half as big, w
 ///|
 test "an old view hosted in a node whole inside one drawn a little smaller (0.99, what holds it scaled, it offset in it): drawn, its words, read out, pressed and its editor's caret told where that scale puts it, not its top left moved onto the pixels" {
   let s = @signals.signal(1.0, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let field = Field::new(text="abcdefghij")
   let t = hosted_scaled(s, pressed, field, nested=true)
   // (its editor focused, its caret at its start, whole: where the host is told it is)

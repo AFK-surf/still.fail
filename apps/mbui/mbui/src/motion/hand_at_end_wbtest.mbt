@@ -47,7 +47,7 @@ test "a box moved from under a still pointer: still pointed at as it goes, not a
   let way = Way::new(0.0)
   let told : Array[(Bool, Double)] = []
   let t = hand_box(way, told)
-  t.move(50.0, 20.0)
+  t.move_to(50.0, 20.0)
   t.draw()
   let t0 = t.time() + 10.0
   let tree = @ui.view_tree().unwrap()
@@ -67,7 +67,7 @@ test "a pointer resting on a box that takes presses, nothing else going: told it
   let way = Way::new(0.0)
   let told : Array[(Bool, Double)] = []
   let t = hand_box(way, told)
-  t.move(50.0, 20.0)
+  t.move_to(50.0, 20.0)
   t.run_for(hand_hover_ms + hand_moved_ms * 2.0)
   assert_eq(told.map(fn(x) { x.0 }), [false, true])
 }
@@ -130,7 +130,7 @@ test "a box moved from under a still pointer as a long fade of its look goes on:
     |> ignore
   })
   t.draw()
-  t.move(50.0, 20.0)
+  t.move_to(50.0, 20.0)
   t.draw()
   let t0 = t.time() + 10.0
   let tree = @ui.view_tree().unwrap()

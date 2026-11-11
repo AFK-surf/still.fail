@@ -87,7 +87,7 @@ pub fn window_step(tall : Double) -> Int {
 // kept across runs: let go of by reset (chat_windows_reset), and of a list as it is asked again (chats_told_before)
 /// The window each list was last told it grows to while the core has not answered it yet, by its params
 /// (list_window_key): told once.
-let windows_asked : Map[String, Int] = {}
+let windows_asked : Map[String, Int] = Map([])
 
 ///|
 /// A chat list's key among windows_asked: its workspace and filter as asked.
@@ -104,7 +104,7 @@ fn list_window_key(p : Map[String, Json]) -> String {
 /// core's window only grows while it holds it).
 pub fn chats_told_before(name : String, topic : Json) -> Array[(String, Json)] {
   guard name == "chats" && topic is Object(t) else { return [] }
-  let params : Map[String, Json] = {}
+  let params : Map[String, Json] = Map([])
   for k in ["scope", "mine", "watching", "hidden"] {
     match t.get(k) {
       Some(v) => params[k] = v
@@ -336,11 +336,11 @@ pub fn open_listed(view : ChatsView) -> Unit {
 
 ///|
 /// The days as last shown, by list (held_order).
-pub let shown_days : Map[String, Array[ChatDay]] = {}
+pub let shown_days : Map[String, Array[ChatDay]] = Map([])
 
 ///|
 /// The days, by list, the order last shown was made from (held_order): while they are the same, so is it.
-let held_from : Map[String, Array[ChatDay]] = {}
+let held_from : Map[String, Array[ChatDay]] = Map([])
 
 ///|
 /// Whether `days` (the very array: a view's, read once a version) are not what list `key`'s order shown was last made
@@ -368,13 +368,13 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
   if !days_new(key, days) {
     return shown
   }
-  let fresh : Map[String, ChatItem] = {}
+  let fresh : Map[String, ChatItem] = Map([])
   for d in days {
     for item in d.items {
       fresh[row_name(item)] = item
     }
   }
-  let held : Map[String, Bool] = {}
+  let held : Map[String, Bool] = Map([])
   let out : Array[(String, Array[ChatItem])] = shown.map(fn(d) {
     let items : Array[ChatItem] = []
     for item in d.items {
@@ -432,7 +432,7 @@ pub fn viewer_moved(key : String, days : Array[ChatDay]) -> Bool {
   if !days_new(key, days) {
     return false
   }
-  let was : Map[String, ChatItem] = {}
+  let was : Map[String, ChatItem] = Map([])
   for d in shown_days.get(key).unwrap_or([]) {
     for item in d.items {
       was[row_name(item)] = item
@@ -577,7 +577,7 @@ pub fn long_stop(station : String, job : Json?) -> (String, Json, Array[(String,
       if text(stop, "view") != "" {
         on.push(("view", text(stop, "view")))
       }
-      let m : Map[String, Json] = {}
+      let m : Map[String, Json] = Map([])
       for kv in on {
         m[kv.0] = Json::string(kv.1)
       }
@@ -602,7 +602,7 @@ pub fn long_jobs_lit(src : Source, w : Workspace) -> Bool {
 /// `longJobs` topic's `ids`).
 pub fn long_jobs_seen(src : Source, w : Workspace) -> Unit {
   let ids = field(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "ids").unwrap_or(Json::array([]))
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   m[w.id] = ids
   (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), answer_unread)
 }

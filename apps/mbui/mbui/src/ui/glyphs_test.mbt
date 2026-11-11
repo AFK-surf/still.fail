@@ -63,7 +63,7 @@ let square_glyph : Double = 100.0
 ///|
 test "words scrolled through, more than the atlas holds: what stays on the screen is drawn once, every glyph from where it was put" {
   let host = SquareHost::{ drawn: [], put: {} }
-  let words = Ref::new("")
+  let words = Ref("")
   let t = @ui.Tester::new(
     fn(c) { c.text(words.val, wrap=false) |> ignore },
     w=4000.0,
@@ -124,7 +124,7 @@ fn square_drawn_from(t : @ui.Tester, host : SquareHost) -> Array[Int] {
 ///|
 test "a glyph of what is on the screen in every plot of a full atlas: a new word has its glyph by the next frame" {
   let host = SquareHost::{ drawn: [], put: {} }
-  let words = Ref::new(square_words(Array::makei(100, fn(i) { 0x4E00 + i })))
+  let words = Ref(square_words(Array::makei(100, fn(i) { 0x4E00 + i })))
   let t = @ui.Tester::new(
     fn(c) { c.text(words.val, wrap=false) |> ignore },
     w=4000.0,

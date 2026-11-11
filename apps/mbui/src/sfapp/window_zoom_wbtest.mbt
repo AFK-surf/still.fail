@@ -106,7 +106,7 @@ test "window zoom: the appearance picker changes and restores the window" {
   // At a later moment the sheet has gone; enlarging puts the setting below this window's visible part.
   t.frame_at(t.time() + @ui.move_most_ms)
   let (w, h) = t.ctx().window_size()
-  t.move(w / 2.0, h / 2.0)
+  t.move_to(w / 2.0, h / 2.0)
   for _ in 0..<10 {
     match t.find("125%") {
       Some((_, y)) if y > 90.0 && y < h - 80.0 => break
@@ -287,7 +287,7 @@ test "window zoom: the chat's bar stays clear of the window corner when its cont
   // The button's ground appears under the pointer; check that drawn shape, not only its idle icon.
   guard t.query(Button, label="打开侧栏") is Some(key) else { fail("no sidebar button") }
   let (x, y, w, h) = key.rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   assert_eq(t.corner_faults(), [])
 }

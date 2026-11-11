@@ -96,7 +96,7 @@ fn message_video_node(
       },
       file_lift_scale,
     )
-    f.shared(By(thumb), @motion.flight_by(@motion.move())) |> ignore
+    f.shared(By(thumb), @motion.flight_by(@motion.moved())) |> ignore
     // the black and its still drawn as one, its edge cut once (the black under a picture cut apart from it left a rim
     // at their rounded edge): the black round a letterboxed one (contained in its own proportions, in the middle) and
     // all of it while it is decoded

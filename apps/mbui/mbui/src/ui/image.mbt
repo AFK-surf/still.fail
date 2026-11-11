@@ -43,12 +43,12 @@ impl Moving for ImageEntry with rest_at(self, now, frame) {
 
 ///|
 /// Decodes by source, smallest first.
-let image_cache : Map[String, Array[ImageEntry]] = {}
+let image_cache : Map[String, Array[ImageEntry]] = Map([])
 
 ///|
 // kept across runs: each decode in image_cache by its host's number, and its source (a host numbers each anew, never one
 // let go of again), gone with it (image_dropped, Tester's reset)
-let image_by_id : Map[Int, (String, ImageEntry)] = {}
+let image_by_id : Map[Int, (String, ImageEntry)] = Map([])
 
 ///|
 // kept across runs: the bytes of the ready decodes in image_cache (each w·h·4 as it is ready, image_dropped's taken off):
@@ -117,11 +117,11 @@ fn named_image_state(name : String) -> (Int, Array[String]) {
 ///|
 /// Encoded images the app handed over (thumbnails from the core, say), by
 /// the key views show them by.
-let image_data : Map[String, Bytes] = {}
+let image_data : Map[String, Bytes] = Map([])
 
 ///|
 /// A vector picture's own renderer when the code that supplies the picture has one, by its source.
-let image_vector_drawers : Map[String, (Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = {}
+let image_vector_drawers : Map[String, (Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = Map([])
 
 ///|
 /// Decoded bytes kept before unused images are dropped.
@@ -794,7 +794,7 @@ priv enum DecodeState {
 
 ///|
 // kept across runs: what is said of the pictures kept, gone with them (image_forget, Tester's reset)
-let images_said : Map[String, ImageSaid] = {}
+let images_said : Map[String, ImageSaid] = Map([])
 
 ///|
 fn image_said(src : String) -> ImageSaid {

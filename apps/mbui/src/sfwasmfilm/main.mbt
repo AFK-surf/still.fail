@@ -61,7 +61,7 @@ pub fn bytes_length() -> Int { host_bytes.val.length() }
 pub fn bytes_unit(i : Int) -> Int { host_bytes.val[i].to_int() }
 ///|
 fn option(key : Int) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for i in 0..<option_length(key) { out.write_char(option_point(key, i).unsafe_to_char()) }
   out.to_string()
 }

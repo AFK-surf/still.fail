@@ -7,8 +7,8 @@ test "what a page read is let go of as it ends, once, and nothing it never read"
     ..made,
     leave: fn(name, params, __reason) {
       if __reason is TopicLeave::Owned(__stop) { __stop(); return }
-      left.push(name + " " + params.get("job").or(Json::string("")).as_string().unwrap()) },
-    release: fn(name, params) { left.push(name + " " + params.get("job").or(Json::string("")).as_string().unwrap()) },
+      left.push(name + " " + (if params.get("job").unwrap_or(Json::string("")) is String(s) { Some(s) } else { None }).unwrap()) },
+    release: fn(name, params) { left.push(name + " " + (if params.get("job").unwrap_or(Json::string("")) is String(s) { Some(s) } else { None }).unwrap()) },
   }
   let log = fn(job : String) -> Map[String, Json] {
     { "station": Json::string("s"), "job": Json::string(job), "lines": Json::number(1.0) }

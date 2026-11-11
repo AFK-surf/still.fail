@@ -630,10 +630,10 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?, place : St
         enter_sends=true,
         field=login_field(here),
       )
-      words = r.text.trim(chars=" \n").to_string()
+      words = r.text.trim(chars=" \n").to_owned()
       logins_here.typed[here] = words != ""
       match r.submitted {
-        Some(sent) if sent.trim(chars=" \n").to_string() != "" && !busy => send(sent.trim(chars=" \n").to_string())
+        Some(sent) if sent.trim(chars=" \n").to_owned() != "" && !busy => send(sent.trim(chars=" \n").to_owned())
         _ => ()
       }
     })
@@ -873,7 +873,7 @@ fn login_step_node(p : @view.View, s : () -> LoginStep) -> Unit {
 fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Json?, place : String) -> Unit {
   let id = text(@signals.untracked(l), "id")
   let field = login_field(place + "\u{1}" + station + "\u{1}" + id)
-  let words = fn() { field.text().trim(chars=" \n").to_string() }
+  let words = fn() { field.text().trim(chars=" \n").to_owned() }
   let shows = @signals.computed(fn(_) { login_paste_shows(core, station, l(), words() != "") })
   let shows = fn() { shows.get() }
   login_said_node(x, fn() { shows().lead })
@@ -901,7 +901,7 @@ fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Jso
           (p.text, p.muted, p.accent)
         },
         submitted=fn(sent) {
-          let code = sent.trim(chars=" \n").to_string()
+          let code = sent.trim(chars=" \n").to_owned()
           if code != "" && !shows().busy {
             send(code)
           }

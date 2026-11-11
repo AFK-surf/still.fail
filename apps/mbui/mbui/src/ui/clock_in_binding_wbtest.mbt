@@ -45,7 +45,7 @@ test "clock read in a binding: what fails its test, by how it is read and its fi
       @view.clock_read_fault("drawn_at", "stillfail/src/sf/x_node.mbt:3", []) is Some(_),
       @view.clock_read_fault("drawn_at", "mbui/src/ui/x_wbtest.mbt:3", []) is Some(_),
       @view.clock_read_fault("cycle", "stillfail/src/sf/x_node.mbt:3", []) is Some(_),
-      @view.clock_read_fault("logic_at", viewer + ":6", six[:5].to_array()) is Some(_),
+      @view.clock_read_fault("logic_at", viewer + ":6", six[:5].to_owned()) is Some(_),
       @view.clock_read_fault("logic_at", viewer + ":3", six) is Some(_),
       @view.clock_read_fault("logic_at", viewer + ":7", six) is Some(_),
     ),

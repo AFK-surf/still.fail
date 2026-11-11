@@ -309,11 +309,11 @@ test "the ways' panel, on every screen: a manager adds a relay (the panel closes
 
 ///|
 test "the ways' panel to one who is no manager: each way seen, none turned; no relay added" {
-  let member = fn(v : Json?) { ws_said(v, "role", Json::string("member")) }
+  let as_member = fn(v : Json?) { ws_said(v, "role", Json::string("member")) }
   for screen in ws_screens {
     let at = screen.0
     let calls : Array[(String, Json)] = []
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, workspace=member) })
+    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, workspace=as_member) })
     assert_true(@sf.presenting(), msg=at)
     assert_true(t.find("北京") is Some(_), msg=at)
     assert_true(t.find("此 workspace 的中继") is None, msg=at)

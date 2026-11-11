@@ -101,7 +101,7 @@ fn patch_all(list : Array[Json], run : ArrayView[Json], first : Map[String, Json
     _ => return Json::array(list)
   }
   let out = list.copy()
-  let index : Map[String, Int] = {}
+  let index : Map[String, Int] = Map([])
   let mut stale = true
   for op in run {
     guard op is Object(o) && o.get("patch") is Some(k) else { continue }

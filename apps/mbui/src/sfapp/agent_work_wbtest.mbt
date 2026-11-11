@@ -95,7 +95,7 @@ test "an agent's card over its name, as over its picture: its background work an
     }
   })
   guard last is Some(name) else { fail("no agent's message") }
-  t.move(name.1 + name.3 / 2.0, name.2 + name.4 / 2.0)
+  t.move_to(name.1 + name.3 / 2.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // one line, under its latest lines, none of the lists it sums up
   let line = word(work_line)
@@ -152,7 +152,7 @@ test "the history's details: its turns' line says its work after it, none withou
   assert_eq(word("4m 12s").length(), 1)
   assert_eq(word("12m").length(), 1)
   assert_true(word("清单").length() == 1 && word("已完成 2/6").length() == 1)
-  let ys = ["读 claude.ts 里的 task 帧", "station 推送 tasks 和 plan", "core 的 agentCard 加上后台和清单", "跑检查并提交"].map(fn(s) {
+  let ys = ["读 claude.ts 里的 task 帧", "station 推送 tasks 和 plan", "core 的 agentCard 加上后台和清单", "跑检查并提交"].map(fn(s) raise {
     let w = word(s)
     assert_eq(w.length(), 1)
     w[0].2
@@ -399,7 +399,7 @@ fn aw_opened(t : @ui.Tester, at : String, rest? : Bool = true) -> Unit raise {
 /// A fault said as `t.audit()` says it, without which node of the old view's it names (that numbering moves as a
 /// panel opens over it).
 fn aw_plain(f : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let cs = f.to_array()
   let mut i = 0
   while i < cs.length() {

@@ -83,7 +83,7 @@ test "a row's menu over a core answering its whole row 1 s late: held on 小屏,
       t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
       t.release(x, y)
     } else {
-      t.move(x, y)
+      t.move_to(x, y)
       t.frame()
       t.right_click(x, y)
     }
@@ -171,7 +171,7 @@ test "a row's time over a late whole row: pointed at wide, held a while on 小�
       t.release(x, y)
       f
     } else {
-      t.move(x, y)
+      t.move_to(x, y)
       words_over(t, start, late + 200.0, ["8 分钟前"])
     }
     whole_from(frames, ["8 分钟前"], late, if platform == 2 { dmax(late, @ui.long_press_ms) } else { late }, at)

@@ -58,7 +58,7 @@ fn node_link_row(col : @view.View, i : Int, count : (String) -> Unit) -> Unit {
 /// window `at` by its 打开 (`pressed`) or by nothing, in a list a share of the window tall where `listed`; at rest;
 /// each tapped once in its middle.
 fn panel_link_rows(at : (Int, Double, Double), pressed : Bool, old : Bool, listed? : Bool = false) -> (Array[String], Map[String, Int]) raise {
-  let count : Map[String, Int] = {}
+  let count : Map[String, Int] = Map([])
   let tally = fn(k : String) { count[k] = count.get(k).unwrap_or(0) + 1 }
   let n = link_rows.length()
   let open = fn(from : Anchor) {

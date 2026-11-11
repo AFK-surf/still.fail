@@ -51,7 +51,7 @@ pub fn profile_groups(list : Array[Json]) -> Array[(String, Array[Json])] {
 /// none), shortest first; the longest of them the one recommended.
 pub fn vault_scopes_up_to(lasts : String) -> Array[String] {
   match vault_scopes.search(lasts) {
-    Some(i) => vault_scopes[:i + 1].to_array()
+    Some(i) => vault_scopes[:i + 1].to_owned()
     None => vault_scopes.copy()
   }
 }

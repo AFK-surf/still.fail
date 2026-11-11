@@ -61,7 +61,7 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
 ///|
 /// The account `workspace` is reached through (the `workspaces` topic, as the settings' here_of reads it), "" none.
 fn account_of(src : Source, workspace : String) -> String {
-  match src.topic("workspaces", Map::new()).get().value {
+  match src.topic("workspaces", Map([])).get().value {
     Some(Array(accounts)) =>
       for a in accounts {
         for w in items(Some(a), "workspaces") {
@@ -81,9 +81,9 @@ fn account_of(src : Source, workspace : String) -> String {
 /// none said, the machine as the person would call it.
 pub fn local_machine_name() -> String {
   for name in ["MBUI_MACHINE", "COMPUTERNAME"] {
-    let v = @ui.env(name).trim(chars=" \t\n").to_string()
+    let v = @ui.env(name).trim(chars=" \t\n").to_owned()
     if v != "" {
-      return if v.has_suffix(".local") { v.view(end_offset=v.length() - 6).to_string() } else { v }
+      return if v.has_suffix(".local") { v.view(end_offset=v.length() - 6).to_owned() } else { v }
     }
   }
   if @settings.local_machine_pc() { "PC" } else { "Mac" }

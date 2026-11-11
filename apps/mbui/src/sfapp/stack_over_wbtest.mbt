@@ -10,7 +10,7 @@ let over_chat : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页�
 /// fixture does.
 fn over_source(answered : @signals.Signal[Bool], also? : Array[(ChatRef, @signals.Signal[Bool])] = []) -> Source {
   let base = fixture("chat")
-  let held : Map[String, @signals.Signal[Bool]] = {}
+  let held : Map[String, @signals.Signal[Bool]] = Map([])
   for a in [(over_chat, answered), ..also] {
     held[Json::object(chat_params(a.0)).stringify()] = a.1
   }

@@ -93,7 +93,7 @@ pub fn sha256(data : Bytes) -> String {
     at += 64
   }
   let digits = "0123456789abcdef"
-  let sb = StringBuilder::new(size_hint=64)
+  let sb = StringBuilder(size_hint=64)
   for x in h {
     for k in 0..<8 {
       let d = ((x >> (28 - 4 * k)) & 15U).reinterpret_as_int()

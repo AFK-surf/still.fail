@@ -646,7 +646,7 @@ priv struct ChoicePick {
 
 ///|
 /// Each choice that has been drawn not side by side, by its key.
-let choice_picks : Map[String, ChoicePick] = {}
+let choice_picks : Map[String, ChoicePick] = Map([])
 
 ///|
 fn init {

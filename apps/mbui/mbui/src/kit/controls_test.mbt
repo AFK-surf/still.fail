@@ -7,8 +7,8 @@ test "switch: a tap turns it, the view keeps it; Activate too; disabled, nothing
   let off = Ref(false)
   let t = @ui.Tester::new(fn(c) {
     c.column(gap=8.0, fn() {
-      on.val = switch(c, "wifi", on.val, label="Wi-Fi").value
-      ignore(switch(c, "air", off.val, label="Airplane", disabled=true))
+      on.val = @kit.switch(c, "wifi", on.val, label="Wi-Fi").value
+      ignore(@kit.switch(c, "air", off.val, label="Airplane", disabled=true))
     })
     |> ignore
   })
@@ -24,7 +24,7 @@ test "switch: a tap turns it, the view keeps it; Activate too; disabled, nothing
 ///|
 test "checkbox: a click checks it; Space with the focus unchecks it; neither (mixed) goes to checked" {
   let v : Ref[@ui.Check] = Ref(@ui.Check::Off)
-  let t = @ui.Tester::new(fn(c) { v.val = checkbox(c, "terms", v.val, label="Terms").value })
+  let t = @ui.Tester::new(fn(c) { v.val = @kit.checkbox(c, "terms", v.val, label="Terms").value })
   t.click(@ui.Role::Checkbox, label="Terms")
   assert_eq(v.val, @ui.Check::On)
   t.key(@ui.key_tab)
@@ -42,7 +42,7 @@ test "checkbox: a click checks it; Space with the focus unchecks it; neither (mi
 test "radio group: a tap checks one; the arrows move the focus along it and check what they reach, wrapping" {
   let v = Ref("a")
   let t = @ui.Tester::new(fn(c) {
-    v.val = radio_group(c, "size", [item("a", label="Small"), item("b", label="Medium"), item("c", label="Large")], v.val, label="Size").value
+    v.val = @kit.radio_group(c, "size", [@kit.item("a", label="Small"), @kit.item("b", label="Medium"), @kit.item("c", label="Large")], v.val, label="Size").value
   })
   t.click(@ui.Role::Radio, label="Large")
   assert_eq(v.val, "c")
@@ -62,11 +62,11 @@ test "toggle group: single, a tap picks one and a second tap lets it go; multipl
   let many : Ref[Array[String]] = Ref([])
   let t = @ui.Tester::new(fn(c) {
     c.column(gap=8.0, fn() {
-      one.val = toggle_group(c, "align", [item("l", label="Left"), item("r", label="Right")], one.val, label="Align").value
-      many.val = toggle_group(
+      one.val = @kit.toggle_group(c, "align", [@kit.item("l", label="Left"), @kit.item("r", label="Right")], one.val, label="Align").value
+      many.val = @kit.toggle_group(
         c,
         "fmt",
-        [item("b", label="Bold"), item("i", label="Italic")],
+        [@kit.item("b", label="Bold"), @kit.item("i", label="Italic")],
         many.val,
         multiple=true,
         label="Format",
@@ -90,10 +90,10 @@ test "toggle group that slides: its thumb behind the pressed item, getting there
   let v : Ref[Array[String]] = Ref(["l"])
   let t = @ui.Tester::new(fn(c) {
     c.box(pad=20.0, fn() {
-      v.val = toggle_group(
+      v.val = @kit.toggle_group(
         c,
         "seg",
-        [item("l", label="Left"), item("m", label="Middle"), item("r", label="Right")],
+        [@kit.item("l", label="Left"), @kit.item("m", label="Middle"), @kit.item("r", label="Right")],
         v.val,
         slide=true,
         thumb=fn(c, w, h) { c.box(w=Px(w), h=Px(h), bg=0x123456FFL, fn() {  }) |> ignore },
@@ -140,10 +140,10 @@ fn slid_group(x : Ref[Double], v : Ref[Array[String]], last? : Ref[String] = Ref
     fn(c) {
       c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
         c.box(tx=x.val, fn() {
-          v.val = toggle_group(
+          v.val = @kit.toggle_group(
             c,
             "seg",
-            [item("l", label="Left"), item("m", label="Middle"), item("r", label=last.val)],
+            [@kit.item("l", label="Left"), @kit.item("m", label="Middle"), @kit.item("r", label=last.val)],
             v.val,
             slide=true,
             thumb=fn(c, w, h) { c.box(w=Px(w), h=Px(h), bg=0x123456FFL, fn() {  }) |> ignore },
@@ -252,7 +252,7 @@ test "another item pressed: the thumb on its way between the two, and another ch
 test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment and Decrement; held in range" {
   let v = Ref(50.0)
   let t = @ui.Tester::new(fn(c) {
-    v.val = slider(c, "vol", v.val, min=0.0, max=100.0, step=5.0, label="Volume").value
+    v.val = @kit.slider(c, "vol", v.val, min=0.0, max=100.0, step=5.0, label="Volume").value
   })
   t.key(@ui.key_tab)
   t.key(@ui.key_code_right)
@@ -274,7 +274,7 @@ test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment
   assert_eq(s.value, "0")
   assert_eq(s.range, Some((0.0, 0.0, 100.0)), msg="its least, where it is, its most")
   let told = t.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
-  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
   assert_eq([f[12], f[13], f[14]], [(0.0).to_string(), (0.0).to_string(), (100.0).to_string()], msg="told the host so")
 }
 
@@ -282,7 +282,7 @@ test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment
 test "slider: a tap on its track sets the value even when no frame is drawn while pressed" {
   let v = Ref(20.0)
   let t = @ui.Tester::new(fn(c) {
-    v.val = slider(c, "s", v.val, w=Px(240.0), label="Volume").value
+    v.val = @kit.slider(c, "s", v.val, w=Px(240.0), label="Volume").value
   }, platform=2)
   let (x, y, w, h) = t.get(@ui.Role::Slider, label="Volume").rect
   t.tap(x + w * 0.75, y + h / 2.0)
@@ -293,7 +293,7 @@ test "slider: a tap on its track sets the value even when no frame is drawn whil
 test "slider: a drag between frames sets the value where it ends" {
   let v = Ref(20.0)
   let t = @ui.Tester::new(fn(c) {
-    v.val = slider(c, "s", v.val, w=Px(240.0), label="Volume").value
+    v.val = @kit.slider(c, "s", v.val, w=Px(240.0), label="Volume").value
   }, platform=2)
   let (x, y, w, h) = t.get(@ui.Role::Slider, label="Volume").rect
   t.touch(0, x + w * 0.2, y + h / 2.0)
@@ -307,7 +307,7 @@ test "slider: a drag between frames sets the value where it ends" {
 test "slider: dragged along its track, it follows the pointer to the nearest step; right to left, mirrored" {
   let v = Ref(0.0)
   let t = @ui.Tester::new(fn(c) {
-    v.val = slider(c, "s", v.val, min=0.0, max=10.0, step=1.0, w=Px(200.0), label="S").value
+    v.val = @kit.slider(c, "s", v.val, min=0.0, max=10.0, step=1.0, w=Px(200.0), label="S").value
   })
   let (x, y, w, h) = t.get(@ui.Role::Slider, label="S").rect
   t.drag(x + 1.0, y + h / 2.0, x + w * 0.7, y + h / 2.0)
@@ -318,17 +318,17 @@ test "slider: dragged along its track, it follows the pointer to the nearest ste
 
 ///|
 test "snap: in range, on the step from min" {
-  assert_eq(snap(7.4, 0.0, 10.0, 1.0), 7.0)
-  assert_eq(snap(-3.0, 0.0, 10.0, 1.0), 0.0)
-  assert_eq(snap(12.0, 0.0, 10.0, 1.0), 10.0)
-  assert_eq(snap(0.26, 0.0, 1.0, 0.25), 0.25)
-  assert_eq(snap(3.3, 1.0, 10.0, 2.0), 3.0)
+  assert_eq(@kit.snap(7.4, 0.0, 10.0, 1.0), 7.0)
+  assert_eq(@kit.snap(-3.0, 0.0, 10.0, 1.0), 0.0)
+  assert_eq(@kit.snap(12.0, 0.0, 10.0, 1.0), 10.0)
+  assert_eq(@kit.snap(0.26, 0.0, 1.0, 0.25), 0.25)
+  assert_eq(@kit.snap(3.3, 1.0, 10.0, 2.0), 3.0)
 }
 
 ///|
 test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (a frame each frame while shown)" {
   let v : Ref[Double?] = Ref(Some(30.0))
-  let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=60.0, label="Upload") })
+  let t = @ui.Tester::new(fn(c) { @kit.progress(c, "upload", v.val, max=60.0, label="Upload") })
   let p = t.get(@ui.Role::ProgressBar, label="Upload")
   assert_eq(p.value, "50%")
   assert_eq(p.range, Some((0.0, 30.0, 60.0)), msg="its least, where it is, its most")
@@ -336,7 +336,7 @@ test "progress: its value as a percentage and its range; not known, neither, and
   t.draw()
   assert_eq(t.get(@ui.Role::ProgressBar, label="Upload").range, None)
   // (what was come drawn back out into the band running along it: progress_known_ms)
-  t.run_for(progress_known_ms)
+  t.run_for(@kit.progress_known_ms)
   // a wait: a frame asked for each frame while it shows (Ctx::cycle), said as a cycle: what never ends does not keep a
   // test from idle
   assert_true(t.ctx().wants_frame)
@@ -360,9 +360,9 @@ test "progress: told a value anew, laid out there at once (its value said at onc
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Px(200.0), fn() {
-        progress(c, "upload", v.val, max=60.0, label="Upload", look=fn(c, s) {
+        @kit.progress(c, "upload", v.val, max=60.0, label="Upload", look=fn(c, s) {
           shown.val = s.t
-          progress_look(c, s)
+          @kit.progress_look(c, s)
         })
       })
       |> ignore
@@ -382,7 +382,7 @@ test "progress: told a value anew, laid out there at once (its value said at onc
   // (drawn from where it was as it sets off, then wider frame by frame to all of it, a capsule all the way)
   let widths : Array[Double] = []
   let built : Array[String] = []
-  let until = t.time() + progress_ms
+  let until = t.time() + @kit.progress_ms
   while t.time() < until {
     let w = t.wanted_after()
     if w == @double.infinity {
@@ -407,10 +407,10 @@ test "progress: told a value anew, laid out there at once (its value said at onc
 
 ///|
 test "avatar: named by its person, their initials while it has no picture" {
-  assert_eq(initials("Ada Lovelace"), "AL")
-  assert_eq(initials("ada"), "A")
-  assert_eq(initials("林 子 健"), "林子")
-  let t = @ui.Tester::new(fn(c) { avatar(c, "", "Ada Lovelace") })
+  assert_eq(@kit.initials("Ada Lovelace"), "AL")
+  assert_eq(@kit.initials("ada"), "A")
+  assert_eq(@kit.initials("林 子 健"), "林子")
+  let t = @ui.Tester::new(fn(c) { @kit.avatar(c, "", "Ada Lovelace") })
   ignore(t.get(@ui.Role::Image, label="Ada Lovelace"))
   assert_true(t.find("AL") is Some(_))
 }
@@ -420,7 +420,7 @@ test "password field: hidden, its words are not read out; the button shows them,
   let shown = Ref(false)
   let words = Ref("")
   let t = @ui.Tester::new(fn(c) {
-    let p = password_field(c, "pw", shown.val, placeholder="Password")
+    let p = @kit.password_field(c, "pw", shown.val, placeholder="Password")
     shown.val = p.visible
     words.val = p.text
   })
@@ -440,7 +440,7 @@ test "password field: hidden, its words are not read out; the button shows them,
 ///|
 test "toggle: a tap presses it, Activate lets it go; said pressed or not" {
   let on = Ref(false)
-  let t = @ui.Tester::new(fn(c) { on.val = toggle(c, "Bold", on.val).value })
+  let t = @ui.Tester::new(fn(c) { on.val = @kit.toggle(c, "Bold", on.val).value })
   t.click(@ui.Role::Button, label="Bold")
   assert_true(on.val)
   assert_eq(t.get(@ui.Role::Button, label="Bold").pressed, Some(true))
@@ -455,11 +455,11 @@ test "label: a tap on it turns its control, or gives its field the focus" {
   let t = @ui.Tester::new(fn(c) {
     c.column(gap=8.0, fn() {
       c.row(gap=8.0, fn() {
-        v.val = checkbox(c, "terms", v.val, label="Terms").value
-        label(c, "Accept the terms", for_id=c.id("terms")) |> ignore
+        v.val = @kit.checkbox(c, "terms", v.val, label="Terms").value
+        @kit.label(c, "Accept the terms", for_id=c.id("terms")) |> ignore
       })
       |> ignore
-      label(c, "Name", for_id=c.id("name"), field=true) |> ignore
+      @kit.label(c, "Name", for_id=c.id("name"), field=true) |> ignore
       c.editor("name", placeholder="Your name") |> ignore
     })
     |> ignore
@@ -476,15 +476,15 @@ test "label: a tap on it turns its control, or gives its field the focus" {
 test "separator, aspect ratio, accessible icon, visually hidden: what the tree says, and the shape kept" {
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
-      separator(c)
-      separator(c, decorative=true)
+      @kit.separator(c)
+      @kit.separator(c, decorative=true)
       c.box(w=Px(160.0), fn() {
-        let i = aspect_ratio(c, 16.0 / 9.0, fn() {  })
+        let i = @kit.aspect_ratio(c, 16.0 / 9.0, fn() {  })
         c.semantics(i, Group, label="Picture")
       })
       |> ignore
-      accessible_icon(c, "Favourite", fn() { c.text("★") |> ignore })
-      visually_hidden(c, "3 unread")
+      @kit.accessible_icon(c, "Favourite", fn() { c.text("★") |> ignore })
+      @kit.visually_hidden(c, "3 unread")
     })
     |> ignore
   })
@@ -508,7 +508,7 @@ test "text field: typed in, its words the view's to read; Enter hands them on" {
   let got = Ref("")
   let sent = Ref(0)
   let t = @ui.Tester::new(fn(c) {
-    let f = text_field(c, "name", placeholder="Name")
+    let f = @kit.text_field(c, "name", placeholder="Name")
     got.val = f.text
     if f.submitted {
       sent.val += 1
@@ -527,7 +527,7 @@ test "text field in a look of the view's: its frame round the editor, told when 
   let focused = Ref(false)
   let got = Ref("")
   let t = @ui.Tester::new(fn(c) {
-    let f = text_field(c, "code", placeholder="Code", enter_sends=false, size=15.0, line=21.0, look=fn(c, s, editor) {
+    let f = @kit.text_field(c, "code", placeholder="Code", enter_sends=false, size=15.0, line=21.0, look=fn(c, s, editor) {
       focused.val = s.focused
       c.box(id=s.id, w=s.w, pad=10.0, radius=12.0, border=1.0, editor) |> ignore
     })
@@ -547,10 +547,10 @@ test "toggle group that grows: as wide as where it is, its items equal shares" {
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Px(300.0), fn() {
-        v.val = toggle_group(
+        v.val = @kit.toggle_group(
           c,
           "g",
-          [item("a", label="A"), item("b", label="Bbbbbb")],
+          [@kit.item("a", label="A"), @kit.item("b", label="Bbbbbb")],
           v.val,
           grow=true,
           label="G",
@@ -576,10 +576,10 @@ test "toggle group that grows, short of room for equal shares: an item as wide a
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Px(200.0), fn() {
-        v.val = toggle_group(
+        v.val = @kit.toggle_group(
           c,
           "g",
-          [item("a", label="A"), item("b", label=long)],
+          [@kit.item("a", label="A"), @kit.item("b", label=long)],
           v.val,
           grow=true,
           label="G",
@@ -603,28 +603,28 @@ test "toggle group that grows, short of room for equal shares: an item as wide a
 ///|
 test "switch: its knob slides to the side it was turned to by a rest of its own (switch_rest)" {
   let on = Ref(false)
-  let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })
+  let t = @ui.Tester::new(fn(c) { on.val = @kit.switch(c, "wifi", on.val, label="Wi-Fi").value })
   t.click(@ui.Role::Switch, label="Wi-Fi")
-  let rest = switch_rest("wifi")
+  let rest = @kit.switch_rest("wifi")
   assert_true(rest > t.time())
   t.run_for(rest - t.time())
   // (there: when it came to rest, as it said it)
-  assert_eq(switch_rest("wifi"), rest)
+  assert_eq(@kit.switch_rest("wifi"), rest)
   t.assert_idle()
 }
 
 ///|
 test "progress: from not known to known, the band running along it is drawn into the part come over progress_known_ms, not changed in a frame" {
   let v : Ref[Double?] = Ref(None)
-  let seen : Ref[ProgressState] = Ref({ t: None, known: 0.0, key: "" })
-  let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=100.0, look=fn(_, s) { seen.val = s }) })
+  let seen : Ref[@kit.ProgressState] = Ref({ t: None, known: 0.0, key: "" })
+  let t = @ui.Tester::new(fn(c) { @kit.progress(c, "upload", v.val, max=100.0, look=fn(_, s) { seen.val = s }) })
   assert_eq(seen.val.known, 0.0)
   v.val = Some(40.0)
   t.draw()
-  t.run_for(progress_known_ms / 2.0)
+  t.run_for(@kit.progress_known_ms / 2.0)
   let half = seen.val.known
   assert_true(half > 0.0 && half < 1.0, msg="\{half}")
-  t.run_for(progress_known_ms)
+  t.run_for(@kit.progress_known_ms)
   assert_eq(seen.val.known, 1.0)
   assert_eq(seen.val.t, Some(0.4))
 }
@@ -632,7 +632,7 @@ test "progress: from not known to known, the band running along it is drawn into
 ///|
 test "switch: its knob slides and its track's colour goes with it as each frame is painted: nothing built for its slide" {
   let on = Ref(false)
-  let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })
+  let t = @ui.Tester::new(fn(c) { on.val = @kit.switch(c, "wifi", on.val, label="Wi-Fi").value })
   t.draw()
   // (its knob: the 18 by 18 drawn; its track: the 36 by 22)
   let knob_x = fn() { t.drawn_rects().filter(fn(r) { r.2 == 18.0 && r.3 == 18.0 }).map(fn(r) { r.0 }) }
@@ -641,7 +641,7 @@ test "switch: its knob slides and its track's colour goes with it as each frame 
   assert_eq((x0.length(), ground0.length()), (1, 1))
   t.act(@ui.Role::Switch, @ui.Action::Activate, label="Wi-Fi")
   assert_true(on.val)
-  let rest = switch_rest("wifi")
+  let rest = @kit.switch_rest("wifi")
   let built : Array[String] = []
   let places : Array[Double] = []
   let grounds : Array[Int64] = []

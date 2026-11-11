@@ -67,7 +67,7 @@ let rooms_known : Map[String, Int] = { "room": 457, "apart": 0, "hover": 0 }
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.
 fn rooms_wrong(rooms : Array[String]) -> String? {
-  let counts : Map[String, Int] = {}
+  let counts : Map[String, Int] = Map([])
   for f in rooms {
     for rule in ["room", "apart", "hover"] {
       if f.contains(": \{rule}: ") {

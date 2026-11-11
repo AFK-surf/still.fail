@@ -25,7 +25,7 @@ fn tap(key : String, code : String, mods : Int) -> Array[@ui.KeyIn] {
 ///|
 test "a key catcher takes the keyboard with no text of its own: committed words as text, Enter between lines" {
   let got : Array[@ui.KeyIn] = []
-  let on = Ref::new(true)
+  let on = Ref(true)
   let t = @ui.Tester::new(catcher_page(got, on))
   t.draw()
   assert_true(t.find("typing") is Some(_))
@@ -56,7 +56,7 @@ test "a key catcher takes the keyboard with no text of its own: committed words 
 ///|
 test "what the input method composes is sent once committed or finished; deleting shortens it while it composes" {
   let got : Array[@ui.KeyIn] = []
-  let on = Ref::new(true)
+  let on = Ref(true)
   let t = @ui.Tester::new(catcher_page(got, on))
   t.draw()
   t.compose("ni")
@@ -88,7 +88,7 @@ test "what the input method composes is sent once committed or finished; deletin
 ///|
 test "a key catcher's keys: named keys as taps, a character with Ctrl, Alt or Cmd as its key, modifiers as a screen's" {
   let got : Array[@ui.KeyIn] = []
-  let on = Ref::new(true)
+  let on = Ref(true)
   let t = @ui.Tester::new(catcher_page(got, on))
   t.draw()
   t.backspace()
@@ -121,7 +121,7 @@ test "a key catcher's keys: named keys as taps, a character with Ctrl, Alt or Cm
 ///|
 test "a key catcher's keys are the same in every build of their frame and gone the frame after" {
   let seen : Array[Int] = []
-  let on = Ref::new(true)
+  let on = Ref(true)
   let t = @ui.Tester::new(fn(c) {
     c.catch_keys("keys", on.val)
     let k = c.key_catcher("keys")
@@ -143,7 +143,7 @@ test "a key catcher's keys are the same in every build of their frame and gone t
 ///|
 test "a press elsewhere leaves a key catcher the focus, as a field's" {
   let got : Array[@ui.KeyIn] = []
-  let on = Ref::new(true)
+  let on = Ref(true)
   let t = @ui.Tester::new(catcher_page(got, on))
   t.draw()
   t.tap(200.0, 600.0)
@@ -166,7 +166,7 @@ test "a field takes the input method's deleting as its Backspace" {
 ///|
 test "the soft keyboard's height: read as each frame begins, kept on the tape and given again" {
   let got : Array[@ui.KeyIn] = []
-  let on = Ref::new(true)
+  let on = Ref(true)
   let t = @ui.Tester::new(catcher_page(got, on))
   t.start_tape()
   let begun = t.time()
@@ -181,7 +181,7 @@ test "the soft keyboard's height: read as each frame begins, kept on the tape an
   t.frame()
   let tape = t.tape()
   assert_true(tape.contains("\"ime\":291.5"))
-  let u = @ui.Tester::new(catcher_page([], Ref::new(true)), time=begun)
+  let u = @ui.Tester::new(catcher_page([], Ref(true)), time=begun)
   let frames = u.replay_frames(tape)
   assert_true(frames.length() >= 4)
   for f in frames {
@@ -193,7 +193,7 @@ test "the soft keyboard's height: read as each frame begins, kept on the tape an
 ///|
 /// A page that reads the clipboard when `ask` is set, keeping what it took.
 fn paste_page(ask : Ref[Bool], took : Ref[@ui.Clipboard?]) -> (@ui.Ctx) -> Unit {
-  let read : Ref[@ui.ClipboardRead?] = Ref::new(None)
+  let read : Ref[@ui.ClipboardRead?] = Ref(None)
   fn(c) {
     if ask.val {
       ask.val = false
@@ -223,8 +223,8 @@ fn paste_page(ask : Ref[Bool], took : Ref[@ui.Clipboard?]) -> (@ui.Ctx) -> Unit 
 
 ///|
 test "the clipboard read is waited on until the test gives it, taken the frame after" {
-  let ask = Ref::new(false)
-  let took : Ref[@ui.Clipboard?] = Ref::new(None)
+  let ask = Ref(false)
+  let took : Ref[@ui.Clipboard?] = Ref(None)
   let t = @ui.Tester::new(paste_page(ask, took))
   ask.val = true
   t.draw()
@@ -262,8 +262,8 @@ test "the clipboard read is waited on until the test gives it, taken the frame a
 
 ///|
 test "the clipboard as the app took it is kept on the tape and given again to a Tester replaying it" {
-  let ask = Ref::new(false)
-  let took : Ref[@ui.Clipboard?] = Ref::new(None)
+  let ask = Ref(false)
+  let took : Ref[@ui.Clipboard?] = Ref(None)
   let t = @ui.Tester::new(paste_page(ask, took))
   t.start_tape()
   let begun = t.time()
@@ -280,8 +280,8 @@ test "the clipboard as the app took it is kept on the tape and given again to a 
   let tape = t.tape()
   assert_true(tape.contains("CLIPSAID "))
   // replayed with no clipboard given: the run's
-  let ask2 = Ref::new(false)
-  let took2 : Ref[@ui.Clipboard?] = Ref::new(None)
+  let ask2 = Ref(false)
+  let took2 : Ref[@ui.Clipboard?] = Ref(None)
   let u = @ui.Tester::new(paste_page(ask2, took2), time=begun)
   // (the app's own ask, at its place: as the run's view asked it as its first frame after the tape began)
   ask2.val = true
@@ -301,7 +301,7 @@ test "the clipboard as the app took it is kept on the tape and given again to a 
 
 ///|
 test "what the app writes, keeps awake and fires is the test's to read" {
-  let go = Ref::new(false)
+  let go = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if go.val {
@@ -337,7 +337,7 @@ test "what the app writes, keeps awake and fires is the test's to read" {
 
 ///|
 test "what is copied is felt, once a copy; with haptics off nothing is" {
-  let copy = Ref::new(0)
+  let copy = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     if copy.val > 0 {
       copy.val -= 1

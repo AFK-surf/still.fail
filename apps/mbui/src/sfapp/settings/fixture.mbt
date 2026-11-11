@@ -1048,7 +1048,7 @@ fn fx_station_profile_groups(profiles : Array[Json]) -> Array[Json] {
 
 ///|
 fn fx_station_profile_states(profiles : Array[Json]) -> Json {
-  let states : Map[String, Json] = {}
+  let states : Map[String, Json] = Map([])
   for p in profiles {
     let pv = Some(p)
     let trouble = field(pv, "trouble")
@@ -1065,7 +1065,7 @@ fn fx_station_profile_states(profiles : Array[Json]) -> Json {
 ///|
 /// The profiles of one account: independently signed in on three stations and also borrowed on three.
 fn fx_profile_hosts() -> Array[Json] {
-  let member = fn(station : String, name : String, id : String, role : String, title : String, about : String) -> Json {
+  let profile_host = fn(station : String, name : String, id : String, role : String, title : String, about : String) -> Json {
     obj([
       ("station", str("ws1/" + station)), ("stationId", str(station)), ("stationName", str(name)),
       ("profileId", str(id)), ("profileName", str(id)), ("role", str(role)), ("title", str(title)),
@@ -1074,12 +1074,12 @@ fn fx_profile_hosts() -> Array[Json] {
     ])
   }
   let members = [
-    member("st1", "Willow", "cc", "host", "Willow", "在此 station 登录，借给 Maple、Cedar、Birch"),
-    member("st2", "Maple", "sh1", "user", "Maple", "向 Willow 借用"),
-    member("st3", "Cedar", "local", "own", "Cedar", "在此 station 单独登录"),
-    member("st3", "Cedar", "sh1", "user", "Cedar", "向 Willow 借用"),
-    member("st4", "Birch", "local", "own", "Birch", "在此 station 单独登录"),
-    member("st4", "Birch", "sh1", "user", "Birch", "向 Willow 借用"),
+    profile_host("st1", "Willow", "cc", "host", "Willow", "在此 station 登录，借给 Maple、Cedar、Birch"),
+    profile_host("st2", "Maple", "sh1", "user", "Maple", "向 Willow 借用"),
+    profile_host("st3", "Cedar", "local", "own", "Cedar", "在此 station 单独登录"),
+    profile_host("st3", "Cedar", "sh1", "user", "Cedar", "向 Willow 借用"),
+    profile_host("st4", "Birch", "local", "own", "Birch", "在此 station 单独登录"),
+    profile_host("st4", "Birch", "sh1", "user", "Birch", "向 Willow 借用"),
   ]
   if fx.profile_one_owner {
     return [members[0], members[1]]
@@ -1203,7 +1203,7 @@ fn fx_cx_more() -> Array[(String, Json)] {
     "gpt-6", "gpt-6-mini", "gpt-6-nano", "gpt-6-codex", "gpt-6-codex-mini", "gpt-5.5", "gpt-5.5-mini", "gpt-5.5-codex", "gpt-5",
     "gpt-5-mini", "o9", "o9-mini",
   ]..append(fx.models_added)
-  let names : Map[String, Json] = {}
+  let names : Map[String, Json] = Map([])
   for m in ids {
     names[m] = str(m.to_upper())
   }
@@ -1918,13 +1918,13 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
     ("models", "按模型", [("claude-opus-5-5", "Opus 5.5", "", "$84", 0.71), ("gpt-6", "GPT-6", "", "$28", 0.24), ("claude-haiku-5", "Haiku 5", "", "$6.10", 0.05)]),
   ]
   // (the day's name as the core says it: 10/5 for 2026-10-05)
-  let dd = if day.length() >= 10 { day.substring(start=8) } else { "" }
+  let dd = if day.length() >= 10 { day[8:].to_owned() } else { "" }
   // (its cost, as its bar says it)
   let day_cost = match daily.search_by(fn(d) { day != "" && text(Some(d), "day") == day }) {
     Some(i) => text(Some(daily[i]), "costText")
     None => ""
   }
-  let day_name = if day == "" { "" } else { "10/" + (if dd.has_prefix("0") { dd.substring(start=1) } else { dd }) }
+  let day_name = if day == "" { "" } else { "10/" + (if dd.has_prefix("0") { dd[1:].to_owned() } else { dd }) }
   let only_shown = match lists.search_by(fn(l) { l.2.search_by(fn(it) { it.0 == only }) is Some(_) }) {
     Some(k) if only != "" => {
       let (_, _, its) = lists[k]
@@ -3468,7 +3468,7 @@ fn fx_feishu_flow(step : String) -> Json {
 fn fx_qr(n : Int) -> Json {
   let rows : Array[Json] = []
   for y in 0..<n {
-    let row = StringBuilder::new()
+    let row = StringBuilder()
     for x in 0..<n {
       let finder = fn(ox : Int, oy : Int) {
         let dx = x - ox
@@ -3530,7 +3530,7 @@ fn fx_resources() -> Json {
     obj([("key", str(key)), ("pid", Json::number(pid)), ("name", str(name)), ("endable", Json::boolean(endable)), ("use", u)])
   }
   let tile = fn(key : String, label : String, value : String, sub : String, points : Array[Double]) {
-    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(Json::number(_))))])
+    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(x => Json::number(x))))])
   }
   let chat = fx_use(25.9, 59.0e6, 0.0, 2.9e6, ("25.9%", "59 MB", "0 B/s", "2.9 MB/s"))
   let notes = fx_use(14.1, 980.0e6, 0.0, 13.0e3, ("14.1%", "980 MB", "0 B/s", "13 KB/s"))

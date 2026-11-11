@@ -37,7 +37,7 @@ test "a hover card closes hover_close_ms after the pointer left its trigger, as 
   let seen : Array[(Double, Bool)] = []
   for late in [0.0, 80.0] {
     let (t, x, y) = hover_tag_tester()
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@sfpages.hover_open_ms * 2.0)
     assert_true(t.find("机器详情") is Some(_), msg="opened")
     let left = t.time()
@@ -56,7 +56,7 @@ test "a hover card closes hover_close_ms after the pointer left its trigger, as 
 test "a hover card opens hover_open_ms after the pointer first came to its trigger, moved on it since, the first frame late" {
   // (where it moves on to is the tag's too: resting there opens its card)
   let (t, x, y) = hover_tag_tester()
-  t.move(x + 2.0, y)
+  t.move_to(x + 2.0, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find("机器详情") is Some(_), msg="2 on is the tag's")
   let (t, x, y) = hover_tag_tester()
@@ -102,7 +102,7 @@ test "a hover card waited for, the pointer off its trigger and back between fram
 ///|
 test "a hover card closes hover_close_ms after the pointer left the window, as the host says it left, the frame late" {
   let (t, x, y) = hover_tag_tester()
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find("机器详情") is Some(_), msg="opened")
   let left = t.time()

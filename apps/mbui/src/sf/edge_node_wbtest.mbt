@@ -51,12 +51,12 @@ fn edge_tip_rects(
       [] => fail("no tip: \{t.semantics().map(fn(s) { (s.role, s.label) })}")
     }
   }
-  t.move(110.0, 100.0)
+  t.move_to(110.0, 100.0)
   t.run_for(edge_tip_ms + tip_settled_ms)
   let first = tip()
   if away {
     // (the pointer off the edge: its tip going, a moment into it)
-    t.move(300.0, 250.0)
+    t.move_to(300.0, 250.0)
     t.run_for(@kit.pop_out_ms / 2.0)
   } else {
     shift.set(by)

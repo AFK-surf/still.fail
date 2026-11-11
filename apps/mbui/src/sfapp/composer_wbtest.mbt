@@ -20,7 +20,7 @@ fn fake_core(
   now? : Double = 0.0,
   over? : (String, Topic) -> Topic = fn(_, t) { t },
   made? : Ref[Source?] = Ref(None),
-  ups? : Map[String, Json] = Map::new(),
+  ups? : Map[String, Json] = Map([]),
   platform? : Int = 2,
 ) -> @ui.Tester {
   new_run()
@@ -467,7 +467,7 @@ test "a video picked or pasted that the host has no picture of shows its first f
   let before = t.views().length()
   t.draw()
   // (a player's open: "open <id> 1 <its type's length>", video/quicktime)
-  let opened = t.views()[before:].to_array().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
+  let opened = t.views()[before:].to_owned().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
   assert_eq(opened.length(), 1)
   let view = (1).until(1000).find_first(fn(i) { opened[0].has_prefix("open \{i} ") }).unwrap()
   let req = t.view_reads(view, 0.0, 1 << 20)

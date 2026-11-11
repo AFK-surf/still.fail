@@ -165,7 +165,7 @@ pub fn about_node(
 fn version_rows_node(g : @view.View, core : Core) -> Unit {
   // (its name as the core's preferences say it, still.fail where they say none)
   @sf.link_row_node(g, fn() {
-    let product = text((core.topic)("prefs", Map::new()).get().value, "productName")
+    let product = text((core.topic)("prefs", Map([])).get().value, "productName")
     (if product == "" { @sf.product() } else { product }) + " " + build_version()
   }, fn() {  }, goes=false)
   let v = fn() { (core.version_now)() }
@@ -193,7 +193,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
     let open = @motion.Way::new(if @signals.untracked(fn() { v().going }) { 1.0 } else { 0.0 })
     r.reacts(fn() { v().going }, fn(going) {
       let to = if going { 1.0 } else { 0.0 }
-      open.go(to, @motion.move().per_unit(version_bar_room), at=r.cause_at())
+      open.go(to, @motion.moved().per_unit(version_bar_room), at=r.cause_at())
     })
     let share = fn() {
       open.said()

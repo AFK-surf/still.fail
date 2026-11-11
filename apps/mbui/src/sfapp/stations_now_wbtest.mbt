@@ -4,7 +4,7 @@ test "wide: the rail's 用量 place, the pointer resting on it, offers 分享卡
   let t = wide_tester(calls)
   let place = t.query(Button, label="用量").unwrap()
   let (x, y, w, h) = place.rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // the card to share, opened from it: the picture, 复制图片 under it
   t.click(Button, label="分享卡片")
@@ -108,7 +108,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
       assert_true(png_size(png) is Some((1080, _)), msg="\{(at, look)}")
     }
     // (kept: the prefs say the last chosen)
-    assert_eq(@sfbase.text(src.topic("prefs", Map::new()).get().value, "shareLook"), "night")
+    assert_eq(@sfbase.text(src.topic("prefs", Map([])).get().value, "shareLook"), "night")
   }
 }
 

@@ -73,7 +73,7 @@ fn yield_run(
   match thumb {
     Some((tx, ty, tw, th, _)) => {
       let p = (tx + tw / 2.0 + 2.0, ty + th / 2.0)
-      t.move(p.0, p.1)
+      t.move_to(p.0, p.1)
       t.run_for(scrollbar_fade_ms)
       let before = t.list_offset()
       steps(t, p, there)
@@ -88,7 +88,7 @@ fn yield_run(
 fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) -> Unit {
   t.press_at(p.0, p.1)
   for i in 1..=4 {
-    t.move(p.0, p.1 + 10.0 * i.to_double())
+    t.move_to(p.0, p.1 + 10.0 * i.to_double())
     t.run_for(drag_step_ms)
   }
   t.release(p.0, p.1 + 40.0)
@@ -125,7 +125,7 @@ test "yield_thumbs: the old view let go while its thumb is held: what follows, n
     t.press_at(p.0, p.1)
     // (held by the old view: its thumb's press)
     assert_true(view_held.val is Some(Old(_, _)), msg="held by the old view")
-    t.move(p.0, p.1 + 10.0)
+    t.move_to(p.0, p.1 + 10.0)
     t.frame()
     let held_at = t.list_offset()
     // (let go of at this event, nothing drawn after it till the hand is done)

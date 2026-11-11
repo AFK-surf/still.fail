@@ -18,7 +18,7 @@ fn rail_changed(at? : (Double, Double)) -> @ui.Tester {
     Some(p) => p
     None => (rx + rw / 2.0, ry + rh / 2.0)
   }
-  t.move(px, py)
+  t.move_to(px, py)
   t.frame()
   t
 }
@@ -163,7 +163,7 @@ fn files_twice(frames : Bool) -> ((Bool, Bool), (Int, Bool, Bool, Bool)) {
   t.draw()
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   t.touch_at(0, x, y, t.time())
   t.touch_at(2, x, y, t.time())
@@ -194,7 +194,7 @@ test "大屏: 文件 on the rail held with ⌘ and moved down past the slop, let
   // (near its top, let go 10 lower: past the slop, still on it, where a press of it is let go)
   let (x, y) = (rx + rw / 2.0, ry + 4.0)
   assert_true(y + 10.0 < ry + rh, msg="let go on it: \{rh}")
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let before = (app.nav.depth(), app.nav.top())
   t.hold_mods(@ui.mod_cmd)

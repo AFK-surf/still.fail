@@ -32,9 +32,9 @@ let versions_state : VersionsState = {
 /// 22:13), in the device's local time.
 pub fn short_date_time(ms : Double) -> String {
   let day_ms = 86400000.0
-  let local = ms + @ui.utc_offset_min(ms).to_double() * 60000.0
-  let days = (local / day_ms).floor()
-  let minutes = ((local - days * day_ms) / 60000.0).floor().to_int()
+  let local_ms = ms + @ui.utc_offset_min(ms).to_double() * 60000.0
+  let days = (local_ms / day_ms).floor()
+  let minutes = ((local_ms - days * day_ms) / 60000.0).floor().to_int()
   // the day's date from the days since 1970-01-01 (the proleptic Gregorian calendar: H. Hinnant's civil_from_days)
   let z = days.to_int() + 719468
   let era = (if z >= 0 { z } else { z - 146096 }) / 146097
@@ -124,7 +124,7 @@ fn adb_ask(name : String, params : Json) -> Unit {
 ///|
 /// The notifications' words, the app's own (AdbShare.java fills `{name}`, `{n}`, `{error}`).
 pub fn adb_texts() -> Json {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   for k in [
       "title", "notify.title", "notify.chats", "notify.on", "notify.idle", "notify.screen", "notify.screens", "stop", "turnOff", "pair.channel", "code", "pair.ask", "typeCode", "enterCode", "connecting",
       "connected", "connected.left", "notPaired", "pair.popped", "off", "attaching", "pairing", "paired", "pairFailed",
@@ -169,7 +169,7 @@ pub fn adb_lend_view(all : Json?, address : String) -> Json? {
   }
   match adb_lends(all).iter().find_first(fn(l) { text(Some(l), "station") == address }) {
     Some(Object(l)) => {
-      let out : Map[String, Json] = {}
+      let out : Map[String, Json] = Map([])
       for k, v in l {
         out[k] = v
       }

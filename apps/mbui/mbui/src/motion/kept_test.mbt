@@ -13,7 +13,7 @@ fn kept_drawn(t : @ui.Tester) -> Array[String] {
   let out = []
   for line in t.drawn_text().split("\n") {
     if line.has_prefix("inst ") {
-      let f = line.split(" ").map(fn(v) { v.to_string() }).collect()
+      let f = line.split(" ").map(fn(v) { v.to_owned() }).collect()
       // ("inst", then its numbers: its kind the 6th, in 1/64ths; a glyph's atlas rect the 13th to the 16th)
       if f.length() > 16 && (f[6] == "64" || f[6] == "192" || f[6] == "448") {
         for j in 13..=16 {

@@ -81,11 +81,11 @@ priv enum PlaceItem {
 ///|
 /// Each places list keeps its own rows and their identities, so favorites enter and leave where they are.
 // kept across runs: put back by nav_reset
-let places_rows : Map[String, @ui.ListRows[PlaceItem]] = {}
+let places_rows : Map[String, @ui.ListRows[PlaceItem]] = Map([])
 
 ///|
 // kept across runs: put back by nav_reset
-let places_keys : Map[String, Array[String]] = {}
+let places_keys : Map[String, Array[String]] = Map([])
 
 ///|
 fn places_rows_of(ws : String) -> @ui.ListRows[PlaceItem] {

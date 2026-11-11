@@ -76,7 +76,7 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
   let c = g()
   let out = []
   // (what a screen reader is told a node is called, where the box was given no label of its own: the last to say)
-  let said : Map[Int, String] = {}
+  let said : Map[Int, String] = Map([])
   for s in c.sems {
     if s.label != "" {
       said[s.node] = s.label

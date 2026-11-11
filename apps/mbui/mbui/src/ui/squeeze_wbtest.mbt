@@ -301,7 +301,7 @@ test "one_line: a line break with the spaces round it one space, none at the end
 
 ///|
 test "words on one line hold their row alike, plain or in runs: as wide as they are while there is room, cut as a last resort" {
-  let ids : Map[Bool, Int] = {}
+  let ids : Map[Bool, Int] = Map([])
   let t = Tester::new(
     fn(c) {
       for rich in [false, true] {

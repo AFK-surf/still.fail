@@ -377,11 +377,11 @@ pub(all) struct Peek {
 
 ///|
 /// The cards' previews, by card.
-pub let peeks : Map[String, Peek] = {}
+pub let peeks : Map[String, Peek] = Map([])
 
 ///|
 /// The cards with a preview built in this pass of the frame, or held by a list's row kept as its nodes (@ui.built_used).
-pub let peeks_built : Map[String, Bool] = {}
+pub let peeks_built : Map[String, Bool] = Map([])
 
 ///|
 /// Previews asked for so far: each view's name its own.
@@ -740,7 +740,7 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
       @ui.add_image(p.pictures[i], b"")
     }
     if newest > 0 {
-      let rest = p.pictures[newest:].to_array()
+      let rest = p.pictures[newest:].to_owned()
       p.pictures.clear()
       p.pictures.append(rest)
     }

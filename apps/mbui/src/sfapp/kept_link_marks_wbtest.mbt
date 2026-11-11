@@ -10,7 +10,7 @@ test "a link in a message left still with a mouse: the hand over it, its right c
   t.drawn_again(true)
   let link = "example.com/bench/list"
   // (the chat scrolled till the link is clear of its bar and its composer)
-  t.move(900.0, 400.0)
+  t.move_to(900.0, 400.0)
   for _ in 0..<12 {
     let dy = match t.run_rects(link) {
       [(_, y, _, h), ..] if y + h / 2.0 > 160.0 && y + h / 2.0 < 600.0 => break
@@ -24,11 +24,11 @@ test "a link in a message left still with a mouse: the hand over it, its right c
   }
   assert_true(t.rows_kept() > 0)
   let (x, y, w, h) = t.run_rects(link)[0]
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   assert_eq(t.cursor(), Hand)
   t.run_for(kept_rows_still_ms)
   assert_eq(t.cursor(), Hand)
-  t.move(x + w / 2.0 + 1.0, y + h / 2.0)
+  t.move_to(x + w / 2.0 + 1.0, y + h / 2.0)
   assert_eq(t.cursor(), Hand)
   t.right_click(x + w / 2.0 + 1.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
@@ -51,7 +51,7 @@ fn kept_link_hits(mode : String, again : Bool, w : Double, h : Double) -> (Array
   let mut kept = 0
   for _ in 0..<8 {
     t.run_for(kept_rows_still_ms)
-    out.push(t.said().split("\n").filter(fn(l) { l.has_prefix("hit ") }).map(fn(l) { l.to_string() }).collect())
+    out.push(t.said().split("\n").filter(fn(l) { l.has_prefix("hit ") }).map(fn(l) { l.to_owned() }).collect())
     kept = kept + t.rows_kept()
   }
   (out, kept)

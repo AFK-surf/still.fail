@@ -124,4 +124,4 @@ pub fn menu_held_node() -> Unit {
 ///|
 /// The press each menu held was last felt for (menu_held), by what it is of.
 // kept across runs: let go by parts_reset, as a run begins (run_begin)
-let held_felt : Map[String, Int] = {}
+let held_felt : Map[String, Int] = Map([])

@@ -425,7 +425,7 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   r.t.press_at(hx, hy)
   r.t.run_for(screen_hold_ms)
   r.t.release(hx, hy)
-  let held = r.inputs()[2:].to_array()
+  let held = r.inputs()[2:].to_owned()
   assert_eq(held.length(), 2)
   assert_eq(kind_of_input(held[0]), "down")
   assert_eq(number(Some(held[0]), "buttons"), 2.0)
@@ -435,7 +435,7 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   let (ax, ay) = r.at(0.2, 0.5)
   let (bx, by) = r.at(0.6, 0.5)
   r.t.drag(ax, ay, bx, by)
-  let drag = r.inputs()[4:].to_array()
+  let drag = r.inputs()[4:].to_owned()
   assert_eq(kind_of_input(drag[0]), "down")
   assert_true(close_to(number(Some(drag[0]), "x"), 0.2))
   assert_true(drag.iter().filter(fn(j) { kind_of_input(j) == "move" }).count() >= 2)
@@ -444,8 +444,8 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   // a drag held still: no move again, however many frames are drawn while it is
   let was = r.inputs().length()
   r.t.press_at(ax, ay)
-  r.t.move(bx, by)
-  let moved = r.inputs()[was:].to_array()
+  r.t.move_to(bx, by)
+  let moved = r.inputs()[was:].to_owned()
   assert_eq(kind_of_input(moved[0]), "down")
   assert_eq(kind_of_input(moved[moved.length() - 1]), "move")
   let still = r.inputs().length()
@@ -483,16 +483,16 @@ fn drawn_streams(t : @ui.Tester) -> Array[(Double, Double, Double, Double, Strin
   .drawn_text()
   .split("\n")
   .filter_map(fn(line) {
-    let l = line.to_string()
+    let l = line.to_owned()
     guard l.has_prefix("inst ") && l.contains(" stream ") else { return None }
-    let words = l.split(" ").map(fn(w) { w.to_string() }).to_array()
+    let words = l.split(" ").map(fn(w) { w.to_owned() }).to_array()
     let n = fn(i : Int) {
       match (try Some(@json.parse(words[i])) catch { _ => None }) {
         Some(Number(d, ..)) => d / 64.0
         _ => 0.0
       }
     }
-    let said = l.split(" stream ").map(fn(w) { w.to_string() }).to_array()
+    let said = l.split(" stream ").map(fn(w) { w.to_owned() }).to_array()
     Some((n(1), n(2), n(3), n(4), "stream " + said[said.length() - 1]))
   })
   .to_array()
@@ -573,7 +573,7 @@ test "a trackpad moves the pointer and clicks where it points; two fingers tappe
   let (ax, ay) = r.at(0.2, 0.5)
   let (bx, by) = r.at(0.4, 0.5)
   r.t.drag(ax, ay, bx, by)
-  let moves = r.inputs()[2:].to_array()
+  let moves = r.inputs()[2:].to_owned()
   assert_true(moves.length() > 0)
   assert_true(moves.iter().all(fn(j) { kind_of_input(j) == "move" && number(Some(j), "buttons") == 0.0 }))
   let x = number(Some(moves[moves.length() - 1]), "x")
@@ -589,7 +589,7 @@ test "a trackpad moves the pointer and clicks where it points; two fingers tappe
   r.t.draw()
   r.t.touch(6, p2x, p2y)
   r.t.release(p1x, p1y)
-  let right = r.inputs()[before:].to_array()
+  let right = r.inputs()[before:].to_owned()
   assert_eq(kind_of_input(right[0]), "down")
   assert_eq(number(Some(right[0]), "buttons"), 2.0)
   assert_true(close_to(number(Some(right[0]), "x"), x))
@@ -599,7 +599,7 @@ test "a trackpad moves the pointer and clicks where it points; two fingers tappe
   r.press_key("Command")
   r.press_key("Tab")
   r.press_key("Tab")
-  let keys = r.inputs()[from:].to_array()
+  let keys = r.inputs()[from:].to_owned()
   assert_eq(keys.length(), 4)
   assert_eq(text(Some(keys[0]), "code"), "Tab")
   assert_eq(number(Some(keys[0]), "mods"), 4.0)
@@ -625,7 +625,7 @@ test "the keyboard: words committed go as text, Enter between lines; with ⌘ he
   assert_eq(text(Some(ins[0]), "text"), "hi 你好")
   r.press_key("Command")
   r.t.type_text("c")
-  let k = r.inputs()[1:].to_array()
+  let k = r.inputs()[1:].to_owned()
   assert_eq(k.length(), 2)
   assert_eq(text(Some(k[0]), "key"), "c")
   assert_eq(text(Some(k[0]), "code"), "KeyC")
@@ -1386,7 +1386,7 @@ test "the keys row's mouse buttons click where the pointer is: 右键 a right cl
   // ⌘ held, then 左键: ⌘ down, the click, ⌘ up; ⌘ let go after it
   r.press_key("Command")
   r.press_key(tr("android-misc.screen.key.mouseLeft"))
-  let left = r.inputs()[2:].to_array()
+  let left = r.inputs()[2:].to_owned()
   assert_eq(left.length(), 4)
   assert_eq(text(Some(left[0]), "key"), "Meta")
   assert_eq(kind_of_input(left[0]), "down")
@@ -1423,7 +1423,7 @@ test "全屏 and sideways, driving: 左键 and 右键 in a capsule of their own 
   assert_true(r.ui().full.get())
   assert_true(r.labelled("退出全屏") is None)
   r.tap_label(tr("android-misc.screen.key.mouseLeft"))
-  let left = r.inputs()[2:].to_array()
+  let left = r.inputs()[2:].to_owned()
   assert_eq(left.length(), 2)
   assert_eq(number(Some(left[0]), "buttons"), btn_primary.to_double())
   // each felt once, as it went down

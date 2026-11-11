@@ -17,7 +17,7 @@ priv struct ThingsAt {
 }
 
 ///|
-let things_at : Map[String, ThingsAt] = {}
+let things_at : Map[String, ThingsAt] = Map([])
 
 ///|
 /// Told as a page of things' old body has another kind chosen (ThingsAt's `kind`): what it built read again, as an old
@@ -739,7 +739,7 @@ fn things_list_node(
       let v = value()
       let k = kind()
       let keys : Array[String] = []
-      let rows : Map[String, ThingsRow] = {}
+      let rows : Map[String, ThingsRow] = Map([])
       let put = fn(name : String, row : ThingsRow) {
         keys.push(name)
         rows[name] = row
@@ -761,7 +761,7 @@ fn things_list_node(
             let tiles = items(group, "items")
             for line in media_lines(tiles.map(media_aspect), across, things_line_high, things_gap) {
               let (from, to, high) = line
-              let these = tiles[from:to].to_array()
+              let these = tiles[from:to].to_owned()
               put("tiles/\{di}/\{gi}/\{from}/\{to}/\{high}", RowTiles(these, high))
             }
           }

@@ -83,7 +83,7 @@ fn Ctx::old_source_said(self : Ctx, i : Int) -> String {
     return ""
   }
   // (each old view's box, the node hosting it)
-  let hosts : Map[Int, @view.NodeId] = {}
+  let hosts : Map[Int, @view.NodeId] = Map([])
   for id, at in old_boxes {
     hosts[at] = id
   }

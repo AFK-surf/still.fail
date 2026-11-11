@@ -370,11 +370,11 @@ let probe_env : Ref[Int] = Ref(-1)
 /// on); and what the app asked of the core, by name, each its count. Said and begun again with each summary of the
 /// frames (perf_said).
 // kept across runs: the record's counts, taken by perf_said
-let perf_ins : Map[String, (Int, Int, Double)] = {}
+let perf_ins : Map[String, (Int, Int, Double)] = Map([])
 
 ///|
 // kept across runs: the record's counts, taken by perf_said
-let perf_outs : Map[String, Int] = {}
+let perf_outs : Map[String, Int] = Map([])
 
 ///|
 fn perf_in(what : String, text : String, bytes : Bytes?, ms : Double) -> Unit {
@@ -412,7 +412,7 @@ pub fn perf_said(span : Double) -> String {
   ins.sort_by(fn(a, b) { b.1.2.compare(a.1.2) })
   let outs = perf_outs.to_array()
   outs.sort_by(fn(a, b) { b.1.compare(a.1) })
-  let line = StringBuilder::new()
+  let line = StringBuilder()
   line.write_string("in (ms/count/KB, the 6 longest):")
   for i, e in ins {
     if i >= 6 {

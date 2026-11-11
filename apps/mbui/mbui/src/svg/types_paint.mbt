@@ -21,7 +21,7 @@ priv enum SPaint {
 
 ///|
 fn parse_paint(text : String) -> SPaint? {
-  let text = text.trim(chars=" \t\n\r").to_string()
+  let text = text.trim(chars=" \t\n\r").to_owned()
   match text {
     "none" => Some(PaintNone)
     "inherit" => Some(PaintInherit)

@@ -1995,7 +1995,7 @@ test "motion-length" {
         "src/app/page.mbt",
         "fn v(a : @motion.Anim) -> Unit {\n" +
         "  a.animate(1.0, @motion.tween(350.0, ease=Move))\n" +
-        "  a.animate(1.0, @motion.move(points=300.0))\n" +
+        "  a.animate(1.0, @motion.moved(points=300.0))\n" +
         "  a.animate(1.0, @motion.tween(140.0, ease=Out))\n" +
         "  a.animate(1.0, @motion.tween(300.0, ease=@ui.Move, delay=20.0))\n" +
         "}\n",

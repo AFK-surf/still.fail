@@ -34,7 +34,7 @@ test "words cut short in nodes are said so as an old view says them (Ctx::shows_
   let old_wide = old.val
   // (the same in nodes, in a window of its own: a row of one line said to be cut, one of short words, wrapped words
   // laid out one line tall)
-  let nodes : Map[String, @view.View] = {}
+  let nodes : Map[String, @view.View] = Map([])
   let node_width = @signals.signal(100.0)
   let one = { ..@view.words_plain, wrap: false }
   let n = Tester::new(fn(_c) {  }, w=800.0, h=200.0)

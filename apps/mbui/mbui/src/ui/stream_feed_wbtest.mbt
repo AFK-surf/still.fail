@@ -30,7 +30,7 @@ fn feed_look(f : Feed) -> Array[String] {
 
 ///|
 fn feed_ev(f : Feed, e : String) -> Array[String] {
-  f.event(e.split(" ").map(fn(x) { x.to_string() }).to_array())
+  f.event(e.split(" ").map(fn(x) { x.to_owned() }).to_array())
   feed_look(f)
 }
 

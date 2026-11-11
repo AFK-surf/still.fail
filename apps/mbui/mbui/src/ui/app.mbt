@@ -308,7 +308,7 @@ fn frame_said_told(c : Ctx, at : Int) -> Unit {
 ///|
 /// Called at the end of every frame (tests).
 // kept across runs: a test sets it around the Testers it makes, and puts it back (layout_wbtest's same_both_ways)
-let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
+let frame_hook : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 /// The frame painted, told where a test asks (frame_hook): drawn out first where a header stands for what a host keeps,
@@ -728,7 +728,7 @@ pub fn Ctx::after_build_or_scroll(self : Ctx, key : String, f : () -> Unit) -> U
 /// What the frame's builds said to tell (Ctx::after_build, in the order said), once by its id: the last said of it,
 /// where the first was.
 fn tells_once(tells : Array[(Int, () -> Unit)]) -> Array[() -> Unit] {
-  let at : Map[Int, Int] = {}
+  let at : Map[Int, Int] = Map([])
   let out : Array[() -> Unit] = []
   for t in tells {
     match at.get(t.0) {
@@ -750,7 +750,7 @@ let frame_passes_most = 3
 ///|
 /// Whether a frame is being built or laid out now (frame_body), before it is drawn: what the view read changing now
 /// is built again in this frame (Ctx::read_changed).
-let building : Ref[Bool] = Ref::new(false)
+let building : Ref[Bool] = Ref(false)
 
 ///|
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
@@ -1187,7 +1187,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // a selection's handle under the finger (Android's): the finger moves that end, the menu away meanwhile
     // (the finger where it is in the field's words, as they are placed: EditorState::local)
     let in_words = match c.editors.get(c.focus_allowed()) {
-      Some(st) => st.local(x, y)
+      Some(st) => st.local_point(x, y)
       None => None
     }
     match (c.editors.get(c.focus_allowed()), in_words) {
@@ -1332,7 +1332,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         // sliding on from a long press's word: widened by words (the menu away meanwhile)
         match c.editors.get(c.word_drag) {
           Some(st) => {
-            match st.local(x, y) {
+            match st.local_point(x, y) {
               Some((lx, ly)) => st.widen_to(lx, ly)
               None => ()
             }
@@ -1349,12 +1349,12 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       } else if c.editor_drag {
         match c.editors.get(c.active) {
           Some(st) if c.clicks > 1 && (c.press_mods & mod_shift_key) == 0 =>
-            match st.local(x, y) {
+            match st.local_point(x, y) {
               Some((lx, ly)) => st.widen_to(lx, ly, by=if c.clicks == 2 { Words } else { Paragraphs })
               None => ()
             }
           Some(st) =>
-            match (st.tl, st.local(x, y)) {
+            match (st.tl, st.local_point(x, y)) {
               (Some(tl), Some((lx, ly))) => st.caret_to_point(tl, lx, ly)
               _ => ()
             }
@@ -1494,7 +1494,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
             (c.press_x - lx).abs() <= 2.0 * touch_slop() &&
             (c.press_y - ly).abs() <= 2.0 * touch_slop() {
             // a second tap soon after the first, near it: the word there picked (Compose's double tap)
-            match st.local(c.press_x, c.press_y) {
+            match st.local_point(c.press_x, c.press_y) {
               Some((lx, ly)) => st.pick_word(lx, ly, t) |> ignore
               None => ()
             }
@@ -2254,7 +2254,7 @@ fn float_caret(c : Ctx, st : EditorState, kind : Int, x : Double, y : Double, t 
 /// The caret put where a pointer at (`x`, `y`) in the window is in the field `st` (place_caret; nothing where it is
 /// drawn as nothing: EditorState::local).
 fn place_caret_at(st : EditorState, x : Double, y : Double, t : Double) -> Unit {
-  match st.local(x, y) {
+  match st.local_point(x, y) {
     Some((lx, ly)) => place_caret(st, lx, ly, t)
     None => ()
   }
@@ -2285,7 +2285,7 @@ fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
   // (the finger where it is in the field's words, as they are placed: none where they are drawn as nothing)
   let (x, y) = match c.editors.get(c.handle_drag) {
     Some(st) =>
-      match st.local(x, y) {
+      match st.local_point(x, y) {
         Some(p) => p
         None => return
       }
@@ -2333,7 +2333,7 @@ pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
 
 ///|
 /// Whether the app is shown (1) and in front (2), as the host last said (shown and in front until it says).
-let app_state : Ref[Int] = Ref::new(3)
+let app_state : Ref[Int] = Ref(3)
 
 ///|
 /// The same, each a signal of its own (app_visible, app_focused, app_awake): what reads one, a node's binding or its
@@ -2364,7 +2364,7 @@ fn app_state_is(s : Int) -> Unit {
 
 ///|
 /// Who is told when that changes (the app's one: `on_app_change`).
-let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
+let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref(None)
 
 ///|
 fn on_app_state(s : Int) -> Unit {
@@ -2603,14 +2603,14 @@ pub fn perf_counting() -> Bool {
 /// `painted: <painted_why>`, `looks`: frame_watch.mbt's, with where it was asked or read); the heaviest one's work and
 /// why; the messages posted to the app, by channel, each its count and bytes (messages_take).
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_whys : Map[String, (Int, Double)] = {}
+let probe_whys : Map[String, (Int, Double)] = Map([])
 
 ///|
 /// The motions the frames since the last summary were for, each its count and work (ms), by the motion their why names
 /// as what read the clock (frame_watch.mbt's built_motion: an Anim's key and who told it), whether it was built, laid
 /// out or painted for it.
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_motions : Map[String, (Int, Double)] = {}
+let probe_motions : Map[String, (Int, Double)] = Map([])
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
@@ -2618,13 +2618,13 @@ let probe_worst : Ref[(Double, String)] = { val: (0.0, "") }
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_channels : Map[String, (Int, Int)] = {}
+let probe_channels : Map[String, (Int, Int)] = Map([])
 
 ///|
 /// What else is said with each summary into the record (perf_also), by name: an app's (its core's calls and topics,
 /// its page, a remote screen's frames).
 // kept across runs: said once as an app starts
-let probe_also : Map[String, (Double) -> String] = {}
+let probe_also : Map[String, (Double) -> String] = Map([])
 
 ///|
 /// `f`'s line said with each summary of the frames into the device's performance record (@hostapi.perf_line) while it
@@ -2659,7 +2659,7 @@ fn[N : Compare + Show] probe_top(m : Map[String, (Int, N)], n : Int, unit : Stri
     let c = Compare::compare(b.1.1, a.1.1)
     if c != 0 { c } else { b.1.0.compare(a.1.0) }
   })
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for i, e in all {
     if i >= n {
       break

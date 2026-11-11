@@ -385,7 +385,7 @@ test "a clone started shows 正在克隆… among the folders, 创建 waiting fo
   press(t, "创建")
   t.frame()
   let made = Some(named(calls, "preset.add")[0].params)
-  assert_eq(items(made, "dirs").map(fn(d) { d.as_string().unwrap_or("") }), ["/Users/me/.stillfail/repos/shop"])
+  assert_eq(items(made, "dirs").map(fn(d) { (if d is String(s) { Some(s) } else { None }).unwrap_or("") }), ["/Users/me/.stillfail/repos/shop"])
 }
 
 ///|

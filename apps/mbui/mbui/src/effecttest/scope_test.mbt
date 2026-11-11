@@ -75,7 +75,7 @@ test "a finalizer that fails is a defect; the others still run" {
   let log = []
   let f = rt.fork(() => @effect.scoped(s => {
     s.add_finalizer(() => log.push("first"))
-    s.add_finalizer(fn() { raise Broke("finalizer broke") })
+    s.add_finalizer(fn() raise { raise Broke("finalizer broke") })
     s.add_finalizer(() => log.push("last"))
     "body"
   }))

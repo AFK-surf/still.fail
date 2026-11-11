@@ -895,7 +895,7 @@ fn new_send(
   }
   // sent, felt as a key's light tap (a no as something refused)
   @ui.haptic(KeyboardTap)
-  let words = d.text.get().trim(chars=" \n\t").to_string()
+  let words = d.text.get().trim(chars=" \n\t").to_owned()
   remember_sent_pictures(src, d, station)
   // (as its message will have them: taken out of the draft as it is sent)
   let up = up_files(d)

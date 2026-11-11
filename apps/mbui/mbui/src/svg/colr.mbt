@@ -11,7 +11,7 @@ priv struct XmlOut {
 
 ///|
 fn XmlOut::new() -> XmlOut {
-  { sb: StringBuilder::new(), stack: [], open: false }
+  { sb: StringBuilder(), stack: [], open: false }
 }
 
 ///|
@@ -210,7 +210,7 @@ fn GlyphPainter::paint_brush(self : GlyphPainter, brush : @font.Brush) -> Unit {
 ///|
 /// The glyph's outline as path data in font units; its bounds.
 fn GlyphPainter::outline_glyph(self : GlyphPainter, glyph : Int) -> @skia.Rect? {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   let mut min_x = f32_max
   let mut min_y = f32_max
   let mut max_x = -f32_max
@@ -249,7 +249,7 @@ fn GlyphPainter::outline_glyph(self : GlyphPainter, glyph : Int) -> @skia.Rect? 
         }
       }
       let s = sb.to_string()
-      self.path = if s.length() > 0 { s.view(end_offset=s.length() - 1).to_string() } else { s }
+      self.path = if s.length() > 0 { s.view(end_offset=s.length() - 1).to_owned() } else { s }
       if min_x <= max_x && min_y <= max_y {
         bounds = @skia.Rect::from_ltrb(min_x, min_y, max_x, max_y)
       }

@@ -1,7 +1,7 @@
 ///|
 /// A page with a button under where a layer opens, the layer (`modal` or not) holding a panel at (100, 200) with two
 /// buttons, and what happened logged.
-fn layer_page(open : Ref[Bool], log : Array[String], modal? : Bool = false) -> (Ctx) -> Unit {
+fn layer_page(open : Ref[Bool], log : Array[String], modal? : Bool = false) -> (@ui.Ctx) -> Unit {
   fn(c) {
     c.column(gap=4.0, fn() {
       let trigger = btn(c, "open")
@@ -41,7 +41,7 @@ fn layer_page(open : Ref[Bool], log : Array[String], modal? : Bool = false) -> (
 test "a layer is drawn and tapped over what is built after it" {
   let open = Ref(true)
   let log = []
-  let t = Tester::new(layer_page(open, log))
+  let t = @ui.Tester::new(layer_page(open, log))
   t.click(Button, label="inside")
   assert_eq(log, ["inside"])
 }
@@ -50,7 +50,7 @@ test "a layer is drawn and tapped over what is built after it" {
 test "a press outside a layer dismisses it and goes on to what is under it; on its anchor it does not dismiss" {
   let open = Ref(true)
   let log = []
-  let t = Tester::new(layer_page(open, log))
+  let t = @ui.Tester::new(layer_page(open, log))
   t.click(Button, label="under")
   assert_eq(log, ["under", "dismissed Outside"])
   assert_false(open.val)
@@ -65,7 +65,7 @@ test "a press outside a layer dismisses it and goes on to what is under it; on i
 test "a modal layer: what is under it takes nothing, a press on its ground dismisses it, it hides the page" {
   let open = Ref(true)
   let log = []
-  let t = Tester::new(layer_page(open, log, modal=true))
+  let t = @ui.Tester::new(layer_page(open, log, modal=true))
   // under it: not in the tree
   assert_true(t.query(Button, label="under") is None)
   assert_true(t.query(Button, label="inside") is Some(_))
@@ -79,7 +79,7 @@ test "Escape and back dismiss the topmost layer only" {
   let a = Ref(true)
   let b = Ref(true)
   let log : Array[String] = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     if a.val {
       let o = c.overlay("a", fn() {
         c.box(tx=10.0, ty=10.0, w=Px(100.0), h=Px(100.0), bg=0xEEEEEEFFL, id=c.id("pa"), fn() {
@@ -113,7 +113,7 @@ test "a press in a layer dismisses the layers over it, not it" {
   let a = Ref(true)
   let b = Ref(true)
   let log : Array[String] = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     if a.val {
       let o = c.overlay("a", fn() {
         c.box(tx=10.0, ty=10.0, w=Px(200.0), h=Px(200.0), bg=0xEEEEEEFFL, id=c.id("pa"), fn() {
@@ -150,7 +150,7 @@ test "a press in a layer dismisses the layers over it, not it" {
 test "a modal layer traps Tab, takes the focus as it opens and gives it back as it goes" {
   let open = Ref(false)
   let log = []
-  let t = Tester::new(layer_page(open, log, modal=true))
+  let t = @ui.Tester::new(layer_page(open, log, modal=true))
   t.tab()
   assert_eq(t.focused().unwrap().label, "open")
   t.press("Enter")
@@ -170,7 +170,7 @@ test "a modal layer traps Tab, takes the focus as it opens and gives it back as 
 ///|
 test "a modal layer stops the wheel over the page under it" {
   let open = @signals.signal(true)
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.list("rows", 100, 40.0, fn(i) { c.text("row \{i}") |> ignore }) |> ignore
     if open.get() {
       c.overlay("m", modal=true, fn() {
@@ -191,7 +191,7 @@ test "a modal layer stops the wheel over the page under it" {
 test "a layer leaving (inert) takes no press and gives the focus back" {
   let inert = Ref(false)
   let log = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     let trigger = btn(c, "trigger")
     c.overlay("l", modal=true, inert=inert.val, return_focus=trigger.id, fn() {
       c.box(tx=10.0, ty=100.0, id=c.id("p"), fn() {
@@ -216,8 +216,8 @@ test "a layer leaving (inert) takes no press and gives the focus back" {
 
 ///|
 test "place: below its anchor, flipped above when there is no room, kept in the window; right to left, from the right" {
-  let out : Array[(Double, Double, Side)] = []
-  let _t = Tester::new(fn(c) {
+  let out : Array[(Double, Double, @ui.Side)] = []
+  let _t = @ui.Tester::new(fn(c) {
     out.clear()
     out.push(c.place((100.0, 100.0, 80.0, 30.0), 120.0, 60.0, along=Start))
     out.push(c.place((100.0, 800.0, 80.0, 30.0), 120.0, 60.0))
@@ -239,7 +239,7 @@ test "place: below its anchor, flipped above when there is no room, kept in the 
 test "a layer dismissed as the view closed it its own way is not dismissed by that when it opens again" {
   let open = Ref(true)
   let log = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(gap=4.0, fn() {
       if btn(c, "open").clicked {
         open.val = true
@@ -271,7 +271,7 @@ test "a layer dismissed as the view closed it its own way is not dismissed by th
 
 ///|
 test "a layer opened by a list's row (built as the list is laid out) is laid out over the window as any other is" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.list("rows", 3, 40.0, fn(k) {
       c.text("row \{k}") |> ignore
       if k == 1 {
@@ -294,18 +294,18 @@ test "a layer opened by a list's row (built as the list is laid out) is laid out
 test "an open layer the focus is in has the keys: the page under it reads none (Escape, a letter, its raw keys); the layer reads them" {
   let open = Ref(true)
   let log : Array[String] = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     // a page reading keys as a list's rows do (Ctx::keys) and as its shortcuts do (Ctx::key_pressed)
     for k in c.keys() {
       log.push("page key \{k.0}")
     }
-    if c.key_pressed(key_escape) || c.key_pressed(key_escape, in_field=true) {
+    if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
       log.push("page escape")
     }
     if open.val {
       // (as a menu opened is: the focus on its first)
       let o = c.overlay("menu", initial_focus=-1, fn() {
-        if c.key_pressed(key_of_char('a')) {
+        if c.key_pressed(@ui.key_of_char('a')) {
           log.push("menu a")
         }
         btn(c, "inside") |> ignore
@@ -317,36 +317,36 @@ test "an open layer the focus is in has the keys: the page under it reads none (
     }
   })
   t.draw()
-  t.key(key_of_char('a'))
+  t.key(@ui.key_of_char('a'))
   t.frame()
   assert_eq(log, ["menu a"])
-  t.key(key_escape)
+  t.key(@ui.key_escape)
   t.frame()
   assert_eq(log, ["menu a", "dismissed Escape"])
   assert_false(open.val)
   // closed: the page's again
-  t.key(key_of_char('a'))
+  t.key(@ui.key_of_char('a'))
   t.frame()
-  assert_eq(log, ["menu a", "dismissed Escape", "page key \{key_of_char('a')}"])
+  assert_eq(log, ["menu a", "dismissed Escape", "page key \{@ui.key_of_char('a')}"])
 }
 
 ///|
 test "a modal layer Escape does not dismiss (a file over the window) has the keys and its own Escape; a toast over it has neither" {
   let toast = Ref(false)
   let log : Array[String] = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     // a page with its shortcuts: Space (a chat's 回到输入框), Escape (a panel of it closed)
-    if c.key_pressed(key_space) {
+    if c.key_pressed(@ui.key_space) {
       log.push("page space")
     }
-    if c.key_pressed(key_escape) || c.key_pressed(key_escape, in_field=true) {
+    if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
       log.push("page escape")
     }
     let o = c.overlay("over", modal=true, escape=false, outside=false, initial_focus=0, fn() {
-      if c.key_pressed(key_space) {
+      if c.key_pressed(@ui.key_space) {
         log.push("over space")
       }
-      if c.key_pressed(key_escape) {
+      if c.key_pressed(@ui.key_escape) {
         log.push("over escape")
       }
     })
@@ -359,16 +359,16 @@ test "a modal layer Escape does not dismiss (a file over the window) has the key
     }
   })
   t.draw()
-  t.key(key_space)
+  t.key(@ui.key_space)
   t.frame()
-  t.key(key_escape)
+  t.key(@ui.key_escape)
   t.frame()
   assert_eq(log, ["over space", "over escape"])
   toast.val = true
   t.frame()
-  t.key(key_space)
+  t.key(@ui.key_space)
   t.frame()
-  t.key(key_escape)
+  t.key(@ui.key_escape)
   t.frame()
   assert_eq(log, ["over space", "over escape", "over space", "over escape"])
 }
@@ -377,7 +377,7 @@ test "a modal layer Escape does not dismiss (a file over the window) has the key
 test "a toast over a dialog leaves it the keys: Escape dismisses the dialog, the page under reads none" {
   let open = Ref(true)
   let log : Array[String] = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     for k in c.keys() {
       log.push("page key \{k.0}")
     }
@@ -391,24 +391,24 @@ test "a toast over a dialog leaves it the keys: Escape dismisses the dialog, the
     c.overlay("toast", escape=false, outside=false, initial_focus=0, fn() {  }) |> ignore
   })
   t.draw()
-  t.key(key_of_char('a'))
+  t.key(@ui.key_of_char('a'))
   t.frame()
   assert_eq(log, [])
-  t.key(key_escape)
+  t.key(@ui.key_escape)
   t.frame()
   assert_eq(log, ["dismissed Escape"])
   assert_false(open.val)
   // closed: the page's again, the toast still over it
-  t.key(key_of_char('a'))
+  t.key(@ui.key_of_char('a'))
   t.frame()
-  assert_eq(log, ["dismissed Escape", "page key \{key_of_char('a')}"])
+  assert_eq(log, ["dismissed Escape", "page key \{@ui.key_of_char('a')}"])
 }
 
 ///|
 test "a field given the focus under a modal layer as it is built does not keep it; one in the layer does, and the one under once it is gone" {
   let ask = @signals.signal("")
   let open = @signals.signal(true)
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     // (as a chat's composer takes the cursor as its chat is first drawn)
     c.editor("under") |> ignore
     if ask.get() == "under" {
@@ -443,7 +443,7 @@ test "a field given the focus under a modal layer as it is built does not keep i
 test "a list's rows in a layer are of it, built as the list is laid out: a field in one takes the focus, the keys are theirs" {
   let ask = Ref(false)
   let log : Array[String] = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.overlay("sheet", modal=true, fn() {
       c.box(h=Px(300.0), fn() {
         c.list("rows", 1, 40.0, fn(_) {
@@ -451,7 +451,7 @@ test "a list's rows in a layer are of it, built as the list is laid out: a field
           if ask.val {
             c.focus_editor("in-row")
           }
-          if c.key_pressed(key_space) {
+          if c.key_pressed(@ui.key_space) {
             log.push("row space")
           }
         })
@@ -462,7 +462,7 @@ test "a list's rows in a layer are of it, built as the list is laid out: a field
     |> ignore
   })
   t.draw()
-  t.key(key_space)
+  t.key(@ui.key_space)
   assert_eq(log, ["row space"])
   ask.val = true
   t.frame()

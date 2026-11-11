@@ -66,7 +66,7 @@ fn image_tester_asking(
 ///|
 test "a chat's picture its station could not be reached for: 加载失败，点按重试, asked again when pressed" {
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let t = image_tester(images, asked, fn(n) {
     if n == 1 {
       Err({ "code": "mesh", "message": "unreachable" })
@@ -89,7 +89,7 @@ test "a chat's picture its station could not be reached for: 加载失败，点�
 ///|
 test "a chat's picture its station has none of: 暂时无法预览, not asked again" {
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let t = image_tester(images, asked, fn(_) { Err({ "code": "http_404", "message": "not found", "status": 404 }) })
   t.draw()
   t.draw()
@@ -106,7 +106,7 @@ test "a chat's picture its station has none of: 暂时无法预览, not asked ag
 ///|
 test "the pictures that failed for want of a station asked again once it is reached again, not while it stays so" {
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let t = image_tester(images, asked, fn(_) { Err({ "code": "timeout", "message": "slow" }) })
   t.draw()
   t.draw()
@@ -129,7 +129,7 @@ test "the pictures that failed for want of a station asked again once it is reac
 test "a chat's pictures that failed for want of its station asked again as the chat is opened again" {
   new_run()
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let src : Source = {
     ..fixture("chat"),
     file: fn(station, key, name) {

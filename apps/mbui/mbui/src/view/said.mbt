@@ -368,7 +368,7 @@ pub fn Tree::said_pass(
     }
   }
 
-  let visited : Map[Int, Bool] = {}
+  let visited : Map[Int, Bool] = Map([])
   // (one read out: what it says, what it is called and what it holds where `words`, `kids`)
   let entry = fn(
     at : Int,
@@ -514,7 +514,8 @@ pub fn Tree::said_pass(
     }
     None
   }
-  for at, gen in self.said_again.to_array() |> Map::from_array {
+  let again_now = self.said_again.to_array() |> Map::from_array
+  for at, gen in again_now {
     if visited.contains(at) {
       continue
     }
@@ -525,7 +526,8 @@ pub fn Tree::said_pass(
     let (x, y, _, s) = self.projected(at)
     entry(at, parent_of(at), x, y, s, true, true)
   }
-  for at, gen in self.said_helds.to_array() |> Map::from_array {
+  let helds_now = self.said_helds.to_array() |> Map::from_array
+  for at, gen in helds_now {
     if visited.contains(at) {
       continue
     }

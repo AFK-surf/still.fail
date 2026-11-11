@@ -27,7 +27,7 @@ pub fn decode_png(b : Bytes) -> (Int, Int, FixedArray[Byte])? {
     if len < 0 || i + 8 + len > b.length() {
       return None
     }
-    let kind = b[i + 4:i + 8].to_bytes()
+    let kind = b[i + 4:i + 8].to_owned()
     let data = i + 8
     if kind == b"IHDR" {
       if len < 13 {
@@ -43,7 +43,7 @@ pub fn decode_png(b : Bytes) -> (Int, Int, FixedArray[Byte])? {
         (b[data + k * 3].to_int(), b[data + k * 3 + 1].to_int(), b[data + k * 3 + 2].to_int())
       })
     } else if kind == b"tRNS" {
-      trns = b[data:data + len].to_bytes()
+      trns = b[data:data + len].to_owned()
     } else if kind == b"IDAT" {
       for k in data..<(data + len) {
         idat.push(b[k])

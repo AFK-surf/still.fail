@@ -395,10 +395,10 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
     return Some(g)
   }
   guard station_glyphs.get(name) is Some(text) else { return None }
-  let parts = text.split("|").map(fn(p) { p.to_string() }).to_array()
+  let parts = text.split("|").map(fn(p) { p.to_owned() }).to_array()
   let paths = fn(i : Int) -> Array[String] {
     if i < parts.length() && parts[i] != "" {
-      parts[i].split(";").map(fn(p) { p.to_string() }).to_array()
+      parts[i].split(";").map(fn(p) { p.to_owned() }).to_array()
     } else {
       []
     }
@@ -409,7 +409,7 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
 }
 
 ///|
-let glyphs_read : Map[String, (Array[String], Array[String])] = {}
+let glyphs_read : Map[String, (Array[String], Array[String])] = Map([])
 
 ///|
 /// Whose service a profile runs on (ProviderLogo): OpenCode's square, a listed provider's maker

@@ -49,7 +49,7 @@ test "list: rows of varied heights move by exactly what the wheel scrolls" {
   assert_true(first == 0 && last >= 10)
   t.check_rows(0.0, 400.0)
   let y5 = y_of(t, 5)
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, 37.5)
   assert_eq(y_of(t, 5), y5 - 37.5)
   t.check_rows(0.0, 400.0)
@@ -102,7 +102,7 @@ test "list: rows above that change size don't move the rows in view" {
   t.frame()
   assert_eq(t.row(50).unwrap(), before)
   // scrolled back up through them, the list reaches its start exactly
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   for _ in 0..<100 {
     t.wheel(100.0, 100.0, -40.0)
     t.check_rows(0.0, 400.0)
@@ -130,7 +130,7 @@ test "list: sticking to its end, it follows new rows until scrolled away" {
     }
   }
   // scrolled away from the end, it stays where it is
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, -100.0)
   let r = t.row(n[0] - 10).unwrap()
   n[0] = n[0] + 3
@@ -161,7 +161,7 @@ test "list: laid from its end and short of its view, no frame the wheel scrolls 
   // every frame drawn, as a host draws it (each laid out once)
   let firsts : Array[Double] = []
   t.each_frame(Some(fn() { firsts.push(y_of(t, 0)) }))
-  t.move(100.0, 300.0)
+  t.move_to(100.0, 300.0)
   for dy in [-40.0, -3.0, 25.0, -100.0, 60.0] {
     t.wheel(100.0, 300.0, dy)
     t.frame()
@@ -185,11 +185,11 @@ test "list: sticking to its end, a finger moving it off by less than a point a m
   assert_eq(bottom_of(t, 999), 400.0)
   // past the slop, then on by a third of a point a move, slowly: frames drawn between the moves
   t.press_at(100.0, 200.0)
-  t.move(100.0, 230.0)
+  t.move_to(100.0, 230.0)
   t.run_for(slow_move_ms)
   let from = bottom_of(t, 999)
   for i in 1..=30 {
-    t.move(100.0, 230.0 + 0.3 * i.to_double())
+    t.move_to(100.0, 230.0 + 0.3 * i.to_double())
     t.run_for(slow_move_ms)
   }
   assert_true((bottom_of(t, 999) - from - 9.0).abs() < 0.01, msg="moved \{bottom_of(t, 999) - from}")
@@ -269,7 +269,7 @@ test "list: End shows the end, though the last rows are taller than estimated" {
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.press("End")
   assert_true(t.at_end())
   assert_eq(bottom_of(t, 1999), 400.0)
@@ -287,7 +287,7 @@ test "list: scrolling up into rows never measured moves by exactly the step" {
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   for step in [-120.0, -200.0, -120.0, -37.0, -200.0, -120.0, -200.0, -5.0, -300.0, -120.0] {
     let first = t.visible().0
     let before = y_of(t, first)
@@ -337,7 +337,7 @@ test "list: scrolling up into a row cut once it is measured moves by exactly the
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   for _ in 0..<40 {
     let first = t.visible().0
     let before = y_of(t, first)
@@ -371,7 +371,7 @@ test "list: rows come in above what is in view, which stays where it is" {
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, 1000.0)
   let (a, _) = t.visible()
   let shown = t.find("Row \{a + 1}").unwrap().1
@@ -422,7 +422,7 @@ test "list: rows come in under a spinner at the top: the first row under it stay
 test "list: back to its end, gliding, then at its end" {
   let t = @ui.Tester::new(boxes(fn() { 200 }, varied, stick_end=true), w=300.0, h=400.0)
   assert_true(t.at_end())
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, -300.0)
   assert_true(!t.at_end())
   let info = t.ctx().list_info("list").unwrap()
@@ -453,7 +453,7 @@ test "list: back to its end, gliding, then at its end" {
 test "list: the same glide to its end at any frame rate: where it is is a function of the time since it set out" {
   let at = fn(step : Double) -> Double {
     let t = @ui.Tester::new(boxes(fn() { 200 }, varied, stick_end=true), w=300.0, h=400.0)
-    t.move(100.0, 100.0)
+    t.move_to(100.0, 100.0)
     t.wheel(100.0, 100.0, -300.0)
     t.run_for(@ui.wheel_ease_ms * 10.0)
     t.ctx().list_to_end("list")
@@ -481,7 +481,7 @@ test "list: a list not built (a page over it) is at rest, its scroll bar too; sh
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, -300.0)
   t.run_for(@ui.wheel_ease_ms * 10.0)
   // its scroll bar shows a while: the list moves
@@ -499,7 +499,7 @@ test "list: a list not built (a page over it) is at rest, its scroll bar too; sh
 ///|
 test "list: a finger's list scrolled draws no scroll bar, and is at rest once its scroll is (scroll_bar.mbt)" {
   let t = @ui.Tester::new(boxes(fn() { 200 }, varied), w=300.0, h=400.0, platform=2)
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, 300.0)
   t.run_for(@ui.scrollbar_fade_ms)
   assert_true(t.drawn_rects().iter().all(fn(r) { r.2 != 3.0 }), msg="\{t.drawn_rects()}")
@@ -538,7 +538,7 @@ test "list: what is built from how it stood is built again once a scroll of one 
   t.draw()
   assert_true(!away[0])
   // a wheel's scroll, laid out in one frame and nothing moving after it
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, -600.0)
   assert_true(!t.list_moving())
   assert_true(away[0])
@@ -546,7 +546,7 @@ test "list: what is built from how it stood is built again once a scroll of one 
 
 ///|
 test "a click seen in a list's row is drawn by the next frame" {
-  let on : Ref[Bool] = Ref::new(false)
+  let on : Ref[Bool] = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if on.val {
@@ -572,7 +572,7 @@ test "a click seen in a list's row is drawn by the next frame" {
 
 ///|
 test "a row followed from its top: a glide to the end stops with its top under the view's, not past it" {
-  let n = Ref::new(10)
+  let n = Ref(10)
   let t = @ui.Tester::new(
     fn(c) {
       c.list(
@@ -739,7 +739,7 @@ test "list: what a row holds stuck stays under the list's top as the row scrolls
   assert_eq(y0, 8.0)
   assert_eq(t.rect_of("Row 0").unwrap().1, 0.0)
   // the row 100 up: the mark 8 under the list's top, its words gone up with the row
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, 100.0)
   let (_, y1, _, _) = t.rect_of("Mark 0").unwrap()
   assert_eq(y1, 8.0)

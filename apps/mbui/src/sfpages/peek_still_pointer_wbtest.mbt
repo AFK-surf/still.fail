@@ -31,7 +31,7 @@ test "a link's card, its row carried from under a still pointer on a way: open a
   })
   t.draw()
   let (x, y, w, h) = t.get(@ui.Role::Button, label="PR #4466").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms * 2.0)
   let card = fn() { t.semantics().filter(fn(s) { s.role == Group && s.label.has_prefix("PR #4466") }).length() }
   let opened = card()
@@ -66,7 +66,7 @@ test "a link's card: what its page is called on two lines at most, the second en
   })
   t.draw()
   let (x, y, w, h) = t.get(@ui.Role::Button, label="链接").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms * 2.0)
   let lines = t.lines_of("一个名字")
   assert_eq(lines.length(), 2, msg="\{lines}")

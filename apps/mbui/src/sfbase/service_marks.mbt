@@ -151,7 +151,7 @@ pub fn service_marked(p : ServicePage, said : Json) -> Unit {
       if number(s, "height") > 0.0 {
         m.css_h = number(s, "height")
       }
-      let boxes : Map[Int, (Double, Double, Double, Double)] = {}
+      let boxes : Map[Int, (Double, Double, Double, Double)] = Map([])
       for b in items(s, "at") {
         match (field(Some(b), "n"), css_box(Some(b))) {
           (Some(Number(n, ..)), Some(r)) => boxes[n.to_int()] = r
@@ -373,7 +373,7 @@ pub fn page_marks_frame(p : ServicePage, site : @ui.NativeView) -> Unit {
             (
               svc("android-chat.preview.mark.quote", args=[("name", name), ("n", mark.n.to_string())]),
               mark_where(mark, file),
-              mark.comment.trim(chars=" \n\t").to_string(),
+              mark.comment.trim(chars=" \n\t").to_owned(),
             ),
           ))
           s.i += 1

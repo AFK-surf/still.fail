@@ -460,16 +460,16 @@ test "a scroll bar's thumb of the page held as a modal layer comes over it: let 
     root.box(fn(l) { l.over(Is(true)).modal(By(fn() { on.get() })) |> ignore }) |> ignore
   })
   t.draw()
-  t.move(296.0, 200.0)
+  t.move_to(296.0, 200.0)
   t.run_for(scrollbar_fade_ms)
-  t.move(296.0, 10.0)
+  t.move_to(296.0, 10.0)
   t.press_at(296.0, 10.0)
   assert_true(g().bar_drag != 0)
   on.set(true)
   assert_eq(g().bar_drag, 0)
   on.set(false)
   t.release(296.0, 10.0)
-  t.move(296.0, 103.0)
+  t.move_to(296.0, 103.0)
   t.run_for(scrollbar_fade_ms)
   assert_eq(t.list_offset(), 0.0)
 }
@@ -717,20 +717,20 @@ test "a scroll bar's thumb lit as the pointer comes over it, unlit as it leaves,
   // (each frame judged by what it draws alone)
   t.check_looks(false)
   t.draw()
-  t.move(296.0, 200.0)
+  t.move_to(296.0, 200.0)
   t.run_for(scrollbar_fade_ms)
   let light = thumb_alpha(t)
-  t.move(296.0, 10.0)
+  t.move_to(296.0, 10.0)
   assert_true(thumb_alpha(t) > light)
   // held, called off by a modal layer, let go (the tree's: no input of the old view's), left: unlit
   t.press_at(296.0, 10.0)
   on.set(true)
   on.set(false)
   t.release(296.0, 10.0)
-  t.move(296.0, 103.0)
+  t.move_to(296.0, 103.0)
   assert_eq(thumb_alpha(t), light)
   // over it again, then the pointer out of the window
-  t.move(296.0, 10.0)
+  t.move_to(296.0, 10.0)
   assert_true(thumb_alpha(t) > light)
   on_pointer(7, 0.0, 0.0, 0)
   t.drawn_now()
@@ -958,7 +958,7 @@ test "a swipe back from the left edge of a page under a modal layer: none while 
   at(t, t0 + 64.0, 2, 300.0)
   t.frame_at(t0 + 64.0 + move_most_ms)
   assert_true(begun > 0 && told[0] == 0, msg="\{told}")
-  assert_eq(told[begun:].to_array(), [3])
+  assert_eq(told[begun:].to_owned(), [3])
   assert_eq(nav.depth(), 2)
 }
 
@@ -1167,7 +1167,7 @@ fn back_let_go_of(how : Int) -> (Array[String], Array[Bool], Array[String]) {
   back(80.0, 1, 200.0, 0.6)
   back(96.0, 2, 0.0, 1.0)
   t.frame_at(t0 + 200.0)
-  (by_then, at_own, told[by_then.length():].to_array())
+  (by_then, at_own, told[by_then.length():].to_owned())
 }
 
 ///|
@@ -1269,7 +1269,7 @@ test "the system's back of an old view going on as the window's tree is made ane
     back(120.0, 0, 0.0, 0.0)
     back(136.0, 2, 0.0, 1.0)
     let now = if how == "tree" { "B" } else { "A" }
-    assert_eq(told[3:].to_array().map(fn(e) { e.0 }), ["\{now} began", "\{now} back"], msg=how)
+    assert_eq(told[3:].to_owned().map(fn(e) { e.0 }), ["\{now} began", "\{now} back"], msg=how)
   }
 }
 

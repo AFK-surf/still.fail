@@ -152,7 +152,7 @@ test "a chat with no agent yet, on a desktop: its station's card under its tag i
   let tag = before.filter(fn(p) { p.1 < 40.0 })
   assert_true(tag.length() > 0, msg="the station's tag in the bar: \{before}")
   let (x, y) = tag[0]
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // the card's name (the name there now that was not before): beside the tag (under it), not in the window's middle
   let card = t.locate("Willow").filter(fn(p) { !before.contains(p) })
@@ -160,7 +160,7 @@ test "a chat with no agent yet, on a desktop: its station's card under its tag i
   assert_true(card.iter().all(fn(p) { p.1 > y && p.1 < 200.0 && (p.0 - x).abs() < 240.0 }), msg="under the tag: \{card}")
   assert_true(t.find("机器详情") is Some(_), msg="its way on")
   // gone once the pointer has left it
-  t.move(900.0, 400.0)
+  t.move_to(900.0, 400.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_true(t.find("机器详情") is None)
 }
@@ -219,12 +219,12 @@ test "station screen submenu stays reachable outside its hover card and opens a 
   let t = decide_core(calls, "chat-station-tag", wide=true)
   let before = app.nav.top()
   let tag = t.locate("Willow").filter(fn(p) { p.1 < 40.0 })[0]
-  t.move(tag.0, tag.1)
+  t.move_to(tag.0, tag.1)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t.tap_text("屏幕")
   t.run_for(@kit.presence_in_ms)
   let screen = t.find("Willow 的屏幕").unwrap()
-  t.move(screen.0, screen.1)
+  t.move_to(screen.0, screen.1)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_true(t.find("机器详情") is Some(_))
   assert_true(t.find("Willow 的屏幕") is Some(_))

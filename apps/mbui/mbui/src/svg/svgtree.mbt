@@ -645,7 +645,7 @@ priv struct TreeBuilder {
 fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
   let doc : SDoc = { nodes: [], attrs: [], links: {} }
   doc.nodes.push({ kind: SRoot, tag: "", parent: -1, children: [], attr_start: 0, attr_end: 0, text: "" })
-  let id_map : Map[String, Int] = {}
+  let id_map : Map[String, Int] = Map([])
   let all = []
   xml.descendants(0, all)
   for n in all {
@@ -667,7 +667,7 @@ fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
         Some(t) => if !(t == "" || t.to_lower() == "text/css") { continue }
         None => ()
       }
-      let text = StringBuilder::new()
+      let text = StringBuilder()
       for c in node.children {
         if xml.nodes[c].kind == XText {
           text.write_string(xml.nodes[c].text)
@@ -685,7 +685,7 @@ fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
   if root < 0 || doc.tag(root) != "svg" {
     return None
   }
-  let links : Map[String, Int] = {}
+  let links : Map[String, Int] = Map([])
   let patterns = []
   let clip_paths = []
   let masks = []
@@ -1226,7 +1226,7 @@ fn TreeBuilder::resolve_tref_text(self : TreeBuilder, href : String) -> String? 
   }
   let under = []
   self.xml.descendants(node, under)
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for n in under {
     if self.xml.nodes[n].kind == XText {
       sb.write_string(self.xml.nodes[n].text)
@@ -1242,7 +1242,7 @@ fn TreeBuilder::resolve_tref_text(self : TreeBuilder, href : String) -> String? 
 
 ///|
 fn trim_text(text : String, preserve : Bool) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   let mut prev = 0x30
   for ch in text {
     let mut c = ch.to_int()
@@ -1290,13 +1290,13 @@ fn last_cu(s : String) -> Int {
 ///|
 fn SDoc::remove_first_space(self : SDoc, id : Int) -> Unit {
   let t = self.nodes[id].text
-  self.nodes[id].text = t.view(start_offset=1).to_string()
+  self.nodes[id].text = t.view(start_offset=1).to_owned()
 }
 
 ///|
 fn SDoc::remove_last_space(self : SDoc, id : Int) -> Unit {
   let t = self.nodes[id].text
-  self.nodes[id].text = t.view(end_offset=t.length() - 1).to_string()
+  self.nodes[id].text = t.view(end_offset=t.length() - 1).to_owned()
 }
 
 ///|
@@ -1363,7 +1363,7 @@ fn trim_text_nodes(text_elem : Int, preserve : Bool, doc : SDoc) -> Unit {
         doc.nodes[node1].text.has_suffix(" ") {
         doc.remove_last_space(node1)
       }
-      if doc.nodes[node1].text.trim(chars=" \t\n\r").to_string() != "" {
+      if doc.nodes[node1].text.trim(chars=" \t\n\r").to_owned() != "" {
         last_non_empty = node1
       }
     }

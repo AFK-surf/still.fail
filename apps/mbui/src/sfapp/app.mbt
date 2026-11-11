@@ -806,7 +806,7 @@ fn go_place(at : Double, place : String, sets : Array[Array[String]], cur : Int)
   place_switch.put(0.0)
   place_switch.go(
     1.0,
-    if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.move(points=switch_slide) },
+    if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.moved(points=switch_slide) },
     at~,
   )
   // (what a finger's press on its tab asked ahead held till the place has come in: sfbase's places_ahead_node)

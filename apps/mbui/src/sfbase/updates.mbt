@@ -143,7 +143,7 @@ pub fn cloud_updates(src : Source, feed : String, origin : String) -> UpdateSour
       // comma-separated, as the station and the desktop app take them (a test's own releases, a dev cloud's)
       let keys = @ui.env("STILLFAIL_RELEASE_KEYS")
         .split(",")
-        .map(fn(k) { k.trim().to_string() })
+        .map(fn(k) { k.trim().to_owned() })
         .filter(fn(k) { k != "" })
         .map(Json::string)
         .collect()
@@ -430,7 +430,7 @@ pub fn update_error(e : String) -> String {
   match e {
     "incomplete" => @sf.t("android-misc.updates.incomplete")
     e if e.has_prefix("status ") =>
-      @sf.t("android-misc.updates.httpStatus", args=[("status", e.view(start_offset=7).to_string())])
+      @sf.t("android-misc.updates.httpStatus", args=[("status", e.view(start_offset=7).to_owned())])
     e => e
   }
 }

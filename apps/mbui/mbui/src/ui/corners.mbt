@@ -292,7 +292,7 @@ fn[T] Ctx::with_tree_nodes(
     tree.drawn_held()
   }
   // (what each draws as it is drawn, and how big: what the squeeze reads of its words, View::shorter's and its scale)
-  let contents : Map[Int, (@view.Content, Double)] = {}
+  let contents : Map[Int, (@view.Content, Double)] = Map([])
   if facts {
     tree.each_drawn_scaled(fn(c, _, _, _, s) { contents[c.id.at] = (c, s) })
     tree_nodes_from.val = count
@@ -533,7 +533,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   let grounds = c.layer_grounds()
   let pictures = c.pictures()
   let ladder = c.corner_ladder
-  let off_ladder : Set[Int] = Set::new()
+  let off_ladder : Set[Int] = Set([])
   let holds = c.round_held(grounds, pictures)
   for i in 0..<c.count {
     let b = c.nodes[i]
@@ -805,7 +805,7 @@ fn Ctx::too_square(self : Ctx, ra : Double, rb : Double) -> Bool {
 /// corner may stand (Theme::corner_fit far), whether the box is round enough for it there or not (a composer's send
 /// 10 in, its corner following a window's 6).
 fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> Map[Int, Array[(Int, Double)]] {
-  let out : Map[Int, Array[(Int, Double)]] = {}
+  let out : Map[Int, Array[(Int, Double)]] = Map([])
   for j in 0..<self.count {
     let b = self.nodes[j]
     if !(b.shows_ground() || b.lit_ground()) || b.layer {
@@ -1087,8 +1087,8 @@ fn unhung(
     return near
   }
   let has = fn(name : String) { near.iter().any(fn(s) { s.0 == name }) }
-  let live : Set[String] = Set::new()
-  let gone : Set[String] = Set::new()
+  let live : Set[String] = Set([])
+  let gone : Set[String] = Set([])
   for k in 0..<4 {
     let sx = if corner_left(k) { "left" } else { "right" }
     let sy = if k < 2 { "top" } else { "bottom" }
@@ -1217,19 +1217,19 @@ fn Ctx::scroll_still(self : Ctx, q : Int, st : Sideways) -> Bool {
 /// The window's tree's nodes said to be pictures (View::says: Role Image), by their node here, while they are among the
 /// frame's (Ctx::with_tree_nodes).
 // kept across runs: emptied before and after each time the tree's nodes are taken in
-let tree_pictures : Set[Int] = Set::new()
+let tree_pictures : Set[Int] = Set([])
 
 ///|
 /// Which of the window's tree's nodes each of them is, by its node here, while they are among the frame's
 /// (Ctx::with_tree_nodes, but where they are `laid`, whose asks read none of it): for a fault to say where it was made
 /// (sizes_steady.mbt). None while they are not.
 // kept across runs: emptied before and after each time the tree's nodes are taken in so
-let tree_frame_ids : Map[Int, @view.NodeId] = {}
+let tree_frame_ids : Map[Int, @view.NodeId] = Map([])
 
 ///|
 /// The nodes said to be pictures (Role Image) this frame, the old views' and the tree's (in_picture).
 fn Ctx::pictures(self : Ctx) -> Set[Int] {
-  let out : Set[Int] = Set::new()
+  let out : Set[Int] = Set([])
   for i in tree_pictures {
     out.add(i)
   }
@@ -1410,7 +1410,7 @@ fn Ctx::follows_corner_at(self : Ctx, p : Int, k : Int, ra : Double, grounds : M
 /// glass) of its own size below it, through boxes all of that size (the composer's glass, a card's ground drawn
 /// apart from what it holds): the box's corner is that ground's.
 fn Ctx::layer_grounds(self : Ctx) -> Map[Int, Int] {
-  let out : Map[Int, Int] = Map::new()
+  let out : Map[Int, Int] = Map([])
   for gi in 0..<self.count {
     let gn = self.nodes[gi]
     if gn.kind != kind_box || gn.corner() < 6.0 || !(gn.grounded() || gn.glass is Some(_)) {
@@ -1670,11 +1670,11 @@ fn alike(rs : FixedArray[Double]) -> Bool {
 /// (its distance and its half), which corner_faults checks; so is one too small for the corner it would have
 /// there, and one at different distances from the two edges: each keeps its own.
 fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
-  let inner : Set[Int] = Set::new()
+  let inner : Set[Int] = Set([])
   for i in self.inners {
     inner.add(i)
   }
-  let said : Set[Int] = Set::new()
+  let said : Set[Int] = Set([])
   for i in self.arounds {
     said.add(i)
   }

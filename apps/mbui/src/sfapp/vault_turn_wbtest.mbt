@@ -142,7 +142,7 @@ test "an answered secret request can be read again from its outcome without answ
       let (x, y) = t.find(outcome).unwrap()
       // (a pointer resting on it opens nothing: only a press does)
       if platform == 0 {
-        t.move(x, y)
+        t.move_to(x, y)
         t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
         assert_true(t.find(detail) is None)
       }
@@ -184,7 +184,7 @@ test "a pointer pressing an answered request's outcome shows its details once, n
   t.run_for(@ui.move_most_ms)
   let (x, y) = t.find("未存入 测试服务登录").unwrap()
   let shown = fn() { t.words().filter(fn(w) { w.0.contains("把测试服务密码安全保存") && w.5 > 0.0 }).length() }
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
   assert_eq(shown(), 0, msg="resting on it")
   t.press_at(x, y)

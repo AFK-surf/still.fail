@@ -170,7 +170,7 @@ fn clear_ground_drawn(node : Bool, ground : Int64) -> Array[Double] raise {
     })
   }
   t.draw()
-  rect_of_color(red)[0:4].to_array()
+  rect_of_color(red)[0:4].to_owned()
 }
 
 ///|

@@ -222,7 +222,7 @@ pub(all) enum StepMoment {
 ///|
 /// Who is told each line of a script as it begins and as it acts (@ui.trace_steps): a run's record of it.
 // kept across runs: the app's own, set once as it starts
-let steps_tracer : Ref[((String, StepMoment) -> Unit)?] = Ref::new(None)
+let steps_tracer : Ref[((String, StepMoment) -> Unit)?] = Ref(None)
 
 ///|
 /// Each line of a scripted run's script (MBUI_DRIVE) given to `step` as written (`tap 发消息`, `until …`): as it
@@ -259,10 +259,10 @@ fn runner_said(done : Map[String, String], j : String) -> Unit {
 
 ///|
 fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
-  let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_string() }).to_array()
+  let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_owned() }).to_array()
   // what the runner has done, as the host posts it (done_watch.h: {"done": X, "said": WORDS}), the frame its post
   // wakes taking it
-  let runner_done : Map[String, String] = {}
+  let runner_done : Map[String, String] = Map([])
   let watching = done_dir != "" && h_drive(9, done_dir)
   if watching {
     on_message("runner", fn(j, _) { runner_said(runner_done, j) })
@@ -996,7 +996,7 @@ fn drive_steps(c : Ctx) -> Unit {
     let waited = now - d.since
     // (`now STEP`: STEP)
     let line = if line.has_prefix("now ") {
-      line.unsafe_substring(start=4, end=line.length()).trim(chars=" ").to_string()
+      line.unsafe_substring(start=4, end=line.length()).trim(chars=" ").to_owned()
     } else {
       line
     }
@@ -1186,14 +1186,14 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         match d.runner_done.get(arg) {
           Some(said) =>
-            match said.trim(chars=" \n\r\t").to_string() {
+            match said.trim(chars=" \n\r\t").to_owned() {
               "" | "ok" if cmd == "done" => {
                 h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
                 next()
               }
               // (what the runner found, typed: the code another device shows, as a person reads it off and types it)
               words if cmd == "typedone" && words.has_prefix("ok ") => {
-                let typed = words.view(start_offset=3).to_string()
+                let typed = words.view(start_offset=3).to_owned()
                 if h_drive(0, typed) {
                   if c.editors.contains(c.focus) {
                     d.typed = typed
@@ -1255,7 +1255,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "tapxy" => {
-        let xy = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        let xy = arg.split(" ").map(fn(v) { number(v.to_owned()) }).to_array()
         let x = if xy[0] < 0.0 { c.width + xy[0] } else { xy[0] }
         let y = if xy[1] < 0.0 { c.height + xy[1] } else { xy[1] }
         press(x, y, true)
@@ -1288,7 +1288,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "holdon" => {
         // `holdon MS DX DY MOVE TEXT`: held still on TEXT MS, then dragged DX DY over MOVE ms (a long press slid on)
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         if words.length() < 5 {
           drive_fail(c, d, "holdon MS DX DY MOVE TEXT")
           return
@@ -1316,7 +1316,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "drag" | "dragon" => {
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         let (x, y, rest) = if cmd == "drag" {
           if words.length() < 4 {
             drive_fail(c, d, "drag X Y DX DY [MS]")
@@ -1357,7 +1357,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "backswipe" => {
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         d.bdx = number(words[0])
         d.bms = 300.0
         d.bedge = 0
@@ -1450,12 +1450,12 @@ fn drive_steps(c : Ctx) -> Unit {
       "wheel" => {
         // (DY, then what is held with it: cmd, ctrl, alt, shift joined by +, as a key's are said)
         let (dy, held) = match arg.find(" ") {
-          Some(i) => (arg.view(end_offset=i).to_string(), arg.view(start_offset=i + 1).to_string())
+          Some(i) => (arg.view(end_offset=i).to_owned(), arg.view(start_offset=i + 1).to_owned())
           None => (arg, "")
         }
         let mut mods = 0
         for m in held.split("+") {
-          match m.to_string() {
+          match m.to_owned() {
             "cmd" => mods = mods | wheel_mod_cmd
             "ctrl" => mods = mods | wheel_mod_ctrl
             "alt" | "option" => mods = mods | wheel_mod_alt
@@ -1477,7 +1477,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "move" => {
-        let xy = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        let xy = arg.split(" ").map(fn(v) { number(v.to_owned()) }).to_array()
         if xy.length() < 2 {
           drive_fail(c, d, "move X Y")
           return
@@ -1582,7 +1582,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "trackpad" => {
         // (the keyboard's trackpad: begun at the window's top left, its finger moved to DX DY from there, let go)
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         let u = text_float_unit
         match words {
           ["begin"] => on_text(text_float_begin, "", 0, 0)
@@ -1597,7 +1597,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "resize" => {
-        let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        let wh = arg.split(" ").map(fn(v) { number(v.to_owned()) }).to_array()
         if wh.length() < 2 {
           drive_fail(c, d, "resize W H")
           return
@@ -1749,12 +1749,12 @@ fn Tester::drive_while(
 
 ///|
 /// A size a scripted run asked of the window, for the tester's next frame (a host's window resizes itself).
-let tester_size : Ref[(Double, Double)?] = Ref::new(None)
+let tester_size : Ref[(Double, Double)?] = Ref(None)
 
 ///|
 /// A key as a script names it (drive's `key`): its code and modifiers.
 fn key_named(name : String) -> (Int, Int)? {
-  let parts = name.split("+").map(fn(v) { v.to_string() }).to_array()
+  let parts = name.split("+").map(fn(v) { v.to_owned() }).to_array()
   let mut mods = 0
   for i in 0..<(parts.length() - 1) {
     match parts[i] {

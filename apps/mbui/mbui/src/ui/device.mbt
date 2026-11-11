@@ -178,7 +178,7 @@ fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
 pub fn clipboard_read() -> ClipboardRead? {
   match @hostapi.clip_read() {
     Some(h) => {
-      let r : ClipboardRead = { host: h, taken: Ref::new(false) }
+      let r : ClipboardRead = { host: h, taken: Ref(false) }
       outside_start(outside_clip, r.outside_id(), "the clipboard read \{r.outside_id()}")
       Some(r)
     }

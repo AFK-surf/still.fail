@@ -5,7 +5,7 @@ let move_steps_far : Double = 300.0
 ///|
 /// A Move's place at each of the display's frames `period` apart, from its start to its end, as the way reads it.
 fn move_steps_places(period : Double) -> (Array[Double], Array[Double]) {
-  let spec = @motion.move()
+  let spec = @motion.moved()
   let dur = spec.duration(0.0, move_steps_far, 0.0)
   let placed = []
   let exact = []

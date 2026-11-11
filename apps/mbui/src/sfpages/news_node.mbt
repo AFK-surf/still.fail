@@ -30,7 +30,7 @@ pub fn changelog_news_node(parent : @view.View, src : Source, tips : @sf.TipLaye
         // (read out as the old frame's box was: all it says)
         @sf.rippled_node(words, fn() { open_page(Setting(@settings.Route::Changelog)) }, 0.0, fn() {
           let said = [news_title_now(news())]
-          said.append(lines()[:@cmp.minimum(news_lines_most, lines().length())].to_array())
+          said.append(lines()[:@cmp.minimum(news_lines_most, lines().length())].to_owned())
           if lines().length() > news_lines_most {
             said.push(@sf.t("android-settings.changelog.more", args=[("n", (lines().length() - news_lines_most).to_string())]))
           }

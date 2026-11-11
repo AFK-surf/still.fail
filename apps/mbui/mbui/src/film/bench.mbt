@@ -75,7 +75,7 @@ pub fn bench(
   t.corners_look(false)
   // (MBUI_BENCH_WHOLE=1: every frame measured built whole, keeping nothing: what building a frame anew costs)
   t.bench_whole(arg("MBUI_BENCH_WHOLE") == "1")
-  let buf = Ref::new(FixedArray::make(0, 0.0))
+  let buf = Ref(FixedArray::make(0, 0.0))
   let damage = @damage.Damage::new()
   let timing = FixedArray::make(2, 0.0)
   let drawn : Array[Measured] = []
@@ -83,7 +83,7 @@ pub fn bench(
   let mut ticks = 0
   // why the frames drawn were asked for (Tester::wanted_why as the frame before each ended): how many each thing asked for
   // (a frame counted under each that asked for it, said without when or where: why_labels)
-  let whys : Map[String, Int] = {}
+  let whys : Map[String, Int] = Map([])
   let mut why = ""
   // (a list's rows set on the device's pixels, as every platform's host has them (Native's rows_on_pixels): the path a
   // device runs measured, not the fake host's default)
@@ -260,7 +260,7 @@ pub fn bench_log(name : String, log : String) -> Bool {
   let mut t0 = -1.0
   let mut t1 = -1.0
   for line in log.split("\n") {
-    let l = line.to_string()
+    let l = line.to_owned()
     if l.contains("DRIVE LOG measure") {
       measuring = true
     }
@@ -269,9 +269,9 @@ pub fn bench_log(name : String, log : String) -> Bool {
     }
     match l.find("PERF ") {
       Some(at) if measuring => {
-        let f : Map[String, Double] = {}
+        let f : Map[String, Double] = Map([])
         for kv in l.unsafe_substring(start=at + 5, end=l.length()).split(" ") {
-          let kv = kv.to_string()
+          let kv = kv.to_owned()
           match kv.find("=") {
             Some(eq) =>
               match number(kv.unsafe_substring(start=eq + 1, end=kv.length())) {
@@ -405,7 +405,7 @@ fn why_labels(why : String) -> Array[String] {
   }
   let out = []
   for part in why.split("; ") {
-    let mut s = part.to_string()
+    let mut s = part.to_owned()
     if s.has_prefix("moving: ") {
       s = s.unsafe_substring(start=8, end=s.length())
     }
@@ -416,7 +416,7 @@ fn why_labels(why : String) -> Array[String] {
       }
     }
     // (a motion's target, a count: not what it is)
-    let s = s.trim(chars=" ").to_string()
+    let s = s.trim(chars=" ").to_owned()
     let s = match s.find(" to ") {
       Some(i) => s.unsafe_substring(start=0, end=i)
       None => s

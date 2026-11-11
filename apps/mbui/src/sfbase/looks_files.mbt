@@ -19,7 +19,7 @@ let looks_files : @sf.LiveMap[String, LooksFile] = @sf.LiveMap::new()
 ///|
 /// What is told each file's bytes once it is here, by name: asked again with it after it failed (looks_files_again).
 // kept across runs: put back as a run begins (faces_reset)
-let looks_files_here : Map[String, (Bytes) -> Unit] = {}
+let looks_files_here : Map[String, (Bytes) -> Unit] = Map([])
 
 ///|
 fn looks_files_reset() -> Unit {
@@ -78,7 +78,7 @@ pub(all) enum LooksStand {
 
 ///|
 pub fn looks_stand(src : Source, files : Array[String]) -> LooksStand {
-  let going = field(src.topic("fonts", Map::new()).get().value, "share")
+  let going = field(src.topic("fonts", Map([])).get().value, "share")
   let mut got = 0.0
   let mut whole = 0.0
   let mut known = true

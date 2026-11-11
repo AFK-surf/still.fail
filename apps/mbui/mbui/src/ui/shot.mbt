@@ -44,11 +44,11 @@ let shot_band_most : Int = 2048
 /// Whether what is painted now is a shot's (Ctx::paint_shots): its pictures drawn whole, not fading in, and one still
 /// coming said (`shot_waits`); no native view (the window's own, where the page has it).
 // kept across runs: set only while a shot is painted, within one frame's paint, and put back
-let shooting : Ref[Bool] = Ref::new(false)
+let shooting : Ref[Bool] = Ref(false)
 
 ///|
 // kept across runs: set only while a shot is painted, within one frame's paint
-let shot_waits : Ref[Bool] = Ref::new(false)
+let shot_waits : Ref[Bool] = Ref(false)
 
 ///|
 fn shot_id(key : String) -> Int {
@@ -451,7 +451,7 @@ fn shift_inst(a : FixedArray[Double], b : Int, dx : Double, dy : Double) -> Unit
 /// The words node `i` and what it holds show, in the order they are painted (a test's: Tester::shots).
 fn Ctx::shot_words(self : Ctx, i : Int) -> Array[String] {
   let out = []
-  let walk : Ref[(Int) -> Unit] = Ref::new(fn(_) {  })
+  let walk : Ref[(Int) -> Unit] = Ref(fn(_) {  })
   walk.val = fn(k) {
     let n = self.nodes[k]
     if (n.kind == kind_text || n.kind == kind_rich) && n.text != "" {

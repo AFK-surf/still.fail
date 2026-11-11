@@ -17,7 +17,7 @@ test "a connect's model control says its model, effort and who runs it in one ro
   for win in [corner_windows[0], corner_windows[5]] {
     let t = screen_in("settings-connect", win, "zh")
     let found = ["Opus 5.5", "高", "自动分配"].map(fn(s) { (s, words_exactly_at(t, s)) })
-    let at = found.map(fn(f) {
+    let at = found.map(fn(f) raise {
       guard f.1 is Some(r) else { fail("\{win.0}: no \{f.0}: \{t.words().map(fn(w) { w.0 }).join("|")}") }
       r
     })

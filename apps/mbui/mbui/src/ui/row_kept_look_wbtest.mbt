@@ -68,7 +68,7 @@ fn kept_row_drawn(
   t.frame()
   let kept = t.rows_as_nodes().0
   t.run_for(at_ms - change_ms)
-  (insts(), kept, rect_of_color(kept_row_ink)[0:4].to_array())
+  (insts(), kept, rect_of_color(kept_row_ink)[0:4].to_owned())
 }
 
 ///|

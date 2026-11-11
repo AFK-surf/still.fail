@@ -4,7 +4,7 @@
 ///|
 test "how far a picture has come, a step of it: what reads that picture told, what reads another not" {
   let images = ChatImages::new()
-  let heard : Map[String, (Json) -> Unit] = {}
+  let heard : Map[String, (Json) -> Unit] = Map([])
   let ask = fn(id : String) {
     images.get("st", id, "mem:t/" + id, fn(h, _) { heard[id] = h }) |> ignore
   }
@@ -35,7 +35,7 @@ test "how far a picture has come, a step of it: what reads that picture told, wh
 ///|
 test "a picture's answer, failed or here, and asked again: what reads it told each time; none made for what reads nothing" {
   let images = ChatImages::new()
-  let done : Map[String, (Result[(Json, Bytes?), Json]) -> Unit] = {}
+  let done : Map[String, (Result[(Json, Bytes?), Json]) -> Unit] = Map([])
   let ask = fn() { images.get("st", "a", "mem:t/a", fn(_, d) { done["a"] = d }) }
   let runs = Ref(0)
   let seen = Ref(false)

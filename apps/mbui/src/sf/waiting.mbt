@@ -339,7 +339,7 @@ pub(all) struct WaitNote {
 /// Made-up words `n` letters long, for what a page's bones are drawn of (`waiting`'s `sample`): only how long they are
 /// is seen, as a bar.
 pub fn sample_words(n : Int) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for _ in 0..<n {
     out.write_char('字')
   }

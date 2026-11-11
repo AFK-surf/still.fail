@@ -321,7 +321,7 @@ pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json)
       }
     "go" => {
       let failed = fn(words : String) { tell({ "t": Json::string("error"), "message": Json::string(words) }) }
-      let method = text(Some(m), "method").to_upper()
+      let verb = text(Some(m), "method").to_upper()
       let path = text(Some(m), "path")
       let headers = link_headers(field(Some(m), "headers"))
       let body = match field(Some(m), "body") {
@@ -336,7 +336,7 @@ pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json)
           return
         }
       }
-      if !link_method(method) || !link_path(path) || l.fetches.contains(id) {
+      if !link_method(verb) || !link_path(path) || l.fetches.contains(id) {
         failed(svc("android-chat.web.badRequest"))
         return
       }
@@ -385,7 +385,7 @@ pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json)
           }
         },
       }
-      service_ask(src, p, method, path, headers, body, 0, [], sink, follow~, cookies~)
+      service_ask(src, p, verb, path, headers, body, 0, [], sink, follow~, cookies~)
     }
     _ => ()
   }
@@ -483,7 +483,7 @@ pub(all) struct Tagging {
 
 ///|
 pub fn tagging_new() -> Tagging {
-  { start: @buffer.new(size_hint=4096), placed: false }
+  { start: Buffer(size_hint=4096), placed: false }
 }
 
 ///|
@@ -501,10 +501,10 @@ pub fn tagging_take(t : Tagging, b : Bytes, last : Bool) -> Bytes {
     None => return Bytes::new(0)
   }
   t.placed = true
-  let out = @buffer.new(size_hint=so_far.length() + 64)
-  out.write_bytes(so_far[0:at].to_bytes())
+  let out = Buffer(size_hint=so_far.length() + 64)
+  out.write_bytes(so_far[0:at].to_owned())
   out.write_bytes(@utf8.encode(page_js_tag))
-  out.write_bytes(so_far[at:].to_bytes())
+  out.write_bytes(so_far[at:].to_owned())
   out.to_bytes()
 }
 

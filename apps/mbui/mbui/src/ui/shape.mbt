@@ -384,7 +384,7 @@ fn Ctx::segs_from(self : Ctx, at : Int) -> Array[Double] {
   if at * 4 >= self.segs.length() {
     []
   } else {
-    self.segs[at * 4:].to_array()
+    self.segs[at * 4:].to_owned()
   }
 }
 

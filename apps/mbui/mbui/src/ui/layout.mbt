@@ -189,7 +189,7 @@ fn ellipsized(s : String, tl : TextLayout, w : Double, lay : (String) -> TextLay
     end = end - 1
   }
   let cut = if end < shaped.starts.length() { shaped.starts[end] } else { shaped.len }
-  lay(s.view(end_offset=cut).to_string() + "…")
+  lay(s.view(end_offset=cut).to_owned() + "…")
 }
 
 ///|
@@ -225,7 +225,7 @@ fn lines_cut(text : String, tl : TextLayout, w : Double, most : Int, lay : (Stri
     end = end - 1
   }
   let cut = if end < count { s.starts[end] } else { s.len }
-  lay(text.view(end_offset=cut).to_string() + "…", w, true)
+  lay(text.view(end_offset=cut).to_owned() + "…", w, true)
 }
 
 ///|
@@ -1087,7 +1087,7 @@ let commit_counts : FixedArray[Int] = FixedArray::make(3, 0)
 /// Off (tests only): every frame laid out from nothing, as before layouts
 /// were kept, to compare with.
 // kept across runs: a test sets it around the Testers it makes, and puts it back (layout_wbtest's same_both_ways)
-let layout_reuse : Ref[Bool] = Ref::new(true)
+let layout_reuse : Ref[Bool] = Ref(true)
 
 ///|
 /// Lays out node `i` and its subtree at (x, y), `w` wide and `h` high (NaN:

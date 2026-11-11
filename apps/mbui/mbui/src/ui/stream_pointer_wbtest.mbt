@@ -2,7 +2,7 @@
 
 ///|
 test "a pointer on a stream's layer: its picture told once, each move told at once, between frames too, nothing built" {
-  let cell : Ref[Stream?] = Ref::new(None)
+  let cell : Ref[Stream?] = Ref(None)
   let t = Tester::new(
     fn(c) {
       match cell.val {
@@ -23,7 +23,7 @@ test "a pointer on a stream's layer: its picture told once, each move told at on
   t.stream_shows(s.id(), 1.0, 640, 360)
   t.draw()
   assert_true(s.layered())
-  let png_asked = Ref::new(0)
+  let png_asked = Ref(0)
   let png = fn() {
     png_asked.val += 1
     b"png"

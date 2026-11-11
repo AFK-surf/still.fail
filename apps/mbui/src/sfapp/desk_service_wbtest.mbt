@@ -123,7 +123,7 @@ test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from 
   for y in [300.0, 600.0] {
     for dx in offsets {
       let x = line + dx
-      t.move(x, y)
+      t.move_to(x, y)
       if t.cursor() != ResizeX {
         continue
       }

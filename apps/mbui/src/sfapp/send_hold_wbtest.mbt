@@ -87,7 +87,7 @@ fn hold_timed(
   t.type_text("\n" + lines[:lines.length() - 1].join("\n"))
   t.run_for(@ui.move_most_ms)
   if up > 0.0 {
-    t.move(195.0, 400.0)
+    t.move_to(195.0, 400.0)
     t.wheel(195.0, 400.0, -up)
     t.run_for(@ui.move_most_ms)
   }

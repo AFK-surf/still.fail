@@ -29,7 +29,7 @@ priv struct CycleLook {
 ///|
 /// The cycles of the tags drawn this frame (painted or drawn again), by tag.
 // kept across runs: emptied as each frame's paint begins (cycle_looks_begin)
-let cycle_frame : Map[Int, CycleLook] = {}
+let cycle_frame : Map[Int, CycleLook] = Map([])
 
 ///|
 /// The last tag given (they are not given again: a recording keeps its own).
@@ -124,7 +124,7 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
   }
   let a = self.inst
   // what each tag's instances cover, together (x0 y0 x1 y1)
-  let boxes : Map[Int, (Double, Double, Double, Double)] = {}
+  let boxes : Map[Int, (Double, Double, Double, Double)] = Map([])
   let mut q = 0
   while q < self.ninst {
     let b = q * inst_size
@@ -142,7 +142,7 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
   if boxes.is_empty() {
     return
   }
-  let looks : Map[Int, Look] = {}
+  let looks : Map[Int, Look] = Map([])
   for tag, _ in boxes {
     match cycle_frame.get(tag) {
       Some(cy) => {

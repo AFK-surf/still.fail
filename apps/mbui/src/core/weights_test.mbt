@@ -16,7 +16,7 @@ test "what a value weighs is its JSON's bytes; its heaviest paths, a list's item
     bytes += if u < 0x80 { 1 } else if u < 0x800 { 2 } else if u < 0x10000 { 3 } else { 4 }
   }
   assert_eq(n, bytes)
-  let by : Map[String, Int] = {}
+  let by : Map[String, Int] = Map([])
   for p in paths {
     by[p.0] = p.1
   }

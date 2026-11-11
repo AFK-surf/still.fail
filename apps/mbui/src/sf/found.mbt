@@ -126,7 +126,7 @@ pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.R
         continue
       }
       let inside = ranges.iter().any(fn(m) { m.0 <= off + a && off + b <= m.1 })
-      let piece = r.text.view(start_offset=a, end_offset=b).to_string()
+      let piece = r.text.view(start_offset=a, end_offset=b).to_owned()
       out.push({ ..r, text: piece, weight: if inside && r.weight < 600 { 600 } else { r.weight } })
     }
     off = off + n

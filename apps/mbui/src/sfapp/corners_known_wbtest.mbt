@@ -3,14 +3,14 @@
 // until the bar is lowered here). A screen not listed has none.
 
 ///|
-let corners_known : Map[String, Int] = Map::new()
+let corners_known : Map[String, Int] = Map([])
 
 ///|
 /// Every screen in every window (corners_wbtest.mbt), by window, language and screen: the bar it may only fall from. A
 /// screen not listed has none. Listed: the rail on the tape (corners_tape_rail), and 安全's last card where its page
 /// ends 5 short of its panel.
 let corners_everywhere_known : Map[String, Int] = {
-  let known = Map::new()
+  let known = Map([])
   for win in ["touch", "desk-win"] {
     for lang in ["zh", "en"] {
       for mode in corners_tape_rail {
@@ -120,4 +120,4 @@ let corners_tape_rail : Array[String] = [
 /// (corners_wbtest.mbt), by window, language and screen: the bar it may only fall from, counted as the rule first ran
 /// (2026-11-11). A screen not listed has none; none is now (智能体's card's spend, an old view's, on its own line of 26
 /// since, as its box was).
-let corners_outgrown_known : Map[String, Int] = Map::new()
+let corners_outgrown_known : Map[String, Int] = Map([])

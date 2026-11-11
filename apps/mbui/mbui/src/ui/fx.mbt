@@ -17,7 +17,7 @@ priv struct Life {
 }
 
 ///|
-let lives : Map[Int, Life] = Map::new()
+let lives : Map[Int, Life] = Map([])
 
 ///|
 fn fx_runtime(seed : Int?) -> @effect.Runtime {

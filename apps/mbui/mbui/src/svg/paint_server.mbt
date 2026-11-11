@@ -28,7 +28,7 @@ fn convert_paint_server(doc : SDoc, node : Int, state : State, cache : Cache) ->
 
 ///|
 fn non_empty_id(s : String) -> String? {
-  if s.trim(chars=" \t\n\r").to_string() == "" {
+  if s.trim(chars=" \t\n\r").to_owned() == "" {
     None
   } else {
     Some(s)

@@ -54,7 +54,7 @@ fn u32(b : Bytes, i : Int) -> Int {
 
 ///|
 fn tag_at(b : Bytes, i : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for k in 0..<4 {
     sb.write_char(Int::unsafe_to_char(u8(b, i + k)))
   }
@@ -86,7 +86,7 @@ pub fn Face::parse(data : Bytes, index : Int) -> Face? {
   }
   let offset = if tag_at(data, 0) == "ttcf" { u32(data, 12 + index * 4) } else { 0 }
   let num_tables = u16(data, offset + 4)
-  let tables : Map[String, (Int, Int)] = {}
+  let tables : Map[String, (Int, Int)] = Map([])
   for k in 0..<num_tables {
     let r = offset + 12 + k * 16
     let t = tag_at(data, r)
@@ -551,7 +551,7 @@ pub fn Face::names(self : Face) -> Array[NameRecord] {
     let len = u16(b, r + 8)
     let off = storage + u16(b, r + 10)
     let text = if platform == 0 || (platform == 3 && (encoding == 0 || encoding == 1 || encoding == 10)) {
-      let sb = StringBuilder::new()
+      let sb = StringBuilder()
       let mut i = 0
       while i + 1 < len {
         let u = u16(b, off + i)
@@ -566,7 +566,7 @@ pub fn Face::names(self : Face) -> Array[NameRecord] {
       }
       Some(sb.to_string())
     } else if platform == 1 && encoding == 0 {
-      let sb = StringBuilder::new()
+      let sb = StringBuilder()
       for i in 0..<len {
         sb.write_char(Int::unsafe_to_char(mac_roman(u8(b, off + i))))
       }
@@ -789,8 +789,8 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int, coor
       // gvar's deltas, with four phantom points after the outline's
       let vx = xs + [0, 0, 0, 0]
       let vy = ys + [0, 0, 0, 0]
-      let local = Array::makei(n_contours, fn(k) { u16(b, ends + k * 2) })
-      match self.simple_deltas(glyph, vx, vy, local, coords) {
+      let contour_ends = Array::makei(n_contours, fn(k) { u16(b, ends + k * 2) })
+      match self.simple_deltas(glyph, vx, vy, contour_ends, coords) {
         Some((dx, dy)) =>
           for k in 0..<n_points {
             xs[k] = xs[k] + fx_round(dx[k])

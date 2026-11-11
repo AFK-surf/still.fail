@@ -6,7 +6,7 @@
 /// The room under a post going to its new height: a Move as long as its way is far, as every row's height in a chat's
 /// list goes (mbui's view/list_motion.mbt: what changes together moves as one, on one curve from one moment).
 // kept across runs: a curve, never written
-pub let close_gap : @motion.Spec = @motion.move()
+pub let close_gap : @motion.Spec = @motion.moved()
 
 ///|
 /// How long the archive buttons take to come and go, 忽略 too.
@@ -29,14 +29,14 @@ pub let archive_tween : @motion.Spec = @motion.tween(archive_ms, ease=archive_ea
 ///|
 /// The rooms under the posts as their motions were asked (under_post, by its key), kept to say when they are at rest.
 // kept across runs: put back by under_reset (sfbase's reset)
-pub let under_ends : Map[String, @motion.Anim] = {}
+pub let under_ends : Map[String, @motion.Anim] = Map([])
 
 ///|
 /// The list's way each block under a post last went on (Ctx::row_way: its start and how long), by its key: the way set
 /// out again (another change in the list come while it goes), it goes on from where it is on the new one, as every row
 /// does, so that the rows' sum goes one way (mbui's view/list_motion.mbt)
 // kept across runs: put back by under_reset (sfbase's reset)
-let under_ways : Map[String, (Double, Double)] = {}
+let under_ways : Map[String, (Double, Double)] = Map([])
 
 ///|
 /// When what comes and goes under the posts (options, how a card went, 忽略, the archive buttons) is at rest, their

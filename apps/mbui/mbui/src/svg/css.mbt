@@ -25,7 +25,7 @@ fn AttrOp::matches(self : AttrOp, value : String) -> Bool {
   match self {
     Exists => true
     Matches(v) => value == v
-    Contains(v) => value.split(" ").any(fn(s) { s.to_string() == v })
+    Contains(v) => value.split(" ").any(fn(s) { s.to_owned() == v })
     StartsWith(v) =>
       if value == v {
         true
@@ -166,7 +166,7 @@ fn CStream::skip_bytes(self : CStream, f : (Int) -> Bool) -> Unit {
 
 ///|
 fn CStream::slice(self : CStream, a : Int, b : Int) -> String {
-  self.text.view(start_offset=a, end_offset=b).to_string()
+  self.text.view(start_offset=a, end_offset=b).to_owned()
 }
 
 ///|
@@ -333,7 +333,7 @@ fn consume_rule_set(s : CStream, rules : Array[CssRule]) -> Bool {
     if s.cur() == 0x2C {
       s.pos += 1
     }
-    let (selector, offset) = parse_selector(s.text.view(start_offset=s.pos).to_string())
+    let (selector, offset) = parse_selector(s.text.view(start_offset=s.pos).to_owned())
     s.pos += offset
     s.skip_spaces()
     match selector {
@@ -436,7 +436,7 @@ fn consume_declaration(s : CStream) -> Declaration? {
       return None
     }
   }
-  let value = s.slice(start, end).trim(chars=" \t\n\r\u{0C}").to_string()
+  let value = s.slice(start, end).trim(chars=" \t\n\r\u{0C}").to_owned()
   if !s.skip_spaces_and_comments() {
     return None
   }
@@ -646,7 +646,7 @@ fn parse_selector(text : String) -> (Selector?, Int) {
           }
           let start = s.pos
           s.skip_bytes(fn(c) { c != 0x29 })
-          let lang = s.slice(start, s.pos).trim(chars=" \t\n\r").to_string()
+          let lang = s.slice(start, s.pos).trim(chars=" \t\n\r").to_owned()
           if !s.consume_byte(0x29) || lang == "" {
             finished = true
             return Some((None, false))

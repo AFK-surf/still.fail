@@ -102,7 +102,7 @@ test "words: a box not built this frame is forgotten" {
 ///|
 test "words: moved (a page sliding in to its place): the frame built again, what was placed from them placed where they are" {
   let dx = @signals.signal(0.0)
-  let placed = Ref::new(-1.0)
+  let placed = Ref(-1.0)
   let t = @ui.Tester::new(
     fn(c) {
       match c.words_of("m") {
@@ -127,8 +127,8 @@ test "words: moved (a page sliding in to its place): the frame built again, what
 
 ///|
 test "a press taken by the app is no tap of what it went down on, and scrolls nothing" {
-  let taps = Ref::new(0)
-  let take = Ref::new(false)
+  let taps = Ref(0)
+  let take = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       let id = c.id("b")
@@ -155,8 +155,8 @@ test "a press taken by the app is no tap of what it went down on, and scrolls no
 
 ///|
 test "a press taken by the app scrolls nothing under it: not a box that scrolls sideways, nor the list round it" {
-  let take = Ref::new(false)
-  let at = Ref::new(0.0)
+  let take = Ref(false)
+  let at = Ref(0.0)
   let t = @ui.Tester::new(
     fn(c) {
       // (the press the app's from the frame that first sees it down: a hold on a code block's words)
@@ -187,7 +187,7 @@ test "a press taken by the app scrolls nothing under it: not a box that scrolls 
     t.press_at(x0, y0)
     for k in 1..=10 {
       let f = k.to_double() / 10.0
-      t.move(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
+      t.move_to(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
     }
     t.release(x1, y1)
     t.draw()
@@ -301,7 +301,7 @@ test "words: under a Tester over a host's kept text, the host's own word as it s
 
 ///|
 test "what the view tells outside is told once a frame's builds are over, from the last: not what an earlier one read" {
-  let dx = Ref::new(0.0)
+  let dx = Ref(0.0)
   let told : Array[Double] = []
   let t = @ui.Tester::new(
     fn(c) {

@@ -47,7 +47,7 @@ fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false
 /// What the last frame's paint said of it besides its drawing (its targets, what scrolls, the words that can be picked,
 /// the scroll bars, the lines of words: Tester::said), a line each.
 fn kept_rows_said(t : @ui.Tester) -> Array[String] {
-  t.said().split("\n").filter(fn(l) { l.length() > 0 }).map(fn(l) { "said " + l.to_string() }).collect()
+  t.said().split("\n").filter(fn(l) { l.length() > 0 }).map(fn(l) { "said " + l.to_owned() }).collect()
 }
 
 ///|
@@ -61,10 +61,10 @@ fn kept_rows_read_out(t : @ui.Tester, a11y : Bool) -> Array[String] {
   let lines : Array[Array[String]] = []
   for l in t.a11y_said().split("\n") {
     if l.length() > 0 {
-      lines.push(l.split("\u{1F}").map(fn(v) { v.to_string() }).collect())
+      lines.push(l.split("\u{1F}").map(fn(v) { v.to_owned() }).collect())
     }
   }
-  let at : Map[String, Int] = {}
+  let at : Map[String, Int] = Map([])
   for k, f in lines {
     at[f[0]] = k
   }
@@ -86,7 +86,7 @@ fn kept_rows_read_out(t : @ui.Tester, a11y : Bool) -> Array[String] {
 /// An instance as `drawn_from` says it, a glyph's place in the atlas left out (the atlas fills in another order where
 /// rows are built every frame: what is drawn the same).
 fn kept_rows_inst(line : String) -> String {
-  let f = line.split(" ").map(fn(v) { v.to_string() }).collect()
+  let f = line.split(" ").map(fn(v) { v.to_owned() }).collect()
   // ("inst", then its numbers: its kind the 6th, in 1/64ths; a glyph's atlas rect the 13th to the 16th)
   if f.length() > 16 && f[0] == "inst" && (f[6] == "64" || f[6] == "192" || f[6] == "448") {
     for j in 13..=16 {

@@ -51,7 +51,7 @@ fn own_agent_card(name : String) -> @ui.Tester {
       }
     })
   guard last is Some(at) else { @halt.saying("no agent's message") }
-  t.move(at.1 - 20.0, at.2 + at.4 / 2.0)
+  t.move_to(at.1 - 20.0, at.2 + at.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t
 }

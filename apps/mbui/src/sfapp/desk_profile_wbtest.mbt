@@ -12,7 +12,7 @@ test "wide: the profile list shows a subscription's tier" {
 ///|
 /// The desk's page wheeled down until `words` shows on it (above the window's foot).
 fn desk_shown(t : @ui.Tester, words : String) -> Unit {
-  t.move(800.0, 400.0)
+  t.move_to(800.0, 400.0)
   for _ in 0..<12 {
     match t.find(words) {
       Some((_, y)) if y < 760.0 => break
@@ -145,9 +145,9 @@ test "wide: a machine's login not made a profile yet shows its allowance in the 
   t.draw()
   // Willow's own Codex login, last in the sidebar: its week's capsule under its row as a profile's row has it
   let side = fn() { t.text_runs().filter(fn(r) { r.x0 < 300.0 }) }
-  let use = side().filter(fn(r) { r.text == "使用此账号" })
-  assert_eq(use.length(), 1, msg="the machine's login offered: \{side().map(fn(r) { r.text })}")
-  let under = side().filter(fn(r) { r.top >= use[0].bottom }).map(fn(r) { r.text })
+  let offered = side().filter(fn(r) { r.text == "使用此账号" })
+  assert_eq(offered.length(), 1, msg="the machine's login offered: \{side().map(fn(r) { r.text })}")
+  let under = side().filter(fn(r) { r.top >= offered[0].bottom }).map(fn(r) { r.text })
   for words in ["5H", "62%", "W", "19%"] {
     assert_true(under.contains(words), msg="\{words} under the offered login: \{under}")
   }

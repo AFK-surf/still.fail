@@ -12,7 +12,7 @@ fn controls_kept() -> @ui.Tester {
 test "the controls page's last frame as a draw list: a line an instance, every glyph named by what the host shaped" {
   let t = controls_kept()
   let dl = t.drawlist()
-  let lines = dl.split("\n").map(fn(l) { l.to_string() }).to_array()
+  let lines = dl.split("\n").map(fn(l) { l.to_owned() }).to_array()
   assert_eq(lines[0], "mbui-dl 4")
   assert_eq(lines[1], "window 960 720 1")
   assert_eq(lines[2], "clear 0.961 0.961 0.969")

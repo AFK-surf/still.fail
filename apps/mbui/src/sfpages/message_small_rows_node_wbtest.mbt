@@ -135,7 +135,7 @@ test "the line under a message waiting for a runtime: a red mark while it is mis
   let underlines = fn() { t.drawn_rects().filter(fn(r) { r.3 <= 1.0 }).length() }
   assert_eq(underlines(), 0)
   let (x, y, aw, ah) = t.rect_of("安装").unwrap()
-  t.move(x + aw / 2.0, y + ah / 2.0)
+  t.move_to(x + aw / 2.0, y + ah / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(underlines(), 1)
   // pressed: installed on its station

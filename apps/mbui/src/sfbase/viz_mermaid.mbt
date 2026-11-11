@@ -15,7 +15,7 @@ priv enum MermaidChart {
 
 ///|
 // kept across runs: the core's answers, by what was asked (mermaid_ask)
-let mermaid_charts : Map[String, MermaidChart] = {}
+let mermaid_charts : Map[String, MermaidChart] = Map([])
 
 ///|
 // kept across runs: how many answers came (a signal: a frame drawing a chart reads it, and comes again as one does)
@@ -55,7 +55,7 @@ fn mermaid_hex(rgba : Int64, ground : Int64) -> String {
     (c * a + g * (255 - a) + 127) / 255
   }
   let hex = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_char('#')
   for shift in [24, 16, 8] {
     let v = mix(shift)

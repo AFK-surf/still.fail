@@ -261,7 +261,7 @@ test "a fatal fails the calls in flight; restarted asks every subscription again
   assert_eq(c.fatal, Some("boom"))
   assert_eq(errs.length(), 1)
   // (in the app's words, the core's own reason kept in `fatal`)
-  assert_eq(errs[0].stringify(), "{\"code\":\"core_restarted\",\"message\":\"" + restarted_text.val + "\"}")
+  assert_eq(errs[0].stringify(), "{\"code\":\"core_restarted\",\"message\":\"" + @core.restarted_text.val + "\"}")
   sent.clear()
   c.restarted()
   assert_eq(c.fatal, None)
@@ -374,9 +374,9 @@ test "a streamed call: each value before its answer, with the bytes beside it; c
 ///|
 test "what is asked of the core is awaited until answered or first read" {
   let sent : Array[String] = []
-  let c = Client::new(fn(s) { sent.push(s) })
-  let waits : Map[Int, String] = {}
-  let n = Ref::new(0)
+  let c = @core.Client::new(fn(s) { sent.push(s) })
+  let waits : Map[Int, String] = Map([])
+  let n = Ref(0)
   c.track(
     fn(what) {
       n.val += 1
@@ -414,7 +414,7 @@ test "what is asked of the core is awaited until answered or first read" {
 ///|
 test "a core started anew is told again where the app's attention is (client.focus, as told last)" {
   let sent : Array[String] = []
-  let c = Client::new(fn(m) { sent.push(m) })
+  let c = @core.Client::new(fn(m) { sent.push(m) })
   c.call("client.focus", params={ "visible": true, "focused": true, "workspace": "ws1" }) |> ignore
   sent.clear()
   c.restarted()
@@ -426,7 +426,7 @@ test "a core started anew is told again where the app's attention is (client.foc
 ///|
 test "a core started anew is told both the app's attention and the chat it shows, whichever was told last" {
   let sent : Array[String] = []
-  let c = Client::new(fn(m) { sent.push(m) })
+  let c = @core.Client::new(fn(m) { sent.push(m) })
   c.call("client.focus", params={ "visible": true, "focused": true, "workspace": "ws1" }) |> ignore
   let chat : Json = { "station": "ws1/st1", "session": "s1", "thread": 7, "end": true }
   c.call("client.focus", params={ "chat": chat }) |> ignore

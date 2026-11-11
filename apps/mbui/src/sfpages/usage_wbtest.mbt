@@ -241,7 +241,7 @@ test "the year: a month whose weeks have not the room for its name says none, no
   xs.dedup()
   assert_true(xs.length() >= 52 && ys.length() >= 7, msg="the grid's columns \{xs.length()}, rows \{ys.length()}")
   let side = cells[0].2
-  t.move(xs[50] + side / 2.0, ys[3] + side / 2.0)
+  t.move_to(xs[50] + side / 2.0, ys[3] + side / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
   assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_), msg="\{t.drawn_text()}")
   t.leave()

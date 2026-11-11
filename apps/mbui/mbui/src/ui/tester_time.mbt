@@ -155,13 +155,13 @@ pub fn Tester::rest_of(self : Tester, name : String) -> Double {
 /// and after each frame the Tester draws (tester_rests_seen), kept once the motion is over and the app has let go of it, for
 /// rest_of. The Tester's own: nothing on the app's way keeps it (a device's app keeps no such record).
 // kept across runs: emptied as each Tester is made (Tester::new)
-let tester_rested : Map[String, Double] = {}
+let tester_rested : Map[String, Double] = Map([])
 
 ///|
 /// What is said to move after the frame just drawn, each end as it says it, kept (tester_rested).
 fn tester_rests_seen() -> Unit {
   let c = g()
-  let now : Map[String, Bool] = {}
+  let now : Map[String, Bool] = Map([])
   for e in c.movers {
     let r = e.m.rest_at(c.clock, c.frame_no)
     now[e.what] = true

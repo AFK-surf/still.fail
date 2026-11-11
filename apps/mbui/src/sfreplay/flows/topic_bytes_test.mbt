@@ -5,7 +5,7 @@
 test "what the core sends for what the app subscribes to: each run and each topic within its bar" {
   let wrong : Array[String] = []
   let said : Array[String] = []
-  let largest : Map[String, (Int, String)] = {}
+  let largest : Map[String, (Int, String)] = Map([])
   let names = @sfreplay.tape_barred()
   names.sort()
   for name in names {

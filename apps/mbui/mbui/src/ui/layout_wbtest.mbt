@@ -81,8 +81,8 @@ fn same_both_ways(name : String, scenario : () -> Unit) -> Int raise {
       while j < la.length() && j < lb.length() && la[j] == lb[j] {
         j = j + 1
       }
-      let ka = if j < la.length() { la[j].to_string() } else { "(end)" }
-      let kb = if j < lb.length() { lb[j].to_string() } else { "(end)" }
+      let ka = if j < la.length() { la[j].to_owned() } else { "(end)" }
+      let kb = if j < lb.length() { lb[j].to_owned() } else { "(end)" }
       fail("\{name}: frame \{k} line \{j}: kept \{ka}, afresh \{kb}")
     }
   }
@@ -92,7 +92,7 @@ fn same_both_ways(name : String, scenario : () -> Unit) -> Int raise {
 ///|
 test "kept layouts: styles changing (padding, sizes, gaps, alignment, colours only)" {
   let n = same_both_ways("styles", fn() {
-    let step = Ref::new(0)
+    let step = Ref(0)
     let t = Tester::new(
       fn(c) {
         let s = step.val
@@ -339,7 +339,7 @@ test "kept layouts: a slot holding another kind of thing" {
 ///|
 test "kept layouts: texts changing (words, size, weight, wrapping, cut to fit)" {
   same_both_ways("texts", fn() {
-    let step = Ref::new(0)
+    let step = Ref(0)
     let t = Tester::new(
       fn(c) {
         let s = step.val
@@ -467,7 +467,7 @@ test "kept layouts: the window resized" {
 ///|
 test "kept layouts: a column moved under a clip (the scroll scene), and lists scrolled" {
   same_both_ways("scroll", fn() {
-    let off = Ref::new(0.0)
+    let off = Ref(0.0)
     let t = Tester::new(
       fn(c) {
         c.column(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -514,7 +514,7 @@ test "kept layouts: a column moved under a clip (the scroll scene), and lists sc
 ///|
 test "kept layouts: animations (springs moving boxes, widths, opacity)" {
   same_both_ways("animation", fn() {
-    let target = Ref::new(0.0)
+    let target = Ref(0.0)
     let t = Tester::new(
       fn(c) {
         let x = c.spring("x", target.val)
@@ -552,7 +552,7 @@ test "kept layouts: animations (springs moving boxes, widths, opacity)" {
 ///|
 test "kept layouts: only something deep inside moving, nothing around it" {
   same_both_ways("deep move", fn() {
-    let k = Ref::new(0)
+    let k = Ref(0)
     let t = Tester::new(
       fn(c) {
         c.column(pad=10.0, fn() {
@@ -593,7 +593,7 @@ test "kept layouts: only something deep inside moving, nothing around it" {
 ///|
 test "kept layouts: rich text changing (words, styles, colours only)" {
   same_both_ways("rich", fn() {
-    let step = Ref::new(0)
+    let step = Ref(0)
     let t = Tester::new(
       fn(c) {
         let s = step.val
@@ -866,7 +866,7 @@ test "a list's running sums are its rows' heights added up" {
 /// A node reused from the pool keeps nothing of what was there before,
 /// whichever builder takes it (each resets only what it does not set).
 test "a slot taken by another builder starts afresh" {
-  let flip = Ref::new(false)
+  let flip = Ref(false)
   let t = Tester::new(
     fn(c) {
       c.column(w=Fill(1.0), h=Fill(1.0), fn() {

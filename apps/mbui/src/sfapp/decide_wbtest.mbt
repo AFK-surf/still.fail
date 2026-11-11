@@ -39,7 +39,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
 test "an option tapped in the chat answers its card (decision.answer)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("把首页和聊天页的截图都更新") is Some(_) {
       break
@@ -61,7 +61,7 @@ test "an option tapped in the chat answers its card (decision.answer)" {
 test "an option picked away from the chat's end: the list goes there, after the answer (as for words sent)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("把首页和聊天页的截图都更新") is Some(_) {
       break
@@ -85,7 +85,7 @@ test "an option picked away from the chat's end: the list goes there, after the 
 test "忽略 lets the ask go (decision.dismiss), gone at once" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("忽略") is Some(_) {
       break
@@ -95,7 +95,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
   let felt = t.haptics().length()
   t.tap_text("忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
   // let go at once (what it showed only drawn as it closes up)
   t.frame()
   assert_eq(@sfpages.dismissed.count(), 1)
@@ -266,7 +266,7 @@ test "the chat's sheet and an agent's card as tall as what they show: their last
 test "an options card: nothing drawn between two options (SettingParts.kt DecisionOptions)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("把首页和聊天页的截图都更新") is Some(_) {
       break

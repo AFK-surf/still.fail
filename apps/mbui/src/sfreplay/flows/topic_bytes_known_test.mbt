@@ -96,7 +96,7 @@ fn init {
 ///|
 /// Each topic's largest value that came whole in any trace, in KB.
 let topic_whole_known : Map[String, Int] = {
-  let known = Map::new()
+  let known = Map([])
   for k in [
       ("accounts", 1),
       ("agentCard", 1),

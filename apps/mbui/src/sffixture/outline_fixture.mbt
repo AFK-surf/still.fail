@@ -168,7 +168,7 @@ fn outline_all(mode : String) -> Array[(Int, Json)] {
 pub fn outline_chat(mode : String, around? : Bool = false) -> Json {
   let all = outline_all(mode).map(fn(dm) { dm.1 })
   let long = outline_long_mode(mode) && !around
-  let messages = if long { all[all.length() - outline_long_held:].to_array() } else { all }
+  let messages = if long { all[all.length() - outline_long_held:].to_owned() } else { all }
   match rich_chat(0) {
     Object(m) => {
       let o = m.copy()
@@ -229,7 +229,7 @@ fn outline_item_of(m : Json, found : String?) -> Json {
       o["snippet"] = Json::string(snippet)
     }
     None =>
-      o["words"] = Json::string(outline_cut(text(v, "text").split("\n").next().map(fn(l) { l.to_string() }).unwrap_or("")))
+      o["words"] = Json::string(outline_cut(text(v, "text").split("\n").next().map(fn(l) { l.to_owned() }).unwrap_or("")))
   }
   Json::object(o)
 }
@@ -238,7 +238,7 @@ fn outline_item_of(m : Json, found : String?) -> Json {
 /// A message's time of day as the core says it (14:05), from what the fixture says of when ("昨天 14:05"; another's
 /// "3 小时前": none).
 fn outline_clock(ago : String) -> String {
-  let last = ago.split(" ").fold(init="", fn(_, p) { p.to_string() })
+  let last = ago.split(" ").fold(init="", fn(_, p) { p.to_owned() })
   if last.length() == 5 && last.contains(":") {
     last
   } else {
@@ -327,7 +327,7 @@ let outline_words_most : Int = 64
 ///|
 /// Words cut to outline_words_most columns, `…` after where cut (views.ts cutWords).
 fn outline_cut(words : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut columns = 0
   for c in words {
     columns += if c.to_int() >= 0x1100 { 2 } else { 1 }
@@ -377,14 +377,14 @@ pub fn fixture_outline_call(f : Fixture, name : String, params : Json) -> Result
   guard field(Some(params), "query") is Some(String(query)) else {
     return Some(Err({ "code": "bad_request", "message": "缺少 query" }))
   }
-  let words = query.to_lower().split(" ").filter(fn(w) { w.length() > 0 }).map(fn(w) { w.to_string() }).collect()
+  let words = query.to_lower().split(" ").filter(fn(w) { w.length() > 0 }).map(fn(w) { w.to_owned() }).collect()
   let found = all.filter(fn(dm) {
     let said = text(Some(dm.1), "text").to_lower()
     words.length() > 0 && words.iter().all(fn(w) { said.contains(w) })
   })
   // (the newest found listed, fifty at most, oldest first; how many older are not)
   let listed = if found.length() > outline_found_most {
-    found[found.length() - outline_found_most:].to_array()
+    found[found.length() - outline_found_most:].to_owned()
   } else {
     found
   }
@@ -407,8 +407,8 @@ pub fn fixture_outline_call(f : Fixture, name : String, params : Json) -> Result
 /// The line of `said` with the first of `words` in it, as the core cuts it (refs.ts excerpt): from a few letters before
 /// the words (at a word's start where one is near), "…" where it is cut, one line of outline_words_most columns.
 fn outline_snippet(said : String, words : Array[String]) -> String {
-  let line = said.split("\n").find_first(fn(l) { words.iter().any(fn(w) { l.to_string().to_lower().contains(w) }) })
-  let line = line.map(fn(l) { l.to_string() }).unwrap_or(said)
+  let line = said.split("\n").find_first(fn(l) { words.iter().any(fn(w) { l.to_owned().to_lower().contains(w) }) })
+  let line = line.map(fn(l) { l.to_owned() }).unwrap_or(said)
   let at = words.fold(init=line.length(), fn(m, w) {
     match line.to_lower().find(w) {
       Some(i) if i < m => i
@@ -422,7 +422,7 @@ fn outline_snippet(said : String, words : Array[String]) -> String {
       Some(i) if from + i < at => from + i + 1
       _ => from
     }
-    outline_cut("…" + line.view(start_offset=from).to_string())
+    outline_cut("…" + line.view(start_offset=from).to_owned())
   } else {
     outline_cut(line)
   }

@@ -298,7 +298,7 @@ test "多选: a message not ticked fades, its box to tick does not" {
   let box_alpha = fn(i : Int) -> Double {
     let (x, y, w, h) = t.all(Checkbox, label="放进图片")[i].rect
     let laid = t.boxes()
-    let by_index : Map[Int, @ui.Laid] = {}
+    let by_index : Map[Int, @ui.Laid] = Map([])
     for b in laid {
       by_index[b.index] = b
     }

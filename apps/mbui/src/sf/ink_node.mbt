@@ -7,7 +7,7 @@
 /// is first read so, let go as one is told and nothing reads it any more. The old views' read (code_ink) tracks nothing,
 /// so none is made for it.
 // kept across runs: emptied as the app begins anew (its init)
-let inks_told : Map[String, @signals.Signal[Int]] = {}
+let inks_told : Map[String, @signals.Signal[Int]] = Map([])
 
 ///|
 fn init {

@@ -94,7 +94,7 @@ let vault_picked : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// The unit chosen for each requested timeout.
-let vault_timeout_minutes : Map[String, Int] = {}
+let vault_timeout_minutes : Map[String, Int] = Map([])
 
 ///|
 // kept across runs: an immutable style
@@ -116,7 +116,7 @@ let vault_typed : @sf.LiveMap[String, @ui.Field] = @sf.LiveMap::new()
 let vault_files : @sf.LiveMap[String, (String, String)] = @sf.LiveMap::new()
 
 ///|
-let vault_file_picks : Map[String, @ui.Pick] = {}
+let vault_file_picks : Map[String, @ui.Pick] = Map([])
 
 ///|
 fn vault_ask_reset() -> Unit {
@@ -603,12 +603,12 @@ pub fn vault_foot(
       })
     _ => ()
   }
-  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_string() == ""
+  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_owned() == ""
   // (what goes with the approval: an object, never kept among what the core is doing)
   let given : Json? = match typed {
     Some(_) => {
       let words : Array[(String, Json)] = [("secret", str(secret))]
-      if username.trim(chars=" ").to_string() != "" {
+      if username.trim(chars=" ").to_owned() != "" {
         words.push(("username", str(username)))
       }
       if filename != "" {

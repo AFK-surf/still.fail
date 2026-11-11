@@ -95,7 +95,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   t.frame_at(v.fly.end() + @ui.frame_period_default)
   let (cx, cy, cw, ch) = t.get(Button, label=@sf.t("common.close")).rect
   let (cx, cy) = (cx + cw / 2.0, cy + ch / 2.0)
-  t.move(cx, cy)
+  t.move_to(cx, cy)
   t.touch(0, cx, cy)
   t.touch(2, cx, cy)
   t.frames_owed()
@@ -156,7 +156,7 @@ test "a film waiting in the composer, opened, plays from the bytes picked: none 
   let got : Array[(Bytes, Double, Bool)] = []
   (track.read)(1000.0, 100, fn(b, size, more) { got.push((b, size, more)) }) |> ignore
   assert_eq(got.length(), 1)
-  assert_eq(got[0].0, film[1000:1100].to_bytes())
+  assert_eq(got[0].0, film[1000:1100].to_owned())
   assert_eq(got[0].1, 4096.0)
   assert_false(got[0].2)
   assert_eq(named(calls, "station.file.part").length(), 0)

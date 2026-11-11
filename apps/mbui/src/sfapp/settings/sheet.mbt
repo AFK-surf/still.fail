@@ -46,7 +46,7 @@ fn panels_core_as_is() -> Core? {
 ///|
 /// The pages' editors' fields by their editors' keys (@ui.Field: the only way to write an editor), so an answer that
 /// puts words in one writes them by its key; put back by reset.
-let keyed_fields : Map[String, @ui.Field] = {}
+let keyed_fields : Map[String, @ui.Field] = Map([])
 
 ///|
 pub fn field_of(key : String) -> @ui.Field {

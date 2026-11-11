@@ -11,7 +11,7 @@ let ground_look_ms : Double = 20.0
 ///|
 /// The pointer's shape at (x, y), moved there.
 fn shape_at(t : @ui.Tester, x : Double, y : Double) -> @view.Cursor {
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(ground_look_ms)
   t.cursor()
 }

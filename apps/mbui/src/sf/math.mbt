@@ -138,7 +138,7 @@ fn math_outline(t : Bytes, id : String, scale : Double) -> Array[(Array[Double],
 }
 
 ///|
-let math_drawings : Map[String, @ui.InlineDrawing] = {}
+let math_drawings : Map[String, @ui.InlineDrawing] = Map([])
 
 ///|
 let math_points : Ref[Int] = Ref(0)

@@ -59,7 +59,7 @@ test "the spacing sweep counts row and heading alignment faults" {
 ///|
 /// What is off its bar in `lang`'s faults `gaps` (each `at: rule n: …`), None where each rule keeps to it.
 fn gaps_wrong(lang : String, gaps : Array[String]) -> String? {
-  let counts : Map[String, Int] = {}
+  let counts : Map[String, Int] = Map([])
   let off : Array[String] = []
   // Take the rule from each fault, so adding a rule to gap_faults cannot silently leave it out of this sweep.
   for f in gaps {

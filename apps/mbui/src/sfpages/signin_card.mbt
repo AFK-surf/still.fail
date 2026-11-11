@@ -21,7 +21,7 @@ priv struct SignInRun {
 }
 
 ///|
-let signin_runs : Map[String, SignInRun] = {}
+let signin_runs : Map[String, SignInRun] = Map([])
 
 ///|
 /// Where each card's asking is (by its id): "" nothing asked, listing / getting / otp (1Password asked), auto (the
@@ -46,7 +46,7 @@ let signin_saving : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// Each card's code field.
-let signin_code : Map[String, @ui.Field] = {}
+let signin_code : Map[String, @ui.Field] = Map([])
 
 ///|
 fn signin_reset() -> Unit {
@@ -189,7 +189,7 @@ fn signin_took(core : @settings.Core, station : String, ask : SignInAsk) -> Unit
 /// What the password manager gave sent to the station, for the card's site only (the station types it into the tab
 /// only while it is on that site); forgotten here once it went.
 fn signin_send(core : @settings.Core, station : String, ask : SignInAsk, username : String, password : String, code : String) -> Unit {
-  let login : Map[String, Json] = {}
+  let login : Map[String, Json] = Map([])
   if username != "" {
     login["username"] = Json::string(username)
   }

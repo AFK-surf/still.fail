@@ -32,7 +32,7 @@ test "a key of a panel's own shows its name by it as the pointer rests on it, ov
   assert_true(presenter_visible(), msg="up")
   assert_eq(tips().length(), 0, msg="none till the pointer rests on it")
   let k = t.get(Button, label="转一转")
-  t.move(k.rect.0 + 12.0, k.rect.1 + 12.0)
+  t.move_to(k.rect.0 + 12.0, k.rect.1 + 12.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_eq(tips().length(), 1, msg="shown")
   // (by it: under it, across its middle)
@@ -66,7 +66,7 @@ test "a key outside a panel said to show its name by it shows none" {
   })
   t.draw()
   let k = t.get(Button, label="转一转")
-  t.move(k.rect.0 + 12.0, k.rect.1 + 12.0)
+  t.move_to(k.rect.0 + 12.0, k.rect.1 + 12.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_eq(t.semantics().filter(fn(s) { s.role == Tooltip }).length(), 0)
 }

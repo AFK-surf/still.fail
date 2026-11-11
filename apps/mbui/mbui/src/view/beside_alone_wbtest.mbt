@@ -113,8 +113,8 @@ test "beside as wide as its anchor: laid out alone as the anchor widens, then by
 ///|
 test "beside as wide as its anchor: one let go, the node made next at its index beside another anchor as wide, as wide as that one from its first frame, nothing of the width kept for the one before" {
   let which = @signals.signal(0, same=fn(a, b) { a == b })
-  let ids : Map[String, NodeId] = {}
-  let at : Map[String, Int] = {}
+  let ids : Map[String, NodeId] = Map([])
+  let at : Map[String, Int] = Map([])
   let t = Tree::new(
     fn(root) {
       for k in ["a", "b"] {

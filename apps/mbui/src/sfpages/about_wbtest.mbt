@@ -135,7 +135,7 @@ test "关于's update row stays usable with the pointer over it as a download be
   // (its row made its way in: the pointer put over it where it rests)
   t.run_for(@ui.move_most_ms)
   let (x, y, w, h) = t.query(Link, label="正在下载 0.1.1").unwrap().rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   let now = t.time()
   t.frame_shown_at(now + 20.0, now + 36.0)
   t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":false}")
@@ -269,9 +269,9 @@ test "关于's 本机 Station, at each width and with either hand: where the app
 test "关于's 本机 Station where the core has none of its software up: its version as the host says it; while it is away, that its update is seen once it is up; nothing to update it with" {
   // (in a workspace this account is not in)
   let t = setting_tester(About, 1280.0, host=fn(h) {
-    h.set_local_station(
+    h.set_local_station((
       #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","workspace":{"id":"ws9","station":"st9","name":"别处","stationName":"Elm","removed":false}}
-      ,
+      ),
     )
   })
   assert_true(about_drawn(t, "Station 0.1.4600"))

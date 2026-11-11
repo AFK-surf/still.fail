@@ -20,7 +20,7 @@ fn reveal_pair(on : @signals.Signal[Bool], node : Bool) -> @ui.Tester {
         c.box(w=Px(300.0), fn() {
           let target = if on.get() { 1.0 } else { 0.0 }
           let open = @motion.anim(c, "t/said", target, global=true)
-          open.follow(c, target, @motion.move().per_unit(@motion.reveal_height(c, "t/said")))
+          open.follow(c, target, @motion.moved().per_unit(@motion.reveal_height(c, "t/said")))
           let share = open.get(c)
           if share > 0.0 {
             @motion.reveal(c, "t/said", share, middle=true, fn() { c.text(reveal_words, style~) |> ignore })
@@ -138,7 +138,7 @@ fn room_sizes(room : @view.View) -> (Double, Double) {
 /// The share of its way a room's Move as far as `natural` has gone `at` after `t0` from `from` to `to`.
 fn move_share(natural : Double, t0 : Double, at : Double, from? : Double = 0.0, to? : Double = 1.0) -> Double {
   let way = @motion.Way::new(from)
-  way.go(to, @motion.move().per_unit(natural), at=t0)
+  way.go(to, @motion.moved().per_unit(natural), at=t0)
   way.value_at(t0 + at)
 }
 
@@ -182,9 +182,9 @@ test "a room as a node turned back half way open: closing from where it was, on 
   let (h, _) = room_sizes(room.val.unwrap())
   // (the same way turned back at 60: from where it is then, as fast as it goes then)
   let way = @motion.Way::new(0.0)
-  way.go(1.0, @motion.move().per_unit(natural), at=t0)
+  way.go(1.0, @motion.moved().per_unit(natural), at=t0)
   let k = way.value_at(t0 + 60.0)
-  way.go(0.0, @motion.move().per_unit(natural), at=t0 + 60.0)
+  way.go(0.0, @motion.moved().per_unit(natural), at=t0 + 60.0)
   let back = way.value_at(t0 + 100.0)
   assert_eq(((h * 1000.0).round(), back < k), ((natural * back * 1000.0).round(), true), msg="\{k} \{back}")
 }

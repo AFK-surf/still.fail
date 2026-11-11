@@ -72,7 +72,7 @@ fn pretty_at(v : Json, depth : Int) -> String {
   }
   match v {
     Object(m) => {
-      if m.size() == 0 {
+      if m.length() == 0 {
         return "{}"
       }
       let parts = []

@@ -38,7 +38,7 @@ test "a tool's tip, its tool's room closing on a Move: gone as it starts going; 
   let t = tip_leaving_tester(there)
   let tips = fn() { t.semantics().filter(fn(s) { s.role == Tooltip && s.label == "复制" }).length() }
   let n = t.get(Button, label="复制")
-  t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_eq(tips(), 1, msg="shown")
   there.set(false)
@@ -52,7 +52,7 @@ test "a tool's tip, its tool's room closing on a Move: gone as it starts going; 
   t.run_for(tip_settled_ms)
   assert_eq(tips(), 0, msg="gone as the pointer leaves")
   let n = t.get(Button, label="复制")
-  t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_eq(tips(), 1, msg="shown again, pointed at anew")
 }

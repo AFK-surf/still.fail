@@ -9,8 +9,8 @@
 /// moved.
 fn list_shift(t : @ui.Tester, before : Array[(String, Double, Double, Double, Double, Double)], x0 : Double, x1 : Double) -> Double {
   let once = fn(ws : Array[(String, Double, Double, Double, Double, Double)]) {
-    let m : Map[String, Double] = {}
-    let twice : Map[String, Bool] = {}
+    let m : Map[String, Double] = Map([])
+    let twice : Map[String, Bool] = Map([])
     for w in ws {
       if w.1 >= x0 && w.1 < x1 {
         if m.contains(w.0) {
@@ -26,7 +26,7 @@ fn list_shift(t : @ui.Tester, before : Array[(String, Double, Double, Double, Do
   }
   let was = once(before)
   let now = once(t.words())
-  let counts : Map[Double, Int] = {}
+  let counts : Map[Double, Int] = Map([])
   for k, y in was {
     match now.get(k) {
       Some(y2) if y != y2 => counts[y - y2] = counts.get(y - y2).unwrap_or(0) + 1
@@ -60,7 +60,7 @@ test "the settings' list scrolls by the keys under the pointer, a desktop's wind
   t.click(Button, label=@sf.t("web-pages.settings.title"))
   t.run_for(@ui.move_most_ms)
   let (x, y, w, _) = t.rect_of("Station").unwrap()
-  t.move(x + w / 2.0, y)
+  t.move_to(x + w / 2.0, y)
   let line = @view.scroll_key_line
   let down = key_shift(t, @ui.key_code_down, 0.0, x + 300.0)
   let up = key_shift(t, @ui.key_code_up, 0.0, x + 300.0)
@@ -84,7 +84,7 @@ test "the settings' list keeps still under the keys while a field has the focus"
   t.tap(sx, sy)
   t.frame()
   let (x, y, w, _) = t.rect_of("Station").unwrap()
-  t.move(x + w / 2.0, y)
+  t.move_to(x + w / 2.0, y)
   let moved = [
     key_shift(t, @ui.key_code_page_down, 0.0, x + 300.0),
     key_shift(t, @ui.key_code_end, 0.0, x + 300.0),
@@ -97,7 +97,7 @@ test "the settings' list keeps still under the keys while a field has the focus"
 test "the chats' list keeps still under the keys while the composer has the focus, a desktop's window" {
   let t = wide_tester([], h=300.0, platform=0)
   t.run_for(@ui.move_most_ms)
-  t.move(150.0, 200.0)
+  t.move_to(150.0, 200.0)
   // (a desktop's window opens with the composer's field focused: the keys its, as they were)
   let focused = t.focused().map(fn(n) { n.role })
   let moved = [
@@ -112,7 +112,7 @@ test "Home's list scrolls by the keys under the pointer, a window narrowed with 
   let t = wide_tester([], w=390.0, h=300.0, platform=0)
   t.run_for(@ui.move_most_ms)
   // (over its rows, clear of what floats over the list's foot)
-  t.move(100.0, 130.0)
+  t.move_to(100.0, 130.0)
   let line = @view.scroll_key_line
   let down = key_shift(t, @ui.key_code_down, 0.0, 390.0)
   let page = key_shift(t, @ui.key_code_page_down, 0.0, 390.0)
@@ -127,7 +127,7 @@ test "the settings' list scrolls by the keys where the finger last was, a phone'
   t.click(Button, label=@sf.t("web-pages.settings.title"))
   t.run_for(@ui.move_most_ms)
   let (x, y, w, _) = t.rect_of("Station").unwrap()
-  t.move(x + w / 2.0, y)
+  t.move_to(x + w / 2.0, y)
   let line = @view.scroll_key_line
   let down = key_shift(t, @ui.key_code_down, 0.0, 390.0)
   let up = key_shift(t, @ui.key_code_up, 0.0, 390.0)

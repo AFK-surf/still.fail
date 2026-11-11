@@ -9,7 +9,7 @@ test "shape debug" {
   }
   let text = @utf8.decode(list) catch { _ => "" }
   for line in text.split("\n") {
-    let parts = line.to_string().split("\t").map(fn(s) { s.to_string() }).to_array()
+    let parts = line.to_owned().split("\t").map(fn(s) { s.to_owned() }).to_array()
     if parts.length() < 2 {
       continue
     }
@@ -29,7 +29,7 @@ test "shape debug" {
     @shape.shape(@shape.ShapeFont::new(face), buffer, [])
     let infos = buffer.glyph_infos()
     let pos = buffer.glyph_positions()
-    let sb = StringBuilder::new()
+    let sb = StringBuilder()
     sb.write_string("SHAPE [")
     for i in 0..<infos.length() {
       if i > 0 {
@@ -56,7 +56,7 @@ test "outline debug" {
   }
   let text = @utf8.decode(list) catch { _ => "" }
   for line in text.split("\n") {
-    let parts = line.to_string().split("\t").map(fn(s) { s.to_string() }).to_array()
+    let parts = line.to_owned().split("\t").map(fn(s) { s.to_owned() }).to_array()
     if parts.length() < 2 {
       continue
     }
@@ -67,7 +67,7 @@ test "outline debug" {
       for ch in g {
         id = id * 10 + (ch.to_int() - 0x30)
       }
-      let sb = StringBuilder::new()
+      let sb = StringBuilder()
       match face.outline(id) {
         Some(cmds) =>
           for c in cmds {

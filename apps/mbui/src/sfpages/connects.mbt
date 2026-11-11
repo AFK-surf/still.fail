@@ -295,7 +295,7 @@ fn connects_list_node(
 /// as connects_list_node makes them, through a core that answers nothing.
 fn connects_sample_node(v : @view.View, core : Core, look : Look, only : String, count : Int, tips : @sf.TipLayer, stint : () -> Int) -> Unit {
   let name = @sf.sample_words(4)
-  let shown = [8, 6, 10][:count].to_array().map(fn(n) {
+  let shown = [8, 6, 10][:count].to_owned().map(fn(n) {
     Json::object({
       "station": "sample",
       "stationName": Json::string(name),
@@ -632,7 +632,7 @@ fn cn_waiting_app_node(
         @sf.line_end_node(c, fn(l) {
           let go = fn() {
             let (st, id) = @signals.untracked(fn() { (station(), app_id()) })
-            new_connect_dialog(src, core, @signals.untracked(here), st, resume=id)
+            new_connect_dialog(src, core, @signals.untracked(here), st, made_app=id)
           }
           if wide {
             @sf.button_node(l, fn() { @sf.t("web-pages.connects.continue") }, go) |> ignore
@@ -725,7 +725,7 @@ fn mine_filter_node(parent : @view.View, key : String, of : String, mine : () ->
 ///|
 /// Which filter's menu is open, by its key.
 // kept across runs: said by its button as its menu opens and goes; reset empties it
-let mine_filter_open : Map[String, Bool] = {}
+let mine_filter_open : Map[String, Bool] = Map([])
 
 ///|
 /// Whether filter `key`'s menu is open (tests).

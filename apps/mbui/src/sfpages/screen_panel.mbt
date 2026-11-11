@@ -478,7 +478,7 @@ fn fps_note(fps : Int) -> String {
 /// A choice kept on this device (`prefs.set` `name`: `v`, null for the default), `value` naming it.
 fn prefs_set(c : @ui.Ctx, s : ScreenSess, name : String, value : String, v : Json) -> Unit {
   c.tell("screen-prefs/" + s.view + "/" + name + "/" + value, fn() {
-    let p : Map[String, Json] = {}
+    let p : Map[String, Json] = Map([])
     p[name] = v
     (s.src.call)("prefs.set", Json::object(p), screen_act(c, @sf.t("web-pages.screen.panel")))
   })

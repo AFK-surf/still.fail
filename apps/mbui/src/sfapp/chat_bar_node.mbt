@@ -94,7 +94,7 @@ fn bar_middle_node(row : @view.View, src : Source, r : ChatRef, view : () -> Cha
     match view() {
       Some(v) => {
         let station = station_marks(src, w).iter().find_first(fn(s) { s.address == r.station })
-        let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
+        let people = if v.people.length() > 5 { v.people[:5].to_owned() } else { v.people }
         let s = match station {
           Some(s) => "\{s.name}\u{1}\{s.emoji}\u{1}\{s.icon}\u{1}\{s.via}"
           None => ""

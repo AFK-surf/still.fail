@@ -314,11 +314,11 @@ pub fn spring_generator(
   rest_delta? : Double,
 ) -> Generator {
   let o = resolve_spring(stiffness, damping, mass, duration, bounce, visual_duration)
-  let inherit = fn(v : Double) { if o.time_defined { 0.0 } else { -ms_to_seconds(v) } }
+  let carried = fn(v : Double) { if o.time_defined { 0.0 } else { -ms_to_seconds(v) } }
   let ratio = o.damping / (2.0 * (o.stiffness * o.mass).sqrt())
   let undamped = ms_to_seconds((o.stiffness / o.mass).sqrt())
   let decay = ratio * undamped
-  let v0 = inherit(or_else(velocity, 0.0))
+  let v0 = carried(or_else(velocity, 0.0))
   let s : SpringNow = {
     target: to,
     delta: to - from,
@@ -408,7 +408,7 @@ pub fn spring_generator(
     retarget_: Some(fn(from, to, v) {
       s.target = to
       s.delta = to - from
-      s.velocity = inherit(v)
+      s.velocity = carried(v)
       // the default thresholds depend on the new change's scale
       if !(truthy(rest_speed) && truthy(rest_delta)) {
         set_rest()

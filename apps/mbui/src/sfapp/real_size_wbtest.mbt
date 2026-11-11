@@ -211,9 +211,9 @@ fn real_size_sweep(win : (String, Double, Double, Int, String)) -> Unit raise {
   let faults : Array[String] = []
   let lines : Array[String] = []
   let change_lines : Array[String] = []
-  let seen : Map[String, Bool] = {}
-  let measured : Map[String, Bool] = {}
-  let home : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
+  let measured : Map[String, Bool] = Map([])
+  let home : Map[String, Bool] = Map([])
   // (Home first: the shell's ways are given there, those it does not read on the first screen that does)
   let modes = corner_modes.filter(fn(m) { m == "home" }) + corner_modes.filter(fn(m) { m != "home" })
   for mode in modes {
@@ -248,7 +248,7 @@ fn real_size_sweep(win : (String, Double, Double, Int, String)) -> Unit raise {
     for r in rows {
       let (row, f) = r
       let way = match row.rev_find("/") {
-        Some(i) => row.view(end_offset=i).to_string()
+        Some(i) => row.view(end_offset=i).to_owned()
         None => row
       }
       if mode == "home" {

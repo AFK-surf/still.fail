@@ -77,7 +77,7 @@ pub let bar_adding : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b
 ///|
 /// How far a place held on 下方栏's page is moved along its bar (BarCard's `dx`: the finger's way past the slop), by
 /// its bar and its name, while a finger has it.
-pub let bar_moves : Map[String, Double] = {}
+pub let bar_moves : Map[String, Double] = Map([])
 
 // ---------------------------------------------------------------------------
 // 存储空间 (what this device keeps)
@@ -250,7 +250,8 @@ fn size_row(
 /// then its files).
 fn kept_sample(c : @ui.Ctx, chats : Bool) -> Unit {
   list_card(c, fn() {
-    for n in if chats { [6, 8, 5] } else { [4] } {
+    let sample_sizes = if chats { [6, 8, 5] } else { [4] }
+    for n in sample_sizes {
       size_row(c, "", @sf.sample_words(n), if chats { "" } else { @sf.sample_words(14) }, 1.0) |> ignore
     }
   })
@@ -534,7 +535,7 @@ let fill_sizes : Array[Double] = [1024.0 * 1024.0 * 1024.0, 100.0 * 1024.0 * 102
 /// `keeping`), each with how it stands, all of them stopped at once; into `blocks`.
 fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
   let t = @sf.theme()
-  let prefs = (core.topic)("prefs", Map::new()).get().value
+  let prefs = (core.topic)("prefs", Map([])).get().value
   let on = !flag(prefs, "fillOff")
   let most = match field(prefs, "fillMax") {
     Some(Number(n, ..)) => n
@@ -572,7 +573,7 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
       }
     })
   })
-  let keeping = items((core.topic)("downloads", Map::new()).get().value, "keeping")
+  let keeping = items((core.topic)("downloads", Map([])).get().value, "keeping")
   if !on || keeping.length() == 0 {
     return
   }

@@ -171,7 +171,7 @@ priv struct GifDecoder {
   /// its global colour table, each colour 0xRRGGBB
   global : FixedArray[Int]
   /// a frame's own colour table, read into this
-  local : FixedArray[Int]
+  local_colors : FixedArray[Int]
   canvas : FixedArray[Byte]
   /// the canvas as it was before a frame of disposal 3 (made as the first such frame comes)
   mut was : FixedArray[Byte]
@@ -212,7 +212,7 @@ fn GifDecoder::new(data : Bytes, w : Int, h : Int, start : Int) -> GifDecoder {
     h,
     start,
     global,
-    local: FixedArray::make(256, 0),
+    local_colors: FixedArray::make(256, 0),
     canvas: FixedArray::make(w * h * 4, b'\x00'),
     was: FixedArray::make(0, b'\x00'),
     at: start,
@@ -303,12 +303,12 @@ fn GifDecoder::draw(self : GifDecoder, at : Int) -> Unit {
   let (table, colours) = if (lf & 0x80) != 0 {
     let size = 1 << ((lf & 7) + 1)
     for k in 0..<size {
-      self.local[k] = (gif_u8(data, p + 3 * k) << 16) |
+      self.local_colors[k] = (gif_u8(data, p + 3 * k) << 16) |
         (gif_u8(data, p + 3 * k + 1) << 8) |
         gif_u8(data, p + 3 * k + 2)
     }
     p = p + 3 * size
-    (self.local, size)
+    (self.local_colors, size)
   } else {
     (self.global, self.global.length())
   }
@@ -510,7 +510,7 @@ priv struct GifCycle {
 
 ///|
 /// The GIFs that move, by the key they were handed over as.
-let moving_images : Map[String, GifCycle] = {}
+let moving_images : Map[String, GifCycle] = Map([])
 
 ///|
 /// `data` handed over as `key` when it is a GIF of more than one frame: its frames each a picture of its own, its first
@@ -723,5 +723,5 @@ fn png_of(w : Int, h : Int, rgba : FixedArray[Byte]) -> Bytes {
   // (IEND)
   png_chunk_head(out, o, 0, 0x49454E44)
   png_crc(out, o + 4, o + 8)
-  Bytes::from_fixedarray(out)
+  Bytes::from_array(out[:])
 }

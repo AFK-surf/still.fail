@@ -126,16 +126,16 @@ test "a submenu row, old and as nodes: the mouse's pointer onto it opens its men
       let about = "\{f.0}, old \{old}"
       let t = sub_panel(old, f.1, [], @signals.signal(true))
       let (x, y) = sub_mid(t, "甲")
-      t.move(x, y)
+      t.move_to(x, y)
       t.frame()
       // (there at once, on its way in)
       assert_true(t.words().any(fn(w) { w.0 == "甲一" }), msg="\{about}: at once")
       let (wx, wy) = sub_mid(t, "说明文字")
-      t.move(wx, wy)
+      t.move_to(wx, wy)
       t.run_for(@ui.move_most_ms)
       assert_true(sub_has(t, "甲一"), msg="\{about}: open still")
       let (bx, by) = sub_mid(t, "乙")
-      t.move(bx, by)
+      t.move_to(bx, by)
       t.frame()
       assert_true(t.words().any(fn(w) { w.0 == "乙一" }), msg="\{about}: the other's")
       t.run_for(@ui.move_most_ms)
@@ -235,7 +235,7 @@ fn sub_called_back(f : (String, @sf.Anchor), away : Bool) -> @ui.Tester raise {
   t.run_for(sub_back_after)
   assert_true(t.query(MenuItem, label="甲一") is None, msg="\{f.0}: out of reach as it goes")
   if away {
-    t.move(4.0, 4.0)
+    t.move_to(4.0, 4.0)
   }
   // (shown again before its Move is over: the same row, back)
   shown.set(true)
@@ -257,7 +257,7 @@ test "a submenu row as nodes, called back as it goes, the mouse's pointer moved 
     let t = sub_called_back(f, true)
     assert_true(sub_has(t, "甲") && !sub_has(t, "甲一"), msg="\{f.0}: back, closed: \{sub_at(t, ["甲", "甲一"])}")
     let (x, y) = sub_mid(t, "甲")
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@ui.move_most_ms)
     assert_true(sub_has(t, "甲一"), msg="\{f.0}: pointed at, open")
   }

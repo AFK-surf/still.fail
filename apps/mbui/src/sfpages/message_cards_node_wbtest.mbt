@@ -280,7 +280,7 @@ fn card_rig_both(
   if over != "" {
     let (x, y, ww, h) = old.rect_of(over).unwrap()
     point = (x + ww / 2.0, y + h / 2.0)
-    old.move(point.0, point.1)
+    old.move_to(point.0, point.1)
     old.run_for(@ui.move_most_ms)
   }
   if press != "" {
@@ -292,7 +292,7 @@ fn card_rig_both(
   t.set_font_scale(scale)
   t.run_for(@ui.move_most_ms)
   if over != "" {
-    t.move(point.0, point.1)
+    t.move_to(point.0, point.1)
     t.run_for(@ui.move_most_ms)
   }
   if press != "" {
@@ -537,7 +537,7 @@ fn card_login_new(w : Double, src : Source, m : () -> Message) -> @ui.Tester {
 test "a login's card under its post, made once as nodes, is drawn as the old view drew it: under way, not to be finished here, whose it is with 忽略, answered, done, failed, one the core does not know; wide and narrow, at 1.3" {
   let cases = card_login_cases()
   for w in [760.0, 390.0] {
-    let drawn : Map[String, String] = {}
+    let drawn : Map[String, String] = Map([])
     for c in cases {
       let at = "\{c.0} at \{w}"
       let (was, now, t) = card_login_both(c.1, c.2, w, at)

@@ -314,7 +314,7 @@ fn tape_moves_from(at : Double, change : () -> Unit) -> Unit {
     }
     let far = dmax(dmax((to.x - x).abs(), (to.page - page).abs()), (to.col - col).abs())
     tape_goes.way.put(0.0)
-    tape_goes.way.go(1.0, @motion.move(over=far), at~)
+    tape_goes.way.go(1.0, @motion.moved(over=far), at~)
     tape_said()
     tape_rest_at(tape_goes.way.ends_at())
   })

@@ -109,7 +109,7 @@ pub fn Pick::files(self : Pick) -> Array[Picked]? {
               bytes,
               held: ga_int(held).to_int(),
               size: ga_int(size).to_double(),
-              src: src.to_string(),
+              src: src.to_owned(),
             })
           _ =>
             out.push({ name: pk_name(self.id, i), bytes, held: 0, size: bytes.length().to_double(), src: "" })

@@ -25,7 +25,7 @@ pub fn file_tile(c : @ui.Ctx, name : String, dir? : Bool = false, progress? : Do
   }
   let dot = name.rev_find(".")
   let ext = match dot {
-    Some(i) if i > 0 && name.length() - i <= tile_ext_most => name.view(start_offset=i + 1).to_string().to_upper()
+    Some(i) if i > 0 && name.length() - i <= tile_ext_most => name.view(start_offset=i + 1).to_owned().to_upper()
     _ => ""
   }
   let shapes = match progress {
@@ -72,7 +72,7 @@ fn tile_outlines(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
 
 ///|
 /// The tiles' outlines cut so far, by their path data and scale (tile_outlines).
-let tiles_made : Map[(String, Double), Array[(Array[Double], Bool)]] = {}
+let tiles_made : Map[(String, Double), Array[(Array[Double], Bool)]] = Map([])
 
 ///|
 /// The sheet filled from its foot `part` of its height (FileTile's rect from y = 36 − 36 × part, cut to the sheet's
@@ -200,7 +200,7 @@ let tile_ext_failed : @ui.TextStyle = tile_ext.then(@ui.text_style(color=Danger)
 pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
   let (stem, ext) = match name.rev_find(".") {
     Some(i) if i > 0 && name.length() - i <= name_ext_most =>
-      (name.view(end_offset=i).to_string(), name.view(start_offset=i).to_string())
+      (name.view(end_offset=i).to_owned(), name.view(start_offset=i).to_owned())
     _ => (name, "")
   }
   c.box(style=name_row, fn() {
@@ -737,7 +737,7 @@ pub fn quote_card(
   let hot = jump && c.lit(source)
   // (waiting in the composer, its ✕ hung on its corner as everything's there: with_corner_remove)
   let hung = composer && remove
-  let node = Ref::new(-1)
+  let node = Ref(-1)
   let card = fn() {
     let look = if composer { quote_box_composer().then(composer_card()) } else { quote_box_message }
     node.val = c.box(style=look.then(@ui.style(clip=words_width is None)), fn() {
@@ -752,7 +752,7 @@ pub fn quote_card(
       let text_box = c.box(style=quote_words, fn() {
         if pin != "" {
           c.box(style=quote_pin, fn() { c.text(pin, style=quote_pin_words) |> ignore }) |> ignore
-          c.text(words.split("\n").next().map(fn(s) { s.to_string() }).unwrap_or(""), style=quote_text) |> ignore
+          c.text(words.split("\n").next().map(fn(s) { s.to_owned() }).unwrap_or(""), style=quote_text) |> ignore
         } else {
           c.box(style=quote_mark, fn() { icon(c, "quote", size=quote_icon, color=p.accent) |> ignore }) |> ignore
           c.rich(
@@ -813,7 +813,7 @@ fn pin_of(author : String, role : String) -> String {
   if role != "page" && role != "image" {
     return ""
   }
-  let digits = StringBuilder::new()
+  let digits = StringBuilder()
   for ch in author.rev_iter() {
     if ch >= '0' && ch <= '9' {
       digits.write_char(ch)

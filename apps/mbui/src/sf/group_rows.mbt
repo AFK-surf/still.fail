@@ -12,7 +12,7 @@ priv struct GroupRows {
 ///|
 /// Each group's rows as last drawn, by the group's key.
 // kept across runs: put back by group_rows_reset, as a run begins (run_begin)
-let group_rows_of : Map[String, GroupRows] = {}
+let group_rows_of : Map[String, GroupRows] = Map([])
 
 ///|
 /// What every group's rows were forgets (a run anew).
@@ -34,11 +34,11 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
       s
     }
   }
-  let here : Map[String, Bool] = {}
+  let here : Map[String, Bool] = Map([])
   for r in rows {
     here[r.0] = true
   }
-  let was : Map[String, Bool] = {}
+  let was : Map[String, Bool] = Map([])
   for r in st.order {
     was[r.0] = true
   }
@@ -65,7 +65,7 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
       a.snap(c, if first { 1.0 } else { 0.0 })
     }
     // (a share of its room: a Move as long as the room is tall, as what is under a post goes)
-    a.follow(c, if shown { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height(c, name)))
+    a.follow(c, if shown { 1.0 } else { 0.0 }, @motion.moved().per_unit(@motion.reveal_height(c, name)))
     let share = a.get(c)
     if !shown && share <= 0.0 {
       continue

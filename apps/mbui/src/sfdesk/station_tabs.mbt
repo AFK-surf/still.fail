@@ -13,7 +13,7 @@ fn station_tab(tab : String) -> (String, String, String)? {
   for kind in ["screen", "drive", "station", "adb"] {
     let prefix = kind + ":"
     if tab.has_prefix(prefix) {
-      let value = @json.parse(tab.substring(start=prefix.length())) catch { _ => return None }
+      let value = @json.parse(tab[prefix.length():].to_owned()) catch { _ => return None }
       guard value is Array(xs) else { return None }
       guard xs.length() == (if kind == "screen" { 2 } else { 1 }) else { return None }
       guard xs[0] is String(station) && station != "" else { return None }
@@ -62,7 +62,7 @@ fn station_tab_name(src : Source, tab : String) -> String? {
     let name = text(card, "title")
     return Some(if name == "" { @sf.t("web-pages.screen.section") } else { name })
   }
-  let scope = station.split("/").next().unwrap_or("").to_string()
+  let scope = station.split("/").next().unwrap_or("").to_owned()
   let mut name = station
   for s in @sfbase.station_marks(src, scope) {
     if s.address == station {
@@ -88,12 +88,12 @@ fn station_tab_page(r : ChatRef, tab : String) -> Page? {
 
 ///|
 /// Keep the opening intent per chat: login browsers close their tab when gone.
-let panel_screen_pages : Map[String, @sfbase.ScreenAt] = {}
+let panel_screen_pages : Map[String, @sfbase.ScreenAt] = Map([])
 
 ///|
 /// The station screens shown in a tab, by the tab: the station and the screen, and whether the frame's builds drew it
 /// since station_tabs_sweep went over them last (as the frame before's were over).
-let panel_screens : Map[String, (String, String, Bool)] = {}
+let panel_screens : Map[String, (String, String, Bool)] = Map([])
 
 ///|
 fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab : String, own_bar? : @ui.Style? = None) -> Bool {

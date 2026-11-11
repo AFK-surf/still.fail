@@ -26,7 +26,7 @@ test "a topic's value is worked out once for each change the core pushes, howeve
   let worked = Ref(0)
   let made : @sfbase.Derived[Double] = @sfbase.Derived::new("counted", fn(v, _) {
     worked.val += 1
-    v.as_number().unwrap_or(0.0)
+    (if v is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0)
   })
   let seen = Ref(0.0)
   let t = @ui.Tester::new(fn(_) {
@@ -87,7 +87,7 @@ test "what is worked out of a topic and a signal of the page's is worked out aga
     for _ in 0..<3 {
       seen.val = made.read(src, "rows", fn(_) {
         worked.val += 1
-        let n = src.topic("counted", {}).get().value.unwrap().as_number().unwrap_or(0.0)
+        let n = (if src.topic("counted", {}).get().value.unwrap() is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0)
         "\{n.to_int()} \{only_io.get()}"
       })
     }
@@ -118,7 +118,7 @@ test "a computed of what was worked out of a topic follows the topic, the topic 
   let version = Ref(1)
   let changes = @signals.signal(1)
   let src = pushed_source(value, version, changes)
-  let inner : @sfbase.Derived[Double] = @sfbase.Derived::new("counted", fn(v, _) { v.as_number().unwrap_or(0.0) })
+  let inner : @sfbase.Derived[Double] = @sfbase.Derived::new("counted", fn(v, _) { (if v is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0) })
   let outer : @sfbase.Kept[String] = @sfbase.Kept::new()
   let worked = Ref(0)
   let seen = Ref("")

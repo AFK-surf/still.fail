@@ -127,7 +127,7 @@ fn decision_login_node(
       here.station
     } else {
       match here.station.find("/") {
-        Some(i) => here.station.view(end_offset=i).to_string() + "/" + other
+        Some(i) => here.station.view(end_offset=i).to_owned() + "/" + other
         None => other
       }
     }

@@ -277,7 +277,7 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     t.press_at(ex, ey)
     t.run_for(@ui.long_press_ms * 2.0)
     for i in 1..=6 {
-      t.move(ex + 10.0 * i.to_double(), ey)
+      t.move_to(ex + 10.0 * i.to_double(), ey)
       t.run_for(slow_drag_ms)
     }
     assert_eq(@sfdesk.wide.side_w.get(), 300.0, msg=at)
@@ -458,7 +458,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
         }
       }
       if (sign * x).to_double() / 64.0 >= left {
-        out.push(line.to_string())
+        out.push(line.to_owned())
       }
     }
   }
@@ -481,7 +481,7 @@ test "on the tape the sidebar's list scrolled with a finger: the page beside dra
   // the list dragged: the page beside drawn again, as it was
   t.press_at(150.0, 600.0)
   for i in 1..=12 {
-    t.move(150.0, 600.0 - 15.0 * i.to_double())
+    t.move_to(150.0, 600.0 - 15.0 * i.to_double())
   }
   assert_eq(drawn_from(t, left), page)
   // let go: built anew (an event from outside), still as it was
@@ -748,7 +748,7 @@ fn drag_slowly(
   let step = by / steps.to_double()
   for i in 1..=steps {
     t.run_for(slow_drag_ms)
-    t.move(x + step * i.to_double(), y)
+    t.move_to(x + step * i.to_double(), y)
   }
   if up {
     t.release(x + by, y)

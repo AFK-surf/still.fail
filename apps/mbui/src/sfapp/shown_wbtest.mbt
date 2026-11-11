@@ -23,7 +23,7 @@ let shown_known : Array[String] = [
 ///|
 /// Whether `name` is a kind's name: a word of letters, or two with one space between them.
 fn shown_like_a_kind(name : String) -> Bool {
-  let words = name.split(" ").map(fn(w) { w.to_string() }).to_array()
+  let words = name.split(" ").map(fn(w) { w.to_owned() }).to_array()
   words.length() >= 1 &&
   words.length() <= 2 &&
   words.iter().all(fn(w) { w.length() > 0 && w.iter().all(fn(ch) { (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') }) })

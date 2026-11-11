@@ -229,7 +229,7 @@ pub let find_typing_ms : Double = 120.0
 /// what it does not.
 fn find_ask(src : Source, station : String, thread : Double, key : String, list : FindList, query : String) -> Unit {
   finding.asked.set(query)
-  let q = query.trim(chars=" ").to_string()
+  let q = query.trim(chars=" ").to_owned()
   if q == "" {
     finding.found.set(None)
     finding.at.set(-1)

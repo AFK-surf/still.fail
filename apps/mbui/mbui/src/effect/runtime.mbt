@@ -230,7 +230,7 @@ fn Runtime::make(seed : Int, shuffle : Bool, start : Int64, clock : (() -> Int64
     defects,
     log: [],
     steps: 0,
-    awaited: Map::new(),
+    awaited: Map([]),
     ended: [],
     ended_n: 0,
     keep_ended: false,

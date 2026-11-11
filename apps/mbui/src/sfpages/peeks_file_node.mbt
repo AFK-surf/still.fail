@@ -382,7 +382,7 @@ fn path_copy_node(parent : @view.View, path : () -> String) -> Unit {
 /// When each file's path was last copied from its card (path_copy_node's), by the path: what a card of it made again
 /// says, as file_foot's mark by the path is kept.
 // kept across runs: let go as the app begins anew (its init)
-let path_copied_at : Map[String, Double] = {}
+let path_copied_at : Map[String, Double] = Map([])
 
 ///|
 fn init {

@@ -189,7 +189,7 @@ fn qt_seen(
       Some(w) => (w.1 + 4.0, w.2 + w.4 / 2.0)
       None => @halt.saying("\{s.name}: its quote's words not drawn")
     }
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@sf.tip_delay_ms - @ui.move_most_ms)
     looks.push(cmp_drawn(t))
     t.run_for(@ui.move_most_ms)
@@ -223,7 +223,7 @@ fn qt_unknown(faults : Array[String]) -> Array[String] {
 fn qt_unbreathed(l : Array[String]) -> Array[String] {
   let out = l.map(fn(x) {
     if x.has_prefix("image ") {
-      let parts : Array[String] = x.split(",").map(fn(p) { p.to_string() }).collect()
+      let parts : Array[String] = x.split(",").map(fn(p) { p.to_owned() }).collect()
       parts.pop() |> ignore
       parts.join(",")
     } else {
@@ -281,10 +281,6 @@ fn qt_differ(at : String, old : Array[String], new : Array[String]) -> String? {
 test "what a message quotes as nodes is drawn as the old view draws it, state by state, wide and narrow, at 1.3" {
   let differ = []
   for s in qt_states() {
-    // (a long quote cut at two lines: qt_long's, till the window's tree's words are)
-    if s.name.has_suffix(" long") {
-      continue
-    }
     for ws in [(760.0, 1.0), (390.0, 1.0), (390.0, 1.3)] {
       let (w, scale) = ws
       let (old, _, _) = qt_seen(s, true, w, scale~)
@@ -366,7 +362,7 @@ test "what was sent from here quoting, as nodes, is drawn as outbox_row draws it
       None => dec_src(@signals.signal((None : Json?)), [])
     }
   }
-  let lines = fn(s : String) { s.split("\n").map(fn(l) { l.to_string() }).collect() }
+  let lines = fn(s : String) { s.split("\n").map(fn(l) { l.to_owned() }).collect() }
   let differ = []
   for c in cases {
     for w in [760.0, 390.0] {
@@ -388,33 +384,5 @@ test "what was sent from here quoting, as nodes, is drawn as outbox_row draws it
   }
   if differ.length() > 0 {
     fail(differ.join("\n"))
-  }
-}
-
-///|
-/// The line of a look (cmp_drawn's) drawing the quote's words, those that begin `Ana：`.
-fn qt_quote_line(l : Array[String]) -> String {
-  l.iter().find_first(fn(x) { x.has_prefix("words Ana：") }).unwrap_or("")
-}
-
-///|
-test "a long quote, cut at two lines as the old card cuts it, waits for the window's tree's words to be cut at a number of lines: the node's runs on" {
-  // Not compared yet (the coordinator of the migration, 2026-11-12): the window's tree's words have no max_lines
-  // (mbui's view_host lays them out whole), which quote_text says; another line of work brings it, and then this
-  // state joins the comparison above. Till then what each draws of it said: the same where two lines hold it (760
-  // wide), not where they do not (the node's runs on to a third).
-  for s in qt_states() {
-    if !s.name.has_suffix(" long") {
-      continue
-    }
-    for ws in [(760.0, 1.0), (390.0, 1.0), (390.0, 1.3)] {
-      let (w, scale) = ws
-      let (old, _, _) = qt_seen(s, true, w, scale~)
-      let (new, _, _) = qt_seen(s, false, w, scale~)
-      let (ol, nl) = (qt_quote_line(old[0]), qt_quote_line(new[0]))
-      let at = "\{s.name} at \{w}, \{scale}: \{ol} | \{nl}"
-      assert_true(ol != "" && nl != "", msg=at)
-      assert_true(if w > 400.0 { nl == ol } else { nl != ol }, msg=at)
-    }
   }
 }

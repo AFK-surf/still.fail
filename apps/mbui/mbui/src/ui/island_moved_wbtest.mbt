@@ -133,9 +133,9 @@ test "an old view faded by its node: painted alone, drawn as built whole" {
     @signals.signal(30.0, same=fn(a, b) { a == b }),
     Ref(0),
   )
-  let opaque = t.frame_hash()
+  let solid = t.frame_hash()
   let (alone, drawn, whole) = island_frame(t, fn() { alpha.set(0.5) })
-  assert_eq((alone, drawn == whole, drawn != opaque), (true, true, true), msg=t.built_why())
+  assert_eq((alone, drawn == whole, drawn != solid), (true, true, true), msg=t.built_why())
 }
 
 ///|

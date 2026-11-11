@@ -248,7 +248,7 @@ test "motion reduced: there at once, the old one let go of" {
 ///|
 test "a row of a list flies to the detail as it is picked, from its own place" {
   let picked : @signals.Signal[Int?] = @signals.signal(None, same=fn(a, b) { a == b })
-  let rows : Map[Int, @view.View] = {}
+  let rows : Map[Int, @view.View] = Map([])
   let big : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(p) {

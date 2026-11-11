@@ -51,7 +51,7 @@ pub fn Tester::view_lets_go(self : Tester, view : Int, req : Int) -> Unit {
 /// What the app gave view `view`'s player for its reads answered to their end, in the order they ended: (the read's
 /// number, how many bytes in all its answers, the whole's length as the app last said it, -1 unknown).
 pub fn Tester::view_answers(self : Tester, view : Int) -> Array[(Int, Int, Double)] {
-  let given : Map[Int, Int] = {}
+  let given : Map[Int, Int] = Map([])
   let ended = []
   for a in self.fake.read_answers {
     if a.0 == view {
@@ -69,7 +69,7 @@ pub fn Tester::view_answers(self : Tester, view : Int) -> Array[(Int, Int, Doubl
 /// How far into its file view `view`'s player has had its bytes: the furthest any of its reads has come with what the
 /// app gave it (where the read is from, and the bytes given it), 0 none.
 pub fn Tester::view_read_to(self : Tester, view : Int) -> Double {
-  let given : Map[Int, Int] = {}
+  let given : Map[Int, Int] = Map([])
   for a in self.fake.read_answers {
     if a.0 == view {
       given[a.1] = given.get(a.1).unwrap_or(0) + a.2

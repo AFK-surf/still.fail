@@ -9,17 +9,17 @@
 ///|
 /// The flow being written (None: none is).
 // kept across runs: Flow::start sets it for each flow, as FLOW_EMIT says
-let script : Ref[Array[String]?] = Ref::new(None)
+let script : Ref[Array[String]?] = Ref(None)
 
 ///|
 /// Whether the step after is to be taken at once (after a run_for into a motion).
 // kept across runs: Flow::start sets it for each flow
-let now_next : Ref[Bool] = Ref::new(false)
+let now_next : Ref[Bool] = Ref(false)
 
 ///|
 /// Additional calls whose presence in the live run is incidental to the current step.
 // kept across runs: reset for each flow
-let incidental_calls : Ref[Array[String]] = Ref::new([])
+let incidental_calls : Ref[Array[String]] = Ref([])
 
 ///|
 /// Starts writing the flow, when FLOW_EMIT asks and this is its first order (seed 0).
@@ -44,7 +44,7 @@ fn emit_start(seed : UInt, w : Double, h : Double, env : Array[(String, String)]
 ///|
 /// What the flow does as each step is said (Flow::take_step: taken when the run took it, Replay::step_taken).
 // kept across runs: Flow::start sets it for each flow
-let step_hook : Ref[((String) -> Unit)?] = Ref::new(None)
+let step_hook : Ref[((String) -> Unit)?] = Ref(None)
 
 ///|
 /// A line of the script (a header, `#…`, as it is; a step after a run_for, `now` first).
@@ -99,7 +99,7 @@ pub fn Flow::peer(self : Flow, words : String) -> Unit {
     Some(s) => {
       let n = s.iter().filter(fn(l) { l.has_prefix("log do: ") }).count()
       let first = match words.split(" ").next() {
-        Some(w) => w.to_string()
+        Some(w) => w.to_owned()
         None => words
       }
       emit("done \{n}-\{first}")

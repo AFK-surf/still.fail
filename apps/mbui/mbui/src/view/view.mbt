@@ -1303,7 +1303,7 @@ pub fn Tree::new(
     on_focus_asked: None,
     focus_opened: [],
     focus_gone: [],
-    focus_firsts: Set::new(),
+    focus_firsts: Set([]),
     focus_first_takes: {},
     layer_openers: {},
     on_layers_focus: fn(_, _) {  },
@@ -1326,7 +1326,7 @@ pub fn Tree::new(
     hand_owed_at: -1.0,
     handing: false,
     hand_at: -1.0,
-    hand_ends: Set::new(),
+    hand_ends: Set([]),
     hand_ends_done: -1.0,
     looks_reading: false,
     hand: fn(_) {  },
@@ -9228,7 +9228,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
   // next time all is laid out, not forgotten)
   let n = self.sized.length()
   @signals.end_batch()
-  let asked = self.sized[n:].to_array()
+  let asked = self.sized[n:].to_owned()
   self.sized.clear()
   self.sized.append(keep)
   self.sized.append(asked)
@@ -9506,7 +9506,7 @@ fn shorter_w_by(
     while e > 0 && chars[e - 1] == ' ' {
       e = e - 1
     }
-    let cut = String::from_array(chars[:e].to_array()) + "…"
+    let cut = String::from_array(chars[:e].to_owned()) + "…"
     if wide(cut) <= room + 0.5 {
       return wide(cut)
     }

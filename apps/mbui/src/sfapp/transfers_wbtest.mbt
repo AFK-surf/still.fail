@@ -11,7 +11,7 @@ fn copy_said(
   state : String,
   progress? : Double = 0.4,
   files? : Int = 1,
-  move? : Bool = false,
+  moves? : Bool = false,
   across? : Bool = true,
   said? : String = "18.3 MB / 48.2 MB",
 ) -> Json {
@@ -25,7 +25,7 @@ fn copy_said(
     "toPath": "旅行",
     "toText": "Maple › 旅行",
     "title": Json::string(title),
-    "move": Json::boolean(move),
+    "move": Json::boolean(moves),
     "state": Json::string(state),
     "active": Json::boolean(state == "copying"),
     "progress": Json::number(progress),
@@ -39,7 +39,7 @@ fn copy_said(
 fn copies_said() -> Array[Json] {
   [
     copy_said("t1", "演示录屏.mp4", "copying", files=3),
-    copy_said("t2", "设计稿", "done", move=true, across=false, said="已完成", files=2),
+    copy_said("t2", "设计稿", "done", moves=true, across=false, said="已完成", files=2),
     copy_said("t3", "季度报告.pdf", "failed", said="空间不足"),
     copy_said("t4", "旧照片", "cancelled", said="已取消"),
   ]
@@ -267,7 +267,7 @@ test "传输 with keyboard and mouse: a key's name shows by it as the pointer re
     let calls : Array[(String, Json)] = []
     let t = transfers_up(calls, platform=0, wide~)
     let (x, y) = button_mid(t, "取消传输")
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
     let tip = t.words().iter().find_first(fn(w) { w.0 == "取消传输" })
     assert_true(tip is Some(w) && w.2 > y, msg="wide \{wide}: \{tip}, the key at \{y}")

@@ -130,7 +130,7 @@ pub fn picture(
   if !scene_drawable(t, "picture", false) {
     return false
   }
-  let buf = Ref::new(FixedArray::make(0, 0.0))
+  let buf = Ref(FixedArray::make(0, 0.0))
   let (n, (r, g, b)) = host_frame(t, buf)
   let times = FixedArray::make(2, 0.0)
   draw_timed(buf.val, n, r, g, b, [(0.0, 0.0, -1.0, -1.0)], times)

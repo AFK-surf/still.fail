@@ -308,7 +308,7 @@ fn Ctx::insts_replay(self : Ctx, insts : FixedArray[Double], floats : Int, segs 
   insts.blit_to(a, len=floats, dst_offset=base)
   let seg0 = (self.segs.length() / 4).to_double()
   self.segs.append(segs)
-  let caps : Map[Int, Int] = {}
+  let caps : Map[Int, Int] = Map([])
   for j in 0..<count {
     let b = base + j * inst_size
     let kind = a[b + 5]

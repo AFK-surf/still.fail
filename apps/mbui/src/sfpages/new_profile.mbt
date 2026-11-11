@@ -10,7 +10,7 @@
 /// Where the add page of a station begins, when it is come to with a provider and how (the web's addProfilePath with
 /// its provider and `method`): told to its draft as that is opened.
 // kept across runs: said by the pages that lead to it; reset (pages.mbt) empties it
-pub let add_profile_start : Map[String, Array[(String, Json)]] = {}
+pub let add_profile_start : Map[String, Array[(String, Json)]] = Map([])
 
 ///|
 /// A new profile (AddProfile) on station `address` (another online one where it is not: the first), made once in node
@@ -196,7 +196,7 @@ fn new_profile_flow_node(
         "plan" => new_profile_plan_node(b, core, station, n, s, d, install)
         "form" => new_profile_form_node(b, core, station, n, d, edit)
         _ => {
-          let gid = key.view(start_offset=6).to_string()
+          let gid = key.view(start_offset=6).to_owned()
           let group = fn() {
             let all = items(d(), "groups")
             match all.search_by(fn(g) { text(Some(g), "id") == gid }) {

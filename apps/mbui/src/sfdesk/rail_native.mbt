@@ -18,7 +18,7 @@ let nav_untaken : Ref[Bool] = { val: false }
 let native_workspace_anchor : Ref[Int] = { val: 0 }
 
 ///|
-let native_sidebar_items : Map[Int, @hostapi.NavItem] = {}
+let native_sidebar_items : Map[Int, @hostapi.NavItem] = Map([])
 
 ///|
 let floating_bar : Ref[@hostapi.NavBar?] = { val: None }
@@ -87,16 +87,16 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
 let nav_page : Array[(@hostapi.NavItem, () -> Unit)] = []
 
 ///|
-let nav_page_was : Map[String, () -> Unit] = {}
+let nav_page_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// What each row of a page's action's menu does (bar_action rows), by the row's id, for what is chosen between frames.
-let nav_rows_was : Map[String, () -> Unit] = {}
+let nav_rows_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// What is up over the whole window handed the bars the frame before (@sf.native_over_act), by id, for what is chosen
 /// between frames.
-let nav_over_was : Map[String, () -> Unit] = {}
+let nav_over_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// The page of the stack being drawn now (frame.mbt's nav_flat), None outside one.
@@ -634,7 +634,7 @@ fn tab_of_place(lit : String) -> String {
 ///|
 /// What each tab showed as it was left (its stack's pages), by its workspace and its id (tab_kept_key); kept while the app
 /// runs.
-let tabs_kept : Map[String, Array[Page]] = {}
+let tabs_kept : Map[String, Array[Page]] = Map([])
 
 ///|
 /// The key of tab `tab` of workspace `ws` in tabs_kept: each workspace's tabs keep their own (a chat of one never shown
@@ -706,12 +706,12 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id == "sidebar/search" {
       switcher_toggle(fn() { c.blur() })
     } else if id.has_prefix("sidebar/filter/") {
-      match id.substring(start=15) {
+      match id[15:].to_owned() {
         "all" => rail_go(c, src, w, "chats")
         f => rail_go(c, src, w, f)
       }
     } else if id.has_prefix("ws/") {
-      let ws = id.substring(start=3)
+      let ws = id[3:].to_owned()
       if ws != w.id {
         // The frame still holds `w`: switching here would let land restore its chat into the new workspace.
         // Change after this build, so the next frame resolves the workspace before it lands on a page.
@@ -720,9 +720,9 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id == "new" {
       new_chat()
     } else if id.has_prefix("list/") {
-      rail_go(c, src, w, id.substring(start=5))
+      rail_go(c, src, w, id[5:].to_owned())
     } else if id.has_prefix("place/") {
-      let place = id.substring(start=6)
+      let place = id[6:].to_owned()
       match tabs_kept.get(tab_kept_key(w.id, id)) {
         // (its stack as it was left: the chat open in it, the list it showed)
         Some(pages) if pages.length() > 0 => {

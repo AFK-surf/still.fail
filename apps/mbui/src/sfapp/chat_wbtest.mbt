@@ -37,7 +37,7 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
 ///|
 test "scrolled up, the way to the newest shows; tapped, the list glides back to its end" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
   assert_true(rd.jump)
@@ -130,7 +130,7 @@ test "a go-to in the chat keeps where the reader was: ↓ back there, ↓ again 
 ///|
 test "the viewer's words on the right, everyone else's under their name" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
   // a bubble at the list's right (16 in: the web's narrow chatList), an agent's words from its left
   let (bx, _, bw, _) = t.rect_of("还有深色模式也看一下").unwrap()
@@ -142,7 +142,7 @@ test "the viewer's words on the right, everyone else's under their name" {
 ///|
 test "what the viewer quotes is over their bubble at the right, no wider than the bubble may be" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
   // (the agent's words it quotes are in the chat too: the card's are after whose they are)
   let quote = t.words().filter(fn(w) { w.0.has_prefix("Claude") && w.0.contains("其余的行按估计的高度占位") })
@@ -159,7 +159,7 @@ test "what the viewer quotes is over their bubble at the right, no wider than th
 ///|
 test "near the top the page before comes in, and what is in view stays where it is" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   // up to the first message: the page before is asked for there, and comes in above it
   let mut tries = 0
   while t.find("Willow 上的 claude 已启动") is None && tries < 40 {
@@ -301,7 +301,7 @@ test "a file card in the chat opens its preview" {
   // (the chat opened drawn at its moment, its push from there)
   t.draw()
   t.run_for(@ui.move_most_ms)
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   // (up the list till its card shows: its name's stem, its extension after it)
   let mut tries = 0
   while t.find(".log") is None && tries < 12 {
@@ -550,7 +550,7 @@ test "left short of its end, a chat opens again where it was left, though the co
   t.draw()
   open_chat(r)
   t.run_for(@ui.move_most_ms)
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
   t.run_for(@ui.move_most_ms)
   let k = "ws1/st1\u{1}s-c1"
@@ -640,7 +640,7 @@ test "a table wider than the message on a phone: at rest in line with the words,
   // slid to its end, held still before it is let go (no fling)
   t.press_at(360.0, y)
   for step in 1..=8 {
-    t.move(360.0 - step.to_double() * 40.0, y)
+    t.move_to(360.0 - step.to_double() * 40.0, y)
   }
   t.run_for(long_press_ms)
   t.release(40.0, y)
@@ -663,7 +663,7 @@ test "a table on a wide list, slid sideways: out over the margin, not cut at the
   let column = x - 4.0 - 12.0
   t.press_at(x + 300.0, y)
   for step in 1..=8 {
-    t.move(x + 300.0 - step.to_double() * 40.0, y)
+    t.move_to(x + 300.0 - step.to_double() * 40.0, y)
   }
   t.run_for(long_press_ms)
   t.release(x - 20.0, y)

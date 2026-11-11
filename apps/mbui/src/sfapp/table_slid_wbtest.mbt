@@ -23,10 +23,10 @@ fn table_slid(again : Bool) -> (Array[Array[String]], Array[(Int, Int)]) {
     let x0 = if way < 0.0 { 360.0 } else { 60.0 }
     t.press_at(x0, y)
     // (past the slop: from there it follows the finger)
-    t.move(x0 + way * 20.0, y)
+    t.move_to(x0 + way * 20.0, y)
     t.rows_built() |> ignore
     for step in 1..=6 {
-      t.move(x0 + way * (20.0 + step.to_double() * 30.0), y)
+      t.move_to(x0 + way * (20.0 + step.to_double() * 30.0), y)
       t.run_for(table_slid_frame_ms)
       out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_said(t))
     }
@@ -65,7 +65,7 @@ test "a table dragged across on 小屏: it moves under the finger and back" {
   // (held still at its end before it is let go: no fling)
   t.press_at(360.0, y)
   for step in 1..=8 {
-    t.move(360.0 - step.to_double() * 40.0, y)
+    t.move_to(360.0 - step.to_double() * 40.0, y)
   }
   t.run_for(long_press_ms)
   t.release(40.0, y)
@@ -74,7 +74,7 @@ test "a table dragged across on 小屏: it moves under the finger and back" {
   assert_true(x1 < x0, msg="\{(x0, x1)}")
   t.press_at(40.0, y)
   for step in 1..=8 {
-    t.move(40.0 + step.to_double() * 40.0, y)
+    t.move_to(40.0 + step.to_double() * 40.0, y)
   }
   t.run_for(long_press_ms)
   t.release(360.0, y)

@@ -66,7 +66,7 @@ test "a picked word's end handle dragged on: the selection goes with it, the men
   let r = 12.5
   t.press_at(x + r, y + h + r)
   assert_false(t.text_menu().0)
-  t.move(x + r + 400.0, y + h + r)
+  t.move_to(x + r + 400.0, y + h + r)
   t.release(x + r + 400.0, y + h + r)
   assert_eq(f.selection(), (0, 17))
   assert_true(t.text_menu().0)

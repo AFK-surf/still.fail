@@ -106,7 +106,7 @@ pub fn Emits::read(self : Emits) -> Unit {
 }
 
 ///|
-pub let emits : Map[String, Emits] = {}
+pub let emits : Map[String, Emits] = Map([])
 
 ///|
 pub fn emits_of(key : String) -> Emits {
@@ -242,7 +242,7 @@ pub fn emit_folded(e : Emits, agent : String) -> Bool {
 /// room opening in the list as the activity's closes, on the list's one way.
 pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
   e.read()
-  let out : Map[String, Bool] = {}
+  let out : Map[String, Bool] = Map([])
   for q in e.queue {
     out[q.1] = true
   }
@@ -709,7 +709,7 @@ pub fn glyph_change(ms : Double, turn : Double, index : Int, salt : Int, incomin
 ///|
 /// A number from 0 to 1 for glyph `i` of message `salt`, the same each time (a hash: no chance in it).
 fn glyph_noise(i : Int, salt : Int) -> Double {
-  let mut h = (i * 374761393 + salt * 668265263).to_uint()
+  let mut h = (i * 374761393 + salt * 668265263).reinterpret_as_uint()
   h = (h ^ (h >> 13)) * 1274126177U
   h = h ^ (h >> 16)
   (h & 0xFFFFU).reinterpret_as_int().to_double() / 65535.0

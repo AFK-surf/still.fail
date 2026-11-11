@@ -63,7 +63,7 @@ test "bones: into them at a cause, the focus, a finger held and what a still poi
 ///|
 test "bones: one said whole drawn as one piece only in its bones itself; out of them what it holds in its own bones drawn so" {
   let outer_boned = @signals.signal(0L, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(w) {

@@ -104,10 +104,10 @@ fn chat_rows_drawn(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
 /// Where the composer's field is drawn from the top (the first editor of the draw list, as Tester::dump says it).
 fn composer_field_y(t : @ui.Tester) -> Double {
   for line in t.dump().split("\n") {
-    let l = line.trim_start(chars=" ").to_string()
+    let l = line.trim_start(chars=" ").to_owned()
     if l.has_prefix("editor ") {
       let xy = l.split(" ").collect()[1].split(",").collect()
-      return dump_number(xy[1].to_string())
+      return dump_number(xy[1].to_owned())
     }
   }
   -1.0

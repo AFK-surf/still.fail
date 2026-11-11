@@ -118,14 +118,14 @@ fn peek_differ(old : Array[String], new : Array[String]) -> Array[String] {
 /// those words till its menu is.
 fn peek_rest_on(t : @ui.Tester, menu : String) -> Unit {
   let (x, y, w, h) = peek_trigger
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms + @ui.move_most_ms)
   if menu != "" {
     // (`menu` the words' key, read now the run's Tester is made)
     let menu = @sf.t(menu)
     match t.find(menu) {
       Some((mx, my)) => {
-        t.move(mx, my)
+        t.move_to(mx, my)
         t.run_for(@ui.move_most_ms)
       }
       None => @halt.saying("no \{menu} drawn")
@@ -207,21 +207,21 @@ fn peek_new(change : (String, Json?) -> Json?, body : (@view.View) -> Unit, padd
 /// is (at x,y) and what is wrong (after its last "): "), so that one of the old view's and one of the nodes' compare.
 fn peek_fault_said(f : String) -> String {
   let what = match f.find(" (") {
-    Some(i) => f.view(end_offset=i).to_string()
+    Some(i) => f.view(end_offset=i).to_owned()
     None => f
   }
   let at = match f.find(" at ") {
     Some(i) => {
       let rest = f.view(start_offset=i + 4)
       match rest.find(" ") {
-        Some(j) => rest.view(end_offset=j).to_string()
-        None => rest.to_string()
+        Some(j) => rest.view(end_offset=j).to_owned()
+        None => rest.to_owned()
       }
     }
     None => ""
   }
   let wrong = match f.rev_find("): ") {
-    Some(i) => f.view(start_offset=i + 3).to_string()
+    Some(i) => f.view(start_offset=i + 3).to_owned()
     None => ""
   }
   what + " at " + at + ": " + wrong

@@ -241,7 +241,7 @@ fn md_paragraph_kind(md : MdNode, xs : Array[MdInline]) -> Int {
 fn md_parts_of(xs : Array[MdInline]) -> Array[MdInline] {
   xs.filter(fn(x) {
     match x {
-      Text(t) => t.trim(chars=" \n\t").to_string() != ""
+      Text(t) => t.trim(chars=" \n\t").to_owned() != ""
       _ => true
     }
   })
@@ -566,7 +566,7 @@ fn md_words_node(
 ) -> Unit {
   let runs = fn() {
     let now = xs()
-    let titles : Map[String, String] = {}
+    let titles : Map[String, String] = Map([])
     // (a bare link to a screen reads as its title, a chat's too where the message says it: Md::words')
     match md.screens {
       Some(sc) => {
@@ -1014,7 +1014,7 @@ fn md_placed_runs(md : MdNode, xs : Array[MdInline]) -> Array[(Int, Array[MdInli
   let flush = fn() {
     if run.iter().any(fn(x) {
         match x {
-          Text(t) => t.trim(chars=" ").to_string() != ""
+          Text(t) => t.trim(chars=" ").to_owned() != ""
           HardBreak => false
           _ => true
         }
@@ -1056,7 +1056,7 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
       let out : Array[Array[(String, String, Double)]] = [[]]
       let mut used = 0.0
       let r = room()
-      let seen : Map[String, Int] = {}
+      let seen : Map[String, Int] = Map([])
       for named in images() {
         let k = seen.get(named.0).unwrap_or(0)
         seen[named.0] = k + 1

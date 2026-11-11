@@ -100,12 +100,12 @@ fn Stream::consume_string(self : Stream, t : String) -> Bool {
 
 ///|
 fn Stream::slice_back(self : Stream, start : Int) -> String {
-  self.text.view(start_offset=start, end_offset=self.pos).to_string()
+  self.text.view(start_offset=start, end_offset=self.pos).to_owned()
 }
 
 ///|
 fn Stream::slice_tail(self : Stream) -> String {
-  self.text.view(start_offset=self.pos).to_string()
+  self.text.view(start_offset=self.pos).to_owned()
 }
 
 ///|
@@ -615,7 +615,7 @@ fn Stream::parse_func_iri(self : Stream) -> String? {
     return None
   }
   let link = match quote {
-    Some(q) => self.consume_bytes(fn(c) { c != q }).trim_end(chars=" \t\n\r").to_string()
+    Some(q) => self.consume_bytes(fn(c) { c != q }).trim_end(chars=" \t\n\r").to_owned()
     None => self.consume_bytes(fn(c) { c != 0x20 && c != 0x29 })
   }
   if link == "" || link.contains("'") || link.contains("\"") {

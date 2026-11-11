@@ -49,7 +49,7 @@ fn system_took(json : String) -> Unit {
 ///|
 /// Where the system's bars put the app's action of its own (`nav_action`), as the host last said it. Put back by each
 /// Tester (messages_reset).
-let system_nav_action_now : Ref[(Double, Double, Double, Double)?] = Ref::new(None)
+let system_nav_action_now : Ref[(Double, Double, Double, Double)?] = Ref(None)
 
 ///|
 /// Where the system's bars put the app's action of its own in the view (x, y, w, h: iOS 27's prominent tab, an iPhone
@@ -68,7 +68,7 @@ pub(all) struct SystemSizeClass {
 
 ///|
 /// The size classes as the host last said them (none yet: None). Put back by each Tester (messages_reset).
-let system_size_class_now : Ref[SystemSizeClass?] = Ref::new(None)
+let system_size_class_now : Ref[SystemSizeClass?] = Ref(None)
 
 ///|
 /// How much room the window has as the system classes it, as the host last said it: None from a host that says none

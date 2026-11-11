@@ -673,7 +673,7 @@ pub fn Viewer::thumb_over(self : Viewer) -> (Double) -> Unit {
 /// brought, as its chat says it), by its thumbnail's id, as a signal of its own made as it is first read
 /// (Viewer::thumb_over): told as that thumbnail's changes, not as another's.
 // kept across runs: said as each changes; put back with the thumbnails
-let thumbs_said : Map[String, @signals.Signal[String]] = {}
+let thumbs_said : Map[String, @signals.Signal[String]] = Map([])
 
 ///|
 /// What is drawn over each chat's list (by its key, as last built): how much of its top the bar takes, how much of
@@ -1107,8 +1107,8 @@ fn Viewer::gallery_at(self : Viewer) -> String {
         Some(r) => {
           r.sent_as_told.get() |> ignore
           let (row, part) = place_parts(self.at)
-          for source, local in r.sent_as {
-            if local == row {
+          for source, sent_row in r.sent_as {
+            if sent_row == row {
               return source + part
             }
           }
@@ -1178,7 +1178,7 @@ pub let pv_strip : Strip = { way: @motion.Way::new(0.0), leaving: None, pinned: 
 ///|
 /// The images beside one asked of the core (`imageNear`), each by its params: let go with the chat they are of
 /// (chat_left), as they hold its thread there.
-pub let near_asked : Map[String, Map[String, Json]] = {}
+pub let near_asked : Map[String, Map[String, Json]] = Map([])
 
 ///|
 /// The images beside those of `station`'s chats let go (a chat of it left).
@@ -1475,7 +1475,7 @@ pub fn stream_part(
 /// How a host's own reader reads the parts `stream_part` would (@ui.NativeView::video's `direct`), past the app: the
 /// core's `call` with `p` (its `offset` and `length` each part's own), the whole's size as `size` says it (0 not known).
 pub fn direct_part(call : String, p : Map[String, Json], size : Double) -> String {
-  let q : Map[String, Json] = {}
+  let q : Map[String, Json] = Map([])
   for k, v in p {
     if k != "offset" && k != "length" {
       q[k] = v
@@ -1636,7 +1636,7 @@ pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
                 Some(b) => {
                   let from = offset.to_int()
                   let to = if from + length < b.length() { from + length } else { b.length() }
-                  answer(if from < to { b[from:to].to_bytes() } else { b"" }, b.length().to_double(), false)
+                  answer(if from < to { b[from:to].to_owned() } else { b"" }, b.length().to_double(), false)
                   return fn() {  }
                 }
                 None => ()
@@ -1762,7 +1762,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
             let (lift, far) = fly_way(t, Some(to), (c.width, c.height))
             v.fly_lift = lift
             v.fly.put(0.0)
-            v.fly.go(1.0, @motion.move(points=far), at~)
+            v.fly.go(1.0, @motion.moved(points=far), at~)
             pv_hidden.set(v.thumb_id())
           }
           None => ()
@@ -1895,7 +1895,7 @@ fn Viewer::fly_home_from(
   self.fly_lift = lift
   self.fly.put(q)
   // (what is left of its way: as far as it had come)
-  self.fly.go(0.0, @motion.move(points=far), at~)
+  self.fly.go(0.0, @motion.moved(points=far), at~)
 }
 
 ///|

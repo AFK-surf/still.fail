@@ -90,7 +90,7 @@ test "a filling Seg short of room at a larger size of words: their words smaller
 ///|
 test "a filling Seg whose options do not fit side by side even at the system's own size: the chosen one and a chevron, as wide as its room; a sheet of them all, one picked chosen; given the room, side by side again" {
   let parts = ["Android", "Desktop", "Web", "Station", "Cloud"]
-  let chosen = Ref::new(4)
+  let chosen = Ref(4)
   presenters_reset()
   // 260 wide: 224 in the track for options whose words with the least either side need 243
   let t = @ui.Tester::new(
@@ -171,7 +171,7 @@ test "the dark theme's segmented thumb seen off its track on every ground, its w
 ///|
 test "segmented whose options do not fit side by side even at the system's own size: the chosen one and a chevron; a pick of them all, one picked chosen" {
   let parts = ["Overview", "Software and devices", "Settings"]
-  let chosen = Ref::new(0)
+  let chosen = Ref(0)
   presenters_reset()
   let t = @ui.Tester::new(
     fn(c) {

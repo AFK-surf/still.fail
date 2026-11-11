@@ -140,7 +140,7 @@ fn outbox_unsent_node(v : @view.View, src : Source, here : MessageNodeHere, o : 
         note,
         fn() {
           let now = o()
-          if now.final && now.error != "" {
+          if now.refused && now.error != "" {
             @sf.t("web-main.draft.notSent", args=[("error", now.error)])
           } else {
             @sf.t("web-main.chat.unsent")
@@ -152,7 +152,7 @@ fn outbox_unsent_node(v : @view.View, src : Source, here : MessageNodeHere, o : 
       @sf.tip_node(here.tips, note, why) |> ignore
     })
     |> ignore
-    row.pick(fn() { o().final }, fn(p, refused) {
+    row.pick(fn() { o().refused }, fn(p, refused) {
       if refused {
         // refused as it is (a file this station does not have): its words back in the composer, to be sent anew
         unsent_button_node(

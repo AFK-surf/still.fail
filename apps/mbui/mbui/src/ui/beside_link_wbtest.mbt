@@ -46,7 +46,7 @@ fn link_card_made(
 ) -> (Tester, @view.NodeId, @view.NodeId) {
   let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0)
   t.check_looks(false)
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let words : Ref[@view.View?] = Ref(None)
   set_view_app(fn(root) {
     root.box(fn(b) {

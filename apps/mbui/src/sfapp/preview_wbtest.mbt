@@ -369,12 +369,12 @@ test "a video's timeline dragged: paused, the player told a finger is on it, a s
   assert_true(t.views().contains("control 1 9 1"))
   assert_eq(seeks(), ["control 1 3 200"])
   // on within that frame: nothing more asked
-  t.move(x0 + span * 0.27, mid)
+  t.move_to(x0 + span * 0.27, mid)
   assert_eq(seeks().length(), 1)
   // to three quarters: the frame there (700 ms), the head and the frame's count there before the player says it is
   // (it says the seek it is taking up: the first, still)
   t.set_player(1, position=200.0)
-  t.move(x0 + span * 0.75, mid)
+  t.move_to(x0 + span * 0.75, mid)
   assert_eq(seeks(), ["control 1 3 200", "control 1 3 700"])
   assert_true(t.find("8 / 10 帧") is Some(_))
   assert_true(
@@ -471,7 +471,7 @@ fn video_in_chat(duration? : Double = 0.0, still? : Bool = true) -> @ui.Tester {
 /// The bytes in hex (a host's grabbed frame as a run's line says it: Tester::view_said).
 fn hex_bytes(b : Bytes) -> String {
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for x in b {
     out.write_char(digits.get_char(x.to_int() >> 4).unwrap())
     out.write_char(digits.get_char(x.to_int() & 15).unwrap())
@@ -739,14 +739,14 @@ test "a text shown as it comes: its lines whole however its parts cut them, a ch
   while at < log.length() {
     let to = if at + 1000 < log.length() { at + 1000 } else { log.length() }
     f.got = to.to_double()
-    f.take(log[at:to].to_bytes())
+    f.take(log[at:to].to_owned())
     at = to
   }
   assert_eq(f.lines.length(), 12000)
   assert_eq(f.lines[0], "[build] 第 1 行：编译 src/module_1.mbt 完成，用时 1 ms")
   assert_eq(f.lines[11999], "[build] 第 12000 行：编译 src/module_69.mbt 完成，用时 1 ms")
   assert_eq(f.tail, "")
-  assert_eq(@sfbase.utf8_whole(@utf8.encode("行")[0:2].to_bytes()), 0)
+  assert_eq(@sfbase.utf8_whole(@utf8.encode("行")[0:2].to_owned()), 0)
   assert_eq(@sfbase.utf8_whole(@utf8.encode("a行")), 4)
 }
 

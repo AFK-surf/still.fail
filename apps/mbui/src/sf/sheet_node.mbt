@@ -256,7 +256,7 @@ fn sheet_node(
       let capped_of = fn(x : PanelOf) { x.tall > 0.0 && !x.form }
       // (an old body a share of the window tall: as tall as its lists say they would be, where one says, up to that
       // share (the host's capped_want's), else that share; told by its old view as it is built, by page)
-      let says : Map[Int, @signals.Signal[Bool]] = {}
+      let says : Map[Int, @signals.Signal[Bool]] = Map([])
       let says_of = fn(n : Int) {
         match says.get(n) {
           Some(s) => s
@@ -478,7 +478,7 @@ fn sheet_node(
           None => ()
         }
         let way = dmax(pushed.untracked(), 1.0)
-        recede.go_by(layer, if h is Some(_) { 1.0 } else { 0.0 }, @motion.move(points=way))
+        recede.go_by(layer, if h is Some(_) { 1.0 } else { 0.0 }, @motion.moved(points=way))
       })
       |> ignore
       // (its title and what it says as they are now, `live`'s where it says them, as the host's sheet heads a panel:
@@ -501,14 +501,14 @@ fn sheet_node(
       }
       // (each page's slide: where it is off to the sheet's side, in the sheet's widths (0 in place, -1 off to its
       // start, 1 off to its end), from where, to where, from when and how long, said as a page is put on or taken off)
-      let ways : Map[Int, @signals.Signal[(Double, Double, Double, Double)]] = {}
+      let ways : Map[Int, @signals.Signal[(Double, Double, Double, Double)]] = Map([])
       let way_at = fn(w : (Double, Double, Double, Double), t : Double) {
         w.1 + @ui.move_path(w.0 - w.1, 0.0, t - w.2, w.3).0
       }
       // (each page off to a side once its slide there is over: laid out nowhere then, drawn and read out not at all,
       // kept as it was left; told at that moment, and taken back at the cause of its way back)
-      let aways : Map[Int, @signals.Signal[Bool]] = {}
-      let dues : Map[Int, () -> Unit] = {}
+      let aways : Map[Int, @signals.Signal[Bool]] = Map([])
+      let dues : Map[Int, () -> Unit] = Map([])
       let away_after = fn(n : Int, w : (Double, Double, Double, Double)) {
         match dues.get(n) {
           Some(d) => d()
@@ -743,7 +743,7 @@ fn sheet_node(
                   // (a tap on its grabber, its top 30: to the other end)
                   if d.oy < sheet_grab_tap {
                     let (lo, hi) = (sheet_grows_to[0], sheet_grows_to[1])
-                    tall.go_by(sheet, if at > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, @motion.move())
+                    tall.go_by(sheet, if at > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, @motion.moved())
                   }
                 } else if @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below) is None {
                   // (sinking away from where it is, as fast as it was going down)
@@ -752,7 +752,7 @@ fn sheet_node(
                 } else {
                   let f = @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below).unwrap_or(sheet_grows_to[0])
                   // (its height, up: its speed the other way, a second's)
-                  tall.go_by(sheet, f * total, @motion.move(), velocity=-speed * 1000.0)
+                  tall.go_by(sheet, f * total, @motion.moved(), velocity=-speed * 1000.0)
                 }
               }
             }
@@ -772,7 +772,7 @@ fn sheet_node(
                   cancel()
                 } else {
                   // (back from its speed, a second's)
-                  back.go_by(layer, 0.0, @motion.move(), velocity=speed * 1000.0)
+                  back.go_by(layer, 0.0, @motion.moved(), velocity=speed * 1000.0)
                 }
               }
             }

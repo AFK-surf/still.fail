@@ -384,7 +384,7 @@ test "wide: the mouse's pointer over the layout's ground (its title, a heading's
   let t = layout_wide()
   let words = layout_words(t, fn(x, y) { x >= 955.0 && y >= 40.0 })
   let shape_on = fn(x : Double, y : Double) {
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@ui.move_most_ms)
     t.cursor()
   }

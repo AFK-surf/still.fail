@@ -384,9 +384,9 @@ let viewer_tool_h : Double = 32.0
 /// A tool (page.css.ts iconBtn): 32, round, as a bar's buttons are (in the corner of a bar 44 high, 6 in, as round as
 /// it is there), the bar's hover under the pointer, its chosen ground on (viewer_lit).
 // kept across runs: a value (no field of it changes)
-let viewer_tool_box : @ui.Style = @ui.css(
+let viewer_tool_box : @ui.Style = @ui.css((
   #|w=S8 h=S8 radius=Full align=ACenter justify=JCenter disabled{opacity=O35}
-)
+))
 
 ///|
 /// What a bar's buttons are under the pointer and while on: its ink's hover and chosen grounds.

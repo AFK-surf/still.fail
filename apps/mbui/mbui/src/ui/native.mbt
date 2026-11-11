@@ -344,10 +344,10 @@ pub fn NativeView::script(self : NativeView, js : String) -> Unit {
 fn script_hash(js : String) -> String {
   let mut h = 0x811c9dc5U
   for i in 0..<js.length() {
-    h = (h ^ js.unsafe_charcode_at(i).reinterpret_as_uint()) * 0x01000193U
+    h = (h ^ js.unsafe_get(i).to_int().reinterpret_as_uint()) * 0x01000193U
   }
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for k in 0..<8 {
     let d = ((h >> (28 - 4 * k)) & 15U).reinterpret_as_int()
     out.write_char(digits.get_char(d).unwrap())
@@ -1107,7 +1107,7 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
 /// node was laid out, stayed there, out of step with its hole. The hole's move (and scale) taken to the view's content
 /// and clip, the clip cut by where the hole's own clip was taken.
 fn Ctx::follow_holes(self : Ctx) -> Unit {
-  let at : Map[Int, Int] = {}
+  let at : Map[Int, Int] = Map([])
   let a = self.inst
   let mut k = 0
   while k < self.ninst {

@@ -16,7 +16,7 @@ fn field_name(k : String) -> Bool {
     return false
   }
   for i in 0..<n {
-    let ch = k.unsafe_charcode_at(i)
+    let ch = k.unsafe_get(i).to_int()
     if !((ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122)) {
       return false
     }
@@ -29,7 +29,7 @@ fn field_name(k : String) -> Bool {
 fn utf8_bytes(s : String) -> Int {
   let mut n = 0
   for i in 0..<s.length() {
-    let u = s.unsafe_charcode_at(i)
+    let u = s.unsafe_get(i).to_int()
     n += if u < 0x80 {
       1
     } else if u < 0x800 {
@@ -92,7 +92,7 @@ fn weigh(j : Json, path : String, deep : Int, by : Map[String, Int], own? : Bool
 /// What `j` weighs (the bytes of its JSON), and its `most` heaviest paths with what each weighs, the heaviest first (of
 /// as heavy, by name): a path's weight has what is under it, so a list and what makes it heavy both show.
 pub fn weights(j : Json, most? : Int = 12) -> (Int, Array[(String, Int)]) {
-  let by : Map[String, Int] = {}
+  let by : Map[String, Int] = Map([])
   let n = weigh(j, "", 0, by)
   let all = by.to_array()
   all.sort_by(fn(a, b) {
@@ -103,5 +103,5 @@ pub fn weights(j : Json, most? : Int = 12) -> (Int, Array[(String, Int)]) {
       a.0.compare(b.0)
     }
   })
-  (n, if all.length() > most { all[:most].to_array() } else { all })
+  (n, if all.length() > most { all[:most].to_owned() } else { all })
 }

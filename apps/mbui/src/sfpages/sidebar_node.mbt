@@ -168,7 +168,7 @@ fn chats_pane_node(
       let days = seen.val
       let hold = at.1 && !@sfbase.viewer_moved(key, days)
       let shown = @sfbase.held_order(key, days, hold)
-      let by_name : Map[String, ChatItem] = {}
+      let by_name : Map[String, ChatItem] = Map([])
       for d in shown {
         for item in d.items {
           by_name[@sfbase.row_name(item)] = item
@@ -501,7 +501,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
 /// Where each list made once is scrolled to, by its key (its workspace's and filter's): kept while the app runs, the
 /// same as it is left and come back to.
 // kept across runs: put back as a run begins (sidebar_reset)
-let list_scrolls : Map[String, @view.Scroll] = {}
+let list_scrolls : Map[String, @view.Scroll] = Map([])
 
 ///|
 /// Each of the lists made once at its top (what is tucked over its rows in view): as a recording's list at its top
@@ -589,11 +589,11 @@ fn RowsMotion::said(
   let watched = watched && self.had && !lines.is_empty()
   if watched && !(was == lines) {
     let now = v.cause_at()
-    let here : Set[String] = Set::new()
+    let here : Set[String] = Set([])
     for k in lines {
       here.add(k)
     }
-    let before : Map[String, Int] = {}
+    let before : Map[String, Int] = Map([])
     for j, k in was {
       before[k] = j
     }
@@ -617,7 +617,7 @@ fn RowsMotion::said(
       }
     }
     let kept = kept_in_order(was_at)
-    let ahead : Set[String] = Set::new()
+    let ahead : Set[String] = Set([])
     for n, k in at {
       if !kept[n] {
         ahead.add(k)

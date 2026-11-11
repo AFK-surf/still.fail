@@ -10,7 +10,7 @@ let flying : Ref[SendFlight?] = { val: None }
 
 ///|
 /// System notices opened (all their words, and their time), by message.
-let opened_notices : Map[String, Bool] = {}
+let opened_notices : Map[String, Bool] = Map([])
 
 ///|
 /// The press an image of a message was last quoted by (file_item): a passage of its message is not picked by it too.

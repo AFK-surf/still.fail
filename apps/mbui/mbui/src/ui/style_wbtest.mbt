@@ -173,7 +173,7 @@ test "style: pressed and hovered read the box's id, as Ctx::pressed and hovered 
   t.draw()
   let th = Theme::light()
   assert_eq(g().nodes[1].bg, th.card)
-  t.move(10.0, 10.0)
+  t.move_to(10.0, 10.0)
   t.draw()
   assert_eq(g().nodes[1].bg, over(th.card, th.faint))
   // (a finger's press lights it too: pressed over lit)
@@ -182,7 +182,7 @@ test "style: pressed and hovered read the box's id, as Ctx::pressed and hovered 
   assert_eq(g().nodes[1].bg, over(over(th.card, th.faint), th.line))
   // without an id: the blocks do nothing
   let t = Tester::new(fn(c) { c.box(style=s, fn() {  }) |> ignore })
-  t.move(10.0, 10.0)
+  t.move_to(10.0, 10.0)
   t.touch(0, 10.0, 10.0)
   t.draw()
   assert_eq(g().nodes[1].bg, th.card)
@@ -224,14 +224,14 @@ test "hover: what holds the one pointed at is pointed at too, as drawn; what lie
   let th = Theme::light()
   assert_eq((g().nodes[2].bg, g().nodes[3].bg, g().nodes[4].bg), (th.card, th.card, th.card))
   // the tab alone
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   assert_eq((g().nodes[2].bg, g().nodes[3].bg), (over(th.card, th.hover), th.card))
   // its ×: both, the × a step more (its tint drawn over the tab's)
-  t.move(70.0, 20.0)
+  t.move_to(70.0, 20.0)
   assert_eq((g().nodes[2].bg, g().nodes[3].bg), (over(th.card, th.hover), over(th.card, th.hover)))
   assert_true(g().hover_in.length() == 1 && g().hovered(g().hover_in[0]))
   // what lies over the tab's room: it alone
-  t.move(90.0, 20.0)
+  t.move_to(90.0, 20.0)
   assert_eq((g().nodes[2].bg, g().nodes[4].bg), (th.card, over(th.card, th.hover)))
   assert_eq(g().hover_in.length(), 0)
 }
@@ -265,7 +265,7 @@ test "hover: a box only pointed at is pointed at, and a press on it is what hold
   }
   let t = Tester::new(view, w=200.0, h=100.0)
   t.draw()
-  t.move(70.0, 20.0)
+  t.move_to(70.0, 20.0)
   t.draw()
   // the chip, and the row that holds it
   assert_true(g().hovered(g().id("chip")) && g().hovered(g().id("row")))
@@ -308,7 +308,7 @@ test "style: the narrow theme in frames narrower than its bound, picked from the
 
 ///|
 test "style: set once, the narrow theme is picked again each frame as the window's width changes" {
-  let set = Ref::new(false)
+  let set = Ref(false)
   let t = Tester::new(
     fn(c) {
       if !set.val {
@@ -516,7 +516,7 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
 
 ///|
 test "style: Ctx's tokens outside a style: space, color, text_size" {
-  let got : Ref[(Double, Bool, Bool, (Double, Double))] = Ref::new((0.0, false, false, (0.0, 0.0)))
+  let got : Ref[(Double, Bool, Bool, (Double, Double))] = Ref((0.0, false, false, (0.0, 0.0)))
   let t = Tester::new(fn(c) {
     got.val = (
       c.space(S11),
@@ -575,7 +575,7 @@ test "style: a list's rows, built as it is laid out, are built in the theme in f
 
 ///|
 test "style: a cover, built once its items are laid out, is built in the theme and direction where it was asked for" {
-  let seen : Ref[(Int64, Bool)] = Ref::new((0L, false))
+  let seen : Ref[(Int64, Bool)] = Ref((0L, false))
   let t = Tester::new(fn(c) {
     c.with_direction(Rtl, fn() {
       c.with_theme(Theme::dark(), fn() {
@@ -598,7 +598,7 @@ test "style: a cover, built once its items are laid out, is built in the theme a
 
 ///|
 test "style: a list's rows are built in the direction where the list was" {
-  let rtl : Ref[Bool] = Ref::new(false)
+  let rtl : Ref[Bool] = Ref(false)
   let t = Tester::new(fn(c) {
     c.with_direction(Rtl, fn() {
       c.list("rows", 1, 40.0, fn(_) {

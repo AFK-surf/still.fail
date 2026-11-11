@@ -83,10 +83,10 @@ let hover_now : Ref[(String, Int)?] = Ref(None)
 let hover_shut : Ref[Bool] = Ref(false)
 
 ///|
-let hover_open : Map[String, Bool] = {}
+let hover_open : Map[String, Bool] = Map([])
 
 ///|
-let hover_holds : Map[String, Int] = {}
+let hover_holds : Map[String, Int] = Map([])
 
 ///|
 /// Whether card `key` is kept open by what was pressed in it.
@@ -522,7 +522,7 @@ priv struct GoneLine {
 }
 
 ///|
-let ran_lines : Map[Int, RanLines] = {}
+let ran_lines : Map[Int, RanLines] = Map([])
 
 ///|
 fn hover_reset() -> Unit {
@@ -992,9 +992,9 @@ let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 ///|
 /// Its stop: a circle 24 on the red's ground (as its pill with words was), its icon 12.
 // kept across runs: a value (no field of it changes)
-let agent_card_stop_box : @ui.Style = @ui.css(
+let agent_card_stop_box : @ui.Style = @ui.css((
   #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter bg=DangerBg hovered{bg=Hover}
-)
+))
 
 ///|
 let agent_card_stop_icon : Double = 12.0

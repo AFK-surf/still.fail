@@ -107,7 +107,7 @@ fn xshare_done(src : Source, r : ChatRef, thread : Double?) -> Unit {
   let p : Map[String, Json] = {
     "station": Json::string(r.station),
     "session": Json::string(session),
-    "to": Json::array(to.map(Json::string(_))),
+    "to": Json::array(to.map(x => Json::string(x))),
     "write": Json::boolean(xsharing.write.untracked()),
   }
   match thread {

@@ -74,13 +74,13 @@ test "the workspaces' sheet: an invitation waiting, 加入 joins it, 忽略 igno
   assert_eq(calls.length(), 1)
   assert_eq(calls[0].0, "invitation.decline")
   assert_eq(text(Some(calls[0].1), "id"), "inv2")
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
   t.frame()
   let (x, y) = words_node(t, "加入").unwrap()
   t.tap(x, y)
   assert_eq(calls.length(), 2)
   assert_eq(calls[1].0, "invitation.accept")
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm, @ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm, @ui.Confirm])
 }
 
 ///|

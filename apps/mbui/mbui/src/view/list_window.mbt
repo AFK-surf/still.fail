@@ -219,7 +219,8 @@ fn[K] Column::known(self : Column[K], i : Int) -> Bool {
 
 ///|
 /// Block `i` as it is counted now.
-fn[K] Column::op_get(self : Column[K], i : Int) -> Laid {
+#alias("_[_]")
+fn[K] Column::at(self : Column[K], i : Int) -> Laid {
   { top: self.top(i), h: self.hs[i] }
 }
 

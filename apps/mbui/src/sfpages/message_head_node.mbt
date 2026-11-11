@@ -205,7 +205,7 @@ fn elsewhere_route_node(v : @view.View, s : () -> Elsewhere) -> Unit {
     @sf.words_node(
       r,
       fn() {
-        @sf.t(if s().received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string()
+        @sf.t(if s().received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_owned()
       },
       fn() { route_words },
     )

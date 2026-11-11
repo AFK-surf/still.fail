@@ -101,10 +101,10 @@ fn core_ink(code : String, ink : String, dark : Bool) -> Array[@ui.Run] {
       i += 1
     }
     let end = imin(code.length(), at + (if n > 0 { n } else { 1 }))
-    out.push(@ui.span(code.view(start_offset=at,end_offset=end).to_string(),mono=true,color=if dark {scopes[k].dark()}else{scopes[k].light()}))
+    out.push(@ui.span(code.view(start_offset=at,end_offset=end).to_owned(),mono=true,color=if dark {scopes[k].dark()}else{scopes[k].light()}))
     at = end
   }
-  if at < code.length() { out.push(@ui.span(code.view(start_offset=at).to_string(),mono=true,color=if dark {Scope::Text.dark()}else{Scope::Text.light()})) }
+  if at < code.length() { out.push(@ui.span(code.view(start_offset=at).to_owned(),mono=true,color=if dark {Scope::Text.dark()}else{Scope::Text.light()})) }
   out
 }
 
@@ -123,7 +123,7 @@ pub let ink_read : Ref[((String, String, (String?) -> Unit) -> Unit)?] = Ref(Non
 
 ///|
 /// The inks answered, by the language and the code; the latest kept, up to `inks_budget` of code.
-let inks : Map[String, String?] = {}
+let inks : Map[String, String?] = Map([])
 
 ///|
 let inks_order : Array[String] = []
@@ -135,7 +135,7 @@ let inks_used : Ref[Int] = Ref(0)
 let inks_budget : Int = 4000000
 
 ///|
-let inks_asked : Map[String, Bool] = {}
+let inks_asked : Map[String, Bool] = Map([])
 
 ///|
 fn init {

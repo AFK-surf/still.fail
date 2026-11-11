@@ -62,7 +62,7 @@ pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
 
 ///|
 /// The mark each chat has had, as its row was last drawn.
-let marks_seen : Map[String, String] = {}
+let marks_seen : Map[String, String] = Map([])
 
 ///|
 fn marks_reset() -> Unit {

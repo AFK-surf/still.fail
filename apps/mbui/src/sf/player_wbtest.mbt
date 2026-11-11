@@ -146,7 +146,7 @@ test "a desktop's timeline dragged: paused, the picture going to the start of ea
   assert_true(told(t, 9, value="1"))
   assert_true(told(t, 3, value="200"))
   let (x1, y1) = at(0.75)
-  t.move(x1, y1)
+  t.move_to(x1, y1)
   assert_true(told(t, 3, value="700"))
   // the frame it is at, of how many, while the finger is on it
   assert_true(t.find("8 / 10 帧") is Some(_))
@@ -295,7 +295,7 @@ test "a desktop's: the bar's way back under the pointer lit on the film's black 
   }
   let lit = alpha(media_dark_text, media_hot_share)
   assert_false(under(lit))
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   assert_true(under(lit))
   // (the page's: dark on the black)
@@ -356,6 +356,6 @@ test "the player's volume read out as a slider whose range is its least, where i
   assert_eq(s.range, Some((desk_none, 0.4, desk_whole)))
   let told = tt.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
   assert_eq(told.length(), 1)
-  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
   assert_eq([f[12], f[13], f[14]], [desk_none.to_string(), (0.4).to_string(), desk_whole.to_string()])
 }

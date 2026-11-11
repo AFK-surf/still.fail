@@ -341,7 +341,7 @@ fn collect_primitives(
   cache : Cache,
 ) -> Array[Primitive] {
   let primitives : Array[Primitive] = []
-  let names : Set[String] = Set::new()
+  let names : Set[String] = Set([])
   let mut idx = 1
   let (scale_w, scale_h) : (Float, Float) = if units == ObjectBoundingBox {
     match object_bbox {

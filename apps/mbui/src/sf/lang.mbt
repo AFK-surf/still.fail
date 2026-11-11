@@ -105,7 +105,7 @@ pub fn branded(text : String) -> String {
   }
   let chars = text.to_array()
   let word = "still.fail".to_array()
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut i = 0
   while i < chars.length() {
     let j = i + word.length()

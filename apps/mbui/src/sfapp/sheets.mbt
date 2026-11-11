@@ -323,7 +323,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
     }
     c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=16.0, gap=8.0, align=ACenter, fn() {
       if people.length() > 0 {
-        let shown = if people.length() > 5 { people[:5].to_array() } else { people }
+        let shown = if people.length() > 5 { people[:5].to_owned() } else { people }
         c.box(w=Px(19.0 + 14.0 * (shown.length() - 1).to_double()), fn() {
           // ringed in the sheet's ground
           people_stack(c, src, shown, 16.0, ring=t.p.card)
@@ -1404,7 +1404,7 @@ fn job_detail_node(v : @view.View, src : Source, r : ChatRef, id : String, j : (
     // (filling what its head leaves (job_body_at's h=Full, an old view's Fill), from none: never pushed past it by a
     // long output)
     col.height(Is(None)).grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-    col.show(fn() { text(j(), "command").trim(chars=" \n").to_string() != "" }, fn(w) {
+    col.show(fn() { text(j(), "command").trim(chars=" \n").to_owned() != "" }, fn(w) {
       job_runs_node(
         w,
         fn() { [@ui.span(text(j(), "command"), mono=true)] },
@@ -1753,7 +1753,7 @@ fn open_jobs_node(v : @view.View, src : Source, w : Workspace) -> Unit {
       if dui.opened.contains(gkey()) || l.length() <= 4 {
         l
       } else {
-        l[:3].to_array()
+        l[:3].to_owned()
       }
     }
     @sf.style_node(gb, fn() { open_jobs_group })

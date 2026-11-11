@@ -8,7 +8,7 @@ test "记忆 made once, the mouse resting on a station's row: back to settings a
     Some(i) => t.semantics()[i].rect
     None => fail("Willow's row read out")
   }
-  t.move(row.0 + row.2 / 2.0, row.1 + row.3 / 2.0)
+  t.move_to(row.0 + row.2 / 2.0, row.1 + row.3 / 2.0)
   t.run_for(@ui.move_most_ms)
   app.nav.pop() |> ignore
   t.run_for(@ui.move_most_ms)
@@ -24,7 +24,7 @@ test "一台 station 的记忆 made once, the mouse resting on its own skills' r
     Some(i) => t.semantics()[i].rect
     None => fail("its own skills' row read out")
   }
-  t.move(row.0 + row.2 / 2.0, row.1 + row.3 / 2.0)
+  t.move_to(row.0 + row.2 / 2.0, row.1 + row.3 / 2.0)
   t.run_for(@ui.move_most_ms)
   app.nav.pop() |> ignore
   t.run_for(@ui.move_most_ms)

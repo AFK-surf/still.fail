@@ -36,7 +36,7 @@ fn swipe_view(moved : Ref[Double], tapped : Ref[Bool]) -> @ui.Tester {
 
 ///|
 test "a wheel over a drag area scrolls the list containing it" {
-  let t = swipe_view(Ref::new(0.0), Ref::new(false))
+  let t = swipe_view(Ref(0.0), Ref(false))
   t.draw()
   let (_, y, _, _) = t.rect_of("swipe me").unwrap()
   t.wheel(150.0, y + 5.0, 80.0)
@@ -46,8 +46,8 @@ test "a wheel over a drag area scrolls the list containing it" {
 
 ///|
 test "a drag area in a list: across first, it is the drag's and the list holds still; up or down first, the list's" {
-  let moved = Ref::new(0.0)
-  let tapped = Ref::new(false)
+  let moved = Ref(0.0)
+  let tapped = Ref(false)
   let t = swipe_view(moved, tapped)
   t.draw()
   let (_, y, _, _) = t.rect_of("swipe me").unwrap()
@@ -97,9 +97,9 @@ fn card_view(moved : Ref[Double], ends : Ref[Int], taps : Ref[Int]) -> @ui.Teste
 
 ///|
 test "a drag area holding a list: across first, it is the card's and the list holds still; up or down first, the list's" {
-  let moved = Ref::new(0.0)
-  let ends = Ref::new(0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let ends = Ref(0)
+  let taps = Ref(0)
   let t = card_view(moved, ends, taps)
   t.draw()
   t.drag(250.0, 150.0, 100.0, 150.0)
@@ -120,9 +120,9 @@ test "a drag area holding a list: across first, it is the card's and the list ho
 
 ///|
 test "dragged at 45°: no one's, till one way is clearly further" {
-  let moved = Ref::new(0.0)
-  let ends = Ref::new(0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let ends = Ref(0)
+  let taps = Ref(0)
   let t = card_view(moved, ends, taps)
   t.draw()
   // as far across as down, past the slop both ways: neither takes it
@@ -142,9 +142,9 @@ test "dragged at 45°: no one's, till one way is clearly further" {
 
 ///|
 test "a list flung in the card is caught as the finger goes down: the press is the list's, the card's let go" {
-  let moved = Ref::new(0.0)
-  let ends = Ref::new(0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let ends = Ref(0)
+  let taps = Ref(0)
   let t = card_view(moved, ends, taps)
   t.draw()
   // flung up fast
@@ -160,8 +160,8 @@ test "a list flung in the card is caught as the finger goes down: the press is t
 
 ///|
 test "a press no one takes is a tap: the row's" {
-  let moved = Ref::new(0.0)
-  let tapped = Ref::new(false)
+  let moved = Ref(0.0)
+  let tapped = Ref(false)
   let t = swipe_view(moved, tapped)
   t.draw()
   let (x, y, _, _) = t.rect_of("swipe me").unwrap()
@@ -207,10 +207,10 @@ fn shaped_view(on : Ref[Bool], drawn : Ref[Bool], moved : Ref[Double], taps : Re
 
 ///|
 test "drag_on: a box drawn as it is, rounded and clipped, a drag area with no node of its own" {
-  let on = Ref::new(false)
-  let drawn = Ref::new(true)
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let on = Ref(false)
+  let drawn = Ref(true)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = shaped_view(on, drawn, moved, taps)
   t.draw()
   let plain = t.dump()
@@ -229,8 +229,8 @@ test "drag_on: a box drawn as it is, rounded and clipped, a drag area with no no
 ///|
 test "drag_on: a press where a rounded clip cut it away is not its, as a tap there is not" {
   // the drag area's box filling a card rounded 40 and clipped: its top left corner, the card's cut away
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       let id = c.id("in-card")
@@ -271,10 +271,10 @@ test "drag_on: a press where a rounded clip cut it away is not its, as a tap the
 
 ///|
 test "drag_on without its box drawn that frame: nothing there to press" {
-  let on = Ref::new(true)
-  let drawn = Ref::new(false)
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let on = Ref(true)
+  let drawn = Ref(false)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = shaped_view(on, drawn, moved, taps)
   t.draw()
   t.drag(220.0, 110.0, 80.0, 110.0)
@@ -342,8 +342,8 @@ fn held_edge_view(
 
 ///|
 test "drag_on hold: a finger swiped across it at once moves it not, nor taps it" {
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = held_edge_view(moved, taps)
   t.draw()
   t.drag(150.0, 100.0, 250.0, 100.0)
@@ -355,8 +355,8 @@ test "drag_on hold: a finger swiped across it at once moves it not, nor taps it"
 
 ///|
 test "drag_on hold: a finger scrolling up and down over it scrolls the list" {
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = held_edge_view(moved, taps)
   t.draw()
   t.drag(150.0, 250.0, 150.0, 100.0)
@@ -368,8 +368,8 @@ test "drag_on hold: a finger scrolling up and down over it scrolls the list" {
 
 ///|
 test "drag_on hold: held still a long press's time, felt, then it follows the finger across" {
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = held_edge_view(moved, taps)
   t.draw()
   let short = @ui.long_press_ms / 8.0
@@ -391,8 +391,8 @@ test "drag_on hold: held still a long press's time, felt, then it follows the fi
 
 ///|
 test "drag_on hold: a finger's quick tap on it is its tap" {
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = held_edge_view(moved, taps)
   t.draw()
   t.press_at(150.0, 100.0)
@@ -403,8 +403,8 @@ test "drag_on hold: a finger's quick tap on it is its tap" {
 
 ///|
 test "drag_on hold: a mouse drags it at once" {
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = held_edge_view(moved, taps, pointing=Mouse)
   t.draw()
   t.drag(150.0, 100.0, 250.0, 100.0)
@@ -453,9 +453,9 @@ fn panel_over_area(downs : Ref[Int], taps : Ref[Int], clicks : Ref[Int]) -> @ui.
 
 ///|
 test "a press on a panel that stops the wheel is the panel's: the drag area under it is not pressed, nor tapped" {
-  let downs = Ref::new(0)
-  let taps = Ref::new(0)
-  let clicks = Ref::new(0)
+  let downs = Ref(0)
+  let taps = Ref(0)
+  let clicks = Ref(0)
   let t = panel_over_area(downs, taps, clicks)
   t.draw()
   t.press_at(20.0, 20.0)
@@ -498,8 +498,8 @@ fn alone_edge_view(moved : Ref[Double], taps : Ref[Int]) -> @ui.Tester {
 
 ///|
 test "drag_on hold, alone under the finger: swiped across at once it moves not, the first press and one after a hold that dragged it alike" {
-  let moved = Ref::new(0.0)
-  let taps = Ref::new(0)
+  let moved = Ref(0.0)
+  let taps = Ref(0)
   let t = alone_edge_view(moved, taps)
   t.draw()
   // (its first press, swiped at once)

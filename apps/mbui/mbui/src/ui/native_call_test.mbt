@@ -5,7 +5,7 @@ fn native_page(
   name : String,
   took : Ref[Result[Json, String]?],
 ) -> (@ui.Ctx) -> Unit {
-  let call : Ref[@ui.NativeCall?] = Ref::new(None)
+  let call : Ref[@ui.NativeCall?] = Ref(None)
   fn(c) {
     if ask.val {
       ask.val = false
@@ -36,8 +36,8 @@ fn native_page(
 
 ///|
 test "a native call waits until the test answers it, taken the frame after; refused, why" {
-  let ask = Ref::new(false)
-  let took : Ref[Result[Json, String]?] = Ref::new(None)
+  let ask = Ref(false)
+  let took : Ref[Result[Json, String]?] = Ref(None)
   let t = @ui.Tester::new(native_page(ask, "adb.phone", took))
   ask.val = true
   t.draw()
@@ -68,8 +68,8 @@ test "a native call waits until the test answers it, taken the frame after; refu
 
 ///|
 test "a name's calls answered as they are asked, each from the frame after" {
-  let ask = Ref::new(false)
-  let took : Ref[Result[Json, String]?] = Ref::new(None)
+  let ask = Ref(false)
+  let took : Ref[Result[Json, String]?] = Ref(None)
   let t = @ui.Tester::new(native_page(ask, "adb.phone", took))
   t.native_answers("adb.phone", fn(p) { { "asked": p } })
   ask.val = true
@@ -82,8 +82,8 @@ test "a name's calls answered as they are asked, each from the frame after" {
 
 ///|
 test "a native call's answer as the app took it is kept on the tape and given again to a Tester replaying it" {
-  let ask = Ref::new(false)
-  let took : Ref[Result[Json, String]?] = Ref::new(None)
+  let ask = Ref(false)
+  let took : Ref[Result[Json, String]?] = Ref(None)
   let t = @ui.Tester::new(native_page(ask, "adb.phone", took))
   t.start_tape()
   let begun = t.time()
@@ -96,8 +96,8 @@ test "a native call's answer as the app took it is kept on the tape and given ag
   let tape = t.tape()
   assert_true(tape.contains("NATIVESAID "))
   // replayed with nothing answered: the run's answer
-  let ask2 = Ref::new(false)
-  let took2 : Ref[Result[Json, String]?] = Ref::new(None)
+  let ask2 = Ref(false)
+  let took2 : Ref[Result[Json, String]?] = Ref(None)
   let u = @ui.Tester::new(native_page(ask2, "adb.phone", took2), time=begun)
   ask2.val = true
   let frames = u.replay_frames(tape)

@@ -132,7 +132,7 @@ fn viz_origin(url : String) -> String {
 
 ///|
 pub fn viz_tokens_json(dark : Bool) -> String {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   for t in viz_tokens(dark) {
     m[t.0] = Json::string(t.1)
   }
@@ -144,7 +144,7 @@ pub let viz_cdns : String = "https://cdnjs.cloudflare.com https://esm.sh https:/
 
 ///|
 pub fn viz_csp(sheets? : Array[String] = []) -> String {
-  let faces = StringBuilder::new()
+  let faces = StringBuilder()
   let seen : Array[String] = []
   for sheet in sheets {
     let o = viz_origin(sheet)
@@ -180,7 +180,7 @@ pub fn viz_ground_style(ground : Int64) -> String {
 /// A colour as CSS has it (#rrggbb, #rrggbbaa when it is not opaque).
 pub fn viz_css_color(c : Int64) -> String {
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_char('#')
   for k in 0..<(if (c & 0xFFL) == 0xFFL { 6 } else { 8 }) {
     let d = ((c >> (28 - 4 * k)) & 15L).to_int()
@@ -453,7 +453,7 @@ pub fn viz_keep(src : Source, station : String, key : String, path : String, sta
 /// A path's last part (its file's name).
 pub fn viz_base_name(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_string()
+    Some(i) => path.view(start_offset=i + 1).to_owned()
     None => path
   }
 }

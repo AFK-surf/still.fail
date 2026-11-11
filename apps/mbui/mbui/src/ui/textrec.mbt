@@ -24,11 +24,11 @@ priv struct TextTable {
 
 ///|
 /// A Tester's kept text (Tester::new's `text`), None: the fake host's own made-up metrics.
-let text_table : Ref[TextTable?] = Ref::new(None)
+let text_table : Ref[TextTable?] = Ref(None)
 
 ///|
 /// Recording (MBUI_TEXT_RECORD=1): -1 not asked yet, 0 no, 1 yes; what was said already.
-let text_rec : Ref[Int] = Ref::new(-1)
+let text_rec : Ref[Int] = Ref(-1)
 
 ///|
 let text_said : Map[String, Bool] = Map([])

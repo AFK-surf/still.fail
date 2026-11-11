@@ -36,7 +36,7 @@ fn emit_restore() -> Unit {
 
 ///|
 test "an answer said while its agent's activity shows waits, then comes out of its avatar: fold, float, spit, return" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   // at work: its activity
   assert_true(t.find("看一下列表") is Some(_))
@@ -57,7 +57,7 @@ test "an answer said while its agent's activity shows waits, then comes out of i
 
 ///|
 test "an answer taller than the window out of the avatar, the list at its end: read from its top, under the bar" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   // its agent at work, the list at its end: it says something long (in over its line), before the fixture's answer
   let first = "列表改成虚拟列表"
@@ -99,7 +99,7 @@ fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
 
 ///|
 test "an agent's picture in its line is where its answer's is, at the row's start: the flying one lands with no step aside" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
@@ -111,7 +111,7 @@ test "an agent's picture in its line is where its answer's is, at the row's star
 
 ///|
 test "the flying avatar goes where its answer comes in: where it was aimed on its way is where it lands, no jump as the answer comes out" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)
@@ -135,7 +135,7 @@ test "the flying avatar goes where its answer comes in: where it was aimed on it
 
 ///|
 test "with the reader scrolled up (not watched), an answer just appears" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   t.wheel(195.0, 400.0, -600.0)
   let em = emits_of("ws1/st1\u{1}s-c1")
@@ -149,7 +149,7 @@ test "with the reader scrolled up (not watched), an answer just appears" {
 
 ///|
 test "read up a little, the answer coming in under what is read comes where it is, its room opening: not there at once" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   t.wheel(195.0, 400.0, -120.0)
   t.run_for(@ui.move_most_ms)
@@ -175,12 +175,12 @@ test "read up a little, the answer coming in under what is read comes where it i
 
 ///|
 test "the answer coming in does not end its own motion: float, spit and return each played whole, the avatar drawn" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
-  let frames : Map[String, Int] = {}
+  let frames : Map[String, Int] = Map([])
   // frame by frame over its whole way out
   let end = t.time() + emit_all_ms()
   while t.time() < end {

@@ -241,7 +241,7 @@ fn sr_arg(args : Array[(String, String)], name : String) -> String {
 /// The first number in `words` (「近 7 天 agent 跨设备执行了 312 个任务」: 312; 「今天用了 3 台设备」: 3), "" for none: what the
 /// view says only in a sentence, said alone.
 fn sr_num(words : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in words {
     if (ch >= '0' && ch <= '9') || (ch == '.' && buf.to_string() != "") {
       buf.write_char(ch)

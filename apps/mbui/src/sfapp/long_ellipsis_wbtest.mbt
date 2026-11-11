@@ -99,8 +99,8 @@ test "a long chat and activity time both have room on their row" {
   let time = t.lines_of("昨天 — 后面")
   assert_eq(chat.length(), 1, msg="\{chat}")
   assert_eq(time.length(), 1, msg="\{time}")
-  assert_true(chat[0].starts_with("Slack") && chat[0].has_suffix("…"), msg="\{chat}")
-  assert_true(time[0].starts_with("昨天") && time[0].has_suffix("…"), msg="\{time}")
+  assert_true(chat[0].has_prefix("Slack") && chat[0].has_suffix("…"), msg="\{chat}")
+  assert_true(time[0].has_prefix("昨天") && time[0].has_suffix("…"), msg="\{time}")
 }
 
 ///|

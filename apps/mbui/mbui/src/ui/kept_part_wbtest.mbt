@@ -95,12 +95,12 @@ test "a part kept is built each frame what moves in it goes, told as it was not 
 test "a part kept is built while the mouse's pointer is over it: what it points at lit, and unlit once it leaves" {
   let steps = fn(t : Tester) {
     t.run_for(kept_ease_ms)
-    t.move(100.0, 20.0)
+    t.move_to(100.0, 20.0)
     t.run_for(kept_ease_ms)
-    t.move(100.0, 300.0)
+    t.move_to(100.0, 300.0)
     t.run_for(kept_ease_ms)
-    t.move(100.0, 20.0)
-    t.move(100.0, 30.0)
+    t.move_to(100.0, 20.0)
+    t.move_to(100.0, 30.0)
     t.run_for(kept_ease_ms)
   }
   let kept = kept_frames(true, 0, steps, pointing=Mouse)

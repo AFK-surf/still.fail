@@ -153,7 +153,7 @@ pub fn begin() -> Unit {
 /// says the machine's own name (MBUI_DEVICE_NAME: the Mac's, the computer's, the phone's as its settings say), that
 /// takes the place of the model or system, so people can tell their devices apart.
 fn tell_device() -> Unit {
-  let facts : Map[String, Json] = {}
+  let facts : Map[String, Json] = Map([])
   if @ui.env("MBUI_OWN") != "1" {
     facts["client"] = Json::string("still.fail mbui")
   }
@@ -307,7 +307,7 @@ fn by_hand(step : String) -> Unit {
 
 ///|
 /// The browser login waiting to come back, and who to tell.
-let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref::new(
+let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref(
   None,
 )
 

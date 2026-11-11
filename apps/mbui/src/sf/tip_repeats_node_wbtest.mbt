@@ -25,7 +25,7 @@ fn repeats_tip(words : String, w : Double, repeats : Bool) -> (Array[String], In
   })
   t.draw()
   let k = t.get(Button, label="按钮")
-  t.move(k.rect.0 + 10.0, k.rect.1 + 10.0)
+  t.move_to(k.rect.0 + 10.0, k.rect.1 + 10.0)
   let laid = fn() { @ui.view_tree().unwrap().work().computes }
   let before = laid()
   t.run_for(tip_delay_ms + tip_settled_ms)

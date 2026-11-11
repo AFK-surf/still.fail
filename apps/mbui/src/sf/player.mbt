@@ -256,7 +256,7 @@ fn player_slice(b : Bytes, offset : Double, length : Int) -> Bytes {
   if from >= to {
     b""
   } else {
-    b[from:to].to_bytes()
+    b[from:to].to_owned()
   }
 }
 

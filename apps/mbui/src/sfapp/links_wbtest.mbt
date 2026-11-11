@@ -5,7 +5,7 @@
 /// The chat scrolled till `words` (a run of its text) is in the list's clear middle, under its bar and over the
 /// composer, not under either; the moment of the last wheel (-1 when none).
 fn scroll_run_clear(t : @ui.Tester, words : String) -> Double {
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   let mut wheeled = -1.0
   for _ in 0..<12 {
     let dy = match t.run_rects(words) {

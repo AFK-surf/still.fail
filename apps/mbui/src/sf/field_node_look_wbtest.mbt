@@ -84,7 +84,7 @@ fn field_look_states(node : Bool, kind : FieldKind, platform : Int, scale : Doub
   // (on its words' line, past its padding: 40 in, 17 down)
   let (x, y) = (40.0, 17.0)
   if platform == 0 {
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@ui.move_most_ms)
     out.push(("pointed", field_look_drawn(t)))
   }
@@ -119,10 +119,10 @@ test "input_node, keyboard and mouse: the pointer on its padding (in its frame, 
     let t = field_look_case(node, OneLine, 0, 1.0, @ui.Field::new())
     // (4 in from its start, in the middle of its height: inside its line round it, before its words' 16 in)
     let unlit = field_look_drawn(t)
-    t.move(4.0, 17.0)
+    t.move_to(4.0, 17.0)
     t.run_for(@ui.move_most_ms)
     let padding = (field_look_drawn(t) != unlit, t.cursor())
-    t.move(40.0, 17.0)
+    t.move_to(40.0, 17.0)
     t.run_for(@ui.move_most_ms)
     lit.push((padding, t.cursor()))
   }
@@ -148,7 +148,7 @@ test "input_node, keyboard and mouse: a layer over it, the pointer on the layer 
   t.run_for(@ui.move_most_ms)
   let (x, y) = (40.0, 17.0)
   let unlit = field_look_drawn(t)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@ui.move_most_ms)
   let lit = field_look_drawn(t) != unlit
   over.set(true)
@@ -194,7 +194,7 @@ fn field_solid_states(node : Bool, platform : Int) -> Array[(String, Array[Strin
   let out = [("unlit", field_look_drawn(t))]
   let (x, y) = (40.0, 17.0)
   if platform == 0 {
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@ui.move_most_ms)
     out.push(("pointed", field_look_drawn(t)))
   }

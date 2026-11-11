@@ -7,9 +7,9 @@ fn png_be32(a : Array[Byte], at : Int) -> Int {
 
 ///|
 test "a shot six windows tall: one PNG of it all at the window's scale, taken in the frame it was asked in, none of it on the screen" {
-  let take = Ref::new(false)
-  let got : Ref[Bytes?] = Ref::new(None)
-  let told = Ref::new(0)
+  let take = Ref(false)
+  let got : Ref[Bytes?] = Ref(None)
+  let told = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), h=Px(40.0), bg=0xFF0000FFL, fn() {  }) |> ignore
@@ -35,7 +35,7 @@ test "a shot six windows tall: one PNG of it all at the window's scale, taken in
   t.draw()
   assert_eq(told.val, 1)
   let png = got.val.unwrap().to_array()
-  assert_eq(png[1:4].to_array(), [b'P', b'N', b'G'])
+  assert_eq(png[1:4].to_owned(), [b'P', b'N', b'G'])
   // 150 × 750 points, two pixels a point
   assert_eq((png_be32(png, 16), png_be32(png, 20)), (300, 1500))
   // what the screen shows is as it was; the shot's words are nowhere once it is taken
@@ -46,9 +46,9 @@ test "a shot six windows tall: one PNG of it all at the window's scale, taken in
 
 ///|
 test "a shot whose view no longer builds it is let go, never told" {
-  let take = Ref::new(false)
-  let shown = Ref::new(true)
-  let told = Ref::new(0)
+  let take = Ref(false)
+  let shown = Ref(true)
+  let told = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       if take.val {
@@ -95,7 +95,7 @@ test "a picture made as nodes, asked at a cause: one PNG of all of it at its own
   t.draw()
   assert_eq(told.val, 1)
   let png = got.val.unwrap().to_array()
-  assert_eq(png[1:4].to_array(), [b'P', b'N', b'G'])
+  assert_eq(png[1:4].to_owned(), [b'P', b'N', b'G'])
   // 150 × 750 points, two pixels a point, whatever the window's
   assert_eq((png_be32(png, 16), png_be32(png, 20)), (300, 1500))
   let words = t.shots()

@@ -32,7 +32,7 @@ pub fn Tester::frame_export(self : Tester) -> Array[String] {
     let n = (v * 255.0).round().to_int()
     let n = if n < 0 { 0 } else if n > 255 { 255 } else { n }
     let d = "0123456789abcdef"
-    d[n / 16:n / 16 + 1].to_string() + d[n % 16:n % 16 + 1].to_string()
+    d[n / 16:n / 16 + 1].to_owned() + d[n % 16:n % 16 + 1].to_owned()
   }
   let kind_of = fn(k : Double) -> String {
     match k.to_int() {
@@ -117,10 +117,10 @@ pub fn Tester::frame_export(self : Tester) -> Array[String] {
 pub fn Tester::probe_at(self : Tester, x : Double, y : Double) -> String {
   self.reads_own()
   let before = self.frame_export()
-  self.move(x, y)
+  self.move_to(x, y)
   self.frame()
   let after = self.frame_export()
-  let counted : Map[String, Int] = {}
+  let counted : Map[String, Int] = Map([])
   for l in before {
     counted[l] = counted.get(l).unwrap_or(0) + 1
   }

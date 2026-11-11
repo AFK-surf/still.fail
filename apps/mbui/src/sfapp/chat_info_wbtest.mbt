@@ -45,7 +45,7 @@ test "大屏: a chat being renamed has its new title in its bar at once, a turni
   let bar_words = t.words().filter(fn(w) { w.2 < 60.0 && w.1 > 300.0 }).map(fn(w) { w.0 })
   assert_true(!bar_words.contains("整理发布清单"), msg="\{bar_words}")
   let (x, y, w, h) = t.rect_of("发布清单 v2").unwrap()
-  t.move(x + w + 12.0, y + h / 2.0)
+  t.move_to(x + w + 12.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms * 3.0)
   assert_true(t.find("正在重命名") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
 }
@@ -58,7 +58,7 @@ test "大屏: a rename that failed leaves the chat's own title in its bar, a mar
   let bar = t.words().filter(fn(w) { w.2 < 60.0 && w.1 > 300.0 && w.0 == "整理发布清单" })
   assert_true(bar.length() == 1, msg="\{t.words().map(fn(w) { (w.0, w.1, w.2) })}")
   let (_, x, y, w, h, _) = bar[0]
-  t.move(x + w + 12.0, y + h / 2.0)
+  t.move_to(x + w + 12.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms * 3.0)
   assert_true(t.find("无法重命名：Willow 不在线") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
 }

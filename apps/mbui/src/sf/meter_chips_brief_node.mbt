@@ -138,7 +138,7 @@ pub fn meter_chips_brief_node(parent : @view.View, meters : () -> Array[Json], l
 fn meter_brief_figure(m : Json?) -> String {
   let unit = chip_str(m, "unit")
   if chip_str(m, "big") != "" {
-    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
+    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_owned() })
   } else {
     chip_str(m, "remaining")
   }
@@ -157,7 +157,7 @@ fn meter_brief_wide(v : @view.View, m : Json, cut~ : Bool) -> Double {
   let wide = fn(s : String) { if s == "" { 0.0 } else { node_words_w(s, size, weight=look.weight) } }
   let chars = words.to_array()
   let figure = if cut && chars.length() > meter_brief_kept {
-    dmin(wide(words), wide(String::from_array(chars[:meter_brief_kept].to_array()) + "…"))
+    dmin(wide(words), wide(String::from_array(chars[:meter_brief_kept].to_owned()) + "…"))
   } else {
     wide(words)
   }

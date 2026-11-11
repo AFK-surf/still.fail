@@ -54,12 +54,12 @@ let history_note_red : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger
 ///|
 /// How a history's steps were put in place as it opened, by its list's key: at
 /// its newest, followed (true), or at an entry, not followed (false). Not there: not put in place yet.
-let history_placed : Map[String, Bool] = {}
+let history_placed : Map[String, Bool] = Map([])
 
 ///|
 /// The histories whose page before, asked for an entry before what was loaded, could not be had: put in place with
 /// what there is.
-let history_short : Map[String, Bool] = {}
+let history_short : Map[String, Bool] = Map([])
 
 ///|
 /// Its details, made once in `v` and scrolling in it, as agent `a`, its card and its station say them now: where it
@@ -478,7 +478,7 @@ let boxed_n : Ref[Int] = { val: 0 }
 
 ///|
 /// The steps' parts as the core read them (`history.tool`), by what was asked.
-let tool_parts : Map[String, Json] = {}
+let tool_parts : Map[String, Json] = Map([])
 
 ///|
 /// Its turns' value with the mark of its work past its turns after it (work_mark): one line, its words cut short only

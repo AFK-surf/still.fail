@@ -142,7 +142,7 @@ test "a host call interrupted before its answer tells the host to stop" {
 ///|
 test "a fiber of the root scope that fails is a defect, told and kept" {
   let rt = @effect.Runtime::new()
-  ignore(rt.fork(fn() -> Unit { raise Broke("lost") }))
+  ignore(rt.fork(fn() -> Unit raise { raise Broke("lost") }))
   ignore(rt.run_ready())
   assert_eq(rt.defects.length(), 1)
 }

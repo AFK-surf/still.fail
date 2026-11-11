@@ -18,7 +18,7 @@ test "chat bar over messages: pressing and dragging from its buttons picks no wo
           let made = t.ctx().selection_made()
           t.press_at(cx, cy)
           assert_eq(t.ctx().selection_made(), made, msg="\{label} at scroll \{d} began a selection")
-          t.move(cx - 80.0, cy + 3.0)
+          t.move_to(cx - 80.0, cy + 3.0)
           assert_eq(t.ctx().selected_text(), "", msg="\{label} at scroll \{d}")
           t.release(cx - 80.0, cy + 3.0)
           t.run_for(@kit.presence_out_ms)

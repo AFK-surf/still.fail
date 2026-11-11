@@ -41,7 +41,7 @@ fn activity_extreme_clock_positions(
   t.run_for(squeeze_opening)
   if two_agents {
     let (x, y, _, h) = t.rect_of(before).unwrap()
-    t.move(x + 2.0, y + h / 2.0)
+    t.move_to(x + 2.0, y + h / 2.0)
     t.frame()
     assert_true(t.all(Button).iter().any(fn(s) { s.label == "停止 Claude" }), msg="the stop control is visible")
   }

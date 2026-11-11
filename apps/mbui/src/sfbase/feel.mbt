@@ -6,7 +6,7 @@
 ///|
 /// What each thing felt as it changes was last seen to be (felt_change), by its key, and on which of its page's stints
 /// (Ctx::page_stint): none until it is first seen.
-let felt_seen : Map[String, (Bool, Int)] = {}
+let felt_seen : Map[String, (Bool, Int)] = Map([])
 
 ///|
 /// As at the start (the app's reset).

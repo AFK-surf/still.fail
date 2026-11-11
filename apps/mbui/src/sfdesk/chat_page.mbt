@@ -548,7 +548,7 @@ fn via_dot(c : @ui.Ctx, via : String) -> Unit {
 /// People overlapping a little: `most` of them at most, each a 16 circle (their picture, or
 /// their initial), each 4 over the one before; more than that, +n after them; their names in its tip.
 fn people_stack(c : @ui.Ctx, src : Source, key : String, people : Array[Person], most : Int) -> Unit {
-  let shown = if people.length() > most { people[:most].to_array() } else { people }
+  let shown = if people.length() > most { people[:most].to_owned() } else { people }
   let id = c.id(key)
   let t = @sf.theme()
   let ring = people_ring.then(@ui.style(bg=Data(t.p.sidebar)))

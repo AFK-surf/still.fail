@@ -100,21 +100,21 @@ fn Hands::lit(self : Hands) -> (Bool, Bool) {
 ///|
 test "a mouse from an old view's button to a tree's and back: the one under it lit, the other no longer, at once" {
   let h = hands()
-  h.t.move(40.0, 20.0)
+  h.t.move_to(40.0, 20.0)
   assert_eq(h.lit(), (true, false))
-  h.t.move(240.0, 40.0)
+  h.t.move_to(240.0, 40.0)
   assert_eq(h.lit(), (false, true))
-  h.t.move(40.0, 20.0)
+  h.t.move_to(40.0, 20.0)
   assert_eq(h.lit(), (true, false))
   // (between them, over neither)
-  h.t.move(170.0, 150.0)
+  h.t.move_to(170.0, 150.0)
   assert_eq(h.lit(), (false, false))
 }
 
 ///|
 test "a still mouse: the tree's button moved under it lit, moved off it not, taking presses no more not; a layer over it, the tree's or the old frame's, not" {
   let h = hands()
-  h.t.move(100.0, 40.0)
+  h.t.move_to(100.0, 40.0)
   assert_eq(h.lit(), (false, false))
   h.at.set(60.0)
   assert_eq(h.lit(), (false, true))
@@ -137,7 +137,7 @@ test "a still mouse: the tree's button moved under it lit, moved off it not, tak
 ///|
 test "the mouse gone from the window: nothing of the tree's lit; a finger's tap leaves nothing lit" {
   let h = hands()
-  h.t.move(240.0, 40.0)
+  h.t.move_to(240.0, 40.0)
   assert_eq(h.lit(), (false, true))
   h.t.leave()
   assert_eq(h.lit(), (false, false))
@@ -149,7 +149,7 @@ test "the mouse gone from the window: nothing of the tree's lit; a finger's tap 
 ///|
 test "a still mouse on an old view's button: the tree's button moved over it lit and the old one not, in that frame; moved off it, the old one again" {
   let h = hands()
-  h.t.move(40.0, 30.0)
+  h.t.move_to(40.0, 30.0)
   assert_eq(h.lit(), (true, false))
   h.at.set(0.0)
   assert_eq(h.lit(), (false, true))
@@ -160,7 +160,7 @@ test "a still mouse on an old view's button: the tree's button moved over it lit
 ///|
 test "a still mouse on the tree's button: what its takes reads said otherwise, it is not pointed at, and is again" {
   let h = hands()
-  h.t.move(240.0, 40.0)
+  h.t.move_to(240.0, 40.0)
   assert_eq(h.lit(), (false, true))
   h.enabled.set(false)
   assert_eq(h.lit(), (false, false), msg="takes nothing there")
@@ -172,12 +172,12 @@ test "a still mouse on the tree's button: what its takes reads said otherwise, i
 test "a still mouse where the tree's button takes nothing at first: lit as it comes to take it; over an old view's button, that one lit as it takes nothing there" {
   let h = hands()
   h.enabled.set(false)
-  h.t.move(240.0, 40.0)
+  h.t.move_to(240.0, 40.0)
   assert_eq(h.lit(), (false, false))
   h.enabled.set(true)
   assert_eq(h.lit(), (false, true), msg="taking it from now")
   // (over the old view's button: the old one lit where the tree's takes nothing, the tree's where it does)
-  h.t.move(40.0, 30.0)
+  h.t.move_to(40.0, 30.0)
   h.at.set(0.0)
   assert_eq(h.lit(), (false, true))
   h.enabled.set(false)
@@ -189,7 +189,7 @@ test "a still mouse where the tree's button takes nothing at first: lit as it co
 ///|
 test "the window's tree let go: what followed where the pointer is (what its takes read) followed no more, at once" {
   let h = hands()
-  h.t.move(240.0, 40.0)
+  h.t.move_to(240.0, 40.0)
   assert_eq(h.lit(), (false, true))
   assert_true(h.enabled.watched())
   view_tree().unwrap().dispose()
@@ -199,13 +199,13 @@ test "the window's tree let go: what followed where the pointer is (what its tak
 ///|
 test "a still mouse and a layer of the old frame's, not modal: one passing the pointer on leaves the tree's button lit, one beside it too; one over the old button, that one not lit" {
   let h = hands()
-  h.t.move(240.0, 40.0)
+  h.t.move_to(240.0, 40.0)
   assert_eq(h.lit(), (false, true))
   h.layer.set(1)
   assert_eq(h.lit(), (false, true), msg="passed on")
   h.layer.set(2)
   assert_eq(h.lit(), (false, true), msg="beside it")
-  h.t.move(40.0, 30.0)
+  h.t.move_to(40.0, 30.0)
   assert_eq(h.lit(), (false, false), msg="the old button under the layer")
   // (the old views light what is under the pointer as their frame ends, by its targets, and draw it so the next: their
   // own way, as ever, desktop.mbt; the tree's nothing either way)
@@ -234,7 +234,7 @@ test "the frame's targets found before the tree is drawn are found once: an old 
     |> ignore
   })
   t.draw()
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.frame_at(t.time() + frame_period_default)
   let c = g()
   let once = fn(ids : Array[Int]) { Set::from_array(ids).length() == ids.length() }
@@ -271,7 +271,7 @@ test "an old view's link in the window's tree: pressed where its words are, as t
 ///|
 test "a still mouse and a layer of the old frame's passing the pointer on, then not, then again (the same layer, the same targets): the tree's button lit, not, lit, each in its frame" {
   let h = hands()
-  h.t.move(240.0, 40.0)
+  h.t.move_to(240.0, 40.0)
   h.layer.set(1)
   assert_eq(h.lit(), (false, true))
   h.layer.set(3)
@@ -387,7 +387,7 @@ test "each old view's place among the frame's targets given out with them: one l
     |> ignore
   })
   t.draw()
-  t.move(180.0, 20.0)
+  t.move_to(180.0, 20.0)
   t.draw()
   a_on.set(false)
   layer.set(false)

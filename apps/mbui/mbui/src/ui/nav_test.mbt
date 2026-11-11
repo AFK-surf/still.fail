@@ -194,7 +194,7 @@ test "the system's back gesture (predictive back) follows, then goes or not" {
 test "a page asks the stack where it stands: the root under a page sliding in over it is still the root, one leaving keeps its own" {
   let nav = @ui.Nav::new(0)
   // each page's under as it was last built
-  let told : Map[Int, Int?] = {}
+  let told : Map[Int, Int?] = Map([])
   let t = @ui.Tester::new(fn(c) {
     c.nav(nav, fn(i) {
       told[i] = nav.under()
@@ -438,7 +438,7 @@ let test_page_wait_ms : Double = 100.0
 ///|
 test "a page pushed waits for what it shows: the slide starts as it comes, from then" {
   let nav = @ui.Nav::new(0)
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(nav_wait_view(nav, ready, test_page_wait_ms))
   t.tap_text("open 1")
   let pushed = t.time()
@@ -460,7 +460,7 @@ test "a page pushed waits for what it shows: the slide starts as it comes, from 
 ///|
 test "a page pushed whose data never comes slides in once it has waited the most" {
   let nav = @ui.Nav::new(0)
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(nav_wait_view(nav, ready, test_page_wait_ms))
   t.tap_text("open 1")
   let pushed = t.time()
@@ -539,7 +539,7 @@ fn flat_wait_view(nav : @ui.Nav[String], ready : Ref[Bool], most : Double) -> (@
 test "nav_flat: a page put on top shows once it has what it shows, the page before staying as it was and told it left only then" {
   let left : Array[String] = []
   let nav = @ui.Nav::new("page one", on_leave=fn(p) { left.push(p) })
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
   t.draw()
   nav.replace("page two")
@@ -556,7 +556,7 @@ test "nav_flat: a page put on top shows once it has what it shows, the page befo
 ///|
 test "nav_flat: a page put on top whose data never comes shows once it has waited the most" {
   let nav = @ui.Nav::new("page one")
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
   t.draw()
   nav.push("page two")

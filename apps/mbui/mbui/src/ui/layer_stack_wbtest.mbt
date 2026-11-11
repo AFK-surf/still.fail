@@ -142,7 +142,7 @@ fn stack_ids(t : Tester, names : Array[String]) -> Map[String, Int] {
 fn stack_takes(t : Tester, k : StackCase, ids : Map[String, Int]) -> (Array[String], Array[String], String?) {
   let from = k.pressed.length()
   t.tap(200.0, 150.0)
-  let tapped = k.pressed[from:].to_array()
+  let tapped = k.pressed[from:].to_owned()
   let from = k.pressed.length()
   for n in ["甲", "乙", "丙"] {
     match ids.get(n) {
@@ -153,7 +153,7 @@ fn stack_takes(t : Tester, k : StackCase, ids : Map[String, Int]) -> (Array[Stri
       None => ()
     }
   }
-  let acted = k.pressed[from:].to_array()
+  let acted = k.pressed[from:].to_owned()
   t.tab()
   (tapped, acted, t.focused().map(fn(s) { s.label }))
 }

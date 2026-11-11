@@ -140,7 +140,7 @@ test "find cubic max curvature 1" {
   ]
   let t_values : Array[Float] = [0.0, 0.0, 0.0]
   let n = find_cubic_max_curvature(src, t_values)
-  assert_eq(t_values[:n].to_array(), [0.0, 0.5, 1.0])
+  assert_eq(t_values[:n].to_owned(), [0.0, 0.5, 1.0])
 }
 
 ///|

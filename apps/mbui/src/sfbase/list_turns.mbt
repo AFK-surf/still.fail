@@ -35,7 +35,7 @@ pub(all) struct Turns {
 }
 
 ///|
-pub let turns_by : Map[String, Turns] = {}
+pub let turns_by : Map[String, Turns] = Map([])
 
 ///|
 /// Chat `key`'s turns (its station and session, as emits_of's).

@@ -17,7 +17,7 @@ priv struct Held {
 }
 
 ///|
-let helds : Map[Int, Held] = {}
+let helds : Map[Int, Held] = Map([])
 
 ///|
 /// What a wait's time added up frame by frame may fall short of its length by, from rounding, and still have held.
@@ -43,7 +43,7 @@ fn periods_at(now : Double, from : Double, period : Double) -> (Int, Double) {
 ///|
 /// When each thing marked happened (Ctx::mark), by its id, as a signal of its own: what asks of one (Ctx::within) is
 /// told as that one is marked again, none other. One asked of and never marked holds -inf.
-let marks_at : Map[Int, @signals.Signal[Double]] = {}
+let marks_at : Map[Int, @signals.Signal[Double]] = Map([])
 
 ///|
 /// When what `id` names was last marked (-inf: never), its signal made as it is first asked of or marked.
@@ -262,7 +262,7 @@ priv struct Due {
 ///|
 /// What is due, by the id of the key it was said under (Ctx::at_moment).
 // kept across runs: said as each is declared, let go as it is done, called off or declared anew; a run's start clears it
-let dues : Map[Int, Due] = {}
+let dues : Map[Int, Due] = Map([])
 
 ///|
 /// `f` done once at the moment `when` (the frames' clock), declared under `key` (the cause it is the moment of: "this

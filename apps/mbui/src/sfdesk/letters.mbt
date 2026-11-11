@@ -5,7 +5,7 @@
 
 ///|
 /// The chat opened in each chat's letters (by the chat's key; none: the list).
-let letters_opened : Map[String, String] = {}
+let letters_opened : Map[String, String] = Map([])
 
 ///|
 fn letters_reset() -> Unit {

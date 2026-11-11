@@ -151,7 +151,7 @@ let clen_order : FixedArray[Int] = [
 
 ///|
 /// The fixed block's codes (RFC 1951 3.2.6), made once.
-let fixed_codes : Ref[(Huff, Huff)?] = Ref::new(None)
+let fixed_codes : Ref[(Huff, Huff)?] = Ref(None)
 
 ///|
 fn fixed() -> (Huff, Huff) {
@@ -341,7 +341,7 @@ fn inflate_at(data : Bytes, start : Int, size : Int) -> (Bytes, Int)? {
     return None
   }
   // the bytes whole that are still in `buf` were not the deflated ones'
-  Some((Bytes::from_fixedarray(out.buf, len=out.len), b.at - b.n / 8))
+  Some((Bytes::from_array(out.buf[:out.len]), b.at - b.n / 8))
 }
 
 ///|

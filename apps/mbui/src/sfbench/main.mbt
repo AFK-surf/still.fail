@@ -16,7 +16,7 @@ fn main {
   let dark = @film.arg("MBUI_DARK") == "1"
   // (the app made as sffix makes it, at the Tester's first frame: the code face it carries given then, to the
   // Tester's text, which is this Mac's)
-  let src : Ref[@sfapp.Source?] = Ref::new(None)
+  let src : Ref[@sfapp.Source?] = Ref(None)
   // (made once, as the window's tree is made in the Tester, after its text is set, or as its first frame begins)
   let source = fn() {
     match src.val {

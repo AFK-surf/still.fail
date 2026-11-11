@@ -84,7 +84,7 @@ pub fn chosen_of(v : Json?) -> Chosen {
 pub fn browse_view_of(v : Json?) -> BrowseView? {
   match v {
     Some(Object(_)) => {
-      let folders : Map[String, Array[String]] = {}
+      let folders : Map[String, Array[String]] = Map([])
       match field(v, "folders") {
         Some(Object(m)) =>
           for k, x in m {
@@ -92,7 +92,7 @@ pub fn browse_view_of(v : Json?) -> BrowseView? {
           }
         _ => ()
       }
-      let widths : Map[String, Double] = {}
+      let widths : Map[String, Double] = Map([])
       match field(v, "widths") {
         Some(Object(m)) =>
           for k, x in m {
@@ -165,7 +165,7 @@ let browse_read : Derived[BrowseView?] = Derived::new("driveBrowse", fn(v, _) {
 pub fn dv_in_order(names : Array[String]?, entries : Array[DvEntry]) -> Array[DvEntry]? {
   match names {
     Some(ns) => {
-      let by : Map[String, DvEntry] = {}
+      let by : Map[String, DvEntry] = Map([])
       for e in entries {
         by[e.name] = e
       }
@@ -185,7 +185,7 @@ pub fn dv_in_order(names : Array[String]?, entries : Array[DvEntry]) -> Array[Dv
 ///|
 /// The order and whether hidden files show, changed (`drive.arrange`: what is not said stays).
 pub fn dv_arrange(src : Source, by? : String, down? : Bool, hidden? : Bool) -> Unit {
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   match by {
     Some(b) => o["by"] = Json::string(b)
     None => ()
@@ -215,7 +215,7 @@ pub fn dv_shown(src : Source, station : String, root : String, path : String, en
 
 ///|
 /// Each folder's entries as last shown in an order said of the same entries (dv_in_order_held), by where it is.
-let dv_orders_held : Map[String, Array[DvEntry]] = {}
+let dv_orders_held : Map[String, Array[DvEntry]] = Map([])
 
 ///|
 /// Let go of each folder's entries held (sfbase's reset).
@@ -231,7 +231,7 @@ fn dv_orders_reset() -> Unit {
 pub fn dv_in_order_held(key : String, names : Array[String]?, entries : Array[DvEntry]) -> Array[DvEntry]? {
   match names {
     Some(ns) => {
-      let have : Set[String] = Set::new()
+      let have : Set[String] = Set([])
       for e in entries {
         have.add(e.name)
       }

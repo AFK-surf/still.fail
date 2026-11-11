@@ -223,7 +223,7 @@ fn center_node(
     g.show(fn() { others().length() > 0 }, fn(e) {
       @sf.panel_row_node(e, fn() { @sf.t("web-pages.screen.endOthers", args=[("count", others().length().to_string())]) }, fn() {
         for o in @signals.untracked(others) {
-          let params = Map::of([("station", Json::string(s.station)), ("screen", Json::string(s.screen)), ("view", Json::string(text(Some(o), "id")))])
+          let params = Map([("station", Json::string(s.station)), ("screen", Json::string(s.screen)), ("view", Json::string(text(Some(o), "id")))])
           (src.call)("screen.endView", Json::object(params), @sfbase.answer_unread)
         }
         done()

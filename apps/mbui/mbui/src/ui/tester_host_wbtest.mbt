@@ -599,12 +599,12 @@ test "fibers forked between frames at one moment, a seed: in their order; their 
   let children : Array[Array[String]] = []
   for seed in 1..=8 {
     let o = order(seed, false)
-    let fibers = o.filter(r => r.starts_with("fiber"))
+    let fibers = o.filter(r => r.has_prefix("fiber"))
     assert_eq(fibers, ["fiber 0", "fiber 1", "fiber 2", "fiber 3"], msg="seed \{seed}: \{o}")
     assert_eq(o.length(), 2 * forked_n)
     assert_eq(order(seed, false), o, msg="seed \{seed} twice")
     assert_eq(order(seed, true), o, msg="seed \{seed}, a frame between each")
-    let c = o.filter(r => r.starts_with("child"))
+    let c = o.filter(r => r.has_prefix("child"))
     if !children.contains(c) {
       children.push(c)
     }

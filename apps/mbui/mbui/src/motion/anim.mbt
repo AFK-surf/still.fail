@@ -486,7 +486,7 @@ pub fn Anim::snap(self : Anim, c : @ui.Ctx, v : Double) -> Unit {
 ///|
 /// What animates, kept from frame to frame by its key (in the scope it was asked in), forgotten once neither used nor
 /// moving for a while.
-let anims : Map[Int, Anim] = {}
+let anims : Map[Int, Anim] = Map([])
 
 ///|
 /// The keys of the Anims whose asker was no longer built while they moved: let go once they are still (anims_let_go).

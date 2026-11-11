@@ -242,7 +242,7 @@ test "desk composer: the pointer moving over the `@` menu's chats chooses them; 
   let chosen = fn() raise { t.get(Button, label=b).selected }
   // moved onto it: chosen
   let (x, y, w, h) = t.get(Button, label=b).rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   assert_eq(chosen(), Some(true))
   // the keys move the choice to another, the pointer resting where it was
@@ -251,7 +251,7 @@ test "desk composer: the pointer moving over the `@` menu's chats chooses them; 
   t.frame()
   assert_eq(chosen(), Some(false))
   // moved again over it: chosen again
-  t.move(x + w / 2.0 + 4.0, y + h / 2.0)
+  t.move_to(x + w / 2.0 + 4.0, y + h / 2.0)
   t.frame()
   assert_eq(chosen(), Some(true))
 }
@@ -524,7 +524,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
 /// How many pictures a tester decoded (each at as many sizes as it was drawn at: a picture covering its tile, once its
 /// proportions are known, again at the size it is drawn).
 fn loaded_sources(t : @ui.Tester) -> Int {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   for l in t.image_loads() {
     seen[l.0] = true
   }
@@ -828,7 +828,7 @@ fn strip_photos(t : @ui.Tester) -> Array[String] {
     // image N PX "SOURCE"
     let parts = line.split("\"").to_array()
     if line.has_prefix("image ") && parts.length() >= 2 && parts[1].has_prefix("content://") {
-      out.push(parts[1].to_string())
+      out.push(parts[1].to_owned())
     }
   }
   out

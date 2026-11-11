@@ -51,7 +51,7 @@ let switches_known : Map[String, Int] = {
 
 ///|
 test "the released app's ways a replay takes from its trace: how many traces are without each, within its bar" {
-  let off : Map[String, Array[String]] = {}
+  let off : Map[String, Array[String]] = Map([])
   let names = @sfreplay.tape_barred()
   names.sort()
   for name in names {

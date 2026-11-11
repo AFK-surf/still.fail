@@ -134,10 +134,10 @@ test "a message's file as a card: its capsule as wide as what it says, its name 
   // under the pointer, its ground the hover's
   let ground = fn() { t.drawn_rects().filter(fn(r) { r.1 == cy && r.2 == cw }).map(fn(r) { r.4 }) }
   let at_rest = ground()
-  t.move(cx + cw / 2.0, cy + 10.0)
+  t.move_to(cx + cw / 2.0, cy + 10.0)
   t.run_for(@ui.move_most_ms)
   assert_true(ground() != at_rest)
-  t.move(380.0, 300.0)
+  t.move_to(380.0, 300.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(ground(), at_rest)
   // the viewer's: at the column's end
@@ -335,7 +335,7 @@ test "a file's card whose name shows cut short says it whole by it as the pointe
   for name in [long, "report.pdf"] {
     let t = files_new(390.0, files_src(), [files_one(name)], false)
     let (cx, cy, cw) = files_capsules(t)[0]
-    t.move(cx + cw / 2.0, cy + 10.0)
+    t.move_to(cx + cw / 2.0, cy + 10.0)
     t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
     let tips = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
     assert_eq(tips, if name == long { [long] } else { [] }, msg=name)

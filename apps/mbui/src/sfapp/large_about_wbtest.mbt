@@ -414,7 +414,7 @@ fn changelog_dragged_past() -> (Array[Double], String, String, String, String) {
   let (x, y, _, h) = t.rect_of(line).unwrap()
   let ys = [first_day_y(t, "甲")]
   t.press_at(x + 4.0, y + h / 2.0)
-  t.move(x + 40.0, 898.0)
+  t.move_to(x + 40.0, 898.0)
   t.run_for(held_past_ms)
   ys.push(first_day_y(t, "甲"))
   let held = t.ctx().selected_text()
@@ -506,7 +506,7 @@ test "大屏 一台 station 的记忆 made once: what it is for by one mark afte
   let marks = t.semantics().filter(fn(n) { n.role == Button && n.label == @sf.t("web-main.about") })
   guard marks is [m] else { fail("its mark read out \{marks.length()} times") }
   let mark = m.rect
-  t.move(mark.0 + mark.2 / 2.0, mark.1 + mark.3 / 2.0)
+  t.move_to(mark.0 + mark.2 / 2.0, mark.1 + mark.3 / 2.0)
   t.run_for(@kit.tooltip_delay_ms + @ui.move_most_ms)
   let words = words_where(t)
   assert_true(words.iter().any(fn(w) { w.has_prefix(@sf.t("web-pages.settings.memory.lead")) }), msg="its tip: \{words}")
@@ -587,7 +587,7 @@ fn archiving_pictures_asked(w : Double, url : String) -> (Array[Int], Array[Int]
         }
         _ => []
       }
-      { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+      { ..r, value: Some(Json::array(first + a[1:].to_owned())) }
     },
   }
   @sfdesk.pane_makes.val = true
@@ -653,7 +653,7 @@ test "归档 made once, on every screen: a station's picture answered later, whi
           }
           _ => []
         }
-        { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+        { ..r, value: Some(Json::array(first + a[1:].to_owned())) }
       },
     }
     @sfdesk.pane_makes.val = true

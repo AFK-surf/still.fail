@@ -39,8 +39,8 @@ fn button_pair(
           let b = c.box(dir=Row, h=Px(36.0), padx=16.0, bg=0x3366CCFFL, radius=18.0, align=ACenter, fn() {
             at = c.text(label, size=13.0, line=18.0, wrap=false, color=0xFFFFFFFFL)
           })
-          reshape(c, b, "t/shape", by=label, spec=move())
-          layout(c, at, "t/words", by=label, spec=move())
+          reshape(c, b, "t/shape", by=label, spec=moved())
+          layout(c, at, "t/words", by=label, spec=moved())
         })
         if half {
           c.look(outer, @ui.look(scale=0.5))
@@ -336,8 +336,8 @@ fn nested_pair(room : @signals.Signal[Double], node : Bool, box_first? : Bool = 
             inner = c.box(pad=2.7, bg=0x3366CCFFL, fn() { c.text("Hi", size=13.0, line=18.0, wrap=false, color=0xFFFFFFFFL) |> ignore })
             c.box(w=Px(10.5), h=Px(10.5), bg=0xCC3333FFL, fn() {  }) |> ignore
           })
-          layout(c, row, "t/row", by=r.to_string(), spec=move())
-          layout(c, inner, "t/inner", by=r.to_string(), spec=move())
+          layout(c, row, "t/row", by=r.to_string(), spec=moved())
+          layout(c, inner, "t/inner", by=r.to_string(), spec=moved())
         })
         |> ignore
       }

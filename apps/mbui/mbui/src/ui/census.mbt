@@ -47,11 +47,11 @@ pub fn Tester::census(self : Tester) -> Census {
   self.reads_own()
   ignore(self)
   let c = g()
-  let text : Map[String, Bool] = {}
-  let weight : Map[String, Bool] = {}
-  let space : Map[String, Bool] = {}
-  let radius : Map[String, Bool] = {}
-  let color : Map[String, Bool] = {}
+  let text : Map[String, Bool] = Map([])
+  let weight : Map[String, Bool] = Map([])
+  let space : Map[String, Bool] = Map([])
+  let radius : Map[String, Bool] = Map([])
+  let color : Map[String, Bool] = Map([])
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.kind == kind_text || n.kind == kind_rich {

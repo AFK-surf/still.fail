@@ -8,12 +8,12 @@
 ///|
 /// The field whose eye opened the item, shown as it opens ("" none), by item.
 // kept across runs: said by the fields' eyes; vault_item_reset empties it
-let vi_reveal : Map[String, String] = {}
+let vi_reveal : Map[String, String] = Map([])
 
 ///|
 /// The fields shown in the clear, by item and field.
 // kept across runs: said by the fields' eyes; vault_item_reset empties it
-let vi_shown : Map[String, Bool] = {}
+let vi_shown : Map[String, Bool] = Map([])
 
 ///|
 fn vault_item_reset() -> Unit {

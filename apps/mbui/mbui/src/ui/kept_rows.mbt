@@ -92,7 +92,8 @@ fn clip_into(k : Int, c : FixedArray[Double]) -> Unit {
   }
   let mut most = dmax(own, clip_cut_least)
   let mut from = if own > clip_cut_least { -2 } else { -1 }
-  for o in if beyond && !apart { [k, k + 12] } else { [k] } {
+  let rows_at = if beyond && !apart { [k, k + 12] } else { [k] }
+  for o in rows_at {
     let d = clip_cut_depth(s, o, x0, y0, x1, y1, r, sm)
     if d > most {
       most = d

@@ -5,7 +5,7 @@
 test "wide: an agent's picture in its line is where its answer's is, out in the margin: the flying one lands with no step aside" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   t.tap_text("发消息")
   t.type_text("看一下列表")
@@ -25,7 +25,7 @@ test "wide: an agent's picture in its line is where its answer's is, out in the 
 test "wide: the avatar an answer comes out of is drawn where it flies in the window, the chat beside the sidebar" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   t.tap_text("发消息")
   t.type_text("看一下列表")

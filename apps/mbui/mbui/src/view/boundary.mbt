@@ -19,7 +19,7 @@ pub let faults_stop : Ref[Bool] = Ref(true)
 ///|
 /// The faults told so far (each told once).
 // kept across runs: what the host was told, never told again
-let faults_said : Map[String, Bool] = {}
+let faults_said : Map[String, Bool] = Map([])
 
 ///|
 /// A fault with no boundary round it known (said outside any node): stopped where faults stop, else told.

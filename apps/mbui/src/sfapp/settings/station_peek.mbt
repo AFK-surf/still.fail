@@ -92,7 +92,7 @@ pub fn station_peek_part(c : @ui.Ctx, address : String) -> Unit {
             // (none of its own: its name's first letter)
             let name = peek_name(core, address)
             if name.length() > 0 {
-              c.text(name.view(end_offset=1).to_string(), style=peek_part_name) |> ignore
+              c.text(name.view(end_offset=1).to_owned(), style=peek_part_name) |> ignore
             }
           }
         })

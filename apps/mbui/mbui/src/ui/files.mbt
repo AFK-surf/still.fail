@@ -204,7 +204,7 @@ fn FakeHost::gallery_read(self : FakeHost) -> Int {
   match self.gallery {
     Some(photos) => {
       // (rows as a host writes them: id, src, added, modified, taken, video, a tab between)
-      let rows = StringBuilder::new()
+      let rows = StringBuilder()
       for p in photos {
         rows.write_string(
           "\{p.id}\t\{p.src}\t\{p.added}\t\{p.modified}\t\{p.taken}\t\{if p.video { 1 } else { 0 }}\n",

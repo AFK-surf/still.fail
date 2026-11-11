@@ -247,8 +247,8 @@ fn station_retry(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 ///|
 /// Its 启动 where it is this machine's, not running here (local_stopped): no try at reaching it again, nothing there
 /// to reach; while it is being started, installed or updated, busy.
-fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> Unit {
-  let working = text(local, "doing") != ""
+fn station_start(c : @ui.Ctx, core : Core, own_station : Json?, address : String) -> Unit {
+  let working = text(own_station, "doing") != ""
   @sf.button(
     c,
     @sf.t("web-pages.localStation.start"),
@@ -257,7 +257,7 @@ fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> U
     busy=working,
     disabled=working,
     on_press=fn() {
-      local_start(core, local)
+      local_start(core, own_station)
     },
   ) |> ignore
 }
@@ -1086,7 +1086,7 @@ fn station_env(c : @ui.Ctx, core : Core, address : String, env : Array[Json], ma
 ///|
 /// The draft of a station's variables open while the page shows it, by station (its form's key).
 // kept across runs: said as the page opens one; station_page_reset empties it
-let env_forms : Map[String, String] = {}
+let env_forms : Map[String, String] = Map([])
 
 ///|
 // kept across runs: counted as forms are opened; station_page_reset puts it back
@@ -1103,7 +1103,7 @@ priv struct EnvDraft {
 
 ///|
 // kept across runs: made as a station's page opens its draft; station_page_reset empties it
-let env_drafts : Map[String, EnvDraft] = {}
+let env_drafts : Map[String, EnvDraft] = Map([])
 
 ///|
 /// The editor (AgentEnvEditor): the field, what is wrong under it (a line the core cannot take), 取消 while changed,

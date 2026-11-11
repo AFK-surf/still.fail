@@ -119,7 +119,7 @@ test "大屏: two chats opened one after the other with no frame between: an ent
   let along = wide_entries(true)
   assert_eq(wide_entries(false), along)
   assert_eq(along.0.1, "s-c3")
-  assert_eq(along.0.0[along.0.0.length() - 2:].to_array(), ["s-c1", "s-c2"])
+  assert_eq(along.0.0[along.0.0.length() - 2:].to_owned(), ["s-c1", "s-c2"])
   assert_eq(along.1, "s-c1")
 }
 

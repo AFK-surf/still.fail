@@ -70,7 +70,7 @@ pub fn completion_node(
   let topic = fn() { @settings.stations_of(core, here()) }
   // (the stations' drafts the page's own, as the old frame kept them by station: each opened as its rows first come,
   // kept while the station goes offline and comes back, all dropped as the page is let go)
-  let forms : Map[String, String] = {}
+  let forms : Map[String, String] = Map([])
   let form_of = fn(station : String) -> String {
     match forms.get(station) {
       Some(f) => f
@@ -624,7 +624,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
   }
   let draft = fn() { (core.topic)("policyForm", { "station": str(station), "form": str(form) }).get().value }
   let serial = (desk_dialogs.val + 1).to_string()
-  let filled : Map[String, Bool] = {}
+  let filled : Map[String, Bool] = Map([])
   // a field's words put in once, as the dialog opens; then what is typed is the draft's
   let words_of = fn(part : String, value : String) -> @ui.Field {
     let f = field_of("policy/" + serial + "/" + part)

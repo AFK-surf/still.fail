@@ -65,7 +65,7 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
     // (the first that needs a look, else the first: what its settings' row counts is what shows)
     "profiles" => {
       let list = items(src.topic("profiles", { "scope": Json::string(w.id) }).get().value, "items")
-      list.get(list.search_by(fn(e) { flag(Some(e), "look") }).or(0)).map(fn(e) { profile_route(Some(e)) })
+      list.get(list.search_by(fn(e) { flag(Some(e), "look") }).unwrap_or(0)).map(fn(e) { profile_route(Some(e)) })
     }
     _ => None
   }

@@ -94,7 +94,7 @@ fn steps_list_node(
   let rows = @signals.computed(fn(_) {
     let (_, all) = steps_rows_of_topic(src, params, lkey)
     let keys : Array[String] = []
-    let by : Map[String, StepsRow] = {}
+    let by : Map[String, StepsRow] = Map([])
     let mut live = 0
     for r in all {
       let k = match r {
@@ -649,7 +649,7 @@ fn one_line_node(
   })
   |> ignore
   // (opening and closing with its room, sizes_steady.mbt)
-  @motion.reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) }, lazy=true) |> ignore
+  @motion.reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) }, deferred=true) |> ignore
 }
 
 ///|
@@ -681,7 +681,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
         let way = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
         room.reacts(open, fn(o) {
           let past = dmax(0.0, @signals.untracked(tall) - most)
-          way.go(if o { 1.0 } else { 0.0 }, @motion.move().per_unit(past), at=room.cause_at())
+          way.go(if o { 1.0 } else { 0.0 }, @motion.moved().per_unit(past), at=room.cause_at())
         })
         let shown = fn() {
           way.said()
@@ -1033,7 +1033,7 @@ fn group_node(
       }
     })
     |> ignore
-    @motion.reveal_node(gv, open, lazy=true, fn(s) {
+    @motion.reveal_node(gv, open, deferred=true, fn(s) {
       steps_box_node(s, h_steps, fn(list) {
         for i, row in rows {
           let rv = Some(row)
@@ -1098,7 +1098,7 @@ fn opened_node(
       summary(line)
     })
     |> ignore
-    @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, lazy=true) |> ignore
+    @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, deferred=true) |> ignore
   })
 }
 

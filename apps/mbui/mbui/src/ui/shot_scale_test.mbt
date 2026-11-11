@@ -86,8 +86,8 @@ fn zoom_glyphs(host : ZoomHost, inst : Array[Double], count : Int) -> Array[(Dou
 ///|
 test "a shot taken at 3 pixels a point in a window of 2: drawn at 3 into a picture of its own, its words' glyphs made half as large again, drawn as large as on the screen" {
   let host = ZoomHost::{ put: {}, drawn: [] }
-  let take = Ref::new(false)
-  let got : Ref[Bytes?] = Ref::new(None)
+  let take = Ref(false)
+  let got : Ref[Bytes?] = Ref(None)
   let t = @ui.Tester::new(
     fn(c) {
       c.text("Ab", size=16.0, wrap=false) |> ignore

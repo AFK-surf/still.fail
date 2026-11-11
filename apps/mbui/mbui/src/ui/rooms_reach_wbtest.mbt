@@ -102,12 +102,12 @@ fn rr_faults(t : Tester) -> Array[String] {
   t
   .tree_room_faults()
   .map(fn(f) {
-    let parts = f.split(", made at ").map(fn(v) { v.to_string() }).to_array()
-    let sb = StringBuilder::new()
+    let parts = f.split(", made at ").map(fn(v) { v.to_owned() }).to_array()
+    let sb = StringBuilder()
     sb.write_string(parts[0])
     for i in 1..<parts.length() {
       // (what follows the place: from the ")" closing it)
-      let after = parts[i].split(")").map(fn(v) { v.to_string() }).to_array()
+      let after = parts[i].split(")").map(fn(v) { v.to_owned() }).to_array()
       for k in 1..<after.length() {
         sb.write_string(")" + after[k])
       }

@@ -2434,7 +2434,7 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
   if bones == 0L {
     self.emit_lines(0.0, 0.0, c.lines, 1.0)
   }
-  let segs = self.segs[seg_start:].to_array()
+  let segs = self.segs[seg_start:].to_owned()
   self.segs_cut(seg_start)
   inst_owners.painting = was
   inst_owners.tree_painting = was_tree
@@ -3796,7 +3796,7 @@ let old_hits_clips : Array[Double] = []
 /// right, foot), said where the old view's nodes are laid out (its place and size as drawn undone), by the old frame's
 /// node it is drawn from: what lies wholly outside it is not drawn.
 // kept across runs: made again each frame the tree is painted
-let old_cuts : Map[Int, (Double, Double, Double, Double)] = {}
+let old_cuts : Map[Int, (Double, Double, Double, Double)] = Map([])
 
 ///|
 /// What scrolls in an old view or stops the wheel there, as the last frame painted it: the frame's scroll targets'
@@ -4249,7 +4249,7 @@ fn old_press_owner(c : Ctx, x : Double, y : Double, chosen : @view.NodeId) -> @v
   let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
   // (a handle of the focused field's selection or caret, before what is under it: that field's)
   match c.editors.get(c.focus_allowed()) {
-    Some(st) if (match st.local(x, y) { Some((lx, ly)) => st.on_sel_handle(lx, ly) != 0 || st.on_handle(lx, ly); None => false }) =>
+    Some(st) if (match st.local_point(x, y) { Some((lx, ly)) => st.on_sel_handle(lx, ly) != 0 || st.on_handle(lx, ly); None => false }) =>
       return c.island_of_id(c.focus)
     _ => ()
   }
@@ -5677,7 +5677,7 @@ fn view_cursor_tell() -> Unit {
 ///|
 // kept across runs: put back as its nodes are let go (yield_thumbs)
 /// The nodes that yield to a list's thumb of an old view under them, by index: who each is, and who the old view is.
-let thumbs_yielded : Map[Int, (@view.NodeId, @view.NodeId)] = {}
+let thumbs_yielded : Map[Int, (@view.NodeId, @view.NodeId)] = Map([])
 
 ///|
 /// Node `v` (one that takes a press: an edge over the side of a block an old view draws) yields, where it is found
@@ -5937,7 +5937,7 @@ fn Ctx::root_layer_stack(self : Ctx, i : Int) -> Int {
 /// drawn as the old frame last published its targets (anchors_published; where it was last, drawn no more), and how
 /// many follow it.
 // kept across runs: each let go with the last node following it
-let old_anchor_rects : Map[Int, (@signals.Signal[(Double, Double, Double, Double)], Int)] = {}
+let old_anchor_rects : Map[Int, (@signals.Signal[(Double, Double, Double, Double)], Int)] = Map([])
 
 ///|
 /// The old frame's targets published whole (frame_paint): each id followed (old_anchor_rects) told where it is drawn
@@ -6136,13 +6136,13 @@ impl Moving for TreeMoves with rest_at(self, now, _frame) {
 ///|
 /// Who tells what each key a node says moves (view_host's on_moves): one each, as an old view's motion is its own.
 // kept across runs: a key's mover only names it to the frame's context, which keeps its own list (Ctx::moving_as)
-let tree_movers : Map[String, Mover] = {}
+let tree_movers : Map[String, Mover] = Map([])
 
 ///|
 /// Who tells each of the tree's columns' glides, by its number (view_host's on_glides): one each, as an old view's list
 /// is its own, with how to ask when its glide ends; let go with it.
 // kept across runs: put back as each column is let go
-let tree_glide_movers : Map[Int, (Mover, () -> Double?)] = {}
+let tree_glide_movers : Map[Int, (Mover, () -> Double?)] = Map([])
 
 ///|
 /// Whether a column of the window's tree glides on by itself at `t` (a fling, a wheel's notches easing in, what shows

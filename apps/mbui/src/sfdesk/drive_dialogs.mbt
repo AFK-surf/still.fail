@@ -614,9 +614,9 @@ let roots_list : @ui.Style = @ui.css("w=Full gap=S1")
 /// A station's row to pick (pickRow): 40 high at least, 6 by 10 in, 10 between, the field's corner; the list's ground
 /// under the pointer.
 // kept across runs: a value (no field of it changes)
-let pick_row : @ui.Style = @ui.css(
+let pick_row : @ui.Style = @ui.css((
   #|row w=Full min_h=S10 px=S2_5 py=S1_5 gap=S2_5 align=ACenter radius=Lg hovered{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

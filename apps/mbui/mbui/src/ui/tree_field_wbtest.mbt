@@ -115,7 +115,7 @@ fn caret_typed(tree : Bool, scale : Double, at : (Double, Double)) -> (Array[Dou
   // (the caret's colour, 0x0A84FF: its red; taller than wide, whatever it is drawn as big as)
   let carets = insts().filter(fn(i) { i[5] == 0.0 && i[8] == 10.0 / 255.0 && i[3] > i[2] })
   guard carets is [.., c] else { fail("\{tree}, \{scale}, at \{at}: no caret drawn") }
-  (c[0:4].to_array(), t.ime_rect())
+  (c[0:4].to_owned(), t.ime_rect())
 }
 
 ///|
@@ -569,12 +569,12 @@ test "a field of the tree's as an old view's, said so: its placeholder said its 
     let tree_one = run(true)
     assert_eq(tree_one, old_one, msg="\{what}: the tree's \{tree_one}, the old view's \{old_one}")
   }
-  alike("its placeholder's shorter way", fn(tree) { field_said_so(tree, "", placeholder=long, shorter=["shorter", "short"]) })
-  alike("a secret", fn(tree) { field_said_so(tree, "hunter2", secret=true) })
-  alike("a look", fn(tree) {
+  alike("its placeholder's shorter way", fn(tree) raise { field_said_so(tree, "", placeholder=long, shorter=["shorter", "short"]) })
+  alike("a secret", fn(tree) raise { field_said_so(tree, "hunter2", secret=true) })
+  alike("a look", fn(tree) raise {
     field_said_so(tree, "abc def", look=fn(d) { (d, if d.length() >= 3 { [(0, 3, 0xFF0000FFL)] } else { [] }) })
   })
-  alike("the input method's key", fn(tree) { field_said_so(tree, "go", ime_action=3) })
+  alike("the input method's key", fn(tree) raise { field_said_so(tree, "go", ime_action=3) })
 }
 
 ///|
@@ -759,7 +759,7 @@ fn field_scrolled(
 ///|
 test "a field of the tree's as an old view's, of more lines than it shows: the wheel over it scrolls its words, the focus and the keyboard kept" {
   let act = fn(t : Tester) {
-    t.move(20.0 + 50.0, 25.0)
+    t.move_to(20.0 + 50.0, 25.0)
     t.wheel(20.0 + 50.0, 25.0, -40.0)
   }
   let old_one = field_scrolled(false, act)
@@ -891,7 +891,7 @@ fn bar_taken(
   let thumbs = fn() { t.drawn_rects().filter(fn(r) { r.2 == scroll_bar_size * scale || r.3 == scroll_bar_size * scale }) }
   // (along its right edge where it is drawn, its middle)
   let (ex, ey) = (20.0 + (200.0 - 3.0) * scale, 20.0 + 21.0 * scale)
-  t.move(ex, ey)
+  t.move_to(ex, ey)
   t.run_for(scrollbar_fade_ms)
   let came = thumbs()
   let thumb = came.get(0).unwrap_or((ex, ey, 0.0, 0.0, 0L))
@@ -983,16 +983,16 @@ test "a field of the tree's bar out: its thumb lit as the pointer is on it (as d
     let (t, _, thumbs) = bar_field(scale, @signals.signal(false))
     let ink = fn() { thumbs().get(0).map_or(-1L, fn(r) { r.4 & 0xFFL }) }
     let (ex, ey) = (20.0 + (200.0 - 10.0) * scale, 20.0 + 3.0 * scale)
-    t.move(ex, ey)
+    t.move_to(ex, ey)
     t.run_for(scrollbar_fade_ms)
     let near = ink()
     guard g().bars.get(0) is Some(b) else { fail("no bar kept for the pointer") }
     let (tx, ty) = (b.tx + b.tw / 2.0, b.ty + b.th / 2.0)
-    t.move(tx, ty)
+    t.move_to(tx, ty)
     let on = ink()
-    t.move(ex, ey)
+    t.move_to(ex, ey)
     let off = ink()
-    t.move(tx, ty)
+    t.move_to(tx, ty)
     t.touch(0, tx, ty)
     t.draw()
     let held = ink()
@@ -1019,7 +1019,7 @@ test "a field of the tree's bar near the still pointer: the old frame's layer op
   // still shown, no field of the tree's found there; then gone; closed, out again)
   guard g().bars.get(0) is Some(b) else { fail("modal \{modal_layer}: no bar kept for the pointer") }
   let (tx, ty) = (b.tx + b.tw / 2.0, b.ty + b.th / 2.0)
-  t.move(tx, ty)
+  t.move_to(tx, ty)
   t.run_for(scrollbar_fade_ms)
   let ink = fn() { thumbs().get(0).map_or(-1L, fn(r) { r.4 & 0xFFL }) }
   let lit = ink()
@@ -1049,7 +1049,7 @@ test "a field of the tree's thumb lit as it comes under the still pointer and no
   // (where its thumb is, hidden: its words at their end, the thumb at the bar's foot)
   guard g().bars.get(0) is Some(b) else { fail("no bar kept for the pointer") }
   let (tx, ty) = (b.tx + b.tw / 2.0, b.ty + b.th / 2.0)
-  t.move(tx, ty)
+  t.move_to(tx, ty)
   t.run_for(scrollbar_fade_ms)
   let faded_in = ink()
   // (its words scrolled to their top by the wheel elsewhere on it: its thumb gone from under the pointer)
@@ -1073,11 +1073,11 @@ test "a field of the tree's thumb faded in under the still pointer, lit; the poi
   let (t, _, thumbs) = bar_field(1.0, @signals.signal(false), lines=40, shows=8)
   let ink = fn() { thumbs().get(0).map_or(-1L, fn(r) { r.4 & 0xFFL }) }
   guard g().bars.get(0) is Some(b) else { fail("no bar kept for the pointer") }
-  t.move(b.tx + b.tw / 2.0, b.ty + b.th / 2.0)
+  t.move_to(b.tx + b.tw / 2.0, b.ty + b.th / 2.0)
   t.run_for(scrollbar_fade_ms)
   let lit = ink()
   // (along its edge, at the field's top: near it, off its thumb at the foot)
-  t.move(b.tx + b.tw / 2.0, 22.0)
+  t.move_to(b.tx + b.tw / 2.0, 22.0)
   let off = ink()
   assert_true(lit > off && off > 0L, msg="lit \{lit}, off \{off}")
 }
@@ -1455,7 +1455,7 @@ test "a field of the tree's of more lines than it shows, drawn half as big about
   f.set(f.text(), caret=0)
   t.draw()
   // (along its right edge where it is drawn, its middle)
-  t.move(fx + fw - 1.5, fy + fh / 2.0)
+  t.move_to(fx + fw - 1.5, fy + fh / 2.0)
   t.run_for(scrollbar_fade_ms)
   let thumbs = t.drawn_rects().filter(fn(r) { r.2 == scroll_bar_size * 0.5 || r.3 == scroll_bar_size * 0.5 })
   system_bars_now.set({ top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 })
@@ -1465,7 +1465,7 @@ test "a field of the tree's of more lines than it shows, drawn half as big about
 }
 
 ///|
-/// A window 300 by 200 whose tree holds a box at `at` drawn `s` as big about its top left, holding one at `local` in
+/// A window 300 by 200 whose tree holds a box at `at` drawn `s` as big about its top left, holding one at `inner_at` in
 /// it, 200 wide, holding a field of the tree's of "abcdefghij" (10 big, one line, nothing about its words: plain) or,
 /// in its place (`words`), the same words of the tree's laid out as the field lays out its own (as big, its line its
 /// theme's for that size, one line): each `put` in turn, the same nodes moved and drawn so, the glyphs drawn each time.
@@ -1475,7 +1475,7 @@ fn field_or_words(
 ) -> Array[Array[(Double, Double)]] {
   let (at0, local0, s0) = put[0]
   let at = @signals.signal(at0, same=fn(a, b) { a == b })
-  let local = @signals.signal(local0, same=fn(a, b) { a == b })
+  let inner_at = @signals.signal(local0, same=fn(a, b) { a == b })
   let s = @signals.signal(s0, same=fn(a, b) { a == b })
   let f = Field::new(text="abcdefghij")
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
@@ -1484,7 +1484,7 @@ fn field_or_words(
       h.over(Is(true)).offset(By(fn() { at.get() })).width(Is(Some(220.0))).scale(By(fn() { s.get() }), about=At(0.0, 0.0))
       |> ignore
       h.box(fn(v) {
-        v.over(Is(true)).offset(By(fn() { local.get() })).width(Is(Some(200.0))) |> ignore
+        v.over(Is(true)).offset(By(fn() { inner_at.get() })).width(Is(Some(200.0))) |> ignore
         if words {
           v
           .words(Is("abcdefghij"), look={ size: 10.0, weight: 400, line: tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
@@ -1500,7 +1500,7 @@ fn field_or_words(
   })
   put.map(fn(p) {
     at.set(p.0)
-    local.set(p.1)
+    inner_at.set(p.1)
     s.set(p.2)
     t.draw()
     t.drawn_glyphs().map(fn(g) { (g.0, g.1) })
@@ -1535,9 +1535,9 @@ test "a field of the tree's as an old view's: the pointer on its words an I-beam
   for tree in [false, true] {
     let s = @signals.signal(1.0, same=fn(a, b) { a == b })
     let t = one_field(tree, s, Field::new(text="abc"), [])
-    t.move(60.0, 30.0)
+    t.move_to(60.0, 30.0)
     let on = t.cursor()
-    t.move(260.0, 150.0)
+    t.move_to(260.0, 150.0)
     got.push((on, t.cursor()))
   }
   assert_eq(got, [(IBeam, Arrow), (IBeam, Arrow)])

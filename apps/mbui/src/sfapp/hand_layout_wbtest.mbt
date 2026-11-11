@@ -105,7 +105,7 @@ test "the hand changes no box: every page in every tier, on a touch device and o
         while k < f.length() && k < m.length() && f[k] == m[k] {
           k += 1
         }
-        let at = fn(a : Array[StringView]) { if k < a.length() { a[k].to_string() } else { "(none)" } }
+        let at = fn(a : Array[StringView]) { if k < a.length() { a[k].to_owned() } else { "(none)" } }
         // (what it is in: the lines over it, the finger's)
         let over = StringBuilder()
         for i in (if k > 6 { k - 6 } else { 0 })..<k {

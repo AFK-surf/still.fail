@@ -47,7 +47,7 @@ let inst_owners : InstOwners = {
   tree_painting: None,
   tree_words: Map([]),
   mark: [],
-  own_colours: Set::new(),
+  own_colours: Set([]),
 }
 
 ///|
@@ -665,7 +665,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   for n in inst_owners.own_colours {
     pictures.add(n)
   }
-  let disabled : Set[Int] = Set::new()
+  let disabled : Set[Int] = Set([])
   for s in self.sems {
     if s.disabled {
       disabled.add(s.node)
@@ -674,10 +674,10 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   let holding = self.holding()
   // each node's words at their faintest letter, a line's or an icon's pieces at their strongest: (ratio, what is said
   // where it is under the least)
-  let lines : Map[Int, (Double, String)] = Map::new()
+  let lines : Map[Int, (Double, String)] = Map([])
   let order : Array[Int] = []
   let out : Array[String] = []
-  let seen : Set[String] = Set::new()
+  let seen : Set[String] = Set([])
   let say = fn(s : String) {
     if !seen.contains(s) {
       seen.add(s)
@@ -687,7 +687,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   // (what a node of the window's tree draws, by node and by what it is checked as, each its own whatever else the node
   // draws: its words at their faintest letter, as an old view's are (their size and weight the tree's words',
   // view_host.mbt); its shapes at their strongest piece, as an old view's icon or line)
-  let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map::new()
+  let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map([])
   let tree_order : Array[(@view.NodeId, Int)] = []
   // (what a node of the window's tree said disabled holds, as an old view's in a widget said disabled: asked nothing;
   // its own presses off, not what a modal layer over it takes them from)

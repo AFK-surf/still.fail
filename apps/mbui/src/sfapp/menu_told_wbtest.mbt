@@ -10,7 +10,7 @@ fn message_menu_tester() -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
-  t.move(x + 24.0, y + 8.0)
+  t.move_to(x + 24.0, y + 8.0)
   t.frame()
   t.frame()
   t

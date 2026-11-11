@@ -196,7 +196,7 @@ let journal_notes_kept : Int = 4
 ///|
 /// What the piece being done went on so far (@hostapi.work_part), by where it was made: its ms summed.
 // kept across runs: emptied as each piece is kept (journal_work) and as a run begins (journal_reset)
-let journal_notes : Map[String, Double] = {}
+let journal_notes : Map[String, Double] = Map([])
 
 ///|
 // kept across runs: put back as a run begins (journal_reset)
@@ -452,7 +452,7 @@ fn journal_work(what : Done, start : Double, end : Double) -> Unit {
     journal_notes.clear()
     all.sort_by(fn(a, b) { b.1.compare(a.1) })
     if all.length() > journal_notes_kept {
-      all[:journal_notes_kept].to_array()
+      all[:journal_notes_kept].to_owned()
     } else {
       all
     }
@@ -673,7 +673,7 @@ fn journal_seal(seal : Seal, at : Double) -> Unit {
     0
   }
   if elided > 0 {
-    contributors = contributors[:hang_contributors_kept].to_array()
+    contributors = contributors[:hang_contributors_kept].to_owned()
   }
   let hang = {
     trigger,
@@ -747,7 +747,7 @@ fn journal_said_shown(at : Double) -> Unit {
 /// id of what is shown.
 fn journal_places(why : String) -> String {
   let out : Array[String] = []
-  let word = StringBuilder::new()
+  let word = StringBuilder()
   let take = fn(w : String) {
     if w.contains(".mbt:") && !out.contains(w) && out.length() < 4 {
       out.push(w)
@@ -897,7 +897,7 @@ pub fn Hang::json(self : Hang) -> Json {
 /// The summary as JSON (reports.mbt's): its counts by what was shown as `by_page`, each name's [frames, stalls, late
 /// frames, blocking] (none said yet: under "").
 pub fn HangSummary::json(self : HangSummary) -> Json {
-  let by_page : Map[String, Json] = {}
+  let by_page : Map[String, Json] = Map([])
   for p in self.by_page {
     by_page[p.0] = journal_counts_json([p.1, p.2, p.3, p.4])
   }

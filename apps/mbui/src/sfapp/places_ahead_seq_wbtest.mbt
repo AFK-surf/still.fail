@@ -11,10 +11,10 @@
 /// where they say more than its workspace or station): the client's messages out, what a run's trace keeps.
 fn ahead_phone(ms : Double, said : Array[String]) -> @ui.Tester {
   new_run()
-  let names : Map[Int, String] = {}
+  let names : Map[Int, String] = Map([])
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }
-    let j = @json.parse(h.view(start_offset=4).to_string()) catch { _ => return }
+    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => return }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { return }
     match (m.get("subscribe"), m.get("unsubscribe")) {
       (Some(Object(sub)), _) =>
@@ -72,11 +72,11 @@ fn home_settings_back(ms : Double) -> (Array[String], Array[String], Array[Strin
   t.tap(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   t.run_for(ms * 4.0)
-  let pushed = ahead_said(said)[start.length():].to_array()
+  let pushed = ahead_said(said)[start.length():].to_owned()
   t.back()
   t.run_for(@ui.move_most_ms)
   t.run_for(ms * 4.0)
-  let back = ahead_said(said)[start.length() + pushed.length():].to_array()
+  let back = ahead_said(said)[start.length() + pushed.length():].to_owned()
   (start, pushed, back)
 }
 
@@ -115,11 +115,11 @@ test "Home under 设置, then a page pushed over 设置 (安全) and back off it
   t.back()
   t.run_for(@ui.move_most_ms)
   t.run_for(place_core_soon_ms * 4.0)
-  let over = ahead_said(said)[under:].to_array()
+  let over = ahead_said(said)[under:].to_owned()
   let before_back = said.length()
   t.back()
   // (at the back itself, Home beside the page going: no frame of the slide run yet)
-  let at_back = ahead_said(said[before_back:].to_array())
+  let at_back = ahead_said(said[before_back:].to_owned())
   t.run_for(@ui.move_most_ms)
   // (设置 reads all the bar's places read, the stations' rows one ask for all: nothing to subscribe again at the back)
   assert_eq((over, at_back), ([], []))
@@ -162,7 +162,7 @@ test "Station's tab pressed and let go there: Station's ways reached subscribed 
   t.run_for(@ui.move_most_ms)
   t.run_for(place_core_soon_ms * 4.0)
   assert_true(app.nav.top() == @sfbase.place_page("stations"))
-  assert_eq(ahead_said(said[before:].to_array()), ["sub stationNet"])
+  assert_eq(ahead_said(said[before:].to_owned()), ["sub stationNet"])
   assert_eq(@sfbase.places_ahead_in_build(), 0)
 }
 
@@ -175,7 +175,7 @@ test "Station's tab pressed, the finger moved off the bar: Station's ways reache
   tab_press(t, "Station", place_tap_ms, true)
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == top)
-  assert_eq(ahead_said(said[before:].to_array()), ["sub stationNet", "unsub stationNet"])
+  assert_eq(ahead_said(said[before:].to_owned()), ["sub stationNet", "unsub stationNet"])
 }
 
 ///|
@@ -190,7 +190,7 @@ test "用量's tab pressed, the finger moved off the bar: 用量 read from the f
   tab_press(t, "用量", place_tap_ms, true)
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == top)
-  assert_eq(ahead_said(said[before:].to_array()), ["sub usage {\"days\":7}", "unsub usage {\"days\":7}"])
+  assert_eq(ahead_said(said[before:].to_owned()), ["sub usage {\"days\":7}", "unsub usage {\"days\":7}"])
 }
 
 ///|
@@ -201,7 +201,7 @@ test "the other bar brought into view once: its places' own subscribed, what onl
   @sfbase.bars_picked.set(Some(([["chats", "files", "profiles", "stations"], ["archive", "usage", "connects", "vault"]], 1)))
   t.draw()
   t.run_for(place_core_soon_ms * 4.0)
-  let now = ahead_said(said[before:].to_array())
+  let now = ahead_said(said[before:].to_owned())
   assert_false(now.contains("unsub stations") || now.contains("sub stations"), msg="\{now}")
   assert_eq(now, ["sub connects {\"mine\":false}", "sub vaults", "unsub workspace", "unsub profiles"])
 }

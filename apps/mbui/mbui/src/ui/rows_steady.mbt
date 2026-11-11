@@ -79,7 +79,7 @@ let rows_steady : RowsSteady = {
   held: true,
   file: "",
   seen: {},
-  found: Set::new(),
+  found: Set([]),
   lists: {},
   window: (-1.0, -1.0),
   words: -1.0,
@@ -91,7 +91,7 @@ let rows_steady : RowsSteady = {
 ///|
 /// Each file's bar: how many jolts a Tester made there may show (the app's tests' known faults, falling as mended).
 // kept across runs: said once as a test program starts (its packages' `init`)
-let rows_steady_bars : Map[String, Int] = {}
+let rows_steady_bars : Map[String, Int] = Map([])
 
 ///|
 /// The jolts known in the tests of the files `bars` names (as words_over_known says its files), each how many a Tester
@@ -126,7 +126,7 @@ fn rows_steady_begin(loc : String, held : Bool) -> Unit {
 /// said once: by whose row, how, when.
 fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[String] {
   let out : Array[String] = []
-  let here : Set[String] = Set::new()
+  let here : Set[String] = Set([])
   // (the window made another size, or words by the system's setting, since the last frame: what each list's rows are
   // laid out at for it is there at once, none of it a row's move; from this frame on anew, what was found kept)
   let words = @signals.untracked(font_scale)

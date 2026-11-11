@@ -274,7 +274,7 @@ fn Cubic64::search_roots(
   extrema += 1
   extreme_ts[extrema] = 1.0
   // (sort_by cmp_f64: a stable sort, NaNs equal to all)
-  let sorted = extreme_ts[0:extrema].to_array()
+  let sorted = extreme_ts[0:extrema].to_owned()
   insertion_sort(sorted)
   for i in 0..<extrema {
     extreme_ts[i] = sorted[i]

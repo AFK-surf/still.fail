@@ -100,7 +100,7 @@ pub fn fix_kind(name : String) -> String {
 
 ///|
 /// The fixture's folders as the pages left them: by root and path, their entries.
-pub let fix_folders : Map[String, Array[Json]] = {}
+pub let fix_folders : Map[String, Array[Json]] = Map([])
 
 ///|
 pub fn fix_folder(root : String, path : String) -> Array[Json] {
@@ -166,7 +166,7 @@ pub fn fix_folder_json(root : String, path : String) -> Json {
 
 ///|
 /// Where the made-up texts were left (drivePlace), by path.
-pub let fix_places : Map[String, Json] = {}
+pub let fix_places : Map[String, Json] = Map([])
 
 ///|
 /// The copies asked (`drive.transfer`), as the `driveTransfers` topic shows them, newest first: each copying, 38% on.

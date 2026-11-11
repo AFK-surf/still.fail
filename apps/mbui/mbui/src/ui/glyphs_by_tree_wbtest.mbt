@@ -26,8 +26,8 @@ fn glyph_look_of(at : GlyphAt) -> GlyphLook {
 /// or View::words, View::glyphs_by). What is read at once (the Tester's reads are the last made's): what each glyph was
 /// told (its number, line, middle along it and its line's box), and each glyph drawn, to a hundredth.
 fn glyphs_told_drawn(node : Bool, runs : Bool, words : String, cut : Int, w : Double) -> (Array[String], Array[String]) {
-  let first = words.view(end_offset=cut).to_string()
-  let second = words.view(start_offset=cut).to_string()
+  let first = words.view(end_offset=cut).to_owned()
+  let second = words.view(start_offset=cut).to_owned()
   let told : Array[String] = []
   let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
   // (what each glyph is told, kept as it is asked: the frame's last asking of each number the one kept)

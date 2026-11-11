@@ -416,7 +416,7 @@ pub fn pick_layer(
   let ends = [c.id("pick/start"), c.id("pick/end")]
   // the bar's buttons
   c.on_press(quote_id, fn() {
-    let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_string()
+    let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_owned()
     if text != "" {
       quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }
@@ -581,7 +581,7 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
   }
   let pop = c.id("pick/pop")
   c.on_press(pop, fn() {
-    let text = c.selected_text().trim(chars=" \n\t").to_string()
+    let text = c.selected_text().trim(chars=" \n\t").to_owned()
     if text != "" {
       quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }

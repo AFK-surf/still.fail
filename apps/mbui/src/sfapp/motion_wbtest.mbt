@@ -5,7 +5,7 @@
 test "Home: a chat with news goes to the top: it closes where it was and opens there, never across the rows it passes" {
   // (the clock set after reset, which puts the fixture's own back)
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -44,7 +44,7 @@ fn home_moving(t : @ui.Tester) -> Array[String] {
 test "Home: back from a chat to the list changed meanwhile, the list drawn as it is: nothing in it moves" {
   // (its ListMotion new: nothing moves the first time)
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -149,7 +149,7 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
 test "words sent fly from the field into their bubble" {
   // the fixture's own station takes what is sent: the outbox at once, the message after
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -191,7 +191,7 @@ test "words sent fly from the field into their bubble" {
 ///|
 test "words sent: the composer stays as it was while they are in it, and comes down as they let go of it, not from under them" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -232,7 +232,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
 ///|
 test "words sent set out from where they were typed and land where their message has them, set alike all the way" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -271,7 +271,7 @@ test "words sent set out from where they were typed and land where their message
 ///|
 test "words sent break their lines in their message where the composer broke them: a paragraph goes a line a piece" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })

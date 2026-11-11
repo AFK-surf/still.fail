@@ -127,7 +127,7 @@ pub fn notify_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let notify = fn() { (core.topic)("notify", Map::new()).get().value }
+  let notify = fn() { (core.topic)("notify", Map([])).get().value }
   let kept_badge = fn() {
     field((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).get().value, "badgeKinds")
   }

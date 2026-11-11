@@ -134,7 +134,7 @@ test "desk: a message's file card, pointed at, says nothing of where the station
   )
   t.draw()
   let (x, y) = t.find("2 KB").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sf.tip_delay_ms * 2.0)
   assert_true(!t.drawn_text().contains("uploads"), msg=t.drawn_text())
 }

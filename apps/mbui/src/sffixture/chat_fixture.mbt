@@ -373,7 +373,7 @@ pub fn long_chat(n : Int) -> Json {
 
 ///|
 /// The made-up chats as made the first time (made again each frame, a long one would cost more than the page).
-pub let kept_chats : Map[String, Json] = {}
+pub let kept_chats : Map[String, Json] = Map([])
 
 ///|
 pub fn kept_chat(key : String, make : () -> Json) -> Json {
@@ -390,7 +390,7 @@ pub fn kept_chat(key : String, make : () -> Json) -> Json {
 ///|
 /// The pictures the made-up files are: soft gradients of their own, made once (by name: the key they are shown by, and
 /// their bytes).
-pub let fixture_pictures : Map[String, (String, Bytes)] = {}
+pub let fixture_pictures : Map[String, (String, Bytes)] = Map([])
 
 ///|
 pub fn fixture_file(name : String) -> String {
@@ -788,11 +788,11 @@ pub(all) struct FixChat {
 }
 
 ///|
-pub let fix_chats : Map[String, FixChat] = {}
+pub let fix_chats : Map[String, FixChat] = Map([])
 
 ///|
 /// The made-up chats' threads, by id: their sessions (what is sent by thread goes to its session's chat).
-pub let fix_threads : Map[Int, String] = {}
+pub let fix_threads : Map[Int, String] = Map([])
 
 ///|
 pub fn fix_chat(session : String) -> FixChat {
@@ -840,12 +840,12 @@ pub let fix_ctx : Ref[@ui.Ctx?] = { val: None }
 pub let fix_clock : Ref[(() -> Double)?] = { val: None }
 
 ///|
-pub let fix_drafts : Map[String, Json] = {}
+pub let fix_drafts : Map[String, Json] = Map([])
 
 ///|
 /// The fixture core's composers' files (`composer.add`), by the composer's key: each up as soon as it is added, as the
 /// station takes it whole.
-pub let fix_composers : Map[String, Array[Json]] = {}
+pub let fix_composers : Map[String, Array[Json]] = Map([])
 
 ///|
 /// The chats of the viewer's other workspace (个人, its station ws2/st9) that a reference may name (`chat.outsideRefs`):
@@ -855,7 +855,7 @@ pub let fix_outside : Array[(String, String, Bool)] = [("s-p1", "季度路线图
 
 ///|
 /// Those of them shared with 星火工作室 since (`chat.xshareAdd`): outside no more.
-pub let fix_xshared : Map[String, Bool] = {}
+pub let fix_xshared : Map[String, Bool] = Map([])
 
 ///|
 pub let fix_serial : Ref[Int] = { val: 0 }
@@ -922,7 +922,7 @@ pub let fix_core_for : Ref[Double] = Ref(0.0)
 /// it puts out (sfbench's APPBENCH, a film's record).
 pub fn fix_pace_said(pace : String, core : String) -> Unit {
   let ms = fn(s : StringView) -> Double? {
-    match (try Some(@json.parse(s.trim(chars=" ").to_string())) catch { _ => None }) {
+    match (try Some(@json.parse(s.trim(chars=" ").to_owned())) catch { _ => None }) {
       Some(Number(n, ..)) => Some(n)
       _ => None
     }
@@ -1090,7 +1090,7 @@ pub fn outgoing_json(id : String, params : Json, state : String, error : String)
 ///|
 /// The files put up from here (`composer.add` with their bytes), by where the station keeps each: the upload each was,
 /// which every message it goes with says (views.ts uploadOf).
-pub let fix_put_up : Map[String, String] = {}
+pub let fix_put_up : Map[String, String] = Map([])
 
 ///|
 /// A message's files as the core draws them: one put up from here naming its upload (views.ts drawn's `own`).
@@ -1180,16 +1180,16 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
       fix_later(end_in, fn() { over(answer_seq) })
     }
     // (its first line, as a made-up agent would take it up)
-    let lead = words.trim(chars=" \n\r\t").to_string()
+    let lead = words.trim(chars=" \n\r\t").to_owned()
     let first = match lead.find("\n") {
-      Some(i) => lead.view(end_offset=i).to_string()
+      Some(i) => lead.view(end_offset=i).to_owned()
       None => lead
     }
     let said = if first == "" {
       "收到文件了，我看一下。"
     } else {
       let cut = if first.length() > 40 {
-        first.view(end_offset=40).to_string() + "…"
+        first.view(end_offset=40).to_owned() + "…"
       } else {
         first
       }
@@ -1357,7 +1357,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
       let words : Array[String] = []
       for w in text(p, "query").to_lower().split(" ") {
         if w.length() > 0 {
-          words.push(w.to_string())
+          words.push(w.to_owned())
         }
       }
       let all = items(Some(rich_chat(f.older)), "messages")
@@ -1368,7 +1368,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
         for w in words {
           let mut from = 0
           while from <= said.length() {
-            match said.view(start_offset=from).to_string().find(w) {
+            match said.view(start_offset=from).to_owned().find(w) {
               Some(i) => {
                 count += 1
                 from = from + i + w.length()
@@ -1548,11 +1548,11 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
 
 ///|
 /// How the first row's chat's cards stand as answered here: by seq, the card's decision.
-pub let fix_decided : Map[Int, Json] = {}
+pub let fix_decided : Map[Int, Json] = Map([])
 
 ///|
 /// The answers given here, by the card's seq: the viewer's message the core posts with each (said as the chat shows).
-pub let fix_replied : Map[Int, String] = {}
+pub let fix_replied : Map[Int, String] = Map([])
 
 ///|
 /// The agent's answers to those answers, after them (fixture_card_call).
@@ -1563,7 +1563,7 @@ pub let fix_card_replies : Array[Json] = []
 /// own messages since (fix_chat's `sent`) stood then, so a message sent after it stays after it, as a chat's time
 /// order has it (with_cards). One said without (a test's own) goes last, as before.
 // kept across runs: put back as a fixture is made (made.mbt)
-let fix_reply_at : Map[String, (Int, Int)] = {}
+let fix_reply_at : Map[String, (Int, Int)] = Map([])
 
 ///|
 /// How chat-vault's request to keep a password, at the chat's end, went once decided here ("": waiting).
@@ -2720,8 +2720,8 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
     pull(127, 5, "虚拟列表：按估计高度占位", "merged", 0, "1 小时前"),
     pull(124, 3, "去掉旧的分页加载", "closed", 0, "2 小时前"),
   ]
-  let pulls = if many { pulls } else { pulls[:1].to_array() }
-  let words : Array[String] = q.to_lower().split(" ").map(fn(w) { w.to_string() }).filter(fn(w) { w != "" }).collect()
+  let pulls = if many { pulls } else { pulls[:1].to_owned() }
+  let words : Array[String] = q.to_lower().split(" ").map(fn(w) { w.to_owned() }).filter(fn(w) { w != "" }).collect()
   let having = fn(list : Array[Json]) -> Json {
     Json::array(
       list.filter(fn(t) {

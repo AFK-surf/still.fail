@@ -221,7 +221,7 @@ pub fn fixture_named(path : String, p : Json?, done : (Result[(Json, Bytes), Jso
 
 ///|
 // kept across runs: the log and the PDF as made once, the same bytes whoever asks (each is made of nothing else)
-let fixture_made : Map[String, Bytes] = {}
+let fixture_made : Map[String, Bytes] = Map([])
 
 ///|
 /// The long log: 12000 lines, each saying which it is (and some Chinese, cut across parts' ends). Made once: it is read
@@ -247,7 +247,7 @@ fn fixture_log_made() -> Bytes {
 
 ///|
 // kept across runs: each picture as made once, the same bytes whoever asks (a picture is its size and side alone)
-let fixture_pngs : Map[(Int, Int, Bool), Bytes] = {}
+let fixture_pngs : Map[(Int, Int, Bool), Bytes] = Map([])
 
 ///|
 /// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen. Made once for each size and

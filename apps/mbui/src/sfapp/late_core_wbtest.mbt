@@ -6,11 +6,11 @@
 /// What of `heard` is a subscription to, or a letting go of, a topic (the client's messages out): `sub <topic>`,
 /// `unsub <topic>`, in order.
 fn wire_subs(heard : Array[String]) -> Array[String] {
-  let topics : Map[Int, String] = {}
+  let topics : Map[Int, String] = Map([])
   let out : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }
-    let text = h.view(start_offset=4).to_string()
+    let text = h.view(start_offset=4).to_owned()
     let j = @json.parse(text) catch { _ => continue }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
     match (m.get("subscribe"), m.get("unsubscribe")) {
@@ -217,11 +217,11 @@ fn switch_frames(t : @ui.Tester, src : Source, start : Double, upto : Double) ->
 ///|
 /// The client's subscriptions to `chats` and lettings go of them, in order: `sub <scope>`, `unsub <scope>`.
 fn wire_chats(heard : Array[String]) -> Array[String] {
-  let scopes : Map[Int, String] = {}
+  let scopes : Map[Int, String] = Map([])
   let out : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }
-    let j = @json.parse(h.view(start_offset=4).to_string()) catch { _ => continue }
+    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => continue }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
     match (m.get("subscribe"), m.get("unsubscribe")) {
       (Some(Object(t)), _) if t.get("topic") == Some(Json::string("chats")) => {
@@ -337,12 +337,12 @@ test "a workspace switched over a core answering each of its topics tens of ms l
       continue
     }
     // (every frame before the switch the first workspace as it was, no bone)
-    let before = frames[:i].to_array().filter(fn(f) { f.1 > 0 || f.2 != "ws1" || f.3 != "ws1" })
+    let before = frames[:i].to_owned().filter(fn(f) { f.1 > 0 || f.2 != "ws1" || f.3 != "ws1" })
     if before.length() > 0 {
       faults.push(name + ": before the switch \{before}")
     }
     // (the switch's frame and every frame after it the other's, whole (on the wide frame the pane filled), no bone)
-    let after = frames[i:].to_array().filter(fn(f) { f.1 > 0 || f.2 != "ws2" || f.3 != "ws2" || (wide && !f.4) })
+    let after = frames[i:].to_owned().filter(fn(f) { f.1 > 0 || f.2 != "ws2" || f.3 != "ws2" || (wide && !f.4) })
     if after.length() > 0 {
       faults.push(name + ": from the switch on \{after}")
     }

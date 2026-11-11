@@ -173,7 +173,7 @@ fn XParser::name(self : XParser) -> String {
   while !self.at_end() && is_name_char(self.cur()) {
     self.pos += 1
   }
-  self.s.view(start_offset=start, end_offset=self.pos).to_string()
+  self.s.view(start_offset=start, end_offset=self.pos).to_owned()
 }
 
 ///|
@@ -181,7 +181,7 @@ fn XParser::until(self : XParser, t : String) -> String? {
   let start = self.pos
   while !self.at_end() {
     if self.starts(t) {
-      let r = self.s.view(start_offset=start, end_offset=self.pos).to_string()
+      let r = self.s.view(start_offset=start, end_offset=self.pos).to_owned()
       self.pos += t.length()
       return Some(r)
     }
@@ -276,7 +276,7 @@ fn XParser::content(self : XParser, top : Bool) -> Unit {
                 ns: "",
                 name: target,
                 attrs: [],
-                text: v.trim(chars=" \t\r\n").to_string(),
+                text: v.trim(chars=" \t\r\n").to_owned(),
                 parent: self.parent,
                 children: [],
                 scope: [],
@@ -351,12 +351,12 @@ fn XParser::element(self : XParser) -> Unit {
     if self.at_end() {
       return self.fail()
     }
-    let value = self.normalize_attribute(self.s.view(start_offset=start, end_offset=self.pos).to_string())
+    let value = self.normalize_attribute(self.s.view(start_offset=start, end_offset=self.pos).to_owned())
     self.pos += 1
     if an == "xmlns" {
       scope.push(("", value))
     } else if an.has_prefix("xmlns:") {
-      scope.push((an.view(start_offset=6).to_string(), value))
+      scope.push((an.view(start_offset=6).to_owned(), value))
     } else {
       raw.push((an, value))
     }
@@ -385,7 +385,7 @@ fn XParser::element(self : XParser) -> Unit {
     }
     None
   }
-  let (prefix, local) = split_qname(qname)
+  let (prefix, local_name) = split_qname(qname)
   let ns = match resolve(prefix) {
     Some(u) => u
     None => if prefix == "" { "" } else { return self.fail() }
@@ -409,7 +409,7 @@ fn XParser::element(self : XParser) -> Unit {
   let id = self.append_node({
     kind: XElement,
     ns,
-    name: local,
+    name: local_name,
     attrs,
     text: qname,
     parent: self.parent,
@@ -424,7 +424,7 @@ fn XParser::element(self : XParser) -> Unit {
 ///|
 fn split_qname(q : String) -> (String, String) {
   match q.find(":") {
-    Some(i) => (q.view(end_offset=i).to_string(), q.view(start_offset=i + 1).to_string())
+    Some(i) => (q.view(end_offset=i).to_owned(), q.view(start_offset=i + 1).to_owned())
     None => ("", q)
   }
 }
@@ -461,7 +461,7 @@ fn XParser::reference(self : XParser) -> XRef? {
       }
       self.pos += 1
     }
-    let digits = self.s.view(start_offset=start, end_offset=self.pos).to_string()
+    let digits = self.s.view(start_offset=start, end_offset=self.pos).to_owned()
     if digits == "" || self.cur() != ';'.to_int() {
       return None
     }
@@ -504,7 +504,7 @@ fn XParser::reference(self : XParser) -> XRef? {
 
 ///|
 fn char_string(c : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   sb.write_char(Int::unsafe_to_char(c))
   sb.to_string()
 }
@@ -512,7 +512,7 @@ fn char_string(c : Int) -> String {
 ///|
 /// Text until the next '<' (process_text): references resolved, an entity's value read as content in place.
 fn XParser::text(self : XParser) -> Unit {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let flush = fn() {
     let t = normalize_text_newlines(buf.to_string())
     buf.reset()
@@ -551,7 +551,7 @@ fn XParser::text(self : XParser) -> Unit {
       while !self.at_end() && self.cur() != '<'.to_int() && self.cur() != '&'.to_int() {
         self.pos += 1
       }
-      buf.write_string(self.s.view(start_offset=start, end_offset=self.pos).to_string())
+      buf.write_string(self.s.view(start_offset=start, end_offset=self.pos).to_owned())
     }
   }
   flush()
@@ -572,7 +572,7 @@ fn XParser::normalize_attribute(self : XParser, raw : String) -> String {
   if !raw.contains("&") && !raw.contains("\t") && !raw.contains("\n") && !raw.contains("\r") {
     return raw
   }
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   self.normalize_attr_into(raw, out)
   out.to_string()
 }
@@ -665,7 +665,7 @@ fn XParser::internal_subset(self : XParser) -> Unit {
         while !self.at_end() && self.cur() != q {
           self.pos += 1
         }
-        let value = self.s.view(start_offset=start, end_offset=self.pos).to_string()
+        let value = self.s.view(start_offset=start, end_offset=self.pos).to_owned()
         self.pos += 1
         if !parameter && !self.entities.contains(name) {
           self.entities[name] = value

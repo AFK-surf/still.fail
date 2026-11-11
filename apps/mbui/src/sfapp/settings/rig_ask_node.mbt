@@ -68,7 +68,7 @@ pub fn rig_card_node(
 /// there in 允许's place), else None.
 fn rig_lacks(core : Core, station : String) -> (String, Bool)? {
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_string()
+    Some(i) => station.view(end_offset=i).to_owned()
     None => ""
   }
   let rigs = (core.topic)("rigs", { "workspace": str(ws) }).get().value

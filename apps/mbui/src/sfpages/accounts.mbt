@@ -29,7 +29,7 @@ priv struct ProfileOpen {
 ///|
 /// The fields of a profile's models' panel, by their key (made as first drawn).
 // kept across runs: made as a panel first shows one; profile_page_reset empties it
-let profile_fields : Map[String, @ui.Field] = {}
+let profile_fields : Map[String, @ui.Field] = Map([])
 
 ///|
 fn profile_page_reset() -> Unit {
@@ -176,7 +176,7 @@ fn profile_found_node(
       ["sign-in", "trouble", "quota", "usage", "used-by", "stations", "models", "run", "share", "workspaces", "account", "env"]
     },
     fn(b, key) {
-      @motion.reveal_node(b, fn() { profile_keys(core, here, o, p, entry).contains(key) }, lazy=true, fn(r) {
+      @motion.reveal_node(b, fn() { profile_keys(core, here, o, p, entry).contains(key) }, deferred=true, fn(r) {
         profile_block_node(r, core, here, address, id, s, o, p, entry, open, stint, tips, key)
       })
       |> ignore
@@ -1055,7 +1055,7 @@ fn profile_usage_node(
     }
   }
   // (read after the page is made: its section opens on its way, pushing what is under it down as it goes, not at once)
-  @motion.reveal_node(b, fn() { usage() is Some(_) }, lazy=true, fn(u) {
+  @motion.reveal_node(b, fn() { usage() is Some(_) }, deferred=true, fn(u) {
     @sf.section_node(
       u,
       fn() {
@@ -1306,7 +1306,7 @@ fn profile_share_node(
     let all = stations()
     match all.search_by(fn(x) { text(Some(x), "id") == sid }) {
       Some(i) => text(Some(all[i]), "name")
-      None => sid.view(end_offset=@cmp.minimum(8, sid.length())).to_string()
+      None => sid.view(end_offset=@cmp.minimum(8, sid.length())).to_owned()
     }
   }
   let subscription = fn() { text(field(p(), "access"), "kind") == "subscription" }
@@ -1495,7 +1495,7 @@ fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit
 /// Which stations may use a share (PickStations), ticked in a panel: every one (those to come too), or those ticked;
 /// the one that has it always.
 fn pick_stations(core : Core, address : String, id : String, stations : Array[Json], own : String, allowed : Array[String]?) -> Unit {
-  let ticked : Map[String, Bool] = {}
+  let ticked : Map[String, Bool] = Map([])
   for x in stations {
     let xid = text(Some(x), "id")
     ticked[xid] = match allowed {
@@ -1841,7 +1841,7 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
     @sf.button_node(f, fn() { @sf.t("common.save") }, fn() {
       // what changed: a name gone or renamed null, a secret left blank kept as it is
       let now = rows.untracked()
-      let patch : Map[String, Json] = {}
+      let patch : Map[String, Json] = Map([])
       let kept = now.map(fn(r) { r.key.text().trim(chars=" \t\n").to_owned() })
       for e in env {
         if !kept.contains(text(Some(e), "key")) {

@@ -5,7 +5,7 @@
 /// The ask of the core's `lockPrompts` list `list` that `is_it` picks, as the core holds it now: None while that topic
 /// is unread, Some(None) once it holds it no more.
 fn prompt_now(core : Core, list : String, is_it : (Json) -> Bool) -> Json?? {
-  let prompts = (core.topic)("lockPrompts", Map::new()).get().value
+  let prompts = (core.topic)("lockPrompts", Map([])).get().value
   match prompts {
     None => None
     Some(_) => Some(items(prompts, list).iter().find_first(is_it))

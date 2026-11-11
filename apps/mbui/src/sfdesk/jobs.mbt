@@ -156,7 +156,7 @@ fn job_row(
 /// the row's words (the 任务 tab's), else how long ago. None said: how a job says something.
 fn job_notices(c : @ui.Ctx, job : Json?, limit? : Int = 0, clock? : Bool = false) -> Unit {
   let all = items(job, "notices")
-  let notices = if limit > 0 && all.length() > limit { all[:limit].to_array() } else { all }
+  let notices = if limit > 0 && all.length() > limit { all[:limit].to_owned() } else { all }
   if notices.length() == 0 {
     c.rich(
       [
@@ -591,15 +591,15 @@ let job_dot_room : @ui.Style = @ui.css("pt=S1_5")
 /// A job's row (jobRow): its dot and words 12 apart, 6 by 8 in (12 at its start); round as an option, the pointer's
 /// ground on it, the picked ground while picked; in the popover in by the panel's words (10), round with it.
 // kept across runs: a value (no field of it changes)
-let job_row_style : @ui.Style = @ui.css(
+let job_row_style : @ui.Style = @ui.css((
   #|row w=Full py=S1_5 pl=S3 pr=S2 gap=S3 align=AStart radius=Xl hovered{bg=Hover} selected{bg=Selected}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_row_inset : @ui.Style = @ui.css(
+let job_row_inset : @ui.Style = @ui.css((
   #|row w=Full py=S1_5 px=S2_5 gap=S3 align=AStart radius=Inner hovered{bg=Hover} selected{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

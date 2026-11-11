@@ -125,7 +125,7 @@ test "a mermaid block, made once as nodes, is drawn as the old view drew it: its
       if answer == "refused" && scale != 1.0 {
         // (a code block's bar's words at 1.3: code_block_node sets them 0.12 lower than code_block, 19.78 high to its
         // 20.02, the library's, mended by #5507 (md_plain_look's line); the rest the same)
-        let rest = fn(d : String) { d.split("\n").filter(fn(l) { !l.contains("@") }).map(fn(l) { l.to_string() }).collect() }
+        let rest = fn(d : String) { d.split("\n").filter(fn(l) { !l.contains("@") }).map(fn(l) { l.to_owned() }).collect() }
         assert_eq(rest(mm_drawn(t)), rest(was), msg=at)
       } else {
         assert_eq(mm_drawn(t), was, msg=at)

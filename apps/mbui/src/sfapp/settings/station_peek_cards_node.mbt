@@ -82,7 +82,7 @@ pub fn station_peek_part_node(v : @view.View, address : String, stint : () -> In
                   fn() {
                     let name = (st.name)()
                     if name.length() > 0 {
-                      name.view(end_offset=1).to_string()
+                      name.view(end_offset=1).to_owned()
                     } else {
                       ""
                     }

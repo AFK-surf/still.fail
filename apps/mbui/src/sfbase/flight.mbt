@@ -224,7 +224,7 @@ let quote_prefix : String = "quote:"
 ///|
 /// Where in its box in the message each file flying there lands (flight_landing's `share`, by its landing's key): the
 /// share of the box's width and height its picture takes, centred, and whether its crop begins at the top.
-let landing_shares : Map[String, (Double, Double, Bool)] = {}
+let landing_shares : Map[String, (Double, Double, Bool)] = Map([])
 
 ///|
 /// How long the words take to their place, the share of it they fly (the rest they settle), and from when they
@@ -965,7 +965,7 @@ pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.Wo
     let a = cuts[i]
     // (without the break that ends its line)
     let mut b = cuts[i + 1]
-    while b > a && is_break(said.unsafe_charcode_at(b - 1)) {
+    while b > a && is_break(said.unsafe_get(b - 1).to_int()) {
       b = b - 1
     }
     if b <= a {
@@ -1024,10 +1024,10 @@ fn words_without(s : String, gone : Array[Int]) -> String {
   let sb = StringBuilder()
   let mut at = 0
   for g in gone {
-    sb.write_string(s.view(start_offset=at, end_offset=g).to_string())
+    sb.write_string(s.view(start_offset=at, end_offset=g).to_owned())
     at = g + 1
   }
-  sb.write_string(s.view(start_offset=at).to_string())
+  sb.write_string(s.view(start_offset=at).to_owned())
   sb.to_string()
 }
 
@@ -1177,14 +1177,14 @@ fn field_lines_of(field : @ui.Field, words : String) -> (@ui.FieldLines?, Int) {
       let mut lead = 0
       while lead < l.text.length() &&
             (
-              l.text.unsafe_charcode_at(lead) == 32 ||
-              l.text.unsafe_charcode_at(lead) == 9 ||
-              is_break(l.text.unsafe_charcode_at(lead))
+              l.text.unsafe_get(lead).to_int() == 32 ||
+              l.text.unsafe_get(lead).to_int() == 9 ||
+              is_break(l.text.unsafe_get(lead).to_int())
             ) {
         lead = lead + 1
       }
       if lead + words.length() <= l.text.length() &&
-        l.text.view(start_offset=lead, end_offset=lead + words.length()).to_string() == words {
+        l.text.view(start_offset=lead, end_offset=lead + words.length()).to_owned() == words {
         (Some(l), lead)
       } else {
         (None, 0)

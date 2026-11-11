@@ -263,7 +263,7 @@ priv struct LSpan {
 ///|
 fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
   let db = opt.fonts
-  let fonts : Map[String, ResolvedFont] = {}
+  let fonts : Map[String, ResolvedFont] = Map([])
   for chunk in text.chunks {
     for span in chunk.spans {
       let key = span.font.key()
@@ -831,7 +831,7 @@ fn collect_normals(
 
 ///|
 fn process_chunk(chunk : TextChunk, fonts : Map[String, ResolvedFont], db : @font.FontDb) -> Array[Cluster] {
-  let positions : Set[Int] = Set::new()
+  let positions : Set[Int] = Set([])
   let mut glyphs : Array[TGlyph] = []
   for span in chunk.spans {
     let font = match fonts.get(span.font.key()) {
@@ -1122,7 +1122,7 @@ fn shape_text(
 /// A chunk's runs in visual order: (first char, end char, right to left), by the bidi algorithm on a left-to-right
 /// paragraph (unicode_bidi's visual_runs).
 fn visual_runs(chunk : TextChunk) -> Array[(Int, Int, Bool)] {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for c in chunk.chars {
     sb.write_char(c)
   }

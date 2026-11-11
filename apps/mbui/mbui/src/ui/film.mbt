@@ -36,8 +36,8 @@ pub fn Tester::film(
   let t0 = self.fake.time
   let first = self.fake.logs.copy()
   // the film's frame the picture drawn last is
-  let shown = Ref::new(0)
-  let failure : Ref[FilmFailure?] = Ref::new(None)
+  let shown = Ref(0)
+  let failure : Ref[FilmFailure?] = Ref(None)
   if !draw(self) {
     return { logs: first, failure: Some(Draw) }
   }

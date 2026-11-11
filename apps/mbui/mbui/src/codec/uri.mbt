@@ -48,10 +48,10 @@ fn hex_value(c : Int) -> Int {
 pub fn decode_uri_component(s : String) -> String? {
   let mut i = 0
   while i < s.length() {
-    if s.unsafe_charcode_at(i) == 37 {
+    if s.unsafe_get(i).to_int() == 37 {
       if i + 2 >= s.length() ||
-        hex_value(s.unsafe_charcode_at(i + 1)) < 0 ||
-        hex_value(s.unsafe_charcode_at(i + 2)) < 0 {
+        hex_value(s.unsafe_get(i + 1).to_int()) < 0 ||
+        hex_value(s.unsafe_get(i + 2).to_int()) < 0 {
         return None
       }
       i = i + 3

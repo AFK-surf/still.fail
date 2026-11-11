@@ -41,7 +41,7 @@ let ftab : FChatTab = {
 /// again then, a part kept as its nodes too, whether it was a press in the tab, the composer's way to a folder or
 /// anything else; what reads another workspace's not.
 // kept across runs: said again as the tab is put back (tab_reset)
-let ftab_places_said : Map[String, @signals.Signal[DriveAt??]] = {}
+let ftab_places_said : Map[String, @signals.Signal[DriveAt??]] = Map([])
 
 ///|
 /// The tab of `ws` put at `at` (None: the places).
@@ -277,13 +277,13 @@ fn ftab_places(c : @ui.Ctx, src : Source, ws : String, stations : Array[DvStatio
 ///|
 /// The way to `abs`: from the home (主目录) when it is under it, else from the top of the disk.
 fn ftab_trail(abs : String, home : String) -> Array[(String, String)] {
-  let trim = fn(p : String) { if p.length() > 1 && p.has_suffix("/") { p.view(end_offset=p.length() - 1).to_string() } else { p } }
+  let trim = fn(p : String) { if p.length() > 1 && p.has_suffix("/") { p.view(end_offset=p.length() - 1).to_owned() } else { p } }
   let at = trim(abs)
   let h = trim(home)
   let out : Array[(String, String)] = []
   let rest = if h != "" && (at == h || at.has_prefix(h + "/")) {
     out.push((@sf.t("web-pages.drive.home"), h))
-    at.view(start_offset=h.length()).to_string()
+    at.view(start_offset=h.length()).to_owned()
   } else {
     out.push(("/", "/"))
     at
@@ -291,7 +291,7 @@ fn ftab_trail(abs : String, home : String) -> Array[(String, String)] {
   for part in rest.split("/") {
     if part != "" {
       let (_, last) = out[out.length() - 1]
-      out.push((part.to_string(), ftab_child(last, part.to_string())))
+      out.push((part.to_owned(), ftab_child(last, part.to_owned())))
     }
   }
   out
@@ -321,8 +321,8 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     let mut so_far = ""
     for part in at.path.split("/") {
       if part != "" {
-        so_far = dv_join(so_far, part.to_string())
-        out.push((part.to_string(), dv_absolute(root, so_far)))
+        so_far = dv_join(so_far, part.to_owned())
+        out.push((part.to_owned(), dv_absolute(root, so_far)))
       }
     }
     out
@@ -332,7 +332,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     if abs == root {
       ftab_go(at.station, root, "")
     } else if abs.has_prefix(prefix) {
-      ftab_go(at.station, root, abs.view(start_offset=prefix.length()).to_string())
+      ftab_go(at.station, root, abs.view(start_offset=prefix.length()).to_owned())
     } else {
       ftab_go(at.station, abs, "")
     }

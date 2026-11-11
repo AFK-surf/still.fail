@@ -91,10 +91,10 @@ fn same_drawn(made : Array[String], old : Array[String], what : String) -> Unit 
     }
   }
   let kinds = fn(a : Array[String]) {
-    let m : Map[String, Int] = {}
+    let m : Map[String, Int] = Map([])
     for x in a {
       let parts = x.split(",").collect()
-      let k = if parts.length() > 5 { parts[5].to_string() } else { "?" }
+      let k = if parts.length() > 5 { parts[5].to_owned() } else { "?" }
       m[k] = m.get(k).unwrap_or(0) + 1
     }
     m.to_array().map(fn(e) { "kind \{e.0}: \{e.1}" }).join(", ")
@@ -825,7 +825,7 @@ test "用量 made once in a window 220 wide at words twice as large: 30 天 chos
   let from = made.words_over_frames().length()
   usage_30_days(made)
   assert_true(made.words().iter().any(fn(x) { x.0 == "$486" }), msg="30 天's total")
-  let over = made.words_over_frames()[from:].to_array()
+  let over = made.words_over_frames()[from:].to_owned()
   assert_true(over.iter().all(fn(m) { m.y >= made_end }), msg="words over words on its title's line: \{over}")
 }
 ///|
@@ -1020,7 +1020,7 @@ test "用量 made once: what the pointer rests on said: a day of the year; by we
   }
   assert_true(mon.0 != "", msg="the year's Monday row found")
   let before = words_where(t)
-  t.move(370.0 - 20.0, mon.2 + mon.4 / 2.0)
+  t.move_to(370.0 - 20.0, mon.2 + mon.4 / 2.0)
   t.run_for(@ui.move_most_ms + @sf.tip_delay_ms)
   let first = words_where(t)
   assert_true(first.length() > before.length(), msg="a tip shown: \{first.length()} words, \{before.length()} before")
@@ -1033,7 +1033,7 @@ test "用量 made once: what the pointer rests on said: a day of the year; by we
   })
   assert_true(squares.length() > 0, msg="the last weeks' columns lit")
   let cell = squares[squares.length() - 1]
-  t.move(cell.0 + cell.2 / 2.0, cell.1 + cell.3 / 2.0)
+  t.move_to(cell.0 + cell.2 / 2.0, cell.1 + cell.3 / 2.0)
   t.run_for(@ui.move_most_ms + @sf.tip_delay_ms)
   let week = words_where(t)
   assert_true(week.iter().any(fn(w) { w.contains("起一周") }), msg="its week said: \{week}")

@@ -1529,7 +1529,7 @@ fn theme_of(dark : Bool) -> Theme {
 ///|
 /// The themes made (theme_of), by light or dark, the native input and the accent.
 // kept across runs: each a value of what it is made of
-let themes_made : Map[(Bool, Bool, String), Theme] = {}
+let themes_made : Map[(Bool, Bool, String), Theme] = Map([])
 
 ///|
 /// Whether a ground is drawn on in place of the page's now (with_ground): the theme is current's, as it says, till then.

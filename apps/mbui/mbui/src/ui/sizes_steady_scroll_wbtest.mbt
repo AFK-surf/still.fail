@@ -94,7 +94,7 @@ fn steady_bar_case(over : @signals.Signal[Bool]) -> (Tester, @view.Scroll) {
     |> ignore
   })
   t.draw()
-  t.move(80.0, 100.0)
+  t.move_to(80.0, 100.0)
   (t, scroll)
 }
 
@@ -266,7 +266,7 @@ test "sizes steady: a dead stop said as the frame it stops on is drawn, a turn b
     let all = ys.mapi(fn(i, y) { (i.to_double() * p, i.to_double() * p, y) })
     let mut dead = false
     for k in 1..=all.length() {
-      if sizes_steady_fault(all[:k].to_array(), p, turned=-1.0e9).0 is Some(s) && s.contains("stopped dead") {
+      if sizes_steady_fault(all[:k].to_owned(), p, turned=-1.0e9).0 is Some(s) && s.contains("stopped dead") {
         dead = true
       }
     }

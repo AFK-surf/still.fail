@@ -261,7 +261,7 @@ fn agent_tiles_apart(lines : Array[String], card : Json?) -> (Array[String], Arr
   ].filter(fn(w) { w != "" })
   let tile = fn(l : String) {
     match l.find("@") {
-      Some(i) => words.contains(l.view(end_offset=i).to_string())
+      Some(i) => words.contains(l.view(end_offset=i).to_owned())
       None => l.contains("x\{agent_tile_h} ")
     }
   }
@@ -282,7 +282,7 @@ fn agent_tile_widths(tiles : Array[String]) -> Array[String] {
       Some(i) => {
         let rest = l.view(start_offset=i + 1)
         match rest.find("x") {
-          Some(j) => rest.view(end_offset=j).to_string()
+          Some(j) => rest.view(end_offset=j).to_owned()
           None => ""
         }
       }
@@ -493,8 +493,8 @@ fn agent_trigger_open(hands : Map[String, @sf.HoverHand], name : String) -> Bool
 
 ///|
 test "an activity row's avatar says neither: a finger's tap on it the row's (opened), no card; held long_press_ms, its agent's card, the row not pressed" {
-  let pressed : Map[String, Int] = {}
-  let hands : Map[String, @sf.HoverHand] = {}
+  let pressed : Map[String, Int] = Map([])
+  let hands : Map[String, @sf.HoverHand] = Map([])
   let t = agent_triggers(1, pressed, hands)
   t.run_for(@ui.move_most_ms)
   // (the avatar: 40 + 20, the row's middle)
@@ -531,13 +531,13 @@ test "an activity row's avatar says neither: a finger's tap on it the row's (ope
 
 ///|
 test "a message's name says its press: clicked, its own (the agent's history); the mouse resting on it, its card, its words starting where the name's do" {
-  let pressed : Map[String, Int] = {}
-  let hands : Map[String, @sf.HoverHand] = {}
+  let pressed : Map[String, Int] = Map([])
+  let hands : Map[String, @sf.HoverHand] = Map([])
   let t = agent_triggers(0, pressed, hands)
   t.run_for(@ui.move_most_ms)
   // (the name: 40 + 20 + 18 + 60, the row's middle)
   let (x, y) = (168.0, 62.0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(hover_open_ms + @ui.move_most_ms)
   assert_true(agent_trigger_open(hands, "名"), msg="rested on: its card")
   match @signals.untracked(hands["名"].card) {

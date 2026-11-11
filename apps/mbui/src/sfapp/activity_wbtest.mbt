@@ -73,19 +73,19 @@ test "activity: the picture opens its agent's card under the pointer, and still 
     let (x, y) = activity_picture(t)
     assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
     let (wx, wy, ww, wh) = t.rect_of(@sffixture.working_step).unwrap()
-    t.move(wx + ww / 2.0, wy + wh / 2.0)
+    t.move_to(wx + ww / 2.0, wy + wh / 2.0)
     t.run_for(@sfpages.hover_open_ms * 2.0)
     assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None, msg="the activity's words do not open the card")
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@sfpages.hover_open_ms * 2.0)
     let card = t.rect_of("8 轮 · 共干了 1 小时 12 分")
     assert_true(card is Some(_), msg="the working agent's card appears over its picture")
     let (cx, cy, cw, ch) = card.unwrap()
     // The pointer can cross into the card and use it without it disappearing.
-    t.move(cx + cw / 2.0, cy + ch / 2.0)
+    t.move_to(cx + cw / 2.0, cy + ch / 2.0)
     t.run_for(@sfpages.hover_close_ms * 2.0)
     assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
-    t.move(1.0, 1.0)
+    t.move_to(1.0, 1.0)
     t.run_for(@sfpages.hover_close_ms * 2.0)
     assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
     t.tap(x, y)
@@ -113,7 +113,7 @@ test "activity: a mouse used with a touch-native system opens the same card" {
   let t = activity_card_tester(390.0, 844.0, 2)
   let (x, y) = activity_picture(t)
   t.host_says_finger(Some(false))
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
 }
@@ -182,7 +182,7 @@ test "the viewer's own message taller than the list is followed to the end: its 
 
 ///|
 test "its line gone with the answer that came out of its avatar, the agent still at work: not back this turn" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)
@@ -201,7 +201,7 @@ test "its line gone with the answer that came out of its avatar, the agent still
 ///|
 test "its line stays after a post saying how far it got, the agent still at work: only an answer that ends the turn takes its place" {
   // (2026-11-09 the user: 「agent 发完消息 activity 不出现」, its line gone for the rest of the turn after a progress post)
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock, words="看下进度")
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)

@@ -421,7 +421,7 @@ test "the pointer within a node under an old view's layer over all of it: within
     |> ignore
   })
   t.draw()
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   let tree = view_app.val.unwrap()
   assert_true(told.last() == Some(true), msg="within, nothing over it: \{told}")
   assert_true(tree.pointed_now() == band_id.val, msg="pointed at, nothing over it")
@@ -433,7 +433,7 @@ test "the pointer within a node under an old view's layer over all of it: within
   t.draw()
   assert_true(tree.pointed_now() is None, msg="what it points at the layer's")
   assert_eq(t.cursor(), Crosshair, msg="the layer's shape")
-  t.move(30.0, 25.0)
+  t.move_to(30.0, 25.0)
   t.draw()
   t.touch(0, 30.0, 25.0)
   t.draw()
@@ -452,7 +452,7 @@ test "the pointer within a node under an old view's layer over all of it: within
   t.draw()
   assert_true(told.last() == Some(false), msg="out of the window: the frame after the same")
   // (back in, then a finger down, no frame drawn: no pointer, not within then; the frame after the same)
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   t.draw()
   assert_true(told.last() == Some(true), msg="back in: within")
   t.touch_raw(0, 1, 200.0, 200.0, t.time())
@@ -522,7 +522,7 @@ test "a row of the tree's that moves the window, as the old view's top row does:
   assert_eq(old_row.0, [1, 1, 1], msg="the old view's: moved by the primary button on its blank alone")
   assert_eq(node_row.0, old_row.0, msg="the tree's: moved as the old view's is")
   assert_eq(node_row.1, old_row.1, msg="the focus as the old view's leaves it")
-  assert_eq(node_row.1[0:2].to_array(), [true, true], msg="the focus kept by a press on the blank, either button")
+  assert_eq(node_row.1[0:2].to_owned(), [true, true], msg="the focus kept by a press on the blank, either button")
   assert_eq(node_row.2, old_row.2, msg="its button pressed as the old view's is")
 }
 

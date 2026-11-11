@@ -74,7 +74,7 @@ let key_names : Array[(String, Int)] = [
 ///|
 /// A binding (Shift+Mod+H) as the key's code and the modifiers held, or None for one this app cannot have.
 fn binding_key(binding : String) -> (Int, Int)? {
-  let parts = binding.split("+").map(fn(p) { p.to_string() }).collect()
+  let parts = binding.split("+").map(fn(p) { p.to_owned() }).collect()
   // (a plus itself is no binding: the last part is always the key)
   let key = match parts.last() {
     Some(k) => k

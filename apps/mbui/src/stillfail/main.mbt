@@ -7,7 +7,7 @@
 
 ///|
 /// The topics asked for, by their key: one subscription each, asked again the same every frame.
-let dumped : Map[String, Int] = {}
+let dumped : Map[String, Int] = Map([])
 
 ///|
 fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
@@ -410,7 +410,7 @@ fn main {
     @core.trace_to(fn(line) { @hostapi.log("CORETRACE " + line) }, bytes_max~)
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
-    let started : Map[String, Json] = {}
+    let started : Map[String, Json] = Map([])
     // (and where the host keeps downloads in a scripted run: what it says of a file kept, which the app tells the core)
     for name in @sfcore.started_by + ["MBUI_DOWNLOADS_DIR"] {
       let v = @sfcore.env_text(name)
@@ -425,8 +425,8 @@ fn main {
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
     // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
     // a replay's host to say the same
-    let local = @json.parse(@ui.local_station()) catch { _ => Json::null() }
-    @hostapi.log("CORETRACE " + ({ "host": { "localStation": local } } : Json).stringify())
+    let own_station = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+    @hostapi.log("CORETRACE " + ({ "host": { "localStation": own_station } } : Json).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
     // and what it gives the frames (the window's size and scale, the system and its settings), first as the first
@@ -465,7 +465,7 @@ fn main {
     // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
     // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)
     @sfapp.open_titled.val = @ui.env("MBUI_OPEN_CHAT")
-    match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
+    match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_owned() }).to_array() {
       [station, session] =>
         @sfapp.open_chat({ station, session, title: "", station_name: "" })
       _ => ()

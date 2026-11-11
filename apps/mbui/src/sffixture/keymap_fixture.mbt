@@ -42,7 +42,7 @@ pub let fx_key_unlisted : Array[String] = ["chat.said.prev", "chat.said.next"]
 ///|
 /// A binding as a key cap shows it (keymap.ts label): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
 pub fn fx_key_label(b : String, mac : Bool) -> String {
-  let parts = b.split("+").map(fn(p) { p.to_string() }).collect()
+  let parts = b.split("+").map(fn(p) { p.to_owned() }).collect()
   let key = parts.pop().unwrap_or("")
   let shown = match key {
     "Space" => tr("web-main.keymap.space")
@@ -92,8 +92,8 @@ pub fn fixture_keymap(changed : Map[String, Array[String]], send_key? : String =
       "group": Json::string(a.1),
       "name": Json::string(tr("web-main.keymap." + a.0)),
       "typing": Json::string(a.4),
-      "keys": Json::array(keys.map(Json::string(_))),
-      "labels": Json::array(labels.map(Json::string(_))),
+      "keys": Json::array(keys.map(x => Json::string(x))),
+      "labels": Json::array(labels.map(x => Json::string(x))),
       "text": Json::string(if labels.length() == 0 { tr("web-main.shortcuts.unset") } else { labels.join(" / ") }),
       "changed": Json::boolean(changed.contains(a.0)),
       "listed": Json::boolean(!fx_key_unlisted.contains(a.0)),
@@ -185,9 +185,9 @@ pub fn fixture_keys_set(changed : Map[String, Array[String]], params : Json) -> 
 ///|
 /// The prefs' `keys`: each action's keys changed here.
 pub fn fixture_keys(changed : Map[String, Array[String]]) -> Json {
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   for k, v in changed {
-    o[k] = Json::array(v.map(Json::string(_)))
+    o[k] = Json::array(v.map(x => Json::string(x)))
   }
   Json::object(o)
 }

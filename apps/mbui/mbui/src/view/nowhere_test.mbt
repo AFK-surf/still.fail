@@ -5,7 +5,7 @@
 ///|
 test "laid nowhere: a box holding a coloured box, words and a button: none of it drawn, read out or pressed by its id or by a screen reader, no gap left for it; a finger held on its button called off then; back, the same nodes as big as they were, pressed again" {
   let nowhere = @signals.signal(false, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let pressed = Ref(0)
   let seen : Array[@view.Drag] = []
   let t = @view.Tree::new(

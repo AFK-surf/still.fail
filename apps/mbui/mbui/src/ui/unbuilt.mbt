@@ -6,7 +6,7 @@
 /// What asked to be told as it is no longer built, by its id: what tells it, and the build that last built it (built
 /// as it asked, or kept as a list's row or a part that asked it: built_used).
 // kept across runs: forgotten as another run begins (parts_forget)
-let unbuilt_watch : Map[Int, UnbuiltWatch] = {}
+let unbuilt_watch : Map[Int, UnbuiltWatch] = Map([])
 
 ///|
 priv struct UnbuiltWatch {

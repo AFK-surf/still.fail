@@ -68,7 +68,7 @@ fn side_slides(n : @view.View, src : Source, key : String, open : Bool) -> Unit 
   match was {
     Some(was) if was != open && panel_own.asked.untracked() == key => {
       panel_own.asked.set("")
-      way.go(target, @motion.move(), at=n.cause_at())
+      way.go(target, @motion.moved(), at=n.cause_at())
       if !open {
         let ends = way.end()
         n.at_moment(ends, fn() { if way.end() == ends { side_left(key) } }) |> ignore

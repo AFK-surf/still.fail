@@ -6,7 +6,7 @@
 
 ///|
 /// The groups opened past their first three, by their key.
-let open_jobs_all : Map[String, Bool] = {}
+let open_jobs_all : Map[String, Bool] = Map([])
 
 ///|
 fn open_jobs_reset() -> Unit {
@@ -35,7 +35,7 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       let shown = if open_jobs_all.contains(key) || list.length() <= open_jobs_shown + 1 {
         list
       } else {
-        list[:open_jobs_shown].to_array()
+        list[:open_jobs_shown].to_owned()
       }
       @sf.panel_group(c, label=text(gv, "head"), fn() {
         for j in shown {

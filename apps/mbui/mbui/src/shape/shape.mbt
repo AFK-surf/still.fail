@@ -16,7 +16,7 @@ pub fn ShapeFont::new(face : @font.Face, coords~ : Array[Int] = []) -> ShapeFont
 
 ///|
 fn ShapeFont::plan(self : ShapeFont, direction : Direction, script : Int, features : Array[Feature]) -> ShapePlan {
-  let key = StringBuilder::new()
+  let key = StringBuilder()
   key.write_string("\{direction} \{script}")
   for f in features {
     key.write_string(" \{f.tag}=\{f.value}:\{f.start}:\{f.end}")

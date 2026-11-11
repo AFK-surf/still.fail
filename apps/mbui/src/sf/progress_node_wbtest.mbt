@@ -66,7 +66,7 @@ fn progress_said(t : @ui.Tester, value : String, range : (Double, Double, Double
     None => ["", "", ""]
   }
   for l in told {
-    let f = l.split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+    let f = l.split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
     assert_eq([f[12], f[13], f[14]], want, msg="told the host: \{f[12]} \{f[13]} \{f[14]}")
   }
 }

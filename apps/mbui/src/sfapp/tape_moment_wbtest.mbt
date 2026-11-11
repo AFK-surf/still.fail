@@ -463,7 +463,7 @@ fn held_let_go(
   })
   let felt = t.haptics().length()
   let now = fn() -> (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane) {
-    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_array(), @sfdesk.wide.tape_at.get())
+    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_owned(), @sfdesk.wide.tape_at.get())
   }
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
@@ -793,9 +793,9 @@ test "on the tape a finger's short swipe let go slowly goes back; quick, it is f
   page_over(t, 720.0)
   t.press_at(360.0, 400.0)
   t.advance(@ui.input_step_ms * 40.0)
-  t.move(380.0, 400.0)
+  t.move_to(380.0, 400.0)
   t.advance(@ui.input_step_ms * 40.0)
-  t.move(390.0, 400.0)
+  t.move_to(390.0, 400.0)
   assert_eq(@sfdesk.wide.tape_pull.get(), Some(@sfdesk.TapePane::Side))
   t.advance(@ui.input_step_ms * 40.0)
   t.release(390.0, 400.0)

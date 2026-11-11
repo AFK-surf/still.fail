@@ -124,7 +124,7 @@ priv struct RowNodes {
 ///|
 /// The rows kept, by list and item.
 // kept across runs: let go of as a run begins (nodes_forget) and as each frame ends for those it did not lay
-let kept_nodes : Map[(Int, Int), RowNodes] = {}
+let kept_nodes : Map[(Int, Int), RowNodes] = Map([])
 
 ///|
 /// Nodes no row nor the frame holds, for a row's to be swapped with.
@@ -1365,7 +1365,7 @@ pub fn Tester::rows_read_built(self : Tester) -> Int {
 /// Why the rows and the parts of the last frame that may not be kept may not (a part's said so), each reason once with
 /// how many (a test's, a bench's).
 pub fn rows_unkept() -> Array[(String, Int)] {
-  let by : Map[String, Int] = {}
+  let by : Map[String, Int] = Map([])
   for _, rn in kept_nodes {
     if !rn.ok && rn.why != "" {
       let why = if rn.item < 0 { "a part: " + rn.why } else { rn.why }

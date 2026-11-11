@@ -89,7 +89,7 @@ fn steps_code_lines(t : @ui.Tester, code : String) -> Array[String] {
   .to_array()
   .filter(fn(l) { l != "" })
   .map(fn(l) {
-    let rects = t.run_rects(l.to_string()).map(fn(r) { "\{(r.0 * 100.0).round() / 100.0},\{(r.1 * 100.0).round() / 100.0} \{(r.2 * 100.0).round() / 100.0}x\{(r.3 * 100.0).round() / 100.0}" })
+    let rects = t.run_rects(l.to_owned()).map(fn(r) { "\{(r.0 * 100.0).round() / 100.0},\{(r.1 * 100.0).round() / 100.0} \{(r.2 * 100.0).round() / 100.0}x\{(r.3 * 100.0).round() / 100.0}" })
     "\{l}: \{rects}"
   })
 }

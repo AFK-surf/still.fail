@@ -18,7 +18,7 @@ test "signed out: the sign-in page" {
 ///|
 test "signed out in a desktop's window: 登录或注册 alone, no wider than the desktop app's; a phone's across the page" {
   new_run()
-  let pressed = Ref::new(0)
+  let pressed = Ref(0)
   let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   // no words but its own
@@ -534,7 +534,7 @@ test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin
       let felt = t.haptics().length()
       t.tap_text("固定")
       assert_eq(named(calls, "chat.pin").length(), 1)
-      assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+      assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
     }
     // (a fixture row from a station before pins has none)
     None => ()
@@ -1021,7 +1021,7 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)

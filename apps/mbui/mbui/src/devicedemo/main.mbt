@@ -21,10 +21,10 @@ fn picture_said(p : @ui.ClipPicture) -> String {
 
 ///|
 fn main {
-  let last = Ref::new("ready")
-  let typed = StringBuilder::new()
-  let read : Ref[@ui.ClipboardRead?] = Ref::new(None)
-  let inset = Ref::new(-1.0)
+  let last = Ref("ready")
+  let typed = StringBuilder()
+  let read : Ref[@ui.ClipboardRead?] = Ref(None)
+  let inset = Ref(-1.0)
   let say = fn(s : String) {
     @ui.log(s)
     last.val = s

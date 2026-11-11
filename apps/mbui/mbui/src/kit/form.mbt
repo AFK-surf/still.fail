@@ -73,7 +73,7 @@ priv struct FormState {
 ///|
 /// What is wrong with `text` in `f` ("" nothing).
 pub fn field_error(f : FormField, text : String, words? : FormWords = form_words) -> String {
-  let s = text.trim().to_string()
+  let s = text.trim().to_owned()
   if s == "" {
     return if f.required { words.missing } else { "" }
   }
@@ -116,8 +116,8 @@ pub fn form(
       s
     }
   }
-  let values : Map[String, String] = {}
-  let errors : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
+  let errors : Map[String, String] = Map([])
   let mut entered = false
   let mut pressed = false
   let fi = c.box(w~, gap=16.0, fn() {

@@ -13,7 +13,7 @@
 ///|
 // kept across runs: the app's handlers are its code, given once as it starts (by a test's app before its Tester), the
 // same for every run; one a channel, a later one in its place
-let message_handlers : Map[String, (String, Bytes?) -> Unit] = Map::new()
+let message_handlers : Map[String, (String, Bytes?) -> Unit] = Map([])
 
 ///|
 /// `handler` is given each message posted on `channel`: its JSON and the bytes beside it (None: none), as the frame
@@ -24,7 +24,7 @@ pub fn on_message(channel : String, handler : (String, Bytes?) -> Unit) -> Unit 
 
 ///|
 // kept across runs: as message_handlers, the app's code
-let message_said : Map[String, (String, Bytes?) -> Bool] = Map::new()
+let message_said : Map[String, (String, Bytes?) -> Bool] = Map([])
 
 ///|
 /// What of a message on `channel` changes only signals, taken by `said` as it comes, as the frame begins, before it is
@@ -49,24 +49,24 @@ let fake_posted : Array[(String, String, Bytes?)] = []
 
 ///|
 /// How often a Tester's posts asked for a frame (the first posted since a frame took the last does).
-let post_wakes : Ref[Int] = Ref::new(0)
+let post_wakes : Ref[Int] = Ref(0)
 
 ///|
 /// How many messages the last frame took and handed to their handlers.
-let messages_handed : Ref[Int] = Ref::new(0)
+let messages_handed : Ref[Int] = Ref(0)
 
 ///|
 /// What a Tester keeps of its run, as a host's log keeps it with MBUI_DRAW_LOG=1 (Tester::start_tape): DRAWHASH,
 /// INPUT and MSG lines. None: nothing kept.
-let tape : Ref[Array[String]?] = Ref::new(None)
+let tape : Ref[Array[String]?] = Ref(None)
 
 ///|
 /// What stands for the outside in a Tester (Tester::between_frames), told as each frame ends.
-let between_frames : Ref[(() -> Unit)?] = Ref::new(None)
+let between_frames : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 /// When that outside has its next to say (Tester::between_frames' `due`): +inf, nothing it knows of.
-let outside_due : Ref[(() -> Double)?] = Ref::new(None)
+let outside_due : Ref[(() -> Double)?] = Ref(None)
 
 ///|
 fn messages_reset() -> Unit {

@@ -5,8 +5,8 @@ let wb_avcc : Bytes = b"\x01\x42\xc0\x1f\xff\xe1\x00\x06\x67\x42\xc0\x1f\xda\x01
 
 ///|
 test "a frame let go in a frame that took its events already: the next frame is owed, takes it and says it shown" {
-  let cell : Ref[Stream?] = Ref::new(None)
-  let feed : Ref[Bool] = Ref::new(false)
+  let cell : Ref[Stream?] = Ref(None)
+  let feed : Ref[Bool] = Ref(false)
   let t = Tester::new(
     fn(c) {
       match cell.val {
@@ -44,7 +44,7 @@ test "a frame let go in a frame that took its events already: the next frame is 
 
 ///|
 test "a frame handed to a stream by a message taken as it comes builds nothing for the message: the frame let go is taken, said shown" {
-  let cell : Ref[Stream?] = Ref::new(None)
+  let cell : Ref[Stream?] = Ref(None)
   let t = Tester::new(
     fn(c) {
       match cell.val {
@@ -82,8 +82,8 @@ test "a frame handed to a stream by a message taken as it comes builds nothing f
 
 ///|
 test "a stream shown by its system video layer: its hole painted, a frame of its size taken as it comes, said shown, nothing built" {
-  let cell : Ref[Stream?] = Ref::new(None)
-  let layer : Ref[Bool] = Ref::new(true)
+  let cell : Ref[Stream?] = Ref(None)
+  let layer : Ref[Bool] = Ref(true)
   let t = Tester::new(
     fn(c) {
       match cell.val {
@@ -95,7 +95,7 @@ test "a stream shown by its system video layer: its hole painted, a frame of its
   )
   t.set_stream_layers(true)
   let acks = []
-  let quiet : Ref[Bool] = Ref::new(true)
+  let quiet : Ref[Bool] = Ref(true)
   let s = Stream::new(shown=fn(ts) { acks.push(ts) }, broken=fn() {  }, layer=true, quiet=Some(fn(_) { quiet.val }))
   cell.val = Some(s)
   s.h264(wb_avcc, 640, 360)
@@ -154,7 +154,7 @@ test "a stream shown by its system video layer: its hole painted, a frame of its
 
 ///|
 test "on a host whose decoder is driven from here, a stream on its system video layer is decoded by the host itself: no feed, a frame of its size taken as it comes" {
-  let cell : Ref[Stream?] = Ref::new(None)
+  let cell : Ref[Stream?] = Ref(None)
   let t = Tester::new(
     fn(c) {
       match cell.val {
@@ -196,8 +196,8 @@ test "on a host whose decoder is driven from here, a stream on its system video 
 
 ///|
 test "a stream shown by its layer has its route's frames taken by the host while it shows itself: what came so said by one event, nothing built" {
-  let cell : Ref[Stream?] = Ref::new(None)
-  let layer : Ref[Bool] = Ref::new(true)
+  let cell : Ref[Stream?] = Ref(None)
+  let layer : Ref[Bool] = Ref(true)
   let t = Tester::new(
     fn(c) {
       match cell.val {
@@ -223,7 +223,7 @@ test "a stream shown by its layer has its route's frames taken by the host while
   // a frame of it shown on its layer: its frames too
   s.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
   s.route(7, 12.0, video=true, audio=true)
-  assert_eq(routes()[1:].to_array(), ["route 7 after=12 video=true audio=true"])
+  assert_eq(routes()[1:].to_owned(), ["route 7 after=12 video=true audio=true"])
   t.stream_shows(s.id(), 2.0, 640, 360)
   t.frame_at(t.fake.time + said_frame_ms)
   assert_eq(acks, [1.0, 2.0])
@@ -243,7 +243,7 @@ test "a stream shown by its layer has its route's frames taken by the host while
   layer.val = false
   t.draw()
   t.draw()
-  assert_eq(routes()[2:].to_array(), ["route 7 after=-1 video=false audio=true"])
+  assert_eq(routes()[2:].to_owned(), ["route 7 after=-1 video=false audio=true"])
   // not asked again while nothing changes
   t.draw()
   assert_eq(routes().length(), 3)

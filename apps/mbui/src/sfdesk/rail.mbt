@@ -466,7 +466,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let extra = rail_in_view(src, w)
   let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
   let entries : Array[@kit.Entry] = []
-  let icons : Map[String, String] = {}
+  let icons : Map[String, String] = Map([])
   if away.length() > 0 {
     entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
     for i in away {
@@ -505,7 +505,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         at=(ax, dmax(ay, rail_menu_clear), aw, ah),
         row_end=fn(c, s) {
           if s.entry.value.has_prefix("go:") {
-            let i = s.entry.value.view(start_offset=3).to_string()
+            let i = s.entry.value.view(start_offset=3).to_owned()
             rail_menu_add(c, i, rail_label(src, i), s.hot, on_press=fn() {
               let next = kept.copy()
               next.push(i)
@@ -526,7 +526,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
     Some("reset") => rail_keep(src, w.id, words_in(items(rail_view(src), "default")))
     Some("customize") => wide.editing.set(true)
-    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.view(start_offset=3).to_string())
+    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.view(start_offset=3).to_owned())
     _ => ()
   }
 }

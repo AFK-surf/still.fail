@@ -61,7 +61,7 @@ test "the page before asked for as the reader nears the chat's top (chat.older),
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.run_for(@ui.move_most_ms)
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     t.wheel(195.0, 400.0, -900.0)
     t.run_for(@ui.move_most_ms)

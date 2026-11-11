@@ -307,14 +307,14 @@ fn vault_kept(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
       })
     } else {
       let open = vaults.iter().any(fn(x) { flag(Some(x), "open") })
-      let sealed = @sf.t("web-pages.vault.lib.sealed")
+      let sealed_words = @sf.t("web-pages.vault.lib.sealed")
       if open {
         let locking = is_doing(core, ["vault.lock"], [("workspace", ws)])
-        vault_do_row(c, "vault-lock", sealed, @sf.t("web-pages.vault.opened"), @sf.t("web-pages.vault.lockNow"), busy=locking, on_press=fn() {
+        vault_do_row(c, "vault-lock", sealed_words, @sf.t("web-pages.vault.opened"), @sf.t("web-pages.vault.lockNow"), busy=locking, on_press=fn() {
           vault_act(core, ws, "lock", [], @sf.t("web-pages.vault.lockNow"))
         })
       } else {
-        @sf.link_row(c, "", sealed, note=@sf.t("web-pages.vault.lib.sealedWhy"), goes=false) |> ignore
+        @sf.link_row(c, "", sealed_words, note=@sf.t("web-pages.vault.lib.sealedWhy"), goes=false) |> ignore
       }
       if left > 0 {
         let moving = is_doing(core, ["vault.migrate"], [("workspace", ws)])
