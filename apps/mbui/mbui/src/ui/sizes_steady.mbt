@@ -199,7 +199,12 @@ fn sizes_steady_fault(
     let off = (v1 - (v0 + v2) / 2.0).abs()
     if v0.abs() > least && v1.abs() > least && v0 * v1 > 0.0 && v2.abs() < 0.2 * v1.abs() &&
       v1.abs() > 0.5 * v0.abs() {
-      return (Some("stopped dead from \{v1} a frame (\{v0} before) at \{seen[3].1} seen=\{all}"), turned)
+      let d1 = if v1 > 0.0 { v0 - v1 } else { v1 - v0 }
+      let d2 = if v1 > 0.0 { v1 - v2 } else { v2 - v1 }
+      return (
+        Some("stopped dead from \{v1} a frame (\{v0} before; slowing \{d1} then \{d2}) at \{seen[3].1} seen=\{all}"),
+        turned,
+      )
     }
     // (at rest, or all but, then setting out: none)
     let resting = v0.abs() < least && v1.abs() < least
