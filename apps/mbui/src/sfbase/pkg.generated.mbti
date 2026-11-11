@@ -2148,6 +2148,8 @@ pub struct ChatImages {
 pub fn ChatImages::again(Self, String) -> Unit
 pub fn ChatImages::clear(Self) -> Unit
 pub fn ChatImages::coming(Self, String) -> (Double, Double?)?
+pub fn ChatImages::coming_let_go(Self, String) -> Unit
+pub fn ChatImages::coming_since(Self, String, Double) -> Double
 pub fn ChatImages::get(Self, String, String, String, ((@json.Json) -> Unit, (Result[(@json.Json, Bytes?), @json.Json]) -> Unit) -> Unit) -> String
 pub fn ChatImages::held(Self, String) -> Bool
 pub fn ChatImages::new() -> Self

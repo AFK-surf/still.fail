@@ -21,11 +21,15 @@ pub struct ChatImages {
   /// as one is first read so, let go as nothing reads it any more. The old views' reads track nothing (they are built
   /// again each frame), so none is made for them and nothing is told of what they read.
   priv told : Map[String, @signals.Signal[Int]]
+  /// when each one coming was first said to be on its way to what shows it (the cause's moment its node was told so:
+  /// coming_since), by id: what shows how far it has come counts from it, a row let go of and made again not waiting
+  /// anew; let go as it is here, fails or is asked again
+  priv since : Map[String, Double]
 }
 
 ///|
 pub fn ChatImages::new() -> ChatImages {
-  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {}, told: {} }
+  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {}, told: {}, since: {} }
 }
 
 ///|
@@ -36,6 +40,7 @@ pub fn ChatImages::clear(self : ChatImages) -> Unit {
   self.reached.clear()
   self.held.clear()
   self.coming.clear()
+  self.since.clear()
   let ids = self.told.keys().to_array()
   for id in ids {
     self.tell(id)
@@ -104,6 +109,7 @@ pub fn ChatImages::get(
         },
         fn(r) {
         self.coming.remove(id)
+        self.since.remove(id)
         match r {
           Ok((said, Some(bytes))) if bytes.length() > 0 => {
             @ui.add_image(name, bytes)
@@ -145,6 +151,26 @@ pub fn ChatImages::coming_told(self : ChatImages, id : String) -> (Double, Doubl
 }
 
 ///|
+/// When picture `id` was first said to be on its way to what shows it: `at` (a node's cause's moment as it is told so)
+/// the first time it is asked, the moment kept since then after (till it is here, fails or is asked again).
+pub fn ChatImages::coming_since(self : ChatImages, id : String, at : Double) -> Double {
+  match self.since.get(id) {
+    Some(t) => t
+    None => {
+      self.since[id] = at
+      at
+    }
+  }
+}
+
+///|
+/// What was on its way as `id` (a download of a chat's file, by its own id: not a picture's) no longer so: when it
+/// was first said to be (coming_since) let go, the next time counted anew.
+pub fn ChatImages::coming_let_go(self : ChatImages, id : String) -> Unit {
+  self.since.remove(id)
+}
+
+///|
 /// Whether picture `id` failed for want of its station (unreached), read by a node: told as that changes.
 pub fn ChatImages::unreached_told(self : ChatImages, id : String) -> Bool {
   self.track(id)
@@ -178,6 +204,7 @@ pub fn ChatImages::again(self : ChatImages, station : String) -> Unit {
     self.unreached.remove(id)
     self.keys.remove(id)
     self.coming.remove(id)
+    self.since.remove(id)
     self.tell(id)
   }
 }
