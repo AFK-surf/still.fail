@@ -213,7 +213,9 @@ fn panel_node(
         // (`tall`: what it holds fills the room it is given, laid out in it, scrolling as it does itself: panel_grows)
         if x.tall > 0.0 {
           p.box(fn(b) {
-            b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(By(fn() { (-panel_pad, -over(), -panel_pad, -out_under) })).focusable(Is(x.focus), keys=0, tab=false) |> ignore
+            // (the room under its head and no more, whatever it holds: grown from none, as what holds a list sized by
+            // what it holds would stand past the panel's foot, its last rows cut there)
+            b.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))).margin(By(fn() { (-panel_pad, -over(), -panel_pad, -out_under) })).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
             match x.nodes {
               // (what it holds nodes: in a column as the old frame's body is laid out, its words as far in as its look says)
