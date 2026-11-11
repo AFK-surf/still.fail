@@ -77,8 +77,6 @@ pub struct Replay {
   /// whether a step of the script's is timed from the step before it (Replay::chain_steps: a pace pass's, its frames
   /// not the run's), else from what happened again before it
   priv mut steps_chained : Bool
-  /// whether every ask of the run's before a message waits it (else only its own and those that are not reports)
-  priv mut strict : Bool
   /// the clock the replay's events are timed on (a Tester's: when an ask is made again, a message given)
   priv mut clock : () -> Double
   /// the calls made since the last take_asked that the run answered (or that it did not make: a live backend answers
@@ -341,7 +339,6 @@ pub fn Replay::parse(log : String) -> Replay {
     walls: [],
     pace: AtOnce,
     steps_chained: false,
-    strict: true,
     clock: fn() { 0.0 },
     seed: 0,
     asked: [],
@@ -538,11 +535,10 @@ pub fn Replay::detach() -> Unit {
 }
 
 ///|
-/// From now on, what came is given at `pace`; `strict`: each message waits every ask of the run's before it (else its
-/// own, and those before it that are not reports: a run's timing made those, another timing makes others).
-pub fn Replay::pace(self : Replay, pace : Pace, strict? : Bool = true) -> Unit {
+/// From now on, what came is given at `pace`. Every pass waits the same (Replay::ready): a message waits its own ask and
+/// those before it that are not reports, as a report the run's frames made the app's own frames may not make again.
+pub fn Replay::pace(self : Replay, pace : Pace) -> Unit {
   self.pace = pace
-  self.strict = strict
 }
 
 ///|
@@ -918,7 +914,7 @@ pub fn Replay::next_due(self : Replay) -> Double? {
 ///|
 /// When message `i` may come at this pace (+inf: not until an ask before it is made again): at once; or at its anchor's
 /// time on by the run's gap between them. Its anchor: the latest event before it that has happened again (an ask made
-/// again, a message given); one left out (skipped, dropped; not strict, a report not made) is passed over, as is a
+/// again, a message given); one left out (skipped, dropped, a report not made) is passed over, as is a
 /// message in not given yet (what may come at once in another order: its own time stands for it), as are asks with no
 /// wall clock (an older trace: anchored to the messages in). None before it: at once.
 fn Replay::due_at(self : Replay, i : Int) -> Double {
@@ -1031,7 +1027,7 @@ fn is_report(m : Json) -> Bool {
 
 ///|
 /// The messages in that may come whenever their time (what they came after asked again), the first of each ask's: in
-/// the run's order: up to the first ask not made again, past those that are reports (strict or not); an ask's own coming
+/// the run's order: up to the first ask not made again, past those that are reports; an ask's own coming
 /// once it was made (an answer to an ask not made again does not).
 fn Replay::ready(self : Replay) -> Array[Int] {
   let firsts : Array[Int] = []
@@ -1041,7 +1037,7 @@ fn Replay::ready(self : Replay) -> Array[Int] {
   for i in from..<self.evs.length() {
     let e = self.evs[i]
     if e.out && !e.done {
-      // (a report waits nothing, strict or not: the run's frames made it, the app's own frames may not, Replay::sent)
+      // (a report waits nothing: the run's frames made it, the app's own frames may not, Replay::sent)
       if !is_report(e.msg) {
         break
       }
@@ -1066,7 +1062,7 @@ fn Replay::ready(self : Replay) -> Array[Int] {
               continue
             }
             seen.push(id)
-            // (an answer to an ask not made again waits; strict, there is none here)
+            // (an answer to an ask not made again waits)
             if self.ids.contains(id) {
               firsts.push(i)
             }
