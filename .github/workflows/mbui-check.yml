@@ -354,7 +354,12 @@ jobs:
           - { group: 4/4, fps: "120", part: 1/2 }
           - { group: 4/4, fps: "120", part: 2/2 }
           - { group: 1/4, fps: "60" }
-          - { group: 2/4, fps: "60" }
+          # (the second's at 60 in two halves too: 139-251 s of its five minutes on seven branches' runs of one evening,
+          # by their runners alone, and 299 s and stopped on an eighth with all its 629 tests passed, chat-outline
+          # 42925266377, 2026-11-11; its two longest files there and on main took the same on one machine, 8.6 s and
+          # 12.8-13.2: its time many files' frames at 60, no one test's and not that change's)
+          - { group: 2/4, fps: "60", part: 1/2 }
+          - { group: 2/4, fps: "60", part: 2/2 }
           - { group: 3/4, fps: "60" }
           - { group: 4/4, fps: "60" }
           - { group: 1/4, fps: "24 7" }
