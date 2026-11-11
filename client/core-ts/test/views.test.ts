@@ -843,6 +843,52 @@ test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
   assert.ok(![page, longer, ...shown].some((u) => holdsStandIn(u.value)), "none went out");
 });
 
+test("a_lists_rows_behind_its_first_screen_are_loaded_after_the_first_answers_of_its_burst", async () => {
+  // A switch of workspace subscribes its first screen's topics in one go, the list among the first: its stations' rows
+  // loaded behind it (views.ts #head, a station a turn) went ahead of each answer after the list's, 2.3-3.5 ms each in
+  // Hermes (2026-11-11).
+  const t = setup({ all: true });
+  const now = t.host.nowMs();
+  const names = ["a", "b", "c", "d", "e"];
+  t.set(workspace(), { id: "ws", stations: names.map((id) => ({ id, name: id, last_seen: null, version: null })) });
+  const records = (st: number) => Array.from({ length: 84 }, (_, i) => ({ ...row(`${names[st]}${i}`, now - (i * 5 + st) * 3_600_000), agents: [session(`${names[st]}${i}`)] }));
+  for (const [st, id] of names.entries()) {
+    t.set(link(`ws/${id}`), { state: "online" });
+    t.set(overview(`ws/${id}`), overviewOf([], [profile("p1")]));
+    t.set(rows(`ws/${id}`), records(st));
+  }
+  for (const id of names) t.data.release(rows(`ws/${id}`));
+  const loaded = () => names.filter((id) => t.data.loaded(rows(`ws/${id}`))).length;
+  // What had been loaded as each message went out.
+  const went: [number, number][] = [];
+  const emit = t.host.emit.bind(t.host);
+  t.host.emit = (client, message) => {
+    went.push([(message as { id: number }).id, loaded()]);
+    emit(client, message);
+  };
+  const burst: Topic[] = [
+    { topic: "chats", scope: "ws", limit: 50 },
+    { topic: "workspace", workspace: "ws" },
+    { topic: "stations", scope: "ws" },
+    { topic: "profiles", scope: "ws" },
+    { topic: "workspaceMarks", scope: "ws" },
+  ];
+  burst.forEach((topic, i) => t.subscribe(1 + i, topic));
+  const page = ui();
+  await t.read(page, 1);
+  await t.read(page, 1);
+  const firsts = burst.map((_, i) => went.findIndex(([id]) => id === 1 + i));
+  assert.ok(firsts.every((at) => at >= 0), `every topic answered: ${JSON.stringify(went)}`);
+  // In the order subscribed, and none of the rows loaded till the last of them went.
+  assert.deepEqual([...firsts].sort((a, b) => a - b), firsts);
+  assert.deepEqual(firsts.map((at) => went[at]![1]), burst.map(() => 0), `rows loaded as each went out: ${JSON.stringify(went)}`);
+  // Loaded all the same, and the list as it was: its later value whole, `more` its rows past the page.
+  assert.equal(loaded(), names.length, "its stations' rows loaded behind it");
+  assert.ok(went.filter(([id]) => id === 1).length >= 2, "the list sent again once its rows are loaded");
+  assert.equal(madeItems(page.value).length, 50);
+  assert.equal(page.value.more, 370);
+});
+
 test("writing_another_pref_does_not_make_a_chat_list_again", async () => {
   const t = setup();
   const u = ui();

@@ -158,6 +158,8 @@ export class Store {
   #firstPending = new Map<string, Entry>();
   #updatesPending = new Map<string, Entry>();
   #pumping = false;
+  /// Background work waiting till no page waits on the store (`answered`).
+  #whenAnswered: (() => void)[] = [];
   #windowOpen = false;
   #soon = false;
   #held: ((topic: Topic) => unknown) | null = null;
@@ -557,6 +559,41 @@ export class Store {
     return this.#firstPending.size > 0;
   }
 
+  /// Whether a page waits on the store: a first value to be made, or, while the pump runs, a change of a topic
+  /// something subscribes to or watches (#nextUpdate) that it is to send in that run.
+  #pagesWait(): boolean {
+    return this.#firstPending.size > 0 || (this.#pumping && this.#nextUpdate(false) !== undefined);
+  }
+
+  /// Background work's turn (the rows of a list loaded behind its first screen, the sync's slices): at once where no page
+  /// waits on the store (#pagesWait), else once the pump has sent what pages wait for. The pump yields to the JS loop
+  /// between topics so that what comes in (a UI's message, a host's answer) is taken, and that yield cannot tell the
+  /// core's other fibers from what came in: each fiber's yield is a turn of the loop of its own (Effect's scheduler a
+  /// `setImmediate` a fiber, in Hermes hermes-globals.ts's `setTimeout(0)`, run in the engine's queue in the order set
+  /// among the tasks posted to it). So work no page waits for waits here itself, told by the pump as it is done (never
+  /// a poll), before each step it takes; it goes on a turn of its own after that, not on the pump's.
+  answered(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (!this.#pagesWait()) return Effect.void;
+      return Effect.callback<void>((resume) => {
+        this.#whenAnswered.push(() => resume(Effect.yieldNow));
+      }).pipe(Effect.andThen(this.answered()));
+    });
+  }
+
+  /// A background step's turn: the JS loop's next (what came in is taken), and then `answered`.
+  turn(): Effect.Effect<void> {
+    return Effect.andThen(Effect.yieldNow, this.answered());
+  }
+
+  /// No page waits on the store any more: the background work waiting for it (`answered`) goes on.
+  #answered(): void {
+    if (this.#whenAnswered.length === 0 || this.#pagesWait()) return;
+    const waiting = this.#whenAnswered;
+    this.#whenAnswered = [];
+    for (const go of waiting) go();
+  }
+
   /// Topics with at least one subscriber (or within their eviction grace).
   liveTopics(): Topic[] {
     return [...this.#topics.values()].map((e) => e.topic);
@@ -610,10 +647,17 @@ export class Store {
           const spentFrom = this.#tracer !== null ? { ...spent } : null;
           this.#flush(topic);
           this.#heldFor(topic, t0, spentFrom);
-          if (this.#firstPending.size > 0 || this.#updatesPending.size > 0) yield* Effect.yieldNow;
+          if (this.#firstPending.size > 0 || this.#updatesPending.size > 0) {
+            // What comes in meanwhile is taken between topics (a subscribe arriving now answered in this run, in its
+            // order; a run that goes on and on keeps no message out); the core's background work is not: it waits
+            // for what pages wait for (`answered`), told here once that is out.
+            this.#answered();
+            yield* Effect.yieldNow;
+          }
         }
       } finally {
         this.#pumping = false;
+        this.#answered();
         if (!this.runner.closed) {
           if (this.#firstPending.size > 0) this.#wakePending(true);
           else if (this.#updatesPending.size > 0) this.#wakePending(false);

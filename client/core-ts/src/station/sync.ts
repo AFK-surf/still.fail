@@ -67,7 +67,8 @@ export const CHANGES_RETRY_MS = 3_600_000;
 /// one, a page of a transcript (200 steps in brief) five (each channel's kind says, channel-kinds.ts).
 export const HISTORY_BATCH = 40;
 /// Background history work shares the engine with page input. Give other work a turn after a small slice, and sooner
-/// when a few large answers already took time. The count also bounds work when a test's clock is stopped.
+/// when a few large answers already took time. The count also bounds work when a test's clock is stopped. A slice's
+/// turn is the store's (`turn`): while a page waits for its first value, the next slice waits till it has gone out.
 const HISTORY_SLICE_ITEMS = 64;
 const HISTORY_SLICE_MS = 8;
 const HISTORY_SESSION_GROUP = 32;
@@ -226,6 +227,7 @@ export class StationsSync {
       },
       now: () => core.host.monotonicMs(),
       firstWaiting: () => core.store.firstValuesPending(),
+      turn: () => core.store.turn(),
       answered: (channel, error, nothing) => this.#channelAnswered(channel, error, nothing),
     });
   }
@@ -1231,7 +1233,7 @@ export class StationsSync {
           // A stream may have said something newer while the batch was away or between slices. Put it back before a
           // view can see this slice; later answers may overlap it too. A slice runs without anything else seeing it.
           this.#retell(address, asked);
-          yield* Effect.yieldNow;
+          yield* this.#core.store.turn();
           sliceAt = this.#core.host.monotonicMs();
           sliced = 0;
         }
@@ -1259,7 +1261,7 @@ export class StationsSync {
         sessions.push(...data.sessionsToRead(address, group));
         sliced += group.length;
         if (at === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
-          yield* Effect.yieldNow;
+          yield* this.#core.store.turn();
           sliceAt = this.#core.host.monotonicMs();
           sliced = 0;
         }
@@ -1272,7 +1274,7 @@ export class StationsSync {
           reads.push({ path: sessionPath(key), cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
         }
         if (this.#core.store.firstValuesPending() || ++sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
-          yield* Effect.yieldNow;
+          yield* this.#core.store.turn();
           sliceAt = this.#core.host.monotonicMs();
           sliced = 0;
         }
@@ -1286,7 +1288,7 @@ export class StationsSync {
         // Finding the next page can read a chat's index from the database. Do not make a page being opened wait for
         // every other chat's index to be read first.
         if (visited++ === 0 || this.#core.store.firstValuesPending() || ++sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
-          yield* Effect.yieldNow;
+          yield* this.#core.store.turn();
           sliceAt = this.#core.host.monotonicMs();
           sliced = 0;
         }
@@ -1367,7 +1369,7 @@ export class StationsSync {
           sliced++;
         }
         if (start === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - at >= HISTORY_SLICE_MS) {
-          yield* Effect.yieldNow;
+          yield* this.#core.store.turn();
           at = this.#core.host.monotonicMs();
           sliced = 0;
         }
@@ -1378,7 +1380,7 @@ export class StationsSync {
         this.channels.bring(entriesOf(address, id), Priority.background);
         sliced++;
         if (visited++ === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - at >= HISTORY_SLICE_MS) {
-          yield* Effect.yieldNow;
+          yield* this.#core.store.turn();
           at = this.#core.host.monotonicMs();
           sliced = 0;
         }

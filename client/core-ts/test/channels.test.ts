@@ -161,6 +161,7 @@ function world(boundedAfter = false) {
     later: (_station, work) => void later.push(work),
     now: () => 0,
     firstWaiting: () => false,
+    turn: () => Effect.yieldNow,
     answered: (c, error, nothing) => void answers.push([c.id, error?.code ?? null, nothing]),
   };
   const channels = new Channels(held, reach);

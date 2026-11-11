@@ -1,6 +1,7 @@
 // The Rust core's store.rs tests, ported (same names, same checks): time on a TestClock.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Effect } from "effect";
 import { apply as applyOps, type Op } from "../src/delta.ts";
 import { applyKeyed, type AnyOp } from "../src/collections.ts";
 import { CoreError } from "../src/error.ts";
@@ -9,7 +10,7 @@ import { Output } from "../src/output.ts";
 import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { COALESCE_MS, EVICT_AFTER_MS, KEPT_PER_CLIENT, Store, type Source, type Value } from "../src/store.ts";
-import { FakeHost } from "../src/testing.ts";
+import { FakeHost, flush } from "../src/testing.ts";
 import { version } from "../src/digest.ts";
 import { work } from "../src/work.ts";
 import { topicDebug } from "../src/protocol.ts";
@@ -1095,6 +1096,134 @@ test("a_topic_nobody_subscribes_to_waits_behind_what_pages_wait_for", async () =
   store.subscribe(1, 6, idle);
   await pass(COALESCE_MS * 2);
   assert.deepEqual(host.takeEmitted(), [[1, value(6, "idle 6")]]);
+});
+
+/// What the store sent, in order: `<topic>` for each message.
+function sentOrder(host: FakeHost, names: Map<number, string>): string[] {
+  return host.takeEmitted().map(([, m]) => names.get((m as { id: number }).id) ?? `?${(m as { id: number }).id}`);
+}
+
+test("background_work_waits_till_every_first_answer_of_a_burst_has_gone_out", async () => {
+  // A switch of workspace subscribes its first screen in one go; the pump yields between topics, and work no page
+  // waits for (a list's rows loaded behind its first screen, the sync's slices) took those turns: a station's rows,
+  // 2.3-3.5 ms in Hermes, ahead of each answer after the list's (2026-11-11).
+  const { host, store } = setup();
+  const runner = store.runner;
+  const order: string[] = [];
+  const burst = ["chats", "marks", "stations", "profiles", "status"];
+  const names = new Map(burst.map((name, i) => [i + 1, name]));
+  store.setSource({
+    start(topic) {
+      store.invalidate(topic);
+    },
+    stop() {},
+    compute(topic) {
+      order.push(topic.topic);
+      // The list's first value sets going its rows' load, a station a turn, as views.ts #head does.
+      if (topic.topic === "chats") {
+        runner.fork(
+          Effect.gen(function* () {
+            for (const station of ["a", "b", "c"]) {
+              yield* store.turn();
+              order.push(`load ${station}`);
+            }
+          }),
+        );
+      }
+      return { ok: topic.topic };
+    },
+  });
+  burst.forEach((name, i) => store.subscribe(1, i + 1, { topic: name }));
+  await flush(20);
+  // No time passed: all of it on the loop's turns.
+  assert.deepEqual(order, [...burst, "load a", "load b", "load c"]);
+  assert.deepEqual(sentOrder(host, names), burst, "in the order subscribed");
+});
+
+test("background_work_waits_for_what_pages_wait_for_not_for_a_topic_let_go_of", async () => {
+  const { store, pass } = setup();
+  const runner = store.runner;
+  const order: string[] = [];
+  store.setSource({ start() {}, stop() {}, compute: (topic) => (order.push(topic.topic), { ok: order.length }) });
+  // Kept a while after it was let go of, and changed: made again last (#nextUpdate), after background work.
+  const idle: Topic = { topic: "idle" };
+  store.subscribe(1, 1, idle);
+  store.invalidate(idle);
+  await pass(COALESCE_MS * 2);
+  store.unsubscribe(1, 1);
+  // Shown: its change, and a page opening.
+  const shown: Topic = { topic: "shown" };
+  store.subscribe(1, 2, shown);
+  store.invalidate(shown);
+  await pass(COALESCE_MS * 2);
+  order.length = 0;
+  store.invalidate(idle);
+  store.invalidate(shown);
+  await pass(COALESCE_MS - 10);
+  // Nothing due yet (the window is open): background work goes on at once.
+  runner.fork(Effect.andThen(store.answered(), Effect.sync(() => order.push("background in the window"))));
+  await flush();
+  assert.deepEqual(order, ["background in the window"]);
+  order.length = 0;
+  const page: Topic = { topic: "page" };
+  store.subscribe(1, 3, page);
+  store.invalidate(page);
+  runner.fork(Effect.andThen(store.turn(), Effect.sync(() => order.push("background"))));
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(order, ["page", "shown", "background", "idle"]);
+});
+
+test("a_subscribe_arriving_while_the_pump_answers_a_burst_is_answered_in_that_run", async () => {
+  const { host, store } = setup();
+  const burst = ["one", "two", "three"];
+  const names = new Map([...burst.map((name, i): [number, string] => [i + 1, name]), [9, "late"]]);
+  store.setSource({
+    start(topic) {
+      store.invalidate(topic);
+    },
+    stop() {},
+    compute(topic) {
+      // A UI's message coming in as the first is made: taken at the pump's next yield, as a host's message is.
+      if (topic.topic === "one") setImmediate(() => store.subscribe(1, 9, { topic: "late" }));
+      return { ok: topic.topic };
+    },
+  });
+  burst.forEach((name, i) => store.subscribe(1, i + 1, { topic: name }));
+  await flush();
+  // No time passed (none of COALESCE_MS): answered with the burst, after those subscribed before it.
+  assert.deepEqual(sentOrder(host, names), [...burst, "late"]);
+});
+
+test("a_pump_that_goes_on_and_on_lets_what_comes_in_in_between_its_topics", async () => {
+  // What the pump's yield between topics is for: a run of changes that keeps making more (here a topic that changes
+  // itself as it is made, 100 times) keeps nothing that comes in waiting till it is over. Without it, the subscribe
+  // below was taken after the 100th.
+  const { host, store } = setup();
+  let made = 0;
+  let cameAt = -1;
+  store.setSource({
+    start() {},
+    stop() {},
+    compute(topic) {
+      if (topic.topic !== "busy") return { ok: topic.topic };
+      made++;
+      if (made === 1) setImmediate(() => ((cameAt = made), store.subscribe(1, 2, { topic: "page" }), store.invalidate({ topic: "page" })));
+      if (made < 100) store.invalidate(topic);
+      return { ok: made };
+    },
+  });
+  store.subscribe(1, 1, { topic: "busy" });
+  store.invalidate({ topic: "busy" });
+  const background = { at: -1 };
+  store.runner.fork(Effect.andThen(store.turn(), Effect.sync(() => void (background.at = made))));
+  // (the loop's turns, no time passed: one a topic made)
+  await flush(250);
+  assert.equal(made, 100);
+  assert.ok(cameAt > 0 && cameAt < 5, `the subscribe came in after ${cameAt} of them`);
+  const page = host.takeEmitted().findIndex(([, m]) => (m as { id: number }).id === 2);
+  assert.ok(page >= 0 && page < 5, `its page answered as the ${page}th message`);
+  // Background work waits for what pages wait for: the topic's changes went to its page first.
+  assert.equal(background.at, 100);
 });
 
 /// A page made from a dependency, kept live by a watch as a view would: what its source made of it, as many times.

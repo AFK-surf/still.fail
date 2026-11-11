@@ -1955,10 +1955,14 @@ export class Views implements Owner {
     this.#seen.read(`loaded ${scope}`);
     if (!this.#loading.has(scope)) {
       this.#loading.add(scope);
+      const store = this.#core.store;
       this.#core.runner.fork(
         Effect.gen({ self: this }, function* () {
           for (const station of stations) {
             yield* Effect.yieldNow;
+            // (after what pages wait for: made as a switch of workspace answers its first screen, a station's rows a
+            // turn went ahead of each answer after the list's, 2.3-3.5 ms each in Hermes, 2026-11-11)
+            yield* store.answered();
             data.shared({ topic: "chatRows", station });
           }
           this.#loading.delete(scope);
