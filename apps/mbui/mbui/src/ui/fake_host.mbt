@@ -1122,6 +1122,7 @@ impl @hostapi.Host for FakeHost with pdf_close(self, doc) {
 /// The pointer's shape as last told (desktop.mbt).
 impl @hostapi.Host for FakeHost with set_cursor(self, kind) {
   self.cursor = kind
+  self.cursors_told = self.cursors_told + 1
 }
 
 ///|

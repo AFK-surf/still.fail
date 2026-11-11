@@ -43,8 +43,8 @@ fn message_others_node(
     match share {
       Some(s) => {
         // (pointed at over all of it, its ⋯ shown then, nothing pressed for it: an old view's box with an id, hovered;
-        // what is pressed in it, its name, time, links, as ever)
-        row.points(Is(true)).cursor(Is(Some(@view.Cursor::Arrow))) |> ignore
+        // what is pressed in it, its name, time, links, as ever; a ground, no control: the arrow over it, said by nothing)
+        row.points(Is(true)).as_ground() |> ignore
         row.on_menu(fn(m) {
           @sfbase.share_offer(m.wx, m.wy, s.go, @signals.untracked(s.link), @signals.untracked(s.words), s.key)
         })

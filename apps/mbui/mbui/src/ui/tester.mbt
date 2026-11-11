@@ -403,6 +403,7 @@ pub fn Tester::new(
     finished: [],
     site: [],
     cursor: 0,
+    cursors_told: 0,
     window_drags: 0,
     window_acts: [],
     zoomed: false,
