@@ -24,8 +24,8 @@ test "89-run-settings" {
     // 思考深度: its stops in the sheet itself (@sf.stops), a level a tap; the third of its five (低 to 最高) is 高, the
     // middle of its track. No model is picked yet, so the core keeps none of it (`saved: false`) and the track goes
     // back to none: that it was asked is held at the flow's end, as every ask of the run's is.
-    let (x, y, w, h) = f.t.get(@ui.Role::Slider, label="思考深度").rect
-    f.tap_at(x + w / 2.0, y + h / 2.0)
+    let (x, y, w, h) = f.t.query(@ui.Role::Slider, label="思考深度").map(fn(s) { s.rect }).unwrap_or((0.0, 0.0, 0.0, 0.0))
+    f.tap_at(f.measured(x + w / 2.0), f.measured(y + h / 2.0))
     f.tap("Sonnet")
     f.see("已更改，下一轮起生效")
     f.toast_gone()

@@ -28,8 +28,7 @@ test "98-reader" {
     // (among what the device keeps, once it has it: the run's downloads before it are on its list too)
     f.until(fn() { f.t.kept().iter().any(fn(k) { k.0 == "旧小说-gb.txt" }) })
     let kept = f.t.kept().filter(fn(k) { k.0 == "旧小说-gb.txt" })
-    assert_eq(kept.length(), 1)
-    assert_eq(kept[0].2.length(), 4454)
+    f.check(kept.length() == 1 && kept[0].2.length() == 4454, "kept \{kept.map(fn(k) { (k.0, k.2.length()) })}")
     // the toast's time shown, then its way out
     f.run_for(@sfapp.toast_ms)
     f.t.draw()
