@@ -1971,6 +1971,8 @@ pub fn segmented_node_height(Look) -> Double
 
 pub fn segments(@ui.Ctx, Double, Double, Int64, Int64) -> Int32
 
+pub fn segments_node(@view.View, Double, Double, () -> Int64, () -> Int64) -> @view.View
+
 pub fn select(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit, placeholder? : String, label? : String, disabled? : Bool, w? : Double, hints? : Map[String, String], whole? : Bool, icons? : Map[String, String]) -> Unit
 
 pub let select_chevron : Double
