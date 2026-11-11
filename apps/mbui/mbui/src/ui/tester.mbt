@@ -537,6 +537,11 @@ pub fn Tester::new(
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  // (the file each bar of its is held by: motion_runs)
+  if motion_runs() {
+    let at = loc.to_string()
+    println("MOTION made \{match at.find(":") { Some(i) => at.unsafe_substring(start=0, end=i); None => at }}")
+  }
   looks_unjudged.val = false
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
@@ -760,6 +765,11 @@ let motion_counted_files : Set[String] = Set::new()
 /// what CI's runs counted): only counted there, every other file judged. Said by a test package as it starts
 /// (`fn init`); only shrinks: a file mended to none leaves the list.
 pub fn motion_counted(files : Array[String]) -> Unit {
+  if motion_runs() {
+    for f in files {
+      println("MOTION counted \{f}")
+    }
+  }
   for f in files {
     motion_counted_files.add(f)
   }

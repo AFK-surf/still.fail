@@ -488,3 +488,23 @@ jobs:
           - { group: 4/4, fps: "7" }
     env: *app-env
     steps: *app-steps
+  # (each per-file bar of the app's set beside what its runs at 60 and 120 found under its file, all their jobs'
+  # together: a file's tests run in one job, but a Tester made in another file's helper is filed under that file,
+  # whose own tests may run in another (scripts/motion_bars.sh). Said, failing nothing, for now: the coordinator of the
+  # migration, 2026-11-12)
+  motion-bars:
+    name: native (the app's bars against what was found)
+    needs: [native, replay-fps, app-rates]
+    if: ${{ always() && github.event_name != 'workflow_run' && inputs.rates != 'no' && !(github.event_name == 'push' && github.workflow == 'mbui-check') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: apps/mbui/mbui/scripts }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { pattern: "motion-*", path: "${{ runner.temp }}/motion" }
+      - run: |
+          # (the app's jobs' alone: mbui's own, motion-mbui-*, are mbui-ci's)
+          find "$RUNNER_TEMP/motion" -mindepth 1 -maxdepth 1 -type d ! -name 'motion-mbui-*' -exec find {} -type f \; | xargs -r cat > "$RUNNER_TEMP/motion.txt"
+          bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "the app's bars against what 60 and 120 fps found" >> "$GITHUB_STEP_SUMMARY"

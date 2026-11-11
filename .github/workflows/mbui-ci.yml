@@ -203,6 +203,24 @@ jobs:
             !apps/mbui/mbui/_build/**/*.mbc
           key: mbui-ci-native-moon-${{ github.sha }}
 
+  # (each per-file bar of mbui's set beside what its runs at 60 and 120 found under its file, both rates' together
+  # (scripts/motion_bars.sh). Said, failing nothing, for now: the coordinator of the migration, 2026-11-12)
+  motion-bars:
+    name: native (mbui's bars against what was found)
+    needs: native
+    if: ${{ always() && inputs.rates != 'no' && github.event_name != 'push' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: apps/mbui/mbui/scripts }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { pattern: "motion-mbui-*", path: "${{ runner.temp }}/motion" }
+      - run: |
+          find "$RUNNER_TEMP/motion" -type f | xargs -r cat > "$RUNNER_TEMP/motion.txt"
+          bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "mbui's bars against what 60 and 120 fps found" >> "$GITHUB_STEP_SUMMARY"
+
   macos:
     if: inputs.rates != 'only'
     defaults:
