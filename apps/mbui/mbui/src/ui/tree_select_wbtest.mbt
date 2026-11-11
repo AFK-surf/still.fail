@@ -358,7 +358,7 @@ test "words picked in a row that scrolls across (a code block's line), held past
 fn picked_past_a_block(none : Bool) -> String {
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   t.check_looks(false)
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(page) {
       page.padding(Is((0.0, 40.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
