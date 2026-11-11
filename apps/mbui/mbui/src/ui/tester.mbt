@@ -593,6 +593,7 @@ pub fn Tester::new(
   }
   let between = test_frames_between()
   tester_rested.clear()
+  frames_at_one.val = (-1.0, 0)
   let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
@@ -927,9 +928,18 @@ pub fn Tester::taken_at(self : Tester) -> Double {
 
 ///|
 /// The display's first frame at or after `t` on the clock: where a test sees what is so at `t` (a deadline, a motion's
-/// end), as a host shows it.
+/// end), as a host shows it. Never a moment before `t`: where the display's frame is a hair short of it (tick_at's
+/// grid_hair, a moment summed one way or another), `t` itself, as at_due draws what is due a hair after a frame. Drawn
+/// at that frame, what comes at `t` has not come (a clock's next second worked out as a few last bits past the frame:
+/// emit_kept_wbtest), the app asks for `t` again, and a host's frames put where it asks never go on
+/// (tester_display_frame_wbtest).
 pub fn Tester::display_frame(self : Tester, t : Double) -> Double {
-  self.tick_at(t)
+  let tick = self.tick_at(t)
+  if tick < t {
+    t
+  } else {
+    tick
+  }
 }
 
 ///|
@@ -983,9 +993,47 @@ fn wait_looked(kind : String, loc : SourceLoc, causes : Array[(Double, String)])
 }
 
 ///|
-/// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew).
+/// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew). Stops,
+/// saying so, on frames_at_one_most of them one after another at one moment while the app waits for a later one
+/// (Tester::frame_at_said).
 pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
+  match self.frame_at_said(at) {
+    Some(s) => @halt.saying(s)
+    None => ()
+  }
   self.frame_shown_at(at, at)
+}
+
+///|
+/// The moment of the last frames frame_at drew one after another at one moment while the app waited for a later one,
+/// and how many.
+// kept across runs: put back by each Tester (Tester::new)
+let frames_at_one : Ref[(Double, Int)] = Ref((-1.0, 0))
+
+///|
+/// How many frames one after another at one moment, the app waiting for a later one, are frames that do not go on
+/// (Tester::frame_at_said): a test draws such a frame a few times (to look at it again), never so many.
+let frames_at_one_most = 1000
+
+///|
+/// What is wrong with a frame at `at` after those frame_at drew before it, said (frame_at stops on it; None where
+/// nothing is): frames_at_one_most one after another at one moment, the app asking for none there but a wake at a later
+/// moment (Tester::wanted_after; an input, a change or a frame asked for counts afresh). Frames put where the app asks
+/// (wanted_after, display_frame) that never come to what it waits for: a test walking them would go on for ever, the
+/// moment it waits for never there.
+fn Tester::frame_at_said(self : Tester, at : Double) -> String? {
+  let w = self.wanted_next()
+  let (was, n) = frames_at_one.val
+  let n = if at == was && w > at && w < @double.infinity { n + 1 } else { 1 }
+  frames_at_one.val = (at, n)
+  if n < frames_at_one_most {
+    return None
+  }
+  Some(
+    "Tester::frame_at: \{n} frames one after another at \{at}, the clock moved on by none: the app asks for its next " +
+    "at \{w} (\{self.wanted_why()})" +
+    (if w > at && w < @double.infinity { ", the display's frame for it \{self.display_frame(w)}" } else { "" }),
+  )
 }
 
 ///|

@@ -120,6 +120,13 @@ fn frame_perf() -> FramePerf {
 /// frames); else the moment it asked to be woken at; +inf, none.
 pub fn Tester::wanted_after(self : Tester) -> Double {
   self.reads_own()
+  self.wanted_next()
+}
+
+///|
+/// Tester::wanted_after, its Tester not asked to be the one made last: the Tester's own check of its frames
+/// (Tester::frame_at_said).
+fn Tester::wanted_next(self : Tester) -> Double {
   let c = g()
   if self.fake.wants ||
     c.wants_frame ||
