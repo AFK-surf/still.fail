@@ -1475,11 +1475,14 @@ fn layout_flex(
     let at = pool.at
     let aligns = pool.aligns
     // (the gap before each item where one comes or goes in a column: as much of it as that one is there and some before
-    // it is (Style's come_k); none such, none worked out)
+    // it is (Style's come_k), where it comes from nothing or goes to it (come_fill) or takes no room holding nothing; one
+    // on its way from as tall as one in its place was has it all along, that one's gap its own (View::arrives). None
+    // such, none worked out)
     let mut comes = false
     if !row {
       for k in 0..<count {
-        if flow.unsafe_get(at.unsafe_get(k)).style.come_k < 1.0 {
+        let cs = flow.unsafe_get(at.unsafe_get(k)).style
+        if cs.come_k < 1.0 && (cs.come_fill || !known(cs.come_now)) {
           comes = true
           break
         }
@@ -1524,7 +1527,8 @@ fn layout_flex(
         let mut seen = 0.0
         let mut all = 0.0
         for k in ln.start..<ln.end {
-          let here = flow.unsafe_get(at.unsafe_get(k)).style.come_k
+          let cs = flow.unsafe_get(at.unsafe_get(k)).style
+          let here = if cs.come_k < 1.0 && known(cs.come_now) && !cs.come_fill { 1.0 } else { cs.come_k }
           let g = if k == ln.start { 0.0 } else { gap_main * fmin(here, seen) }
           gap_before.unsafe_set(k, g)
           all = all + g

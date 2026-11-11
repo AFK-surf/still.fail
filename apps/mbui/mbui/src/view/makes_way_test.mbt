@@ -124,6 +124,32 @@ test "picked anew down a column: the new one's way from as tall as the one befor
 }
 
 ///|
+test "picked anew down a column with a gap: the gap before it there all along, what is under it set out from where it was" {
+  // (the one before had the gap, the new one in its place has it from the first: only what comes from nothing or goes to
+  // it opens or closes its gap (flex's gap_share))
+  let tall = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.gap(Is(12.0)) |> ignore
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("上")) |> ignore }) |> ignore
+    root.pick(fn() { tall.get() }, fn(v, k) { v.height(Is(Some(if k { 60.0 } else { 20.0 }))) |> ignore })
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(word_y(t, "下"), 64.0)
+  t.event(100.0, fn() { tall.set(true) })
+  t.at(100.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(word_y(t, "下"), 64.0)
+  t.at(104.0)
+  t.frame(390.0, 844.0) |> ignore
+  let first = word_y(t, "下")
+  assert_true(first >= 64.0 && first < 66.0, msg="set out from where it was: \{first}")
+  t.at(600.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(word_y(t, "下"), 104.0)
+}
+
+///|
 test "at once, along a row, or made with what holds it: no way made" {
   let on = @signals.signal(false, same=fn(a, b) { a == b })
   let across = @signals.signal(false, same=fn(a, b) { a == b })
