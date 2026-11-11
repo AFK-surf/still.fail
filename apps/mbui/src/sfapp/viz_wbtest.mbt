@@ -479,7 +479,7 @@ test "expanded fragments scroll while their inline copies grow with their conten
 
 ///|
 test "inline HTML is set in the faces the app is set in, a face still.fail keeps linked from its stylesheet" {
-  new_run()
+  fresh_app()
   // none chosen: the stylesheet's own (no font token at all, an empty one would stand in its place)
   let plain = viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL)
   assert_false(plain.contains("--e-font-body:"))
@@ -495,7 +495,7 @@ test "inline HTML is set in the faces the app is set in, a face still.fail keeps
   // its origin let in for the stylesheet and the files it names, nothing else of it
   assert_true(doc.contains("fonts.googleapis.com https://app.still.fail;"))
   assert_true(doc.contains("fonts.gstatic.com https://app.still.fail;"))
-  new_run()
+  fresh_app()
 }
 
 ///|

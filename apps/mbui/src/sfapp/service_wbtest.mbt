@@ -125,7 +125,7 @@ test "cookies: several in one header apart (an Expires date's comma kept), each 
 
 ///|
 test "a size chosen: kept on the device (prefs), read as a page opens in a later run" {
-  new_run()
+  fresh_app()
   let kept : Array[Json] = []
   svc_keep.val = fn(patch) { kept.push(patch) }
   keep_size(service_key("ws1/st1", "j-a"), Some({ width: 390, height: Some(844) }))
@@ -135,7 +135,7 @@ test "a size chosen: kept on the device (prefs), read as a page opens in a later
   assert_eq(text(field(Some(kept[1]), "previewSizes"), "ws1/st1\nj-b"), "1280")
   assert_true(field(field(Some(kept[2]), "previewSizes"), "ws1/st1\nj-c") == Some(Json::null()))
   // a later run: nothing chosen since it started, the pages open as the core kept them
-  new_run()
+  fresh_app()
   let prefs : Json = {
     "previewSizes": { "ws1/st1\nj-a": "390x844", "ws1/st1\nj-b": "1280", "ws1/st1\nj-d": "wide" },
   }

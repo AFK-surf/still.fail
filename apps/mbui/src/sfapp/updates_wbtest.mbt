@@ -189,7 +189,7 @@ test "none newer: the row offers to check, and asked now says 已是最新" {
 ///|
 ///|
 test "no source: nothing is asked; asked now, it says why" {
-  new_run()
+  fresh_app()
   update_version.val = 1
   let said = []
   update_check(fixture("home"), false, done=fn(w) { said.push(w) })

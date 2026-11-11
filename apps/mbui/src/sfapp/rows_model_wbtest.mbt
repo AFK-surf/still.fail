@@ -36,7 +36,7 @@ test "a row's agents by their mark: one maker's models once, a runtime with no m
 ///|
 test "the list's filter as the prefs keep it where none is chosen here: listFilter by workspace, else onlyWatching, else onlyMine, else all; one unknown is all" {
   let with_prefs = fn(prefs : Json) -> Source {
-    new_run()
+    fresh_app()
     let base = fixture("home")
     {
       ..base,

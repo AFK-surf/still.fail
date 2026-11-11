@@ -196,6 +196,9 @@
     "starts": ["new_run", "fresh_app", "reset", "@sfbase.reset"],
     "reads": ["@sf.t", "@sf.t_around", "@sf.language", "tr", "@sfbase.tr"]
   },
+  "reset_by_hand": {
+    "names": ["new_run"]
+  },
   "counts": {
     "frame-request": {},
     "settle": {},
@@ -530,7 +533,8 @@
     "abort-unsaid": {},
     "empty-on-done": {},
     "panic-test": {},
-    "read-before-run": {}
+    "read-before-run": {},
+    "reset-by-hand": {}
   },
   "excused": {
     "frame-request": {},

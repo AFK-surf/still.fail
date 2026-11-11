@@ -275,7 +275,8 @@
       "src/ui/tester_api_test.mbt": 3,
       "src/ui/textrec_test.mbt": 1
     },
-    "read-before-run": {}
+    "read-before-run": {},
+    "reset-by-hand": {}
   },
   "excused": {
     "frame-request": {},

@@ -207,7 +207,7 @@ test "nothing found; still being looked for, what could not be, what the core sa
 
 ///|
 test "what was found opens where the core says (SearchItem.open): a file read, a service its chat and its page, a station its page" {
-  new_run()
+  fresh_app()
   let base : FoundItem = {
     kind: "file",
     key: "f",
