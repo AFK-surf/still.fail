@@ -10,6 +10,8 @@
 //   RELAY=https://… node scripts/native.ts run mesh -- node station/side/screen-net.ts   (through that relay alone)
 //
 // LINK_SECONDS (default 8) a link; LINKS to pick some by name (comma separated); BITRATE (default 6000000) the source's.
+// AUDIO=1: the view asks for the computer's sound too, the source making a 20 ms packet of 48 kHz stereo PCM every
+// 20 ms as still.fail Helper does; each link then says what share of the bytes that came were sound.
 import { execFileSync } from "node:child_process";
 import { createSocket, type RemoteInfo } from "node:dgram";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -39,6 +41,9 @@ const DUMP = process.env.DUMP;
 const helperApp = () => process.env.STILLFAIL_HELPER ?? execFileSync(process.execPath, [join(import.meta.dirname, "../../scripts/native.ts"), "file", "helper"], { encoding: "utf8" }).trim();
 /// How long a device takes to decode and draw a frame before it acknowledges it.
 const DRAW_MS = 4;
+const AUDIO = process.env.AUDIO === "1";
+/// A 20 ms packet of 48 kHz stereo 16-bit PCM, as still.fail Helper sends the system's sound.
+const AUDIO_BYTES = 3840;
 
 type Link = { name: string; rttMs: number; loss: number; mbps: number | null; relay?: string };
 const LINKS: Link[] = [
@@ -51,6 +56,9 @@ const LINKS: Link[] = [
   { name: "city-4M", rttMs: 40, loss: 0, mbps: 4 },
   { name: "city-1M", rttMs: 40, loss: 0, mbps: 1 },
   { name: "far-2%-20M", rttMs: 150, loss: 0.02, mbps: 20 },
+  // a relay far away carrying a few hundred kbit/s, as a phone's way to a station through one
+  { name: "far-800k", rttMs: 150, loss: 0, mbps: 0.8 },
+  { name: "far-400k", rttMs: 150, loss: 0, mbps: 0.4 },
 ];
 
 const now = () => performance.now();
@@ -75,7 +83,18 @@ function movingSource(): ScreenSource {
       // The picture's size: 1080p fitted into the bounds asked.
       const fit = (w: number, h: number) => { const k = Math.min(1, w / 1920, h / 1080); return { width: Math.round(1920 * k), height: Math.round(1080 * k) }; };
       let size = fit(options.maxWidth, options.maxHeight);
+      let heard = now();
       return {
+        ...(options.audio
+          ? {
+              async nextAudio() {
+                heard += 20;
+                if (now() < heard) await sleep(heard - now());
+                else heard = now();
+                return closed ? null : { ts: nowUs(), data: randomBytes(AUDIO_BYTES) };
+              },
+            }
+          : {}),
         async next(): Promise<Frame | null> {
           const due = last + 1000 / FPS;
           if (now() < due) await sleep(due - now());
@@ -171,7 +190,7 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   const proxy = link.relay ? { close() {} } : await impair(link, station.sockets().find((s) => !s.startsWith("0.0.0.0") && !s.startsWith("["))!);
   const conn = await device.connect(link.relay ? { id: station.id(), relays: [link.relay] } : { id: station.id(), ips: [(proxy as { address: string }).address] }, ALPN);
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: { maxWidth: 1920, maxHeight: 1080, codecs: CODECS, control: false } });
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: { maxWidth: 1920, maxHeight: 1080, codecs: CODECS, control: false, ...(AUDIO ? { audio: "pcm_s16le" } : {}) } });
   const reader = new Reader(stream);
   const head = await reader.line();
   if (head?.status !== 200) throw new Error(`refused: ${JSON.stringify(head)}`);
@@ -179,6 +198,8 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   const late: number[] = [];
   const drawn: number[] = [];
   let bytes = 0;
+  let audioBytes = 0;
+  let videoBytes = 0;
   let codec = "";
   /// The station's own measure of how late the frames were, as it last said it.
   let said: { frame: number; before: number } | null = null;
@@ -202,7 +223,9 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
       heights.push(config.height);
       if (DUMP && config.description) kept.push(...parameterSets(codec, Buffer.from(config.description, "base64")));
     }
+    if (f.kind === KIND.audio && now() >= counted) audioBytes += f.payload.length;
     if (f.kind !== KIND.video) continue;
+    if (now() >= counted) videoBytes += f.payload.length;
     if (DUMP) kept.push(...units(f.payload.subarray(9)));
     await sleep(DRAW_MS);
     const at = now();
@@ -231,6 +254,7 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
     stalls: stalls.length,
     stalledMs: Math.round(stalls.reduce((a, b) => a + b, 0)),
     mbps: +((bytes * 8) / span / 1e6).toFixed(2),
+    ...(AUDIO ? { audioShare: +(audioBytes / Math.max(1, audioBytes + videoBytes)).toFixed(2), audioKbps: Math.round((audioBytes * 8) / span / 1000), videoKbps: Math.round((videoBytes * 8) / span / 1000) } : {}),
   };
 }
 

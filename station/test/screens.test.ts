@@ -273,6 +273,56 @@ test("frames go unacknowledged while the link keeps up: two before its round tri
   await v.served;
 });
 
+/// 2026-11-11: on a link of a few hundred kbit/s the computer's sound (1.5 Mbit/s of PCM) went on the stream as fast as
+/// it was made, every picture seconds behind it. None is asked for before the first picture's round trip is known; while
+/// the pictures wait in front of the link, a packet of sound is left out; once they go through, the sound goes again.
+test("the sound is left out while the pictures wait in front of the link", async () => {
+  class HeldSound extends FakeView {
+    #waiting: ((frame: { ts: number; data: Uint8Array }) => void) | null = null;
+    nextAudio() {
+      return new Promise<{ ts: number; data: Uint8Array }>((give) => (this.#waiting = give));
+    }
+    get asking() {
+      return this.#waiting !== null;
+    }
+    give(ts: number) {
+      const give = this.#waiting;
+      this.#waiting = null;
+      assert.ok(give, "a packet of sound asked for");
+      give({ ts, data: new Uint8Array(3840) });
+    }
+  }
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new HeldSound();
+  hub.add(source);
+  const time = testClock();
+  const v = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true, audio: "pcm_s16le" }, undefined, time.clock);
+  await until(v.frames, KIND.video);
+  await settle();
+  const view = source.views[0] as HeldSound;
+  assert.equal(view.asking, false, "none asked before the link's round trip is known");
+  await v.stream.write(frame(KIND.ack, ts8(1000)));
+  await settle();
+  view.give(1);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 1n, "the link keeps up: sound goes");
+  // Later than the round trip and QUEUE_MS: the pictures wait, and what sound is made meanwhile is left out.
+  await time.adjust(QUEUE_MS + 1);
+  view.give(2);
+  await settle();
+  view.give(3);
+  await settle();
+  // All the pictures decoded: the sound goes again, from what is made now.
+  await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+  await settle();
+  view.give(4);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 4n);
+  await v.stream.finish();
+  await v.served;
+});
+
 /// A view of a source that frames a part of its screen when asked (a desktop's): it says the bounds asked, and its next
 /// frame after them is a key frame with a config of that size, saying the part.
 class PartView extends FakeView {
@@ -1548,11 +1598,14 @@ test("the Mac's desktop sends its system output to a view that asked for it, pul
   try {
     for (const requested of [true, false]) {
       fake.views = [];
-      const v = await open(hub, member, { codecs: ["h264"], control: true, ...(requested ? { audio: "pcm_s16le" } : {}) }, "/admin/api/screens/desktop/view");
+      // (on a clock of the test's: no frame waits on the way, so none of the sound is left out)
+      const v = await open(hub, member, { codecs: ["h264"], control: true, ...(requested ? { audio: "pcm_s16le" } : {}) }, "/admin/api/screens/desktop/view", testClock().clock);
       assert.equal(v.answer.status, 200);
       if (requested) {
-        // The helper asked for the system output too; the client told the format before the first packet.
+        // The helper asked for the system output too; the client told the format before the first packet, which is
+        // asked for once the first picture's round trip is known.
         assert.equal(fake.views[0].audio, true);
+        await v.stream.write(frame(KIND.ack, (await until(v.frames, KIND.video)).subarray(1, 9)));
         assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
         for (const n of [1, 2]) {
           const packet = await until(v.frames, KIND.audio);
@@ -2055,9 +2108,10 @@ test("negotiated system audio flows while the picture is still, and unrequested 
     const sound = new SoundView();
     source.make = () => sound;
     hub.add(source);
-    const v = await open(hub, member, { codecs: ["h264"], ...(requested ? { audio: "pcm_s16le" } : {}) });
+    const v = await open(hub, member, { codecs: ["h264"], ...(requested ? { audio: "pcm_s16le" } : {}) }, undefined, testClock().clock);
     if (requested) {
       assert.equal(source.opened[0]!.audio, true);
+      await v.stream.write(frame(KIND.ack, (await until(v.frames, KIND.video)).subarray(1, 9)));
       assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
       const packet = await until(v.frames, KIND.audio);
       assert.equal(packet.readBigUInt64BE(), 43210n);

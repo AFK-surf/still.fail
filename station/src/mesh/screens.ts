@@ -294,6 +294,9 @@ class ViewSession {
   /// Inputs, in order, each once the one before was posted.
   #inputs: Promise<void> = Promise.resolve();
   #wake: () => void = () => {};
+  /// Told once the link's round trip is known (the first frame acknowledged), or the view ended: the sound waits for it.
+  #timed: () => void = () => {};
+  readonly #timedYet = new Promise<void>((resolve) => (this.#timed = resolve));
   #leave: () => void = () => {};
   #unwatch: () => void = () => {};
   #unclip: () => void = () => {};
@@ -412,6 +415,7 @@ class ViewSession {
     this.#leave();
     this.#unwatch();
     this.#wake();
+    this.#timed();
     if (reason === null) {
       this.#done();
       return;
@@ -509,10 +513,15 @@ class ViewSession {
     await this.#over;
   }
 
-  /// One audio packet in flight: network backpressure never builds an audio queue behind video.
+  /// One audio packet in flight: network backpressure never builds an audio queue behind video. A packet is left out
+  /// while the pictures wait in front of the link (`Pacer.backlogged`): the stream takes it at once whatever the link
+  /// carries, and its 1.5 Mbit/s (48 kHz stereo PCM) on a link of a few hundred kbit/s held every picture seconds behind
+  /// it, 88–90% of what came sound (2026-11-11, station/side/screen-net.ts AUDIO=1). None is asked for before the first
+  /// picture's round trip is known: sound from the start made that round trip the queue's, and nothing waited past it.
   async #audio(): Promise<void> {
     let configured = false;
     try {
+      await this.#timedYet;
       while (!this.#closed) {
         const next = await this.view.nextAudio!();
         if (this.#closed || next === null) break;
@@ -520,6 +529,7 @@ class ViewSession {
           await this.#send(KIND.audioConfig, Buffer.from(JSON.stringify({ codec: "pcm_s16le", sampleRate: 48000, channels: 2 })));
           configured = true;
         }
+        if (this.pacer.backlogged()) continue;
         const payload = Buffer.alloc(8 + next.data.length);
         payload.writeBigUInt64BE(BigInt(Math.round(next.ts)), 0);
         payload.set(next.data, 8);
@@ -625,6 +635,7 @@ class ViewSession {
             if (got.payload.length < 8) break;
             const acked = Number(got.payload.readBigUInt64BE(0));
             this.pacer.acked(acked);
+            if (this.pacer.rtt() !== null) this.#timed();
             this.latency.acked(acked, this.pacer.rtt() ?? 0);
             const latency = this.latency.take();
             if (latency) void this.#state({ latency });
