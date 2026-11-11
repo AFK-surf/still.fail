@@ -59,6 +59,9 @@ priv struct Config {
   // (read-before-run)
   run_starts : Array[String]
   run_reads : Array[String]
+  // what puts the app back by hand before the Tester a test makes (`reset_by_hand.names`: the app's new_run): in a test
+  // file, a Tester made after it in the same test or function (reset-by-hand)
+  reset_by_hand : Array[String]
 }
 
 ///|
@@ -117,6 +120,7 @@ fn Config::new(d : @rjson.Value) -> Config {
     tester_files: strs(sect(d, "tester").get("files"), []),
     run_starts: strs(sect(d, "run_first").get("starts"), []),
     run_reads: strs(sect(d, "run_first").get("reads"), []),
+    reset_by_hand: strs(sect(d, "reset_by_hand").get("names"), []),
   }
 }
 
@@ -2437,6 +2441,66 @@ fn lint_read_before_run(files : Array[MbtFile], cfg : Config, out : Array[Findin
       let (k, at) = first(fi, i, true)
       if k == 2 {
         out.push(finding("read-before-run", f.rel, f.toks[at].line, f.line_text(at)))
+      }
+    }
+  }
+}
+
+///|
+/// reset-by-hand: in a test file, a test or a function that puts the app back by hand (`reset_by_hand.names`) makes a
+/// Tester after the last of them (Tester::new, or a function said to give one back: its type after `->` names Tester),
+/// else what it put back is left marked for a Tester to come, which is the next test's
+fn lint_reset_by_hand(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> Unit {
+  if cfg.reset_by_hand.is_empty() {
+    return
+  }
+  // what gives a Tester back, by name, in every file
+  let makers : Map[String, Unit] = Map::new()
+  for f in files {
+    for it in f.items {
+      if it.kind != "fn" || it.name == "" {
+        continue
+      }
+      let mut arrow = false
+      let mut k = it.start
+      while k <= it.end && k < f.toks.length() {
+        let t = f.toks[k]
+        if t.text == "{" && arrow {
+          break
+        }
+        if t.text == "->" {
+          arrow = true
+        } else if arrow && t.kind == "ident" && t.text == "Tester" {
+          let parts = it.name.split("::").to_array()
+          makers[parts[parts.length() - 1].to_string()] = ()
+          break
+        }
+        k += 1
+      }
+    }
+  }
+  for f in files {
+    if !f.test_file {
+      continue
+    }
+    let last : Map[Int, Int] = Map::new() // item -> the last call putting the app back in it
+    for c in f.calls {
+      if !c.is_def && c.kind == "bare" && c.item >= 0 && cfg.reset_by_hand.contains(c.name) {
+        last[c.item] = c.at
+      }
+    }
+    for item, at in last {
+      let made = f.calls.iter().any(fn(c) {
+        c.item == item &&
+        c.at > at &&
+        !c.is_def &&
+        (
+          (c.kind == "type" && c.qual.has_suffix("Tester") && c.name == "new") ||
+          ((c.kind == "bare" || c.kind == "pkg") && makers.contains(c.name))
+        )
+      })
+      if !made {
+        out.push(finding("reset-by-hand", f.rel, f.toks[at].line, f.line_text(at)))
       }
     }
   }

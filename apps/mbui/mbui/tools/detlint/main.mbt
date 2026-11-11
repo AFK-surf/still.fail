@@ -348,6 +348,7 @@ fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding]
   lint_globals(mbts, cfg, findings)
   lap("globals")
   lint_read_before_run(mbts, cfg, findings)
+  lint_reset_by_hand(mbts, cfg, findings)
   lint_build_effects(mbts, cfg, findings)
   lap("build effects")
   excuse(findings, texts)

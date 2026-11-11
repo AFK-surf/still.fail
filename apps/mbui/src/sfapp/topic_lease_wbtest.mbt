@@ -28,7 +28,7 @@ fn lease_ended(sent : Array[String], id : Int) -> Int {
 
 ///|
 test "moving a lease keeps the same watch and makes the old handle harmless" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -56,7 +56,7 @@ test "moving a lease keeps the same watch and makes the old handle harmless" {
 
 ///|
 test "an independent lease follows a wrapper outside its view source through handover" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let calls : Array[String] = []
   let outer_leaves : Array[(String, String)] = []
@@ -130,7 +130,7 @@ test "an independent lease follows a wrapper outside its view source through han
 
 ///|
 test "a lease keeps the projection and remapping of a wrapper inside its view source" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -163,7 +163,7 @@ test "a lease keeps the projection and remapping of a wrapper inside its view so
 
 ///|
 test "destroying the destination during source cleanup cannot orphan the moved watch" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -190,7 +190,7 @@ test "destroying the destination during source cleanup cannot orphan the moved w
 
 ///|
 test "nested source owners end a lease until it is explicitly moved" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let base = lease_test_source(client)
   let outer : Ref[Source?] = Ref(None)
@@ -207,7 +207,7 @@ test "nested source owners end a lease until it is explicitly moved" {
 
 ///|
 test "a moved lease survives both nested source views and ends with its new view" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -234,7 +234,7 @@ test "a moved lease survives both nested source views and ends with its new view
 
 ///|
 test "a lease cannot move to a view that already ended" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let source = lease_test_source(client)
   let target : Ref[@view.View?] = Ref(None)
@@ -251,7 +251,7 @@ test "a lease cannot move to a view that already ended" {
 
 ///|
 test "two temporary readers keep one subscription until both finish" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -268,7 +268,7 @@ test "two temporary readers keep one subscription until both finish" {
 
 ///|
 test "two temporary topic readers release independently of a legacy hold" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -292,7 +292,7 @@ test "two temporary topic readers release independently of a legacy hold" {
 
 ///|
 test "a temporary reader leaves the separate page reader and its updates intact" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -315,7 +315,7 @@ test "a temporary reader leaves the separate page reader and its updates intact"
 
 ///|
 test "a temporary reader of the same view leaves that view's existing reader intact" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -335,7 +335,7 @@ test "a temporary reader of the same view leaves that view's existing reader int
 
 ///|
 test "an early reader made by a view ends when that view ends" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let source = lease_test_source(client)
   let page : Ref[Source?] = Ref(None)
@@ -355,7 +355,7 @@ test "an early reader made by a view ends when that view ends" {
 
 ///|
 test "releasing or transferring a temporary reader removes the old view cleanup" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let source = lease_test_source(client)
   let first : Ref[@view.View?] = Ref(None)
@@ -394,7 +394,7 @@ test "releasing or transferring a temporary reader removes the old view cleanup"
 
 ///|
 test "a temporary reader currently reports graph release rather than legacy leave" {
-  new_run()
+  fresh_app()
   let releases = Ref(0)
   let leaves = Ref(0)
   let base = @sfbase.made_source(topic=fn(_, _) { Some({ "value": 1 }) })
@@ -413,7 +413,7 @@ test "a temporary reader currently reports graph release rather than legacy leav
 
 ///|
 test "an early reader can hand its subscription to a different view before the old one ends" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -445,7 +445,7 @@ test "an early reader can hand its subscription to a different view before the o
 
 ///|
 test "a handover to a disposed source does not drop the current reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -470,7 +470,7 @@ test "a handover to a disposed source does not drop the current reader" {
 
 ///|
 test "a transferred reader uses the destination source projection" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -502,7 +502,7 @@ test "a transferred reader uses the destination source projection" {
 
 ///|
 test "a reentrant old view disposal aborts a handover without an orphan reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -533,7 +533,7 @@ test "a reentrant old view disposal aborts a handover without an orphan reader" 
 
 ///|
 test "a reentrant destination disposal keeps the original reader until it ends" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -565,7 +565,7 @@ test "a reentrant destination disposal keeps the original reader until it ends" 
 
 ///|
 test "a nested handover wins and the outer attempt leaves no orphan" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let source = lease_test_source(client)
@@ -608,7 +608,7 @@ test "a nested handover wins and the outer attempt leaves no orphan" {
 
 ///|
 test "a reader released synchronously while being read returns no live value" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -637,7 +637,7 @@ test "a reader released synchronously while being read returns no live value" {
 
 ///|
 test "a temporary reader released in a callback retires exactly once" {
-  new_run()
+  fresh_app()
   let phase = Ref("setup")
   let events : Array[String] = []
   let client = @core.Client::new(fn(s) { events.push("\{phase.val}:wire \{s}") })
@@ -687,7 +687,7 @@ test "a temporary reader released in a callback retires exactly once" {
 
 ///|
 test "a reader released in its explicit read returns no value and leaves no subscription" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -720,7 +720,7 @@ test "a reader released in its explicit read returns no value and leaves no subs
 
 ///|
 fn lease_end_during_handover(dispose_view : Bool) -> Unit raise {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)

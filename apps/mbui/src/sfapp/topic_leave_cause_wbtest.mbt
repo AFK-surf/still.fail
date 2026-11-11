@@ -2,7 +2,7 @@
 
 ///|
 test "cancelling an owned early read notifies the source without ending a legacy reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -35,7 +35,7 @@ test "cancelling an owned early read notifies the source without ending a legacy
 
 ///|
 test "a view leave notifies the source but cannot release an independent legacy reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -63,7 +63,7 @@ test "a view leave notifies the source but cannot release an independent legacy 
 
 ///|
 test "an early read cancellation remains one-shot during a reentrant source callback" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -87,7 +87,7 @@ test "an early read cancellation remains one-shot during a reentrant source call
 
 ///|
 test "a wrapper that observes without forwarding cannot retain a cancelled reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -112,7 +112,7 @@ test "a wrapper that observes without forwarding cannot retain a cancelled reade
 
 ///|
 test "a view leave cannot recursively notify a forwarding callback for the same topic" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)
@@ -140,7 +140,7 @@ test "a view leave cannot recursively notify a forwarding callback for the same 
 
 ///|
 test "two readers of one view each notify when one cancellation triggers the other" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = lease_test_source(client)

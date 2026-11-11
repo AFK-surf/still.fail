@@ -60,7 +60,7 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
 
 ///|
 test "an accent the build does not know (kept by a newer one): still.fail's orange" {
-  new_run()
+  fresh_app()
   @sf.set_accent("indigo")
   assert_eq(@sf.accent_key(), "")
   @sf.set_accent("teal")
