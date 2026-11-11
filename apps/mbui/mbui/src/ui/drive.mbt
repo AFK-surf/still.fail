@@ -172,6 +172,9 @@ priv struct Driver {
   // before them moved the focus, and they went into the field it focused (2026-11-05, the vault's editor on Android:
   // a host's words in the name's field)
   mut typed : String
+  // a wheel's words followed (`wheel`): the window's tree's node drawing the words nearest where it turned, those
+  // words, where they were drawn as it turned and last said, and when it turned (None: none followed)
+  mut wheel_follow : (@view.NodeId, String, Double, Double, Double)?
 }
 
 ///|
@@ -298,6 +301,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     seen_frame: -1,
     dir,
     said_taken: 0,
+    wheel_follow: None,
     typed: "",
   })
   let watched = if watching { " (the runner's directory \{done_dir} watched)" } else { "" }
@@ -629,6 +633,18 @@ fn screen_words(c : Ctx) -> String {
       }
     }
   }
+  // (and the window's tree's: a page made of nodes said too, not an empty screen)
+  match view_app.val {
+    Some(tree) =>
+      for e in tree.drawn() {
+        let w = view_words_found(e)
+        let y = e.y + e.h / 2.0
+        if w != "" && e.bones == 0L && y >= 0.0 && y <= c.height {
+          words.push(w)
+        }
+      }
+    None => ()
+  }
   let all = words.join(" | ")
   if all.length() > 1500 {
     all.unsafe_substring(start=0, end=1500) + "…"
@@ -779,6 +795,8 @@ fn press(x : Double, y : Double, up : Bool) -> Unit {
 fn drive_frame(c : Ctx) -> Unit {
   drive_steps(c)
   guard driver.val is Some(d) else { return }
+  // (on the frames that come after it, none asked for of its own: what the wheel set moving draws them)
+  wheel_followed(d)
   let now = h_now()
   let mut at = @double.infinity
   let soon = fn(t : Double) { if t < at { at = t } }
@@ -803,6 +821,119 @@ fn drive_frame(c : Ctx) -> Unit {
   }
   if at < @double.infinity {
     c.wake_at_time(dmax(at, now), later=true)
+  }
+}
+
+///|
+/// How long the words nearest a wheel are followed after it (wheel_followed).
+let wheel_follow_ms : Double = 1500.0
+
+///|
+/// The window's tree's node drawing words nearest (x, y), those words, and where they are drawn (their middle's y).
+fn tree_words_near(x : Double, y : Double) -> (@view.NodeId, String, Double)? {
+  guard view_app.val is Some(tree) else { return None }
+  let mut best : (@view.NodeId, String, Double)? = None
+  let mut far = @double.infinity
+  for d in tree.drawn() {
+    let words = view_words_found(d)
+    if words == "" || d.bones != 0L || d.w <= 0.0 || d.h <= 0.0 {
+      continue
+    }
+    let (mx, my) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
+    let dist = (mx - x).abs() + (my - y).abs()
+    if dist < far {
+      far = dist
+      best = Some((d.id, words, my))
+    }
+  }
+  best
+}
+
+///|
+/// What a scripted run's `wheel` says of itself, in its log: where it turned, what took it (the window's tree's node
+/// found there and the one that took it, or the old frame's, wheel_went), what was moving as it turned (the page's
+/// way in among it), and the words nearest it, followed after it for wheel_follow_ms (wheel_followed): whether what
+/// it scrolled moved, and stayed. So a wheel that did nothing is told from one undone after.
+fn wheel_said(
+  d : Driver,
+  x : Double,
+  y : Double,
+  dy : String,
+  near : (@view.NodeId, String, Double)?,
+  moving : Array[String],
+) -> Unit {
+  let named = fn(id : @view.NodeId?) {
+    match (id, view_app.val) {
+      (Some(i), Some(tree)) => {
+        let name = tree.drawn_name(i)
+        "\{i.at}" + (if name == "" { "" } else { " (" + name + ")" })
+      }
+      _ => "none"
+    }
+  }
+  let last = @view.wheel_last
+  let found : @view.NodeId? = if last.found_at >= 0 { Some({ at: last.found_at, gen: last.found_gen }) } else { None }
+  let took : @view.NodeId? = if last.took_at >= 0 { Some({ at: last.took_at, gen: last.took_gen }) } else { None }
+  // (what of an old view's scrolls where it went, as it stands now the wheel has moved it)
+  let old_said = fn() {
+    let target = wheel_old_target.val
+    if target == 0 {
+      "nothing that scrolls there"
+    } else {
+      "what scrolls there, \{target}" +
+      (match g().lists.get(target) {
+        Some(st) => if st.wheel_moves(number(dy)) { ", a list not at its end that way" } else { ", a list at its end that way" }
+        None => ""
+      })
+    }
+  }
+  let went = match wheel_went.val {
+    1 => "the window's tree"
+    2 => "the old view the tree hosts there: " + old_said()
+    3 => old_said()
+    _ => "nowhere"
+  }
+  let words = match near {
+    Some((_, w, wy)) => "\"" + w + "\" at y \{wy}"
+    None => "no words of the tree's"
+  }
+  h_log(
+    "DRIVE wheel \{dy} at \{x.to_int()},\{y.to_int()}: went to \{went}; the tree's found \{named(found)}, taken by \{named(took)}; nearest " +
+    words + "; moving: " + (if moving.length() == 0 { "nothing" } else { moving.join("; ") }),
+  )
+  d.wheel_follow = match near {
+    Some((id, w, wy)) => Some((id, w, wy, wy, h_now()))
+    None => None
+  }
+}
+
+///|
+/// The words a wheel followed (wheel_said), this frame: said where they moved (by half a point or more) since last
+/// said, gone, or where they are on the first frame after wheel_follow_ms (none asked for: a frame comes as something
+/// moves, so none drawn means nothing moved).
+fn wheel_followed(d : Driver) -> Unit {
+  guard d.wheel_follow is Some((id, words, y0, last, t0)) else { return }
+  let after = (h_now() - t0).to_int()
+  let drawn = match view_app.val {
+    Some(tree) => tree.drawn().iter().find_first(fn(e) { e.id == id })
+    None => None
+  }
+  match drawn {
+    None => {
+      h_log("DRIVE wheel +\{after} ms: \"\{words}\" no longer drawn")
+      d.wheel_follow = None
+    }
+    Some(e) => {
+      let y = e.y + e.h / 2.0
+      if (y - last).abs() >= 0.5 {
+        h_log("DRIVE wheel +\{after} ms: \"\{words}\" at y \{y}")
+        d.wheel_follow = Some((id, words, y0, y, t0))
+      }
+      if h_now() - t0 > wheel_follow_ms {
+        h_log("DRIVE wheel +\{after} ms: \"\{words}\" ends at y \{y}, from \{y0}")
+        d.wheel_follow = None
+      }
+    }
   }
 }
 
@@ -1336,7 +1467,12 @@ fn drive_steps(c : Ctx) -> Unit {
             }
           }
         }
-        on_wheel(c.width / 2.0, c.height / 2.0, 0.0, number(dy), mods * 16)
+        let (wx, wy) = (c.width / 2.0, c.height / 2.0)
+        // (what is there as it turns, and the words nearest it followed after: wheel_said)
+        let near = tree_words_near(wx, wy)
+        let moving = c.moving_now()
+        on_wheel(wx, wy, 0.0, number(dy), mods * 16)
+        wheel_said(d, wx, wy, dy, near, moving)
         acted()
         return
       }
