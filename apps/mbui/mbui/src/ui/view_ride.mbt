@@ -139,6 +139,20 @@ let list_heads : Array[ListHead] = []
 let offsets_flat : Array[Int] = []
 
 ///|
+/// What each node drawing what it holds stretched (View::stretches) was last painted stretched by: one stretched
+/// otherwise in a paint is told drawn anew where it shows (damage_known), one stretched as it was is not. Written only
+/// as one is painted stretched, so a paint with none stretched does nothing more for it; let go whole as it comes to
+/// stretch_painted_most (a node gone, or no longer stretched, kept till then: one stretched again as it was is compared,
+/// as anything is), and as a run begins (view_forget), so a run's first stretch is told whatever ran before it.
+// kept across runs: emptied as each begins (view_forget), written by a paint as it draws one stretched otherwise,
+// emptied as it holds stretch_painted_most
+let stretch_painted : Map[@view.NodeId, Double] = Map([])
+
+///|
+/// How many stretch_painted holds at most.
+let stretch_painted_most = 16
+
+///|
 /// What a column scrolls by its offset alone being drawn now, as the tree is painted (none between paints): the outer
 /// of the two rides there are (Riding the inner).
 // kept across runs: none between paints
