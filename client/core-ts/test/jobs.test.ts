@@ -176,4 +176,7 @@ test("a_logs_lines_each_by_its_number_its_runs_and_nothing_else_of_it", () => {
   assert.deepEqual(row, { outputAt: NOW - 3_000, last: "two", said: "最后输出 · 刚刚" });
   // (shaped as it goes out)
   assert.ok("ok" in conform("JobLogView", v), JSON.stringify(conform("JobLogView", v)));
+  // Shown again (held inside another value and put out a second time): as it was, its lines kept.
+  assert.equal(log(v, c()), v);
+  assert.deepEqual(log(row, c(), 1), row);
 });

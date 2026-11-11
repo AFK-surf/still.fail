@@ -813,12 +813,16 @@ function jobsOf(now: number, station: number): J[] {
   }));
 }
 
-function resourcesOf(now: number, station: number): J {
+/// What still.fail uses of station `st`'s machine as the station tells it (`more`: that many samples on, each as before,
+/// the oldest gone).
+export function resourcesOf(now: number, station: number, more = 0): J {
   const use = (cpu: number, mem: number) => ({ cpu, memory: mem, netIn: 1200 * cpu, netOut: 300 * cpu, diskRead: 4096 * cpu, diskWrite: 2048 * cpu });
+  const sample = (k: number) => use(60 + (k % 7) * 4, 5.8 * 1024 ** 3);
+  const at = now + more * 5000;
   return {
-    at: now, counted: true, net: true, disk: true, everyMs: 5000, machine: { cores: STATIONS[station]!.cpus, memory: STATIONS[station]!.memGb * 1024 ** 3 },
-    total: use(84.2, 6.1 * 1024 ** 3),
-    history: Array.from({ length: 36 }, (_, i) => ({ at: now - (36 - i) * 5000, ...use(60 + (i % 7) * 4, 5.8 * 1024 ** 3) })),
+    at, counted: true, net: true, disk: true, everyMs: 5000, machine: { cores: STATIONS[station]!.cpus, memory: STATIONS[station]!.memGb * 1024 ** 3 },
+    total: more === 0 ? use(84.2, 6.1 * 1024 ** 3) : sample(35 + more),
+    history: Array.from({ length: 36 }, (_, i) => ({ at: at - (36 - i) * 5000, ...sample(i + more) })),
     chats: Object.fromEntries(Array.from({ length: 6 }, (_, i) => [keyOf(station, i), { thread: threadIdOf(station, i), title: pick(TITLES, i + station) }])),
     groups: Array.from({ length: 8 }, (_, g) => ({
       key: g < 6 ? `chat:${keyOf(station, g)}` : g === 6 ? "station" : "agents", ...(g < 6 ? { session: keyOf(station, g) } : {}),
@@ -831,13 +835,18 @@ function resourcesOf(now: number, station: number): J {
 
 /// Each topic of the workspace with what it holds: what `set` puts in the rig, in an order a core could have it come;
 /// the chat with the last `chat` of its messages read.
-export function fixture(now: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
-  const out: [Topic, unknown][] = [];
-  out.push([workspace(), {
+/// The workspace as still.fail cloud lists it (`/v1/workspaces/:id`): its stations and members.
+function workspaceOf(now: number): J {
+  return {
     id: "ws", name: "Acme", role: "owner",
     stations: STATIONS.map((s, i) => ({ id: s.id, name: s.name, last_seen: Math.trunc(now / 1000) - (i < UP_COUNT ? 5 : 3 * 86400), version: "0.1.7018", ...(s.emoji ? { emoji: s.emoji } : {}) })),
     members: PEOPLE.map((p, i) => ({ sub: p.sub, email: p.email, name: p.name, role: i === 0 ? "owner" : i < 3 ? "admin" : "member", picture: i % 2 === 0 ? slackPicture(i) : "" })),
-  }]);
+  };
+}
+
+export function fixture(now: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
+  const out: [Topic, unknown][] = [];
+  out.push([workspace(), workspaceOf(now)]);
   for (let st = 0; st < STATIONS.length; st++) {
     const at = address(st);
     const up = st < UP_COUNT;
@@ -995,10 +1004,11 @@ export function quotaChanged(base: number, at: number, st: number): J {
 
 /// What the chat's station tells as one more message comes at `at` (the workspace made at `base`, the chat with the last
 /// `chat` of its messages read): its page, its thread and its row.
-export function messageAdded(base: number, at: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
+/// (`said`: what the message is, its words and what comes with them)
+export function messageAdded(base: number, at: number, chat = CHAT_MESSAGES, said: J = { text: "好的，我先跑一遍测试再合。" }): [Topic, unknown][] {
   const page = chatPage(base, chat);
   const n = CHAT_MESSAGES + 1;
-  const entry = { ...entryOf(base, n), text: "好的，我先跑一遍测试再合。", at };
+  const entry = { ...entryOf(base, n), at, ...said };
   const t0 = threadOf(base, 0, 0);
   const r0 = rowOf(base, 0, 0);
   const last = { seq: n, authorKind: "agent", author: CHAT.keys[0], authorName: null, text: entry.text, createdAt: at };
@@ -1008,6 +1018,186 @@ export function messageAdded(base: number, at: number, chat = CHAT_MESSAGES): [T
     [threads(CHAT.station), [thread, ...Array.from({ length: ROWS_UP - 1 }, (_, i) => threadOf(base, 0, i + 1))]],
     [rows(CHAT.station), [{ ...r0, last, lastActiveAt: at }, ...Array.from({ length: ROWS_UP - 1 }, (_, i) => rowOf(base, 0, i + 1))]],
   ];
+}
+
+/// What the chat's agent says next with what it shows (made at `at`): a picture it attached and a pull request it links,
+/// as `messageAdded`'s `said`.
+export function thingSaid(at: number): J {
+  const n = CHAT_MESSAGES + 1;
+  return {
+    text: `截图和新的 PR：https://github.com/acme/app/pull/5250\n\n![](screenshot-${n}.png)`, at,
+    attachments: [{ name: `screenshot-${n}.png`, path: `.stillfail/uploads/${n}-screenshot.png`, size: 251_002, width: 1170, height: 2532, thumbhash: "3OcRJYB4d3h/iIeHeEh3eIhw+j3A" }],
+  };
+}
+
+/// Station `st`'s chat rows (made at `base`), each as `f` makes it of the fixture's (null: gone from the list).
+function rowsWith(base: number, st: number, f: (row: J, i: number) => J | null): J[] {
+  return Array.from({ length: rowsCount(st) }, (_, i) => f(rowOf(base, st, i), i)).filter((r) => r !== null);
+}
+
+/// A chat of the viewer's on Maple (not the open one) whose agent came to wait on a card at `at`: its rows, and the row
+/// before and after (what attention.ts tells notices.ts of).
+export const CARD_ROW = 6;
+export function cardCame(base: number, at: number): { rows: J[]; before: J; after: J } {
+  const before = rowOf(base, 0, CARD_ROW);
+  const seq = before.last.seq + 1;
+  const text = "需要你决定：周六上午 9 点做生产库迁移可以吗？";
+  const after = { ...before, last: { seq, authorKind: "agent", author: before.id, authorName: null, text, createdAt: at }, lastActiveAt: at, ...waiting(seq, before.id, text, at, optionsCard()) };
+  return { rows: rowsWith(base, 0, (r, i) => (i === CARD_ROW ? after : r)), before, after };
+}
+
+/// A chat of Maple's the station recommended archiving, archived at `at` by its archiving: its rows without it, its
+/// archived rows with it first.
+export const ARCHIVED_ROW = 5;
+export function chatArchived(base: number, at: number): { rows: J[]; archived: J[] } {
+  const row = { ...rowOf(base, 0, ARCHIVED_ROW), archived: { at, by: "auto", alone: true } };
+  return { rows: rowsWith(base, 0, (r, i) => (i === ARCHIVED_ROW ? null : r)), archived: [row, ...Array.from({ length: ARCHIVED }, (_, i) => rowOf(base, 0, i, true))] };
+}
+
+/// A chat of Maple's with no title yet named by its agent (`chat_title`) with the words the search looks for.
+export const RENAMED_ROW = 7;
+export function chatRenamed(base: number): J[] {
+  return rowsWith(base, 0, (r, i) => (i === RENAMED_ROW ? { ...r, named: { ...r.named, thread: { ...r.named.thread, title: "迁移演练：Postgres 15 → 17 切换" }, firstText: null } } : r));
+}
+
+/// What Maple tells of three of its jobs at `at` (its `job` event, each): the chat's dev server crashed; the chat's watch
+/// of its PR's CI ended, the CI red; the soak a round more told (`stillfail-job notify`), the oldest of the notices it shows gone.
+export function jobsMoved(base: number, at: number): J[] {
+  const all = jobsOf(base, 0);
+  const [dev, ci, , soak] = all as [J, J, J, J];
+  return [
+    { ...dev, state: "failed", exitCode: 1, endedAt: at, outputAt: at },
+    { ...ci, state: "exited", exitCode: 1, endedAt: at, outputAt: at, notices: [...ci.notices, { at, text: "CI 失败：check-mbui native，2 个测试没过" }] },
+    { ...soak, outputAt: at, notices: [...soak.notices.slice(1), { at, text: "第 413 轮：全部通过（平均 3 分 09 秒）" }] },
+  ];
+}
+
+/// Maple's usage read again (its `usage` event): today's calls of a chat a few more.
+export function usageRead(base: number): J {
+  const u = usageOf(base, 0);
+  const [first, ...rest] = u.rows as J[];
+  return { ...u, rows: [{ ...first, calls: first.calls + 3, cost: Math.round((first.cost + 0.42) * 100) / 100, input: first.input + 2_100, cacheRead: first.cacheRead + 61_000, output: first.output + 900 }, ...rest], history: { ...u.history, days: u.history.days.map((d: J, i: number) => (i === u.history.days.length - 1 ? { ...d, tokens: d.tokens + 64_000, calls: d.calls + 3 } : d)) } };
+}
+
+/// The folder of Maple's drive shown with a file more at `at`: a screenshot saved into it.
+export function driveAdded(base: number, at: number): J {
+  const d = driveOf(base);
+  return { ...d, entries: [{ name: "Screenshot 2026-11-11 at 14.02.11.png", dir: false, size: 2_412_331, mtime: at, type: "file" }, ...d.entries] };
+}
+
+/// The chat's letters (its `letters` as the device holds it: all its entries, its letters) with `letters` letters, and
+/// entries `more` after its 300.
+export function lettersHeld(base: number, letters = LETTERS_COUNT, more: J[] = []): J {
+  return { entries: [...chatPage(base).entries, ...more], letters: lettersOf(base, letters), whole: true, thread: { ...threadOf(base, 0, 0), lettersLast: letters } };
+}
+
+/// Maple's screens as it tells them at `at` (its `screens` event): the chat's agent's browser tab moved to the PR's
+/// checks, the person looking at it gone.
+export function screensMoved(base: number, at: number): J {
+  const s = screensOf(base);
+  return { ...s, screens: s.screens.map((x: J) => (x.id === "browser:T1" ? { ...x, title: "Checks · Pull request #5244 · acme/app", viewers: x.viewers.slice(0, 1), views: x.views.slice(0, 1).map((v: J) => ({ ...v, at })) } : x)) };
+}
+
+/// What Maple says of its devices at `at`, a member's test phone attached to it more.
+export function devicesAdded(base: number, at: number): J {
+  const d = devicesSaid(base, 0);
+  const p = PEOPLE[1];
+  return { ...d, devices: [...d.devices, { id: "00000000c0ffee01", name: "Pixel 9 测试机", kind: "adb", target: "192.168.1.60:5555", ws: "ws", owner: p.sub, owner_email: p.email, owner_name: p.name, at, station: STATIONS[0].id, stationName: STATIONS[0].name }] };
+}
+
+/// The workspace's lock as its stations keep it once a member's new device was approved at `at` (an entry more, and
+/// what the device told of itself).
+export function lockApproved(base: number, at: number): J {
+  const l = lockOf(base);
+  const secs = Math.floor(at / 1000);
+  const p = PEOPLE[1];
+  const device = { id: `dev-${p.sub}-tablet`, sub: p.sub, kind: "app", label: `ios still.fail · ${p.name} 的 iPad Pro`, sign_key: `sk-${p.sub}-tablet` };
+  return {
+    head: { seq: 2, hash: "h-2", genesis: "h-genesis" }, entries: [...l.entries, { seq: 2, prev: "h-genesis", at: secs, by: "dev-s1-mac", kind: "device", body: device, sig: "" }],
+    seen: [...l.seen, { base: device.id, last_seen: secs, label: device.label }],
+  };
+}
+
+/// The workspace's plain library as held once Maple told its uses again at `at`: the most used item used once more,
+/// the oldest of the 500 it keeps gone.
+export function vaultUsed(base: number, at: number): J {
+  const v = vaultOf(base);
+  const key = `${STATIONS[0].id}/plain`;
+  const use = { item: VAULT_ITEM, at: Math.floor(at / 1000), session: `ember:${CHAT.keys[0]}`, chatTitle: pick(TITLES, 0), mode: "proxy", command: "gh pr merge 5244 --squash", hosts: ["api.github.com", "github.com", "uploads.github.com"], denied: false };
+  return { ...v, uses: { ...v.uses, [key]: [use, ...v.uses[key].slice(0, -1)] } };
+}
+
+/// The workspace's plain library with an item added at `at`.
+export function vaultAdded(base: number, at: number): J {
+  const v = vaultOf(base);
+  const id = `item-${VAULT_ITEMS}`;
+  const name = "Linear API key";
+  return { ...v, plain: { ...v.plain, [id]: { id, owner: "s1", version: 1, kind: "token", name, notes: "", listing: { name, kind: "token", modes: ["proxy"], hosts: ["api.linear.app"], env: null, lasts: "chat" }, at, station: STATIONS[0].id } } };
+}
+
+/// The workspace as the cloud lists it once a member more joined.
+export function memberJoined(base: number): J {
+  const w = workspaceOf(base);
+  return { ...w, members: [...w.members, { sub: "s13", email: "lin.xiao@acme.dev", name: "林晓", role: "member", picture: "" }] };
+}
+
+/// Maple at `at` with a session more, a Slack thread's of its first connect: its sessions, and its overview counting it.
+export function sessionMade(base: number, at: number): [Topic, unknown][] {
+  const keys = [...Array.from({ length: ROWS_UP }, (_, i) => keyOf(0, i)), CHAT.keys[1]];
+  const made = { ...sessionOf(base, 0, keyOf(0, ROWS_UP + 1), ROWS_UP + 1), createdAt: at, lastActiveAt: at };
+  const o = overviewOf(base, 0);
+  return [
+    [sessions(address(0)), [...keys.map((k, i) => sessionOf(base, 0, k, i)), made]],
+    [overview(address(0)), { ...o, connects: o.connects.map((c: J) => (c.id === "c-slack-1" ? { ...c, sessions: c.sessions + 1 } : c)) }],
+  ];
+}
+
+/// Maple's overview once something of it changed at `at` (its `overview` event): `decided`, an automatic decision more
+/// (the newest of the ten it shows first); `updating`, Claude Code being updated; `machine`, the machine's own Claude
+/// login's allowance read again; `login`, a sign-in of a Codex account under way, begun on another device;
+/// `archiving`, its archiving's review turned off on another device (`archiving.save`); `off`, its automatic decisions
+/// on whether a chat is done turned off there (`automaticDecisions.save`).
+export function overviewMoved(base: number, at: number, what: "decided" | "updating" | "machine" | "login" | "archiving" | "off"): J {
+  const o = overviewOf(base, 0);
+  if (what === "off") return { ...o, automaticDecisions: { ...o.automaticDecisions, settings: { completion: { ...o.automaticDecisions.settings.completion, enabled: false } } } };
+  if (what === "login") return { ...o, logins: overviewOf(base, 1).logins.map((l: J) => ({ ...l, job: { ...l.job, startedAt: at - 2 * MIN, expiresAt: at + 13 * MIN } })) };
+  if (what === "archiving") return { ...o, archiving: { ...o.archiving, reviewed: false } };
+  if (what === "updating") return { ...o, updates: o.updates.map((u: J) => (u.id === "claude" ? { ...u, state: "updating" } : u)) };
+  if (what === "machine") {
+    return { ...o, machineLogins: o.machineLogins.map((m: J, i: number) => (i === 0 ? { ...m, quota: { ...m.quota, windows: [{ ...m.quota.windows[0], usedPercent: m.quota.windows[0].usedPercent + 3 }, ...m.quota.windows.slice(1)], checkedAt: at } } : m)) };
+  }
+  const ad = o.automaticDecisions;
+  const made = { ...ad.recent[0], id: 9010, session: keyOf(0, 11), title: pick(TITLES, 11), at, label: "已完成", accepted: true, elapsedMs: 3100 };
+  return { ...o, automaticDecisions: { ...ad, recent: [made, ...ad.recent.slice(0, -1)], policy: { ...ad.policy, checked: ad.policy.checked + 1 } } };
+}
+
+/// Maple's presets once one was changed on another device at `at`.
+export function presetsChanged(base: number, at: number): J {
+  const p = presetsOf(base, 0);
+  return { ...p, presets: p.presets.map((x: J) => (x.id === "p-infra" ? { ...x, instructions: `${x.instructions}改完在 #infra 贴 diff。`, updatedAt: at } : x)) };
+}
+
+/// The changelog's feed as the cloud answers it once a build more is out at `at`: an entry more, the newest.
+export function changelogReleased(base: number, at: number): J {
+  const f = changelogFeed(base);
+  const version = CHANGELOG_NEWEST + 2;
+  const entry = { version, commit: "f".repeat(40), at: Math.trunc(at / 1000), text: [changelogLine(9999)], fixes: [], parts: ["android", "desktop", "station", "web"] };
+  return { entries: [entry, ...f.entries], released: { ...f.released, android: version, station: version } };
+}
+
+/// The chat's agent's live state at `at` as it goes on working (station/topics.ts `#live`, with its line): a call more
+/// in its transcript, its step now that call.
+export function liveStepped(base: number, at: number): J {
+  const live = liveOf(base);
+  const iso = new Date(at).toISOString();
+  const call = "pnpm exec tsgo --noEmit && node --test test/topic-bytes.test.ts";
+  const now = {
+    ...live,
+    timeline: [...live.timeline, { at: iso, kind: "tool_call", text: call, tool: "Bash", callId: "call-160" }],
+    steps: [{ id: "st-2", step: "tool", tool: "Bash", input: JSON.stringify({ command: call }), startedAt: at }],
+    usage: { ...live.usage, modelCalls: live.usage.modelCalls + 1, outputTokens: live.usage.outputTokens + 120, contextTokens: live.usage.contextTokens + 900, lastCallAt: at },
+  };
+  return { ...now, activity: activity(now) };
 }
 
 // ── the account's own, and what else the pages read ──
@@ -1129,8 +1319,8 @@ function vaultOf(now: number): J {
 /// What the chat's agents and three other chats wrote each other (its `letters`, station/src/sessions/messages.ts): forty
 /// letters, each way, as its own log keeps them.
 export const LETTERS_COUNT = 40;
-function lettersOf(now: number): J[] {
-  return Array.from({ length: LETTERS_COUNT }, (_, k) => {
+function lettersOf(now: number, count = LETTERS_COUNT): J[] {
+  return Array.from({ length: count }, (_, k) => {
     const other = [12, 20, 33][k % 3]!;
     const title = pick(TITLES, other);
     const link = `https://still.fail/o/ws/maple/${keyOf(0, other)}`;
@@ -1146,13 +1336,19 @@ function lettersOf(now: number): J[] {
   });
 }
 
-/// The chat's station's connection as the device samples it (station/topics.ts `#sampleNet`): its last `NET_KEPT` samples.
-function netOf(now: number): J {
+/// The chat's station's connection as the device samples it (station/topics.ts `#sampleNet`): its last `NET_KEPT` samples
+/// (`more`: that many samples on, each as before, the oldest gone).
+export function netOf(now: number, more = 0): J {
+  const at = now + more * 2000;
+  const sample = (k: number) => ({ rttMs: 18 + ((k * 7) % 13) + 0.4, rxBps: 12_000 + ((k * 3331) % 90_000), txBps: 2_000 + ((k * 911) % 9_000), sent: 40, lost: k === 17 ? 1 : 0 });
+  // (what the samples after the first counted, two seconds each)
+  const rx = Array.from({ length: more }, (_, k) => 2 * sample(30 + k).rxBps).reduce((a, b) => a + b, 0);
+  const tx = Array.from({ length: more }, (_, k) => 2 * sample(30 + k).txBps).reduce((a, b) => a + b, 0);
   return {
-    path: "direct", relay: RELAYS[1], rttMs: 23.4, rxBytes: 412_331_004, txBytes: 38_120_551,
-    samples: Array.from({ length: 30 }, (_, i) => ({ at: now - (30 - i) * 2000, rttMs: 18 + ((i * 7) % 13) + 0.4, rxBps: 12_000 + ((i * 3331) % 90_000), txBps: 2_000 + ((i * 911) % 9_000), sent: 40, lost: i === 17 ? 1 : 0 })),
+    path: "direct", relay: RELAYS[1], rttMs: more === 0 ? 23.4 : sample(29 + more).rttMs, rxBytes: 412_331_004 + rx, txBytes: 38_120_551 + tx,
+    samples: Array.from({ length: 30 }, (_, i) => ({ at: at - (30 - i) * 2000, ...sample(i + more) })),
     measured: { measuring: false, relays: [{ relay: "direct", rttMs: 23 }, { relay: RELAYS[0], rttMs: 61 }, { relay: RELAYS[1], rttMs: 38 }, { relay: RELAYS[2], rttMs: 84 }, { relay: OWN_RELAY, rttMs: 47 }], moved: null },
-    todayRxBytes: 1_204_331_004, todayTxBytes: 98_120_551, lan: ["192.168.1.20:52001", "10.8.0.3:52001", "[fe80::1c2a:3bff:fe4d:9a01]:52001"],
+    todayRxBytes: 1_204_331_004 + rx, todayTxBytes: 98_120_551 + tx, lan: ["192.168.1.20:52001", "10.8.0.3:52001", "[fe80::1c2a:3bff:fe4d:9a01]:52001"],
   };
 }
 
