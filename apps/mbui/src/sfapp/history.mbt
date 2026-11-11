@@ -402,7 +402,7 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
 }
 
 ///|
-/// How it runs, in one line (run_row's, as nodes) in `v`, as `a` says it now: the model (never cut short), how hard it
+/// How it runs, in one line (run_row's, as nodes) in `v`, as `a` says it now: the model (cut short last), how hard it
 /// thinks, the account, its allowance under them; a hairline round it. `press` as it is tapped, given where it is (the
 /// model picker opened beside it).
 fn run_row_node(v : @view.View, a : () -> Json?, press : (@sf.Anchor) -> Unit) -> Unit {
@@ -449,12 +449,8 @@ fn run_row_node(v : @view.View, a : () -> Json?, press : (@sf.Anchor) -> Unit) -
       // how it runs on its line, its account's allowance under it, a line of its own
       b.box(fn(w) {
         w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-        w.box(fn(l) {
-          l.row(Is(true)).lines_up(Is(Some(Middle))).min_width(Is(Some(0.0))) |> ignore
-          @sf.words_node(l, model, fn() { run_model }).shrink(Is(0.0)) |> ignore
-          @sf.words_node(l, rest, fn() { run_rest }).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-        })
-        |> ignore
+        // (the model's name whole, what follows it giving way first: cut short itself only beside the least of that)
+        @sf.name_line_node(w, model, fn() { run_model }, rest, fn() { run_rest }) |> ignore
         w.show(fn() { @sf.has_quota(quota()) }, fn(q) {
           q.row(Is(true)).padding(Is((0.0, 4.0, 0.0, 0.0))) |> ignore
           @sf.quota_chips_node(q, quota)

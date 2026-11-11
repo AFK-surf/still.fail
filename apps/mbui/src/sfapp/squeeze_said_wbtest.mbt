@@ -74,28 +74,5 @@ let said_modes : Array[String] = [
 
 ///|
 /// What each screen still has squeezed with what people wrote at its longest, by window, language and screen: the bar
-/// it may only fall from. A screen not listed has none. Those listed are the window tree's, found as the squeeze came to
-/// hold its nodes (squeeze_tree.mbt, 2026-11-11), each to be mended, the bar brought down as it is: what each is and
-/// where it was made beside it.
-let said_known : Map[String, Int] = {
-  let known = Map::new()
-  for k in [
-    // 真问题，待修: (e) the model's name at its longest never gives way (shrink 0), run 1500 wide out of its row, cut
-    // by the page: sfapp/history.mbt:445; (f) so over the row's mark at its end: history.mbt:423
-    ("phone-zh history-details", 2),
-    // 真问题，待修: (e) the station's name at its longest never gives way (min_width 0, no shrink said), cut by what
-    // holds it: sfdesk/history.mbt:221
-    ("touch-zh chat-model-pop", 1),
-    ("touch-zh history", 1),
-    ("touch-zh history-details", 1),
-    ("desk-zh chat-model-pop", 1),
-    ("desk-zh history", 1),
-    ("desk-zh history-details", 1),
-    ("tablet-zh chat-model-pop", 1),
-    ("tablet-zh history", 1),
-    ("tablet-zh history-details", 1),
-  ] {
-    known[k.0] = k.1
-  }
-  known
-}
+/// it may only fall from. A screen not listed has none.
+let said_known : Map[String, Int] = Map::new()
