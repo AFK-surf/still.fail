@@ -493,6 +493,11 @@ for t in $targets; do
   # (how what moves goes, said where a run counts it (MBUI_TEST_MOTION=count): all of it kept, past LINES_OUT's tail)
   [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
   grep -v "$F" "$out" | grep -av '^MOTION ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  # (and each test that failed, whole, its lines under it too, wherever it fell: past LINES_OUT's tail behind a run's
+  # CLOCKREAD lines, main df98aad1's words_large failures were in no line of app 2/4's log nor in its What failed,
+  # 42956992852, 2026-11-11)
+  awk '/^\[[^]]*\] test .* failed/ { on = 1; print; next } on && /^  / { print; next } { on = 0 }' "$out" |
+    sed '1s/^/test.sh: what failed, whole:\n/'
   grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || cat "$out".time.* 2>/dev/null | sort -rn | sed 's/^/test.sh: a run of /'
   rm -f "$out".time.*
