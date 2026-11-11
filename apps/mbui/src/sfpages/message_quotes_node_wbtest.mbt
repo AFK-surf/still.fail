@@ -296,7 +296,7 @@ test "what a message quotes as nodes is drawn as the old view draws it, state by
         let (old, old_pin) = qt_unpinned(old[0], pin)
         let (new, new_pin) = qt_unpinned(new[0], pin)
         // (each its number once, the node's otherwise than the old one's grown out of its mark)
-        assert_true(old_pin.length() == 1 && new_pin.length() == 1 && old_pin != new_pin, msg="\{s.name}: \{old_pin} \{new_pin}")
+        assert_true(old_pin.length() == 1 && new_pin.length() == 1 && old_pin != new_pin, msg="\{s.name}: \{Repr(old_pin)} \{Repr(new_pin)}")
         (old, new)
       } else if s.name.has_suffix(" video") && scale != 1.0 {
         let (old, old_capsule) = qt_uncapsuled(old[0])

@@ -69,6 +69,6 @@ test "a link's card: what its page is called on two lines at most, the second en
   t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms * 2.0)
   let lines = t.lines_of("一个名字")
-  assert_eq(lines.length(), 2, msg="\{lines}")
+  assert_eq(lines.length(), 2, msg="\{Repr(lines)}")
   assert_true(lines[1].has_suffix("…"), msg="\{Repr(lines)}")
 }

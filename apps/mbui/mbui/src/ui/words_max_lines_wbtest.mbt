@@ -139,8 +139,8 @@ test "words saying how many lines at most at the system's words 1.3: cut, measur
 test "long Chinese words saying two lines at most, 150 wide: two lines, the second ending in an ellipsis; saying none, more" {
   let (_, words, probe) = max_lines_words[0]
   let two = max_lines_read(true, words, probe, None, text_style(size=Meta, leading=L5, max_lines=2), 150.0, 1.0)
-  assert_eq(two.1.length(), 2, msg="\{two.1}")
-  assert_true(two.1[1].has_suffix("…"), msg="\{two.1}")
+  assert_eq(two.1.length(), 2, msg="\{Repr(two.1)}")
+  assert_true(two.1[1].has_suffix("…"), msg="\{Repr(two.1)}")
   // (as tall as two of its lines)
   let one = max_lines_read(true, "短短一行", "短短", None, text_style(size=Meta, leading=L5), 150.0, 1.0)
   assert_eq(two.0[0].4, 2.0 * one.0[0].4, msg="\{Repr(two.0)} | \{Repr(one.0)}")

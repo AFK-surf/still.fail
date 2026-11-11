@@ -222,7 +222,7 @@ test "a message's pictures and videos as nodes drawn as the old view draws them,
     let (new, new_at, new_alpha) = cmp_seen(s, false)
     // (what is compared is drawn: a picture where one is here, its words where it says any)
     let pictured = ["likeness", "here", "tall", "thin", "sent", "video"].contains(s.name)
-    assert_eq(new_alpha.length() > 0, pictured, msg="\{s.name}: \{new_alpha}")
+    assert_eq(new_alpha.length() > 0, pictured, msg="\{s.name}: \{Repr(new_alpha)}")
     // an intended difference (the coordinator of the migration, 2026-11-11): a likeness waiting breathes as all of
     // what stands in for a picture does (the user, 2026-10-30), where the old view's breath (Ctx::cycle_look) took no
     // picture's instances and left it whole; all else of it the same

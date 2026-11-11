@@ -146,7 +146,7 @@ test "wide: a machine's login not made a profile yet shows its allowance in the 
   // Willow's own Codex login, last in the sidebar: its week's capsule under its row as a profile's row has it
   let side = fn() { t.text_runs().filter(fn(r) { r.x0 < 300.0 }) }
   let offered = side().filter(fn(r) { r.text == "使用此账号" })
-  assert_eq(offered.length(), 1, msg="the machine's login offered: \{side().map(fn(r) { r.text })}")
+  assert_eq(offered.length(), 1, msg="the machine's login offered: \{Repr(side().map(fn(r) { r.text }))}")
   let under = side().filter(fn(r) { r.top >= offered[0].bottom }).map(fn(r) { r.text })
   for words in ["5H", "62%", "W", "19%"] {
     assert_true(under.contains(words), msg="\{words} under the offered login: \{Repr(under)}")
