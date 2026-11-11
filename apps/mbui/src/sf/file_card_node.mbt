@@ -9,7 +9,8 @@
 /// `remove` its ✕ at its end, each concentric with the end where it is the last, named as `retry_label` and
 /// `remove_label` say, their tips in `tips`; pressed, `on_press` with what was pressed (the card itself: Open), the
 /// hover ground under the pointer; right clicked or held by a finger, `menu` where (its menu: file_menu's). Read out as
-/// a group named by its name. The node.
+/// a group named by its name; its name whole in a tip by it while what it says shows cut short (file_card's). The
+/// node.
 #callsite(autofill(loc))
 pub fn file_card_node(
   parent : @view.View,
@@ -35,6 +36,8 @@ pub fn file_card_node(
       }
     })
     card.says(By(fn() { Some(@view.said(Group, label=name())) })) |> ignore
+    // (its name whole by it while what it says shows cut short: file_card's tip)
+    tip_node(tips, card, name, repeats=true) |> ignore
     match menu {
       // (right clicked, its menu where the pointer is; held by a finger, there, felt, the press the menu's: lifting it
       // opens nothing. A mouse's button held is a press as long as any: file_menu's, menu_asked's)
