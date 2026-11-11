@@ -101,7 +101,7 @@ fn Tester::draw_owed_said(self : Tester, n : Int) -> String? {
       return None
     }
     if self.past_inputs_next() || self.frames_on_clock() {
-      return
+      return None
     }
     self.frame_now()
     n = n + 1
