@@ -32,7 +32,21 @@ runs:
         # silent to GitHub's runners, every job here cancelled at its 5 minutes with all but five .debs in the cache.
         # Where they do not come in that time, the .debs the cache keeps are installed as they are (a package Ubuntu
         # updated since is the cache's older one for this run, and the cache is left as it was).
-        if sudo timeout 60 apt-get update -q -o APT::Update::Error-Mode=any &&
+        # That minute is not waited where the mirror says nothing at all: its release file is asked for first, 5 s, and
+        # with no answer and .debs in the cache they are installed at once. The minute and the 20 s of installing them
+        # left the preview's Linux build (3 minutes) no room in its 5: of eight such jobs that evening two were
+        # cancelled as they uploaded what they had built (#5550's, #5572's, 5 min 4 s), the rest took 4:09 to 4:36.
+        # (the mirror: the first the runner's list names, or the sources' own where they name one, arm64's; none found,
+        # apt is asked as before)
+        mirror=$(awk 'NF { print $1; exit }' /etc/apt/apt-mirrors.txt 2>/dev/null || true)
+        [ -n "$mirror" ] || mirror=$(sed -n 's/^URIs: *\(https\{0,1\}:[^ ]*\).*/\1/p' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null | head -1 || true)
+        answers() {
+          [ -n "$mirror" ] || return 0
+          curl -fsS -m 5 -o /dev/null "${mirror%/}/dists/$(. /etc/os-release && echo "$VERSION_CODENAME")/InRelease" && echo "apt: $mirror answers" ||
+            { echo "apt: $mirror did not answer in 5 s"; return 1; }
+        }
+        if { answers || ! ls "$d"/*.deb > /dev/null 2>&1; } &&
+          sudo timeout 60 apt-get update -q -o APT::Update::Error-Mode=any &&
           sudo timeout 120 apt-get install -y -q --no-install-recommends -o Dir::Cache::Archives="$d" ${{ inputs.packages }}; then
           sudo apt-get autoclean -q -o Dir::Cache::Archives="$d"
           sudo chown -R "$(id -u)" "$d"
