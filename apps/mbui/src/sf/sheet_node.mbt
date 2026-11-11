@@ -645,16 +645,24 @@ fn SheetRise::shown(self : SheetRise, h : Double, t : Double) -> Double {
   match self.way {
     // (risen or below, no way said: there, as tall as it is)
     None => if self.risen { 0.0 } else { d }
-    // (from rest at its place's foot or risen, as tall as it was then: a Move of its own height, as it always was,
-    // to the bit)
-    Some(w) if w.v0 == 0.0 && d == w.plan && d > 0.0 && (if w.up { w.u0 == 0.0 } else { w.u0 == w.plan }) => {
-      let x0 = if w.up { 1.0 } else { 0.0 }
-      let to = 1.0 - x0
-      let (dx, _) = @ui.move_path((x0 - to) * d, 0.0, t - w.at, @ui.move_ms((x0 - to).abs() * d))
-      (to + dx / d) * d
-    }
+    // (from rest at its place's foot or risen, as tall as it is now as it was then: the same way worked out as it was
+    // before its top's was (in its heights), only so that each frame of a sheet whose content stands still is what it
+    // was to the bit; the same curve as its top's (sheet_sink_wbtest holds them within 1e-9 of each other, on into a
+    // frame laid out another height), to go once nothing compares frames with those of before)
+    Some(w) if w.v0 == 0.0 && d == w.plan && d > 0.0 && (if w.up { w.u0 == 0.0 } else { w.u0 == w.plan }) =>
+      sheet_below_as_before(w.up, d, t - w.at)
     Some(_) => d - self.top_at(d, 0.0, t).0
   }
+}
+
+///|
+/// How far below its place a sheet `d` tall is `t` ms into its way up (`up`) or down from rest, worked out as it was in
+/// its own heights (SheetRise::shown's, for its frames to the bit).
+fn sheet_below_as_before(up : Bool, d : Double, t : Double) -> Double {
+  let x0 = if up { 1.0 } else { 0.0 }
+  let to = 1.0 - x0
+  let (dx, _) = @ui.move_path((x0 - to) * d, 0.0, t, @ui.move_ms((x0 - to).abs() * d))
+  (to + dx / d) * d
 }
 
 ///|

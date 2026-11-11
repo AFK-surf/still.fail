@@ -12,7 +12,8 @@ let grows_step : Double = 0.01
 
 ///|
 /// How tall it is laid out as of the logic's moment, and how fast that height goes then (points a ms): all of it laid
-/// out at that moment and grows_step after, what comes or goes and what follows the clock as it is then. Read where a
+/// out at that moment and grows_step after, what comes or goes in it and what follows the clock as it is then; at once
+/// (0 a ms, nothing laid out more) where nothing follows the clock. Read where a
 /// change is taken (a handler, what reacts to a change, what is due once a change is told whole), as
 /// View::laid_window_now is; a binding reading it fails its test (said where its node was made). (0, 0) where it is let
 /// go.
@@ -20,18 +21,33 @@ pub fn View::grows_now(self : View) -> (Double, Double) {
   let tree = self.tree
   tree.grows_read_in_binding()
   guard self.live() is Some(n) else { return (0.0, 0.0) }
+  // (nothing following the clock (no way under way says how tall a node is, no binding follows a way: each reads the
+  // clock while it goes, View::comes's, View::drawn_while): as tall as it is laid out, going nowhere; laid out again
+  // only where a change told since asks it, nothing more for it)
+  let still = !tree.clock.watched()
+  if still && !tree.layout_due {
+    return (n.flex.height, 0.0)
+  }
   tree.measured_now()
-  guard tree.last_w > 0.0 && !tree.measuring else { return (n.flex.height, 0.0) }
+  guard tree.last_w > 0.0 && !tree.measuring && !still else { return (n.flex.height, 0.0) }
   let at = tree.logic_said()
   let shown = tree.clock.untracked()
-  // (what comes or goes in all of it, as it was drawn: its way's moment set to each, and back)
+  // (what comes or goes in it, as it was drawn: its way's moment set to each, and back; what is not in it laid out as
+  // it stands)
   let coming : Array[(Int, Double)] = []
-  for k, m in tree.nodes {
+  let walk : Ref[(Int) -> Unit] = Ref(fn(_) {  })
+  walk.val = fn(k : Int) {
+    let m = tree.nodes[k]
+    guard m.live else { return }
     let st = m.flex.style
-    if m.live && m.coming && st.come_now == st.come_now {
+    if m.coming && st.come_now == st.come_now {
       coming.push((k, st.come_now))
     }
+    for c in m.kids {
+      (walk.val)(c)
+    }
   }
+  (walk.val)(self.at)
   let laid_at = fn(t : Double, back : Bool) {
     tree.bound_at(t)
     for c in coming {

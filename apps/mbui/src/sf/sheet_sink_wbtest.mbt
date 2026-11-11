@@ -133,3 +133,42 @@ test "a sheet closed as what it holds grows or shrinks: the same at each moment 
     }
   }
 }
+
+///|
+/// Where 第一行 is at moments of a sheet's sink, closed `into` on from what it holds shrinking; `again`: what it holds
+/// growing again sink_changed_on into the sink.
+fn sink_tops_after(c : (Double, Double, Double), again : Bool) -> Array[Double] {
+  let tall = @signals.signal(true)
+  let t = sink_sheet(tall, c.0, c.1)
+  tall.set(false)
+  t.run_for(c.2)
+  t.key(@ui.key_escape)
+  let from = t.time()
+  let tops = []
+  let mut changed = false
+  for ms in sink_moments {
+    if again && !changed && ms > sink_changed_on {
+      changed = true
+      t.run_for(from + sink_changed_on - t.time())
+      tall.set(true)
+    }
+    t.run_for(from + ms - t.time())
+    tops.push(t.find("第一行").map(fn(p) { p.1 }).unwrap_or(-1.0))
+  }
+  tops
+}
+
+///|
+/// How far into a sink what it holds changes again: between the first moment looked at and the second.
+let sink_changed_on : Double = 50.0
+
+///|
+test "a sheet's sink, said at its moment, goes as it was said whatever what it holds does after" {
+  for c in sink_cases {
+    let as_said = sink_tops_after(c, false)
+    let changed = sink_tops_after(c, true)
+    for i in 0..<as_said.length() {
+      assert_true((as_said[i] - changed[i]).abs() < 1.0e-6, msg="\{c}: \{as_said} \{changed}")
+    }
+  }
+}
