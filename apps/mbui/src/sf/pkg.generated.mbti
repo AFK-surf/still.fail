@@ -1196,6 +1196,10 @@ pub let mouse_found : Found
 
 pub let move_spring : @motion.Spec
 
+pub fn name_line_node(@view.View, () -> String, () -> @ui.TextStyle, () -> String, () -> @ui.TextStyle) -> @view.View
+
+pub let name_line_rest_least : Double
+
 pub let name_max : @ui.Len
 
 pub fn name_words(@ui.Ctx, String, @ui.TextStyle, color? : Int64) -> Int32
