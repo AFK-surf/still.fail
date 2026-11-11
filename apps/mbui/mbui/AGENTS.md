@@ -141,6 +141,15 @@ yet and you can add one, add it.
   declaration's Wasm side (`x_wasm.mbt` beside `x_native.mbt`, for an app run in Wasm by the native shell,
   `src/host/wasm_shell.c`) is written by `tools/wasmhost`: still.fail's `scripts/wasm-app.sh build` writes it,
   `check` says where it is not what the declarations make.
+- What a host is posted from outside the frames (a core's message, mb_post) it tells the app between frames
+  (`MB_OUTSIDE_POSTED`: ui's `messages_between`, which takes what changes only signals then), never left for a frame to
+  take as it begins: there the frame has brought the window's tree and read what it does again before what came is
+  taken, and a change only the tree reads went undrawn till something else built the frame whole (the web's and
+  Linux's hosts, till 2026-11-11). The Tester's fake host tells it as each frame is about to begin. What each host's
+  check holds: the Tester's every replay; Linux's `host_contract.sh linux posted` (told between frames); the web's
+  `test/web/posted.test.mjs` (told between frames, and before an input that came after it). What the window's tree
+  was told in a frame is drawn by that frame whenever in it it was told (ui's `view_owes`: its changes waiting count,
+  not only whether it is due).
 - What runs in the app never asks whether a Tester runs it: no `fake.val`, no switch only a Tester sets. What differs
   under a Tester is its fake host's answer (`impl Host for FakeHost`, a capability such as `rows_on_pixels`,
   `answers_by_frame`, answered as a device would unless the test says otherwise) or what the Tester does itself after a

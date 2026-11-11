@@ -38,14 +38,21 @@ fn main {
   let a11y = @ui.env("MBUI_A11YCHECK") == "1"
   // MBUI_FONTSCALECHECK=1: the system's size of words as the host gives it, on the log (fontscalecheck.mbt)
   let font_scaled = @ui.env("MBUI_FONTSCALECHECK") == "1"
+  // MBUI_POSTCHECK=1: what the host posts told between frames, said on the log (postcheck.mbt)
+  let posted = @ui.env("MBUI_POSTCHECK") == "1"
   if imaged != "" {
     @gallery.image_check_follow()
+  }
+  if posted {
+    @gallery.post_check_follow()
   }
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }
   @ui.run("mbui kit", fn(c) {
-    if updated != "" {
+    if posted {
+      @gallery.post_check_run(c)
+    } else if updated != "" {
       @gallery.update_check_run(c, updated)
     } else if linked {
       @gallery.link_check_run(c)

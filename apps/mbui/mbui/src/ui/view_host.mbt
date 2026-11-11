@@ -709,11 +709,21 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
 let view_logic_at : Ref[Double] = Ref(0.0)
 
 ///|
+/// Whether the window's tree has something the frame has not brought of it: told since (due), or what it was told
+/// laid out and placed already and its changes not taken (a tree that lays itself out as each change is told whole,
+/// View::laid_before_causes, does so in the change's own event, wherever in the frame that came: due no more, what it
+/// changed waiting all the same, 2026-11-11). Brought, what was told is drawn by this
+/// frame, whenever in it it was told.
+fn view_owes(tree : @view.Tree) -> Bool {
+  tree.told_since() || tree.changes_waiting()
+}
+
+///|
 /// What the frame took as it began (messages, the host's answers, the hand) told the window's tree: brought, before the
 /// frame decides what of the old views it builds again (where they are placed is part of that: view_island_said).
 fn view_arrived() -> Unit {
   match view_app.val {
-    Some(tree) if tree.told_since() => {
+    Some(tree) if view_owes(tree) => {
       view_brought(tree)
       // (what a still pointer is over, as what came moved it: view_pointed_again)
       view_pointed_again()
@@ -865,7 +875,7 @@ fn old_drawn(tree : @view.Tree) -> Array[(@view.Content, Double, Double, Double,
 /// so, an old view built for the room it had would be drawn in the room it has now, till the next frame).
 fn view_told_as_built(c : Ctx) -> Unit {
   match view_app.val {
-    Some(tree) if tree.told_since() => {
+    Some(tree) if view_owes(tree) => {
       let was = view_island_said()
       view_brought(tree)
       if view_island_said() != was {
@@ -1071,7 +1081,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // what the frame took is what it paints)
   view_due.get() |> ignore
   view_due_at.val = ""
-  if tree.told_since() {
+  if view_owes(tree) {
     view_brought(tree, told=false)
   }
   // (the frame's input targets, the old views' and what the old frame put over all of it, found before anything is
@@ -1103,7 +1113,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     None => ()
   }
-  if tree.told_since() {
+  if view_owes(tree) {
     view_brought(tree, told=false)
   }
   // (what the tree changed taken, whoever brought it to its moment, before anything of it is painted: by this frame's

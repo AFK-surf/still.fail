@@ -347,6 +347,69 @@ test "window tree: a node's words set by a message the frame takes: drawn so by 
 }
 
 ///|
+test "window tree: a node's words set by a message, the tree laid out once each change is told: drawn so by the next frame, not a frame of its looks alone" {
+  // (a tree that lays out and places what a change told once it is told whole, View::laid_before_causes, as a page
+  // with something set off by its cause does: a message taken as a frame began was laid out so in its event, the tree
+  // due no more, and the frame, deciding what it does from what the tree had told it before, drew its looks alone:
+  // what the message changed unseen till something else built the frame whole; posted messages are told between
+  // frames, as every host tells them, 2026-11-11)
+  let said = @signals.signal("before", same=fn(a, b) { a == b })
+  on_message_said("tree-settled", fn(_, _) {
+    said.set("after")
+    true
+  })
+  let ink = 0x112233FFL
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.laid_before_causes()
+    root.box(fn(b) { b.height(Is(Some(30.0))).words(By(fn() { said.get() }), ink~) |> ignore }) |> ignore
+  })
+  t.draw()
+  let t0 = t.time()
+  t.frame_at(t0 + 16.0)
+  t.frame_at(t0 + 32.0)
+  t.post("tree-settled", "{}")
+  t.frame_at(t0 + 48.0)
+  let tree = view_tree().unwrap()
+  let words = tree.drawn().filter(fn(d) { d.words != "" }).map(fn(d) { d.words })
+  let glyphs = t.drawn_glyphs().filter(fn(g) { g.2 == ink }).length()
+  assert_eq((words, glyphs, t.built_why() != "" || t.painted_why() != ""), (["after"], 5, true))
+}
+
+///|
+test "window tree: a node's words set as an old view is built, the tree laid out once each change is told: drawn so by that frame" {
+  // (no message: told in the frame, after the frame brought the tree as it began; the tree laying itself out in the
+  // change's own event, due no more, its change waiting: brought all the same, what was told drawn by the frame it was
+  // told in, whenever in it, view_owes)
+  let said = @signals.signal("before", same=fn(a, b) { a == b })
+  let go = Ref(false)
+  let ink = 0x112233FFL
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.laid_before_causes()
+    root.box(fn(b) { b.height(Is(Some(30.0))).words(By(fn() { said.get() }), ink~) |> ignore }) |> ignore
+    old(root, fn(c) {
+      c.text("old") |> ignore
+      if go.val {
+        go.val = false
+        said.set("after")
+      }
+    }).grow(Is(1.0)) |> ignore
+  })
+  t.draw()
+  let t0 = t.time()
+  t.frame_at(t0 + 16.0)
+  t.frame_at(t0 + 32.0)
+  go.val = true
+  t.stepped()
+  t.frame_at(t0 + 48.0)
+  let tree = view_tree().unwrap()
+  let words = tree.drawn().filter(fn(d) { d.words != "" && d.words != "old" }).map(fn(d) { d.words })
+  let glyphs = t.drawn_glyphs().filter(fn(g) { g.2 == ink }).length()
+  assert_eq((words, glyphs), (["after"], 5))
+}
+
+///|
 test "window tree: a message the frame takes makes a node over an old view taller: the old view laid out below it, that frame" {
   let tall = @signals.signal(30.0, same=fn(a, b) { a == b })
   on_message_said("tree-tall", fn(_, _) {
