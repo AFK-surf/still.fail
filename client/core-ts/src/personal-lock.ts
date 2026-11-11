@@ -236,11 +236,15 @@ export class PersonalLock {
       const pinned = this.#pinned.get(sub) ?? [];
       const holds = checkChain(entries, sub) !== null;
       const grows = pinned.length > 0 && holds && entries.length >= pinned.length && pinned.every((e, i) => entryHash(e) === entryHash(entries[i]!));
+      // The one pinned as far as it went some entries ago: who was read is behind on it (a station away while a device
+      // was let in, read alone as its link opened; the cloud, told each entry and never waited on). It is no lock begun
+      // elsewhere: taken for one, the person was warned their devices had been set anew, by one station's being late.
+      const behind = entries.length > 0 && entries.length < pinned.length && entries.every((e, i) => entryHash(e) === entryHash(pinned[i]!));
       if (grows) {
         this.#seen.delete(sub);
         if (entries.length > pinned.length) yield* this.#pin(sub, entries);
-      } else if (pinned.length > 0 && entries.length === 0) {
-        // (the cloud, or the stations, lost it, or never had it: brought back)
+      } else if (pinned.length > 0 && (entries.length === 0 || behind)) {
+        // (the cloud, or the stations, lost it, never had it, or are behind on it: brought back)
         if (stations) yield* Effect.ignore(this.#env.stations!.bring(sub, pinned));
         else yield* this.#env.cloud(sub, "POST", PATH, { entries: pinned });
       } else if (holds && entries.length > 0 && stations && pinned.length === 0 && (yield* this.#putOnBy(sub, entries))) {

@@ -175,6 +175,39 @@ test("a person's devices read and bring their lock at their stations, the cloud 
   }
 });
 
+test("a station behind on its person's lock, read alone, is brought it: the lock is not taken for one begun anew elsewhere", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const other = (n: string) => ({ key: `ed25519:${n.repeat(32)}`, id: n.repeat(32), label: n });
+    await a.runner.run(a.lock.addDevice(SUB, other("22"), "why"));
+    assert.equal(a.lock.entries(SUB).length, 2);
+    assert.equal(a.lock.standing(SUB), "member");
+    // The one station reached now is one that was away as the device was let in: it keeps the lock as far as its first
+    // entry. Its link opens, and it alone is read.
+    for (const [k, ch] of [...st.kept]) st.kept.set(k, ch.slice(0, 1));
+    const brought = st.say.brought;
+    await a.runner.run(a.lock.refresh(SUB, STATION));
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.equal(a.lock.entries(SUB).length, 2);
+    // (and it is brought what it lacks, as one that kept none is)
+    assert.ok(st.say.brought > brought, "the station behind was brought the lock");
+    assert.deepEqual([...st.kept.values()].map((ch) => ch.length), [2]);
+    // The cloud behind the same way (it is told each entry and not waited on), and no station reached: read of it, the
+    // lock is the one pinned still, and the cloud is brought what it lacks.
+    c.kept.entries = c.kept.entries.slice(0, 1);
+    st.say.up = false;
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.equal(a.lock.entries(SUB).length, 2);
+    assert.equal(c.kept.entries.length, 2);
+  } finally {
+    a.runner.shutdown();
+  }
+});
+
 test("a new device refused by every station finds who may let it in of what their refusals told, not the cloud", async () => {
   const c = cloud();
   const st = stations();
