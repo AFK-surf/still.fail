@@ -1,9 +1,8 @@
 // What a structure makes or lets go along a row (View::show, pick, each said `along_row=true`): its way across, as
 // down a column it makes its way down (View::comes), the same way on its width (flex's Style::come_across). Only where
 // it is said, for now (the coordinator of the migration, 2026-11-11): the rows' structures said otherwise are looked at
-// one by one before it is every row's. Words said on the very node that makes its way (`v.words(…)` on what the
-// structure gives) are drawn whole on the way, not cut by it (a node's clip cuts what it holds, not itself: ui's
-// shot.mbt), over what is beside it, as down a column: put them in a box it holds.
+// one by one before it is every row's. What makes its way is cut to itself as it goes, its own words too
+// (Content::clips_self).
 
 ///|
 /// Slot `slot` of a structure (`kind`, asked for at `loc`) said `along_row`: marked so, a fault where `at_once` is said

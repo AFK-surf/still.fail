@@ -1429,6 +1429,16 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
       raising.val = Some((c.id, self.ninst))
     }
+    // (on its way in or out: cut to itself before it draws its own, so its words go no further than its way has got,
+    // over nothing beside it; pushed once, for what it holds too, below. Content::clips_self)
+    if c.clips_self {
+      let r = c.radius * s
+      match c.corners {
+        Some((tl, tr, br, bl)) => push_box_clip(x, y, c.w * s, c.h * s, tl * s, tr * s, br * s, bl * s)
+        None => push_box_clip(x, y, c.w * s, c.h * s, r, r, r, r)
+      }
+      clipping.push(c.id)
+    }
     let k0 = self.ninst
     let k = clip_top()
     // (what it draws itself, and where its edge was composed among the frame's instances (-1: none), drawn after what it
@@ -1491,8 +1501,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (then, after all it draws itself however it ends, as each of its own was done on the way out: written here, not
     // deferred, a deferred block being a closure made for each node drawn)
     // (what it holds cut to it, as an old view's clipping box cuts what it holds (push_round_clip's, after its own): at
-    // its own edge, its edge drawn over what it holds there, taking no room)
-    if c.clips {
+    // its own edge, its edge drawn over what it holds there, taking no room; pushed before it drew where it is on its way)
+    if c.clips && !c.clips_self {
       let r = c.radius * s
       match c.corners {
         Some((tl, tr, br, bl)) => push_box_clip(x, y, c.w * s, c.h * s, tl * s, tr * s, br * s, bl * s)

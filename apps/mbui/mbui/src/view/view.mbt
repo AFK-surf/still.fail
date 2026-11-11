@@ -182,6 +182,9 @@ pub(all) struct Content {
   hosted : Bool
   /// what it holds cut to it, its corners round as its own (View::clips)
   clips : Bool
+  /// on its way in or out (View::comes), cut to itself as well: its own words drawn within it, not past it over what
+  /// is beside it, as what it holds is (clips with it, its way's while it goes)
+  clips_self : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
   /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
@@ -279,6 +282,9 @@ pub(all) struct Drawn {
   hosted : Bool
   /// what it holds cut to it, its corners round as its own (View::clips)
   clips : Bool
+  /// on its way in or out (View::comes), cut to itself as well: its own words drawn within it, not past it over what
+  /// is beside it, as what it holds is (clips with it, its way's while it goes)
+  clips_self : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
   /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
@@ -9371,6 +9377,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     shadow: n.look.shadow,
     hosted: n.hosted,
     clips: n.look.clips,
+    clips_self: n.look.clips && n.coming,
     words_center: n.look.words_center,
     ellipsis_past: n.look.ellipsis_past,
     picture: n.look.picture,
@@ -10132,6 +10139,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     shadow: c.shadow,
     hosted: c.hosted,
     clips: c.clips,
+    clips_self: c.clips_self,
     words_center: c.words_center,
     ellipsis_past: c.ellipsis_past,
     picture: c.picture,

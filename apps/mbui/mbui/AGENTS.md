@@ -52,8 +52,9 @@ yet and you can add one, add it.
   out whole at the width it comes to, what is after it and a grown one beside it going with it; a row's group its
   own, apart from its column's), but for now only where the structure says `along_row=true` (`src/view/along_row.mbt`;
   with `at_once`, or where no row lays it out, a fault); not in a row that wraps, nor alone in its row, nor across its
-  height. Words said on the very node making its way (in a column as in a row) are not cut by it on the way (its
-  clip cuts what it holds, not itself), so they are drawn whole over what is beside it: put them in a box it holds.
+  height. What makes its way, down a column or along a row, is cut to itself as it goes, its own words with what it
+  holds (`Content::clips_self`: a node's clip cut only what it holds, its own words drawn whole over what was beside
+  it, till 2026-11-11).
   The rows' other structures (`apps/mbui`'s, 133 found by the screens' sweep) are looked at one by one once
   the chat's page is made as nodes, then rows make their way by default and `along_row` goes: a switch a page must
   say is a debt of 方案 A, not its end (the coordinator of the migration, 2026-11-11).
