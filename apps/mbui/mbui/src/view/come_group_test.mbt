@@ -324,13 +324,17 @@ test "rows as tall as each other coming at one moment: each as it comes alone, t
   })
   t.frame(390.0, 844.0) |> ignore
   t.event(100.0, fn() { keys.set(["头", "甲", "乙", "丙"]) })
-  for i in 0..=40 {
-    let at = 100.0 + i.to_double() * 1000.0 / 60.0
+  let mut f = 0
+  let mut at = 100.0
+  // (to well past where a Move as far as 44 is over)
+  while at <= 100.0 + @flex.move_ms(44.0) * 2.0 {
     t.at(at)
     t.frame(390.0, 844.0) |> ignore
     let alone = @flex.come_way(0.0, 0.0, 44.0, at - 100.0).0
     for w in ["甲", "乙", "丙"] {
       assert_true((cg_drawn(t, w).1 - alone).abs() < 1.0e-6, msg="\{w} at \{at}: \{cg_drawn(t, w).1} \{alone}")
     }
+    f = f + 1
+    at = 100.0 + f.to_double() * 1000.0 / 60.0
   }
 }
