@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b805f72e7](https://github.com/AFK-surf/still.fail/commit/b805f72e7df416d481c5dbf7ea41265d4bc0247e) sf: a sheet's foot of nodes keeps its buttons whol | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.93 | 183.54 |
 | [2cdb3ab04](https://github.com/AFK-surf/still.fail/commit/2cdb3ab040f068fcd7ab15c9d14316ca9db55030) app: a history's model and its station, and an act | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.5 | 186.35 |
 | [224daa17e](https://github.com/AFK-surf/still.fail/commit/224daa17e9b815b8d33dd3aa1784663e287bc704) core, app: a model control and a new chat send wha | 1.81 | 2.42 | 10.07 | 28.81 | 35.54 | 25.65 | 47.47 | 94.6 | 130.15 |
 | [1c21e3620](https://github.com/AFK-surf/still.fail/commit/1c21e36201ae7b64bd2ebbeb5874b65924398483) mbui: what comes and goes down a column at one mom | 1.81 | 2.42 | 10.07 | 28.81 | 35.54 | 25.65 | 47.47 | 94.32 | 139.21 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [081eff020](https://github.com/AFK-surf/still.fail/commit/081eff020f54f2731df7566cf9e8323ad4bb05c6) core, app: a list's stations are rows; one station | 1.78 | 2.37 | 9.9 | 28.52 | 34.69 | 25.45 | 46.78 | 93.9 | 181.79 |
 | [594d3a7a3](https://github.com/AFK-surf/still.fail/commit/594d3a7a3ff33bb8d36eedb0090ae1232b49374c) app: the workspaces and a new workspace in panels  | 1.78 | 2.37 | 9.9 | 28.52 | 34.68 | 25.45 | 46.78 | 93.9 | 174.54 |
 | [4d3e89971](https://github.com/AFK-surf/still.fail/commit/4d3e8997122c119275171876adefff623b546ad0) mbui: a come way that goes along with another way  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.9 | 162.13 |
-| [5e6176182](https://github.com/AFK-surf/still.fail/commit/5e61761821eb6bb4a614aea56d73683aa4ef5e98) mbui: window tree words may be cut by their own sa | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.8 | 187.35 |
