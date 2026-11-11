@@ -204,7 +204,12 @@ jobs:
           # store grown with each push else)
           went=${{ steps.tests.outcome }}
           [ "$OWN" != a- ] || [ "$went" != failure ] || went=success
-          [ ! -d $S ] || [ "$went" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
+          # (main's keeps what its runs used for the last twelve hours, not only this run's: a branch off main of an hour
+          # or two before found few of its units in main's newest store, main having changed them since, and compiled
+          # them all again, 644 of sfapp's 899 in 141 s, app build 275-276 s of its 5 minutes, core-connect-rows
+          # 42934469629 and mbui-app-part-balance, 2026-11-10 and 11, where main's own was 41-227)
+          old=$( [ "$OWN" = m- ] && echo "-mmin +720" || echo "")
+          [ ! -d $S ] || [ "$went" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" $old -exec rm -rf {} +
           c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
       - if: always() && env.BUILD_KEY != steps.main.outputs.cache-matched-key && env.BUILD_KEY != steps.own.outputs.cache-matched-key
