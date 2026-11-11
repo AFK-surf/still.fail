@@ -51,6 +51,7 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "stationPart profiles": { topic: "stationPart", scope: "ws", station, part: "profiles" },
   "stationPart machineLogins": { topic: "stationPart", scope: "ws", station, part: "machineLogins" },
   "stationPart logins": { topic: "stationPart", scope: "ws", station, part: "logins" },
+  "stationPart updates": { topic: "stationPart", scope: "ws", station, part: "updates" },
   "chats": { topic: "chats", scope: "ws", mine: false, limit: 50 },
   "chats mine": { topic: "chats", scope: "ws", mine: true, limit: 50 },
   "profiles": { topic: "profiles", scope: "ws" },
