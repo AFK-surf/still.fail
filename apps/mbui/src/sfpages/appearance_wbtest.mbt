@@ -50,7 +50,26 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
     let at = "\{w} platform \{platform}"
     let titles = t.boxes_held().filter(fn(b) { b.text == "震动" })
     assert_eq(titles.length(), 1, msg="\{at}: \{titles.map(fn(b) { (b.x, b.y, b.w, b.h, b.weight) })}")
-    let (x, y, _, sh) = t.get(Switch, label="震动").rect
+    let (sx, y, sw, sh) = t.get(Switch, label="震动").rect
+    // (where the switch is drawn: its track, the widest round ground in what is read out. What is read out is its
+    // press's room, which may be wider than the track drawn in it: a small switch's, 9 more each side with a finger)
+    let mut track : (Double, Double)? = None
+    for b in t.boxes_held() {
+      if b.bg != 0L &&
+        b.h > 0.0 &&
+        (b.radius * 2.0 - b.h).abs() < 0.5 &&
+        b.x >= sx - 0.5 &&
+        b.x + b.w <= sx + sw + 0.5 &&
+        b.y >= y - 0.5 &&
+        b.y + b.h <= y + sh + 0.5 &&
+        (match track {
+          Some((_, tw)) => b.w > tw
+          None => true
+        }) {
+        track = Some((b.x, b.w))
+      }
+    }
+    guard track is Some((x, _)) else { fail("\{at}: no track drawn in the switch") }
     // (the title's words as they are drawn: where they end, their line's middle)
     guard t.rect_of("震动") is Some((tx, ty, tw, th)) else { fail("\{at}: no 震动 drawn") }
     assert_true(x >= tx + tw, msg="\{at}: switch follows its title: title ends \{tx + tw}, switch \{x}")

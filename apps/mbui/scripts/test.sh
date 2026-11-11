@@ -286,7 +286,7 @@ for t in $targets; do
       # 51-59 s of its 214-262, 2026-11-10. At 24 and at 7 on the fourth, which has a runner for each: the second runs
       # both in turn, 138 s and 117 s of pages beside its four sweeps, 267 s of its 5 minutes, main 62fed392 42751653901)
       # (its two, the app's two languages, a run each: in one at 120 a second it was 173 s of the second's part 2/2, 257 s
-      # of its 5 minutes on main caa9c272, 42759467421, 2026-11-10; at 120 APP_PART gives each part one)
+      # of its 5 minutes on main caa9c272, 42759467421, 2026-11-10; at 120 and at 60 APP_PART gives each part one)
       "src/sfapp/words_large_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in 24 | 7) echo 4 ;; *) echo 2 ;; esac ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
@@ -311,9 +311,9 @@ for t in $targets; do
     done
     runs=("${mine[@]}")
     # (APP_PART=k/m: the k-th of m shares of this group's pages' files, every m-th of them, and of its other runs: a
-    # group too long for one runner's five minutes at a rate's frames (mbui-check's at 120 a second) on m. Its other
-    # runs were all the first's: kept_rows' three runs and half the pages 228 s, the pages' 70 s of it beside them, the
-    # second's same number of pages alone 18 s, main c1c5a1b0, 42653215101, 2026-11-10)
+    # group too long for one runner's five minutes at a rate's frames (mbui-check's at 120 a second, and the second's
+    # at 60) on m. Its other runs were all the first's: kept_rows' three runs and half the pages 228 s, the pages'
+    # 70 s of it beside them, the second's same number of pages alone 18 s, main c1c5a1b0, 42653215101, 2026-11-10)
     if [ -n "${APP_PART:-}" ]; then
       mine=() o=0
       for r in "${runs[@]}"; do

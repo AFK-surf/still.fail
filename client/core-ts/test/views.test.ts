@@ -1230,6 +1230,39 @@ test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", asyn
   assert.equal(chats.value.trouble.text, "无法连接 beta");
 });
 
+test("stations_that_find_this_core_too_old_say_so_once_and_one_among_others_amiss_is_counted", async () => {
+  // Every station answered a stable page 426 (2026-11-10): its list said 「4 台 station 异常」, nothing of why.
+  for (const app of [true, false]) {
+    const t = setup();
+    t.host.appKeys = app;
+    const chats = ui();
+    t.subscribe(1, { topic: "chats", scope: "ws" });
+    t.set(workspace(), stations(t.nowS()));
+    await t.read(chats, 1);
+    const said = app ? "这个 app 版本太旧，station 已不再支持：请更新 app" : "这个页面版本太旧，station 已不再支持：请刷新页面";
+    t.set(link("ws/a"), { state: "error", message: "请更新 app", old: "app" });
+    t.set(link("ws/b"), { state: "error", message: "请更新 app", old: "app" });
+    t.set(link("ws/c"), { state: "online" });
+    await t.read(chats, 1);
+    // Said once, not as so many stations amiss; each station's own sentence still its message.
+    assert.deepEqual(chats.value.trouble, { text: said, state: "error", retry: false });
+    assert.deepEqual(chats.value.stations.filter((s: J) => s.state === "error").map((s: J) => [s.station, s.message]), [["ws/a", "请更新 app"], ["ws/b", "请更新 app"]]);
+    // One alone: the same words, its mark beside them.
+    t.set(link("ws/b"), { state: "online" });
+    await t.read(chats, 1);
+    assert.deepEqual(chats.value.trouble, { text: said, state: "error", retry: false, station: "ws/a" });
+    // Among others amiss for another reason: counted as before.
+    t.set(link("ws/b"), { state: "offline" });
+    await t.read(chats, 1);
+    assert.deepEqual(chats.value.trouble, { text: "2 台 station 异常", state: "error", retry: false });
+    // One this core finds too old: that it is, by name, as a station saying what this core cannot read.
+    t.set(link("ws/a"), { state: "error", message: "此 station 版本过旧", old: "station" });
+    t.set(link("ws/b"), { state: "online" });
+    await t.read(chats, 1);
+    assert.deepEqual(chats.value.trouble, { text: "alpha 版本不兼容，需要更新", state: "incompatible", retry: false, station: "ws/a" });
+  }
+});
+
 test("a station's mode is the viewer's to change where they added it, or no member did and they own the workspace", async () => {
   // Its owner is who added it, whatever the viewer's role (the user, 2026-11-10; cloud/src/directory.ts setStationMode).
   const t = setup();

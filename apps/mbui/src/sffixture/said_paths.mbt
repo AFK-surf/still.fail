@@ -1462,6 +1462,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "vaults.*.ownerName",
     "vaults.*.members.*.name",
     "vaults.*.stationName",
+    "vaults.*.waits",
     "requests.*.vaultName",
     "requests.*.itemName",
     "requests.*.reason",

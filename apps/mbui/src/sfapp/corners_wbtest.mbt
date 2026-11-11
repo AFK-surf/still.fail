@@ -65,7 +65,7 @@ let corner_modes : Array[String] = {
     "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
     "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
     "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
-    "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-words", "settings-vault-add",
+    "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-waits", "settings-vault-words", "settings-vault-add",
     "settings-vault-editor", "settings-vault-recover", "settings-lock-prompt", "settings-add-people",
     "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
     "settings-policy-option", "settings-security-join", "settings-security-off", "settings-stations-tasks", "place-stations-tasks", "settings-station-tasks", "settings-station-tasks-other", "settings-station-tasks-locked", "settings-stations-devices", "place-stations-devices", "settings-station-devices",

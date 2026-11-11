@@ -1310,6 +1310,7 @@ export const SHAPES: Record<string, Shape> = {
     ["message", opt("String"), { said: true }],
     ["retrying", opt("bool"), { doc: "Found offline and tried again just now (a person's 重试, or the device back): still taken for down\nuntil the try reaches it, its 重试 turning meanwhile." }],
     ["cause", opt("String"), { doc: "Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the\ncloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the\nworkspace's members, for a security mode: `message` says why) | updating (it went down while updating itself). Absent otherwise, and from a core\nbefore it." }],
+    ["old", opt("String"), { doc: "In error, answered that one side is too old (link.ts TooOld): station (this core finds it older than it talks\nto) | app (it finds this app, or page, older than it talks to). Absent otherwise, and from a core before it." }],
   ], { doc: "A station's mesh link: connecting | online | offline | error." }),
   StationState: struct([
     ["station", "String"],
@@ -1881,6 +1882,7 @@ export const SHAPES: Record<string, Shape> = {
     ["missing", "u32", { doc: "Members' devices set up since that hold no key yet (`vault.addDevice`, by its owner)." }],
     ["recoverable", "bool", { doc: "Its key is also sealed to its owner's recovery words." }],
     ["lasts", opt("String"), { doc: "The longest grant of its items that say none (`vault.setLasts`): `once`, `hour` or `chat`." }],
+    ["waits", opt("String"), { said: true, doc: "The name of the station it waits to be keyed anew on, while it does (a device or member holding its key was taken out of the lock; read meanwhile, changed by no one: views/vault.ts `waitingAs`); absent otherwise." }],
   ], { doc: "A vault the viewer is a member of." }),
   VaultRequest: struct([
     ["id", "String"],
