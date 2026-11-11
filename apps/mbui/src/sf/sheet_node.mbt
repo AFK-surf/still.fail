@@ -989,9 +989,13 @@ fn sheet_node(
                       b.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
                       b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
                         said(s)
-                        // (in from its sides as the host's sheet has a panel's: opened by a press as far in as a pick's
-                        // rows, else as its words)
-                        let room = if pressed {
+                        // (in from its sides as the host's sheet has a panel's: a form a share of the window tall laying
+                        // out its own sides, its words as far in as a sheet's, whatever opened it (sheet_old_body's
+                        // full_width); opened by a press as far in as a pick's rows, else as its words)
+                        let own_sides = x.tall > 0.0
+                        let room = if own_sides {
+                          full_width
+                        } else if pressed {
                           if footed { sheet_held_sides } else { sheet_held }
                         } else {
                           sheet_panel
@@ -1004,14 +1008,18 @@ fn sheet_node(
                           // (laid out as the host's sheet lays out a panel's body, sheet_step's: narrow; its words what a
                           // sheet's rows leave of its words' in one a press opened, its rows out to its words' in one opened
                           // by nothing)
-                          panel_in_lend(
-                            col,
-                            Narrow,
-                            if pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 },
-                            // (sheet_held's, sheet_panel's px)
-                            sides=if pressed { sheet_row_sides } else { sheet_panel_sides },
-                            rows_out=dmax(0.0, (if pressed { sheet_row_sides } else { sheet_panel_sides }) - panel_card_in),
-                          )
+                          if own_sides {
+                            panel_in_lend(col, Narrow, sheet_panel_sides, sides=0.0)
+                          } else {
+                            panel_in_lend(
+                              col,
+                              Narrow,
+                              if pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 },
+                              // (sheet_held's, sheet_panel's px)
+                              sides=if pressed { sheet_row_sides } else { sheet_panel_sides },
+                              rows_out=dmax(0.0, (if pressed { sheet_row_sides } else { sheet_panel_sides }) - panel_card_in),
+                            )
+                          }
                           match pg.nodes {
                             Some(n) => (n.body)(col, close)
                             None => ()

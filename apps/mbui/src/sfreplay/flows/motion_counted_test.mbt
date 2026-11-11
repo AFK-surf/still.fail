@@ -29,7 +29,6 @@ fn init {
     "src/sfreplay/flows/send_card_paced_test.mbt",
     "src/sfreplay/flows/send_paced_test.mbt",
     "src/sfreplay/flows/service_page_test.mbt",
-    "src/sfreplay/flows/settings_add_station_test.mbt",
     "src/sfreplay/flows/settings_connect_test.mbt",
     "src/sfreplay/flows/settings_decisions_test.mbt",
     "src/sfreplay/flows/settings_run_settings_test.mbt",
