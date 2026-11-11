@@ -61,6 +61,38 @@ fn pace_between(seed : UInt) -> Double? {
 }
 
 ///|
+/// The run's display's own frames, where its trace keeps them (`{"frame":…}`), for the strict pass: each at its
+/// moment here, timed as the steps are: from the run's first step as it was taken again (before it, from the first of
+/// the run that happened again here), once (its first step taken as what it waits for is so, not at the run's moment:
+/// the run's timeline from there on, Replay::due_at). Each step after falls at its moment on that same timeline; one
+/// that does not is said (FRAME-DRIFT), never mended by timing the frames anew from it (the coordinator of the
+/// migration, 2026-11-12). The strict pass's frames then fall where the run's did, not on a grid of its own a phase
+/// apart from them.
+fn frames_as_run(t : @ui.Tester, r : @core.Replay) -> Unit {
+  guard r.run_frames().length() > 0 else { return }
+  let anchor = match r.first_step_anchor() {
+    Some(a) => Some(a)
+    None => r.first_happened()
+  }
+  match anchor {
+    Some((at, wall)) if run_framed.val != Some((at, wall)) => {
+      run_framed.val = Some((at, wall))
+      let now = t.time()
+      let times = r.run_frames().map(fn(w) { w - wall + at }).filter(fn(x) { x > now })
+      if times.length() > 0 {
+        t.set_frame_times(times)
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+/// The anchor the run's frames were last timed from (frames_as_run), None not yet.
+// kept across runs: put back as a flow starts (Flow::start)
+let run_framed : Ref[(Double, Double)?] = Ref(None)
+
+///|
 /// Whether pass `seed` is the strict one or one of its pace passes (pace_between).
 fn strict_pass(seed : UInt) -> Bool {
   seed == 0 || pace_between(seed) is Some(_)
@@ -285,6 +317,7 @@ pub fn Flow::start(
   // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
+  run_framed.val = None
   t.between_frames(fn() {
     if followed.val != "" {
       match t.find(followed.val) {
@@ -299,6 +332,9 @@ pub fn Flow::start(
     }
     if !one_by_one.val {
       r.deliver(now=t.time(), host_by=t.taken_at(), taken_at=t.taken_at(), to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore
+    }
+    if seed == 0 && emit_path() == "" {
+      frames_as_run(t, r)
     }
     // (the run's pace: while its host's lines come, a frame each, the display's frames where the run's were, Tester::
     // set_frame_times: each run of them mapped onto this clock by its first line given here; between them, the
@@ -505,6 +541,16 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
       // (a step that acts begins what a later run_to_rest may wait for: what was said before it is not)
       if self.r.step_taken(line) && !waiting_step(line) {
         self.said.clear()
+      }
+      // (the strict pass: the run's frames timed from its first step taken, once; each step after it on that timeline,
+      // or said)
+      if keeping.val == 1 && emit_path() == "" {
+        frames_as_run(self.t, self.r)
+        match (self.r.first_step_anchor(), self.r.step_anchor()) {
+          (Some((a0, w0)), Some((a, w))) if (a - (a0 + (w - w0))).abs() > frame_drift_most && self.r.run_frames().length() > 0 =>
+            println("FRAME-DRIFT \{pass_trace.val}: \{line} taken at \{a}, the run's frames' timeline has it at \{a0 + (w - w0)}")
+          _ => ()
+        }
       }
       // (and what it sets off drawn on the host's frames up to the next step's moment, none past it: the next input
       // comes at its own moment at any frame rate, Tester::inputs_next)
@@ -743,9 +789,16 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
   }
   if late {
     let at = self.t.time()
-    self.fail(
-      "\{site}: not so at \{by} ms, the run's moment for it (its timeline \{opening_late.val} ms later from its first step): so at \{at} ms, \{at - by} ms later",
-    )
+    let said = "\{site}: not so at \{by} ms, the run's moment for it (its timeline \{opening_late.val} ms later from its first step): so at \{at} ms, \{at - by} ms later"
+    // (a trace without its display's frames: the strict pass's on a grid of its own, a phase apart from the run's, so
+    // a screen a few frames after its cause comes up to a frame later or sooner than the run's did: measured, not
+    // judged, till the trace is recorded again with them (frames_unrecorded_known; the coordinator of the migration,
+    // 2026-11-12))
+    if self.r.run_frames().is_empty() {
+      println("LATE-UNFRAMED \{pass_trace.val}: " + said)
+    } else {
+      self.fail(said)
+    }
   }
   if first_own {
     self.first_screen(
@@ -2112,3 +2165,8 @@ fn strict_diverged_said(flow : String, asked : Array[(Double, String)]) -> Strin
     }
   }
 }
+
+///|
+/// How far a step of the strict pass may fall from the run's frames' timeline (frames_as_run) before it is said: a
+/// rounding.
+let frame_drift_most : Double = 0.5

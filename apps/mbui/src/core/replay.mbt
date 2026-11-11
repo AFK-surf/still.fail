@@ -97,6 +97,9 @@ pub struct Replay {
   /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
   /// a word's bounds, a picture's sizes; one a line
   priv run_text : Array[String]
+  /// when the run's display began each frame, on the run's clock (`w` of its trace's `{"frame":T}` lines: src/stillfail's
+  /// CORETRACE frame); none in a trace recorded before they were kept
+  priv run_frames : Array[Double]
   /// this machine's station as the run's host said it (its trace's `{"host":{"localStation":…}}`: src/stillfail's CORETRACE host)
   priv run_local : String
   /// what the run's host gave its frames as the run began (its trace's first `{"settings":…}`: mbui's
@@ -204,6 +207,7 @@ pub fn Replay::parse(log : String) -> Replay {
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
+  let run_frames : Array[Double] = []
   let run_local : Ref[String] = Ref("")
   let run_settings : Ref[Json?] = Ref(None)
   for v in log.split("\n") {
@@ -255,6 +259,11 @@ pub fn Replay::parse(log : String) -> Replay {
           }
         } else if m.get("settings") is Some(Object(_)) && run_settings.val is None {
           run_settings.val = Some(j)
+        } else if m.get("frame") is Some(Number(_, ..)) {
+          match m.get("w") {
+            Some(Number(w, ..)) => run_frames.push(w)
+            _ => ()
+          }
         } else if m.get("textrec") is Some(rec) {
           run_text.push(rec.stringify())
         } else if m.contains("view") ||
@@ -356,6 +365,7 @@ pub fn Replay::parse(log : String) -> Replay {
     ambient_ids: {},
     run_env,
     run_text,
+    run_frames,
     run_local: run_local.val,
     run_settings: run_settings.val,
     stations_own: false,
@@ -1868,6 +1878,25 @@ pub fn Replay::step_anchor(self : Replay) -> (Double, Double)? {
     }
   }
   last
+}
+
+///|
+/// The run's first step taken again here that says its moment: when here and when in the run (what the run's frames
+/// are timed from in the strict pass). None before it.
+pub fn Replay::first_step_anchor(self : Replay) -> (Double, Double)? {
+  for e in self.evs {
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      return Some((e.at, e.wall))
+    }
+  }
+  None
+}
+
+///|
+/// When the run's display began each frame, on the run's clock (its `{"frame":…}` lines); empty: a trace recorded
+/// before they were kept, its display's frames not known.
+pub fn Replay::run_frames(self : Replay) -> Array[Double] {
+  self.run_frames
 }
 
 ///|

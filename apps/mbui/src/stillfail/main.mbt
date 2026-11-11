@@ -433,6 +433,9 @@ fn main {
     // frame begins and again where it changes: a replay's Tester is made by it, never by defaults (src/sfreplay:
     // Flow::start)
     @ui.trace_settings(fn(m) { @core.trace_note(m) })
+    // and each frame's moment as its host gave it (`{"frame":T}`, beside the core's clock `w` as it began): where the
+    // run's display drew, for a replay's strict pass to draw there (src/sfreplay), not on a grid of its own
+    @ui.trace_frames(fn(t) { @core.trace_note({ "frame": Json::number(t) }) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
     // went to the host (`"acted":true`), at the same clock: when the run took each step and when it acted, for a replay
     // to take it when the run did (src/core/replay.mbt: Replay::step_at)
