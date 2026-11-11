@@ -290,6 +290,9 @@ pub(all) struct Viewer {
   /// a tab's beside a chat (viewer_tab.mbt), not the one over the whole window: its stage starts under the tab's own
   /// tools, nothing of the window's bars over it
   beside : Bool
+  /// a film or a song played as its player opens (the whole window's always; a tab's only as the person opened it
+  /// beside just now: viewer_tab.mbt's tab_asked), else there paused until its play key
+  mut plays_now : Bool
 }
 
 ///|
@@ -844,8 +847,10 @@ pub fn preview_rest() -> Double {
 /// Opens `a` of the chat on `station` (kept by the session `key`) over everything; `steps`: what an image steps
 /// through; `named`: a file a message names by its path (`a.path`), not one sent with it. `beside`: asked beside the
 /// page (by default as the command key is held as it is pressed: beside_held; a menu's 在侧边打开, the preview's
-/// 移到侧边): a tab of the side panel where the shell has one for the page in view (Shell's `beside`), else over
-/// everything all the same.
+/// 移到侧边): a tab of the side panel where the shell has one for the page in view (Shell's `beside`; a film or a song
+/// played there at once), else over everything all the same. Over everything, what the tabs beside the page play is
+/// paused; `start`: where a film or a song starts there (ms; a tab's 全屏: where the tab's player was), else where it
+/// was left.
 pub fn open_preview(
   station : String,
   key : String,
@@ -855,13 +860,19 @@ pub fn open_preview(
   named? : Bool = false,
   at? : String = "",
   beside? : Bool = beside_held(),
+  start? : Double = -1.0,
 ) -> Unit {
-  if beside && opens_beside(a.path, a.name) && (shell.val.beside)(view_tab_key(station, key, a, drive, named)) {
+  if beside && opens_beside(a.path, a.name) && beside_open(view_tab_key(station, key, a, drive, named), 0.0) {
     return
   }
   close_now()
+  tab_players_pause()
   pv_strip.leaving = None
-  viewer.set(Some(new_viewer(station, key, a, drive, steps, named~, at~)))
+  let v = new_viewer(station, key, a, drive, steps, named~, at~)
+  if start > 0.0 {
+    v.start_at = start
+  }
+  viewer.set(Some(v))
 }
 
 ///|
@@ -970,6 +981,7 @@ pub fn new_viewer(
     hold_off: fn() {  },
     lift: @motion.Way::new(0.0),
     beside,
+    plays_now: !beside,
   }
   // (one named by its path read anew each time: it may have changed since)
   if !named {
@@ -1541,9 +1553,11 @@ pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
   match v.shown_kind() {
     // a film or a song: the one player (@sf.player_view), read through the core a part at a time (never the whole file
     // first, a seek far ahead one more ranged read), from the frame it was left at (the thumbnail's)
+    // (a tab's its own, by its viewer: its view and what its player's view holds not the whole window's, nor another
+    // tab's)
     Some(KVideo) | Some(KAudio) => {
       if v.media is None {
-        let m = @sf.new_media("preview-media")
+        let m = @sf.new_media(if v.beside { "preview-media/" + v.serial.to_string() } else { "preview-media" })
         let start = if v.start_at > 0.0 { v.start_at } else { 0.0 }
         v.start_at = -1.0
         m.open(
@@ -1597,6 +1611,7 @@ pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
             },
           },
           start~,
+          play=v.plays_now,
         )
         v.media = Some(m)
       }
@@ -2753,14 +2768,19 @@ pub fn Viewer::view(self : Viewer) -> @ui.NativeView? {
 /// A film or a song in the one player (@sf.player_view, as a drive's plays), back to where it was opened from, its
 /// 下载 the preview's. Where its picture is (edge to edge, as the player puts it) is worked out here too: what it flies
 /// to from its thumbnail and back into it from (its still flying, the player's picture not placed meanwhile), and where
-/// the chat's still of it shows until its first frame does.
+/// the chat's still of it shows until its first frame does. A tab's beside a chat embedded in the tab's stage
+/// (@sf.player_view's `embedded`: on the page's ground, its picture in the room over its controls as far in as a tab's
+/// picture is, tab_picture_margin), not flying, no keys.
 pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
   let m = match v.media {
     Some(m) => m
+    // (a tab's: nothing of its own till its player is made, no keys)
     None => {
-      tap_stage(c, v, stage)
-      v.shut_on_escape(c)
+      if !v.beside {
+        tap_stage(c, v, stage)
+        v.shut_on_escape(c)
+      }
       return
     }
   }
@@ -2773,7 +2793,7 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   let still = if v.shown_kind() == Some(KVideo) { v.still(src) } else { "" }
   let z = v.vzoom
   // (clear of the bar and the controls as the player fits it: player_room)
-  let (top, foot) = @sf.player_room(c.width)
+  let (top, foot) = @sf.player_room(c.width, embedded=v.beside)
   z.boxed(c.width, c.height - top - foot, at=c.moment())
   // (as big as its player says, else as sent, else as its still: Viewer::video_natural, what its flight goes to too)
   let (nw, nh) = v.video_natural(src)
@@ -2820,6 +2840,10 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     // (closed by its fade: its controls away at once, the page showing through as it goes; flown back into its
     // thumbnail they go with it as it shrinks, its ground whole till they are gone: bars_share)
     going=v.closing && !v.flies,
+    move_beside=if !v.beside && beside_offered(v.file.path, v.file.name) { Some(fn() { v.move_beside() }) } else { None },
+    // (a tab's: in its stage under the tab's tools, which have its name, 下载 and 全屏)
+    embedded=v.beside,
+    margin=if v.beside { tab_picture_margin } else { 0.0 },
   )
 }
 

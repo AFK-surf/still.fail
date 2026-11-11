@@ -49,8 +49,16 @@ pub let preview_coming : Ref[(String, Json?)?] = Ref(None)
 pub let preview_broken : Ref[String?] = Ref(None)
 
 ///|
-/// MBUI_FIXTURE=chat-preview-<what>: which file opens.
+/// MBUI_FIXTURE=chat-preview-<what>: which file opens. (chat-view-side-audio: the song kept beside the chat stands as
+/// chat-preview-audio's.)
 pub fn fixture_preview(mode : String) -> Unit {
+  if mode == "chat-view-side-audio" {
+    match @sfbase.tab_viewer("ws1/st1:s-c1", fixture_view_tab(mode)) {
+      Some(v) => v.pinned = Some(fixture_song_stands)
+      None => ()
+    }
+    return
+  }
   let which = match mode {
     "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-swipe-wide" | "chat-preview-coming" | "chat-preview-coming-part" | "chat-preview-broken" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
@@ -99,19 +107,8 @@ pub fn fixture_preview(mode : String) -> Unit {
         None => ()
       }
       if viewer.get() is Some(v) {
-        // the song paused at 0:31 of 1:35, the same on every run
         if which.has_suffix(".m4a") {
-          v.pinned = Some({
-            state: 1,
-            duration: 95000.0,
-            position: 31000.0,
-            buffered: 95000.0,
-            playing: false,
-            buffering: false,
-            ended: false,
-            width: 0.0,
-            height: 0.0,
-          })
+          v.pinned = Some(fixture_song_stands)
         }
         if mode == "chat-preview-webm-unsupported" {
           v.pinned = Some({
@@ -129,6 +126,21 @@ pub fn fixture_preview(mode : String) -> Unit {
       }
     }
   }
+}
+
+///|
+/// How the made-up song stands: paused at 0:31 of 1:35, the same on every run.
+// kept across runs: a value (no field of it changes)
+let fixture_song_stands : @kit.MediaStatus = {
+  state: 1,
+  duration: 95000.0,
+  position: 31000.0,
+  buffered: 95000.0,
+  playing: false,
+  buffering: false,
+  ended: false,
+  width: 0.0,
+  height: 0.0,
 }
 
 ///|
