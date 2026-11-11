@@ -30,6 +30,8 @@ export const work = {
   /// Rows a chat list made of its records (views.ts #chatRow): those something shows, each once while its record is as
   /// it was.
   rows: 0,
+  /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.
+  overviews: 0,
 };
 
 export type Work = typeof work;

@@ -2312,12 +2312,24 @@ export class Views implements Owner {
     let kept = this.#stationShown.get(station);
     if (kept) return kept;
     const overview: Topic = { topic: "overview", station };
+    // What is made of an overview record is kept with it (the same frozen object while the record is unchanged): `full`
+    // and `profile` take one decorated overview, and a computed read again after it was let go takes it again, while its
+    // words about time hold (present.ts `made`); whether it can be read, which no clock changes, for as long as the
+    // record is kept. Each made it anew: `stations` decorated every station's whole overview for that one boolean (12–13 ms
+    // of its 14–16 ms in Hermes for 5 stations of 150 KB each), `profiles` all of them again (11.7–13 ms of 19–20 ms),
+    // both again as a workspace was come back to a minute after it was left with no overview changed.
+    const shown = new WeakMap<object, present.Made<J>>();
+    const readable = new WeakMap<object, boolean>();
+    const decorate = (o: J, c: present.Clock): J => {
+      work.overviews++;
+      return asShaped("Overview", present.decorate(overview, structuredClone(o), c));
+    };
     const decorated = (read: () => J) => computed(() => {
       const o = read();
       if (o === undefined) return null;
       // (its times in words, by the minute)
-      const now = this.#core.host.nowMs();
-      return asShaped("Overview", present.decorate(overview, structuredClone(o), { now, offsetMin: this.#core.host.utcOffsetMin(now) }));
+      const c = this.#clock();
+      return isObject(o) ? present.taken(present.made(shown, o, c, () => decorate(o, c))) : decorate(o, c);
     });
     kept = {
       full: decorated(() => this.ok(overview)),
@@ -2338,7 +2350,18 @@ export class Views implements Owner {
       // Its overview is read and this core cannot read it (its page says so): a boolean, so that what reads it is made
       // again only as that changes (reactive.ts: a computed whose value is the same tells its readers nothing), not
       // with each quota or decision of a station it can read.
-      unreadable: computed(() => this.ok(overview) !== undefined && kept!.full.get() === null),
+      unreadable: computed(() => {
+        const o = this.ok(overview);
+        if (o === undefined) return false;
+        if (!isObject(o)) return kept!.full.get() === null;
+        let fits = readable.get(o);
+        if (fits === undefined) {
+          const c = untracked(() => this.#clock());
+          fits = present.made(shown, o, c, () => decorate(o, c)).value !== null;
+          readable.set(o, fits);
+        }
+        return !fits;
+      }),
       // Its machine's own logins offered for a profile, as its page has them (the same list while they are equal: the
       // profiles' page is not made again with each other change of its overview).
       offered: (() => {

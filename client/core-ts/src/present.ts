@@ -2,7 +2,7 @@
 // value through its shape (client/core-ts/src/shapes/schema.ts) as it goes out.
 import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
-import { t } from "./i18n.ts";
+import { current as language, t } from "./i18n.ts";
 import { authorNameOf } from "./entries.ts";
 import { STATION_PARTS, type Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
@@ -18,6 +18,7 @@ import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
 import * as clock from "./clock.ts";
+import { untracked } from "./reactive.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
 import { isStationAuthor } from "./titles.ts";
@@ -38,10 +39,73 @@ export function clockAt(c: Clock): void {
 
 const DAY_MS = 86_400_000;
 
+// The grains of the clock a making read, recorded as it reads them (`grainsOf`), so that what takes a value kept from
+// it reads them too (`taken`).
+const MINUTE = 1;
+const DAY = 2;
+let grains = 0;
+
+function byMinute(): void {
+  grains |= MINUTE;
+  clock.minute.get();
+}
+
+function byDay(): void {
+  grains |= DAY;
+  clock.day.get();
+}
+
+/// What `fn` gives, and the grains of the clock it read (`MINUTE`, `DAY`); what it read counts for a making around it too.
+export function grainsOf<T>(fn: () => T): { value: T; grains: number } {
+  const outer = grains;
+  grains = 0;
+  try {
+    const value = fn();
+    return { value, grains };
+  } finally {
+    grains |= outer;
+  }
+}
+
+/// A value made for a clock and kept with what it was made of (`made`): the minute, offset, language and product name
+/// its words hold for (`at`), and the grains of the clock its making read.
+export type Made<T> = { value: T; at: string; grains: number };
+
+/// What kept words hold for: the minute of the clock they were made for (the clock they were made with, not the
+/// `clock.minute` signal, which moves only as a value is put together or a ticking topic is shown, so lags now by a
+/// second at each minute and by hours while nothing is), its offset, and what they are said in.
+function holdsFor(c: Clock): string {
+  return `${Math.floor(c.now / 60_000)}/${c.offsetMin}/${language()}/${brand.name()}`;
+}
+
+/// What `make` makes of `of` for clock `c`, kept in `kept`: the one kept while it was made in the same minute (a value
+/// made again in that minute could differ only by what a decorator says of `c.now` within it, which a computed kept
+/// through the minute says as stale), else made again, untracked; reads nothing reactive. A station's whole overview
+/// decorated took 2.6 ms in Hermes, made again by every computed that read it, and again as one let go was read anew
+/// though its record had not changed (views.ts #stationShownOf). `taken` is what a computed takes of it.
+export function made<K extends object, T>(kept: WeakMap<K, Made<T>>, of: K, c: Clock, make: () => T): Made<T> {
+  const at = holdsFor(c);
+  const was = kept.get(of);
+  if (was !== undefined && was.at === at) return was;
+  const m = untracked(() => grainsOf(make));
+  const next = { value: m.value, at, grains: m.grains };
+  kept.set(of, next);
+  return next;
+}
+
+/// A kept value as the computed taking it has it: reading the grains of the clock its making read, so that it is made
+/// again as its words change, as though it had made the value itself.
+export function taken<T>(m: Made<T>): T {
+  if (m.grains & MINUTE) byMinute();
+  if (m.grains & DAY) byDay();
+  return m.value;
+}
+
 /// A moment in words (Stamp).
 export function stamp(ms: number, c: Clock): Record<string, unknown> {
   // (a day or more past, its words are its day's: 昨天 18:12, 11月3日 18:12; nearer, or to come, the minute's)
-  (c.now - ms >= DAY_MS ? clock.day : clock.minute).get();
+  if (c.now - ms >= DAY_MS) byDay();
+  else byMinute();
   return {
     past: ms <= c.now,
     at: ms,
@@ -61,7 +125,7 @@ export function leftLevel(used: number): [number, string] {
 }
 
 function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
-  clock.minute.get();
+  byMinute();
   const out = list.map((w) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
@@ -170,7 +234,7 @@ export function times(value: unknown, c: Clock): unknown {
     }
   }
   if ("windows" in map && "state" in map) {
-    clock.minute.get();
+    byMinute();
     const credits = map.credits;
     if (isObject(credits)) {
       const text =

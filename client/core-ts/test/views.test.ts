@@ -13,9 +13,9 @@ import { EVICT_AFTER_MS } from "../src/store.ts";
 import { attention, choices, models, runnableOn } from "../src/views/models.ts";
 import { answeredAt, betaOffered, blockedUnder, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
-import { work } from "../src/work.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
+import { work, workSince } from "../src/work.ts";
 import { hostOf, link, overview, prefs, rows, sessions, setup, sorted, threads, ui, workspace, type Ui } from "./views-rig.ts";
 
 holdLanguage();
@@ -1556,6 +1556,67 @@ test("a_station_whose_overview_this_core_cannot_read_says_so_in_its_row_as_on_it
   const again = (list.value as J[]).find((s) => s.station === "ws/a");
   assert.deepEqual(again.problems, []);
   assert.deepEqual(Object.keys(again.overview).sort(), ["counts", "disk", "drive", "viewer"]);
+});
+
+test("a_stations_overview_is_decorated_once_for_its_record_by_the_list_and_the_profiles_and_not_again_as_the_list_is_asked_anew", async () => {
+  // The list decorated every station's whole overview for whether it can be read, the profiles all of them again, and
+  // the list all of them again as it was asked a minute after it was let go (12–13 ms of its 14–16 ms in Hermes, 5
+  // stations of 150 KB each).
+  const t = setup({ all: true });
+  const [list, profiles, again] = [ui(), ui(), ui()];
+  const from = { ...work };
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  await allUp(t);
+  await t.read(list, 1);
+  assert.equal(workSince(from).overviews, 3, "the list: each station's overview once");
+  t.subscribe(2, { topic: "profiles", scope: "ws" });
+  await t.read(profiles, 2);
+  assert.equal(profiles.value.items.length, 3);
+  assert.equal(workSince(from).overviews, 3, "the profiles take what the list made");
+  t.store.unsubscribe(1, 1);
+  t.store.unsubscribe(1, 2);
+  await t.host.time.pass((EVICT_AFTER_MS * 5) / 4, 1000);
+  assert.ok(!t.store.liveTopics().some((topic) => topic.topic === "stations" || topic.topic === "profiles"), "both let go");
+  const before = { ...work };
+  t.subscribe(3, { topic: "stations", scope: "ws" });
+  await t.read(again, 3);
+  assert.equal(workSince(before).overviews, 0, "asked again, no overview changed: none");
+  assert.deepEqual(again.value, list.value);
+});
+
+test("a_stations_words_about_time_follow_the_minute_watched_or_asked_anew", async () => {
+  const t = setup({ all: true });
+  t.store.setClock();
+  const now = t.host.nowMs();
+  // (its allowance read 30 s before: 刚刚, then so many minutes ago)
+  const read = { ...busyOverview(20, false), profiles: [profile("p", { quota: { state: "ok", windows: [{ label: "5h", usedPercent: 20, resetsAt: now + 86_400_000 }], checkedAt: now - 30_000 } })] };
+  t.set(workspace(), { id: "ws", stations: [{ id: "a", name: "alpha", last_seen: null, version: null }] });
+  t.set(link("ws/a"), { state: "online" });
+  t.set(overview("ws/a"), read);
+  const ago = () => format.relativeTime(now - 30_000, t.host.nowMs(), 0);
+  const [page, profiles] = [ui(), ui()];
+  t.subscribe(1, { topic: "station", scope: "ws", station: "ws/a" });
+  t.subscribe(2, { topic: "profiles", scope: "ws" });
+  const said = async () => {
+    await t.readAll([[page, 1], [profiles, 2]]);
+    return [page.value.overview.profiles[0].quota.time.checkedAt.ago, profiles.value.items[0].profile.quota.time.checkedAt.ago];
+  };
+  assert.deepEqual(await said(), [ago(), ago()]);
+  assert.equal(ago(), words("core-logic.format.ago.now"));
+  // Watched: made again as the minute passes.
+  await t.host.time.pass(150_000, 1000);
+  assert.equal(ago(), words("core-logic.format.ago.minutes", { n: 3 }));
+  assert.deepEqual(await said(), [ago(), ago()], "watched, minutes on");
+  // Let go, then asked anew minutes later with its record unchanged: what was kept for it is not taken.
+  t.store.unsubscribe(1, 1);
+  t.store.unsubscribe(1, 2);
+  await t.host.time.pass((EVICT_AFTER_MS * 5) / 4, 1000);
+  const [page2, profiles2] = [ui(), ui()];
+  t.subscribe(3, { topic: "station", scope: "ws", station: "ws/a" });
+  t.subscribe(4, { topic: "profiles", scope: "ws" });
+  await t.readAll([[page2, 3], [profiles2, 4]]);
+  assert.notEqual(ago(), words("core-logic.format.ago.minutes", { n: 3 }));
+  assert.deepEqual([page2.value.overview.profiles[0].quota.time.checkedAt.ago, profiles2.value.items[0].profile.quota.time.checkedAt.ago], [ago(), ago()], "asked anew, minutes later");
 });
 
 test("a_part_of_a_stations_overview_is_its_pages_and_changes_only_with_it", async () => {
