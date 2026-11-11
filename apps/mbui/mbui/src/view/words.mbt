@@ -760,7 +760,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
     if n.points != on {
       n.points = on
       self.tree.inputs_own_said(self.at)
-      self.tree.hits = self.tree.hits + 1
+      self.tree.hits_bump()
       self.tree.marked()
     }
   }

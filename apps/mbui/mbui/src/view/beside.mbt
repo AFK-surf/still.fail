@@ -224,7 +224,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
       self.places_rev = self.places_rev + 1
-      self.hits = self.hits + 1
+      self.hits_bump()
     }
   }
 
@@ -250,7 +250,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
             self.work.composed = self.work.composed + 1
             self.composed.push({ at, gen: n.gen })
             self.places_rev = self.places_rev + 1
-            self.hits = self.hits + 1
+            self.hits_bump()
           }
         None => ()
       }
@@ -354,7 +354,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
       self.places_rev = self.places_rev + 1
-      self.hits = self.hits + 1
+      self.hits_bump()
     }
     state[at] = 2
     true
@@ -387,7 +387,7 @@ fn Tree::beside_widened(self : Tree, at : Int, w : Double) -> Unit {
   // (another size: what follows sizes told, and what is pointed at worked out again by its new box, as after any
   // layout)
   self.sizes_due = true
-  self.hits = self.hits + 1
+  self.hits_bump()
 }
 
 ///|

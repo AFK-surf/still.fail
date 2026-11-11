@@ -310,6 +310,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
       view_drawn_by(root.tree)
       // (what a node says moves, from the first it makes: View::said_moving)
       root.tree.on_moves(view_moves)
+      // (what a still pointer is over worked out again where a change or a way's end may have moved it: Tree::on_hand)
+      root.tree.on_hand(fn(at) { view_hand_at(root.tree, at) })
       make(root)
       // (its words shaped as the theme it is drawn in says (its digits all one width or not: the app's, set_tree_theme,
       // else the window's for its width): as that changes, every word measured and drawn again so at the change's
@@ -4802,11 +4804,12 @@ fn view_old_pointed(at : (Double, Double)?) -> Unit {
 let view_point_seen : Ref[(Int, Bool, Int)] = Ref((-1, false, -1))
 
 ///|
-/// As a frame begins, the tree laid out as it has it (view_frame): what a still pointer is over, where what a point hits
-/// may have changed since it was last told (a node moved under it, one taking presses no more, a layer opened over it;
-/// what the old frame puts over all of it, by what it last drew, as the old views' own pointing is), before anything of
-/// the frame is built or drawn: what reads it built and drawn so this frame. Nothing looked at where none of it changed;
-/// what decides where a node takes it (View::takes) is followed by the tree itself (Tree::point_at).
+/// As a frame begins, the tree laid out as it has it (view_frame): what a still pointer is over where the old frame's
+/// layer over it changed or what it yields (by what it last drew, as the old views' own pointing is), before anything of
+/// the frame is built or drawn. What of the tree's a point hits is not looked at again here: the hand is worked out at
+/// an input (view_pointed), in a change and at the end of a way that may move something under it, at their moments
+/// (view_hand_at), never on a frame as something goes; what decides where a node takes it (View::takes) is followed by
+/// the tree itself (Tree::point_at).
 fn view_pointed_again() -> Unit {
   let tree = match view_app.val {
     Some(t) => t
@@ -4822,7 +4825,8 @@ fn view_pointed_again() -> Unit {
         view_point_tell(tree)
       }
     Some((x, y)) => {
-      if view_point_seen.val != (tree.hits_said(), old_layer_over(x, y), yields_said.val) {
+      let (_, over, yields) = view_point_seen.val
+      if (over, yields) != (old_layer_over(x, y), yields_said.val) {
         view_point_tell(tree)
       }
     }
@@ -6144,4 +6148,26 @@ fn view_scroll_key(c : Ctx, code : Int) -> Bool {
     return false
   }
   tree.ask_action(action, view_moment(), from=focus_node_of(c.focus))
+}
+
+///|
+/// What a still pointer is over worked out again at `at` (Tree::on_hand: a change's moment, or a way's end that may have
+/// moved something under it), where what a point hits changed since it was last told: as an event of that moment, what
+/// it tells told so. A finger points at nothing. The hand is found at an input (view_pointed), here, and nowhere else:
+/// a drag is inputs, each found once; a wheel's notches each one; the glide after a fling is let go a way, found at its
+/// end, not on the frames it goes by.
+fn view_hand_at(tree : @view.Tree, at : Double) -> Unit {
+  if pointing() is Finger {
+    return
+  }
+  match view_point.val {
+    Some(_) if view_point_seen.val.0 != tree.hits_said() => {
+      // (laid out as of then where the tree stands at or before it: a change told between frames, what it made placed)
+      if at >= tree.brought_at() {
+        tree.bring_to(at)
+      }
+      tree.event(at, fn() { view_point_tell(tree) })
+    }
+    _ => ()
+  }
 }

@@ -175,6 +175,8 @@ pub fn Way::shown_on(self : Way, n : @view.View) -> Double {
   if t == @double.infinity {
     self.target()
   } else {
+    // (what it moves, if under a still pointer, worked out again as it ends, not as it goes)
+    n.hand_at_end(self.end())
     self.value_at(t)
   }
 }

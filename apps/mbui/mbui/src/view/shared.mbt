@@ -631,7 +631,7 @@ fn Tree::lift_marked(self : Tree, at : Int) -> Unit {
   self.look_marked_at(at)
   self.composed.push({ at, gen: n.gen })
   self.places_rev = self.places_rev + 1
-  self.hits = self.hits + 1
+  self.hits_bump()
 }
 
 ///|
@@ -673,7 +673,7 @@ fn Tree::flying_of(self : Tree, at : Int) -> Flying? {
 fn Tree::lifted_order(self : Tree) -> Unit {
   self.order_whole = true
   self.order_due = true
-  self.hits = self.hits + 1
+  self.hits_bump()
   self.draws_rev = self.draws_rev + 1
   self.draws_any_rev = self.draws_any_rev + 1
   self.marked()

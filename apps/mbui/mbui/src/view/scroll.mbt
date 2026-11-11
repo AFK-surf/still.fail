@@ -201,7 +201,7 @@ fn Scroll::rest_now(self : Scroll) -> Double? {
       }
     // (a page's list's notches easing in and what shows past an end going back, each its own: at rest as the later is)
     None => {
-      let eased = self.notch.get().map(fn(n) { n.t0 + ease_end(n.total, n.v0) })
+      let eased = self.notch.get().map(fn(n) { n.t0 + n.end })
       let back = match self.past.get() {
         Some({ back: Some(p), .. }) => Some(p.rest)
         _ => None
@@ -283,7 +283,8 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
       }
     None =>
       match self.notch.get() {
-        Some(n) => dclamp(n.x0 + ease_come(n.total, n.v0, t - n.t0), 0.0, most)
+        Some(n) =>
+          dclamp(n.x0 + (if t - n.t0 >= n.end { n.total } else { ease_come(n.total, n.v0, t - n.t0) }), 0.0, most)
         None => dclamp(self.x.get(), 0.0, most)
       }
   }
@@ -557,17 +558,7 @@ fn Scroll::offset_said(self : Scroll) -> Unit {
 /// words each set on a pixel as they came). Read as it is drawn, found or read out at a moment (Node's scroll_off),
 /// nothing followed.
 fn Scroll::held_dy(self : Scroll, tree : Tree, at : Int, t : Double) -> Double {
-  let d = -self.where_at(t) + self.past_moved(t)
-  let n = tree.nodes[at]
-  if tree.rows_grid > 0.0 && n.list_rows {
-    let y = n.flex.top + off_y(n)
-    tree.rows_placed(at, y + d) - tree.rows_placed(at, y)
-  } else if tree.pixel_grid > 0.0 {
-    let g = tree.pixel_grid
-    (d * g).round() / g
-  } else {
-    d
-  }
+  self.drawn_off(tree, at, self.where_at(t), self.past_moved(t))
 }
 
 ///|
@@ -624,6 +615,7 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
   // (what hosts the tree told it glides, which column it is and how to ask it when it ends now: Tree::on_glides)
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
   // (at rest at its end, said on the timeline: then nothing reads the time for it)
+  v.tree.hand_at_end(end_t)
   self.settle_off = v.at_moment(end_t, fn() {
     self.settle_off = fn() {  }
     // (scrolled till its end: told so while it still counts as under way, its bar's showing from there)
@@ -699,6 +691,7 @@ fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Doub
   self.scrolled_at(t)
   // (what hosts the tree told it goes on by itself, till when as it is asked: Tree::on_glides)
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
+  v.tree.hand_at_end(end_t)
   self.settle_off = v.at_moment(end_t, fn() {
     self.settle_off = fn() {  }
     self.scrolled_at(end_t)
