@@ -1715,11 +1715,14 @@ fn Ctx::view_picture(self : Ctx, c : @view.Content, x : Double, y : Double, s : 
         _ => ()
       }
     }
-    // (covering it where it says so, as an old view's picture does: View::image_covers; contained where it says so,
+    // (covering it where it says so, as an old view's picture does: View::image_covers, from a side said along its
+    // height View::image_covers_at; contained where it says so,
     // View::image_contains; fading in where it says so,
     // View::image_fades; a GIF that moves going through its frames, each woken for, as an old view's: moving_key)
     None => {
-      let fit = if c.image_cover {
+      let fit = if c.image_cover_at is Some(along) {
+        FitCoverAt(along)
+      } else if c.image_cover {
         FitCover
       } else if c.image_contain {
         FitContain

@@ -85,6 +85,9 @@ pub(all) struct Look {
   /// its picture contained in it, all of it shown as wide for as tall as it is, in its middle (View::image_contains);
   /// else filling it (covering it said, covering it)
   mut image_contain : Bool
+  /// its picture covering it from a side said along its height (0 its top, 1 its foot): cut where it is not as wide
+  /// for as tall, as much of it as shows taken from there (View::image_covers_at); None as image_cover says
+  mut image_cover_at : Double?
   /// its picture fading in as it is decoded (View::image_fades); else there at once
   mut image_fade : Bool
   /// where in it its picture lies (x, y, w, h, in its own terms) and the matte filling the rest of it, drawn with the
@@ -168,6 +171,8 @@ pub(all) struct Content {
   image_cover : Bool
   /// its picture contained in it, not stretched to it (View::image_contains)
   image_contain : Bool
+  /// its picture covering it from a side along its height (View::image_covers_at)
+  image_cover_at : Double?
   /// its picture fading in as it is decoded (View::image_fades)
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
@@ -263,6 +268,8 @@ pub(all) struct Drawn {
   image_cover : Bool
   /// its picture contained in it, not stretched to it (View::image_contains)
   image_contain : Bool
+  /// its picture covering it from a side along its height (View::image_covers_at)
+  image_cover_at : Double?
   /// its picture fading in as it is decoded (View::image_fades)
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
@@ -1377,6 +1384,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.look.image_for = (0.0, 0.0)
       n.look.image_cover = false
       n.look.image_contain = false
+      n.look.image_cover_at = None
       n.look.image_fade = false
       n.look.image_in = None
       n.look.glass = None
@@ -1532,7 +1540,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         words_as_said,
@@ -2893,6 +2901,7 @@ priv enum Prop {
   ImageFor
   ImageCover
   ImageContain
+  ImageCoverAt
   ImageFade
   ImageIn
   Corners
@@ -2986,6 +2995,7 @@ fn Prop::ord(self : Prop) -> Int {
     ImageContain => 75
     ImageFade => 76
     ImageIn => 77
+    ImageCoverAt => 85
     Corners => 78
     Bones => 79
     BoneWhole => 80
@@ -3810,6 +3820,17 @@ pub fn View::image(self : View, image : Live[(String, String, Int)?], loc~ : Sou
 #callsite(autofill(loc))
 pub fn View::image_covers(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
   self.bind(loc~, ImageCover, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_cover = on })
+  self
+}
+
+///|
+/// Its picture (View::image) covering it as it changes, cut where it is not as wide for as tall, as much of it as shows
+/// taken from `at` along its height (0: its top, as a long screenshot is shown from its start; 1: its foot; 0.5: its
+/// middle, as covering it is) and across it from its middle (an old view's FitCoverAt): what the box shows of it, its
+/// box the picture drawn; None, as View::image_covers says. Said, it covers it whatever else is said. Paint's.
+#callsite(autofill(loc))
+pub fn View::image_covers_at(self : View, at : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, ImageCoverAt, at, Paint, fn(at) { self.tree.nodes[self.at].look.image_cover_at = at })
   self
 }
 
@@ -9314,6 +9335,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     image_for: n.look.image_for,
     image_cover: n.look.image_cover,
     image_contain: n.look.image_contain,
+    image_cover_at: n.look.image_cover_at,
     image_fade: n.look.image_fade,
     image_in: n.look.image_in,
     glass: n.look.glass,
@@ -10074,6 +10096,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     image_for: c.image_for,
     image_cover: c.image_cover,
     image_contain: c.image_contain,
+    image_cover_at: c.image_cover_at,
     image_fade: c.image_fade,
     image_in: c.image_in,
     glass: c.glass,
