@@ -8,6 +8,7 @@ import { chatHistory, chatLeave, chatPost, chatState, mayStage, fromSandbox, sta
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
+import { chatArchive } from "../sessions/chat-archive.ts";
 import type { Args } from "../sessions/args.ts";
 import { chatList, chatRead, elsewhere, readAfar, scopeOf, sessionHistory } from "../sessions/others.ts";
 import { suggestArchive } from "../sessions/review.ts";
@@ -415,6 +416,19 @@ export const CHAT_CREATE = {
   },
 };
 
+export const CHAT_ARCHIVE = {
+  name: "chat_archive",
+  description: "Archive another still.fail chat on this station or another station of your workspace. As when a person archives it in the app, its own session goes with it: its running turn can finish, and its jobs and services stop. The chat and its messages remain, but its workspace files may later be cleaned up. Use the chat's link, or its address or session key on this station. Calling again on an already manually archived chat leaves it as it was.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      chat: { type: "string", description: "Another chat's link, or its thread address or session key on this station; chat_list finds them." },
+    },
+    required: ["chat"],
+    additionalProperties: false,
+  },
+};
+
 export const SESSION_HISTORY = {
   name: "session_history",
   description:
@@ -507,6 +521,7 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args, undefined, scopeOf(hub, key)) },
     { ...SESSION_SEND, run: (key, args) => withStaged(hub, key, args, false, (a) => sessionSend(hub, key, a)) },
     { ...CHAT_CREATE, run: (key, args) => withStaged(hub, key, args, false, (a) => chatCreate(hub, key, a)) },
+    { ...CHAT_ARCHIVE, run: (key, args) => chatArchive(hub, key, args) },
     { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args, scopeOf(hub, key)) },
   ];
 }
