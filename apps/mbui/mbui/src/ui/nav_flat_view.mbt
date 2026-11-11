@@ -113,7 +113,7 @@ pub fn[P] nav_flat_view(
       if nav.mode == 3 {
         c.page_in_hand = true
       }
-      let r = nav.ends_at(c.frame_no)
+      let r = nav.rested_at(c.frame_no)
       if r > c.nav_rest {
         c.nav_rest = r
       }

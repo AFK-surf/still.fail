@@ -283,7 +283,27 @@ test "nav_rest: a test runs to the end of the stacks' slides, holding none of th
   assert_eq(@ui.nav_rest(), tapped + page_ms)
   t.run_for(@ui.nav_rest() - t.time())
   t.assert_idle()
-  assert_eq(@ui.nav_rest(), -1.0)
+  // (over: its end as it was, not "nothing moves", so a test asking after the frames passed it runs to now)
+  assert_eq(@ui.nav_rest(), tapped + page_ms)
+  t.run_for(page_ms)
+  assert_eq(@ui.nav_rest(), tapped + page_ms)
+}
+
+///|
+test "nav_rest: the same end whether the frames drawn on the slide's way passed it or not (a display's 7 a second)" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.draw()
+  t.set_frame_period(seven_a_second)
+  let tapped = t.time()
+  t.tap_text("open 1")
+  let end = @ui.nav_rest()
+  assert_true(end > tapped && end < 1.0e300, msg="\{end} at \{tapped}")
+  // (the display's next frames: the first after the end well past it)
+  t.run_for(end - t.time() + seven_a_second)
+  assert_true(t.time() > end)
+  t.assert_idle()
+  assert_eq(@ui.nav_rest(), end)
 }
 
 ///|
@@ -769,3 +789,7 @@ test "nav_flat, its owner keeping a stay: one on top again since (come back to: 
   t.draw()
   assert_true(t.find("title 2") is Some(_) && t.find("title 0") is None)
 }
+
+///|
+/// A display's frame period at 7 frames a second (ms): frames far apart, one well past a slide's end.
+let seven_a_second : Double = 1000.0 / 7.0

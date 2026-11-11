@@ -570,6 +570,8 @@ struct Node {
   /// when that move is over at the size it is laid out, where it holds what is leaving that holds it till then
   /// (View::moved_by's `holds_leaving`)
   mut moved_holds : ((Double, Double) -> Double)?
+  /// when that move is over at a size (View::moved_by's `ends`), for View::moved_end
+  mut moved_ends : ((Double, Double) -> Double)?
   /// what it draws, as last made
   mut content : Content?
   /// leaving (View::going): since when it goes as from its start (-1: not leaving), how long all of it takes; coming
@@ -1380,6 +1382,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.moved_by = None
       n.moved = (0.0, 0.0)
       n.moved_holds = None
+      n.moved_ends = None
       n.went = None
       n.parent = parent
       n.allow_ellipsis = false
@@ -1609,6 +1612,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         moved_by: None,
         moved: (0.0, 0.0),
         moved_holds: None,
+        moved_ends: None,
         content: None,
         left_at: -1.0,
         span: 0.0,
@@ -3301,6 +3305,50 @@ pub fn View::laid_size(self : View) -> (Double, Double) {
 }
 
 ///|
+/// When the move it is drawn by (View::moved_by) is over, its `ends` at the size it is laid out as of the logic's
+/// moment (as laid_size): the move's own end, said by its data at that size, not by the frame last drawn; -1 where none
+/// is said. Read only by what a test asks of when a part stops (@sf.presented_rest), never by what runs. It lays the
+/// tree out as of that moment first, so it is asked between frames and handlers, never as the tree lets go of what it
+/// made (an `owns`' undoing, a layer let go): there `laid=false` reads it as it was last laid out, nothing laid out anew.
+pub fn View::moved_end(self : View, laid? : Bool = true) -> Double {
+  guard self.live() is Some(n) else { return -1.0 }
+  guard n.moved_ends is Some(ends) else { return -1.0 }
+  if laid {
+    self.tree.measured_now()
+  }
+  ends(n.flex.width, n.flex.height)
+}
+
+///|
+/// The latest of the ends the ways in and out of this node and of all it holds said as each was said (View::comes:
+/// `come_ends`, in each way's own data, nothing measured or seen drawn), laid out as of the logic's moment as laid_size
+/// is; -1 where none of it ever made its way. Read only by what a test asks of when a part stops (@sf.presented_rest, a
+/// sheet's rest: a way in of what it holds grows it as surely as its own motion does), never by what runs. It lays the
+/// tree out as of that moment first, so it is asked between frames and handlers, never as the tree lets go of what it
+/// made (an `owns`' undoing, a layer let go): there `laid=false` reads the ways as they were last laid out.
+pub fn View::comes_end(self : View, laid? : Bool = true) -> Double {
+  guard self.live() is Some(_) else { return -1.0 }
+  if laid {
+    self.tree.measured_now()
+  }
+  self.tree.comes_end_in(self.at)
+}
+
+///|
+fn Tree::comes_end_in(self : Tree, at : Int) -> Double {
+  let n = self.nodes[at]
+  let e = n.flex.style.come_ends
+  let mut end = if e == e { e } else { -1.0 }
+  for k in n.kids {
+    let r = self.comes_end_in(k)
+    if r > end {
+      end = r
+    }
+  }
+  end
+}
+
+///|
 /// The window's size, as its frames give it (0 by 0 before the first), followed: what is made by it (which frame its
 /// width calls for) made again as it changes.
 pub fn View::window(self : View) -> (Double, Double) {
@@ -3797,6 +3845,7 @@ pub fn View::moved_by(
   n.moved_by = Some(f)
   // (what is leaving that holds it kept till its move is over, its end said: Tree::leave_ends)
   n.moved_holds = if holds_leaving { Some(ends) } else { None }
+  n.moved_ends = Some(ends)
   if holds_leaving && !self.tree.leave_holders.contains(self.id()) {
     self.tree.leave_holders.push(self.id())
   }

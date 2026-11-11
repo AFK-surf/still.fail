@@ -751,6 +751,9 @@ test "sheet_rest: a test runs to when a sheet is at rest, opened or closed, by t
   assert_true(up > t.time())
   t.run_for(up - t.time())
   t.assert_idle()
+  // (over: its end as it said it, whichever frames came after)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(sheet_rest("info"), up)
   // there, its button where the sheet's top puts it
   assert_true(t.get(@ui.Role::Button, label="OK").rect.1 >= 844.0 - 300.0)
   open.val = false
@@ -759,6 +762,7 @@ test "sheet_rest: a test runs to when a sheet is at rest, opened or closed, by t
   t.run_for(down - t.time())
   t.assert_idle()
   assert_false(shown.val)
+  assert_eq(sheet_rest("info"), down)
   assert_eq(sheet_rest("nothing of that name"), -1.0)
 }
 

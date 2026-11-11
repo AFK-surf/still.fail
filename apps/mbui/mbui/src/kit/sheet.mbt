@@ -374,15 +374,16 @@ let sheet_measured : String = "kit-sheet"
 
 ///|
 /// When sheet `key` (the key it is built by, the last built by it) is at rest: its height's and its sinking's springs
-/// and its scrim's fade all there (the frames' clock; -1: it is not moving; +inf: told to move, not started yet).
-/// What a test runs to once it opened or closed one.
+/// and its scrim's fade all there (the frames' clock; +inf: told to move, not started yet), each over its end as it
+/// said it, whichever frames were drawn on its way; -1: none of it has moved. What a test runs to once it opened or
+/// closed one.
 pub fn sheet_rest(key : String) -> Double {
   match kit.val.sheet_keys.get(key) {
     Some(id) =>
       match kit.val.sheets.get(id) {
         Some(s) => {
           let mut e = -1.0
-          for r in [s.h.end(), s.below.end(), s.lag.end(), s.fade.ends_at()] {
+          for r in [s.h.end(), s.below.end(), s.lag.end(), fade_rest(s.fade)] {
             if r > e {
               e = r
             }
@@ -392,6 +393,22 @@ pub fn sheet_rest(key : String) -> Double {
         None => -1.0
       }
     None => -1.0
+  }
+}
+
+///|
+/// When a sheet's scrim's fade is there (Anim::ends_at), or the last one was, its start and its length as it said them
+/// (Anim::ends); -1: none told.
+fn fade_rest(a : @motion.Anim) -> Double {
+  let r = a.ends_at()
+  if r >= 0.0 {
+    return r
+  }
+  let e = a.ends()
+  if e < @double.infinity {
+    e
+  } else {
+    -1.0
   }
 }
 
