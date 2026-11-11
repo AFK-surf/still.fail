@@ -124,6 +124,7 @@ pub fn Client::said(Self, String) -> Unit
 pub fn Client::stream(Self, String, params? : @json.Json, bytes? : Bytes?, on_value~ : (@json.Json, Bytes?) -> Unit, on_done? : (Result[@json.Json, @json.Json]) -> Unit) -> Int32
 pub fn Client::stream_bytes(Self, String, params? : @json.Json, on_value~ : (@json.Json, Bytes?) -> Unit, on_done~ : (Result[(@json.Json, Bytes?), @json.Json]) -> Unit) -> Int32
 pub fn Client::subscribe(Self, String, params? : Map[String, @json.Json]) -> Sub
+pub fn Client::tells_before(Self, (String, @json.Json) -> Array[(String, @json.Json)]) -> Unit
 pub fn Client::time_topics(Self, ((Int32, String, @json.Json?, Bool) -> Unit)?) -> Unit
 pub fn Client::topic_generation(Self, String, params? : Map[String, @json.Json]) -> (Int32, Bool)
 pub fn Client::topic_said(Self, Map[String, @json.Json]) -> Bool

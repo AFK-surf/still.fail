@@ -381,6 +381,8 @@ fn main {
   // what the places open on, and the last few chats, are kept by the core's client as they are let go of, asked again
   // with their version
   @core.client.keep(@sfbase.topic_kept)
+  // (a chat list's first window told the core before the list is asked, each time it is)
+  @core.client.tells_before(@sfbase.chats_told_before)
   // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
   @ui.set_vector_pictures(draw_svg)
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its

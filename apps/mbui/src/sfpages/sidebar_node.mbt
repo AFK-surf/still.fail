@@ -235,6 +235,12 @@ fn chats_pane_node(
   }
   // (how many more the core has, read anew only as its list changes, not each time the column is scrolled)
   let more = @signals.computed(fn(_) { @sfbase.chats_more(src, id, filter) })
+  // (a window made taller: the list told the first window of it, where it holds fewer and the core has more; it never
+  // shrinks)
+  let held_rows = @signals.computed(fn(_) { @sfbase.chats_held(read().0) })
+  v.reacts(fn() { (v.window().1, more.get(), held_rows.get()) }, fn(at) {
+    @sfbase.chats_window_for(src, id, filter, at.0, at.2, at.1)
+  })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   // (a chat's row in line `line`, its key as it is now (`key`: "r/" and its name, another's as the row is taken for
   // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list)
@@ -270,9 +276,12 @@ fn chats_pane_node(
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },
-    // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
-    near_foot=(1.5, fn() { more.get() > 0 }, fn() {
-      @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
+    // scrolled to within a screen of its foot while the core has more of its rows: its window a step more, the rows
+    // added coming into the list it holds. A screen, not a screen and a half: its first window is what its room shows
+    // and a screen more (sfbase's first_window), its foot a screen and a little below at rest, which a screen and a
+    // half would have grown the moment it opened
+    near_foot=(1.0, fn() { more.get() > 0 }, fn() {
+      @sfbase.chats_grow(src, id, filter, @signals.untracked(fn() { held_rows.get() }), @signals.untracked(fn() { more.get() }))
     }),
     fn(b, k) {
     b.box(fn(line) {

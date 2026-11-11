@@ -696,6 +696,7 @@ pub(all) struct Fixture {
   tabs_shown : Map[String, Json]
   sidebars : Map[String, Json]
   mut share_look : String
+  windows : Map[String, Int]
 }
 pub fn Fixture::changed(Self) -> Unit
 pub fn Fixture::changes(Self) -> Int32

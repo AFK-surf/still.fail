@@ -1201,87 +1201,81 @@ test "a phone's Home: the bell opens 待处理, 全部已读 reads the unread an
 }
 
 ///|
-test "Home asks the core for a page of its chats, and a page more while it has more and is shown near their end" {
-  // (the whole list of 1400 chats went to the app as it opened, a screen of them shown: 2026-11-08)
-  new_run()
+/// A made-up core whose chats' list of ws1 says it has 10 more rows than it gives, till it is told a window past those it
+/// gives: what it is told of the list's window (`chats.window`'s rows) and what of it is let go of put in `told`, `left`.
+fn more_source(told : Array[Int], left : Array[String]) -> Source {
   let base = fixture("home")
-  let limits : Array[Int] = []
-  let left : Array[Int] = []
-  let src : Source = {
+  let windowed = @signals.signal(false)
+  {
     ..base,
     topic_read: fn(name, params) {
       let t = base.topic(name, params).get().snapshot()
-      guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
-      let limit = n.to_int()
-      if !limits.contains(limit) {
-        limits.push(limit)
-      }
-      // more past the first page; none past the second
+      guard name == "chats" && !windowed.get() else { return t }
       match t.value {
-        Some(Object(v)) if limit == @sfbase.chats_page => {
+        Some(Object(v)) => {
           let more = v.copy()
           more["more"] = Json::number(10.0)
           { ..t, value: Some(Json::object(more)) }
         }
         _ => t
       }
+    },
+    call: fn(name, params, done) {
+      if name == "chats.window" {
+        match field(Some(params), "rows") {
+          Some(Number(n, ..)) => told.push(n.to_int())
+          _ => ()
+        }
+        windowed.set(true)
+      }
+      (base.call)(name, params, done)
     },
     leave: fn(name, params, reason) {
       if name == "chats" {
-        match params.get("limit") {
-          Some(Number(n, ..)) => left.push(n.to_int())
-          _ => ()
-        }
+        left.push(Json::object(params).stringify())
       }
       (base.leave)(name, params, reason)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.move_most_ms)
-  // its few rows end within the screen: the page after asked for at once, the first let go of; none after it
-  assert_eq(limits, [@sfbase.chats_page, 2 * @sfbase.chats_page])
-  assert_eq(left, [@sfbase.chats_page])
 }
 
 ///|
-test "Home's rows stay while a page more of them is on its way, not its skeleton" {
-  // (the list went to its skeleton for the core's round trip each time a page more was asked: 2026-11-08)
+test "Home's list near its end while the core has more is told a window past what it holds, once, its list let go of never" {
+  // (the whole list of 1400 chats went to the app as it opened, a screen of them shown: 2026-11-08; a page more was
+  // another topic, the list whole again: 2026-11-11)
   new_run()
-  let base = fixture("home")
-  let answered = @signals.signal(false)
-  let left : Array[Int] = []
-  let src : Source = {
-    ..base,
-    topic_read: fn(name, params) {
-      let t = base.topic(name, params).get().snapshot()
-      guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
-      match t.value {
-        Some(Object(v)) if n.to_int() == @sfbase.chats_page => {
-          let more = v.copy()
-          more["more"] = Json::number(10.0)
-          { ..t, value: Some(Json::object(more)) }
-        }
-        Some(_) if !answered.get() => { ..t, value: None }
-        _ => t
-      }
-    },
-    leave: fn(name, params, reason) {
-      if name == "chats" && params.get("limit") is Some(Number(n, ..)) {
-        left.push(n.to_int())
-      }
-      (base.leave)(name, params, reason)
-    },
-  }
+  let told : Array[Int] = []
+  let left : Array[String] = []
+  let src = more_source(told, left)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfbase.chats_limit("ws1", "all"), 2 * @sfbase.chats_page)
-  assert_true(t.find("整理发布清单") is Some(_))
+  let shown = @signals.untracked(fn() {
+    match chats_of(src, "ws1", "all").0 {
+      Some(v) => v.days.fold(init=0, fn(n, d) { n + d.items.length() })
+      None => 0
+    }
+  })
+  // its few rows end within the screen: more asked for at once (a step past them, or the screen's first window, whichever
+  // came first: one), none after it
+  assert_eq(told.length(), 1)
+  assert_true(told[0] >= shown + @sfbase.window_step(844.0) || told[0] == @sfbase.first_window(844.0))
+  assert_true(told[0] > shown)
   assert_eq(left, [])
-  // the page more come: shown, the first let go of
-  answered.set(true)
+}
+
+///|
+test "Home's rows stay while its window grows, not its skeleton" {
+  // (the list went to its skeleton for the core's round trip each time a page more was asked: 2026-11-08)
+  new_run()
+  let told : Array[Int] = []
+  let left : Array[String] = []
+  let src = more_source(told, left)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
+  assert_eq(told.length(), 1)
   assert_true(t.find("整理发布清单") is Some(_))
-  assert_eq(left, [@sfbase.chats_page])
+  assert_eq(t.bones_drawn(), 0)
+  assert_eq(left, [])
 }
 
 ///|

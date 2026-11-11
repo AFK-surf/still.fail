@@ -142,7 +142,7 @@ pub fn chat_kept_from(Source, ChatRef) -> ChatView?
 
 pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
 
-pub fn chat_limits_reset() -> Unit
+pub fn chat_windows_reset() -> Unit
 
 pub fn chat_link(String, String) -> String
 
@@ -180,21 +180,23 @@ pub fn chat_whole_held(Source, ChatRef) -> TopicState
 
 pub fn chats_all_opens(Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool
 
-pub fn chats_ask_more(Source, String, String, Int) -> Unit
-
 pub fn chats_asked(String, String) -> Map[String, @json.Json]
 
-pub fn chats_limit(String, String) -> Int
+pub fn chats_grow(Source, String, String, Int, Int) -> Unit
+
+pub fn chats_held(ChatsView?) -> Int
 
 pub fn chats_more(Source, String, String) -> Int
 
 pub fn chats_of(Source, String, String) -> (ChatsView?, String?)
 
-pub let chats_page : Int
+pub fn chats_told_before(String, @json.Json) -> Array[(String, @json.Json)]
 
 pub fn chats_topic(Source, String) -> Topic
 
 pub fn chats_view_made(@json.Json) -> ChatsView
+
+pub fn chats_window_for(Source, String, String, Double, Int, Int) -> Unit
 
 pub fn choices_of(@json.Json?, String) -> Array[Choice]?
 
@@ -521,6 +523,8 @@ pub fn file_seed(String, String, Bytes) -> String
 pub fn file_serve(FilePage, @ui.SiteRequest, @ui.SiteReply) -> Unit
 
 pub fn file_type(String) -> String
+
+pub fn first_window(Double) -> Int
 
 pub fn file_viewer_reset() -> Unit
 
@@ -1960,6 +1964,10 @@ pub fn window_page(String) -> Page?
 pub fn window_text(Page) -> String?
 
 pub let window_zoom_levels : Array[(String, Double)]
+
+pub let window_tall : Ref[Double]
+
+pub fn window_step(Double) -> Int
 
 pub fn wire_topic_key(String, Map[String, @json.Json]) -> String
 

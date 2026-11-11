@@ -827,8 +827,8 @@ pub fn reset() -> Unit {
   keepings.clear()
   // what was worked out of the core's topics (derived.mbt)
   kept_reset()
-  // how many of each chats' list are asked (rows.mbt)
-  chat_limits_reset()
+  // how many rows each chats' list was told to grow to, the window's height they are worked out of (rows.mbt)
+  chat_windows_reset()
   open_titled.val = ""
   shown_days.clear()
   held_from.clear()

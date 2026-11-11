@@ -137,6 +137,8 @@ pub struct Client {
   /// one let go of came after the new one's first value): a version is made of the value alone, and what is kept is
   /// only ever taken where the core says the topic's value is that version, so it is never taken for another.
   priv kept : Map[String, (Json, String, String)]
+  /// What the core is told before a topic is asked (its name, its JSON as asked), each time it is (Client::tells_before)
+  priv mut tells : (String, Json) -> Array[(String, Json)]
 }
 
 ///|
@@ -179,7 +181,18 @@ pub fn Client::new(
     unheld_counts: {},
     keeps: fn(_, _) { 0 },
     kept: {},
+    tells: fn(_, _) { [] },
   }
+}
+
+///|
+/// What the core is told before a topic is asked (`f` of its name and its JSON as asked: calls, each its name and its
+/// params, none read the answer of), each time it is asked: as it is first read, asked anew (Client::refresh_topic), and
+/// of a core started again (Client::restarted), which knows nothing of what the one before was told. A chat list's
+/// window (`chats.window`: how many of its rows go out, no part of its topic) goes so before the list. Said once, as
+/// the app starts.
+pub fn Client::tells_before(self : Client, f : (String, Json) -> Array[(String, Json)]) -> Unit {
+  self.tells = f
 }
 
 ///|
@@ -419,6 +432,9 @@ pub fn Client::topic_generation(self : Client, topic : String, params? : Map[Str
 
 ///|
 fn Client::ask(self : Client, s : Sub) -> Unit {
+  for told in (self.tells)(topic_name(s.topic), s.topic) {
+    self.call(told.0, params=told.1) |> ignore
+  }
   self.end_sub_wait(s.id)
   self.sub_waits[s.id] = (self.start_wait)("core: \{s.key}")
   perf_out("sub " + topic_name(s.topic))
