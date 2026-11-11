@@ -32,8 +32,29 @@ fn Node::lit_ground(self : Node) -> Bool {
   self.opacity > 0.01 &&
   self.fw > 0.0 &&
   self.fh > 0.0 &&
-  (self.state_ground || (!self.pressed_row() && self.id != 0 && self.hit && self.radius >= 0.5))
+  (
+    self.state_ground ||
+    (self.ground_shown & corners_lit_rest.val) != 0 ||
+    (!self.pressed_row() && self.id != 0 && self.hit && self.radius >= 0.5)
+  )
 }
+
+///|
+// kept across runs: TEMPORARY (a run that only prints, not to merge): set only while Ctx::corner_faults asks the
+// rule again, a kind of ground the window's tree shows in a state not now held as seen at rest, put back as it ends
+let corners_lit_rest : Ref[Int] = Ref(0)
+
+///|
+/// TEMPORARY: a ground seen under the hand (Node's ground_shown).
+let corner_shown_hand : Int = 1
+
+///|
+/// TEMPORARY: a ground seen with the keyboard's focus.
+let corner_shown_focus : Int = 2
+
+///|
+/// TEMPORARY: a ground bound, reading neither, of one said to be chosen or not (seen as it is chosen).
+let corner_shown_chosen : Int = 4
 
 ///|
 /// Whether node `n` is a row pressed as a whole (a press target wider than tall: a list's row, a menu's), whose ground
@@ -332,6 +353,17 @@ fn[T] Ctx::with_tree_nodes(
       Some(links) => n.links = @signals.untracked(links)
       None => ()
     }
+    n.ground_shown = {
+      let read = tree.ground_read(d.id)
+      let shown = (if (read & @view.ground_read_hand) != 0 { corner_shown_hand } else { 0 }) |
+        (if (read & @view.ground_read_focus) != 0 { corner_shown_focus } else { 0 })
+      // (bound, reading neither, said to be chosen or not: seen as it is chosen)
+      if shown == 0 && (read & @view.ground_read_bound) != 0 && tree.says_chosen(d.id) {
+        corner_shown_chosen
+      } else {
+        shown
+      }
+    }
     n.glass = d.glass
     n.clip = d.clips
     n.opacity = d.alpha
@@ -504,7 +536,47 @@ pub fn Tester::corner_pairs(self : Tester) -> Array[String] {
 
 ///|
 /// Where the frame just built breaks the corner rule (Tester::corner_faults; a scripted run's `corners`).
+/// TEMPORARY (a run that only prints, not to merge): asked again with a ground the window's tree shows in a state it
+/// is not in now (under the hand, with the focus, chosen: Node's ground_shown) held as seen at rest, each kind apart,
+/// each difference printed (CORNERS-DIFF), the rule as it is returned.
 fn Ctx::corner_faults(self : Ctx) -> Array[String] {
+  let was = self.corner_faults_found()
+  let mut any = 0
+  for i in 0..<self.count {
+    any = any | self.nodes[i].ground_shown
+  }
+  if any == 0 {
+    return was
+  }
+  let (w, h) = (self.window_w, self.window_h)
+  // (the pairs a test asks for, Tester::corner_pairs: of the rule as it is alone)
+  let pairs = corner_pairs_out.val
+  corner_pairs_out.val = None
+  for kind in [(corner_shown_hand, "lit"), (corner_shown_focus, "focus"), (corner_shown_chosen, "chosen")] {
+    if (any & kind.0) == 0 {
+      continue
+    }
+    corners_lit_rest.val = kind.0
+    let shown = self.corner_faults_found()
+    corners_lit_rest.val = 0
+    for f in shown {
+      if !was.contains(f) {
+        println("CORNERS-DIFF \{w}x\{h} \{kind.1}-only: \{f}")
+      }
+    }
+    for f in was {
+      if !shown.contains(f) {
+        println("CORNERS-DIFF \{w}x\{h} rest-only (\{kind.1}): \{f}")
+      }
+    }
+  }
+  corner_pairs_out.val = pairs
+  was
+}
+
+///|
+/// Where the frame just built breaks the corner rule (Ctx::corner_faults).
+fn Ctx::corner_faults_found(self : Ctx) -> Array[String] {
   let c = self
   // the corners said `Inner` that could not be worked out (corners_after_layout), first
   let out : Array[String] = c.inner_faults.copy()
