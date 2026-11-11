@@ -310,7 +310,11 @@ for t in $targets; do
           # as they are, 20; the first's, 200: its pages' 755 s beside them were 154-276 s. By page-seconds.txt's times
           # at 60 written again from those five runs (the fourth's 941 s of pages there, its job 248 s, the second's 560
           # and 145): each runner's pages some 160 s on its programs)
-          60) specs="4,4,200,1 4,4,20,1 1,4,600,1 8,8,0,1" ;;
+          # (the first's other runs reckoned 200 there was wrong: dealt so its job was 261 s, main 0430f0a7
+          # 43118127081, the packages' programs 242 s, its 81 pages' files 237 (462 s of them by the table), preview_tree's
+          # halves 180 and 125, so some 500 s of its cores beside its pages, as it was reckoned before; the second's
+          # job was 115 s, the third's 140, the fourth's two 127 and 180. 520 again: its pages 279 s by the table)
+          60) specs="4,4,520,1 4,4,20,1 1,4,600,1 8,8,0,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           120) specs="4,4,500,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
