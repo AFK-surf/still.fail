@@ -5,6 +5,6 @@
 ///|
 fn init {
   @ui.gaps_steady_known([
-    ("src/sf/presenters_wbtest.mbt", 5),
+    ("src/sf/presenters_wbtest.mbt", 1),
   ])
 }

@@ -18,12 +18,11 @@ fn init {
     ("src/sfapp/quote_image_wbtest.mbt", 5),
     // (sent with a quote: the agent's row over it opens 82→91 and closes to 87 as the sent one comes; the quote over
     // its first line closes 40→18 and opens to 20)
-    ("src/sfapp/send_hold_wbtest.mbt", 2),
+    ("src/sfapp/send_hold_wbtest.mbt", 1),
     // (the agent's row over words sent opens 81→102 and closes to 98: the user's 「距离能突变三次」, back with #5231 taken
     // out by #5256 till the list's motion is made again)
     ("src/sfapp/send_steady_wbtest.mbt", 1),
     ("src/sfapp/station_peek_wbtest.mbt", 1),
-    ("src/sfapp/vault_cards_wbtest.mbt", 1),
     ("src/sfapp/wide_wbtest.mbt", 2),
   ])
 }
