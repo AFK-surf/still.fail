@@ -173,6 +173,8 @@ pub fn find_at() -> Int32
 
 pub fn find_bar(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Double, FindList) -> Unit
 
+pub fn find_bar_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> Double?, FindList, @sf.TipLayer) -> @view.View
+
 pub fn find_chat() -> String
 
 pub fn find_close() -> Unit
