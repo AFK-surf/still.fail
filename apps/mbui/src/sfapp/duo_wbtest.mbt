@@ -1348,3 +1348,30 @@ test "a new chat where the stations lend their files, no system's bars: its 文�
   assert_true(said_at(t, @sf.t("web-pages.chat.files")) is Some(_))
   assert_false(t.nav_said().contains("page/new/files"))
 }
+
+///|
+test "an iPhone Duo upright: a picture waiting in the composer, rounder than a card at the screen's foot, keeps a block's corners, standing in concentric with it" {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=669.0, h=951.0, platform=1, window_corner=59.0, nav_able=true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  // (the composer's corner concentric with the screen's: rounder than a card's)
+  let corner = @sf.composer_corner()
+  assert_true(corner > @sf.card_corner, msg="\{corner}")
+  // (each frame held to the corner rule: before, the picture stood 8 in as round as 31, a circle)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
+  t.run_for(@ui.move_most_ms)
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
+  let clips = t.drawn_image_clips()
+  let shown = t.drawn_instances().filter(fn(a) { a[5] == 4.0 }).mapi(fn(k, a) { (a, clips[k]) }).filter(fn(p) {
+    t.image_src(p.0[20].to_int()) == picture
+  })
+  assert_true(shown.length() > 0, msg="the picture waiting was not drawn")
+  for p in shown {
+    let (_, (r0, r1, r2, r3)) = p.1
+    assert_eq([r0, r1, r2, r3], [@sf.row_corner, @sf.row_corner, @sf.row_corner, @sf.row_corner])
+  }
+}
