@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
+import { Lock, asked, baseOf, deviceText, fold, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -72,6 +72,11 @@ export const PAIR_DIAL_MS = PAIR_REDIAL_MS;
 export const PAIR_DIAL_TRIES = 6;
 /// How long the new device waits for a trusted device it reached to say whether it shows a code.
 const PAIR_ANSWER_MS = 30_000;
+/// How long the new device waits for a workspace's lock to name it, once a trusted device that had its confirmation
+/// ended without a word and the lock read then did not name it: the trusted device signs within lock.ts ASKED_MS of the
+/// confirmation, then brings the entry to the cloud. What it costs: a line that went before the trusted device had the
+/// confirmation is said gone that much later.
+export const PAIR_SIGNED_MS = 10_000;
 /// Who signs member credentials, and what kind they are (station/src/cloud/provider.ts STILLFAIL `credential`).
 const ISSUERS = ["stillfail-cloud"];
 const TYPES = ["stillfail-member+jwt"];
@@ -362,11 +367,14 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const body: J = { id: a.device, sub: p.sub, kind: a.kind, label: a.label };
       if (a.kind === "app" && a.signKey !== null) body.sign_key = a.signKey;
       if (a.kind === "web") body.exp = Math.floor(inner.host.nowMs() / 1000) + WEB_DEVICE_SECS;
-      const lock = new Lock(inner, p.ws, p.account, null, { byHand: true });
+      // (what it waits on of the workspace's stations ends with lock.ts ASKED_MS, the read after it too: the person who
+      // typed the code waits on it; 2026-11-12, the workspace's one station asleep, 45 s)
+      const within = asked(inner);
+      const lock = new Lock(inner, p.ws, p.account, null, { byHand: true, within });
       const signed = yield* Effect.result(Effect.andThen(p.joins === true ? lock.admit(p.sub, a.email) : Effect.void, lock.append("device", body)));
       if (signed._tag === "Success") done.push(p.ws);
       else failed.push({ ws: p.ws, error: signed.failure.message });
-      yield* Effect.ignore(read(inner, p.ws), { log: "Unhandled", message: "pairing workspace read" });
+      yield* within.wait(Effect.ignore(read(inner, p.ws), { log: "Unhandled", message: "pairing workspace read" }));
     }
     return { t: "approved", workspaces: done, failed };
   });
@@ -428,15 +436,18 @@ function hide(inner: Inner, device: string): void {
 // ── the new device ──
 
 /// A trusted device that showed a code, and the workspaces it approves this one in; `until`, when its code is too old
-/// (ms, as this device saw it come).
-export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number };
+/// (ms, as this device saw it come); `confirmed`: the code's confirmation went to it (only then may it have signed this
+/// device in).
+export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number; confirmed?: boolean };
 /// This device's try: how far it got, the trusted devices showing a code.
 /// `lost`: a trusted device that showed a code ended since, others still showing theirs (the code typed may be its).
 /// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
 /// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
 /// `searching`: other devices or newer locks are still being sought; `lastEnds`: why the last codes went away then.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
+/// `lockMoved`: told a workspace's lock moved while looking; `lockSigned`, while waiting for the lock to name this
+/// device after a code was proved (`prove`).
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockSigned?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -806,12 +817,36 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     // signed it in all the same, its answer lost on the way back (its line gone, its app put away as it answered;
     // 2026-11-04 a phone signed a web page in and the page said the code was wrong). The lock as the cloud keeps it says.
     if (approved === null && ends.length > 0) {
-      const now = Math.floor(inner.host.nowMs() / 1000);
-      const inNow: string[] = [];
-      for (const ws of y.workspaces.filter((w) => !isPerson(w))) {
-        yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
-        if (live(fold(held(inner, ws)?.entries ?? []).devices.get(base), now) !== undefined) inNow.push(ws);
+      const places = y.workspaces.filter((w) => !isPerson(w));
+      const signedIn = () => {
+        const now = Math.floor(inner.host.nowMs() / 1000);
+        return places.filter((ws) => live(fold(held(inner, ws)?.entries ?? []).devices.get(base), now) !== undefined);
+      };
+      // Not named, though a trusted device that had the confirmation went without a word: it signs after the
+      // confirmation (a read, the signature, the cloud's POST), and the read here can come first (2026-11-12: signed
+      // in, the new device said its code had failed). Then the lock is waited for to move and name this device, as it
+      // is told to have moved (lock.ts `hold`), not read again; PAIR_SIGNED_MS at most. Listened for from before the
+      // read, so that a move while it reads is not missed. One that ended before the confirmation, or with a word,
+      // signed nothing to wait for.
+      const unheard = places.length > 0 && results.some(([m, r]) => m.confirmed === true && r._tag === "Failure" && r.failure.code === "pair_gone");
+      const named = Deferred.makeUnsafe<string[]>();
+      if (unheard) {
+        y.lockSigned = (ws) => {
+          if (!places.includes(ws)) return;
+          const now = signedIn();
+          if (now.length > 0) Deferred.doneUnsafe(named, Effect.succeed(now));
+        };
       }
+      const inNow = yield* Effect.ensuring(
+        Effect.gen(function* () {
+          for (const ws of places) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+          const now = signedIn();
+          if (now.length > 0 || !unheard) return now;
+          const got = yield* Effect.timeoutOption(Deferred.await(named), PAIR_SIGNED_MS); // timer: a deadline
+          return got._tag === "Some" ? got.value : now;
+        }),
+        Effect.sync(() => { if (unheard) delete y.lockSigned; }),
+      );
       if (inNow.length > 0) approved = { t: "approved", workspaces: inNow, failed: [] };
     }
     if (approved !== null) {
@@ -889,6 +924,7 @@ export function tryOne(inner: Inner, m: Met, base: string, code: string): Effect
     const keys = pakeKeys(p, unhex(str(r.y) ?? ""), "new");
     if (keys !== null && sameMac(keys.theirs, unhex(str(r.mac) ?? ""))) {
       yield* m.d.send({ t: "confirm", mac: hex(keys.mine) });
+      m.confirmed = true;
       const a = yield* m.d.next();
       if (isObject(a) && a.t === "approved") return arr(a.workspaces).length > 0 ? { approved: a } : yield* Effect.fail(unsigned(a));
       return yield* Effect.fail(ended(a));
@@ -957,7 +993,11 @@ export function install(_inner: Inner): void {
   pairs.mine = mine;
   pairs.deny = deny;
   pairs.hide = hide;
-  pairs.moved = (inner, ws) => tryings.get(inner)?.lockMoved?.(ws);
+  pairs.moved = (inner, ws) => {
+    const y = tryings.get(inner);
+    y?.lockMoved?.(ws);
+    y?.lockSigned?.(ws);
+  };
   pairs.reading = (inner, ws) => tryings.get(inner)?.lockReading?.(ws);
   pairs.run = (inner, name, _ws, params) => {
     if (name === "pair") return begin(inner);
