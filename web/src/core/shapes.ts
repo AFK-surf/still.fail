@@ -749,7 +749,11 @@ export interface QuotaReset {
 	id?: string;
 	/** session | weekly | full | model (what one model used of the week) | credit (a provider's own, saying nothing more) */
 	kind: string;
+	/** The model a `model` reset gives back to, as its station names it. */
+	model?: string;
 	left: number;
+	/** When each of them ends, in milliseconds: what `text` says in words. */
+	expiries?: number[];
 	/** One can be used now; else only once at a limit it refills. */
 	usable: boolean;
 	title: string;

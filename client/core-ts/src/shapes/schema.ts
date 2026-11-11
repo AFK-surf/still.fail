@@ -685,7 +685,9 @@ export const SHAPES: Record<string, Shape> = {
   QuotaReset: struct([
     ["id", opt("String"), { doc: "What `profile.resetQuota` is asked for as `reset`; none: any of the account's." }],
     ["kind", "String", { doc: "session | weekly | full | model (what one model used of the week) | credit (a provider's own, saying nothing more)" }],
+    ["model", opt("String"), { doc: "The model a `model` reset gives back to, as its station names it." }],
     ["left", "u64", { client: "I54" }],
+    ["expiries", opt(vec("i64")), { client: opt(vec("I54")), doc: "When each of them ends, in milliseconds: what `text` says in words." }],
     ["usable", "bool", { doc: "One can be used now; else only once at a limit it refills." }],
     ["title", "String"],
     ["leftText", "String", { doc: "How many are left, in words, shown on their own." }],
