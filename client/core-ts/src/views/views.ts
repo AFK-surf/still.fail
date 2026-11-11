@@ -875,9 +875,11 @@ export class Views implements Owner {
 
   start(view: Topic): void {
     // A chat's first value waits for what it is made of alone: what only keeps it current as it shows (the chats its
-    // messages link to, as their stations' lists have them) is watched once that value has gone out (`opened`), and
-    // its sources are not worked out again as it is first made. Both were 2.3-5.5 ms in Hermes before a chat switched
-    // to could go out (a Mac Studio, 2026-11-12: its links' stations found in all its messages).
+    // messages link to, as their stations' lists have them) is watched once that value has gone out (`opened`). Found
+    // in all its messages as it started and again as it was made, that was 2.3-5.5 ms in Hermes before a chat switched
+    // to could go out (a Mac Studio, 2026-11-12). What it is made of is still worked out each time it is made, as
+    // before: a chat asked by its session, or one whose thread the device has not got yet, learns its thread and its
+    // agents after it started, and has no value to go out till they are watched.
     const opening = view.topic === "chat";
     this.#views.set(topicKey(view), { topic: view, watches: new Map(), opening });
     this.#sync(view);
@@ -1483,7 +1485,7 @@ export class Views implements Owner {
   compute(view: Topic): Value | undefined {
     const live = this.#views.get(topicKey(view));
     if (live === undefined) return undefined;
-    if (!live.opening) timed(`${view.topic}.sources`, () => untracked(() => this.#sync(view)));
+    timed(`${view.topic}.sources`, () => untracked(() => this.#sync(view)));
     const out = timed(`${view.topic}.make`, () => this.#compute(view));
     if (view.topic !== "chat" || out === undefined || !("ok" in out)) return out;
     const v = out.ok as J;
