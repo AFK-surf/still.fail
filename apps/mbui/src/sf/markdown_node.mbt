@@ -9,8 +9,12 @@
 /// `text` as Markdown in `parent` (markdown's): `tree`, its reading where it is told one (a message's `md`: nothing
 /// asked of the core); `size` its words', as it changes (0: the theme's body), on lines `line` times it high;
 /// `ink` (0: the theme's text); `document`: its headings a document's; `bleed`: how far past its column either side its
-/// tables scroll; `copy`: its tables offer to be copied; `paths`: the files its paths name are a session's (chips);
-/// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held; `chat_title`, what a bare
+/// tables scroll; `copy`: its tables offer to be copied; `fit_tables`: each table shown whole in the column, as much
+/// smaller as makes it fit, rather than part of it left to scroll to (a chat's shared picture: markdown's); `paths`: the files its paths name are a session's (chips);
+/// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held; `on_link_shown`, each
+/// paragraph's links as they are (its words' node, each link's way, its words and its first run: what shows over one
+/// while it is pointed at, @ui.runs_links' `shown`); `one_line`: its first block's words alone, on one line as wide as
+/// they are, cut with an ellipsis where the column is narrower (markdown's: a notice closed); `chat_title`, what a bare
 /// link to a chat reads as; `code`, a fenced block of a language drawn another way (what draws it, its code as it
 /// changes); `files`, the files it names by their names, drawn where it names them (a paragraph of only a link to one,
 /// or its images); `screens`, its links to screens: a paragraph of only one its card, one bare in a sentence its title.
@@ -26,10 +30,13 @@ pub fn markdown_node(
   document? : Bool = false,
   bleed? : Double = 0.0,
   copy? : Bool = true,
+  fit_tables? : Bool = false,
   paths? : Bool = false,
   found? : () -> Array[String] = fn() { [] },
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
+  on_link_shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
+  one_line? : Bool = false,
   chat_title? : (String) -> String? = fn(_) { None },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   files? : (String) -> PlacedNode? = fn(_) { None },
@@ -64,17 +71,24 @@ pub fn markdown_node(
       document,
       bleed,
       copy,
+      fit: fit_tables,
       paths,
       found,
       on_link,
       on_link_hold,
+      on_link_shown,
       chat_title,
       code,
       files,
       screens,
     }
     let blocks = fn() { md_node_blocks(text(), tree()) }
-    md_blocks_node(col, md, blocks, false)
+    if one_line {
+      // (its first block's words on one line, cut short: markdown's one_line)
+      md_words_node(col, md, fn() { first_words(blocks()) }, md.size, 0, wrap=false, cut=true)
+    } else {
+      md_blocks_node(col, md, blocks, false)
+    }
   })
 }
 
@@ -87,10 +101,13 @@ priv struct MdNode {
   document : Bool
   bleed : Double
   copy : Bool
+  /// its tables shown whole in the column (markdown_node's `fit_tables`)
+  fit : Bool
   paths : Bool
   found : () -> Array[String]
   on_link : (String) -> Unit
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
+  on_link_shown : ((@view.View, Array[(String, String, Int)]) -> Unit)?
   chat_title : (String) -> String?
   code : (String) -> ((@view.View, () -> String) -> Unit)?
   files : (String) -> PlacedNode?
@@ -426,6 +443,7 @@ fn md_block_node(
           md.copy,
           md.on_link,
           md.on_link_hold,
+          fit=md.fit,
         )
       })
       |> ignore
@@ -540,6 +558,7 @@ fn md_words_node(
   size : () -> Double,
   weight : Int,
   wrap? : Bool = true,
+  cut? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   let runs = fn() {
@@ -574,7 +593,12 @@ fn md_words_node(
   }
   p.box(made_for=loc, fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
-    @ui.runs_links(w, runs, md.on_link, hold?=md.on_link_hold) |> ignore
+    // (on one line as wide as they are, cut short with an ellipsis where the column is narrower: one_line's)
+    if cut {
+      w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
+    }
+    @ui.runs_links(w, runs, md.on_link, hold?=md.on_link_hold, shown?=md.on_link_shown.map(fn(f) { fn(links) { f(w, links) } }))
+    |> ignore
   })
   |> ignore
 }
