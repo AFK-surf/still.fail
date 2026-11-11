@@ -130,10 +130,13 @@ yet and you can add one, add it.
   package still lists as it starts (`@ui.motion_counted`, `src/ui/tester.mbt`) and judge every other file, so one
   mended to none stays so and a new one starts judged. No exemption mends one: the `*_known` bars only fall, and a
   file leaves `motion_counted` once it shows none; one is never added to it. A bar's key is the file its Testers are made in (one
-  made in another file's helper is that file's): those runs say each bar and what was found under its file
-  (`MOTION bar`, `known`, `made`, `counted`, `held`), `scripts/motion_bars.sh` sets them side by side in the job's
-  summary, a bar more than what is found to fall and a counted file showing none to leave the list (for now said, not
-  failed: the coordinator of the migration, 2026-11-12).
+  made in another file's helper is that file's), and it holds how many one Tester may show: those runs, and the
+  default rate's in CI (`MBUI_TEST_BARS`), say each bar and each fault a Tester found with how many it has come to,
+  judged or counted (`MOTION bar`, `known`, `made`, `unjudged`, `counted`, `held`), and `scripts/motion_bars.sh` sets
+  each bar beside the most one Tester of its file found at any of the three, in the summary of a job after them: a bar
+  more than that to fall, a counted file showing none at 60 and 120 to leave the list, a file with a Tester not judged
+  on how what moves goes (`Tester::motion_unjudged`) left out (for now said, not failed: the coordinator of the
+  migration, 2026-11-12).
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set

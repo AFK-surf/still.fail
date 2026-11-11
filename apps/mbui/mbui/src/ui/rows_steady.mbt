@@ -451,11 +451,11 @@ fn Tester::hold_rows_steady(self : Tester) -> Unit {
     }
     rows_steady.found.add(row)
     let bar = rows_steady_bars.get(rows_steady.file).unwrap_or(0)
+    motion_known_said("rows_steady", rows_steady.file, rows_steady.found.length(), bar, f)
     if self.motion == Count {
       println("MOTION rows_steady \{rows_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
       continue
     }
-    motion_known_said("rows_steady", rows_steady.file, rows_steady.found.length(), bar, f)
     if rows_steady.found.length() > bar {
       let said = "rows not steady (rows_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{rows_steady.found.length()} now, \{bar} known in \{rows_steady.file}"

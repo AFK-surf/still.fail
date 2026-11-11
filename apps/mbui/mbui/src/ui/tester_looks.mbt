@@ -235,6 +235,11 @@ let motion_unjudged : Ref[Bool] = Ref(false)
 pub fn Tester::motion_unjudged(self : Tester, on : Bool) -> Unit {
   ignore(self)
   motion_unjudged.val = on
+  // (its file's bars not set beside what it found, none of it looked for: motion_runs, `MOTION unjudged <file>`)
+  if on && motion_runs() {
+    let at = looks_made_at.val
+    println("MOTION unjudged \{match at.find(":") { Some(i) => at.unsafe_substring(start=0, end=i); None => at }}")
+  }
 }
 
 ///|
