@@ -876,6 +876,9 @@ pub struct Tree {
   focus_gone : Array[NodeId]
   /// the layers that give the focus to the first of what they hold that takes it as they open (View::focus_opens_first)
   focus_firsts : Set[NodeId]
+  /// of those, the ones that give it only to the first of them that says what `takes` holds (View::focus_opens_first's
+  /// `takes`)
+  focus_first_takes : Map[NodeId, (Said) -> Bool]
   /// what opened the layers in a node (View::opened_by), by that node: what they give the focus back to as they go
   layer_openers : Map[NodeId, Opener]
   mut on_layers_focus : (Array[NodeId], Array[(NodeId, NodeId?)]) -> Unit
@@ -1179,6 +1182,7 @@ pub fn Tree::new(
     focus_opened: [],
     focus_gone: [],
     focus_firsts: Set::new(),
+    focus_first_takes: {},
     layer_openers: {},
     on_layers_focus: fn(_, _) {  },
     point_stop: None,
