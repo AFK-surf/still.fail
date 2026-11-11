@@ -168,7 +168,7 @@ test "a tall picture cut to its top: covering its box from its top, the part of 
   t.run_for(reveal_test_late + reveal_test_mid)
   let grow = 1.0 + reveal_grow * (1.0 - @ui.Out.at(reveal_test_mid / reveal_ms))
   let i = t.drawn_images()[0]
-  assert_true((i[2] - w * grow).abs() < 0.01 && (i[3] - h * grow).abs() < 0.01, msg="\{i}")
+  assert_true((i[2] - w * grow).abs() < 0.01 && (i[3] - h * grow).abs() < 0.01, msg="\{Repr(i)}")
   assert_true((i[1] - (h / 2.0 - h / 2.0 * grow)).abs() < 0.01, msg="\{Repr(i)}")
   // (at rest: its box, the top of the picture as much of it as shows)
   t.run_for(reveal_ms)

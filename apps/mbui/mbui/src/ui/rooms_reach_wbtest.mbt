@@ -340,7 +340,7 @@ test "a layer presented over all else (a hover card under its trigger) covering 
   // (a) presented: the trigger's room under it the card's, no fault
   let t = rr_presented(true, false)
   let faults = t.tree_room_faults()
-  assert_true(faults.is_empty(), msg="presented: \{faults}")
+  assert_true(faults.is_empty(), msg="presented: \{Repr(faults)}")
   // (b) the same drawn after it as any: the trigger has 6 under it, 12 over it
   let t = rr_presented(false, false)
   let faults = t.tree_room_faults()

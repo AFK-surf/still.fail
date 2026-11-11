@@ -94,7 +94,7 @@ test "a node's glyphs by a look of their own: each told its number, its line and
       let (old_told, old_drawn) = glyphs_told_drawn(false, runs, "ab cd efg hij", 6, w)
       let (made_told, made_drawn) = glyphs_told_drawn(true, runs, "ab cd efg hij", 6, w)
       assert_eq(made_told, old_told, msg="\{at}: told")
-      assert_eq(made_drawn, old_drawn, msg="\{at}: drawn: only made \{made_drawn.filter(fn(x) { !old_drawn.contains(x) })} | only old \{old_drawn.filter(fn(x) { !made_drawn.contains(x) })}")
+      assert_eq(made_drawn, old_drawn, msg="\{at}: drawn: only made \{Repr(made_drawn.filter(fn(x) { !old_drawn.contains(x) }))} | only old \{Repr(old_drawn.filter(fn(x) { !made_drawn.contains(x) }))}")
       // (all its glyphs told and drawn: ab cd efg hij, 10)
       assert_eq(made_told.length(), 10, msg="\{at}: \{Repr(made_told)}")
       // (narrow: on two lines, the middle along each from its own start: the second line's first glyph as the first's)

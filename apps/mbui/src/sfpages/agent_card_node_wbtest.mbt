@@ -340,7 +340,7 @@ test "an agent's card as nodes: the same words where they were and the same rect
     let old_faults = to.audit()
     let t = agent_new(src, fn(b, src, tips, card) { agent_card_node(b, src, agent_ref(), agent_at, tips, card) })
     let new = peek_drawn(t)
-    assert_true(old.length() > 4, msg="\{name}: the old card drawn: \{old}")
+    assert_true(old.length() > 4, msg="\{name}: the old card drawn: \{Repr(old)}")
     // (its figures: the library's usage_tiles_node, three shares alike, where the old's were 97.33, 97.33 and 81.33,
     // the context's 16 less for what held it: the coordinator, 2026-11-11, a difference said)
     let card = (src.topic_read)("agentCard", { "station": Json::string("ws1/st1"), "key": Json::string(agent_at) }).value
@@ -352,7 +352,7 @@ test "an agent's card as nodes: the same words where they were and the same rect
     }
     let widths = agent_tile_widths(new_tiles)
     if agent_tile_widths(old_tiles).length() != widths.length() || widths.iter().any(fn(w) { w != widths[0] }) {
-      faults.push("\{name}: its figures \{agent_tile_widths(old_tiles)} as \{widths}, not in shares alike")
+      faults.push("\{name}: its figures \{Repr(agent_tile_widths(old_tiles))} as \{Repr(widths)}, not in shares alike")
     }
     let (known, rest) = agent_rooms_known(t.audit(), card)
     if known.length() != agent_rooms_expected(name) {

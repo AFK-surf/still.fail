@@ -272,7 +272,7 @@ test "a station's card as nodes: the same words where they were and the same rec
     }
     let t = peek_new(change, fn(b) { @settings.station_peek_card_node(b, peek_at, fn() { 0 }) })
     let new = peek_drawn(t)
-    assert_true(old.length() > 4, msg="\{name}: the old card drawn: \{old}")
+    assert_true(old.length() > 4, msg="\{name}: the old card drawn: \{Repr(old)}")
     let d = peek_differ(old, new)
     if d.length() > 0 {
       faults.push("\{name}:\n  " + d.join("\n  "))
@@ -310,7 +310,7 @@ test "a station's part as nodes (under its agent's, in one card): the same as th
       @settings.station_peek_part_node(b, peek_at, fn() { 0 })
     })
     let new = peek_drawn(t)
-    assert_true(old.length() > 4, msg="\{name}: the old part drawn: \{old}")
+    assert_true(old.length() > 4, msg="\{name}: the old part drawn: \{Repr(old)}")
     let d = peek_differ(old, new)
     if d.length() > 0 {
       faults.push("\{name}:\n  " + d.join("\n  "))

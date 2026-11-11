@@ -549,7 +549,7 @@ test "对话目录: the rail's ticks, one for each said, the reader's (the 16th:
   assert_eq(ticks.length(), 31, msg="\{Repr(ticks)}")
   let p = @sf.theme().p
   let long = ticks.mapi(fn(i, k) { (i, k) }).filter(fn(k) { k.1.1 == outline_hex(p.text) })
-  assert_eq(long.map(fn(k) { k.0 }), [15], msg="\{ticks}")
+  assert_eq(long.map(fn(k) { k.0 }), [15], msg="\{Repr(ticks)}")
   assert_eq(long[0].1.0, 16.0)
   // (the rest one colour, quieter than the ink, each as long as its turn: shorter than the reader's, 4 for one message,
   // longer as more answered it: 林's first (Claude answering, then Ana) longer than Ana's next (林 straight after))
@@ -1091,7 +1091,7 @@ test "对话目录: a tick of the rail pointed at says its message's first line 
   t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
   assert_eq(outline_rows_asked(calls).length(), asked + 1)
   let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
-  assert_eq(tip.length(), 1, msg="\{tip}")
+  assert_eq(tip.length(), 1, msg="\{Repr(tip)}")
   assert_true(tip[0].has_prefix("早，今天想把发布清单") && tip[0].has_suffix("09:12"), msg="\{Repr(tip)}")
   // (the next: Ana's 09:40, its words held already, nothing asked)
   t.move_to(rx + rw / 2.0, ticks[1].1 + 1.0)
