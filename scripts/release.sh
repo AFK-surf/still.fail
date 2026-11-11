@@ -9,8 +9,9 @@
 # MBUI_VARIANT=stable: its installer stillfail-<version>-x64-win.exe in desktop/, not code-signed yet, its feeds
 # win/latest.json and stillfail.yml, below) and
 # `android` (the Android app: apps/mbui's in the Kotlin one's place, scripts/beta.sh build, MBUI_VARIANT=stable or
-# beta: its APK and latest.json, in android/). Their version is the
-# commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
+# beta: its APK and latest.json, in android/; still.fail's with its native library's symbols, symbols/android/). Their
+# version is the commits in the history, so a release is made from a new commit; the latest is put last, once its files
+# are there.
 #   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop and android only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
@@ -64,7 +65,8 @@ put() {
   if [ -n "${RELEASE_DIR:-}" ]; then
     mkdir -p "$RELEASE_DIR/$(dirname "$2")" && cp "$1" "$RELEASE_DIR/$2" && echo "put $2 in $RELEASE_DIR"
   else
-    r2 put "$2" --file "$1" --content-type "$3"
+    # (its failure returned: a caller that goes on without it, as the symbols' below, runs it outside set -e)
+    r2 put "$2" --file "$1" --content-type "$3" || return 1
     echo "uploaded $2 ($(du -h "$1" | cut -f1))"
   fi
 }
@@ -295,6 +297,17 @@ for platform in $platforms; do
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \
         "$build" "$build" "$name" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"
       put_feed "$out/latest.json" "android/${beta:+beta/}latest.json" application/json "android/$name=$apk"
+      # Its libmbui.so's function symbols (beta.sh build: the library as linked, before the APK stripped it), to name the
+      # frames of its crash reports (scripts/crash-symbols.ts), kept 30 days (scripts/release-prune.ts; the owner,
+      # 2026-11-11) and never served (cloud/src/install.ts releaseType). Put after the feed, and never a reason to fail
+      # or hold back the release: a warning. still.fail's own app's only (monoid's: none made).
+      syms="$out/mbui/android/app-$variant.syms.xz"
+      if [ "$product" = stillfail ]; then
+        if [ ! -s "$syms" ]; then echo "release.sh: warning: no symbols of $name (beta.sh build made none)" >&2
+        elif ! put "$syms" "symbols/android/${name%.apk}.syms.xz" application/x-xz; then
+          echo "release.sh: warning: the symbols of $name were not put" >&2
+        fi
+      fi
       ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
