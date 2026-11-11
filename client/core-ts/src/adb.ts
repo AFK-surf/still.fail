@@ -635,8 +635,10 @@ export class Adb {
         return this.#of(call.sub, (sub) => this.#env.personal.open(sub, t("core-misc.personal.reason.open")));
       case "personalJoin":
         return this.#of(call.sub, (sub) => Effect.gen({ self: this }, function* () {
-          yield* Effect.forEach(this.#env.subs(), (a) => Effect.ignore(this.#env.personal.refresh(a.sub), { log: "Unhandled", message: "personal lock read" }), { discard: true });
-          yield* this.#env.personal.refresh(sub);
+          // (one wait for the call's reads: past it, the locks as pinned here, the reads going on behind)
+          const within = this.#env.personal.asked();
+          yield* Effect.forEach(this.#env.subs(), (a) => Effect.ignore(this.#env.personal.refresh(a.sub, undefined, within), { log: "Unhandled", message: "personal lock read" }), { discard: true });
+          yield* this.#env.personal.refresh(sub, undefined, within);
           yield* this.#env.personal.makeKey();
           // Every account here the other device can let it in to, on the one code.
           const others = this.#env.personal.outside(this.#env.subs().map((a) => a.sub));
