@@ -37,7 +37,10 @@ let tip_out_scale : Double = 0.97
 /// how far from what it is beside; `at_pointer`: beside the pointer as it moves along the control, its middle level with
 /// it (a tall thin thing's: an edge, usePointerTip), not the control's middle. `within`: shown by the pointer within
 /// `anchor` as it is placed (View::pointer_within), where it is no control and takes no press (a bar's name, what is
-/// pressed there the bar's), not by its being pointed at.
+/// pressed there the bar's), not by its being pointed at. `repeats`: it says words the control shows itself (a file's
+/// name on its card), whole: shown only where they show cut short there as it would show (View::words_cut_now: any words
+/// in `anchor`, as the old tip's Ctx::shows_cut), none where they show whole; once shown, it goes as any does, not as
+/// they come to show whole.
 pub fn tip_node(
   tips : TipLayer,
   anchor : @view.View,
@@ -48,6 +51,7 @@ pub fn tip_node(
   gap? : Double = tip_gap,
   at_pointer? : Bool = false,
   within? : Bool = false,
+  repeats? : Bool = false,
 ) -> TipHand {
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
@@ -92,6 +96,10 @@ pub fn tip_node(
   }
   let set_open = fn(on : Bool) {
     if on == open.untracked() {
+      return
+    }
+    // (saying what its control shows whole: not shown where that shows whole as it would show, at this moment)
+    if on && repeats && !anchor.words_cut_now() {
       return
     }
     let at = anchor.cause_at()

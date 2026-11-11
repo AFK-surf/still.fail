@@ -328,3 +328,16 @@ test "a long name in a card at its widest: its stem cut short, its extension who
     assert_eq(t.audit(), [], msg="\{w}")
   }
 }
+
+///|
+test "a file's card whose name shows cut short says it whole by it as the pointer rests on it; one whose name shows whole, nothing" {
+  let long = "一份说得很长很长的季度财务报告最终版本第三稿.pdf"
+  for name in [long, "report.pdf"] {
+    let t = files_new(390.0, files_src(), [files_one(name)], false)
+    let (cx, cy, cw) = files_capsules(t)[0]
+    t.move(cx + cw / 2.0, cy + 10.0)
+    t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
+    let tips = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
+    assert_eq(tips, if name == long { [long] } else { [] }, msg=name)
+  }
+}
