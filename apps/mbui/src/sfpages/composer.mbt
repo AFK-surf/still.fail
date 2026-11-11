@@ -1021,14 +1021,15 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, 
   // picture's foot cut square and faded as it came in, 2026-11-02 the user: 「能看出问题吗」).
   // (held by words sent from it: as tall as what was added was laid out as they were sent, composer_held_extras)
   let empty = w.quotes.get().is_empty() && w.files.get().is_empty() && held <= 0.0
-  let room = Ref(-1)
+  // (the room, read where it is as what it holds is painted: held_coming)
+  let room : Ref[@ui.NodeHeld?] = Ref(None)
   let area = c.box(
     style=if held > 0.0 { extras_column.then(@ui.style(min_h=Fixed(held))) } else { extras_column },
     left?=if empty { Some(@sf.composer_pad) } else { None },
     top?=if empty { Some(@sf.composer_pad) } else { None },
     fn() { composer_extra_items(c, src, spec, w, holds, shape, quote_pictures, file_pictures, room) },
   )
-  room.val = area
+  room.val = Some(c.node_held(area))
   // (how tall it is laid out: what words sent hold it as, composer_held_extras)
   @motion.measure(c, area, "composer/extras/room")
   @motion.scope(c, area)
@@ -1036,7 +1037,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, 
 }
 
 ///|
-fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], room : Ref[Int]) -> Unit {
+fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], room : Ref[@ui.NodeHeld?]) -> Unit {
   if !w.quotes.get().is_empty() {
     let quote_had = quote_has_focus(c, w)
     c.box(style=quotes_column, fn() {
@@ -1122,12 +1123,15 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
 /// own as it comes), though said so as it is (built again the frame after, it was there before). Below what the room
 /// shows as it opens for it (`room`, composer_extras), it grows with it from its top, as a row coming where it is
 /// (@ui.Ctx::held_look's size; faded in by its entrance alone): whole, as far as the room has reached down it.
-fn held_coming(c : @ui.Ctx, i : Int, key : String, room : Ref[Int]) -> Unit {
+fn held_coming(c : @ui.Ctx, i : Int, key : String, room : Ref[@ui.NodeHeld?]) -> Unit {
   @motion.entering(c, i, key + "/in", @sf.waiting_in, at_once=!composing.same_draft)
+  // (it and its room read where they are as it is painted, not where they were built: what holds them kept as its
+  // nodes is put back elsewhere among the frame's as what is built before it makes more nodes or fewer)
+  let held = c.node_held(i)
   c.look_by(i, fn() {
-    match @motion.grown_shown(c, "composer/extras") {
-      Some(shown) if room.val >= 0 => {
-        let (_, top, _, _) = c.node_rect(room.val)
+    match (@motion.grown_shown(c, "composer/extras"), held.at(), room.val.bind(fn(r) { r.at() })) {
+      (Some(shown), Some(i), Some(room)) => {
+        let (_, top, _, _) = c.node_rect(room)
         let (_, y, _, h) = c.node_rect(i)
         if h > 0.0 {
           // (seen from the first, as it comes in: its own entrance fades it, not its room)

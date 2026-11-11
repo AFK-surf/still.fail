@@ -1409,7 +1409,14 @@ pub fn reveal(
     // (as big as its room is open and gone by half, as a list's row coming and going where it is: what a card under a
     // post holds not cut by its room as it closes, 2026-10-31 the user: 「特殊情况下消息列表还是会出现比较明显的裁剪」
     // 「比如选择决策」)
-    c.look_by(inner, fn() { c.held_look(inner, share) })
+    // (read where it is as it is painted: a list's row it is in, kept as its nodes, put back elsewhere among the frame's)
+    let held = c.node_held(inner)
+    c.look_by(inner, fn() {
+      match held.at() {
+        Some(i) => c.held_look(i, share)
+        None => @ui.still_look
+      }
+    })
     let soft = @ui.cut_soft((natural - shown) / 2.0, shown / 2.0)
     c.fade_to(inner, outer, top=soft, foot=soft)
   }

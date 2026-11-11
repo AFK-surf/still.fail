@@ -1412,9 +1412,17 @@ pub fn flight_landing(
   // (in a new chat's list coming up with the words, drawn below its place by as much: from its tile all the same,
   // straight, as its words go: flight_carry_shift)
   @motion.fly(c, i, fx, fy - flight_carry_rise(c, f), scale=s0, px=flight_across_of(c, f), py=up, ps=up)
+  // (read where it is as it is placed: its message's row kept as its nodes is put back elsewhere among the frame's as
+  // what is built before it makes more nodes or fewer, this not made again)
+  let held = c.node_held(i)
   @motion.placed(c, i, fn() {
-    let (_, _, w, h) = c.node_rect(i)
-    @ui.look(alpha=flight_shown(c, i, ff.shown, ff.from, w, h, up))
+    match held.at() {
+      Some(i) => {
+        let (_, _, w, h) = c.node_rect(i)
+        @ui.look(alpha=flight_shown(c, i, ff.shown, ff.from, w, h, up))
+      }
+      None => @ui.still_look
+    }
   })
 }
 
@@ -1446,7 +1454,10 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
   let own = c.node_bg(card)
   let from = if ff.ground != 0L { ff.ground } else { own }
   @motion.flying_placed(c, card)
+  // (read where it is as it is placed, as flight_landing's)
+  let held = c.node_held(card)
   @motion.placed(c, card, fn() {
+    guard held.at() is Some(card) else { return @ui.still_look }
     let (x, y, w, h) = c.node_rect(card)
     let dx = (fx + sx - x) * (1.0 - across)
     let dy = (fy + sy - y) * (1.0 - up)
