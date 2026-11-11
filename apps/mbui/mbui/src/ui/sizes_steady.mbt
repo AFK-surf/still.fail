@@ -214,6 +214,13 @@ fn sizes_steady_fault(
 }
 
 ///|
+/// The nodes of the window's tree among the frame's that scroll what they hold (View::scrolls), however far they can
+/// go now (Tree::is_scroller): what is in one measured from its top all the while it is one, never switched to the
+/// window's as what it holds comes to fit in it or grows past it on its way (Ctx::sizes_steady_faults).
+// kept across runs: filled and emptied round one asking of sizes steady (Ctx::with_tree_nodes's `steady`)
+let tree_scroller_at : Set[Int] = Set::new()
+
+///|
 /// The faults the frame just drawn (at `now`, the display's frames `period` apart) shows, each said once: of whom, how.
 fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[String] {
   let out : Array[String] = []
@@ -222,7 +229,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
   sizes_steady.window = (self.width, self.height)
   sizes_steady.words = words
   let here : Set[(Int, Int, Int64, Bool)] = Set::new()
-  self.with_tree_nodes(fn() {
+  self.with_tree_nodes(steady=true, fn() {
     // (one ident twice in the frame: who either is, unsaid)
     let count : Map[Int, Int] = {}
     for i in 0..<self.count {
@@ -293,7 +300,8 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           row_at[i] = ya[i] * n.y + yb[i]
           in_row[i] = true
           set_out[i] = -1.0
-        } else if pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 || pn.tree_scrolls {
+        } else if pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 ||
+          tree_scroller_at.contains(p) {
           // (less how far its scroll was put for what came out another height over what shows: what is under that moved
           // down in it as far, held where it was)
           row_at[i] = ya[i] * (n.y + pn.tree_corrected) + yb[i]

@@ -1202,6 +1202,13 @@ pub fn Tree::scroll_corrected(self : Tree, id : NodeId) -> Double {
 }
 
 ///|
+/// Whether node `id` scrolls what it holds (View::scrolls), whether or not what it holds is taller than it now
+/// (Tree::scrolls_now): the same all the while it is one, as what it holds comes to fit in it or grows past it.
+pub fn Tree::is_scroller(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].scroll_held >= 0
+}
+
+///|
 pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
   // (what it holds as tall as it is laid out, less its own: how far it can go, as its Scroll's room says it)
