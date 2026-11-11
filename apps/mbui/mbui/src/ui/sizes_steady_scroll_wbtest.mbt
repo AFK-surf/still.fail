@@ -194,12 +194,24 @@ test "sizes steady in what a node of the tree's scrolls: what it holds measured 
 }
 
 ///|
-test "sizes steady: at speed then at rest, and so the frame after, a dead stop; turned back through rest between two frames, none" {
+test "sizes steady: a dead stop said as the frame it stops on is drawn, a turn back through rest by what it slowed before, not by what comes after" {
   let p = 1000.0 / 60.0
-  let at = fn(ys : Array[Double]) { ys.mapi(fn(i, y) { (i.to_double() * p, i.to_double() * p, y) }) }
-  // (a sheet closed as it grows: up 29 a frame, then down, its turn between two frames)
-  let turn = at([0.0, -30.0, -59.0, -56.2, -11.4])
-  assert_true(sizes_steady_fault(turn, p, turned=-1.0e9).0 is None)
-  let stop = at([0.0, -30.0, -59.0, -59.5, -59.5])
-  assert_true(sizes_steady_fault(stop, p, turned=-1.0e9).0 is Some(_))
+  // (judged each frame as a run's frames are, on what was drawn up to then)
+  let said = fn(ys : Array[Double]) {
+    let all = ys.mapi(fn(i, y) { (i.to_double() * p, i.to_double() * p, y) })
+    let mut dead = false
+    for k in 1..=all.length() {
+      if sizes_steady_fault(all[:k].to_array(), p, turned=-1.0e9).0 is Some(s) && s.contains("stopped dead") {
+        dead = true
+      }
+    }
+    dead
+  }
+  // (at speed, then at rest)
+  assert_true(said([0.0, -30.0, -59.0, -59.5, -59.5]))
+  // (a sheet closed as it grows: up 29 a frame, then down, its turn between two frames: slowing 1 a frame, then 31.8
+  // at once, whatever it does after; the coordinator of the migration, 2026-11-11)
+  assert_true(said([0.0, -30.0, -59.0, -56.2, -11.4]))
+  // (turned back through rest between two frames slowing at one rate: none)
+  assert_true(!said([0.0, -30.0, -50.0, -60.0, -60.0, -50.0, -30.0]))
 }

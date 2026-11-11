@@ -166,9 +166,18 @@ fn Ctx::sizes_steady_made(self : Ctx, i : Int) -> String {
 }
 
 ///|
+/// How many times more speed a measure stopped dead loses in its last frame than it lost in each frame before it, at the
+/// least (sizes_steady_fault): one slowing at one rate to rest loses as much each frame, once the frames' lengths are
+/// taken out, up to 1.21 where a frame half again as long as the rest falls between (新建 workspace's sheet, its invite
+/// code's field turned back, 2026-11-11), and a half more than that is what no slowing at one rate comes to; every dead
+/// stop CI's runs count, and each this check was there to find, loses more (1.66 times at the least) or was still
+/// going as fast or faster the frame before.
+let stop_jerk : Double = 1.5
+
+///|
 /// A measure's last frames (rows_steady_fault's samples, the display's frames `period` apart; it last turned back at
 /// `turned`): the frame before the last a step or a spike (off both frames round it the same way), or a dead stop (at
-/// speed, then at rest at once and the frame after); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
+/// speed, then at rest at once, slowing more at once than it slowed: stop_jerk); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
 /// rest, going on as fast or slowing) is none: an eased way out sets out so (sf/motion.mbt). In a list's row whose way
 /// set out at `set_out` between them, as rows_steady_fault has a row's place: the speed it takes up then, from where it
 /// was, is the way's (a row joining the rows' way under way goes on its share of it as they do: list_size.mbt).
@@ -197,15 +206,32 @@ fn sizes_steady_fault(
     let on = v1 * v2 > 0.0 && v2.abs() >= 0.25 * v1.abs() && v2.abs() <= v1.abs()
     let sets_out = on && (v0.abs() < 0.5 || (rest_before && v0 * v1 > 0.0 && v0.abs() < v1.abs()))
     let off = (v1 - (v0 + v2) / 2.0).abs()
-    // (a dead stop is at rest the frame after as well: one turned back through rest between two frames goes on the
-    // other way then, as fast as it slowed or faster)
-    if all.length() > 4 && all[0].1 < seen[0].1 {
-      let u = fn(a : Int) { (all[a + 1].2 - all[a].2) / (all[a + 1].1 - all[a].1) * period }
-      let (u0, u1, u2, u3) = (u(0), u(1), u(2), u(3))
-      let turns = u3 * u1 < 0.0 && u3.abs() >= 0.2 * u1.abs()
-      if u0.abs() > least && u1.abs() > least && u0 * u1 > 0.0 && u2.abs() < 0.2 * u1.abs() &&
-        u1.abs() > 0.5 * u0.abs() && !turns {
-        return (Some("stopped dead from \{u1} a frame (\{u0} before) at \{all[3].1} seen=\{all}"), turned)
+    // (stopped dead: going, then all but still in a frame, the speed it lost that frame more than stop_jerk times what
+    // it lost in either frame before (the lesser of the two, a frame further back where there is one: where its slowing
+    // set in falls between frames as it likes); slowing at one rate to rest, whatever frame its rest falls on, none
+    // (the coordinator of the migration, 2026-11-11: what stops dead is a step in how fast it slows, not where its rest
+    // falls among the frames; what it does after, turning back or not, no part of it))
+    if v0.abs() > least && v1.abs() > least && v0 * v1 > 0.0 && v2.abs() < 0.2 * v1.abs() {
+      let toward = if v1 > 0.0 { 1.0 } else { -1.0 }
+      let d1 = (v0 - v1) * toward
+      let d2 = (v1 - v2) * toward
+      // (the frame before those too, where it was seen moving then: one stopped dead at a moment between two frames is
+      // sampled as at speed, a piece, still (10, 10, 5, 0), the piece as long as where that moment fell makes it, the
+      // same numbers as a slowing set in at once and over in two frames; both are said, or one falling between frames
+      // would go unsaid)
+      let back = all.length() > 4 && all[all.length() - 5].1 < seen[0].1
+      let d0 = if back {
+        let vb = (seen[0].2 - all[all.length() - 5].2) / (seen[0].1 - all[all.length() - 5].1) * period
+        (vb - v0) * toward
+      } else {
+        d1
+      }
+      let before = if d0 < d1 { d0 } else { d1 }
+      if before <= 0.0 || d2 > stop_jerk * before {
+        return (
+          Some("stopped dead from \{v1} a frame (\{v0} before; slowing \{before} then \{d2}) at \{seen[3].1} seen=\{all}"),
+          turned,
+        )
       }
     }
     // (at rest, or all but, then setting out: none)
