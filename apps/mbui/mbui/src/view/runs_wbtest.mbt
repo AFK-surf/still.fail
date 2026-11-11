@@ -14,9 +14,9 @@ test "words in pieces: drawn with their pieces, read as their words one after an
       })
       |> ignore
     },
-    measure_runs=fn(rs, look, set, w) {
+    measure_runs=fn(rs, look, set, w, k) {
       measured.push(rs.length())
-      runs_measure(rs, look, set, w)
+      runs_measure(rs, look, set, w, k)
     },
   )
   t.frame(390.0, 844.0) |> ignore
@@ -297,9 +297,9 @@ test "how pieces are set (RunsLook): a node made again where one let go was, say
         |> ignore
       })
     },
-    measure_runs=fn(rs, look, s, w) {
+    measure_runs=fn(rs, look, s, w, k) {
       measured.val = measured.val + 1
-      runs_measure(rs, look, s, w)
+      runs_measure(rs, look, s, w, k)
     },
   )
   t.frame(390.0, 844.0) |> ignore

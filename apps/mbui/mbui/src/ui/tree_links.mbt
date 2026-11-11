@@ -34,7 +34,7 @@ pub fn runs_links(
     let w = v.laid_size().0
     let (rs, look, set) = v.runs_set_now()
     guard !rs.is_empty() else { return [] }
-    let (r, lay, _) = view_runs_laid(rs, look, set, w)
+    let (r, lay, _) = view_runs_laid(rs, look, set, w, v.tree.words_scale_of(v.id()))
     rich_link_pieces(r, lay, 0.0, 0.0, center_in=if v.words_centered_now() { w } else { -1.0 })
   }
   let piece_at = fn(x : Double, y : Double) -> (Int, Double, Double, Double, Double)? {

@@ -131,6 +131,9 @@ pub fn field(
   parent.box(fn(f) {
     let id = f.id()
     let st = field.st
+    // (its words the editor's, at the system's size of words whatever its node says (Ctx::editor_sizing): made where
+    // words are as said, a check's tree says so, View::words_follow_system)
+    f.words_follow_system("a field")
     // (one Field, one editor: held by another node still, it is told; an old view's editor given it then, Ctx::editor.
     // Given so, a fault (the boundary round it shows it), this field taking it over meanwhile)
     match st.tree_node {

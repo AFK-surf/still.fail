@@ -153,7 +153,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   A new state a report shows gets a fixture mode in `corner_modes`, so both sweeps see it.
 - Both sweeps hold each screen as well to the words a box with its height said does not hold (mbui's
   `Tester::fixed_outgrown`, in `t.audit()` too): a box holding words grows with them (a least, or its height worked out
-  of their line at the system's size of words, as `list_looks_at` does); each screen's bar is in
+  of their line at the system's size of words, as `list_looks_at` does), or, where they are part of a mark of a size
+  said (a letter in its square, a badge's `!`), they are drawn by its points as it is (`@sf.mark_words_node`: mbui's
+  `View::box(words_as_said=true)`, whose words and all made in it are at 1); each screen's bar is in
   `corners_outgrown_known` and `words_large_outgrown_known`, and only falls (the coordinator of the migration,
   2026-11-11).
 - What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar

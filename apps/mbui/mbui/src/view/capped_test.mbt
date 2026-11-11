@@ -37,7 +37,7 @@ fn capped_tree(
       |> ignore
     },
     // (on one line as wide as all of them, as a host measures words that do not wrap)
-    measure=fn(s, look, w) { if look.wrap { @view.words_measure(s, look, w) } else { (s.length().to_double() * 7.0, 18.0) } },
+    measure=fn(s, look, w, k) { if look.wrap { @view.words_measure(s, look, w, k) } else { (s.length().to_double() * 7.0, 18.0) } },
     time=fn() { 0.0 },
   )
   fn() {

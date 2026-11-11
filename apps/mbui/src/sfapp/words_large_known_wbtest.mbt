@@ -163,11 +163,11 @@ let words_large_known : Map[String, Int] = {
 /// Words a box with its height said does not hold (mbui's Tester::fixed_outgrown) on each screen in a phone's window at
 /// words_large_scale (words_large_wbtest.mbt), by language and screen: the bar it may only fall from, counted as the
 /// rule first ran (2026-11-11). A screen not listed has none. What they are (the coordinator of the migration,
-/// 2026-11-11): a mark's letter grown out of its mark (an account's, a workspace's, a mark's, the 「!」 of 通知), to be
-/// drawn at 1 as the mark is; a chip or a label said as high as its words at 1 (Plus, a length of time, 用量's months), to
-/// grow with them; 智能体's card's spend; the share cards' stage, whose words are to keep the size the card is made at;
-/// and the old views' (switcher's and search's rows, a screen's timer, a chat's old parts), mended as each is made as
-/// nodes.
+/// 2026-11-11): a chip or a label said as high as its words at 1 (Plus and a runtime's tag on 账号's page, pf_tag; a
+/// length of time; 用量's months), to grow with them; 智能体's card's spend; the share cards' stage, whose words are to
+/// keep the size the card is made at; and the old views' (switcher's and search's rows, a screen's timer, a chat's old
+/// parts), mended as each is made as nodes. A mark's letter (a workspace's, a mark's, the 「!」 of 通知) is drawn at 1 as
+/// its mark is (@sf.mark_words_node), so none of those is left.
 let words_large_outgrown_known : Map[String, Int] = {
   let known = Map::new()
   for k in [
@@ -176,7 +176,6 @@ let words_large_outgrown_known : Map[String, Int] = {
     ("phone-en chat-publish", 4),
     ("phone-en chat-screens", 8),
     ("phone-en chat-things", 1),
-    ("phone-en home-sheet", 2),
     ("phone-en newchat-model", 4),
     ("phone-en screen-agent-driving", 1),
     ("phone-en screen-agent-paused", 1),
@@ -193,9 +192,7 @@ let words_large_outgrown_known : Map[String, Int] = {
     ("phone-en screen-trackpad-command", 1),
     ("phone-en search-jobs", 12),
     ("phone-en search-results", 23),
-    ("phone-en settings-lock-prompt", 2),
     ("phone-en settings-new-profile", 1),
-    ("phone-en settings-notify-denied", 1),
     ("phone-en settings-profile", 1),
     ("phone-en settings-profile-blocked", 1),
     ("phone-en settings-profile-fable", 1),
@@ -218,7 +215,6 @@ let words_large_outgrown_known : Map[String, Int] = {
     ("phone-zh chat-publish", 4),
     ("phone-zh chat-screens", 8),
     ("phone-zh chat-things", 1),
-    ("phone-zh home-sheet", 2),
     ("phone-zh newchat-model", 4),
     ("phone-zh screen-agent-driving", 1),
     ("phone-zh screen-agent-paused", 1),
@@ -235,9 +231,7 @@ let words_large_outgrown_known : Map[String, Int] = {
     ("phone-zh screen-trackpad-command", 1),
     ("phone-zh search-jobs", 12),
     ("phone-zh search-results", 23),
-    ("phone-zh settings-lock-prompt", 2),
     ("phone-zh settings-new-profile", 1),
-    ("phone-zh settings-notify-denied", 1),
     ("phone-zh settings-profile", 1),
     ("phone-zh settings-profile-blocked", 1),
     ("phone-zh settings-profile-fable", 1),

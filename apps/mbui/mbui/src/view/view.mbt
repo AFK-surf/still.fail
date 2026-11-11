@@ -331,6 +331,9 @@ struct Node {
   mut parent : Int
   /// A last-resort ellipsis in its own words was deliberately allowed, without changing their sizing.
   mut allow_ellipsis : Bool
+  /// its words, and all made in it, at the size they are said, whatever the system's size of words (View::box's
+  /// `words_as_said`, taken from what it is made in as it is made: View::words_scale answers 1)
+  mut words_as_said : Bool
   kids : Array[Int]
   /// its scope (what it was made with, and what is set on it, owned), and what stops it
   mut owner : @signals.ReactiveNode?
@@ -644,13 +647,15 @@ pub struct Tree {
   time : (() -> Double)?
   /// the moment the change a queued binding works out was told, while it is (-1: none)
   mut cause_at : Double
-  /// how words are measured: (words, how they are set, width offered) -> (width, height)
-  measure : (String, WordsLook, Double) -> (Double, Double)
-  /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
-  measure_runs : (Array[@text.Run], WordsLook, RunsLook, Double) -> (Double, Double)
+  /// how words are measured: (words, how they are set, width offered, the size of words they are at: their node's,
+  /// Tree::words_scale_at) -> (width, height)
+  measure : (String, WordsLook, Double, Double) -> (Double, Double)
+  /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered, the
+  /// size of words)
+  measure_runs : (Array[@text.Run], WordsLook, RunsLook, Double, Double) -> (Double, Double)
   /// how wide words too wide for a width on one line are drawn where they say shorter ways (View::shorter): the first of
-  /// those that fits, else the last cut with an ellipsis, as the host lays them out
-  measure_shorter : (String, Array[String], WordsLook, Double) -> Double
+  /// those that fits, else the last cut with an ellipsis, as the host lays them out (at the size of words given last)
+  measure_shorter : (String, Array[String], WordsLook, Double, Double) -> Double
   /// whether each node keeps where in the source it was made and its properties said (source.mbt): a Tester's tree
   sources : Bool
   nodes : Array[Node]
@@ -1051,13 +1056,14 @@ pub struct View {
 
 ///|
 /// A tree whose root `make` makes (as the root's own: its bindings, its nodes), its words measured by `measure` (in
-/// pieces set their own way: `measure_runs`; said a shorter way where too wide: `measure_shorter`), keeping where in
-/// the source each node was made where `sources` (source.mbt).
+/// pieces set their own way: `measure_runs`; said a shorter way where too wide: `measure_shorter`), each told the size
+/// of words of the node whose words they are (View::words_scale's), keeping where in the source each node was made
+/// where `sources` (source.mbt).
 pub fn Tree::new(
   make : (View) -> Unit,
-  measure? : (String, WordsLook, Double) -> (Double, Double) = words_measure,
-  measure_runs? : (Array[@text.Run], WordsLook, RunsLook, Double) -> (Double, Double) = runs_measure,
-  measure_shorter? : (String, Array[String], WordsLook, Double) -> Double,
+  measure? : (String, WordsLook, Double, Double) -> (Double, Double) = words_measure,
+  measure_runs? : (Array[@text.Run], WordsLook, RunsLook, Double, Double) -> (Double, Double) = runs_measure,
+  measure_shorter? : (String, Array[String], WordsLook, Double, Double) -> Double,
   time? : () -> Double,
   sources? : Bool = false,
 ) -> Tree {
@@ -1093,7 +1099,7 @@ pub fn Tree::new(
     measure_runs,
     measure_shorter: match measure_shorter {
       Some(f) => f
-      None => fn(words, shorter, look, room) { shorter_w_by(measure, words, shorter, look, room) }
+      None => fn(words, shorter, look, room, scale) { shorter_w_by(measure, words, shorter, look, room, scale) }
     },
     sources,
     nodes: [],
@@ -1280,8 +1286,8 @@ pub fn Tree::new(
 }
 
 ///|
-/// Words measured as a test's are: 7 a character, 18 a line, wrapped to the width offered.
-pub fn words_measure(words : String, _look : WordsLook, width : Double) -> (Double, Double) {
+/// Words measured as a test's are: 7 a character, 18 a line, wrapped to the width offered, whatever the size of words.
+pub fn words_measure(words : String, _look : WordsLook, width : Double, _scale : Double) -> (Double, Double) {
   let full = words.length().to_double() * 7.0
   if full <= 0.0 {
     return (0.0, 0.0)
@@ -1293,8 +1299,9 @@ pub fn words_measure(words : String, _look : WordsLook, width : Double) -> (Doub
 
 ///|
 /// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else),
-/// made at `loc` in the source (kept where the tree keeps that: source.mbt).
-fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
+/// made at `loc` in the source (kept where the tree keeps that: source.mbt), its words at the size they are said where
+/// `words_as_said` (what it is made in's, or its own: View::box).
+fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : SourceLoc) -> View {
   self.work.made = self.work.made + 1
   self.hits = self.hits + 1
   let at = match self.free.pop() {
@@ -1376,6 +1383,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.went = None
       n.parent = parent
       n.allow_ellipsis = false
+      n.words_as_said = words_as_said
       n.slot = false
       n.alone = false
       n.boxes_due = false
@@ -1487,6 +1495,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
+        words_as_said,
         kids: [],
         owner: None,
         stop: None,
@@ -2089,10 +2098,20 @@ pub fn Tree::dispose(self : Tree) -> Unit {
 /// A node made in `self`, after what it holds already, made by `make` as its own (in its scope).
 /// Made at `loc`, the place that asked for it; the outside of the part asked for at `made_for` where a library's part
 /// makes it so (View::made_for, source.mbt).
+/// Where `words_as_said`, its words and the words of all made in it are drawn and measured at the size they are said,
+/// whatever the system's size of words (View::words_scale answers 1 there): words that are part of a mark drawn by its
+/// points (a letter in a disc, a badge's `!`), as an icon is. Said as it is made, so all made in it after is made so
+/// (what is made in it takes it from what it is made in); never said of a node made already.
 #callsite(autofill(loc))
-pub fn View::box(self : View, make : (View) -> Unit, made_for? : SourceLoc, loc~ : SourceLoc) -> View {
+pub fn View::box(
+  self : View,
+  make : (View) -> Unit,
+  made_for? : SourceLoc,
+  words_as_said? : Bool = false,
+  loc~ : SourceLoc,
+) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
-  let v = self.tree.made(self.at, loc~)
+  let v = self.tree.made(self.at, words_as_said=words_as_said || n.words_as_said, loc~)
   match made_for {
     Some(l) => v.made_for(l) |> ignore
     None => ()
@@ -5049,10 +5068,12 @@ pub fn View::words(
     let nd = tree.nodes[at]
     let look = nd.look
     let t0 = tree.part_began()
+    // (at its own size of words: View::words_scale's)
+    let scale = if nd.words_as_said { 1.0 } else { (tree.env.words_scale)() }
     let (mw, mh) = if look.runs.is_empty() {
-      (tree.measure)(look.words, look.words_look, offered)
+      (tree.measure)(look.words, look.words_look, offered, scale)
     } else {
-      (tree.measure_runs)(look.runs, look.words_look, look.runs_look, offered)
+      (tree.measure_runs)(look.runs, look.words_look, look.runs_look, offered, scale)
     }
     if t0 >= 0.0 {
       let t1 = tree.part_began()
@@ -5067,7 +5088,7 @@ pub fn View::words(
       nd.shorter.length() > 0 &&
       wm == AtMost &&
       mw > offered + 0.5 {
-      (tree.measure_shorter)(look.words, nd.shorter, look.words_look, offered)
+      (tree.measure_shorter)(look.words, nd.shorter, look.words_look, offered, scale)
     } else {
       mw
     }
@@ -6594,7 +6615,7 @@ pub fn View::lays_out_alone(self : View) -> View {
 /// structure was asked for).
 fn View::slot(self : View, loc : SourceLoc) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
-  let v = self.tree.made(self.at, loc~)
+  let v = self.tree.made(self.at, words_as_said=n.words_as_said, loc~)
   self.tree.nodes[v.at].slot = true
   n.kids.push(v.at)
   if self.at == 0 {
@@ -8921,7 +8942,7 @@ fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
     // (along a row alone, as an old view's least of one-line words is: in a column, cut to the column's width)
     None =>
       if shorter && along {
-        Pt((self.measure)(n.shorter[n.shorter.length() - 1], n.look.words_look, -1.0).0)
+        Pt((self.measure)(n.shorter[n.shorter.length() - 1], n.look.words_look, -1.0, self.words_scale_at(at)).0)
       } else {
         Auto
       }
@@ -8935,16 +8956,17 @@ fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
 ///|
 /// How wide what is drawn of words too wide for `room` on one line is where they say `shorter` ways, without a host's
 /// own layout of them (a tree made with none: words_measure's): the first of those that fits, else the last cut, by
-/// its characters, where it and an ellipsis fit (no space left before it); measured by `measure`.
+/// its characters, where it and an ellipsis fit (no space left before it); measured by `measure` at `scale`.
 fn shorter_w_by(
-  measure : (String, WordsLook, Double) -> (Double, Double),
+  measure : (String, WordsLook, Double, Double) -> (Double, Double),
   words : String,
   shorter : Array[String],
   look : WordsLook,
   room : Double,
+  scale : Double,
 ) -> Double {
   ignore(words)
-  let wide = fn(s : String) { measure(s, look, -1.0).0 }
+  let wide = fn(s : String) { measure(s, look, -1.0, scale).0 }
   for alt in shorter {
     if wide(alt) <= room + 0.5 {
       return wide(alt)
@@ -8974,7 +8996,7 @@ fn shorter_w_by(
 fn Tree::shorter_in(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   let w = n.flex.width
-  let fits = fn(s : String) { (self.measure)(s, n.look.words_look, -1.0).0 <= w + 0.5 }
+  let fits = fn(s : String) { (self.measure)(s, n.look.words_look, -1.0, self.words_scale_at(at)).0 <= w + 0.5 }
   let mut shown : String? = None
   // (one line's words alone, saying shorter ones: words that wrap have the room of their lines, as an old view's do;
   // none said now, its own)

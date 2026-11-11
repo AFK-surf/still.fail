@@ -33,7 +33,7 @@ fn links_tester(
   t.draw()
   let tree = view_app.val.unwrap()
   let d = tree.drawn_of(id.val.unwrap()).unwrap()
-  let (r, lay, _) = view_runs_laid(d.runs, d.words_look, d.runs_look, d.w)
+  let (r, lay, _) = view_runs_laid(d.runs, d.words_look, d.runs_look, d.w, tree.words_scale_of(d.id))
   let pieces = rich_link_pieces(r, lay, d.x, d.y).map(fn(p) { (p.1, p.2, p.3, p.4) })
   (t, taps, holds, pieces)
 }

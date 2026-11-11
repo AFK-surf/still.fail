@@ -323,14 +323,15 @@ fn workspace_row_node(
 
 ///|
 /// A workspace's mark (`w`'s, as it is now) in `parent`, ws_row_mark across in the words' ink, else its first letter
-/// (ws_row_letter), one in the other's place (a pick: its way from as tall as the other was).
+/// (ws_row_letter, part of the mark: at its size whatever the system's size of words, mark_words_node), one in the
+/// other's place (a pick: its way from as tall as the other was).
 fn ws_mark_node(parent : @view.View, w : () -> Workspace) -> Unit {
   parent.pick(fn() { workspace_marked(w()) }, fn(m, marked) {
     if marked {
       let ink = fn() { @sf.theme().p.text }
       @sf.station_mark_node(m, fn() { w().emoji }, fn() { w().icon }, ws_row_mark, ink, fn() { 0 })
     } else {
-      @sf.words_node(m, fn() { @sf.initial(w().name) }, fn() { ws_row_letter }) |> ignore
+      @sf.mark_words_node(m, fn() { @sf.initial(w().name) }, fn() { ws_row_letter }) |> ignore
     }
   })
 }

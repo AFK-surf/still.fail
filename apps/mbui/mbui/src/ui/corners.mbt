@@ -336,8 +336,9 @@ fn[T] Ctx::with_tree_nodes(
       let w = Node::new()
       w.kind = kind_text
       w.text = view_words_set(d.words, d.words_look)
-      // (set as the tree draws them (view_host's words: at the system's size of words, Ctx::sp), its weight, its ink)
-      w.font_size = self.sp(d.words_look.size)
+      // (set as the tree draws them (view_host's words: at its node's size of words, Tree::words_scale_of), its weight,
+      // its ink)
+      w.font_size = view_sp(tree.words_scale_of(d.id), d.words_look.size)
       w.weight = d.words_look.weight
       w.color = d.ink
       w.x = d.x

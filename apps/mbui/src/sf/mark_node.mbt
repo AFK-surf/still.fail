@@ -160,7 +160,8 @@ pub fn station_mark_node(
 ///|
 /// A workspace before its name where it is named among other words (workspace_badge's, as a node) in `parent`: its
 /// mark `size` across (station_mark_node's, in the ink; a picture of it asked for on `stint`), else its `name`'s first
-/// letter, semibold and muted in a meta's size, in a square as large. Each as it changes.
+/// letter, semibold and muted in a meta's size (part of the mark: at its size whatever the system's size of words,
+/// mark_words_node), in a square as large. Each as it changes.
 #callsite(autofill(loc))
 pub fn workspace_badge_node(
   parent : @view.View,
@@ -178,7 +179,7 @@ pub fn workspace_badge_node(
     b.show(fn() { !marked() }, at_once=true, fn(tile) {
       style_node(tile, fn() { workspace_badge_tile })
       tile.width(Is(Some(size))).height(Is(Some(size))) |> ignore
-      words_node(tile, fn() { initial(name()) }, fn() { workspace_badge_letter }) |> ignore
+      mark_words_node(tile, fn() { initial(name()) }, fn() { workspace_badge_letter }) |> ignore
     })
   })
   |> ignore
