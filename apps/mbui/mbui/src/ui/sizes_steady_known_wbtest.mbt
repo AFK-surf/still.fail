@@ -5,6 +5,6 @@
 ///|
 fn init {
   sizes_steady_known([
-    ("src/ui/layout_wbtest.mbt", 29),
+    ("src/ui/layout_wbtest.mbt", 8),
   ])
 }

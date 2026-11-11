@@ -21,7 +21,7 @@ fn init {
     // 278.98 to 293.06 and back to 288.80 at 3183.3". When a device's answer comes is no app's to say: both are a
     // device's. Taken away as the node message list makes the two one way with the composer)
     ("src/sfreplay/flows/share_files_test.mbt", 2),
-    ("src/sfreplay/flows/share_test.mbt", 3),
+    ("src/sfreplay/flows/share_test.mbt", 2),
     ("src/sfreplay/flows/sheets_sinking_test.mbt", 2),
     ("src/sfreplay/flows/viewer_test.mbt", 1),
   ])

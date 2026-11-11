@@ -132,9 +132,9 @@ yet and you can add one, add it.
   file leaves `motion_counted` once it shows none; one is never added to it. A bar's key is the file its Testers are made in (one
   made in another file's helper is that file's), and it holds how many one Tester may show: those runs, and the
   default rate's in CI (`MBUI_TEST_BARS`), say each bar and each fault a Tester found with how many it has come to,
-  judged or counted (`MOTION bar`, `known`, `made`, `unjudged`, `counted`, `held`), and `scripts/motion_bars.sh` sets
+  judged or counted (`MOTION bar`, `known`, `made`, `unjudged`, `counted`, `counting`, `held`), and `scripts/motion_bars.sh` sets
   each bar beside the most one Tester of its file found at any of the three, in the summary of a job after them: a bar
-  more than that to fall, a counted file showing none at 60 and 120 to leave the list, a file with a Tester not judged
+  more than that to fall, a counted file showing none where it was counted to leave the list, a file with a Tester not judged
   on how what moves goes (`Tester::motion_unjudged`) left out (for now said, not failed: the coordinator of the
   migration, 2026-11-12).
 - Motion is data: said once with where from, where to, curve and start; its
