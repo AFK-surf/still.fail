@@ -275,14 +275,12 @@ fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
 
 ///|
 /// A file's tab `tab` asked beside (Shell's `beside`): on the wide frame, in the side panel of the chat in view, in
-/// front (that file's tab there already, brought to the front); else nowhere (false: it opens over the whole window).
-fn beside_where(src : Source, wide : Bool, tab : String) -> Bool {
+/// front (that file's tab there already, brought to the front): the tab put there; else nowhere (None: it opens over
+/// the whole window).
+fn beside_where(src : Source, wide : Bool, tab : String) -> String? {
   match app.nav.top() {
-    Chat(r) if wide => {
-      @sfdesk.view_beside(src, r, tab)
-      true
-    }
-    _ => false
+    Chat(r) if wide => Some(@sfdesk.view_beside(src, r, tab))
+    _ => None
   }
 }
 

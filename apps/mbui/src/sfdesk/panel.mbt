@@ -85,8 +85,8 @@ pub fn side_ask(src : Source, r : ChatRef, action : String, tab : String?) -> Un
 ///|
 /// File tab `tab` opened beside chat `r` (the shell's `beside`: sfapp's beside_where), in front; a tab of that file open
 /// there already (the same file, what it said of itself then aside: view_tab_file's same_file), that one brought to the
-/// front, never a second.
-pub fn view_beside(src : Source, r : ChatRef, tab : String) -> Unit {
+/// front, never a second: the tab put in front.
+pub fn view_beside(src : Source, r : ChatRef, tab : String) -> String {
   let open = match @sfbase.view_tab_file(tab) {
     Some(f) =>
       side_now(src, r).0
@@ -99,7 +99,9 @@ pub fn view_beside(src : Source, r : ChatRef, tab : String) -> Unit {
       })
     None => None
   }
-  side_change(src, r, "open", Some(open.unwrap_or(tab)))
+  let put = open.unwrap_or(tab)
+  side_change(src, r, "open", Some(put))
+  put
 }
 
 ///|

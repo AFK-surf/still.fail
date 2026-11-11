@@ -670,7 +670,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       ),
     ]
   }
-  let more = [download_option(src, here, a, owner)]
+  let more = [beside_option(here, a, at), download_option(src, here, a, owner)]
   more.append(load)
   file_menu(c, open, "", quote=quote_of(here, a, owner, by), more~)
   // (its name, which nothing over its picture says)

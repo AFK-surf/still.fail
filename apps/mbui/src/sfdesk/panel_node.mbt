@@ -125,6 +125,12 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
     }
     let open = fn() { side_now(src, r).0.length() > 0 }
     col.reacts(open, fn(open) { side_slides(col, src, key, open) })
+    // (its page kept under another, shown no more: what a file's tab plays here paused, as when its tab is let go)
+    col.reacts(fn() { app.nav.shows(serial) }, fn(shows) {
+      if !shows {
+        @sfbase.tab_players_pause(chat=tabs_key(r))
+      }
+    })
     let over = fn() { pane_w_at(src, col) < side_both_least }
     let at = fn() { side_col(src, col, key, open()) }
     col

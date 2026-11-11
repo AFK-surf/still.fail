@@ -55,8 +55,9 @@
 /// A new workspace over Home swept (new-workspace, new-workspace-code), what home-sheet has under it on a tablet: the new
 /// chat's three chips beside its composer, old views, the page behind counted again, 6 more, 297.
 /// A file beside a chat in the viewer a screen of its own (chat-view-side, chat-view-side-image, 2026-11-10), what
-/// chat-things-side has: its tab's close key, in the three wide windows each, 6 more, 303.)
-let rooms_known : Map[String, Int] = { "room": 303, "apart": 0, "hover": 0 }
+/// chat-things-side has: its tab's close key, in the three wide windows each, 6 more, 303. A film and a song beside a
+/// chat (chat-view-side-video, chat-view-side-audio, 2026-11-11), the same: its tab's close key, 6 more, 309.)
+let rooms_known : Map[String, Int] = { "room": 309, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

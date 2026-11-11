@@ -270,8 +270,9 @@ pub fn Media::new(
 }
 
 ///|
-/// `track` played from `start` ms in (0: its start), at the speed chosen; what played before stops.
-pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> Unit {
+/// `track` played from `start` ms in (0: its start), at the speed chosen; what played before stops. `play` false: opened
+/// paused there, showing that frame, until it is played.
+pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0, play? : Bool = true) -> Unit {
   self.close_view()
   self.decode_failed = false
   let n = @ui.NativeView::video(track.mime, track.read, direct=track.direct)
@@ -284,7 +285,9 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   if start > 0.0 {
     n.seek(start)
   }
-  n.play()
+  if play {
+    n.play()
+  }
   self.view = Some(n)
   self.track = Some(track)
   self.start_at = start

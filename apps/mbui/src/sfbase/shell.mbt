@@ -21,9 +21,10 @@ pub(all) struct Shell {
   /// service: the side panel's tabs on the wide frame, toggled): what a page asks of its chat (open_detail)
   detail : (Source, ChatRef, String) -> Unit
   /// a file asked to be opened beside the page (its `view:` tab: viewer_tab.mbt) put there where the layout has a side
-  /// panel for the page in view (the wide frame's chat), in front; whether it was (not: what asked opens it over the
-  /// whole window). What open_preview calls, never a page itself
-  beside : (String) -> Bool
+  /// panel for the page in view (the wide frame's chat), in front: the tab it put there (that file's tab there
+  /// already, by whatever key it was opened with), none where it has nowhere (what asked opens it over the whole
+  /// window). What open_preview calls, never a page itself
+  beside : (String) -> String?
   /// whether the layout has such a side panel for the page in view now: what offers to open a file there asks
   beside_room : () -> Bool
   /// what back does where the layout has it (the tiers' table), none where back is the
@@ -49,7 +50,7 @@ pub fn bare_shell() -> Shell {
     open: stack_open,
     open_over: stack_open,
     detail: fn(_, _, _) {  },
-    beside: fn(_) { false },
+    beside: fn(_) { None },
     beside_room: fn() { false },
     back: stack_back,
     show: fn() {  },
