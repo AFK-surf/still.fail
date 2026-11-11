@@ -162,6 +162,46 @@ fn notify_params(workspace : String) -> Map[String, Json] {
 }
 
 ///|
+/// What the start says of notifications, signed in with a workspace in view, said in node `v` at the moment its cause
+/// comes (the core's `notify` answered, the app shown again: both signals), between frames, not as a frame after it
+/// runs: what the system allows (`notify.permission`, as the app starts and each time it is shown again: MainActivity
+/// onStart), the system asked once (the first time signed in with notifications on: App.kt
+/// rememberNotificationAsk(once)) and this device's push registration (once at the start: MainActivity Push.sync).
+/// Read with a workspace in view only, as notices_frame was: `notify` is held by then (sfbase's shell_opens).
+pub fn notices_said_node(v : @view.View, src : Source) -> Unit {
+  v.reacts(
+    fn() {
+      match workspace_in_view(src).0 {
+        Some(_) if !src.read_only => src.topic("notify", Map([])).get().value is Some(_) && @ui.app_visible()
+        _ => false
+      }
+    },
+    fn(now) {
+      if !now {
+        return
+      }
+      notice_state.src = Some(src)
+      let h = notice_host.val
+      let notify = @signals.untracked(fn() { src.topic("notify", Map([])).get().value })
+      if !notice_state.told {
+        notice_state.told = true
+        tell_permission(src, notify)
+      }
+      if !notice_state.asked_once && flag(notify, "on") && field(notify, "asked") is Some(False) {
+        notice_state.asked_once = true
+        (src.call)("notify.set", { "asked": Json::boolean(true) }, answer_unread)
+        (h.ask)() |> ignore
+      }
+      if !notice_state.synced {
+        notice_state.synced = true
+        notice_state.token = (h.token)()
+        push_sync(src, None)
+      }
+    },
+  )
+}
+
+///|
 /// Each frame, signed in, the workspace `w` in view.
 pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   if src.read_only {
@@ -169,36 +209,14 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   }
   notice_state.src = Some(src)
   let h = notice_host.val
-  let shown = @ui.app_visible()
-  let notify = src.topic("notify", Map([])).get().value
-  match notify {
-    Some(_) => {
-      // what the system allows, as the app starts and each time it is shown again (MainActivity onStart)
-      if shown && !notice_state.told {
-        notice_state.told = true
-        tell_permission(src, notify)
-      }
-      // asked once, the first time signed in with notifications on (App.kt rememberNotificationAsk(once))
-      if !notice_state.asked_once && flag(notify, "on") && field(notify, "asked") is Some(False) {
-        notice_state.asked_once = true
-        (src.call)("notify.set", { "asked": Json::boolean(true) }, answer_unread)
-        (h.ask)() |> ignore
-      }
-      // the registration for pushes, once at the start (MainActivity: Push.sync)
-      if !notice_state.synced {
-        notice_state.synced = true
-        notice_state.token = (h.token)()
-        push_sync(src, None)
-      }
-      // a token come since (the push service's first, given after the start, or a new one): registered as the core
-      // says (PushService.onNewToken)
-      let token = (h.token)()
-      if token != "" && token != notice_state.token {
-        notice_state.token = token
-        push_sync(src, None)
-      }
+  // a token come since (the push service's first, given after the start, or a new one): registered as the core says
+  // (PushService.onNewToken); what the start says is notices_said_node's
+  if notice_state.synced {
+    let token = (h.token)()
+    if token != "" && token != notice_state.token {
+      notice_state.token = token
+      push_sync(src, None)
     }
-    None => ()
   }
   // the system's answer to an ask
   match (h.answer)() {

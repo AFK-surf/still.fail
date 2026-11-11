@@ -87,6 +87,7 @@ fn notify_core(
   notify? : @signals.Signal[Json] = @signals.signal({ "on": true, "asked": true, "push": true, "show": [] }),
   show? : Array[Json] = [],
   env? : Array[(String, String)] = [],
+  answered? : @signals.Signal[Bool] = @signals.signal(true),
 ) -> @ui.Tester {
   new_run()
   use_system(sys)
@@ -98,8 +99,10 @@ fn notify_core(
         "notify" =>
           if params.contains("workspace") {
             { value: Some({ "show": Json::array(show) }), error: None, version: show.length() }
-          } else {
+          } else if answered.get() {
             { value: Some(notify.get()), error: None, version: 1 }
+          } else {
+            { value: None, error: None, version: -1 }
           }
         _ => base.topic(name, params).get().snapshot()
       }
@@ -337,6 +340,35 @@ test "the system told what it allows; asked once when it never was, with notific
   assert_eq(sys.asks, 1)
   // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
 }
+
+///|
+test "what the system allows told at the moment the core's notify is answered, and as the app is shown again, no frame waited for" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let answered = @signals.signal(false)
+  let t = notify_core(calls, sys, answered~)
+  t.run_for(notify_late_ms)
+  // (not answered: nothing told, nothing registered)
+  assert_eq(named(calls, "notify.permission").length(), 0)
+  // answered between frames: told then, before any frame after it, so the same among the core's messages at any rate
+  // of frames
+  answered.set(true)
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 1)
+  assert_true(told[0].params.stringify().contains("\"granted\""))
+  // hidden: not told; shown again: told again, once
+  t.app_state(false, false)
+  t.run_for(notify_late_ms)
+  assert_eq(named(calls, "notify.permission").length(), 1)
+  t.app_state(true, true)
+  assert_eq(named(calls, "notify.permission").length(), 2)
+  t.run_for(notify_late_ms)
+  assert_eq(named(calls, "notify.permission").length(), 2)
+}
+
+///|
+/// How long the core's `notify` is not answered in the test above, and how long the app is behind.
+let notify_late_ms : Double = 500.0
 
 ///|
 test "pushes: none registered without a token, taken off while off; a token registered" {
