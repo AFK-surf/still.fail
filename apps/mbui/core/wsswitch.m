@@ -8,7 +8,13 @@
 // person waits (`waited`: press to all it waits for answered) and when the new screen is whole (`quiet`: press to the
 // last first value of what the commit asked).
 //   wsswitch <data dir>   MB_CORE_BUNDLE: the core's script; SCREEN=small|wide (small); LIMIT: the list's first
-//                         window (30, sfbase first_window on both screens); AWAY_MS: how long away before the last switch
+//                         window (30, sfbase first_window on both screens); AWAY_MS: how long away before the last switch;
+//                         STATIONS=up: the stations up (the seed's `link` records, as a device last found them) and the
+//                         network never answering (still.fail cloud at 192.0.2.1, TEST-NET-1, which nothing routes),
+//                         so each link stays as a device's is as the app starts, on its way and taken for up (link.ts),
+//                         until it gives up some seconds on (mesh.ts's dial): the switches within seconds of the start
+//                         find them up, the last one, after AWAY_MS, down; else (down) refused at once, every station
+//                         down and a new chat's page saying so
 #import <Foundation/Foundation.h>
 #include <math.h>
 #include <os/lock.h>
@@ -371,7 +377,8 @@ int main(int argc, char **argv) {
     wide_screen = getenv("SCREEN") && strcmp(getenv("SCREEN"), "wide") == 0;
     limit = getenv("LIMIT") ? atoi(getenv("LIMIT")) : 30;
     told = dispatch_semaphore_create(0);
-    mb_core_start(argv[1], "http://127.0.0.1:9", 0, on_message, NULL);
+    int up = getenv("STATIONS") && strcmp(getenv("STATIONS"), "up") == 0;
+    mb_core_start(argv[1], up ? "http://192.0.2.1:9" : "http://127.0.0.1:9", 0, on_message, NULL);
     show("as the app starts", @"ws", 1);
     // (long enough for what the start set going to be over: the links' first tries, the rows read behind the list)
     idle(6000);

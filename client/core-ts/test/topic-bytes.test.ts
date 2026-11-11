@@ -172,7 +172,6 @@ const EMPTY: Record<string, Record<string, string>> = {
   "connect": { "bound.efforts": STATE, "bound.time": STATE, "bound.watch.names": STATE },
   // (a new chat's pick names no account's allowance, choose.ts `#now` quiet; the model it takes with nothing chosen,
   // Fable, runs on one runtime; borrow: a model only another station has, picked)
-  "newChat": { "pick.account.profile.quota.windows": ASKED_SO, "pick.runtimes": STATE, "pick.borrow.lines": STATE },
   "pick": { "account.profile.quota.windows": ASKED_SO, runtimes: STATE, "borrow.lines": STATE },
   "chat": chatEmpty(true, false),
   "chat compact": chatEmpty(true, true),

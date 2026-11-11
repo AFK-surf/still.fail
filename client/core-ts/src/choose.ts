@@ -15,9 +15,10 @@ import * as model from "./shapes/model.ts";
 import { Marks } from "./reactive.ts";
 import type { Store, Value } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
-import { borrowable, effortDefault, models, quotaLine, servingIn, sourced } from "./views/models.ts";
+import { borrowable, effortDefault, lends, models, quotaLine, servingIn, sourced } from "./views/models.ts";
 import { profileServes } from "./views/profile-scope.ts";
 import { pendingKeyMade } from "./views/local.ts";
+import { work } from "./work.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -101,6 +102,39 @@ export function resolve(options: J[], choice: J): Resolved {
 
 function picked(r: Resolved): J {
   return { model: r.entry !== null ? r.entry.model : null, runtime: r.runtime ?? "claude", effort: r.effort, fast: r.fast, context: r.context, profile: r.profile };
+}
+
+/// The account a control on `value` names (PickAccount; none where it names none) and what it is made of: the one it is
+/// kept to (`kept`, its id), its window running low (`low`). It is the one kept to, as `option` (the model it runs, its
+/// accounts) has it, else the one it is on now (`current`, a chat's); `quiet`, a new chat's, which names the station's
+/// pick only where it runs low, and no account's allowance.
+function named(value: J, option: J, current: J, quiet: boolean): { kept: string | null; low: J; account: J } {
+  const kept = text(get(value, "profile"));
+  let shown: J = null;
+  if (kept !== null && option !== undefined && option !== null) shown = arr(get(get(option, "accounts"), typeof value.runtime === "string" ? value.runtime : "")).find((a) => a.id === kept) ?? null;
+  if (shown === null) shown = current;
+  const low = shown !== null ? (get(quotaLine(get(shown, "quota")), "level") ?? null) : null;
+  if (quiet && kept === null && low === null) return { kept, low, account: null };
+  const txt =
+    kept !== null
+      ? shown !== null
+        ? typeof shown.name === "string"
+          ? shown.name
+          : kept
+        : kept
+      : shown !== null
+        ? t("core-logic.choose.account.auto_on", { name: typeof shown.name === "string" ? shown.name : "" })
+        : t("core-logic.choose.account.auto");
+  return { kept, low, account: { text: txt, auto: kept === null, level: low, profile: quiet ? null : shown } };
+}
+
+/// Whether what a new chat or a chat runs on now (`value`) runs Fast: as it is set, else as its account does (the one
+/// kept to, else the one it is on, `current`), as the station's overview says.
+function runsFast(overview: J, value: J, current: J): boolean {
+  if (!fastRuntime(value.runtime)) return false;
+  if (typeof value.fast === "boolean") return value.fast;
+  const id = text(get(value, "profile")) ?? (typeof get(current, "id") === "string" ? current.id : null);
+  return arr(get(overview, "profiles")).some((p) => id !== null && p.id === id && p.fast === true);
 }
 
 const comboFast = (v: J): boolean | null => fastRuntime(get(v, "runtime")) && typeof get(v, "fast") === "boolean" ? v.fast : null;
@@ -297,7 +331,9 @@ export class Choose implements Owner {
     // workspace (not every station's, by the minute).
     const page: J = this.#env.store.get({ topic: "station", scope, station: addr });
     const overview = isObject(get(page, "overview")) ? page.overview : null;
-    const options = overview !== null ? models(servingIn(this.#env.store.get({ topic: "overview", station: addr }), scope, station.joined === true), this.#env.now()) : [];
+    const raw: J = this.#env.store.get({ topic: "overview", station: addr });
+    const served = servingIn(raw, scope, station.joined === true);
+    const options = overview !== null ? models(served, this.#env.now()) : [];
     const r = resolve(options, this.#choice(scope, id));
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
     // A station this workspace joined runs its chats on the profiles open to it: with some, but
@@ -307,9 +343,9 @@ export class Choose implements Owner {
     const profiles = overview !== null ? arr(servingIn(overview, scope, joined).profiles) : all;
     view.waiting = overview === null;
     // No profile of its own, but another station of the workspace has models it could borrow: its model control
-    // offers them (borrowed before the chat is made) rather than only adding a profile.
-    const lends = overview !== null && profiles.length === 0 && !joined
-      && borrowable(this.#env.store.get({ topic: "stationsWhole", scope }), addr, [], null, this.#env.now()).length > 0;
+    // offers them (borrowed before the chat is made) rather than only adding a profile. Only whether one does: each
+    // other station up's overview walked for a profile it would lend, none of their models made (lends).
+    const lends = overview !== null && profiles.length === 0 && !joined && this.#lends(scope, addr);
     const disabled = all.some((p) => get(p, "enabled") === false && profileServes(p, scope, joined));
     view.blocked = overview !== null && profiles.length === 0 ? (lends ? null : disabled ? "disabled" : joined && all.length > 0 ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
     // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
@@ -336,12 +372,19 @@ export class Choose implements Owner {
     view.profile = r.profile;
     view.efforts = r.efforts;
     view.accounts = r.accounts;
-    const pick = this.#pick({ topic: "pick", station: addr, of: "new" }, addr, "new");
-    view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
+    // Its model control as the page draws it closed (none while its profiles are read: the page shows it in its
+    // bones); its panel is the `pick` topic, asked as it opens.
+    // Its control runs on the station's models of every profile it has enabled (`#onStation`, as `pick` of `new` has
+    // always made them), the page on those serving this workspace (`servingIn`): the same list, made once, unless a
+    // profile enabled there does not serve it (its `serves` false; or, on a station from before `serves`, one this
+    // workspace joined whose profile's `workspaces` do not name it); then the control's are made apart, as before.
+    const servesAll = arr(get(served, "profiles")).length === arr(get(raw, "profiles")).filter((p) => get(p, "enabled") !== false).length;
+    view.pick = overview !== null ? this.#face(addr, servesAll ? options : models(raw, this.#env.now())) : null;
     // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
-    // control opens; the one picked whichever station it is of.
+    // control opens (its menu: each by its name and station's); the one picked whichever station it is of. Held with
+    // the page, which has each station's read as it shows: the menu finds them read, never waits on a station.
     const listed = this.#workspacePresets(online);
-    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", dirs: arr(get(p, "dirs")).length, station: at, stationName, marks: this.#marks(p, at) }));
+    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", station: at, stationName }));
     const picked = this.#picked(scope, listed);
     view.preset = picked === undefined ? "" : (text(get(picked.p, "id")) ?? "");
     view.presetStation = picked?.station ?? "";
@@ -355,6 +398,27 @@ export class Choose implements Owner {
     const overview = this.#env.store.get({ topic: "overview", station: addr });
     const options = models(overview, this.#env.now());
     return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
+  }
+
+  /// A new chat's model control as its page draws it closed (NewChatPick), on `station` of `options` (its models as
+  /// `#onStation` makes them: of every profile enabled there): what it runs on now and how
+  /// (the model's name, maker and runtimes; whether it says how hard it thinks, Fast; the account kept to), worked out
+  /// of that station alone, as `#pick` works out the same of it (`#now`'s, `named`, `runsFast`). Its panel is the `pick`
+  /// topic, asked as it opens: every option annotated, the workspace's other stations' models after them, made for
+  /// the panel, never for the page. None while the station's overview is not read (`pick`'s none).
+  #face(station: string, options: J[]): J {
+    const overview = this.#env.store.get({ topic: "overview", station });
+    if (overview === undefined) return null;
+    const r = resolve(options, this.#choice(ofAddress(station), stationId(station)));
+    const value = picked(r);
+    return { value, valueOption: r.entry, efforts: r.efforts, account: named(value, r.entry, null, true).account, fastText: runsFast(overview, value, null) ? "Fast" : null };
+  }
+
+  /// Whether another station of `scope` up now would lend station `here` a model (views/models.ts `lends`): a yes or no
+  /// of the scope's stations' rows and the overviews of those up, as they are kept, none of their models made.
+  #lends(scope: string, here: string): boolean {
+    const v = this.#env.store.value({ topic: "stations", scope });
+    return lends(v !== undefined && "ok" in v ? v.ok : [], here, (station) => this.#env.store.get({ topic: "overview", station }));
   }
 
   /// The presets of the scope's stations `online` (their addresses' `presets` topics), as each station said them last,
@@ -640,35 +704,8 @@ export class Choose implements Owner {
     const speedText = (f: boolean | null) => (f === true ? "Fast" : f === false ? t("core-logic.choose.speed.standard") : t("core-logic.choose.speed.plan"));
     const next = { model: nextModel, runtime: on ?? null, effort, profile, fast, context };
     const changed = FIELDS.some((f) => !equal((next as J)[f], value[f] ?? null));
-    const kept = text(get(value, "profile"));
-    let shown: J = null;
-    if (kept !== null && valueOption !== undefined) shown = arr(get(get(valueOption, "accounts"), typeof value.runtime === "string" ? value.runtime : "")).find((a) => a.id === kept) ?? null;
-    if (shown === null) shown = current;
-    const effectiveFast =
-      fastRuntime(value.runtime) &&
-      (o.kind === "new" || o.kind === "session") &&
-      (typeof value.fast === "boolean"
-        ? value.fast
-        : (() => {
-            const id = kept ?? (typeof get(current, "id") === "string" ? current.id : null);
-            return arr(get(overview, "profiles")).some((p) => id !== null && p.id === id && p.fast === true);
-          })());
-    const low = shown !== null ? (get(quotaLine(get(shown, "quota")), "level") ?? null) : null;
-    const names = !quiet || kept !== null || low !== null;
-    let accountView: J = null;
-    if (names) {
-      const txt =
-        kept !== null
-          ? shown !== null
-            ? typeof shown.name === "string"
-              ? shown.name
-              : kept
-            : kept
-          : shown !== null
-            ? t("core-logic.choose.account.auto_on", { name: typeof shown.name === "string" ? shown.name : "" })
-            : t("core-logic.choose.account.auto");
-      accountView = { text: txt, auto: kept === null, level: low, profile: quiet ? null : shown };
-    }
+    const { kept, low, account: accountView } = named(value, valueOption, current, quiet);
+    const effectiveFast = (o.kind === "new" || o.kind === "session") && runsFast(overview, value, current);
     const drafted = account(profile);
     const who = drafted !== undefined && typeof drafted.name === "string" ? drafted.name.split("@")[0] : t("core-logic.choose.account");
     const whoLevel = dropped ? "amber" : profile === null && kept === null ? low : null;
@@ -740,6 +777,7 @@ export class Choose implements Owner {
       };
       return took.runtime === null && took.effort === null && took.fast === null && took.context === null ? undefined : took;
     };
+    work.annotated += options.length;
     const annotated = options.map((opt: J) => {
       const id = typeof opt.model === "string" ? opt.model : "";
       const ran = id === m ? { runtime: on ?? null, effort, fast, context } : (this.#usual(scope, id, history) ?? byHand(opt));
