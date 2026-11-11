@@ -7,7 +7,7 @@
 // to see it is there, is a connection, and the runner keeps one at a time. So it is never looked at but to attach.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
 import { niced } from "../ops/nice.ts";
@@ -39,6 +39,8 @@ export const runnersDir = (data: string) => join(data, "run", "runners");
 /// Whether a runner of before (its info file there, itself alive) still keeps its process: its socket there (one on its
 /// way out has removed it). A pipe cannot be looked at (see above): the info file, which goes with it, says so then.
 export const listening = (info: RunnerInfo) => !platform.runnerSocketVisible || existsSync(info.socket);
+/// `listening`, looked at off the station's thread.
+export const listeningSoon = async (info: RunnerInfo) => !platform.runnerSocketVisible || (await access(info.socket).then(() => true, () => false));
 
 /// A program named by its command (not a path) that `env`'s PATH does not have: the runtime is not installed there.
 export class CommandMissing extends Error {
@@ -112,9 +114,10 @@ export async function liveRunners(data: string, options: { strict?: boolean } = 
   return read.flatMap((text) => (text === null ? [] : alive(() => text)));
 }
 
-/// Runner `id`'s, its file alone, if its runner is alive.
-export function runnerOf(data: string, id: string): RunnerInfo | undefined {
-  return alive(() => readFileSync(join(runnersDir(data), `${id}.json`), "utf8"))[0];
+/// Runner `id`'s, its file alone (read off the station's thread), if its runner is alive.
+export async function runnerOf(data: string, id: string): Promise<RunnerInfo | undefined> {
+  const text = await readFile(join(runnersDir(data), `${id}.json`), "utf8").catch(() => null);
+  return text === null ? undefined : alive(() => text)[0];
 }
 
 /// What an info file says, if its runner is alive.

@@ -26,13 +26,23 @@ yet and you can add one, add it.
   handler (`on_press`, `on_key`, `on_drag`), run outside tracking, writing state; a shortcut is an action
   (`on_action`), its keys the tree's keymap's (`View::keymap`: `src/view/keymap.mbt`), never a key read as a build
   runs (detlint `key-read`); time is read where it is drawn (`moved_by`, a look's closure), never as a frame is built.
-  `src/view/view.mbt`'s head says the model whole.
+  A binding reads a way only through the framework's entries, following the clock while it goes and reading its end once
+  it is there (`Way::shown_on`, `View::drawn_while`, `View::goes_now`); a Tester fails the rest
+  (`src/view/clock_read.mbt`; the coordinator of the migration, 2026-11-10). `src/view/view.mbt`'s head says the model
+  whole.
 - What a structure makes or lets go down a column makes its way in or closes it on a Move, what is under it going with
   it (`View::comes`, flex's `come_*`): the framework's, not each page's (the user, 2026-11-09: 方案 A). A show in its
   opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. Say `at_once=true`
   only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another);
   `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls,
-  what a block holds makes its way as anywhere; what holds a scroller (a page, a pane) comes and goes at once.
+  what a block holds makes its way as anywhere. What holds a scroller makes its way as anything does, what it holds
+  laid out once at the size it comes to (a panel's capped list in a pick); a page or a pane comes and goes at once by
+  being grown to what its column leaves it, not by holding a scroller (the coordinator of the migration, 2026-11-11:
+  the rule that made all of them come at once was for those, and pages in a stack say at_once). What comes and goes
+  down one column at one moment, with what is still on its way there then, goes one way (flex's `ComeGroup`), each its
+  share, setting out and coming to rest together; turned away from where it goes as a whole, all of it slows as one
+  first; one alone goes its own way. Never each its own beside the others (the coordinator of the migration,
+  2026-11-11, by the user's 2026-10-30, 2026-11-03 and 2026-11-09).
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
@@ -63,10 +73,15 @@ yet and you can add one, add it.
   a function of the inputs and that moment, at 60 Hz, at 120 Hz, or in one jump.
 - So every test the Tester runs, mbui's and the app's, runs again with frames drawn on `run_for`'s way (while the app
   asks for them, as a host draws them) at 60, 120, 24 and 7 a second (`MBUI_TEST_FPS`, `scripts/fps_check.sh`; in CI
-  mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate), and must come out the same. Only
+  mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate, on a branch's pushes and pull requests and
+  in the day's run: main's run after a merge is at the default rate alone, the rates having run on the merged head, 64
+  runs and 13.8% of GitHub's runner time with none red, 2026-11-10), and must come out the same; the app's sweeps of
+  each screen at rest (screens, squeeze_said, words_large, corners, contrast) only at the default rate, a rate having
+  found nothing in them the default run did not (the user, 2026-11-11: each part of the tests is run for what it is
+  for). Only
   `run_for`'s way gets them: what a test walks itself (inputs, `frame()`) is on the display's frames as ever. Those runs
-  hold results only; how a motion goes frame to frame (`sizes_steady`, `rows_steady`, `words_over`) is judged on the
-  default run's frames (the user, 2026-11-09: 平滑度另开一条线), and a test that walks its frames itself to judge that
+  hold results only; how a motion goes frame to frame (`sizes_steady`, `rows_steady`, `words_over`, `gaps_steady`) is
+  judged on the default run's frames (the user, 2026-11-09: 平滑度另开一条线), and a test that walks its frames itself to judge that
   (`frame()`, the same frames at any rate) returns at once at a rate (`@ui.test_at_a_rate()`, send_steady_wbtest.mbt).
   That line: `MBUI_TEST_MOTION` (`count`, `judge`; `src/ui/tester_fps.mbt`) judges them at 60 and 120 on every frame on
   the way as well, where a step half way through a motion shows (「动画执行到一半突变也算突变」); CI's 60 and 120 runs
@@ -140,6 +155,9 @@ yet and you can add one, add it.
   a host callback's order, a core answer's order, the network, an emulator's state, another job's files). Do not
   rerun it green and move on, do not call it "偶发", do not add retries or waits. Find what came in uncontrolled and
   route it through what is recorded and given again, or take it out of the run.
+- A failure says why. Nothing in mbui or an app calls `abort` itself: on wasm-gc, where the tests run off CI, it prints
+  none of its words. Stop with `@halt.saying(msg)` (`src/halt`), which prints them and the line that said them first;
+  detlint's `abort-unsaid` holds it, in the app as in mbui (the coordinator of the migration, 2026-11-11).
 
 ## Tools are MoonBit, not Python
 
@@ -150,6 +168,23 @@ yet and you can add one, add it.
   `scripts/wasmrun.mjs` in Node, no C compiled (the user, 2026-11-03); in CI natively (`scripts/tooltarget.sh`). What
   it asks of the system goes through `tools/sys` (sys.c on native, wasmrun's "tsys" on Wasm). No new Python; a Python
   script that needs a change is rewritten instead (those left are going one by one).
+
+## The Android app's allocator
+
+- MoonBit's runtime in the Android app allocates with mimalloc 2.1.7, compiled from its source into libmbui.so
+  (`scripts/android.sh`: `MOONBIT_ALLOCATOR_MIMALLOC`, `mimalloc_obj`), the one moon's native builds (the Mac's and
+  Windows' apps) link prebuilt; it overrides no `malloc`, so the rest of the process keeps scudo. It is compiled by way
+  of `src/host/mimalloc_android.c`, which takes away the `SYS_*` names its raw `syscall(…)`s are made by, so it calls
+  libc's: Android's seccomp filter for apps kills a raw `access` (it killed kitdemo on x86_64 at once). Decided 2026-11-11
+  (the owner: 「你自己决定」): the same 349 KB `chat` message `@json.parse`d and let go, the same C, median ms to
+  decode / to let go: a phone (Snapdragon SM8850, Android 17) 7.3-15 / 2.4-4.9 with scudo, 2.6-5.3 / 0.7-0.85 with
+  mimalloc; an arm64 emulator 7.3 / 2.5 against 2.7 / 0.5; the Mac (mimalloc) 2.6 / 0.5. Scudo had been there only
+  because moon ships mimalloc as a macOS object alone (zzj3720/mbui 191a3ed321). Given up, known and taken: scudo's
+  hardening (and memory tagging where a phone has it), about 145 KB of the app (157 KB of still.fail's libmbui.so,
+  56 KB of its APK), and memory mimalloc keeps once freed.
+  Do not change it back without measuring again. Every compile of the Android app's C says the same allocator
+  (`scripts/android.sh`'s `CFLAGS`, its Wasm shell's too; mbui-ci's `mbc check`): a MoonBit object freed by the
+  other one is memory corrupted. iOS stays on the system's until CI runs the iOS app built so.
 
 ## Before a PR
 

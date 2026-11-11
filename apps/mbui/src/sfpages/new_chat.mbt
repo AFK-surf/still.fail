@@ -415,7 +415,7 @@ fn new_station_control(
   let t = @sf.theme()
   let from = c.id("new/station")
   let open = fn() {
-    @sf.panel(@sf.t("android-chat.new.station.pick"), fn(c, close) { station_rows(c, src, w, v, close) }, from=Of(from))
+    @sf.panel_nodes(@sf.t("android-chat.new.station.pick"), fn(n, close) { station_rows_node(n, src, w, v, close) }, from=Of(from))
   }
   new_capsule(
     c,
@@ -475,40 +475,60 @@ fn take_asked(what : String) -> Bool {
 }
 
 ///|
-/// Where a new chat runs (the mobile pickStation): the workspace's stations up now, each its
-/// mark beside its name, the one it starts on checked, and what the stations' list says of it (station_facts.mbt: its
-/// agents at work, what is left of its machine, how this device reaches it); picked, the core has it (`newChat.pick`).
-fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () -> Unit) -> Unit {
-  let p = @sf.theme().p
+/// Where a new chat runs (the mobile pickStation), in node `n` (its panel's body): the workspace's stations as `v` said
+/// them as it opened, each its mark beside its name, the one it starts on checked, and what the stations' list says of
+/// it (station_facts.mbt: its agents at work, what is left of its machine, how this device reaches it, followed as it
+/// changes); picked, the core has it (`newChat.pick`) and the panel closes, showing what it showed till it is gone.
+fn station_rows_node(n : @view.View, src : Source, w : Workspace, v : Json?, close : () -> Unit) -> Unit {
   let current = text(field(v, "station"), "station")
   for s in items(v, "stations") {
     let st = Some(s)
-    let id = c.id("pick-station/" + text(st, "station"))
-    c.on_press(id, fn() {
-      @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
-      close()
-    })
-    // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in)
-    let row = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
-      c.box(style=station_row_mark_box, fn() {
-        @sf.station_icon(c, text(st, "emoji"), text(st, "icon"), station_row_mark, p.text)
+    let here = text(st, "station") == current
+    n.box(fn(row) {
+      // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in_node; its ground under a mouse, as
+      // panel_row_in's `hovered`)
+      @sf.style_node(row, fn() { station_row.then(@sf.panel_row_in_node(row)) })
+      row.ground(By(fn() { if @sf.hovered_node(row) { @sf.theme().p.hover } else { 0L } })) |> ignore
+      @sf.rippled_node(row, fn() {
+        @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
+        close()
+      }, @sf.row_corner, fn() { text(st, "name") })
+      // (read out checked or not: the one it starts on)
+      row.says(Is(Some(@view.said(Button, label=text(st, "name"), check=if here { On } else { Off })))) |> ignore
+      row.box(fn(m) {
+        @sf.style_node(m, fn() { station_row_mark_box }, in_row=true)
+        if @sf.has_station_mark(text(st, "emoji"), text(st, "icon")) {
+          @sf.station_mark_node(m, fn() { text(st, "emoji") }, fn() { text(st, "icon") }, station_row_mark, fn() {
+            @sf.theme().p.text
+          }, fn() { 0 })
+        } else {
+          @sf.icon_node(m, "server", station_row_mark, By(fn() { @sf.theme().p.text })) |> ignore
+        }
       })
       |> ignore
-      c.box(style=station_row_words, fn() {
-        c.box(style=station_row_head, fn() {
-          c.text(text(st, "name"), style=station_row_name) |> ignore
-          station_state(c, st)
-          if text(st, "station") == current {
-            @sf.icon(c, "check", size=new_mark, color=p.accent) |> ignore
+      row.box(fn(col) {
+        @sf.style_node(col, fn() { station_row_words }, in_row=true)
+        // (giving way to its mark beside it where its name is long, as the old one's grow did: its name cut short)
+        col.min_width(Is(Some(0.0))) |> ignore
+        col.box(fn(head) {
+          @sf.style_node(head, fn() { station_row_head })
+          // (as long as there is room, what follows it at the line's end: station_row_name's w=grow, a node's own)
+          @sf.words_node(head, fn() { text(st, "name") }, fn() { station_row_name })
+          .grow(Is(1.0))
+          .shrink(Is(1.0))
+          .min_width(Is(Some(0.0)))
+          |> ignore
+          station_state_node(head, fn() { st })
+          if here {
+            @sf.icon_node(head, "check", new_mark, By(fn() { @sf.theme().p.accent })) |> ignore
           }
         })
         |> ignore
-        station_figures(c, src, st)
+        station_figures_node(col, src, fn() { st })
       })
       |> ignore
-      @sf.press_ripple(c, id, @sf.row_corner)
     })
-    c.semantics(row, Button, id~, label=text(st, "name"), check=if text(st, "station") == current { On } else { Off })
+    |> ignore
   }
 }
 
@@ -879,21 +899,20 @@ fn new_send(
   // its words, its quotes and its files from where they were typed, their cards and their tiles, into their row in
   // the chat's list, in it from now (sent_local), the list coming up with them, the composer held as tall as it is
   // till they set out
-  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
   @sfbase.flight_carry_start(
     c,
     d.key,
     words,
     flying_quotes(c, src, d, station) + flying_files(c, src, d),
     field=d.field,
-    hold=fn(c, ms) { composer_hold(c, d.key, 0.0, box, ms) },
+    shaped=composer_shapes_sent(c, src, d, station),
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
     marks~,
     runs~,
   )
   let row = sent_local(c, rk, None, words, up, going~, quotes~, runs~, now=(src.now)())
-  @sfbase.flight_carry_into(c, d.key, draft, rk, row, hold=fn(c, ms) { composer_hold(c, draft, 0.0, box, ms) })
+  @sfbase.flight_carry_into(c, d.key, draft, rk, row)
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)
   fresh.sending.set(true)

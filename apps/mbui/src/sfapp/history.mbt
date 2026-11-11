@@ -25,41 +25,31 @@ fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
 }
 
 ///|
-/// The head's short line: only what is worth a look now: a quota running out (its chip, what it
-/// says and more in its tip), the disk filling up (amber), an account that cannot run (red).
-fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
-  let t = @sf.theme()
-  let notes = items(a, "attention")
-  if notes.length() == 0 {
-    c.box(h=Px(8.0), fn() {  }) |> ignore
-    return
-  }
-  c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=6.0, pb=8.0, gap=10.0, align=ACenter, fn() {
-    for i, n in notes {
-      let nv = Some(n)
-      match field(nv, "quota") {
-        Some(Object(_)) as q => {
-          // (what the core says of it, and more, over it while it is pointed at, held by a finger: HistorySummary's tip)
-          let more = text(nv, "more")
-          @sf.quota_chip(c, q, small=true, key="history/attention/" + i.to_string(), said=text(nv, "text") + (if more != "" {
-            "\n" + more
-          } else {
-            ""
-          }))
-        }
-        _ =>
-          c.text(
-            text(nv, "text"),
-            size=t.t.caption,
-            color=if text(nv, "kind") == "disk" { t.p.warn_ink } else { t.p.red },
-            wrap=false,
-          )
-          |> ignore
-      }
+/// The head's short line, made once in `v`: only what is worth a look now (sfpages' history_attention_node: a quota
+/// running out, its chip with what it says and more in its tip, in `tips`; the disk filling up, amber; an account that
+/// cannot run, red), as `a` says it; 8 of room while there is none.
+fn history_summary_node(v : @view.View, a : () -> Json?, tips : @sf.TipLayer) -> Unit {
+  v.pick(fn() { items(a(), "attention").length() > 0 }, fn(p, any) {
+    if !any {
+      p.height(Is(Some(8.0))) |> ignore
+      return
     }
+    p.box(fn(r) {
+      r.row(Is(true)).padding(Is((18.0, 6.0, 18.0, 8.0))).gap(Is(10.0)).lines_up(Is(Some(Middle))) |> ignore
+      @sfpages.history_attention_node(r, a, tips, history_note_amber, history_note_red)
+    })
+    |> ignore
   })
-  |> ignore
 }
+
+///|
+/// What needs seeing to that is no quota: the caption's, the disk amber, an account red.
+// kept across runs: a value (no field of it changes)
+let history_note_amber : @ui.TextStyle = @ui.text_style(size=Caption, color=WarnInk, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let history_note_red : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger, wrap=false)
 
 ///|
 /// How a history's steps were put in place as it opened, by its list's key: at
@@ -72,82 +62,327 @@ let history_placed : Map[String, Bool] = {}
 let history_short : Map[String, Bool] = {}
 
 ///|
-/// Its details: where it stands and its figures as its card has them, how it runs in a line,
-/// what it runs on and has done, what it used, the station.
-fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Json?) -> Unit {
-  let t = @sf.theme()
-  let s = field(a, "session")
-  let card = src.topic("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).get().value
-  let usage = @sfpages.history_usage(src, r.station, key)
-  let host = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) }).get().value
-  let detail = fn(label : String, value : String, marked : Bool) {
-    c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
-      c.box(w=Px(76.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })
+/// Its details, made once in `v` and scrolling in it, as agent `a`, its card and its station say them now: where it
+/// stands and its figures as its card has them, how it runs in a line (its model's panel opened from it), what it runs
+/// on and has done, what it used, the station.
+fn history_details_node(v : @view.View, src : Source, r : ChatRef, key : String, a : () -> Json?, tips : @sf.TipLayer) -> Unit {
+  let s = fn() { field(a(), "session") }
+  let params : Map[String, Json] = { "station": Json::string(r.station), "key": Json::string(key) }
+  let card = fn() { src.topic("agentCard", params).get().value }
+  let usage = fn() { @sfpages.history_usage(src, r.station, key) }
+  let host_held = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) })
+  let host = fn() { host_held.get().value }
+  // a line of it: its name in a 76 column, what it says beside it
+  let detail = fn(p : @view.View, label : () -> String, value : (@view.View) -> Unit) {
+    p.box(fn(l) {
+      l.row(Is(true)).gap(Is(16.0)) |> ignore
+      l.box(fn(n) {
+        n.width(Is(Some(76.0))).shrink(Is(0.0)) |> ignore
+        @sf.words_node(n, label, fn() { details_label }) |> ignore
+      })
       |> ignore
-      if marked {
-        c.box(style=details_turns, fn() {
-          c.text(value, style=details_turns_words, keep=true) |> ignore
-          // (in the list's row, said at its least: a mark with how many)
-          @sfpages.work_mark(c, src, r.station, key, details_turns_mark, details_turns_link, lead=" · ", smallest=true)
-        })
-        |> ignore
-      } else {
-        c.box(w=Fill(1.0), fn() { c.text(value, size=t.t.ui, color=t.p.text) |> ignore }) |> ignore
-      }
+      l.box(fn(w) {
+        w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+        value(w)
+      })
+      |> ignore
     })
     |> ignore
   }
-  let rows : Array[() -> Unit] = [
-    fn() {
-      c.box(w=Fill(1.0), pt=2.0, fn() { agent_status(c, src, a) }) |> ignore
-      agent_tiles(c, card, 14.0)
-      agent_notes(c, card, 10.0)
-      c.box(h=Px(6.0), fn() {  }) |> ignore
-      // How it runs is picked in the same panel as elsewhere in the app.
-      let from = c.id("history-run-row")
-      run_row(c, a, on_press=fn() {
-        @sfpages.open_triple_panel(src, r.station, "session:" + key, Of(from), saved=@sf.t("web-pages.chat.pickSaved"))
+  let said = fn(words : () -> String) { fn(w : @view.View) { @sf.words_node(w, words, fn() { details_value }) |> ignore } }
+  let group = fn(p : @view.View, name : () -> String) {
+    p.box(fn(g) {
+      g.padding(Is((0.0, 14.0, 0.0, 4.0))) |> ignore
+      @sf.words_node(g, name, fn() { details_group }) |> ignore
+    })
+    |> ignore
+  }
+  let rows = fn(p : @view.View, top : Double, body : (@view.View) -> Unit) {
+    p.box(fn(b) {
+      b.padding(Is((0.0, top, 0.0, 10.0))).gap(Is(8.0)) |> ignore
+      body(b)
+    })
+    |> ignore
+  }
+  v.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+  v.scrolls(@view.Scroll::new(), bar=@ui.tree_scroll_bar(), fn(held) {
+    held.padding(Is((18.0, 0.0, 18.0, 30.0))) |> ignore
+    held.box(fn(st) {
+      st.padding(Is((0.0, 2.0, 0.0, 0.0))) |> ignore
+      agent_status_node(st, src, a)
+    })
+    |> ignore
+    agent_tiles_node(held, card, 14.0)
+    agent_notes_node(held, card, 10.0)
+    held.box(fn(gap) { gap.height(Is(Some(6.0))) |> ignore }) |> ignore
+    // How it runs is picked in the same panel as elsewhere in the app.
+    run_row_node(held, a, fn(from) {
+      @sfpages.open_triple_panel(src, r.station, "session:" + key, from, saved=@sf.t("web-pages.chat.pickSaved"))
+    })
+    rows(held, 12.0, fn(b) {
+      detail(b, fn() { tr("android-chat.history.detail.runtime") }, said(fn() { text(s(), "runtimeText") }))
+      b.show(fn() { text(s(), "processText") != "" }, fn(x) {
+        detail(x, fn() { tr("android-chat.history.detail.process") }, said(fn() { text(s(), "processText") }))
       })
-      c.box(w=Fill(1.0), pt=12.0, pb=10.0, gap=8.0, fn() {
-        detail(tr("android-chat.history.detail.runtime"), text(s, "runtimeText"), false)
-        match text(s, "processText") {
-          "" => ()
-          p => detail(tr("android-chat.history.detail.process"), p, false)
-        }
-        match text(card, "work") {
-          "" => ()
-          // (and after it what it has going in the background and its checklist, a mark that opens them from the
-          // foot: the first to give way)
-          w => detail(tr("android-chat.agent.turns"), w, true)
-        }
-      })
-      |> ignore
-      if usage.length() > 0 {
-        group_label(c, tr("android-chat.agent.usage"))
-        c.box(w=Fill(1.0), pt=6.0, pb=10.0, gap=8.0, fn() {
-          for u in usage {
-            detail(text(Some(u), "label"), text(Some(u), "value"), false)
-          }
+      // (and after it what it has going in the background and its checklist, a mark that opens them from the foot:
+      // the first to give way)
+      b.show(fn() { text(card(), "work") != "" }, fn(x) {
+        detail(x, fn() { tr("android-chat.agent.turns") }, fn(w) {
+          w.box(fn(t) {
+            @sf.style_node(t, fn() { details_turns }, in_row=true)
+            t.fits(Is(true)).min_width(Is(Some(0.0))) |> ignore
+            @sf.words_node(t, fn() { text(card(), "work") }, fn() { details_turns_words })
+            .shrink(Is(1.0))
+            .min_width(Is(Some(0.0)))
+            .fit_whole(Is(true))
+            |> ignore
+            @sfpages.work_mark_node(t, src, r.station, key, details_turns_mark, details_turns_link, lead=" · ", smallest=true)
+          })
+          |> ignore
         })
-        |> ignore
-      }
-      group_label(c, "Station")
-      c.box(w=Fill(1.0), pt=6.0, pb=10.0, gap=8.0, fn() {
-        detail(tr("android-chat.history.detail.name"), station_name_of(src, r), false)
-        match host {
-          Some(Object(_)) => detail(tr("android-chat.history.detail.machine"), text(host, "identity"), false)
-          _ => ()
-        }
       })
-      |> ignore
-      c.box(h=Px(30.0), fn() {  }) |> ignore
-    },
-  ]
-  c.list("history-details/" + r.station + "/" + key, rows.length(), 400.0, fn(i) {
-    c.box(w=Fill(1.0), pl=18.0, pr=18.0, fn() { (rows[i])() }) |> ignore
+    })
+    held.show(fn() { usage().length() > 0 }, fn(u) {
+      group(u, fn() { tr("android-chat.agent.usage") })
+      rows(u, 6.0, fn(b) {
+        b.each(fn() { Array::makei(usage().length(), fn(i) { i }) }, fn(i) { i }, fn(x, i) {
+          let k = i.untracked()
+          let one = fn() { usage().get(k) }
+          detail(x, fn() { text(one(), "label") }, said(fn() { text(one(), "value") }))
+        })
+      })
+    })
+    group(held, fn() { "Station" })
+    rows(held, 6.0, fn(b) {
+      detail(b, fn() { tr("android-chat.history.detail.name") }, said(fn() { station_name_of(src, r) }))
+      b.show(fn() { host() is Some(Object(_)) }, fn(x) {
+        detail(x, fn() { tr("android-chat.history.detail.machine") }, said(fn() { text(host(), "identity") }))
+      })
+    })
+    ignore(tips)
   })
   |> ignore
 }
+
+///|
+/// Where it stands (agent_status's, as nodes) in `v`, as `a` says it now: a dot in its tone on the first line's middle,
+/// its words and, muted, for how long, counting on each second from when it began.
+fn agent_status_node(v : @view.View, src : Source, a : () -> Json?) -> Unit {
+  let s = fn() { field(a(), "session") }
+  v.box(fn(row) {
+    row.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Start))) |> ignore
+    row.box(fn(d) {
+      d.padding(Is((0.0, 6.0, 0.0, 0.0))).shrink(Is(0.0)) |> ignore
+      d.box(fn(dot) {
+        dot.width(Is(Some(6.0))).height(Is(Some(6.0))).radius(Is(3.0)).ground(By(fn() { tone_color(text(s(), "tone")) })) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    // (its clock made again as what it counts from changes)
+    row.pick(fn() { since_from(src, a()) }, fn(w, from) {
+      w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+      let tick = match from {
+        Some((at, till)) => @sfpages.steps_seconds(w, src, at, till?=till)
+        None => fn() { 0 }
+      }
+      w
+      .words_runs(By(fn() {
+        tick() |> ignore
+        let since = since_words(src, a())
+        let runs = [@ui.span(text(s(), "statusText"))]
+        if since != "" {
+          runs.push(@ui.span(" · " + since, color=@sf.theme().p.muted))
+        }
+        runs
+      }))
+      .words_look(By(fn() { @ui.style_words(status_words) }))
+      .ink(By(fn() { @ui.style_ink(status_words) }))
+      |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+/// Where its words stand: the meta's, 18 a line, in the ink.
+// kept across runs: a value (no field of it changes)
+let status_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg)
+
+///|
+/// When what agent `a`'s status counts from began and for how long at most it counts (ms; none: on), none when it
+/// counts nothing (when it was last at it, as the core says it).
+fn since_from(src : Source, a : Json?) -> (Double, Double?)? {
+  let wait = field(a, "wait")
+  match wait {
+    Some(Object(_)) => {
+      let from = number(wait, "since")
+      Some((from, opt_number(wait, "seconds").map(fn(sec) { sec * second_ms })))
+    }
+    _ =>
+      match opt_number(a, "since") {
+        Some(at) => Some((at, None))
+        None => {
+          ignore(src)
+          None
+        }
+      }
+  }
+}
+
+///|
+/// For how long agent `a` has stood where it does (agent_since's words, read at the time it is drawn): at work since
+/// its turn began, waiting as long as it has (of at most), else when it was last at it.
+fn since_words(src : Source, a : Json?) -> String {
+  let wait = field(a, "wait")
+  let since = opt_number(a, "since")
+  if wait is None && since is None {
+    return text(field(field(field(a, "session"), "time"), "lastActiveAt"), "ago")
+  }
+  let now = (src.now)()
+  match wait {
+    Some(Object(_)) => {
+      let from = number(wait, "since")
+      match opt_number(wait, "seconds") {
+        Some(sec) => elapsed(dmin(now, from + sec * second_ms) - from) + " / " + elapsed(sec * second_ms)
+        None => elapsed(now - from)
+      }
+    }
+    _ => {
+      let from = since.unwrap_or(now)
+      elapsed(now - from)
+    }
+  }
+}
+
+///|
+/// The figures that say most (agent_tiles', as nodes) in `v`, `top` over them, as `card` says them now: what it cost,
+/// the cache's hit rate, how full its context is, each large over its name, side by side; a context worth a look in its
+/// level's colour. None while none is known.
+fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
+  v.show(fn() { agent_tiles_known(card()) }, fn(o) {
+    o.box(fn(r) {
+      @sf.style_node(r, fn() { tiles_row })
+      r.padding(Is((0.0, top, 0.0, 0.0))) |> ignore
+      let tile = fn(p : @view.View, figure : () -> String, name : () -> String, level : () -> String) {
+        p.box(fn(t) {
+          t
+          .radius(Is(@sf.row_corner))
+          .ground(By(fn() { @sf.alpha(@sf.theme().p.text, 0.05) }))
+          .padding(Is((@sf.text_in, 9.0, @sf.text_in, 8.0)))
+          .says(By(fn() { Some(@view.said(Text, label=name() + " " + figure())) }))
+          |> ignore
+          t.box(fn(f) {
+            // (no lower than a heading's line at the system's size of words, a figure on a smaller one in its middle:
+            // the tiles of a row as high as each other, their names level)
+            f
+            .min_height(By(fn() {
+              f.words_redone() |> ignore
+              Some(@sf.node_sp(f, @ui.tree_theme().text_size(Heading).1))
+            }))
+            .lies_along(Is(Middle))
+            |> ignore
+            @sf.words_node(f, figure, fn() {
+              let big = if figure().length() > 6 { tile_figure_small } else { tile_figure }
+              match level() {
+                "red" => big.then(@ui.text_style(color=Danger))
+                "amber" => big.then(@ui.text_style(color=WarnInk))
+                _ => big
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+          @sf.words_node(t, name, fn() { tile_name }) |> ignore
+        })
+        |> ignore
+      }
+      let cost = fn() { text(card(), "cost") }
+      let cache = fn() { field(card(), "cache") }
+      let context = fn() { field(card(), "context") }
+      // (each tile's share of the row: what shows it takes it)
+      let across = fn(p : @view.View) { p.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore }
+      r.show(fn() { cost() != "" }, fn(p) {
+        across(p)
+        tile(p, cost, fn() { tr("android-chat.agent.cost") }, fn() { "" })
+      })
+      r.show(fn() { cache() is Some(Object(_)) }, fn(p) {
+        across(p)
+        tile(p, fn() { text(cache(), "text") }, fn() { tr("android-chat.agent.cache") }, fn() { "" })
+      })
+      r.show(fn() { context() is Some(Object(_)) }, fn(p) {
+        across(p)
+        tile(
+          p,
+          fn() {
+            if flag(context(), "unknown") {
+              text(context(), "text")
+            } else {
+              "\{number(context(), "percent").round().to_int()}%"
+            }
+          },
+          fn() { tr("android-chat.agent.context") },
+          fn() { if flag(context(), "unknown") { "" } else { text(context(), "level") } },
+        )
+      })
+    })
+    |> ignore
+  })
+}
+
+///|
+/// A tile's figure: the heading's size (22), 600, on its line (30); 16 where it is longer than six characters, in the
+/// middle of a box as high as the heading's line.
+// kept across runs: a value (no field of it changes)
+let tile_figure : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_figure_small : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// The tiles side by side across the details, 8 apart.
+// kept across runs: a value (no field of it changes)
+let tiles_row : @ui.Style = @ui.css("row w=Full gap=S2")
+
+///|
+/// What is wrong (agent_notes', as nodes) in `v`, `top` over it, as `card` says it now: a line each in its level's
+/// colour. Nothing while nothing is.
+fn agent_notes_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
+  let notes = fn() { items(card(), "attention") }
+  v.show(fn() { notes().length() > 0 }, fn(o) {
+    o.box(fn(b) {
+      b.padding(Is((@sf.text_in, top, @sf.text_in, 8.0))).gap(Is(2.0)) |> ignore
+      b.each(fn() { Array::makei(notes().length(), fn(i) { i }) }, fn(i) { i }, fn(x, i) {
+        let k = i.untracked()
+        let n = fn() { notes().get(k) }
+        @sf.words_node(x, fn() { text(n(), "text") }, fn() { if text(n(), "level") == "amber" { note_amber } else { note_red } })
+        |> ignore
+      })
+    })
+    |> ignore
+  })
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let note_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
+
+///|
+// kept across runs: a value (no field of it changes)
+let note_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk)
+
+///|
+// kept across runs: a value (no field of it changes)
+let details_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let details_value : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let details_group : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// A station's name, from the stations the app knows (its address's workspace's), else as the chat's row said it.
@@ -167,74 +402,75 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
 }
 
 ///|
-/// How it runs, in one line: the model (never cut short), how hard it thinks, the account; a
-/// hairline round it. `on_press` as it is tapped (the model picker opened).
-fn run_row(c : @ui.Ctx, a : Json?, on_press? : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  let s = field(a, "session")
-  let name = text(field(a, "account"), "name")
-  let model = match opt_text(s, "model") {
-    Some(m) =>
-      match text(s, "modelName") {
-        "" => m
-        n => n
-      }
-    None => tr("android-chat.pick.model")
+/// How it runs, in one line (run_row's, as nodes) in `v`, as `a` says it now: the model (cut short last), how hard it
+/// thinks, the account, its allowance under them; a hairline round it. `press` as it is tapped, given where it is (the
+/// model picker opened beside it).
+fn run_row_node(v : @view.View, a : () -> Json?, press : (@sf.Anchor) -> Unit) -> Unit {
+  let s = fn() { field(a(), "session") }
+  let model = fn() {
+    match opt_text(s(), "model") {
+      Some(m) =>
+        match text(s(), "modelName") {
+          "" => m
+          n => n
+        }
+      None => tr("android-chat.pick.model")
+    }
   }
-  let effort = match text(s, "effort") {
-    "" => tr("android-chat.pick.effort.default")
-    e => e
+  let rest = fn() {
+    let name = text(field(a(), "account"), "name")
+    let effort = match text(s(), "effort") {
+      "" => tr("android-chat.pick.effort.default")
+      e => e
+    }
+    let account = if flag(s(), "profilePinned") { name } else { fill("android-chat.history.run.auto", [("name", name)]) }
+    " · " + effort + " · " + account
   }
-  let account = if flag(s, "profilePinned") {
-    name
-  } else {
-    fill("android-chat.history.run.auto", [("name", name)])
-  }
-  let id = c.id("history-run-row")
-  c.box(w=Fill(1.0), pt=6.0, fn() {
-    c.box(
-      dir=Row,
-      w=Fill(1.0),
-      padx=12.0,
-      pady=10.0,
-      gap=6.0,
-      radius=10.0,
-      border=1.0,
-      border_color=t.p.line,
-      align=ACenter,
-      id~,
-      fn() {
-        @sf.maker_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), 15.0) |> ignore
-        // how it runs on its line, its account's allowance under it, a line of its own (beside it, the allowance left
-        // the line where it had not the room: gone)
-        c.box(style=run_words, keep=true, fn() {
-          c.box(style=run_line, fn() {
-            c.text(model, size=t.t.ui, color=t.p.text, wrap=false, w=Cut, keep=true) |> ignore
-            c.box(w=Fill(1.0), keep=true, fn() {
-              c.text(" · " + effort + " · " + account, size=t.t.meta, color=t.p.muted, wrap=false, w=Cut, keep=true)
-              |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-          allowance_line(c, field(field(a, "account"), "quota"))
+  let quota = fn() { field(field(a(), "account"), "quota") }
+  v.box(fn(o) {
+    o.padding(Is((0.0, 6.0, 0.0, 0.0))) |> ignore
+    o.box(fn(b) {
+      b
+      .row(Is(true))
+      .padding(Is((12.0, 10.0, 12.0, 10.0)))
+      .gap(Is(6.0))
+      .radius(Is(10.0))
+      .edge(By(fn() { (1.0, @sf.theme().p.line) }))
+      .lines_up(Is(Some(Middle)))
+      |> ignore
+      @sf.presses_node(b, fn() {
+        let (x, y, w, h) = b.placed_window_now()
+        press(At(x, y, w, h))
+      })
+      b.says(By(fn() { Some(@view.said(Button, label=model() + rest())) })) |> ignore
+      b.pick(fn() { (text(field(s(), "maker"), "id"), text(s(), "runtime")) }, fn(m, k) {
+        @sf.maker_mark_node(m, k.0, k.1, 15.0) |> ignore
+      })
+      // how it runs on its line, its account's allowance under it, a line of its own
+      b.box(fn(w) {
+        w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+        // (the model's name whole, what follows it giving way first: cut short itself only beside the least of that)
+        @sf.name_line_node(w, model, fn() { run_model }, rest, fn() { run_rest }) |> ignore
+        w.show(fn() { @sf.has_quota(quota()) }, fn(q) {
+          q.row(Is(true)).padding(Is((0.0, 4.0, 0.0, 0.0))) |> ignore
+          @sf.quota_chips_node(q, quota)
         })
-        |> ignore
-        @sf.icon(c, "chevron-down", size=14.0, color=t.p.muted) |> ignore
-        // History.kt: clip(Smooth(10)).clickable
-        @motion.ripple(c, id, 10.0)
-      },
-    )
+      })
+      |> ignore
+      @sf.icon_node(b, "chevron-down", 14.0, By(fn() { @sf.theme().p.muted })) |> ignore
+    })
     |> ignore
   })
   |> ignore
-  match on_press {
-    Some(f) => c.on_press(id, f)
-    None => ()
-  }
 }
 
-// ── a call, drawn by what it is ────────────────────────
+///|
+// kept across runs: a value (no field of it changes)
+let run_model : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let run_rest : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// The boxes of a step drawn so far, numbered for where each is scrolled to (within the step's scope).
@@ -243,16 +479,6 @@ let boxed_n : Ref[Int] = { val: 0 }
 ///|
 /// The steps' parts as the core read them (`history.tool`), by what was asked.
 let tool_parts : Map[String, Json] = {}
-
-///|
-/// How it runs and its account's allowance under it, in what the row leaves its mark and its chevron.
-// kept across runs: a value (no field of it changes)
-let run_words : @ui.Style = @ui.css("w=Full")
-
-///|
-/// How it runs: its model, how hard it thinks and its account, on a line.
-// kept across runs: a value (no field of it changes)
-let run_line : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 /// Its turns' value with the mark of its work past its turns after it (work_mark): one line, its words cut short only

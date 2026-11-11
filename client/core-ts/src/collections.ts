@@ -38,6 +38,8 @@ const SPECS: Record<string, Spec> = {
   sessions: items("key"),
   jobs: items("id"),
   history: { fields: { items: items("key") } },
+  // (by the date: a heading changing at midnight patches it, its seqs not sent again)
+  chatOutline: { fields: { days: { key: ["date"] } } },
   vaults: { fields: { vaults: items("id"), requests: items("id") } },
   vaultItems: { fields: { items: items("id") } },
   driveTransfers: { fields: { transfers: { key: ["station", "id"] } } },

@@ -230,7 +230,7 @@ fn outside_asked(
   t.draw()
   tap_send(t)
   let asked = named(calls, "chat.outsideRefs")
-  guard asked.length() == 1 else { abort("the core asked \{asked.length()} times") }
+  guard asked.length() == 1 else { @halt.saying("the core asked \{asked.length()} times") }
   (asked[0].done)(Ok({ "chats": Json::array(chats) }))
   t.draw()
   t.frame()
@@ -336,6 +336,22 @@ test "分享对话 on a wide window: a dialog in the middle; Enter says yes, onc
 }
 
 ///|
+test "分享对话: the focus on 分享并发送 as it opens in the middle of a wide window, never on it on a sheet (by touch or with keyboard and mouse)" {
+  for screen in [(2, false), (0, false), (0, true)] {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let calls : Array[Made] = []
+    let t = outside_asked(calls, outside_two(), platform~, wide~)
+    let said = t.focus_said()
+    if wide {
+      assert_true(said.contains("分享并发送"), msg="\{at}: \{said}")
+    } else {
+      assert_true(!said.contains("分享并发送"), msg="\{at}: \{said}")
+    }
+  }
+}
+
+///|
 test "分享对话 on a wide window: 取消, Escape and a press outside it send nothing" {
   let calls : Array[Made] = []
   let t = outside_asked(calls, outside_two(), platform=0, wide=true)
@@ -366,7 +382,7 @@ test "分享对话 on a wide window: 取消, Escape and a press outside it send 
 fn outside_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 

@@ -142,16 +142,21 @@ pub fn rippled_node(
 }
 
 ///|
-/// Words of `style` in node `w`, `words` as they are said, cut short on their line where `style` says so.
+/// Words of `style` in node `w`, `words` as they are said, cut short on their line where `style` says so: `w=Cut`, or,
+/// on one line, filling it (`w=Full`), as an old view's line of `Fill` says it may be cut (ui's Ctx::squeeze_cut_said).
 fn styled_words(w : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> @view.View {
   w
   .words(By(words))
   .words_look(By(fn() { @ui.style_words(style()) }))
   .ink(By(fn() { @ui.style_ink(style()) }))
   |> ignore
-  if @ui.style_cut(@signals.untracked(style)) {
+  let said = @signals.untracked(style)
+  if @ui.style_cut(said) {
     // (cut short where their line has not the room across: given way along a row, never squeezed down, View::cuts)
     w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
+  } else if @ui.style_fills(said) && !@ui.style_words(said).wrap {
+    // (its say alone, not how it is laid out: how wide it is is what holds it lays out, as it was)
+    w.allow_ellipsis(Is(true)) |> ignore
   }
   w
 }
@@ -633,10 +638,23 @@ fn on_card_node(v : @view.View) -> Bool {
 ///|
 /// Rows together on a list card (group's), `rows` made in it: narrow, ListCard (10 under it, its rows `list_pad` in, its
 /// corner the list card's; lent to them that they are on it: on_card_node); wide, wide_group_node's (a list card, or a
-/// `card` of words).
+/// `card` of words). In a panel's body, not a small panel's beside what opened it, a card of the panel's whatever its
+/// look, as the old one's there (group's in_panel way): on the panel's cards' ground (panel_card_group: the ink at 5%,
+/// a card's corner), its rows the ladder's inset in (panel_card_rows), `panel_card_in` from the panel's sides
+/// (panel_card_out_node), its rows told they are on it (narrow, a card's: on_card_node; wide, a list's: part_of's
+/// `list`), as the old one's in_card and in_list.
 #callsite(autofill(loc))
 pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool = false, loc~ : SourceLoc) -> Unit {
   let at = part_of(parent)
+  if parent.lent(panel_in_lent) is Some(p) && !p.small {
+    parent.box(made_for=loc, fn(k) {
+      style_node(k, fn() { panel_card_group.then(panel_card_rows).then(panel_card_out_node(k)) })
+      k.lends(on_card_lent, true).lends(part_at, { ..at, list: at.look is Wide }) |> ignore
+      rows(k)
+    })
+    |> ignore
+    return
+  }
   if at.look is Wide {
     wide_group_node(parent, at, rows, card)
     return
@@ -785,21 +803,37 @@ pub fn link_row_node(
     )
     return
   }
+  // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; square there, as the old one's
+  // ground is, a small panel's inner corner in one; elsewhere a card's row, as ever)
+  let at = panel_in_of(parent)
+  let in_panel = panel_row_at(at, own=card_pad - corner_inset, card=on_card_node(parent))
+  let (out, side) = match in_panel {
+    Some(p) => (p.out, p.side)
+    None => (0.0, text_in)
+  }
+  let corner = if in_panel is None {
+    @ui.concentric(group_corner, list_pad)
+  } else if at.small {
+    small_panel_inner(r_menu)
+  } else {
+    0.0
+  }
   parent.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .gap(Is(12.0))
+    .margin(Is((-out, 0.0, -out, 0.0)))
     // (a tile leading it: the row as tall as the tile and the ladder's inset over and under it, or its words and theirs,
     // both across its middle; at its top, a tile shorter than its words stood off the row's middle, the user,
     // 2026-11-08: 「workspace 怎么不居中」)
-    .padding(Is(if lead is LeadTile(_) { (text_in, corner_inset, text_in, corner_inset) } else { (text_in, text_in, text_in, text_in) }))
-    .radius(Is(@ui.concentric(group_corner, list_pad)))
+    .padding(Is(if lead is LeadTile(_) { (side, corner_inset, side, corner_inset) } else { (side, text_in, side, text_in) }))
+    .radius(Is(corner))
     .min_height(By(fn() { Some(theme().items.least) }))
     .lines_up(By(fn() { Some(if under() && !(lead is LeadTile(_)) && !face { Start } else { Middle }) }))
     |> ignore
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-      pressed_node(r, press, Is(row_corner), Link, title)
+      pressed_node(r, press, Is(if in_panel is Some(_) { corner } else { row_corner }), Link, title)
       row_folds_said(r, title, folds)
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as that line at least, across its
@@ -1032,6 +1066,7 @@ let status_dot_side : Double = 7.0
 /// knob slides to its side (switch_ms, eased out) and its track's colour with it, from where it is at that moment;
 /// held by a finger, the knob a lens growing as a lift does. In the room a finger's press takes round it, up and down.
 /// `small`: 26 by 16 (switch_size's). While `disabled()`, at half (@kit.switch's look's), taking no press nor the focus.
+/// What the keys' focus and a screen reader find is one node, its room: a switch by its name, on or off.
 #callsite(autofill(loc))
 pub fn switch_node(
   parent : @view.View,
@@ -1065,11 +1100,15 @@ pub fn switch_node(
         }
         turn(to)
       }
-      room.presses(By(fn() { !disabled() })).focusable(By(fn() { !disabled() })).on_press(press) |> ignore
-      v
-      .alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } }))
+      // (what takes the focus and the press is what says it is a switch, its name and whether it is on: one thing to a
+      // screen reader and to the keys, its room; the ring the keys' focus shows drawn round its track, below)
+      room
+      .presses(By(fn() { !disabled() }))
+      .focusable(By(fn() { !disabled() }))
+      .on_press(press)
       .says(By(fn() { Some(@view.said(Switch, label=label(), check=if on() { On } else { Off })) }))
       |> ignore
+      v.alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } })) |> ignore
       let on_it = fn(d : @view.Drag) { room.finger_target(d.wx, d.wy) }
       room.gesture(
         @ui.touch_slop(),
@@ -1639,4 +1678,36 @@ pub fn top_bar_title_node(
     .min_width(Is(Some(0.0)))
     |> ignore
   })
+}
+
+///|
+/// A card's one row with a control at its end (a button) standing in the card's corner, concentric with it: the ladder
+/// makes a card's corner less its padding a row's corner, a button's half (button_height), so the row is as tall as the
+/// button and the card's own padding is round it above, below and at its end; where a wide panel's card has wider ends
+/// than it has padding above and below, the control's margin takes it out to the same (the user, 2026-11-10: a one-row
+/// card's trailing button 16 and 22 in, its capsule not concentric with the card's corner, 「这按钮和卡片圆角也对不上」).
+/// `words` on its start as a row's title, as far in as the other rows' are.
+#callsite(autofill(loc))
+pub fn corner_row_node(parent : @view.View, words : () -> String, end : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  let wide = part_of(parent).look is Wide
+  let pane = in_pane_node(parent)
+  // (the card's padding above and below, and at its ends: group_node's, wide_group_node's)
+  let pad = if pane { corner_inset } else { list_pad }
+  let ends = if wide && pane { card_pad - wide_row_over } else { pad }
+  parent.box(made_for=loc, fn(row) {
+    row
+    .row(Is(true))
+    .lines_up(Is(Some(Middle)))
+    .height(Is(Some(button_height())))
+    .gap(Is(text_in))
+    .padding(Is((dmax(0.0, text_in + list_pad - ends), 0.0, 0.0, 0.0)))
+    |> ignore
+    words_node(row, words, fn() { pg_row_title }).grow(Is(1.0)).shrink(Is(1.0)) |> ignore
+    row.box(fn(e) {
+      e.margin(Is((0.0, 0.0, pad - ends, 0.0))) |> ignore
+      end(e)
+    })
+    |> ignore
+  })
+  |> ignore
 }

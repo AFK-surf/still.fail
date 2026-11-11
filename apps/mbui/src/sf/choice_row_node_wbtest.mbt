@@ -91,7 +91,7 @@ fn choice_rows_tester(look : Look, platform : Int, pressed : Map[String, Int], c
 /// The old row (left) and the node's (right) read out as `label`.
 fn choice_pair(t : @ui.Tester, label : String) -> (@ui.SemNode, @ui.SemNode) {
   let all = t.all(Button, label~)
-  guard all.length() == 2 else { abort("\{label}: \{all.length()} rows") }
+  guard all.length() == 2 else { @halt.saying("\{label}: \{all.length()} rows") }
   if all[0].rect.0 < all[1].rect.0 { (all[0], all[1]) } else { (all[1], all[0]) }
 }
 

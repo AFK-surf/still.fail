@@ -137,6 +137,34 @@ pub(all) struct Card {
   phone : PhoneAsk?
   /// an agent's ask to sign in to a site (MessageCard.signinAsk), drawn in place of the post's words
   signin : SignInAsk?
+  /// an agent's request for a rig of the workspace (MessageCard.rigAsk), drawn in place of the post's words
+  rig : RigAsk?
+}
+
+///|
+/// An agent's request for a rig (a station that only runs tasks) as its card says it (RigAsk): its id, the rig and its name, the agent's
+/// reason and the time it asked for; the chat as the card named it (what the rig's person's device signs with the
+/// grant: `rig.decide`'s `ask`); once decided, how (`status`: granted, denied, ended; `why`; granted, whether the rig
+/// took it yet, `delivered`, and for how long it was signed).
+pub(all) struct RigAsk {
+  request : String
+  rig : String
+  name : String
+  reason : String
+  timeout_kind : String
+  timeout_seconds : Int
+  session : String
+  chat : String
+  title : String
+  by : String
+  status : String
+  why : String
+  delivered : Bool
+  granted_kind : String
+  granted_seconds : Int
+  /// One of the rig's devices alone (设备), its id and name as asked: "" for the rig itself.
+  device : String
+  device_name : String
 }
 
 ///|
@@ -477,6 +505,29 @@ pub fn message_of(m : Json) -> Message {
                 why: text(a, "why"),
                 link: text(a, "link"),
                 lasts: text(a, "lasts"),
+              })
+            _ => None
+          },
+          rig: match field(c, "rigAsk") {
+            Some(Object(_)) as a =>
+              Some({
+                request: text(a, "request"),
+                rig: text(a, "rig"),
+                name: text(a, "name"),
+                reason: text(a, "reason"),
+                timeout_kind: text(a, "timeoutKind"),
+                timeout_seconds: count(a, "timeoutSeconds"),
+                session: text(a, "session"),
+                chat: text(a, "chat"),
+                title: text(a, "title"),
+                by: text(a, "by"),
+                status: text(a, "status"),
+                why: text(a, "why"),
+                delivered: flag(a, "delivered"),
+                granted_kind: text(a, "grantedKind"),
+                granted_seconds: count(a, "grantedSeconds"),
+                device: text(a, "device"),
+                device_name: text(a, "deviceName"),
               })
             _ => None
           },
@@ -844,10 +895,29 @@ pub fn stations_of(v : Json?) -> Array[Station] {
 }
 
 ///|
-/// The workspace's stations as a page that only names them shows them (`stations` `brief`: each one's mark and how it
-/// is reached, not its overview and profiles, nor their changes).
+/// The workspace's stations as a list's rows (`stations {scope}`: what a row shows, never a station whole), asked one
+/// way wherever they are read so the core is asked them once (the settings' stations_of is the same ask).
+pub fn stations_asked(scope : String) -> Map[String, Json] {
+  { "scope": Json::string(scope) }
+}
+
+///|
+/// The workspace's stations' rows (stations_asked) as they are now.
+pub fn station_rows(src : Source, scope : String) -> TopicState {
+  src.topic("stations", stations_asked(scope)).get()
+}
+
+///|
+/// The workspace's stations as a page that only names them shows them: each one's mark and how it is reached, from
+/// their rows. Never what was last said while nothing read them (`lasting`'s, a place's to show at once): a chat
+/// names its station as it is now, or not yet (core_signal_wbtest.mbt).
 pub fn station_marks(src : Source, scope : String) -> Array[Station] {
-  stations_of(src.topic("stations", { "scope": Json::string(scope), "brief": Json::boolean(true) }).get().value)
+  let t = station_rows(src, scope)
+  if t.kept() {
+    []
+  } else {
+    stations_of(t.value)
+  }
 }
 
 ///|

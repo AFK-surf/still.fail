@@ -13,7 +13,8 @@
 /// row's ground reaches the panel's sides as it does outside a list. As tall as its rows laid end to end where there is
 /// the room, giving way where there is not; `fills`: the room the panel gives it, whatever it holds (one gone about in,
 /// a folder after another, each holding more or less: not a list growing and shrinking at each step); `most`: no taller
-/// than that. Its node (what scrolls).
+/// than that. `place`: what asks it to show a row (ListPlace: one brought to its middle as it opens). Its node (what
+/// scrolls).
 #callsite(autofill(loc))
 pub fn[K : Hash + Eq] panel_list_node(
   parent : @view.View,
@@ -22,6 +23,7 @@ pub fn[K : Hash + Eq] panel_list_node(
   est~ : Double,
   fills? : Bool = false,
   most? : () -> Double,
+  place? : @view.ListPlace[K],
   loc~ : SourceLoc,
 ) -> @view.View {
   let at = panel_in_of(parent)
@@ -41,12 +43,13 @@ pub fn[K : Hash + Eq] panel_list_node(
       keys,
       fn(b, k) {
         // (its rows laid out as the panel's are, their words further in by as far as it reaches out)
-        panel_in_lend(b, look, at.words + out, small=at.small, clear=at.clear)
+        panel_in_lend(b, look, at.words + out, sides=at.sides - out, small=at.small, clear=at.clear, listed=true)
         row(b, k)
       },
       est~,
       slop=@ui.touch_slop(),
       bar=@ui.tree_scroll_bar(),
+      place?,
     )
     |> ignore
   })

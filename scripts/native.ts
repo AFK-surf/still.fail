@@ -349,7 +349,7 @@ const PARTS: Record<string, Part> = {
     env: "STILLFAIL_MB_READER",
     rust: false,
     inputs: ["station/mb/src", "station/mb/moon.mod", "station/mb/moon.work", "station/mb/build.sh",
-      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/moon.mod",
+      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/src/halt", "apps/mbui/mbui/moon.mod",
       ":(exclude,glob)**/*_test.mbt", ":(exclude,glob)**/*_wbtest.mbt", ":(exclude,glob)**/pkg.generated.mbti"],
     recipe: (t) => ({ moon: "native release", shell: t === "darwin-arm64" ? key("shell-apple", t) : key("shell-station", t), mac: key("shell-apple", "darwin-arm64") }),
     build(t, out) {
@@ -1222,7 +1222,15 @@ function upload(file: string): void {
 // release's 1000 failed main's mbui-media-runtime (42734298404, 2026-11-10).
 const KEEP = 20;
 function prune(keep: number, only?: Set<string>): void {
-  const assets = JSON.parse(gh(["api", "--paginate", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", "[.assets[] | {id, name, created_at}]"]) || "[]") as { id: number; name: string; created_at: string }[];
+  // (a list GitHub's answer did not get through for prunes nothing, left for the next prune as one DELETE dropped is
+  // below: an EOF on it failed main's mbui-media-runtime film with both its programs already published, 89ddb06c
+  // 42961511598, 2026-11-11)
+  const listed = gh(["api", "--paginate", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", "[.assets[] | {id, name, created_at}]"], { allowFail: true });
+  if (!listed) {
+    console.log(`the release's assets not listed: the next prune prunes them`);
+    return;
+  }
+  const assets = JSON.parse(listed) as { id: number; name: string; created_at: string }[];
   const groups = new Map<string, typeof assets>();
   for (const a of assets) {
     const g = a.name.replace(/-[0-9a-f]{24}\.tar\.gz$/, "");

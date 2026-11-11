@@ -15,7 +15,7 @@ let mbw_cb_mb_host_run_5 : Ref[FuncRef[(Int, String, Int, Int) -> Unit]?] = Ref(
 fn mbw_cb_mb_host_run_5_in(a0 : Int, a1 : Int, a2 : Int, a3 : Int) -> Unit {
   match mbw_cb_mb_host_run_5.val {
     Some(f) => f(a0, @wasmrt.string_at(a1), a2, a3)
-    None => abort("mb_host_run: no function")
+    None => @halt.saying("mb_host_run: no function")
   }
 }
 
@@ -358,11 +358,11 @@ fn ffi_hold_words(channel : String, title : String, body : String) -> Unit {
 fn ffi_app_version() -> Int = "mbhost" "mb_host_app_version"
 
 ///|
-fn mbw_mb_host_update_fetch(url : Int, sha256 : Int, size : Double, name : Int, now : Int) = "mbhost" "mb_host_update_fetch"
+fn mbw_mb_host_update_fetch(url : Int, sha256 : Int, size : Double, name : Int, now : Int, delta : Int) = "mbhost" "mb_host_update_fetch"
 
 ///|
-fn ffi_update_fetch(url : String, sha256 : String, size : Double, name : String, now : Int) -> Unit {
-  mbw_mb_host_update_fetch(@wasmrt.string_addr(url), @wasmrt.string_addr(sha256), size, @wasmrt.string_addr(name), now)
+fn ffi_update_fetch(url : String, sha256 : String, size : Double, name : String, now : Int, delta : String) -> Unit {
+  mbw_mb_host_update_fetch(@wasmrt.string_addr(url), @wasmrt.string_addr(sha256), size, @wasmrt.string_addr(name), now, @wasmrt.string_addr(delta))
 }
 
 ///|
@@ -1108,8 +1108,8 @@ fn app_version() -> Int {
 
 ///|
 /// A newer build downloaded and made ready (@hostapi.update_fetch).
-fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
-  ffi_update_fetch(url, sha256, size, name, if now { 1 } else { 0 })
+fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool, delta : String) -> Unit {
+  ffi_update_fetch(url, sha256, size, name, if now { 1 } else { 0 }, delta)
 }
 
 ///|

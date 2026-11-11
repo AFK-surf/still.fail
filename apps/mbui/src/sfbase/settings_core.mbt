@@ -72,7 +72,7 @@ fn settings_core_of(
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it
-      let stations = src.topic("stations", { "scope": Json::string(w.id) }).get().snapshot()
+      let stations = station_rows(src, w.id)
       let mut name = ""
       match stations.value {
         Some(Array(a)) =>
@@ -154,6 +154,7 @@ fn settings_core_of(
     face_failed: face_failed,
     own_code_face: own_code_preview,
     read_only: if src.read_only { read_only_words } else { "" },
+    devices_on: src.asks_devices,
   }
 }
 

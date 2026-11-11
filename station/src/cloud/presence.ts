@@ -10,7 +10,7 @@ import WebSocket from "ws";
 import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
-import { type Cloud as CloudState, isRevocation, joinedOf, joinedPendingPath, pendingLockPath } from "./state.ts";
+import { type Cloud as CloudState, MODE_PENDING_S, isRevocation, joinedOf, joinedPendingPath, pendingLockPath, rigGrantsPath, rigsOf } from "./state.ts";
 import { type Entry, asEntry, entryHash, fold } from "./lock.ts";
 import type { StationKey } from "./key.ts";
 import type { CloudSaid } from "./plane.ts";
@@ -299,6 +299,26 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
       const { peers, gateways } = s.filtered(st);
       st.peers = Array.isArray(body.peers) ? peers : [];
       if (Array.isArray(body.gateway_keys)) st.gateway_keys = gateways;
+      // The home workspace's rigs (a plane from before them names none). Whether this machine is one is what
+      // `enroll --rig` wrote, never the plane's to change: a rig made a station by its word would take every
+      // station's requests with no grant, a station made a rig would stop serving its chats.
+      const rigs = rigsOf(body.rigs);
+      if (rigs.length > 0 && st.rig === undefined) st.rigs = rigs;
+      else delete st.rigs;
+      // A change of what this machine is, asked of it over a way the plane has no part in (a device of whose it will be
+      // that reached it; its person's signature) and waiting here: done once the plane lists it so. The plane's word alone
+      // changes nothing, and what waited too long is forgotten.
+      const listedRig = body.rig !== null && typeof body.rig === "object" && typeof body.rig.owner === "string" ? (body.rig.owner as string) : null;
+      const fresh = (at: number) => nowSecs() - at <= MODE_PENDING_S;
+      if (st.rig_pending !== undefined && !fresh(st.rig_pending.at)) delete st.rig_pending;
+      if (st.full_pending !== undefined && !fresh(st.full_pending.at)) delete st.full_pending;
+      if (st.rig === undefined && st.rig_pending !== undefined && listedRig === st.rig_pending.owner && joined.length === 0) st.rig_due = true;
+      if (st.rig !== undefined && st.full_pending !== undefined && listedRig === null) {
+        log.warn("presence", "this rig is listed as a whole station, as its person signed: it becomes one");
+        delete st.rig;
+        delete st.full_pending;
+        rmSync(rigGrantsPath(s.data), { force: true });
+      }
     });
     syncLock(s, body.lock, send);
     // Each joined workspace's lock too, level with the plane's.

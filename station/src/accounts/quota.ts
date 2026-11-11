@@ -5,7 +5,8 @@
 // - ChatGPT subscription (Codex): the app-server's account/rateLimits/read;
 // - Claude subscription: Claude Code's OAuth usage endpoint (what /usage shows), with the token Claude Code keeps in the
 //   profile's home (renewed first when about to run out, and once more when the provider says it is not good: oauth.ts);
-//   a model's own week under the account's (Fable's) apart from the account's windows, in `scoped`;
+//   a model's own week under the account's (Fable's) apart from the account's windows, in `scoped`; the limit resets it
+//   holds (Claude Code's /limit-reset), asked as the installed Claude Code asks them: claude-reset.ts;
 // - Anthropic API keys and other providers bill per use and have no allowance to show.
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -21,6 +22,7 @@ import { RenewRefused } from "./console.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { codexQuotaFailure } from "../../../client/core-ts/src/codex-quota.ts";
+import { claudeHeaders, claudeResets, type QuotaReset, USAGE_PATH } from "./claude-reset.ts";
 
 type Json = any;
 
@@ -104,8 +106,14 @@ async function refused(provider: string, response: Response, lang: Lang): Promis
     return quota("blocked", [], detail);
   }
   if (status === 401) return quota("unavailable", [], tr(lang, "station.quota.signInExpired"));
-  return quota("unavailable", [], tr(lang, "station.quota.providerStatus", { provider, status }));
+  return { ...quota("unavailable", [], tr(lang, "station.quota.providerStatus", { provider, status })), ...(troubled(status) ? { unanswered: true } : {}) };
 }
+
+/// A status that is the provider's own trouble or its asking to be asked later, not its answer about the account.
+const troubled = (status: number | undefined) => status === 429 || (typeof status === "number" && status >= 500);
+
+/// What a question that got no answer leaves: nothing known of the allowance, said as `detail`.
+const unansweredQuota = (detail: string): ProfileQuota => ({ ...quota("unavailable", [], detail), unanswered: true });
 
 const get = (url: string, headers: Record<string, string>) => profileFetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
 
@@ -125,22 +133,23 @@ async function opencode(urls: Urls, key: string, lang: Lang): Promise<ProfileQuo
 }
 
 /// A Claude subscription's allowance with its token; asked again once with a renewed token when the provider says the
-/// token is not good. `home`: the profile's (null: the machine's own login).
-export async function claudeWithRefresh(env: Env, home: string | null, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota> {
+/// token is not good. `home`: the profile's (null: the machine's own login). `version`: the installed Claude Code's,
+/// which its limit resets are offered to (none: they are not asked).
+export async function claudeWithRefresh(env: Env, home: string | null, urls: Urls = URLS, lang: Lang = stationLang(), version: string | null = null): Promise<ProfileQuota> {
   const [token] = await claudeOAuthToken(env, home, null, urls.claudeToken, lang);
-  const [first, unauthorized] = await claudeUsageResponse(urls.anthropic, token, lang);
+  const [first, unauthorized] = await claudeUsageResponse(urls.anthropic, token, lang, version);
   if (!unauthorized) return first;
   const [renewed] = await claudeOAuthToken(env, home, token, urls.claudeToken, lang);
-  return (await claudeUsageResponse(urls.anthropic, renewed, lang))[0];
+  return (await claudeUsageResponse(urls.anthropic, renewed, lang, version))[0];
 }
 
 /// A Claude subscription's allowance, by its access token: what /usage shows.
-export async function claudeUsage(base: string, token: string, lang: Lang = stationLang()): Promise<ProfileQuota> {
-  return (await claudeUsageResponse(base, token, lang))[0];
+export async function claudeUsage(base: string, token: string, lang: Lang = stationLang(), version: string | null = null): Promise<ProfileQuota> {
+  return (await claudeUsageResponse(base, token, lang, version))[0];
 }
 
-async function claudeUsageResponse(base: string, token: string, lang: Lang): Promise<[ProfileQuota, boolean]> {
-  const response = await get(`${base}/api/oauth/usage`, { authorization: `Bearer ${token}`, "anthropic-beta": "oauth-2025-04-20" });
+async function claudeUsageResponse(base: string, token: string, lang: Lang, version: string | null): Promise<[ProfileQuota, boolean]> {
+  const response = await get(`${base}${version !== null ? USAGE_PATH : "/api/oauth/usage"}`, claudeHeaders(token, version));
   if (!response.ok) return [await refused("Anthropic ", response, lang), response.status === 401];
   const body: Json = await response.json();
   const labels: Record<string, string> = { five_hour: "5 小时", seven_day: "每周", seven_day_opus: "每周 · Opus", seven_day_sonnet: "每周 · Sonnet" };
@@ -154,7 +163,17 @@ async function claudeUsageResponse(base: string, token: string, lang: Lang): Pro
   const scoped = claudeScoped(body?.limits).filter((s) => !windows.some((w) => w.label === s.label));
   if (scoped.length > 0) q.scoped = scoped;
   if (typeof body?.extra_usage?.is_enabled === "boolean") q.extraUsage = body.extra_usage.is_enabled;
+  const resets = version !== null ? claudeResets(body, scoped.length === 1 ? (scoped[0]!.scope ?? null) : null) : [];
+  if (resets.length > 0) withResets(q, resets);
   return [q, false];
+}
+
+/// The resets of each kind, and their count and expiries all together as a core from before kinds reads them.
+function withResets(q: ProfileQuota, resets: QuotaReset[]) {
+  q.resets = resets;
+  q.resetCount = resets.reduce((n, r) => n + r.left, 0);
+  const expiries = resets.flatMap((r) => r.expiries ?? []).sort((a, b) => a - b);
+  if (expiries.length > 0) q.resetExpiries = expiries;
 }
 
 /// The weeks one model has to itself under the account's (Fable's, 2026-11): the entries of `limits` scoped to a
@@ -233,7 +252,7 @@ function unanswered(error: unknown): boolean {
 
 function failed(error: unknown, lang: Lang): ProfileQuota {
   // One that never reached the provider said in words, not as Node says it.
-  if (unanswered(error)) return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (unanswered(error)) return unansweredQuota(tr(lang, "station.quota.unreachable"));
   const detail = error instanceof Error ? error.message : String(error);
   // Its login over: its profile is checked again, to say so (Accounts).
   if (error instanceof RenewRefused) return { ...quota("unavailable", [], detail), signedOut: true };
@@ -242,18 +261,19 @@ function failed(error: unknown, lang: Lang): ProfileQuota {
 
 /// Codex's app-server wraps the provider response in RPC JSON. Do not show that response as the reason.
 function codexFailed(error: unknown, lang: Lang): ProfileQuota {
-  if (unanswered(error)) return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (unanswered(error)) return unansweredQuota(tr(lang, "station.quota.unreachable"));
   const failure = codexQuotaFailure(error instanceof Error ? error.message : String(error));
   if (failure.kind === "login") return { ...quota("unavailable", [], tr(lang, "station.quota.codexLogin")), signedOut: true };
-  if (failure.kind === "network") return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (failure.kind === "network") return unansweredQuota(tr(lang, "station.quota.unreachable"));
   if (failure.kind === "blocked") return quota("blocked", [], tr(lang, "station.quota.codexBlocked"));
-  if (failure.kind === "status") return quota("unavailable", [], tr(lang, "station.quota.codexStatus", { status: failure.status }));
+  if (failure.kind === "status") return { ...quota("unavailable", [], tr(lang, "station.quota.codexStatus", { status: failure.status })), ...(troubled(failure.status) ? { unanswered: true } : {}) };
   return quota("unavailable", [], tr(lang, "station.quota.codexFailed"));
 }
 
 /// Asks the provider. `codexRateLimits` reaches the profile's codex app-server; `env` is the station's (for a machine
 /// profile's login). Never throws: what went wrong is an unavailable (or blocked) allowance.
-export async function checkQuota(profile: Profile, env: Env, codexRateLimits: CodexRateLimits | undefined, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota> {
+/// `claudeVersion`: the installed Claude Code's (claudeWithRefresh).
+export async function checkQuota(profile: Profile, env: Env, codexRateLimits: CodexRateLimits | undefined, urls: Urls = URLS, lang: Lang = stationLang(), claudeVersion: string | null = null): Promise<ProfileQuota> {
   try {
     const kind = accessKind(profile);
     if (kind === "opencode-go") return await opencode(urls, String((profile.access as Json)?.key ?? "").trim(), lang);
@@ -270,7 +290,7 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     if (profile.runtime === "devin") return quota("unsupported", [], tr(lang, "station.quota.devinUnsupported"));
     // Nor the Antigravity CLI.
     if (profile.runtime === "agy") return quota("unsupported", [], tr(lang, "station.quota.agyUnsupported"));
-    if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang);
+    if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang, claudeVersion);
     try {
       if (!codexRateLimits) throw new Error("no codex app-server to ask");
       const q = codexQuota(await codexRateLimits(profile), lang);

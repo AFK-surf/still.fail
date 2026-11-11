@@ -28,7 +28,7 @@ fn panel_centred_node(
   // (one that goes in steps: Escape and back a step back first, its steps' own)
   // (a step further in from a panel: back to that one)
   let within = fn() { steps_escape(keyed) || back_under(keyed) }
-  dialog_layer_node(parent, open, cancel, outside=true, first_stop=keyed.steps is None, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
+  dialog_layer_node(parent, open, cancel, outside=true, first_stop=keyed.steps is None, first_takes?=if x.nodes is Some(_) { Some(fn(s : @view.Said) { opens_on_role(s.role) }) } else { None }, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
     // (one that goes in steps: each its own head and foot, sliding in whole; the dialog untitled round them)
     let steps = keyed.steps
@@ -53,6 +53,24 @@ fn panel_centred_node(
         { alpha: 1.0, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: look().words }
       })
     }
+    // (its close button in its top corner, an old view in `o` (`let_go`: its field let go of first, field_let_go))
+    let close_old = fn(o : @view.View, let_go : Bool) {
+      @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
+        let held = c.box(style=dialog_close_row, fn() {
+          c.box(style=dialog_close_corner(), fn() {
+            icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
+              if let_go {
+                field_let_go(keyed)
+              }
+              cancel()
+            }) |> ignore
+          })
+          |> ignore
+        })
+        words_look(c, held)
+      })
+      |> ignore
+    }
     // (what it holds and its head on the line of its words, a row's padding in: panel_centred's)
     let words_in = panel_words - dialog_pad
     // (what it holds and its foot nodes, panel_nodes')
@@ -66,8 +84,13 @@ fn panel_centred_node(
     }
     // (which of what it holds takes the focus as it opens, where what it holds says one: panel_opens_on_node)
     let opens_on : Ref[@view.View?] = Ref(None)
+    // (and the field it opens to be typed in, before that: panel_opens_in_node, panel_search_at_hand_node)
+    let field : Ref[PanelField?] = Ref(None)
+    // (what its fields offer made in its layer: offers_layer_lent)
+    offers_layer_lend(layer)
     across.box(fn(d) {
       d.lends(panel_opens_lent, opens_on) |> ignore
+      d.lends(panel_field_lent, field) |> ignore
       d
       .width(By(fn() { Some(w()) }))
       // (no taller than the window leaves it, dialog_room: what it holds scrolls in itself past that)
@@ -108,11 +131,13 @@ fn panel_centred_node(
       // out last, drawn over them))
       // (its close button as nodes, where what it holds is nodes (panel_nodes): its field let go of first, as the old
       // frame has it: field_let_go)
+      // (no stop of Tab's, as the old frame's close button takes no focus: a press, Escape and back close it)
       let close_node = fn(v : @view.View) {
         icon_button_node(v, "close", fn() { t("common.close") }, fn() {
           field_let_go(keyed)
           cancel()
         }, size=dialog_close)
+        .tab_stop(Is(false))
         |> ignore
       }
       let corner = fn() {
@@ -133,20 +158,8 @@ fn panel_centred_node(
             |> ignore
             return
           }
-          @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
-            let held = c.box(style=dialog_close_row, fn() {
-              c.box(style=dialog_close_corner(), fn() {
-                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
-                  // (its field let go of first, as the old frame has it: field_let_go)
-                  field_let_go(keyed)
-                  cancel()
-                }) |> ignore
-              })
-              |> ignore
-            })
-            words_look(c, held)
-          })
-          |> ignore
+          // (its field let go of first, as the old frame has it: field_let_go)
+          close_old(o, true)
         })
       }
       if x.live is None {
@@ -269,17 +282,12 @@ fn panel_centred_node(
       // taller than the dialog leaves it, laid out in that, its lists giving way and scrolling in themselves (old's
       // `gives`), nothing of it scrolling past it)
       if x.tall > 0.0 && !x.form && steps is None && x.nodes is Some(n) {
-        // (what it holds nodes: its share of the window less its frame, no taller than the dialog leaves it, what it holds
-        // filling that and laid out in it, scrolling as it does itself)
+        // (what it holds nodes: its share of the window less its frame, its body's own room over and under it outside
+        // that, as the old body's measured box stood in its padding (measured_body in `at`); no taller than the dialog
+        // leaves it, all of it giving way where it is short of room, what it holds filling that share and laid out in
+        // it, scrolling as it does itself)
         d.box(fn(b) {
           style_node(b, fn() { centred_part_in(0.0, 0.0) })
-          // (one as tall as what it holds up to that share (`hugs`): no taller than it, as tall as what it holds)
-          let share = fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }
-          if n.hugs {
-            b.max_height(By(share)) |> ignore
-          } else {
-            b.height(By(share)) |> ignore
-          }
           b
           .shrink(Is(1.0))
           .min_height(Is(Some(0.0)))
@@ -290,12 +298,24 @@ fn panel_centred_node(
             style_node(col, fn() {
               (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
             })
-            col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            col.grow(Is(1.0)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             // (its rows out across the room the dialog leaves them, as far as an old body's: rows_out's)
-            panel_in_lend(col, Wide, 0.0, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
+            panel_in_lend(col, Wide, 0.0, sides=dialog_pad + words_in, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
               if untitled() { dialog_close_clear() } else { 0.0 }
             }))
-            (n.body)(col, close)
+            // (what it holds, together in one box as the old body's measured box held it (none of the body's gap
+            // between its parts): its share tall; one as tall as what it holds up to that share (`hugs`), no taller)
+            col.box(fn(held) {
+              let share = fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }
+              if n.hugs {
+                held.max_height(By(share)) |> ignore
+              } else {
+                held.height(By(share)) |> ignore
+              }
+              held.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+              (n.body)(held, close)
+            })
+            |> ignore
           })
           |> ignore
         })
@@ -364,9 +384,12 @@ fn panel_centred_node(
                     style_node(col, fn() {
                       (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
                     })
+                    // (holding nothing laid out, none of its room: its title and what it says straight over its foot,
+                    // as the old body's box gone_empty)
+                    col.gone_empty(Is(true)) |> ignore
                     // (on its words' line already: none further in; its rows out across the room the dialog leaves them,
                     // as far as an old body's (rows_out's); clear of its close button while untitled)
-                    panel_in_lend(col, Wide, 0.0, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
+                    panel_in_lend(col, Wide, 0.0, sides=dialog_pad + words_in, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
                       if untitled() { dialog_close_clear() } else { 0.0 }
                     }))
                     (n.body)(col, close)
@@ -469,18 +492,7 @@ fn panel_centred_node(
       if steps is Some(_) {
         d.box(fn(o) {
           o.over(Is(true)).width(By(fn() { Some(w()) }))|> ignore
-          @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
-            let held = c.box(style=dialog_close_row, fn() {
-              c.box(style=dialog_close_corner(), fn() {
-                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
-                  cancel()
-                }) |> ignore
-              })
-              |> ignore
-            })
-            words_look(c, held)
-          })
-          |> ignore
+          close_old(o, false)
         })
         |> ignore
       }
@@ -488,12 +500,16 @@ fn panel_centred_node(
       d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
     })
     |> ignore
-    // (the focus on its own ground as it opens, the first of what it holds that takes it once that is built
-    // (first_stop; not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: back to what
-    // had it as it goes; on the one of what it holds that said so, where one did: panel_opens_on_node)
-    match opens_on.val {
-      Some(first) => first
-      None => layer
+    // (the focus on its own ground as it opens, back to what had it as it goes: on the field it opens to be typed in, or
+    // the one of what it holds that said so, where one did (panel_opens_in_node, panel_search_at_hand_node,
+    // panel_opens_on_node); else the first of what it holds that takes it once that is built and laid out (first_stop;
+    // not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: where what it holds is nodes,
+    // only what takes what is typed or the arrows (opens_on_role), none of it where nothing does (its own ground: the
+    // keys its, Escape; Enter nothing), as the old dialog's went to the first of its fields and choices it registered)
+    match (field.val, opens_on.val) {
+      (Some(f), _) => f.field
+      (None, Some(first)) => first
+      (None, None) => layer
     }
   })
 }
@@ -530,4 +546,15 @@ fn titled_by_row(x : PanelOf, body : () -> Unit) -> Unit {
   title_row_given.val = x.title_row is Some(_)
   body()
   title_row_given.val = was
+}
+
+///|
+/// Whether what is read out as `role` is what a dialog of nodes opens on (its layer's focus_opens_first `takes`): what takes what is typed (a field, a
+/// box offering what to type) or the arrow keys (a choice of a few, its radios or its tabs; a slider). One place: a
+/// kind to add is added here.
+fn opens_on_role(role : @view.Role) -> Bool {
+  match role {
+    TextField | Combobox | Radio | Tab | Slider => true
+    _ => false
+  }
 }

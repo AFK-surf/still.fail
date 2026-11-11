@@ -69,7 +69,7 @@ fn Tree::scroll_keys_here(self : Tree, at : Int) -> Bool {
 fn Tree::scroll_under_pointer(self : Tree) -> Int? {
   let (px, py) = self.pointer_said()
   guard px >= 0.0 && py >= 0.0 else { return None }
-  let now = self.logic_at()
+  let now = self.logic_said()
   let found : Ref[Int?] = Ref(None)
   // (of what takes input there, as a wheel finds it: what is only drawn over it (a bar's glass) passed)
   self.each_drawn_scaled(fn(c, cx, cy, _, s) {

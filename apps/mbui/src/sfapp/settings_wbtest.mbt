@@ -330,7 +330,7 @@ test "the workspace left: asked first, then another workspace's Home at once whi
   t.run_for(@ui.move_most_ms)
   t.tap_text("退出此 workspace")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("退出「星火工作室」？") is Some(_), msg=t.drawn_text())
   let (x, y) = words_node(t, "退出").unwrap()
   t.tap(x, y)
@@ -568,13 +568,12 @@ test "添加成员: what is typed counts at once, 添加 lit by it" {
   let (x, y, w, h) = t.query(Button, label="添加成员").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(t.find("添加成员") is Some(_))
+  // (its sheet risen: its field where a finger finds it)
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("name@example.com")
   t.type_text("he2@example.com")
-  // the sheet's 添加, its last words (the page's 添加中继 lies under it)
-  match t.find_last("添加") {
-    Some((x, y)) => t.tap(x, y)
-    None => fail("no 添加")
-  }
+  // the sheet's 添加 (the page's 添加中继 lies under it; the sheet's title 添加成员 over it)
+  t.click(Button, label="添加")
   // the fixture adds them: the sheet says what came of it
   assert_true(t.find("完成") is Some(_))
 }
@@ -1120,7 +1119,7 @@ test "a connect's page says what another runtime reaches where its station lets 
 /// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
 /// a dialog (with a pointer) past its coming.
 fn presented_in(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
 }
 

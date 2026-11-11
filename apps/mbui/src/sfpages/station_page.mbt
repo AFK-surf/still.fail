@@ -23,17 +23,15 @@ let station_part_names : Array[String] = ["overview", "processes", "settings", "
 /// its list. Its parts each as wide as the page's column (narrow, 12 from its sides, as its cards are); its head, with
 /// its name, first (narrow: in place of the large title).
 pub fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
-  let topic = @settings.stations_of(core, here)
+  // (that station alone, whole: its page's own ask)
+  let topic = @settings.station_read(core, here, address)
   let manager = { let r = role_of(core, here); r == "owner" || r == "admin" }
   let back = "Station"
   match topic.value {
-    Some(Array(list)) =>
-      match list.search_by(fn(s) { text(Some(s), "station") == address }) {
-        Some(i) => station_view(c, core, here, frame, Some(list[i]), manager)
-        // (removed, or a link from before: its list)
-        None => station_waiting(c, core, here, frame, back, "")
-      }
-    _ => station_waiting(c, core, here, frame, back, @sf.t("common.readingStations"))
+    Some(Object(_)) as s => station_view(c, core, here, frame, s, manager)
+    // (removed, or a link from before: its list)
+    Some(_) => station_waiting(c, core, here, frame, back, "")
+    None => station_waiting(c, core, here, frame, back, @sf.t("common.readingStations"))
   }
 }
 
@@ -308,6 +306,30 @@ fn station_menu_items(core : Core, here : Here, s : Json?) -> Array[@sf.MenuItem
       } else {
         None
       },
+      // made one that only runs tasks by its owner, who added it (`mine`: the core says; asked first, with how many
+      // chats it holds go out of sight): its own station asked, so only while it is up; one of another workspace's
+      // stays whole
+      if flag(s, "mine") && flag(s, "online") && !flag(s, "joined") {
+        Some(@sf.menu_item_of(@sf.t("web-pages.rigs.toTasks"), icon="boxes", fn() {
+          let chats = number(field(field(s, "overview"), "counts"), "sessions").to_int()
+          confirm(
+            @sf.t("web-pages.rigs.toTasksAsk", args=[("name", text(s, "name"))]),
+            if chats > 0 { @sf.t("web-pages.rigs.toTasksNote", args=[("n", chats.to_string())]) } else { @sf.t("web-pages.rigs.toTasksNoteNone") },
+            @sf.t("web-pages.rigs.toTasks"),
+            fn() {
+              @settings.act(
+                core,
+                @sf.t("web-pages.rigs.toTasks"),
+                "rig.setMode",
+                obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("mode", str("tasks"))]),
+                done=@sf.t("web-pages.rigs.toTasksDone"),
+              )
+            },
+          )
+        }))
+      } else {
+        None
+      },
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
   ]
 }
@@ -543,6 +565,45 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
       })
     }
     _ => ()
+  }
+  // its devices (设备: every chat's, as it is), and adding one: any member but one who only reads
+  let id = text(s, "id")
+  let devices = @settings.devices_listed(core, here).filter(fn(d) { text(Some(d), "station") == id && text(Some(d), "via") == "station" })
+  let role = role_of(core, here)
+  let can_add = role != "" && role != "viewer"
+  // (while it is up: one is added there)
+  if online && (devices.length() > 0 || can_add) {
+    out.push(fn() {
+      st_section(c, @sf.t("web-pages.devices.title"), count=devices.length(), description=@sf.t("web-pages.devices.stationNote"), fn() {
+        @sf.group(c, fn() {
+          for d in devices {
+            let dv = Some(d)
+            let row = "station-device/" + address + "/" + text(dv, "id")
+            let from = c.id(row)
+            @sf.link_row(
+              c,
+              row,
+              text(dv, "name"),
+              note=join([@settings.device_kind_words(dv), text(dv, "target"), @settings.device_whose(dv)], " · "),
+              lead=fn() { st_row_mark(c, @settings.device_icon(dv)) },
+              on_press=fn() { @settings.open_device(core, here, id, text(dv, "id"), @sf.Beside::Of(from).anchor()) },
+            ) |> ignore
+          }
+          if can_add {
+            let row = "station-device-add/" + address
+            let from = c.id(row)
+            @sf.link_row(
+              c,
+              row,
+              @sf.t("web-pages.devices.add"),
+              note=@sf.t("web-pages.devices.addNote"),
+              lead=fn() { st_row_mark(c, "plus") },
+              on_press=fn() { @settings.add_device(core, here, id, false, @sf.Beside::Of(from)) },
+            ) |> ignore
+          }
+        })
+      })
+    })
   }
   // what else of it has a page of its own: its memory, this device's adb lent to its agents (AdbShare)
   out.push(fn() {
@@ -1376,11 +1437,7 @@ fn station_machine(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Array
         match host {
           Some(_) => {
             let details = items(host, "details")
-            let footprint = text(field(o, "footprint"), "text")
             let rows : Array[(String, String)] = details.map(fn(d) { (text(Some(d), "label"), text(Some(d), "value")) })
-            if footprint != "" {
-              rows.push((@sf.t("web-pages.stations.page.footprint"), footprint))
-            }
             @sf.block(c, fn() { host_details(c, rows) })
           }
           None =>

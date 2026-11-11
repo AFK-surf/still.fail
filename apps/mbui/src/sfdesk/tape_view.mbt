@@ -286,11 +286,7 @@ fn tape_x_at(r : TapeRoom, t : Double) -> Double {
 fn tape_drawn_at(n : @view.View) -> Double {
   tape_goes.said.get() |> ignore
   tape_goes.way.said()
-  if tape_goes.way.goes_at(n.logic_at()) {
-    n.drawn_at()
-  } else {
-    @double.infinity
-  }
+  n.drawn_while(fn(t) { tape_goes.way.goes_at(t) })
 }
 
 ///|
@@ -449,11 +445,7 @@ fn tape_let_go(p : TapePane, v : Double, at : Double) -> Unit {
   @signals.untracked(fn() {
     let ends = tape_ends(tape_room_now())
     let span = tape_x_of(ends, p) - tape_x_of(ends, wide.tape_at.get())
-    let k = if span == 0.0 { 0.0 } else { tape_pull_clamp(ends, p, wide.tape_drag.get()) / span }
-    let fling = v.abs() > tape_fling
-    let toward = fling && (v > 0.0) == (span > 0.0)
-    let away = fling && !toward
-    if toward || (k > tape_pull_over && !away) {
+    if tape_goes_over(tape_pull_clamp(ends, p, wide.tape_drag.get()), span, v) {
       tape_to(p, at)
     } else {
       tape_moves_from(at, fn() {
@@ -1143,14 +1135,15 @@ fn tape_side_at(side : @view.View) -> SideAt {
 /// A chat's side panel on the tape in node `pane` (tape_panel_box's, 6 in from the bars, 8 from the page's): an agent's
 /// history in front, the tree's, its ground, corners and line round what is in it as the page's panel's are
 /// (tape_page_pane), the panel's room beside the system's column its ground alone (side_history_node, its top an
-/// island built as tape_panel_built builds); else its island (tape_panel_built).
+/// island built as tape_panel_built builds); a file in the viewer so too (side_view_node); else its island
+/// (tape_panel_built).
 fn tape_side_node(pane : @view.View, src : Source) -> Unit {
   let tips = @sf.TipLayer::new(fn() { tape_goes.node })
   let history = fn() {
     match tape_shown_side() {
       Some(ChatSide(r)) =>
         match tape_side_shown(src, r).1 {
-          front if side_history_tab(front) => Some((r, front))
+          front if side_node_tab(front) => Some((r, front))
           _ => None
         }
       _ => None
@@ -1181,7 +1174,7 @@ fn tape_side_node(pane : @view.View, src : Source) -> Unit {
     |> ignore
     @ui.tree_corners_linked(q, fn() { Some(tape_pane_corners(Panel, true)) })
     // (what it reads its own, let go as the history leaves the front or the panel goes)
-    side_history_node(q, src.owned_by(q), r, agent, tips, fn(n, build, natural) {
+    let behind = fn(n : @view.View, build : (@ui.Ctx) -> Unit, natural : Bool) {
       island(
         n,
         fn(c) {
@@ -1195,7 +1188,13 @@ fn tape_side_node(pane : @view.View, src : Source) -> Unit {
         },
         natural,
       )
-    })
+    }
+    // (a file in the viewer: the panel's bar, then the file's tools and stage, as beside the page)
+    if @sfbase.view_tab_file(agent) is Some(_) {
+      side_view_node(q, src.owned_by(q), r, agent, behind)
+    } else {
+      side_history_node(q, src.owned_by(q), r, agent, tips, behind)
+    }
   })
 }
 
@@ -1438,4 +1437,15 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
 /// the chat's actions in a Duo's system bars read as another thing's, so there too it is the bar's own).
 fn screen_tab_alone(tabs : Array[String]) -> Bool {
   wide.tape && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
+}
+
+///|
+/// Whether the one pulled `pulled` of its way `span` over, let go going `v` (px a second), is brought over: flung toward
+/// it, or landing past tape_pull_over of the way on from that speed (@ui.lands_past) and not flung away.
+fn tape_goes_over(pulled : Double, span : Double, v : Double) -> Bool {
+  let fling = v.abs() > tape_fling
+  let toward = fling && (v > 0.0) == (span > 0.0)
+  let away = fling && !toward
+  let over = span != 0.0 && @ui.lands_past(pulled, v / 1000.0, tape_pull_over * span)
+  toward || (over && !away)
 }

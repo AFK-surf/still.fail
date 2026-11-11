@@ -8,8 +8,9 @@
 // hidden, not made another size), words by their place only (how tall they are is how many lines they take); by who it is
 // in the frame (its ident, a tree node's id) and what it is (its kind, its ground): one made in another's place is
 // another. Only while some of it shows. Not across a gap of more than a few frames,
-// the window made another size (or words by the system's setting), a frame with the pointer down (what the hand moves goes as it goes), nor while it does
-// not show. Held on every frame a Tester draws, as rows_steady.mbt's rule; its known faults a file at a time
+// the window made another size (or words by the system's setting), a frame with the pointer down, whoever holds the
+// press (the old frame's, Ctx::down, or a node of the window's tree, view_holds: what the hand moves goes as it goes),
+// nor while it does not show. Held on every frame a Tester draws, as rows_steady.mbt's rule; its known faults a file at a time
 // (`sizes_steady_known`), each bar only falling.
 
 ///|
@@ -165,9 +166,18 @@ fn Ctx::sizes_steady_made(self : Ctx, i : Int) -> String {
 }
 
 ///|
+/// How many times more speed a measure stopped dead loses in its last frame than it lost in each frame before it, at the
+/// least (sizes_steady_fault): one slowing at one rate to rest loses as much each frame, once the frames' lengths are
+/// taken out, up to 1.21 where a frame half again as long as the rest falls between (新建 workspace's sheet, its invite
+/// code's field turned back, 2026-11-11), and a half more than that is what no slowing at one rate comes to; every dead
+/// stop CI's runs count, and each this check was there to find, loses more (1.66 times at the least) or was still
+/// going as fast or faster the frame before.
+let stop_jerk : Double = 1.5
+
+///|
 /// A measure's last frames (rows_steady_fault's samples, the display's frames `period` apart; it last turned back at
 /// `turned`): the frame before the last a step or a spike (off both frames round it the same way), or a dead stop (at
-/// speed, then at rest at once); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
+/// speed, then at rest at once, slowing more at once than it slowed: stop_jerk); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
 /// rest, going on as fast or slowing) is none: an eased way out sets out so (sf/motion.mbt). In a list's row whose way
 /// set out at `set_out` between them, as rows_steady_fault has a row's place: the speed it takes up then, from where it
 /// was, is the way's (a row joining the rows' way under way goes on its share of it as they do: list_size.mbt).
@@ -196,9 +206,33 @@ fn sizes_steady_fault(
     let on = v1 * v2 > 0.0 && v2.abs() >= 0.25 * v1.abs() && v2.abs() <= v1.abs()
     let sets_out = on && (v0.abs() < 0.5 || (rest_before && v0 * v1 > 0.0 && v0.abs() < v1.abs()))
     let off = (v1 - (v0 + v2) / 2.0).abs()
-    if v0.abs() > least && v1.abs() > least && v0 * v1 > 0.0 && v2.abs() < 0.2 * v1.abs() &&
-      v1.abs() > 0.5 * v0.abs() {
-      return (Some("stopped dead from \{v1} a frame (\{v0} before) at \{seen[3].1} seen=\{all}"), turned)
+    // (stopped dead: going, then all but still in a frame, the speed it lost that frame more than stop_jerk times what
+    // it lost in either frame before (the lesser of the two, a frame further back where there is one: where its slowing
+    // set in falls between frames as it likes); slowing at one rate to rest, whatever frame its rest falls on, none
+    // (the coordinator of the migration, 2026-11-11: what stops dead is a step in how fast it slows, not where its rest
+    // falls among the frames; what it does after, turning back or not, no part of it))
+    if v0.abs() > least && v1.abs() > least && v0 * v1 > 0.0 && v2.abs() < 0.2 * v1.abs() {
+      let toward = if v1 > 0.0 { 1.0 } else { -1.0 }
+      let d1 = (v0 - v1) * toward
+      let d2 = (v1 - v2) * toward
+      // (the frame before those too, where it was seen moving then: one stopped dead at a moment between two frames is
+      // sampled as at speed, a piece, still (10, 10, 5, 0), the piece as long as where that moment fell makes it, the
+      // same numbers as a slowing set in at once and over in two frames; both are said, or one falling between frames
+      // would go unsaid)
+      let back = all.length() > 4 && all[all.length() - 5].1 < seen[0].1
+      let d0 = if back {
+        let vb = (seen[0].2 - all[all.length() - 5].2) / (seen[0].1 - all[all.length() - 5].1) * period
+        (vb - v0) * toward
+      } else {
+        d1
+      }
+      let before = if d0 < d1 { d0 } else { d1 }
+      if before <= 0.0 || d2 > stop_jerk * before {
+        return (
+          Some("stopped dead from \{v1} a frame (\{v0} before; slowing \{before} then \{d2}) at \{seen[3].1} seen=\{all}"),
+          turned,
+        )
+      }
     }
     // (at rest, or all but, then setting out: none)
     let resting = v0.abs() < least && v1.abs() < least
@@ -213,6 +247,13 @@ fn sizes_steady_fault(
 }
 
 ///|
+/// The nodes of the window's tree among the frame's that scroll what they hold (View::scrolls), however far they can
+/// go now (Tree::is_scroller): what is in one measured from its top all the while it is one, never switched to the
+/// window's as what it holds comes to fit in it or grows past it on its way (Ctx::sizes_steady_faults).
+// kept across runs: filled and emptied round one asking of sizes steady (Ctx::with_tree_nodes's `steady`)
+let tree_scroller_at : Set[Int] = Set::new()
+
+///|
 /// The faults the frame just drawn (at `now`, the display's frames `period` apart) shows, each said once: of whom, how.
 fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[String] {
   let out : Array[String] = []
@@ -221,7 +262,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
   sizes_steady.window = (self.width, self.height)
   sizes_steady.words = words
   let here : Set[(Int, Int, Int64, Bool)] = Set::new()
-  self.with_tree_nodes(fn() {
+  self.with_tree_nodes(steady=true, fn() {
     // (one ident twice in the frame: who either is, unsaid)
     let count : Map[Int, Int] = {}
     for i in 0..<self.count {
@@ -242,6 +283,11 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     let al = Array::make(k, 1.0)
     let c_top = Array::make(k, -1.0e9)
     let c_bot = Array::make(k, 1.0e9)
+    // (and across: how far its looks put it off where it is laid out, and what clips it there, so what is cut off to a
+    // side, a page slid off out of its column, shows as little as what is cut off above or below)
+    let xb = Array::make(k, 0.0)
+    let c_left = Array::make(k, -1.0e9)
+    let c_right = Array::make(k, 1.0e9)
     let row_at = Array::make(k, 0.0)
     let in_row = Array::make(k, false)
     // (and when the rows' way of the list it is in last set out: list_size.mbt's RowCauses, -1 none)
@@ -266,14 +312,15 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       let n = self.nodes[i]
       let p = n.parent
       let (pa, pb, palpha) = if p >= 0 && p < k { (ya[p], yb[p], al[p]) } else { (1.0, 0.0, 1.0) }
-      let (la, lb, lalpha) = match self.drawn_entry(i) {
+      let (la, lb, lalpha, ldx) = match self.drawn_entry(i) {
         Some(e) => {
           let l = e.look_now()
           let oy = n.y + l.oy * n.fh
-          (l.sy, oy * (1.0 - l.sy) + l.dy, l.alpha)
+          (l.sy, oy * (1.0 - l.sy) + l.dy, l.alpha, l.dx)
         }
-        None => (1.0, 0.0, 1.0)
+        None => (1.0, 0.0, 1.0, 0.0)
       }
+      xb[i] = (if p >= 0 && p < k { xb[p] } else { 0.0 }) + ldx
       ya[i] = pa * la
       yb[i] = pa * lb + pb
       al[i] = palpha * n.opacity * lalpha
@@ -281,10 +328,15 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         let pn = self.nodes[p]
         c_top[i] = c_top[p]
         c_bot[i] = c_bot[p]
+        c_left[i] = c_left[p]
+        c_right[i] = c_right[p]
         if pn.clip {
           let top = ya[p] * pn.y + yb[p]
           c_top[i] = dmax(c_top[i], top)
           c_bot[i] = dmin(c_bot[i], top + ya[p] * pn.fh)
+          let left = pn.x + xb[p]
+          c_left[i] = dmax(c_left[i], left)
+          c_right[i] = dmin(c_right[i], left + pn.fw)
         }
         if pn.tree_rows {
           // (a row of a page's list of the window's tree: its place the list's (rows_steady.mbt, Scroll::grew_above),
@@ -292,13 +344,23 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           row_at[i] = ya[i] * n.y + yb[i]
           in_row[i] = true
           set_out[i] = -1.0
-        } else if pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 || pn.tree_scrolls {
+        } else if pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 ||
+          tree_scroller_at.contains(p) {
           // (less how far its scroll was put for what came out another height over what shows: what is under that moved
           // down in it as far, held where it was)
           row_at[i] = ya[i] * (n.y + pn.tree_corrected) + yb[i]
           in_row[i] = true
+          // (the moment its rows' way set out; or an old list's put elsewhere at once, Ctx::app_scrolled's `put_at`, as
+          // rows_steady.mbt has it for the rows themselves: what it holds at its top, a head stuck under its edge
+          // (Node::stick), steps in its row then for no cause of its own)
           set_out[i] = match self.lists.get(pn.id) {
-            Some({ causes: Some(c), .. }) if pn.kind == kind_list => c.start
+            Some(st) if pn.kind == kind_list => {
+              let rows = match st.causes {
+                Some(c) => c.start
+                None => -1.0
+              }
+              dmax(rows, st.put_at)
+            }
             _ => -1.0
           }
         } else {
@@ -319,14 +381,29 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         Some({ ground: Some((_, y, _, h, _)), .. }) => (y, y + h)
         _ => (gy, gy + gh)
       }
-      let shows = al[i] > 0.05 && n.fw > 0.0 && dmin(bot0, c_bot[i]) > dmax(top0, c_top[i])
+      let left0 = n.x + xb[i]
+      // (none of an old view the window's tree places nowhere now: laid out nowhere, its page off to a side)
+      let placed = match n.island {
+        Some(id) => old_placed.iter().any(fn(p) { p.0 == id })
+        None => true
+      }
+      let shows = placed &&
+        al[i] > 0.05 &&
+        n.fw > 0.0 &&
+        dmin(bot0, c_bot[i]) > dmax(top0, c_top[i]) &&
+        dmin(left0 + n.fw, c_right[i]) > dmax(left0, c_left[i]) &&
+        // (nor what is off the window to a side: a page slid off out of its sheet, an old view's held in it)
+        left0 + n.fw > 0.0 &&
+        left0 < self.width
       let row_top = row_at[i]
       let in_row = in_row[i]
       // (words: where they stand; how tall is how many lines they take, no motion's)
       let words = n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor
       let measures = if words { [(false, top0 - row_top)] } else { [(true, bot0 - top0), (false, top0 - row_top)] }
       for m in measures {
-        let key = (n.ident, n.kind, n.bg, m.0)
+        // (a place in a row and one in the window are two measures, never one stepping from the other: what holds it
+        // starting or stopping to scroll, as what it holds comes to be taller than it or not, moves nothing)
+        let key = (n.ident, if !m.0 && in_row { -1 - n.kind } else { n.kind }, n.bg, m.0)
         here.add(key)
         let seen = match sizes_steady.seen.get(key) {
           Some(s) => s
@@ -337,7 +414,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           }
         }
         let gap = seen.length() > 0 && now - seen[seen.length() - 1].1 > 2.5 * period
-        if gap || resized || !shows || self.down {
+        if gap || resized || !shows || self.down || view_holds() {
           seen.clear()
           continue
         }
@@ -444,8 +521,7 @@ fn Tester::hold_sizes_steady(self : Tester) -> Unit {
     if sizes_steady.found.length() > bar {
       let said = "sizes not steady (sizes_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{sizes_steady.found.length()} now, \{bar} known in \{sizes_steady.file}"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
   }
 }

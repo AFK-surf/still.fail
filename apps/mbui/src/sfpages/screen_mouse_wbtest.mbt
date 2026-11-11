@@ -164,6 +164,24 @@ test "the keyboard types into it once it is pressed; ⌘V pastes this device's c
 }
 
 ///|
+test "Windows driving a Mac: Win K and Win Shift K send Command, Ctrl K stays Control" {
+  let r = screen_rig(w=1280.0, h=800.0, platform=3, os="macOS 26")
+  r.t.run_for(@sf.later_ms)
+  driven(r)
+  r.tap_at(0.5, 0.5)
+  let from = r.inputs().length()
+  for mods in [@ui.mod_cmd, @ui.mod_cmd | @ui.mod_shift_key, @ui.mod_ctrl] {
+    r.t.key(@ui.key_of_char('k'), mods~)
+  }
+  let keys = r.inputs()[from:].to_array()
+  assert_eq(keys.length(), 6)
+  assert_eq(keys.map(fn(k) { text(Some(k), "code") }), ["KeyK", "KeyK", "KeyK", "KeyK", "KeyK", "KeyK"])
+  assert_eq(keys.map(fn(k) { number(Some(k), "mods") }), [4.0, 4.0, 12.0, 12.0, 2.0, 2.0])
+  assert_eq(keys.map(fn(k) { text(Some(k), "kind") }), ["down", "up", "down", "up", "down", "up"])
+  mouse_done(r)
+}
+
+///|
 test "over the picture driving it the mouse is the screen's pointer, in its shape; the station's is drawn again once it leaves" {
   let r = mouse_rig()
   r.live(others=[])

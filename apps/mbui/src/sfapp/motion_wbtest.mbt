@@ -100,7 +100,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
           }
           let first = match days[0] {
             Object(d) => d
-            _ => abort("no day")
+            _ => @halt.saying("no day")
           }
           let rows = match first.get("items") {
             Some(Array(r)) => r.copy()
@@ -214,7 +214,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   assert_true(!reshaping(), msg="\{t.moving()}")
   assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), room)
   // let go of once the words are on their way: it comes down from as tall as it was, its field with it
-  let go = t.rest_of("composer/held-box/")
+  let (go, down) = @sfbase.flight_lets_go("ws1/st1:s-c1").unwrap()
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
   t.run_for(go - t.time())
   assert_true(
@@ -224,7 +224,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   assert_true(box() < tall, msg="\{box()} \{tall}")
   assert_true(reshaping(), msg="\{t.moving()}")
   // and its room under the list down with it, on the same curve
-  t.run_for(t.rest_of("composer/hold/") - t.time())
+  t.run_for(go + down - t.time())
   assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") < room)
   fix_clock.val = None
 }

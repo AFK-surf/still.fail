@@ -45,7 +45,7 @@ let place_across : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? {
   match place_pick.get(place_key(w.id, place)) {
     // (a station gone from the list: the first, not its page waiting for it)
-    Some(Station(a)) if !stations_listed(src, w).iter().any(fn(s) { text(Some(s), "station") == a }) =>
+    Some(Station(a)) if !stations_listed(src, w).iter().any(fn(s) { text(Some(s), "station") == a }) && place_rig_at(src, w, a) is None =>
       place_route_first(src, w, place)
     Some(r) => Some(r)
     None => place_route_first(src, w, place)
@@ -72,11 +72,39 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
 }
 
 ///|
-/// The workspace's stations, as the core lists them.
+/// The workspace's stations, their rows as the core lists them.
 fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
-  match src.topic("stations", { "scope": Json::string(w.id) }).get().value {
+  match @sfbase.station_rows(src, w.id).value {
     Some(Array(a)) => a
     _ => []
+  }
+}
+
+///|
+/// The station at `address` picked in the stations' place of workspace `ws`, as a press on its row picks it (a made-up
+/// run opened on it).
+pub fn place_pick_station(ws : String, address : String) -> Unit {
+  place_pick[place_key(ws, "stations")] = Route::Station(address)
+}
+
+///|
+/// The workspace's station that only runs tasks at `address`, if it is one (the settings' rig_at).
+fn place_rig_at(src : Source, w : Workspace, address : String) -> Json? {
+  let core = settings_core(src, w)
+  @settings.rig_at(core, @settings.here_of(core, w.id, w.name), address)
+}
+
+///|
+/// The address of the station picked in the stations' place of the workspace in view where it is one that only runs
+/// tasks, else "": its page is made once as nodes (pane_made's, tape_made's), in the place of the old view's.
+fn place_rig(src : Source) -> String {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) =>
+      match place_route(src, w, "stations") {
+        Some(Station(a)) if place_rig_at(src, w, a) is Some(_) => a
+        _ => ""
+      }
+    None => ""
   }
 }
 
@@ -157,6 +185,49 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           @sfbase.show_chosen()
         })
       }
+      // those that only run tasks after the whole ones: whose each is and how it is, in the figures' place
+      for r in @settings.rigs_listed(core, here) {
+        let r = Some(r)
+        let address = w.id + "/" + text(r, "id")
+        let t = @sf.theme()
+        nav_item(
+          c,
+          at=side_at(),
+          "stations/" + address,
+          picked == Some(Route::Station(address)),
+          fn() { @sf.icon(c, "boxes", size=nav_mark_side, color=t.p.text) |> ignore },
+          fn() { nav_title(c, text(r, "name")) },
+          lines=fn() { @sfpages.rig_figures(c, r) },
+          keep_lines=2,
+          more=false,
+          on_press=fn() {
+            place_pick[place_key(w.id, "stations")] = Route::Station(address)
+            @sfbase.show_chosen()
+          },
+        )
+      }
+      // the workspace's devices under their heading (设备: attached to a station, or a person's phone), each opening
+      // its panel
+      let devices = @settings.devices_listed(core, here)
+      if devices.length() > 0 {
+        @sf.list_heading(c, @sf.t("web-pages.devices.title"), side_at())
+      }
+      for d in devices {
+        let d = Some(d)
+        let t = @sf.theme()
+        nav_item(
+          c,
+          at=side_at(),
+          "devices/" + text(d, "station") + "/" + text(d, "id"),
+          false,
+          fn() { @sf.icon(c, @settings.device_icon(d), size=nav_mark_side, color=t.p.text) |> ignore },
+          fn() { nav_title(c, text(d, "name"), away=field(d, "online") is Some(False)) },
+          lines=fn() { c.text(@settings.device_said(d), style=nav_meta(), allow_ellipsis=true) |> ignore },
+          keep_lines=1,
+          more=false,
+          on_press=fn() { @settings.open_device(core, here, text(d, "station"), text(d, "id"), Unanchored) },
+        )
+      }
     })
   })
   |> ignore
@@ -199,6 +270,11 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
+      // (the room the widest allowance's chips need: one way for every row, nav_quota_chips)
+      let mut chips = 0.0
+      for e in list {
+        chips = dmax(chips, @sf.nav_quota_line(c, field(field(Some(e), "profile"), "quota")))
+      }
       for i, e in list {
         let e = Some(e)
         // (another row under it: the next of its group)
@@ -269,7 +345,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
             more~,
             foot?=if windows {
-              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at()) })
+              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at(), widest=chips) })
             } else {
               None
             },
@@ -280,16 +356,11 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
           )
       }
-      // each station's own logins, not profiles yet
-      for s in stations_listed(src, w) {
-        let s = Some(s)
-        if !flag(s, "online") {
-          continue
-        }
+      // each station's own logins, not profiles yet: as the profiles' list says them (each station up that offers one)
+      for o in @settings.profiles_offers(src.topic("profiles", { "scope": Json::string(w.id) }).get().value) {
+        let s = Some(o.0)
         let station = text(s, "station")
-        let offers = items(field(s, "overview"), "machineLogins").filter(fn(l) {
-          flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked"
-        })
+        let offers = o.1.filter(fn(l) { flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked" })
         if offers.length() == 0 {
           continue
         }
@@ -372,7 +443,7 @@ let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).
 fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let read = src.topic("stations", { "scope": Json::string(w.id) }).get().value is Some(_)
+  let read = @sfbase.station_rows(src, w.id).value is Some(_)
   // (while they are read: a station's page, the one picked once they are, in its bones)
   if !read {
     @sfpages.station_waiting(c, core, here, @sf.no_frame, "Station", @sf.t("common.readingStations"))

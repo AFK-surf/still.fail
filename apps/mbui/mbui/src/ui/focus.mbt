@@ -498,12 +498,28 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
 }
 
 ///|
+/// The old views built in the frame being built (view_host.mbt's held build): what had the focus in one of them and was
+/// not built in it again has it no more (Ctx::focus_frame_end).
+// kept across runs: cleared as each frame is built
+let islands_built : Array[@view.NodeId] = []
+
+///|
 /// As the frame ends: what can take the focus now is what Tab goes among next frame.
 fn Ctx::focus_frame_end(self : Ctx) -> Unit {
   // A one-time code is entered only while its boxes are shown. Its state can outlive those boxes on the same page,
-  // but it must not keep the keyboard once they are gone. Other editors keep their focus when a page covers them.
+  // but it must not keep the keyboard once they are gone.
   if code_fields.contains(self.focus) && !self.focusables.iter().any(fn(f) { f.id == self.focus }) {
     self.focus_moved(0)
+  }
+  // A field with the focus its old view built again without it (an `if` around it now false): the focus is only in
+  // what shows (Ctx::focus_taken_under's one rule), so none has it; one under a page put over its page (one that view is
+  // not built in now) is the stack's to put aside and give back (Nav::told_focus).
+  if self.focus != 0 && self.editors.contains(self.focus) {
+    match self.last_focusables.iter().find_first(fn(f) { f.id == self.focus }) {
+      Some({ island: Some(i), .. }) if islands_built.contains(i) &&
+        !self.focusables.iter().any(fn(f) { f.id == self.focus }) => self.focus_moved(0)
+      _ => ()
+    }
   }
   // what has it now is what the next frame's keys and presses move it from (Ctx::focus_gained)
   self.focus_before = self.focus
@@ -581,6 +597,7 @@ fn Ctx::focus_keeps(self : Ctx, code : Int, mods : Int) -> Bool {
 /// focus_to: one focus, read on either side); a node's no longer able to take it (let go, another tree's, leaving,
 /// taking no press, under a modal layer), the focus to none.
 fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
+  let was = self.focus
   self.focus = id
   match visible {
     Some(v) => self.focus_visible = v
@@ -589,6 +606,10 @@ fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
   // (both sides told as one change)
   @signals.start_batch()
   focus_told_tree(self)
+  // (come to a field of the tree's: its caret blinking from this moment, tree_field_focus_came)
+  if self.focus != was {
+    tree_field_focus_came(self)
+  }
   // (what of the old views reads it told now, with the tree's, in a build too: what read it as it was before (a field
   // read without it, given it back in the same build) built again from it, nothing else; between builds, the host owing
   // a frame for it)

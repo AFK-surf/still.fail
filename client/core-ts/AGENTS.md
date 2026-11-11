@@ -22,6 +22,22 @@ design rules (the user, 2026-10-03):
    an unchanged item is the same object, and a keyed subscriber gets insert, patch, drop, move ops.
 7. **Workspaces are isolated** from each other.
 
+## What a topic sends is bounded
+
+The app parses every message of the core on its frame thread: on the owner's phone a `stations` of 463 KB took 25–86 ms
+each time it came. So what a topic sends is bounded (the user, 2026-11-10): `test/topic-bytes.test.ts` measures every
+way the app asks each topic on a workspace of real size (`test/real-size.ts`), a value sent whole at most 32 KB, a
+message as something changes at most 4 KB. A list's item carries what its row shows; a page of one thing asks that
+thing's own topic; a field one page needs is not added to a list every page holds; a new topic is placed in the test's
+tables. Its `OVER` tables only fall. A topic the app lets go of keeping its value (`keep`) and asks again (`have`) is
+sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`). What
+goes out is what the topic's shape declares, the rest dropped (`src/conform.ts`), while the core's own readers read its
+whole value (`store.value`): a field the core reads and no UI does stays out of the shape (a chat's agents' models,
+which `src/choose.ts` reads of `views.agent`). A part a view shapes once for every topic that holds it (views.ts
+`asShaped`) goes out as each topic's own shape says there (a station's overview to its page as `StationOverview`,
+conform.ts `reshaped`); where one shape is sent by several topics and only some pages read a field, the others get a
+shape of their own (`ListedProfile`, `StationProfile` beside `Profile`).
+
 ## What is shared is never written
 
 Unchanged things being the same object is what makes rule 6 work, so a value read from the database

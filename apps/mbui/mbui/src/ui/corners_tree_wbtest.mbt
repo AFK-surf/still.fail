@@ -653,3 +653,37 @@ test "corners: cards in a list in a panel, scrolled to its top, its middle and i
   // judged each by their own)
   assert_eq(scrolled_faults(scrolled_cards(16.0, 26.0, 16.0, foot_right=10.0)), (0, 0, 0))
 }
+
+///|
+test "corners of the window's tree: a round key 12 in a node's 20, 6 and 10 in, with no ground of its own: said while it takes presses, as its ground shows under the hand; said to take none (View::presses), nothing, it never lights; taking them again, said again" {
+  let on = @signals.signal(false)
+  let t = tree_card(corners_held=false, fn(v) {
+    v.box(fn(k) {
+      k
+      .width(Is(Some(24.0)))
+      .height(Is(Some(24.0)))
+      .radius(Is(12.0))
+      .margin(Is((0.0, 4.0, 0.0, 0.0)))
+      .presses(By(fn() { on.get() }))
+      .on_press(fn() {  })
+      .says(Is(Some(@view.said(Button, label="turn"))))
+      |> ignore
+    })
+    |> ignore
+  })
+  let off = t.corner_faults()
+  on.set(true)
+  t.draw()
+  let taking = t.corner_faults()
+  on.set(false)
+  t.draw()
+  let off_again = t.corner_faults()
+  on.set(true)
+  t.draw()
+  let taking_again = t.corner_faults()
+  assert_eq(
+    (off, taking.length() > 0, off_again, taking_again.length() > 0),
+    ([], true, [], true),
+    msg="\{off} | \{taking} | \{off_again} | \{taking_again}",
+  )
+}

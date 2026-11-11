@@ -56,8 +56,7 @@ fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
       let c = g()
       if c.read_back_moved {
         let s = "Tester::draw: what the view reads (\{c.read_back_key}) still changes after \{n} frames: it does not converge"
-        println(s)
-        abort(s)
+        @halt.saying(s)
       }
       return
     }
@@ -302,8 +301,7 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
   }
   if why.length() > 0 {
     let s = "Tester::assert_idle: not idle: " + why.join("; ")
-    println(s)
-    abort(s)
+    @halt.saying(s)
   }
   let cycles = self.cycles()
   if cycles.length() > 0 {

@@ -37,3 +37,21 @@ pub fn[T] work_part(what : () -> String, f : () -> T) -> T {
     }
   }
 }
+
+///|
+/// A part timed by whoever runs it begins: the journal's clock now, below 0 where no journal listens (nothing timed).
+pub fn work_began() -> Double {
+  match work_noting.val {
+    Some((now, _)) => now()
+    None => -1.0
+  }
+}
+
+///|
+/// A part took `ms` on the journal's clock (work_began's), in one piece or in all of many (the words measured in a
+/// layout): the journal told it was `what` where that is `work_noted_ms` or more.
+pub fn work_took(what : String, ms : Double) -> Unit {
+  if ms >= work_noted_ms && work_noting.val is Some((_, note)) {
+    note(what, ms)
+  }
+}

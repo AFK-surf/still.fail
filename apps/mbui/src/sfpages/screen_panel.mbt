@@ -53,7 +53,7 @@ fn screen_os(src : Source, station : String) -> String {
     Some(i) => station.view(end_offset=i).to_owned()
     None => station
   }
-  match src.topic("stations", { "scope": Json::string(scope) }).get().value {
+  match @sfbase.station_rows(src, scope).value {
     Some(Array(list)) =>
       for s in list {
         if text(Some(s), "station") == station {
@@ -202,6 +202,9 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let net = screen_net(s)
   let rtt = field(net, "rtt")
   let level = text(rtt, "level")
+  // (its figures counted each second as the view's seconds seen are (screen_count): read again with them, where it is
+  // an old view in a node of the window's tree, built again only as what it read changes)
+  u.seen.get() |> ignore
   let st = s.state
   let latency = field(st, "latency")
   let video = field(st, "video")

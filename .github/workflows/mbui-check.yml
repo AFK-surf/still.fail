@@ -2,6 +2,11 @@
 # (pipeline.yml's check-mbui calls this, its gate waits for it), main's here on its own (on a push to the app). On main
 # they hold nothing back (the preview app is preview.yml's, done waits for neither) and were the last of its pipeline run
 # in half of them: as part of it, the run after waited for them, 16 of 40 runs a median 88 s (2026-10-20).
+# The tests at 120, 60, 24 and 7 frames a second too (app-rates, replay-fps) on a branch's pushes and pull requests,
+# in the day's run and the other ways it is run, as before; main's own run after a merge at the default rate alone: it
+# runs again what each merged branch's pipeline ran on its head at every rate, 64 runs and 4,628 runner-minutes on
+# 2026-11-10, 13.8% of all GitHub runner time, none red (the user, 2026-11-11: each part of the tests is run for what
+# it is for).
 name: mbui-check
 on:
   workflow_call:
@@ -55,14 +60,11 @@ jobs:
         # (sfapp's program itself built once, app-build below, and its groups' runs on it in the app job since: each
         # of five runners compiled the same program again, 60-150 s each, more than half of a push's runner time, and
         # four branches pushed at once waited up to 4 minutes for runners, 2026-10-31, as asked)
+        # (the small packages' programs built once here, at the default rate, and put in an artifact (test.sh
+        # PKGS_BUILD_OUT): their runs at 120, 60, 24 and 7 frames a second are app-rates' 1/4's, on them. Each rate
+        # had a runner of its own here that built the same programs again, 72-90 s, to run them 21-51 s, 2026-11-11)
         include:
           - { part: app, group: pkgs, store: app-pkgs }
-          # (and again with frames drawn on run_for's way while the app asks for them, at 120 a second, at 60, and at
-          # 24 then 7, a runner each (MBUI_TEST_FPS, mbui's scripts/fps_check.sh): the same results, what a test asserts
-          # at a moment what is so at it however many frames came before)
-          - { part: app, group: pkgs, store: app-pkgs, fps: "120" }
-          - { part: app, group: pkgs, store: app-pkgs, fps: "60" }
-          - { part: app, group: pkgs, store: app-pkgs, fps: "24 7" }
           # (the flows at every rate, the default's too: replay-fps below, on the program replay-build makes once)
     env:
       PART: ${{ matrix.part }}
@@ -168,13 +170,19 @@ jobs:
           code=0
           for r in ${FPS:-default}; do
             if [ $r = default ]; then unset MBUI_TEST_FPS; else export MBUI_TEST_FPS=$r; echo "=== at $r frames a second"; fi
-            TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ env.PART }} APP_GROUP=${{ env.GROUP == 'build' && '1/4' || env.GROUP }} APP_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'app' && format('{0}/app-test', runner.temp) || '' }} REPLAY_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'replay' && format('{0}/replay-test', runner.temp) || '' }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee -a "$RUNNER_TEMP/mbui-test.log" || code=1
+            TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ env.PART }} APP_GROUP=${{ env.GROUP == 'build' && '1/4' || env.GROUP }} APP_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'app' && format('{0}/app-test', runner.temp) || '' }} PKGS_BUILD_OUT=${{ env.GROUP == 'pkgs' && format('{0}/pkgs-test', runner.temp) || '' }} REPLAY_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'replay' && format('{0}/replay-test', runner.temp) || '' }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee -a "$RUNNER_TEMP/mbui-test.log" || code=1
           done
           exit $code
       # (sfapp's test program and its tests' list, for the app job's runs)
       - if: env.GROUP == 'build' && env.PART == 'app'
         uses: actions/upload-artifact@v4
         with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test", retention-days: 1, compression-level: 1 }
+      # (the small packages' test programs and their tests' lists, for app-rates' 1/4's runs: after red tests too, the
+      # programs put there before they ran, so the rates' runs still say what they find; none put, the build failed.
+      # None where app-rates does not run)
+      - if: always() && env.GROUP == 'pkgs' && github.event_name != 'workflow_run' && !(github.event_name == 'push' && github.workflow == 'mbui-check')
+        uses: actions/upload-artifact@v4
+        with: { name: "mbui-pkgs-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/pkgs-test", retention-days: 1, compression-level: 1, if-no-files-found: ignore }
       # (the flows' test program and its tests' list, for the replay-fps job's runs)
       - if: env.GROUP == 'build' && env.PART == 'replay'
         uses: actions/upload-artifact@v4
@@ -204,7 +212,12 @@ jobs:
           # store grown with each push else)
           went=${{ steps.tests.outcome }}
           [ "$OWN" != a- ] || [ "$went" != failure ] || went=success
-          [ ! -d $S ] || [ "$went" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
+          # (main's keeps what its runs used for the last twelve hours, not only this run's: a branch off main of an hour
+          # or two before found few of its units in main's newest store, main having changed them since, and compiled
+          # them all again, 644 of sfapp's 899 in 141 s, app build 275-276 s of its 5 minutes, core-connect-rows
+          # 42934469629 and mbui-app-part-balance, 2026-11-10 and 11, where main's own was 41-227)
+          old=$( [ "$OWN" = m- ] && echo "-mmin +720" || echo "")
+          [ ! -d $S ] || [ "$went" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" $old -exec rm -rf {} +
           c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
       - if: always() && env.BUILD_KEY != steps.main.outputs.cache-matched-key && env.BUILD_KEY != steps.own.outputs.cache-matched-key
@@ -280,7 +293,8 @@ jobs:
     steps: *native-steps
 
   # The flows seen again at the default rate and at 120, 60, 24 and 7 frames a second (MBUI_TEST_FPS), each on the
-  # program replay-build made (REPLAY_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs)
+  # program replay-build made (REPLAY_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs).
+  # Main's own run after a merge at the default rate alone (the file's head)
   replay-fps:
     name: native (replay${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }})
     needs: replay-build
@@ -289,7 +303,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fps: ["", "120", "60", "24", "7"]
+        fps: ${{ fromJSON(github.event_name == 'push' && github.workflow == 'mbui-check' && '[""]' || '["", "120", "60", "24", "7"]') }}
     env:
       MBUI_TEST_FPS: ${{ matrix.fps }}
       FPS: ${{ matrix.fps }}
@@ -325,7 +339,8 @@ jobs:
           echo "::error title=check-mbui (replay${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
 
   # sfapp's tests, the app part's groups (scripts/test.sh app_group_of), each run on the program app-build made
-  # (APP_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs)
+  # (APP_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs); at the default rate here, at
+  # the others in app-rates below, the same steps
   app:
     name: native (app ${{ matrix.group }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.part && format(' part {0}', matrix.part) || '' }})
     needs: app-build
@@ -337,53 +352,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # (and the page tests again with frames drawn on run_for's way (MBUI_TEST_FPS), as the native job's above)
         group: [1/4, 2/4, 3/4, 4/4, contrast, corners]
         fps: [""]
-        include:
-          - { group: 1/4, fps: "120" }
-          # (the second's too: 288 s of its pages and 299 s in all on a branch, 2026-11-09, 42635671188; 268 s on main,
-          # its time spread over many files' frames at 120, no one test's to take out)
-          - { group: 2/4, fps: "120", part: 1/2 }
-          - { group: 2/4, fps: "120", part: 2/2 }
-          # (the third's pages at 120 in two halves, how what moves goes counted on every frame too: stopped at its five
-          # minutes in one, 2026-11-10, 42649531176)
-          - { group: 3/4, fps: "120", part: 1/2 }
-          - { group: 3/4, fps: "120", part: 2/2 }
-          # (the fourth's pages at 120 in two halves: 315 s and stopped at its five minutes in one, 2026-11-09)
-          - { group: 4/4, fps: "120", part: 1/2 }
-          - { group: 4/4, fps: "120", part: 2/2 }
-          - { group: 1/4, fps: "60" }
-          - { group: 2/4, fps: "60" }
-          - { group: 3/4, fps: "60" }
-          - { group: 4/4, fps: "60" }
-          - { group: 1/4, fps: "24 7" }
-          - { group: 2/4, fps: "24 7" }
-          - { group: 3/4, fps: "24 7" }
-          # (the fourth's at 24 and at 7 a runner each: one after the other 275 s of its runs, 289 s of its five minutes on
-          # a branch, 42649543160, 2026-11-10; its time many files' frames, no one test's)
-          - { group: 4/4, fps: "24" }
-          - { group: 4/4, fps: "7" }
-    env:
+    env: &app-env
       FPS: ${{ matrix.fps }}
       APP_PART: ${{ matrix.part }}
+      # (the first's at a rate runs the small packages' programs native built too, beside its pages: PKGS_EXE)
+      PKGS: ${{ matrix.group == '1/4' && matrix.fps != '' && 'yes' || '' }}
       MBUI_TEST_MOTION: ${{ (matrix.fps == '120' || matrix.fps == '60') && 'count' || '' }}
       MOTION_OUT: ${{ github.workspace }}/motion.txt
-    steps:
+    steps: &app-steps
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test" }
+      - if: env.PKGS == 'yes'
+        uses: actions/download-artifact@v4
+        with: { name: "mbui-pkgs-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/pkgs-test" }
       - name: The mbui app's tests (native, app ${{ matrix.group }}, on app-build's program)
         id: tests
         run: |
           set -o pipefail
           chmod +x "$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" "$RUNNER_TEMP/app-test/testexe"
+          [ "$PKGS" != yes ] || find "$RUNNER_TEMP/pkgs-test" -type f \( -name '*.exe' -o -name testexe \) -exec chmod +x {} +
           # (each of FPS's rates in its turn, MBUI_TEST_FPS; none said: once, as by default)
           code=0
           for r in ${FPS:-default}; do
             if [ $r = default ]; then unset MBUI_TEST_FPS; else export MBUI_TEST_FPS=$r; echo "=== at $r frames a second"; fi
             TESTEXE="$RUNNER_TEMP/app-test/testexe" \
             APP_EXE="$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" APP_INFO="$RUNNER_TEMP/app-test/__whitebox_test_info.json" \
+            PKGS_EXE=${{ env.PKGS == 'yes' && format('{0}/pkgs-test', runner.temp) || '' }} \
               TIMES=1 TARGETS=native PARTS=app APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 \
               bash apps/mbui/scripts/test.sh 2>&1 | tee -a "$RUNNER_TEMP/mbui-test.log" || code=1
           done
@@ -414,3 +411,49 @@ jobs:
             echo '```'
             [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The page tests again with frames drawn on run_for's way while the app asks for them (MBUI_TEST_FPS, mbui's
+  # scripts/fps_check.sh): the same results, what a test asserts at a moment what is so at it however many frames came
+  # before. A branch's pushes and pull requests and the day's run; not main's own run after a merge (the file's head).
+  # The first group's at each rate runs the small packages' programs too, native's: so these wait for native, and run
+  # whatever it said
+  app-rates:
+    name: native (app ${{ matrix.group }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.part && format(' part {0}', matrix.part) || '' }})
+    needs: [app-build, native]
+    if: ${{ !cancelled() && needs.app-build.result == 'success' && github.event_name != 'workflow_run' && !(github.event_name == 'push' && github.workflow == 'mbui-check') }}
+    runs-on: ubuntu-24.04
+    # (a push's 5 minutes; the day's, its pages in one process, 10)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { group: 1/4, fps: "120" }
+          # (the second's too: 288 s of its pages and 299 s in all on a branch, 2026-11-09, 42635671188; 268 s on main,
+          # its time spread over many files' frames at 120, no one test's to take out)
+          - { group: 2/4, fps: "120", part: 1/2 }
+          - { group: 2/4, fps: "120", part: 2/2 }
+          # (the third's pages at 120 in two halves, how what moves goes counted on every frame too: stopped at its five
+          # minutes in one, 2026-11-10, 42649531176)
+          - { group: 3/4, fps: "120", part: 1/2 }
+          - { group: 3/4, fps: "120", part: 2/2 }
+          # (the fourth's pages at 120 in two halves: 315 s and stopped at its five minutes in one, 2026-11-09)
+          - { group: 4/4, fps: "120", part: 1/2 }
+          - { group: 4/4, fps: "120", part: 2/2 }
+          - { group: 1/4, fps: "60" }
+          # (the second's at 60 was in two halves from #5322 until the screens', squeeze_said's and words_large's sweeps
+          # left the rates: 139-251 s of its five minutes on seven branches' runs of one evening, and 299 s and stopped
+          # on an eighth, chat-outline 42925266377, 2026-11-11, its time many files' frames at 60 beside those sweeps
+          # (with kept_rows' last run 400 s of its cores). One runner again, its pages on four programs: page_deal)
+          - { group: 2/4, fps: "60" }
+          - { group: 3/4, fps: "60" }
+          - { group: 4/4, fps: "60" }
+          - { group: 1/4, fps: "24 7" }
+          - { group: 2/4, fps: "24 7" }
+          - { group: 3/4, fps: "24 7" }
+          # (the fourth's at 24 and at 7 a runner each: one after the other 275 s of its runs, 289 s of its five minutes on
+          # a branch, 42649543160, 2026-11-10; its time many files' frames, no one test's)
+          - { group: 4/4, fps: "24" }
+          - { group: 4/4, fps: "7" }
+    env: *app-env
+    steps: *app-steps

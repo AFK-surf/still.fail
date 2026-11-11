@@ -33,6 +33,7 @@ test("subscribers share a pending location and get the transcript before events 
     assert.deepEqual(first, []);
     pending.resolve({ runtime: "claude", paths: [path], current: true });
     await settle();
+    await hub.idle();
     for (const got of [first, second]) {
       const timeline = got.find((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline")!;
       assert.deepEqual(timeline.entries.map((e) => e.text), ["one", "two"]);
@@ -71,6 +72,7 @@ test("unsubscribing during location preserves handover state, while deleting a s
     requests[0]!.pending.resolve({ runtime: "claude", paths: [path], current: true });
     requests[1]!.pending.resolve({ runtime: "claude", paths: [path], current: true });
     await settle();
+    await hub.idle();
     assert.deepEqual(abandoned, []);
     assert.equal(stateReads, 0, "the next watch resumes the carried reading");
     assert.equal(joined[0]?.type, "timeline");
@@ -84,6 +86,7 @@ test("unsubscribing during location preserves handover state, while deleting a s
     assert.equal(requests[2]!.signal.aborted, true);
     requests[2]!.pending.resolve({ runtime: "claude", paths: [path], current: true });
     await settle();
+    await hub.idle();
     assert.deepEqual(hub.carriedTails(), [], "a late answer cannot restore a deleted session's state");
   } finally { hub.close(); rmSync(dir, { recursive: true, force: true }); }
 });
@@ -112,8 +115,10 @@ test("a newly written transcript is announced even when its location takes longe
       await settle();
       requests[1]!.resolve({ runtime: "claude", paths: [path], current: true });
       await settle();
+      await hub.idle();
       await time.adjust(40);
       await settle();
+      await hub.idle();
       const timeline = got.find((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline");
       assert.ok(timeline, `the new transcript is announced with reader=${withReader}`);
       assert.equal(timeline.start, 1);

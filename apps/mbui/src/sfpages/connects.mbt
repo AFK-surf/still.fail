@@ -51,35 +51,42 @@ pub fn connects_node(
   let shown = fn() { items(view(), "items").filter(fn(x) { only == "" || text(Some(x), "station") == only }) }
   let wait = fn() { field(view(), "wait") }
   let loading = fn() { wait() is None || flag(wait(), "reading") }
-  // the Slack apps the viewer made that no connect has taken yet, each on its station
+  let station_of = fn(address : String) -> Json? {
+    stations().iter().find_first(fn(s) { text(Some(s), "station") == address })
+  }
+  // the Slack apps the viewer made that no connect has taken yet, each on its station (the connects' `slackApps`: every
+  // station's, said with it), with that station's row (its name and whether it is up; till that is read, its name)
   let waiting = fn() -> Array[(Json, Json)] {
-    let out : Array[(Json, Json)] = []
-    for s in stations() {
-      for app in items(field(Some(s), "overview"), "slackApps") {
-        out.push((app, s))
+    items(view(), "slackApps").filter_map(fn(x) {
+      let address = text(Some(x), "station")
+      if only != "" && address != only {
+        return None
       }
-    }
-    out
+      let s = match station_of(address) {
+        Some(s) => s
+        None => Json::object({ "station": Json::string(address), "name": Json::string(text(Some(x), "stationName")) })
+      }
+      Some((field(Some(x), "app").unwrap_or(Json::null()), s))
+    })
   }
   // none at all yet (not only none of the viewer's): the page is about adding the first
   let first = fn() {
     !loading() && topic().error is None && shown().length() == 0 && !mine.get() && waiting().length() == 0
   }
-  // a connect runs a profile's model: with none on any station (each read), the first step is a profile
+  // a connect runs a profile's model: with none on any station (each read), the first step is a profile (the connects'
+  // `noProfile`; one station's, by its overview's profiles alone)
   let no_profile = fn() {
-    let st = stations()
-    st.length() > 0 &&
-    st
-    .iter()
-    .all(fn(s) {
-      field(Some(s), "overview") is Some(Object(_)) && items(field(Some(s), "overview"), "profiles").length() == 0
-    })
+    if only == "" {
+      flag(view(), "noProfile")
+    } else {
+      match @settings.station_part(core, here(), only, "profiles") {
+        Some(Array(a)) => a.length() == 0
+        _ => false
+      }
+    }
   }
   // where one is added: the stations online
   let targets = fn() { stations().filter(fn(s) { flag(Some(s), "online") }) }
-  let station_of = fn(address : String) -> Json? {
-    stations().iter().find_first(fn(s) { text(Some(s), "station") == address })
-  }
   let failing = fn() { items(wait(), "failing").length() > 0 }
   // (its primary action named as what it adds; narrow, the title's ＋)
   let actions = fn(l : @view.View) {

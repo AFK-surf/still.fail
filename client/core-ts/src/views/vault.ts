@@ -111,6 +111,11 @@ type Held = {
   /// vault: this device's lock behind the station's (a device let in again, given the key in the version written for it
   /// before it heard it was in the lock). Taken as the lock comes (`vaultCome`); nothing else would tell it again.
   later?: Record<string, Vault>;
+  /// The last version held of a vault under each earlier key, by vault, then by epoch: what unseals an earlier key for
+  /// this device (its `keys`), and what the lock took then, while items written under that key are left to be written
+  /// again under the vault's (`carryOn`: a keying anew stopped half-way). Let go once nothing sits under it
+  /// (`settleBefore`).
+  before?: Record<string, Record<string, Vault>>;
 };
 
 /// A vault's version a station holds, and its items' versions; the signatures of those (`sig`, `sigs`): which of two of
@@ -222,19 +227,91 @@ function trusted(lock: Checked, v: Vault): boolean {
   return ok;
 }
 
+/// The lock as it stood when it last took vault version `v`: the lock as it is where it takes it, else the longest
+/// prefix of the chain held that does (a version keyed for a device or member taken out since), else none. Found once
+/// for each chain and version: a lock held is replaced whole as it moves on, never changed in place (a version by its
+/// vault, number and signature, as what is held of the vaults is made anew at every change to any of them): the pages
+/// ask it on every view of the vaults (`waitingAs`).
+const took = new WeakMap<readonly Entry[], Map<string, Checked | null>>();
+/// How many prefixes of a lock `tookAs` has checked: a count only, that the tests read (what it finds is kept).
+export const waitingChecks = { count: 0 };
+function tookAs(inner: Inner, ws: string, v: Vault): Checked | null {
+  const lock = lockOf(inner, ws);
+  if (!(lock instanceof CoreError) && trusted(lock, v)) return lock;
+  const entries: readonly Entry[] = lockHeld(inner, ws)?.entries ?? [];
+  let of = took.get(entries);
+  if (!of) took.set(entries, (of = new Map()));
+  const at = `${v.id}/${v.seq}/${v.sig?.sig}`;
+  if (of.has(at)) return of.get(at)!;
+  let was: Checked | null = null;
+  for (let n = entries.length - 1; n > 0 && was === null; n--) {
+    waitingChecks.count++;
+    try {
+      const prefix = checkLock(entries.slice(0, n) as Entry[], nowS(inner));
+      if (!prefix.disabled && trusted(prefix, v)) was = prefix;
+    } catch {
+      // (a prefix that does not check out: an earlier one may)
+    }
+  }
+  of.set(at, was);
+  return was;
+}
+
+/// A vault waiting to be keyed anew: the lock as it stood when it last took version `v` (`tookAs`), where the lock as
+/// it is takes it no more only for a device or a member taken out since that holds a key of it or is in it, and its
+/// owner is a member still; else null. Until its owner's device keys it anew (`rekeyGone`, written on its own
+/// station), the devices left read it as that lock took it, and change nothing in it (`vault_waiting`,
+/// `waitingError`): the stations take no version of it till then (rules/, a key for a device not in the lock). The
+/// owner's decision, 2026-11-10: with the vault's station off (a laptop closed), a device taken out left the vault
+/// gone for everyone, its items 「条目不存在」, until that station was back, though the devices left held its key and
+/// its items. It gives the device taken out nothing: that device is out of the lock, so reads nothing of any vault
+/// here (`Vaults.#ready`, and the views ask for this device in the lock), and reaches no station; what is carried on
+/// as the vault is keyed anew is checked against this same lock (`#carryNow`).
+export function waitingAs(inner: Inner, ws: string, lock: Checked, v: Vault): Checked | null {
+  if (v.deleted || trusted(lock, v)) return null;
+  const gone = v.keys.some((k) => !lock.devices.has(k.cert.device)) || v.members.some((m) => !lock.members.has(m));
+  if (!gone || !lock.members.has(v.owner)) return null;
+  return tookAs(inner, ws, v);
+}
+
+/// The lock vault `v` is read by on this device: the lock as it is, where it takes it; the lock as it stood, where it
+/// waits to be keyed anew (`waitingAs`) and this device, in the lock (`self`), holds one of its keys; else null (not
+/// there).
+function readAs(inner: Inner, ws: string, lock: Checked, v: Vault, self: { device: string } | null): Checked | null {
+  if (v.deleted) return null;
+  if (trusted(lock, v)) return lock;
+  if (self === null || !v.keys.some((k) => k.cert.device === self.device)) return null;
+  return waitingAs(inner, ws, lock, v);
+}
+
+/// The name of the station vault `v` waits on to be keyed anew (`waitingAs`), the one it lives on: its id's first
+/// characters where the workspace names none.
+function waitsOn(inner: Inner, ws: string, v: Vault): string {
+  const at = held(inner, ws).at[v.id] ?? "";
+  return str(stationsOf(inner, ws).find((s) => s.id === at)?.name) || at.slice(0, 8);
+}
+
+/// Why a change to vault `v`, waiting to be keyed anew, is refused: the station it waits for (`waitsOn`).
+function waitingError(inner: Inner, ws: string, v: Vault): CoreError {
+  return new CoreError("vault_waiting", t("core-misc.vault.waiting", { name: v.name, station: waitsOn(inner, ws, v) }));
+}
+
 /// Which of what a station says the rules take (a vault's version, an item's, a box certificate): what one says is
 /// held over what is held only where they take it, or take what is held no more than it. A version a station made up
 /// (signed by someone other than its writer, a later number on it) hides none held before it, nor one it gives after
-/// (test/vault.test.ts "a station that lies"). No lock checked here: none taken.
+/// (test/vault.test.ts "a station that lies"). No lock checked here: none taken. A vault waiting to be keyed anew
+/// (`waitingAs`) is taken as the lock it waits by took it, and its items checked against that lock: else any later
+/// version a station made up of it or of an item, taken by none, would be held over it.
 type Fits = { vault(v: Vault): boolean; item(i: Item): boolean; cert(c: BoxCert): boolean };
 function fits(inner: Inner, ws: string): Fits {
   const lock = lockOf(inner, ws);
   if (lock instanceof CoreError) return { vault: () => false, item: () => false, cert: () => false };
   return {
-    vault: (v) => trusted(lock, v),
+    vault: (v) => trusted(lock, v) || waitingAs(inner, ws, lock, v) !== null,
     item: (i) => {
       const v = held(inner, ws).vaults[i.vault];
-      return v !== undefined && trusted(lock, v) && rules.item_ok_js(lock, v, null, i, true, rulesCrypto) === null;
+      const as = v === undefined ? null : trusted(lock, v) ? lock : waitingAs(inner, ws, lock, v);
+      return v !== undefined && as !== null && rules.item_ok_js(as, v, null, i, true, rulesCrypto) === null;
     },
     cert: (c) => rules.cert_ok_js(lock, c, false, rulesCrypto) === null,
   };
@@ -365,6 +442,7 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
       else changeItems(inner, ws, v.id, (held) => {
         for (const i of all) if (i.vault === v.id && newer(i, held[i.id], fit)) held[i.id] = i;
       });
+      settleBefore(inner, ws, v.id);
     }
     // Those it lists no more: the latest versions it holds of them, as the versions held here show this person was in
     // them; one taking them out (or deleting it), checked, lets it go here.
@@ -384,6 +462,9 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
     }
     // (members' devices set up meanwhile: given the keys unsealed here)
     if (boxes.length > 0) giveKept(inner, ws);
+    // (items left under an earlier key, a keying anew stopped half-way: written again under the vault's where the keys
+    // are unsealed here still)
+    if (list !== null) carryKept(inner, ws);
   });
 }
 
@@ -417,14 +498,39 @@ function holds(h: Held, v: Vault, station: string, items: Item[] | null, fit: Fi
 }
 
 /// Vault `v` held over the version held where the rules say so (of one seq, written on two stations at once: the one
-/// every station and device keeps); a later one the lock does not take yet kept aside (`later`).
+/// every station and device keeps); a later one the lock does not take yet kept aside (`later`). One under a new key
+/// keeps the version it replaces as the last of its key (`before`): its items may be left under it a while.
 function take(h: Held, v: Vault, fit: Fits): void {
   const had = h.vaults[v.id];
   const later = had !== undefined && rules.vault_supersedes_js(v, had);
   if (had === undefined || over(fit.vault(v), () => fit.vault(had), later)) {
     h.vaults[v.id] = v;
+    // (a vault deleted keeps no items, so nothing under an earlier key either)
+    if (v.deleted) delete h.before?.[v.id];
+    else if (had !== undefined && v.epoch > had.epoch) {
+      const before = (h.before ??= {});
+      before[v.id] = { ...before[v.id], [had.epoch]: had };
+    }
     if (h.later?.[v.id] !== undefined && !rules.vault_supersedes_js(h.later[v.id], v)) delete h.later[v.id];
   } else if (later && (h.later?.[v.id] === undefined || rules.vault_supersedes_js(v, h.later[v.id]))) (h.later ??= {})[v.id] = v;
+}
+
+/// The versions kept of vault `id`'s earlier keys (`before`) let go where no item held of it sits under them any more.
+/// As its items are read whole of a station, never as they are carried on here: an item another device wrote under
+/// the earlier key as the vault was keyed anew may be told only after this device wrote the ones it held again, and
+/// would then have no version to be carried on by.
+function settleBefore(inner: Inner, ws: string, id: string): void {
+  const of = held(inner, ws).before?.[id];
+  if (of === undefined) return;
+  const under = new Set(Object.values(items(inner, ws, id)).filter((i) => !i.deleted).map((i) => String(i.epoch)));
+  const gone = Object.keys(of).filter((e) => !under.has(e));
+  if (gone.length === 0) return;
+  change(inner, ws, (h) => {
+    const kept = h.before?.[id];
+    if (kept === undefined) return;
+    for (const e of gone) delete kept[e];
+    if (Object.keys(kept).length === 0) delete h.before![id];
+  });
 }
 
 /// The versions kept aside (`later`) that the lock as it is now takes, held: their items read again of the station
@@ -501,6 +607,7 @@ function letGo(h: Held, id: string, station: string): void {
     delete h.on[id];
     delete h.vaults[id];
     delete h.at[id];
+    delete h.before?.[id];
     return;
   }
   if (h.at[id] === station || h.at[id] === undefined) h.at[id] = Object.keys(on).sort()[0]!;
@@ -645,6 +752,7 @@ function readItems(inner: Inner, address: string, vault: string): Effect.Effect<
     changeItems(inner, ws, vault, (held) => {
       for (const i of all) if (newer(i, held[i.id], fit)) held[i.id] = i;
     });
+    settleBefore(inner, ws, vault);
     change(inner, ws, (h) => {
       const at = h.on[vault]?.[station];
       if (at !== undefined) {
@@ -751,6 +859,21 @@ function giveKept(inner: Inner, ws: string): void {
   inner.runner.fork(Effect.ignore(new Vaults(inner, ws, null).giveKept(), { log: "Unhandled", message: "vault keys given" }));
 }
 
+/// The items left under an earlier key of each vault that has any written again under its key with the keys
+/// unsealed here: forked, nothing asked of the person (`Vaults.carryOn`). As a station is read again (its connection
+/// opened), not as each vault or item is told: that would race the device keying a vault anew, item by item.
+function carryKept(inner: Inner, ws: string): void {
+  if (!able(inner)) return;
+  const h = held(inner, ws);
+  const ids = Object.values(h.vaults).filter((v) => !v.deleted && h.before?.[v.id] !== undefined && underEarlier(inner, ws, v).length > 0).map((v) => v.id);
+  if (ids.length === 0) return;
+  const vaults = new Vaults(inner, ws, null);
+  inner.runner.fork(Effect.forEach(ids, (id) => Effect.ignore(vaults.carryOn(id, null), { log: "Unhandled", message: "vault items carried on" }), { discard: true }));
+}
+
+/// The items of vault `v` held here still under an earlier key than its own (not deleted).
+const underEarlier = (inner: Inner, ws: string, v: Vault): Item[] => Object.values(items(inner, ws, v.id)).filter((i) => !i.deleted && i.epoch < v.epoch);
+
 /// The `lockPrompts` topic's `asks` (views/lock.ts promptsView: the topic every page has open, and every recorded
 /// run of the app asks; a topic of its own would be asked by none of them): in every workspace of the person's, the
 /// members' devices set up (their certificates the lock vouches for) that hold no key to a vault of this person's own
@@ -827,7 +950,8 @@ export function vaultsView(inner: Inner, ws: string): J {
   const vouched = certs(inner, ws, lock);
   const mine = self ? vouched.find((c) => c.device === self.device) : undefined;
   const vaults = Object.values(h.vaults)
-    .filter((v) => !v.deleted && trusted(lock, v) && sub !== null && v.members.includes(sub))
+    // (one waiting to be keyed anew too, where this device holds a key of it: readAs)
+    .filter((v) => sub !== null && v.members.includes(sub) && readAs(inner, ws, lock, v, self) !== null)
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1))
     .map((v) => {
       const keyed = new Map(v.keys.map((k) => [k.cert.device, k.cert.box]));
@@ -842,6 +966,8 @@ export function vaultsView(inner: Inner, ws: string): J {
         keyed: self !== null && mine !== undefined && keyed.get(self.device) === mine.box,
         missing: vouched.filter((c) => v.members.includes(c.sub) && keyed.get(c.device) !== c.box).length,
         recoverable: v.recovery !== undefined, lasts: v.lasts ?? "chat",
+        // (said only while it waits to be keyed anew: a row that does not wait is as it was)
+        ...(waitingAs(inner, ws, lock, v) !== null ? { waits: waitsOn(inner, ws, v) } : {}),
       };
     });
   // (a secret to keep is told only to whom it is for: it may be meant for no vault yet)
@@ -910,7 +1036,8 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
   const last = lastUses(inner, ws, id);
   const v = held(inner, ws).vaults[id];
   const lock = lockOf(inner, ws);
-  if (!v || v.deleted || lock instanceof CoreError || !trusted(lock, v)) return { vault: id, name: "", open: false, items: [] };
+  // (one waiting to be keyed anew too, where this device holds a key of it: readAs)
+  if (!v || lock instanceof CoreError || readAs(inner, ws, lock, v, me(lock, signerOf(inner))) === null) return { vault: id, name: "", open: false, items: [] };
   const key = unlocked(inner, v) ? mem(inner).keys.get(keyOf(v))!.key : null;
   const list = Object.values(items(inner, ws, id))
     .filter((i) => !i.deleted)
@@ -1089,10 +1216,21 @@ class Vaults {
     });
   }
 
+  /// Vault `id` to be changed: one waiting to be keyed anew (`waitingAs`) is refused, saying the station it waits for.
   #vault(lock: Checked, id: string): Effect.Effect<Vault, CoreError> {
     const v = held(this.#inner, this.ws).vaults[id];
-    if (!v || v.deleted || !trusted(lock, v)) return fail("vault_unknown", t("core-misc.vault.unknown"));
-    return Effect.succeed(v);
+    if (!v || v.deleted) return fail("vault_unknown", t("core-misc.vault.unknown"));
+    if (trusted(lock, v)) return Effect.succeed(v);
+    if (waitingAs(this.#inner, this.ws, lock, v) !== null) return Effect.fail(waitingError(this.#inner, this.ws, v));
+    return fail("vault_unknown", t("core-misc.vault.unknown"));
+  }
+
+  /// Vault `id` to be read, and the lock it is read by (`readAs`: one waiting to be keyed anew, as the lock took it).
+  #readable(lock: Checked, id: string, self: { device: string }): Effect.Effect<{ v: Vault; as: Checked }, CoreError> {
+    const v = held(this.#inner, this.ws).vaults[id];
+    const as = v === undefined ? null : readAs(this.#inner, this.ws, lock, v, self);
+    if (!v || as === null) return fail("vault_unknown", t("core-misc.vault.unknown"));
+    return Effect.succeed({ v, as });
   }
 
   /// This device's box key, read from the secure storage (the person asked, saying `reason`).
@@ -1129,6 +1267,15 @@ class Vaults {
     );
   }
 
+  /// What runs on vault `id` one at a time, each after the one before: a giving of its key, a keying anew, its items
+  /// carried on to its key.
+  #giving(id: string) {
+    const giving = mem(this.#inner).giving;
+    let one = giving.get(id);
+    if (one === undefined) giving.set(id, (one = Semaphore.makeUnsafe(1)));
+    return one.withPermits(1);
+  }
+
   /// The members' devices set up (their box certificates the lock vouches for) that vault `v` has no key for (or
   /// `device` alone).
   #missing(lock: Checked, v: Vault, device: string | null): Vouched[] {
@@ -1143,13 +1290,14 @@ class Vaults {
     // One giving of a vault at a time (two would write the same seq, the second refused), each after the one before,
     // reading the vault and the certificates anew: a certificate heard while a version is written is given to next,
     // not dropped (review of #3624).
-    const giving = mem(this.#inner).giving;
-    let one = giving.get(id);
-    if (one === undefined) giving.set(id, (one = Semaphore.makeUnsafe(1)));
-    return one.withPermits(1)(
+    return this.#giving(id)(
       Effect.gen(function* () {
         const inner = self.#inner;
         const { lock, signer, self: who } = yield* self.#ready();
+        // (one waiting to be keyed anew is given to no one till it is: a key unsealed to read it gives nothing; asked
+        // for by the person, addDevice says why)
+        const was = held(inner, self.ws).vaults[id];
+        if (was !== undefined && waitingAs(inner, self.ws, lock, was) !== null) return 0;
         const v = yield* self.#vault(lock, id);
         if (v.owner !== who.sub || v.epoch !== epoch) return 0;
         const add = self.#missing(lock, v, device);
@@ -1215,11 +1363,12 @@ class Vaults {
   }
 
   /// The vaults of this person's own that a device or member taken out of the lock since holds a key of (so the
-  /// stations, and this core, take them no more: rules/src/vault/vault.mbt, a key for a device not in the lock) written
-  /// anew: a new key under the next epoch, sealed to the members' devices the lock still vouches for, and each item
-  /// written again under it, the one taken out holding no key to any of it. Only a version the lock took before (a
-  /// prefix of the chain vouching for it) is so carried on, and only its items that held then. The key unsealed here, or
-  /// read with this device's box key (the person asked). As the lock comes; nothing done when nothing was taken out.
+  /// stations take no version of them more, rules/src/vault/vault.mbt, a key for a device not in the lock; this core
+  /// reads them meanwhile and changes nothing in them: `waitingAs`) written anew: a new key under the next epoch,
+  /// sealed to the members' devices the lock still vouches for, and each item written again under it, the one taken
+  /// out holding no key to any of it. Only a version the lock took before (a prefix of the chain vouching for it,
+  /// `waitingAs`) is so carried on, and only its items that held then. The key unsealed here, or read with this
+  /// device's box key (the person asked). As the lock comes; nothing done when nothing was taken out.
   rekeyGone(): Effect.Effect<void, CoreError> {
     const self = this;
     return Effect.gen(function* () {
@@ -1228,33 +1377,18 @@ class Vaults {
       if (lock instanceof CoreError) return;
       const who = me(lock, signerOf(inner));
       if (who === null) return;
-      const entries = lockHeld(inner, self.ws)?.entries ?? [];
       for (const v of Object.values(held(inner, self.ws).vaults)) {
         if (v.deleted || v.owner !== who.sub || trusted(lock, v) || !v.keys.some((k) => k.cert.device === who.device)) continue;
-        const gone = v.keys.some((k) => !lock.devices.has(k.cert.device)) || v.members.some((m) => !lock.members.has(m));
-        if (!gone || !lock.members.has(v.owner)) continue;
-        // (the lock as it was when it took this version: the longest prefix of the chain that does)
-        let was: Checked | null = null;
-        for (let n = entries.length - 1; n > 0 && was === null; n--) {
-          try {
-            const at = checkLock(entries.slice(0, n) as Entry[], nowS(inner));
-            if (!at.disabled && trusted(at, v)) was = at;
-          } catch {
-            // (a prefix that does not check out: an earlier one may)
-          }
-        }
-        if (was === null) continue;
-        yield* Effect.ignore(self.#rekey(v.id, v.seq, was), { log: "Unhandled", message: "vault keyed anew" });
+        // (waiting to be keyed anew: a version the lock took before, a prefix of the chain vouching for it)
+        if (waitingAs(inner, self.ws, lock, v) === null) continue;
+        yield* Effect.ignore(self.#rekey(v.id, v.seq), { log: "Unhandled", message: "vault keyed anew" });
       }
     });
   }
 
-  #rekey(id: string, seq: number, was: Checked): Effect.Effect<void, CoreError> {
+  #rekey(id: string, seq: number): Effect.Effect<void, CoreError> {
     const self = this;
-    const giving = mem(this.#inner).giving;
-    let one = giving.get(id);
-    if (one === undefined) giving.set(id, (one = Semaphore.makeUnsafe(1)));
-    return one.withPermits(1)(
+    return this.#giving(id)(
       Effect.gen(function* () {
         const inner = self.#inner;
         const { lock, signer, self: who } = yield* self.#ready();
@@ -1282,25 +1416,113 @@ class Vaults {
         const { sig: _, recovery: _r, ...rest } = v;
         const next = sign({ ...rest, seq: v.seq + 1, members, epoch, keys: to.map((c) => ({ cert: bare(c), wrapped: seal(c.box) })), ...(recovery ? { recovery: seal(recovery) } : {}), at: nowS(inner) }, TAG.vault, signer);
         const nv = yield* self.#putVault(next, held(inner, self.ws).at[v.id] ?? "");
-        mem(inner).keys.delete(keyOf(v));
+        // The key before kept a while too, not forgotten: an item not written again yet (this device stopped, a write
+        // that failed) is carried on with it, nobody asked. The device taken out holds that key anyway: keeping it
+        // here a while gives nothing away. (The version it was sealed in is kept as the last of its epoch, `before`.)
+        self.#keep(v, old);
         self.#keep(nv, key);
         // Its items, as they held when the lock took the version before, written again under the new key.
-        for (const i of Object.values(items(inner, self.ws, v.id))) {
-          if (i.deleted || i.epoch !== v.epoch || rules.item_ok_js(was, v, null, i, true, rulesCrypto) !== null) continue;
-          const plain = yield* Effect.try({ try: () => decrypt(old, i.ct, itemContext(self.ws, v.id, i.id, i.version, i.epoch)), catch: asCoreError });
-          const nonce = new Uint8Array(12);
-          inner.host.randomBytes(nonce);
-          const version = i.version + 1;
-          const ct = encryptWith(key, plain, itemContext(self.ws, v.id, i.id, version, epoch), nonce);
-          const item = sign({ v: 1 as const, ws: self.ws, vault: v.id, id: i.id, version, epoch, ct, ...(i.listing ? { listing: i.listing } : {}), at: nowS(inner) }, TAG.item, signer);
-          yield* Effect.ignore(self.#putItem(item, nv), { log: "Unhandled", message: "vault item keyed anew" });
-        }
-        changed(inner, self.ws);
+        yield* Effect.ignore(self.#carryNow(id, null, new Map([[keyOf(v), old], [keyOf(nv), key]])), { log: "Unhandled", message: "vault items keyed anew" });
         // A device that came back meanwhile (put in the lock again as it was keyed anew) was looked at against the
         // version before, its key given for the epoch going: given the new one now (after this, as it waits its turn).
         inner.runner.fork(Effect.ignore(self.giveKept(), { log: "Unhandled", message: "vault keys given" }));
       }),
     );
+  }
+
+  /// Vault `id`'s items left under an earlier key (a keying anew stopped half-way: the device keying it closed, killed
+  /// or cut off, a write that failed) written again under its key, as `#rekey` writes them; otherwise nothing would,
+  /// and none of them could be opened. Only those that held when the lock took the last version of that key held here
+  /// (`before`) are carried on: a version or an item a station made up is not. Any member's device with a key to the
+  /// vault does it, as the rules let any member's device write an item's next version: an owner whose only device
+  /// stopped half-way leaves a team's vault unreadable to no one. The keys from `known`, else unsealed here still, else
+  /// unsealed with this device's box key, read at most once: the person asked, saying `ask` (`how.asked` told when they
+  /// are), or read already (`how.priv`); `ask` null and none read, those of a key not to be had are left as they are.
+  /// How many it wrote. Within the vault's giving (`carryOn` takes its turn; `#rekey` holds it already).
+  #carryNow(id: string, ask: string | null, known?: Map<string, Uint8Array>, how: { asked?: () => void; priv?: Uint8Array } = {}): Effect.Effect<number, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      const ws = self.ws;
+      const { lock, signer, self: who } = yield* self.#ready();
+      const v = held(inner, ws).vaults[id];
+      if (!v || v.deleted || !trusted(lock, v) || !v.members.includes(who.sub) || !v.keys.some((k) => k.cert.device === who.device)) return 0;
+      const left = underEarlier(inner, ws, v);
+      if (left.length === 0) return 0;
+      // What may be carried on, by earlier key: the items the lock took then under the last version held of it.
+      const before: Record<string, Vault> = held(inner, ws).before?.[id] ?? {};
+      const plan: { b: Vault; items: Item[] }[] = [];
+      for (const epoch of new Set(left.map((i) => i.epoch))) {
+        const b = before[epoch];
+        const was = b === undefined ? null : tookAs(inner, ws, b);
+        if (b === undefined || was === null) continue;
+        const these = left.filter((i) => i.epoch === b.epoch && rules.item_ok_js(was, b, null, i, true, rulesCrypto) === null);
+        if (these.length > 0) plan.push({ b, items: these });
+      }
+      // This device's box key, read once, where the person may be asked (or it was read already).
+      let priv: Uint8Array | null = how.priv ?? null;
+      const boxKey: Effect.Effect<Uint8Array | null, CoreError> = Effect.suspend((): Effect.Effect<Uint8Array | null, CoreError> => {
+        if (priv !== null || ask === null) return Effect.succeed(priv);
+        return Effect.map(self.#boxKey(ask), (p) => {
+          priv = p;
+          how.asked?.();
+          return p;
+        });
+      });
+      // A version's key: given, unsealed here still, else unsealed with the box key (then kept, as `#key` keeps it);
+      // none where it is not to be had.
+      const keyFor = (of: Vault): Effect.Effect<Uint8Array | null, CoreError> =>
+        Effect.gen(function* () {
+          const given = known?.get(keyOf(of));
+          if (given !== undefined) return given;
+          const kept = mem(inner).keys.get(keyOf(of));
+          if (kept && kept.until > inner.host.nowMs()) return kept.key;
+          const sealed = of.keys.find((k) => k.cert.device === who.device);
+          if (sealed === undefined) return null;
+          const p = yield* boxKey;
+          if (p === null || boxPublic(p) !== sealed.cert.box) return null;
+          let key: Uint8Array;
+          try {
+            key = openSeal(p, sealed.wrapped, keyContext(ws, of.id, of.epoch));
+          } catch {
+            return null;
+          }
+          self.#keep(of, key);
+          return key;
+        });
+      const key = plan.length === 0 ? null : yield* keyFor(v);
+      let wrote = 0;
+      for (const { b, items: these } of key === null ? [] : plan) {
+        const old = yield* keyFor(b);
+        if (old === null) continue;
+        for (const i of these) {
+          // (one that fails stops none of the rest; one another device wrote meanwhile is read again by `#putItem`)
+          yield* Effect.ignore(
+            Effect.gen(function* () {
+              const plain = yield* Effect.try({ try: () => decrypt(old, i.ct, itemContext(ws, id, i.id, i.version, i.epoch)), catch: asCoreError });
+              const nonce = new Uint8Array(12);
+              inner.host.randomBytes(nonce);
+              const version = i.version + 1;
+              const ct = encryptWith(key!, plain, itemContext(ws, id, i.id, version, v.epoch), nonce);
+              const item = sign({ v: 1 as const, ws, vault: id, id: i.id, version, epoch: v.epoch, ct, ...(i.listing ? { listing: i.listing } : {}), at: nowS(inner) }, TAG.item, signer);
+              yield* self.#putItem(item, v);
+              wrote++;
+            }),
+            { log: "Unhandled", message: "vault item keyed anew" },
+          );
+        }
+      }
+      // (the versions kept of the earlier keys are let go as the vault's items are next read of a station, not here:
+      // `settleBefore`)
+      changed(inner, ws);
+      return wrote;
+    });
+  }
+
+  /// Vault `id`'s items left under an earlier key carried on (`#carryNow`), in its turn after a giving or a keying anew
+  /// under way: a read that carries waits for it, not racing it item by item.
+  carryOn(id: string, ask: string | null, known?: Map<string, Uint8Array>, how: { asked?: () => void; priv?: Uint8Array } = {}): Effect.Effect<number, CoreError> {
+    return this.#giving(id)(this.#carryNow(id, ask, known, how));
   }
 
   /// A vault's key kept unsealed UNLOCK_MS from now, then forgotten (and the pages told).
@@ -1365,8 +1587,8 @@ class Vaults {
       }
       const stations = yield* self.#publish(sign({ v: 1 as const, ws: self.ws, device: who.device, box: pub, recovery, at: nowS(inner) }, TAG.box, signer));
       for (const s of stations) yield* Effect.ignore(readStation(inner, `${self.ws}/${s}`), { log: "Unhandled", message: "vault station read" });
-      // (not made, it is offered on the page as when there is none)
-      const own = Object.values(held(inner, self.ws).vaults).some((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub);
+      // (not made, it is offered on the page as when there is none; one waiting to be keyed anew is one)
+      const own = Object.values(held(inner, self.ws).vaults).some((v) => !v.deleted && (trusted(lock, v) || waitingAs(inner, self.ws, lock, v) !== null) && v.owner === who.sub);
       const made = own ? null : yield* Effect.orElseSucceed(Effect.map(self.create(t("core-misc.vault.personal"), null), (m) => (m as { id: string }).id), () => null);
       return { words, device: who.device, stations, made };
     });
@@ -1564,12 +1786,14 @@ class Vaults {
     });
   }
 
-  /// The item, found in its vault, and that vault.
-  #find(lock: Checked, id: string): Effect.Effect<{ v: Vault; item: Item }, CoreError> {
+  /// The item, found in its vault, that vault, and the lock it is read by (`readAs`: one waiting to be keyed anew, as
+  /// the lock took it).
+  #find(lock: Checked, self: { device: string }, id: string): Effect.Effect<{ v: Vault; item: Item; as: Checked }, CoreError> {
     const h = held(this.#inner, this.ws);
     for (const v of Object.values(h.vaults)) {
       const item = items(this.#inner, this.ws, v.id)[id];
-      if (item && !item.deleted && trusted(lock, v)) return Effect.succeed({ v, item });
+      const as = item && !item.deleted ? readAs(this.#inner, this.ws, lock, v, self) : null;
+      if (item && as !== null) return Effect.succeed({ v, item, as });
     }
     return fail("vault_unknown", t("core-misc.vault.unknownItem"));
   }
@@ -1584,17 +1808,29 @@ class Vaults {
   open(id: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
+      // (a device taken out of the lock opens nothing, of a vault waiting to be keyed anew either: #ready refuses it)
       const { lock, self: who } = yield* self.#ready();
-      let { v, item } = yield* self.#find(lock, id);
+      let { v, item, as } = yield* self.#find(lock, who, id);
       // Written before its vault was keyed anew (`rekeyGone`), as held here: its station read again for the one
       // written since under the new key.
       if (item.epoch < v.epoch) {
         yield* Effect.ignore(readItems(self.#inner, `${self.ws}/${held(self.#inner, self.ws).at[v.id] ?? ""}`, v.id), { log: "Unhandled", message: "vault items read" });
-        ({ v, item } = yield* self.#find(lock, id));
+        ({ v, item, as } = yield* self.#find(lock, who, id));
       }
       const name = item.listing?.name ?? v.name;
-      const key = yield* self.#key(v, who, false, t("core-misc.vault.reason.open", { name }));
-      const bytes = yield* self.#plain(lock, v, item, key);
+      const reason = t("core-misc.vault.reason.open", { name });
+      // Still under the earlier key (its keying anew stopped half-way): carried on to the vault's key here, the person
+      // asked for this device's box key where the keys are not unsealed (as opening it would); one not to be carried on
+      // stays refused below (nor one of a vault waiting to be keyed anew: nothing is written into it). What fails it is
+      // reading the box key, which opening it would fail on the same way: the answer, not asked again.
+      if (item.epoch < v.epoch) {
+        yield* self.carryOn(v.id, reason);
+        ({ v, item, as } = yield* self.#find(lock, who, id));
+      }
+      const key = yield* self.#key(v, who, false, reason);
+      // (an item of a vault waiting to be keyed anew checked against the lock as it took the vault, as what is carried
+      // on is)
+      const bytes = yield* self.#plain(as, v, item, key);
       return { vault: v.id, id: item.id, version: item.version, plain: JSON.parse(new TextDecoder().decode(bytes)) };
     });
   }
@@ -1611,8 +1847,12 @@ class Vaults {
       const { priv } = recoveryPair(entropy);
       let recovered = 0;
       let others = 0;
+      // (one waiting to be keyed anew that this device would be keyed into: a version written, refused, said once the
+      // others are done)
+      let waited: Vault | null = null;
       for (const v of Object.values(held(inner, self.ws).vaults)) {
-        if (!trusted(lock, v) || !v.recovery || !v.members.includes(who.sub)) continue;
+        const waits = waitingAs(inner, self.ws, lock, v) !== null;
+        if ((!waits && !trusted(lock, v)) || !v.recovery || !v.members.includes(who.sub)) continue;
         let key: Uint8Array;
         try {
           key = openSeal(priv, v.recovery, keyContext(self.ws, v.id, v.epoch));
@@ -1628,6 +1868,10 @@ class Vaults {
           recovered++;
           continue;
         }
+        if (waits) {
+          waited ??= v;
+          continue;
+        }
         const eph = new Uint8Array(32);
         inner.host.randomBytes(eph);
         const cert = bare(here);
@@ -1636,6 +1880,7 @@ class Vaults {
         yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, keys, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
         recovered++;
       }
+      if (waited !== null) return yield* Effect.fail(waitingError(inner, self.ws, waited));
       return { recovered, others };
     });
   }
@@ -1679,17 +1924,27 @@ class Vaults {
       }
       const { lock, signer, self: who } = yield* self.#ready();
       const { r, station } = yield* self.#request(id);
-      const v = yield* self.#vault(lock, r.vault);
+      // (a use of an item, read: one of a vault waiting to be keyed anew is given as it is opened, checked against the
+      // lock that took the vault; the sign-in's newer cookies are not written into it meanwhile, below)
+      const { v, as } = yield* self.#readable(lock, r.vault, who);
       if (!v.members.includes(who.sub)) return yield* fail("vault_unknown", t("core-misc.vault.unknown"));
-      const item = items(inner, self.ws, v.id)[r.item];
-      if (!item || item.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
+      const found = items(inner, self.ws, v.id)[r.item];
+      if (!found || found.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
+      let item: Item = found;
       if (!allows(item.listing?.lasts ?? v.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
       // (this device's box key, as it was unsealed for it: a sign-in's newer cookies the request carries are opened with it)
       const unsealed: { priv?: Uint8Array } = {};
       const key = yield* self.#key(v, who, true, t("core-misc.vault.reason.approve", { name: item.listing?.name ?? v.name }), true, (p) => (unsealed.priv = p));
-      let bytes = yield* self.#plain(lock, v, item, key);
-      // A sign-in's newer cookies ( 登录态 写回): written as its next version, and granted.
-      const renewal = r.mode === "browser" ? r.renewal?.sealed.find((x) => x.device === who.device) : undefined;
+      // Still under the earlier key (its keying anew stopped half-way): carried on to the vault's key first, with the
+      // box key just read (the person asked once); one not to be carried on stays refused below.
+      if (item.epoch < v.epoch) {
+        yield* Effect.ignore(self.carryOn(v.id, null, new Map([[keyOf(v), key]]), unsealed.priv ? { priv: unsealed.priv } : {}), { log: "Unhandled", message: "vault items carried on" });
+        item = items(inner, self.ws, v.id)[r.item] ?? item;
+      }
+      let bytes = yield* self.#plain(as, v, item, key);
+      // A sign-in's newer cookies ( 登录态 写回): written as its next version, and granted (not into a vault waiting
+      // to be keyed anew: the cookies it holds granted).
+      const renewal = r.mode === "browser" && as === lock ? r.renewal?.sealed.find((x) => x.device === who.device) : undefined;
       const priv = unsealed.priv;
       if (renewal !== undefined && priv !== undefined) {
         const renewed = yield* Effect.result(Effect.try({
@@ -1765,8 +2020,14 @@ class Vaults {
       if (box === undefined) return yield* (given ? fail("vault_not_set_up", t("core-misc.vault.notSetUp")) : fail("vault_no_key", t("core-misc.vault.notSealedHere")));
       const keyedHere = (v: Vault) => trusted(lock, v) && v.members.includes(who.sub) && v.keys.some((k) => k.cert.device === who.device && k.cert.box === box);
       const h = held(inner, self.ws);
+      // (a secret is written into no vault waiting to be keyed anew: the one asked for, or their own when it is the one
+      // it would go to, refused saying the station it waits for, not put elsewhere nor a second one made)
+      const waitsHere = (v: Vault) => v.members.includes(who.sub) && waitingAs(inner, self.ws, lock, v) !== null;
+      if (h.vaults[r.vault] !== undefined && waitsHere(h.vaults[r.vault]!)) return yield* Effect.fail(waitingError(inner, self.ws, h.vaults[r.vault]!));
       const theirs = Object.values(h.vaults).filter(keyedHere).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
       const chosen = (h.vaults[r.vault] && keyedHere(h.vaults[r.vault]!) ? h.vaults[r.vault] : undefined) ?? theirs.find((x) => x.owner === who.sub) ?? theirs[0];
+      const ownWaiting = chosen ? undefined : Object.values(h.vaults).find((v) => v.owner === who.sub && waitsHere(v));
+      if (ownWaiting !== undefined) return yield* Effect.fail(waitingError(inner, self.ws, ownWaiting));
       // Their own vault this device has no key to yet: given it by a device that has (not a second one made here).
       if (!chosen && Object.values(h.vaults).some((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub)) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
       const priv = yield* self.#boxKey(t("core-misc.vault.reason.save", { name: s.name }));
@@ -1914,12 +2175,17 @@ class Vaults {
       const { lock, self: who } = ready.success;
       const out: { plain: Plain; listing: Listing | null }[] = [];
       for (const v of Object.values(held(inner, self.ws).vaults)) {
-        if (!trusted(lock, v) || v.owner !== who.sub || !v.keys.some((k) => k.cert.device === who.device)) continue;
+        // (read: one waiting to be keyed anew too, its items checked against the lock that took it)
+        const as = readAs(inner, self.ws, lock, v, who);
+        if (as === null || v.owner !== who.sub || !v.keys.some((k) => k.cert.device === who.device)) continue;
+        const why = reason ?? t("core-misc.vault.reason.unlock", { name: v.name });
+        // (those left under an earlier key carried on first: none of them is lost as the lock goes)
+        if (underEarlier(inner, self.ws, v).length > 0) yield* self.carryOn(v.id, why, undefined, { asked: () => asked?.() });
         const all = Object.values(items(inner, self.ws, v.id)).filter((i) => !i.deleted && i.epoch === v.epoch);
         if (all.length === 0) continue;
-        const key = yield* self.#key(v, who, false, reason ?? t("core-misc.vault.reason.unlock", { name: v.name }), true, () => asked?.());
+        const key = yield* self.#key(v, who, false, why, true, () => asked?.());
         for (const item of all) {
-          const bytes = yield* Effect.result(self.#plain(lock, v, item, key));
+          const bytes = yield* Effect.result(self.#plain(as, v, item, key));
           if (bytes._tag === "Success") out.push({ plain: plainOf(JSON.parse(new TextDecoder().decode(bytes.success))), listing: item.listing ?? null });
         }
       }
@@ -1938,6 +2204,9 @@ class Vaults {
       // (one this device holds a key to first)
       const owns = Object.values(held(inner, self.ws).vaults).filter((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub);
       const own = owns.find((v) => v.keys.some((k) => k.cert.device === who.device)) ?? owns[0];
+      // (their own waiting to be keyed anew: nothing moved into it till it is)
+      const waiting = own ? undefined : Object.values(held(inner, self.ws).vaults).find((v) => v.owner === who.sub && waitingAs(inner, self.ws, lock, v) !== null);
+      if (waiting !== undefined) return yield* Effect.fail(waitingError(inner, self.ws, waiting));
       if (!own) return yield* fail("vault_not_set_up", t("core-misc.vault.notSetUp"));
       const same = (p: Plain) => JSON.stringify([p.kind, p.name, p.fields]);
       const had = new Set((yield* self.unsealOwn()).map((s) => same(s.plain)));

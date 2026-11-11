@@ -326,6 +326,17 @@ fn tree_field_focus(id : @view.NodeId) -> Unit {
 }
 
 ///|
+/// The focus come to what `c` says has it (Ctx::focus_moved, whoever moved it: the app's Field::focus, a layer opening
+/// with it, Tab, a press, a screen reader): where that is a field of the window's tree, its caret blinking from the
+/// moment of what moved it (the event's, as a press puts the caret: place_caret; in a frame, the frame's), shown at
+/// once as an old view's field's is, built as it is first shown (Ctx::editor's blink_again, which a field of the tree's
+/// never reads).
+fn tree_field_focus_came(c : Ctx) -> Unit {
+  guard tree_said_ids.get(c.focus) is Some(id) && tree_fields.get(id) is Some(tf) else { return }
+  tf.st.blink0 = if c.in_frame() { c.clock } else { view_moment() }
+}
+
+///|
 /// Field node `id` let go: its editor nobody's in the window.
 fn tree_field_gone(id : @view.NodeId) -> Unit {
   match tree_fields.get(id) {
@@ -894,6 +905,39 @@ fn tree_field_told(tf : TreeField) -> Unit {
 }
 
 ///|
+/// Field node `id` (`tf`) as it is placed at (`x`, `y`), laid out `w` by `h`: what it is laid out and drawn by, as an
+/// old view's field is by its node (Node::field_box), and what the squeeze holds its placeholder to (FieldBox::hint_kept).
+fn Ctx::tree_field_box(
+  self : Ctx,
+  id : @view.NodeId,
+  tf : TreeField,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+) -> FieldBox {
+  let z = self.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line)
+  {
+    id: tree_said_id(id),
+    x,
+    y,
+    w,
+    h,
+    pad_l: z.pad_x,
+    pad_t: z.pad_y,
+    pad_r: z.pad_x,
+    pad_b: z.pad_y,
+    font_size: z.font_size,
+    weight: Node::new().weight,
+    line_h: z.line,
+    wrap: z.wrap,
+    trim: tf.trim,
+    hint: (tf.hint)(),
+    shorter: tf.shorter,
+  }
+}
+
+///|
 /// Field node `id` drawn this frame at (`x`, `y`), laid out `w` by `h` (in its own terms), `s` as big, `alpha` opaque:
 /// placed there, laid out and drawn as an old view's field is (Ctx::lay_out_field, Ctx::paint_field), then drawn as big
 /// as it is about that place, as what its block draws is.
@@ -913,25 +957,7 @@ fn Ctx::paint_tree_field(
   // it is drawn and made as big there: as the tree's own words are, view_blit; not placed on the pixels as a whole, as
   // an old view's field is with its old view, old_place)
   let (ux, uy) = laid
-  let z = self.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line)
-  let fb : FieldBox = {
-    id: tree_said_id(id),
-    x: ux,
-    y: uy,
-    w,
-    h,
-    pad_l: z.pad_x,
-    pad_t: z.pad_y,
-    pad_r: z.pad_x,
-    pad_b: z.pad_y,
-    font_size: z.font_size,
-    weight: Node::new().weight,
-    line_h: z.line,
-    wrap: z.wrap,
-    trim: tf.trim,
-    hint: (tf.hint)(),
-    shorter: tf.shorter,
-  }
+  let fb = self.tree_field_box(id, tf, ux, uy, w, h)
   let st = tf.st
   // (painted again as what is its own changes it (tree_field_redraw), and with the clock while its words are flung on)
   tree_fields_drawn.get() |> ignore

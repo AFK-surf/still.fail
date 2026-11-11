@@ -79,13 +79,6 @@ pub(all) struct Reading {
   mut top_seq : Double
   /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between
   mut bottom_seq : Double
-  /// whether those were worked out (read_place: once a build that showed its list was over) since its list last came
-  /// to show (let go as a build begins that it was not shown in before: linger_tick), whether where the chat stands
-  /// (its State row) was in view then, and whether the list was still then (not gliding, nothing in its turns under
-  /// way or waiting): what is on screen (Reading::sees)
-  mut view_read : Bool
-  mut state_seen : Bool
-  mut view_still : Bool
   /// how far that message's top is below the list's (points: above it, less than 0)
   mut top_off : Double
   mut at_end : Bool
@@ -97,6 +90,10 @@ pub(all) struct Reading {
   /// the jump button: shown since when (or hidden since when), and which
   mut jump : Bool
   mut jump_at : Double
+  /// more than the list's own height from the chat's end as its list was last laid out (its last row's bottom that far
+  /// under the view's, or the window short of the chat's end): where a go-to in the chat keeps where the reader was
+  /// (jump.mbt keep_place_of)
+  mut far : Bool
   /// the bell to what waits to be decided: shown
   mut ask : Bool
   /// a scripted scroll through it (MBUI_CHAT_BENCH): frames so far, their times
@@ -133,11 +130,8 @@ pub(all) struct Reading {
   /// the newest row that came in over rows at its end while it was followed (what is at the end stays where it shows,
   /// the rows over it go up for it: sfpages chat_list; "" none yet)
   mut over : String
-  /// rows asked a turn to come in
+  /// rows that came into it new (Turns::admit)
   admitted : Map[String, Bool]
-  /// its list, read as it was last laid out (its glide after what came set out there): a turn waits for that glide's
-  /// end (ListInfo's `glide_rest`), not for the reader's hand (and there)
-  mut list_read : @ui.ListReader?
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
   /// anchor: a message arriving while it is followed is read from its start)
   mut newest : String
@@ -215,7 +209,7 @@ pub(all) struct Reading {
 
 ///|
 /// What row_keys made of a chat's entries (`all`, of view `v`, nothing sent from here waiting for its
-/// row, no row waiting its turn), and the rows it knew then.
+/// row), and the rows it knew then.
 pub struct RowsMade {
   all : Array[Entry]
   v : ChatView
@@ -252,15 +246,13 @@ pub fn reading_of(key : String) -> Reading {
         seen_whole: -1.0,
         top_seq: -1.0,
         bottom_seq: -1.0,
-        view_read: false,
-        state_seen: false,
-        view_still: true,
         top_off: 0.0,
         at_end: true,
         told_place: "",
         told_at: "\u{0}",
         scale: 1.0,
         jump: false,
+        far: false,
         ask: false,
         jump_at: -1.0e9,
         bench: 0,
@@ -281,7 +273,6 @@ pub fn reading_of(key : String) -> Reading {
         makes_way: {},
         over: "",
         admitted: {},
-        list_read: None,
         newest: "",
         following_row: false,
         follow_key: "",
@@ -412,8 +403,26 @@ fn answered_at(v : ChatView, all : Array[Entry]) -> Array[Agent] {
 /// sent, all of it goes on one way with them (their agent's line too: answered_at). Not sent after all, their row
 /// gone, the core's word stands again: the card waits.
 fn sent_here_view(r : ChatRef, v : ChatView, list : Array[Entry]) -> (ChatView, Array[Entry]) {
-  guard local_sending.get(r.station + "\u{1}" + r.session) is Some(sending) && !sending.is_empty() else {
+  let rk = r.station + "\u{1}" + r.session
+  guard local_sending.get(rk) is Some(sending) && !sending.is_empty() else {
+    // (nothing sent from here on its way: what was made of its views while there was, let go)
+    sent_here_made.remove(rk)
     return (v, list)
+  }
+  // (made of this view and these words already: that, the same rows to the list)
+  let sig = sending.map(fn(l) { l.row.id + "@" + l.newest.to_string() }).join(",")
+  let kept = match sent_here_made.get(rk) {
+    Some(k) => k
+    None => {
+      let k : Array[SentHereMade] = []
+      sent_here_made[rk] = k
+      k
+    }
+  }
+  for m in kept {
+    if physical_equal(m.of, v) && physical_equal(m.list, list) && m.sending == sig {
+      return (m.view, m.entries)
+    }
   }
   let mut at = -1
   for i, m in v.messages {
@@ -438,9 +447,38 @@ fn sent_here_view(r : ChatRef, v : ChatView, list : Array[Entry]) -> (ChatView, 
   // (no more asked: letting it go is not offered under it)
   messages[at] = { ..m, asked: false, decision: Some({ resolved: true, dismissed: false, text: Some(said), chosen: None }) }
   let asks = v.asks.filter(fn(seq) { seq != m.seq })
-  let v = { ..v, messages, asks, ask_clear: v.ask_clear && !asks.is_empty(), state: None, state_ask: None }
-  (v, chat_entries(v).0)
+  let made = { ..v, messages, asks, ask_clear: v.ask_clear && !asks.is_empty(), state: None, state_ask: None }
+  let out = (made, chat_entries(made).0)
+  // (of other words sent, or more than its readers are: let go)
+  kept.retain(fn(m) { m.sending == sig })
+  if kept.length() >= sent_here_kept_most {
+    kept.remove(0) |> ignore
+  }
+  kept.push({ of: v, list, sending: sig, view: out.0, entries: out.1 })
+  out
 }
+
+///|
+/// What sent_here_view made of a chat's view, and of what: the core's view and entries it was made from and the words
+/// sent then. The same again while those are (each frame of the words' flight reads it, a phone's core answering many
+/// frames after the press): a view and entries made anew each read were other rows to the list every frame, all of
+/// them built again, twice a frame while the frame is built again for what it set. One for each of the chat's readers
+/// (its page, the frame round it, linger_tick: each its source's own view of it), a few at most.
+priv struct SentHereMade {
+  of : ChatView
+  list : Array[Entry]
+  sending : String
+  view : ChatView
+  entries : Array[Entry]
+}
+
+///|
+// kept across runs: forgotten with what was sent (sent_reset, as a run starts)
+let sent_here_made : Map[String, Array[SentHereMade]] = {}
+
+///|
+/// How many of a chat's views sent_here_view keeps what it made of: more readers than this at once make theirs again.
+let sent_here_kept_most : Int = 4
 
 ///|
 /// The entries and where their messages end, before the live rows at the foot.
@@ -515,7 +553,7 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
       // the old subscription ends; a reader still in use obtains a new input on its next read.
       match was {
         Some(before) => { source: before.source, read: before.read, topic: before.topic, live }
-        None => abort("a chat input was left before it was read")
+        None => @halt.saying("a chat input was left before it was read")
       }
     } else {
       let (read, topic) = chat_read.read(src, chat_params(r))
@@ -750,10 +788,6 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     rd.played = false
     rd.ticked = false
     rd.floor_counted = false
-    // (not shown: where its reader was is worked out anew once it shows again, Reading::sees)
-    if !rd.was_shown {
-      rd.view_read = false
-    }
     // every chat kept whose data the page read: its activities whose turn is over let go, its page shown or not
     // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
@@ -797,16 +831,9 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   let em = emits_of(rk)
   if shown && !played {
     rd.played = true
-    // what changes the list's height, one at a time: each whose turn has come starts
+    // messages out of avatars: their turn, asked by now, starts (list_turns.mbt)
     let turns = turns_of(rk)
-    turns.step(c, match rd.list_read {
-      Some(lr) =>
-        match lr.info() {
-          Some(i) => i.glide_rest
-          None => -1.0
-        }
-      None => -1.0
-    })
+    turns.step(c)
     let playing = em.current is Some(_) || em.queue.length() > 0
     let watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && in_front
     if watched != em.watched {
@@ -1248,21 +1275,6 @@ pub fn read_place(
 ) -> Unit {
   let n = list.length()
   let info = lr.info()
-  rd.view_read = true
-  rd.state_seen = match info {
-    Some(i) if i.first >= 0 => {
-      let mut k = i.first
-      let mut seen = false
-      while k <= i.last && k < n {
-        if list[k] is State(_, _, _) {
-          seen = true
-        }
-        k = k + 1
-      }
-      seen
-    }
-    _ => false
-  }
   match (info, lr.place()) {
     (Some(i), Some((first, past, _))) if i.first >= 0 && !v.newer => {
       let foot = i.height - room
@@ -1322,31 +1334,11 @@ pub fn read_place(
 }
 
 ///|
-/// Whether the row of message `seq` (None: where the chat stands, its State row) was on screen as the build before
-/// left the list, its page shown then and where its reader was worked out from it since it came to show: what
-/// changes in it is seen changing (Turns::in_turn's `seen`). The chat left and opened again, or the row scrolled
-/// away and back, it was not. While the list moves (gliding, a turn under way or waiting) it counts as seen whatever
-/// is in view: what goes out of sight goes once the list is still, never changing the rows' places while they are on
-/// their way.
-pub fn Reading::sees(self : Reading, seq : Double?) -> Bool {
-  if !self.was_shown || !self.view_read {
-    return false
-  }
-  if !self.view_still {
-    return true
-  }
-  match seq {
-    Some(s) => self.top_seq >= 0.0 && s >= self.top_seq && s <= self.bottom_seq
-    None => self.state_seen
-  }
-}
-
-///|
 /// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
 /// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
-/// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
-/// among what changes the list's height, kept out of the list till then. What was sent
-/// from here never waits: in the list the frame it is sent, before the core has it (LocalSent).
+/// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) is in the list at
+/// once, its room opening from then (Turns::admit), as is what was sent from here, the frame it is sent, before the
+/// core has it (LocalSent).
 pub fn row_keys(
   c : @ui.Ctx,
   rd : Reading,
@@ -1371,10 +1363,9 @@ pub fn row_keys(
     Some(i) => i.following_row
     None => false
   }
-  rd.list_read = Some(c.list_reader(key))
   rd.foot_sign = if ask_clears(v) { "+ask" } else { "" }
-  // The same entries and message-to-outbox mapping as last time, nothing sent from here waiting for its row and no
-  // row for its turn: what it made then, its rows not gone over again. Other view fields may change without changing
+  // The same entries and message-to-outbox mapping as last time, nothing sent from here waiting for its row: what it
+  // made then, its rows not gone over again. Other view fields may change without changing
   // those inputs (the chat's title, for example). Whether the list follows its end is not asked: it only lets in rows
   // not known yet, and with the same entries every row was made known then.
   // (a page read in, before the window or reaching the chat's end: what it brings was said long ago, there at once,
@@ -1391,11 +1382,10 @@ pub fn row_keys(
         ask_clears(m.v) == ask_clears(v))) &&
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
-      sending.is_empty() &&
-      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, watched, flight, laid~, laid_at~, foot_way~)
+      sending.is_empty() => return shown_rows(c, rd, m.list, m.keys, watched, flight, laid~, laid_at~, foot_way~)
     _ => ()
   }
-  let made_whole = sending.is_empty() && turns.waiting.is_empty()
+  let made_whole = sending.is_empty()
   let given = all
   for o in v.outbox {
     if o.seq >= 0.0 {
@@ -1519,23 +1509,15 @@ pub fn row_keys(
         if e is Working(_) {
           rd.acts[k] = true
         }
-        match e {
-          // (after what closes under a post as its agent starts)
-          Working(_) => turns.admit(c, k, working_turn_ms, after=true)
-          _ => turns.admit(c, k, rise_ms)
-        }
+        turns.admit(c, k)
       }
     }
   }
   let list : Array[Entry] = []
   let keys : Array[String] = []
   for i, e in all {
-    let k = all_keys[i]
-    if turns.waiting.contains(k) {
-      continue
-    }
     list.push(e)
-    keys.push(k)
+    keys.push(all_keys[i])
   }
   if rd.drawn && following && rd.floor > 0.0 {
     for k in came_new {
@@ -1620,7 +1602,7 @@ pub fn row_keys(
     }
   }
   rd.drawn = true
-  rd.rows_made = if made_whole && turns.waiting.is_empty() {
+  rd.rows_made = if made_whole {
     Some({ all: given, v, rise_ms, known: rd.known.length(), list, keys })
   } else {
     None
@@ -1668,7 +1650,7 @@ fn shown_rows(
   foot_way~ : (Double, Double)?,
 ) -> (Array[Entry], Array[String]) {
   // words sent let go of the composer as they leave it, a share of their way on (flight_placed): their row opens
-  // from then, the composer's room closes from then (composer_hold), as long, so that what is over them goes one way;
+  // from then, the composer's room closes from then (flight_lets_go), as long, so that what is over them goes one way;
   // their row opening from the moment they were sent, the room after, on a curve of its own, had it go up, then down
   // (set out this frame as their row is in the list, when not yet: flight_placed); what else changes the rows' heights
   // from now till then (a card they answer closing) sets out with them, one way
@@ -1676,14 +1658,25 @@ fn shown_rows(
   let mut told_foot = false
   let leaving = match flight {
     Some(f) if !f.carried => {
-      if f.placed && rd.sent_foot != "/" + f.key {
+      // (once their way is said, in the frame their row is placed: flight_timed)
+      if f.placed && f.timed && rd.sent_foot != "/" + f.key {
         rd.sent_foot = "/" + f.key
         told_foot = true
       }
-      let set_out = if f.placed { f.set_out } else { now }
-      Some((f.key, set_out + flight_settle * f.ms, (1.0 - flight_settle) * f.ms))
+      // (said in the one place the composer's coming down is: flight_lets_go; not placed yet, from now, as long as
+      // their usual way's share)
+      match flight_lets_go(f.chat) {
+        Some((at, ms)) => Some((f.key, at, ms))
+        None => Some((f.key, now + flight_settle * f.ms, (1.0 - flight_settle) * f.ms))
+      }
     }
     _ => None
+  }
+  // (built again as their row opens, in the first frame drawn at or past that moment: their way is drawn each frame
+  // meanwhile)
+  match leaving {
+    Some((_, at, _)) if at > now => c.shows_from(at)
+    _ => ()
   }
   let told_laid = laid != rd.rows_laid
   rd.rows_laid = laid
@@ -1909,6 +1902,7 @@ pub fn tell_focus(
 /// atLatest), its list at its end as it comes (list_after). Asked as the way to the newest is pressed, and as words are
 /// sent: they go at the chat's end, not after what was being read.
 pub fn chat_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, what : String) -> Unit {
+  place_forget(r.station + "\u{1}" + r.session)
   guard v.newer && v.thread is Some(th) else { return }
   let rd = reading_of(r.station + "\u{1}" + r.session)
   rd.latest_asked = true
@@ -2226,6 +2220,8 @@ pub fn list_after(
     // LaunchedEffect(host.goTo)
     match go_tos.get(gk) {
       Some(target) if rd.placed && !put_now => {
+        // (back to where the reader was, kept as a go-to took it away: there as it was, nothing flashing)
+        let back = go_back_offsets.get(gk)
         let mut at = -1
         let mut first = -1.0
         let mut found = false
@@ -2245,6 +2241,7 @@ pub fn list_after(
                     rd.found_words = words
                     found = true
                   }
+                  None if back is Some(_) => ()
                   None => {
                     rd.flash = m.ts
                     rd.flash_passage = go_to_passages.get(gk).unwrap_or("")
@@ -2260,12 +2257,16 @@ pub fn list_after(
         if at >= 0 {
           go_tos.remove(gk)
           go_to_passages.remove(gk)
+          go_back_offsets.remove(gk)
           if found {
             on_found(rd)
-          } else {
+          } else if back is None {
             flash_start(c, rd)
           }
-          c.list_scroll_to(key, at, offset=-top)
+          c.list_scroll_to(key, at, offset=match back {
+            Some(off) => -off
+            None => -top
+          })
           @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
@@ -2297,7 +2298,10 @@ pub fn list_after(
                   )
                 })
               }
-            _ => go_tos.remove(gk)
+            _ => {
+              go_tos.remove(gk)
+              go_back_offsets.remove(gk)
+            }
           }
         }
       }
@@ -2392,16 +2396,14 @@ pub fn list_after(
       None => false
     }
     rd.at_end = seen
+    // (at its end: where the reader was before a go-to forgotten)
+    if seen {
+      place_forget(gk)
+    }
     // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
     let lr = c.list_reader(key)
-    // (still: what goes out of sight goes only then, never shifting rows on their way: Reading::sees)
-    let tu = turns_of(r.station + "\u{1}" + r.session)
-    let still = !c.list_moving(key) && tu.asks.is_empty() && !tu.open
-    c.after_build_or_scroll("reading", fn() {
-      read_place(rd, v, list, lr, bar, room)
-      rd.view_still = still
-    })
+    c.after_build_or_scroll("reading", fn() { read_place(rd, v, list, lr, bar, room) })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
     // from memory never leaves the page)
     rd.scale = c.scale
@@ -2417,6 +2419,10 @@ pub fn list_after(
       Some(i) => i.first >= 0 && i.below > 120.0 && !i.gliding
       None => false
     }
+    rd.far = v.newer || (match info {
+      Some(i) => i.first >= 0 && !i.at_end && i.below > i.height
+      None => false
+    })
   { info, ask_rows, away }
 }
 

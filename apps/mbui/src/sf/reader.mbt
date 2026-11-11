@@ -214,7 +214,7 @@ pub fn reader_let_go(key : String) -> Unit {
   match readings.get(key) {
     Some(r) => {
       match r.book.get() {
-        Some(book) => reader_keep(r, book, true)
+        Some(book) => reader_keep(r, book)
         None => ()
       }
       // (its layout's panel let go with it)
@@ -233,10 +233,47 @@ fn readings_reset() -> Unit {
 }
 
 ///|
+/// Which panel the text read as `key` has open, followed (panels_told): for a tab's tools that open them
+/// (reader_panel_toggle).
+pub fn reader_panel_of(key : String) -> ReaderPanel {
+  panels_told.get() |> ignore
+  match readings.get(key) {
+    Some(r) => r.panel
+    None => NoPanel
+  }
+}
+
+///|
+/// The text read as `key` in a tab (reader's `beside`): `panel` opened from the tab's tools, or closed again by the same
+/// tool (or the layout's own close), outside any build; the search's field given the keys as it opens. The layout's is
+/// the tab's own (its stage lays it, reader_layout_docked), never the window's: layout_open is not told.
+pub fn reader_panel_toggle(key : String, panel : ReaderPanel) -> Unit {
+  let r = reading_for(key)
+  if r.panel == panel {
+    r.panel = NoPanel
+    panels_told.set(panels_told.untracked() + 1)
+    r.search.let_go()
+    return
+  }
+  r.panel = panel
+  panels_told.set(panels_told.untracked() + 1)
+  r.contents_put = panel == Contents
+  if panel == Find {
+    r.search.focus()
+  }
+}
+
+///|
 /// The text whose layout's panel is open (its reading's key; None, none): what the window's tree lays it out by
 /// (reader_layout_nodes), told as a reader's panel is opened or closed (reader_panel_set).
 // kept across runs: put back by readings_reset
 let layout_open : @signals.Signal[String?] = @signals.signal(None)
+
+///|
+/// Told as any reading's panel is opened or closed (reader_panel_set, reader_panel_toggle): what shows which is open
+/// from outside the reader (a tab's tools beside a chat, its stage's layout: reader_panel_of) follows it.
+// kept across runs: only a count
+let panels_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// Reading `r`'s panel made `panel` (where it is the layout, what the window's tree lays out told so; its layout's
@@ -244,6 +281,7 @@ let layout_open : @signals.Signal[String?] = @signals.signal(None)
 /// reader at a panel (sffix's reader-layout) does.
 pub fn reader_panel_set(r : Reading, panel : ReaderPanel) -> Unit {
   r.panel = panel
+  panels_told.set(panels_told.untracked() + 1)
   let open = layout_open.untracked()
   if panel == Layout {
     if open != Some(r.key) {
@@ -334,10 +372,10 @@ pub fn reader_open_at(c : @ui.Ctx, r : Reading, book : Book) -> Bool {
 
 ///|
 /// Where it was left, kept with its file (the offset of the text, of its length): as the reader holds still, and as it
-/// is left (`force`).
-fn reader_keep(r : Reading, book : Book, force : Bool) -> Unit {
+/// is left; told only where it is not where it was last kept (left where it last held still, nothing is told again).
+fn reader_keep(r : Reading, book : Book) -> Unit {
   let off = book.offset_of(r.chunk, r.within)
-  if !force && off == r.kept {
+  if off == r.kept {
     return
   }
   r.kept = off
@@ -443,7 +481,7 @@ pub fn reader_column(
   // (each move a wait of its own; nothing shown waits for it)
   if @kit.after(c, "reader-keep/" + r.key + "/\{r.moves}", r.moves > r.kept_moves, reader_still_ms, later=true) {
     // (once the frame's builds are over, where the last put it)
-    c.after_build("reader-keep", fn() { reader_keep(r, book, false) })
+    c.after_build("reader-keep", fn() { reader_keep(r, book) })
   }
   // a jump (r.jump: to block k, `off` into it, `lead` a little below the top), held until it is there: each build
   // scrolls to where it is by what is laid out now (the block's row at the top; once its height is laid out, the
@@ -830,7 +868,10 @@ fn joined(words : Array[String], between : String) -> String {
 ///|
 /// A text read (Reader): `file` (read as `key`, Markdown or not) on its paper, back to `back_label` (`on_back`); while
 /// it comes, how far it has; failed, why. With a mouse a desktop's (over the window, the bar every file opened has, the
-/// panels docked at its right); on a phone its own bars that a tap brings, the panels as the page's sheets.
+/// panels docked at its right); on a phone its own bars that a tap brings, the panels as the page's sheets. `beside`: in
+/// a tab beside a chat, whose own tools open its panels (reader_panel_toggle): no bar of its own, no keys of the
+/// window's, the column from the tab's top, its panels over the text where the tab is too narrow for both.
+/// `move_beside`: a desktop's bar's 移到侧边 (its file to a tab beside the page instead), where it is offered.
 pub fn reader(
   c : @ui.Ctx,
   key : String,
@@ -838,6 +879,8 @@ pub fn reader(
   markdown~ : Bool,
   back_label~ : String,
   on_back~ : () -> Unit,
+  beside? : Bool = false,
+  move_beside? : (() -> Unit)? = None,
 ) -> Unit {
   let r = reading_for(key)
   reader_load(r, file, markdown)
@@ -850,7 +893,7 @@ pub fn reader(
   }
   let host = viewer_host()
   // laid out Small: a phone's (its own bars that a tap brings, the panels as the page's sheets), as the viewer's frame
-  let narrow = layout(c.width) is Small
+  let narrow = !beside && layout(c.width) is Small
   let (room_top, room_foot) = (host.room)()
   let style = (host.reader_style)()
   let p = reader_paper(style.paper)
@@ -863,6 +906,10 @@ pub fn reader(
               c.text(t("web-pages.drive.reader.empty"), style=desk_note_words.then(@ui.text_style(color=Data(p.muted))))
               |> ignore
             })
+          } else if beside {
+            // a tab's: from its top, the panel over the text where the tab has not room for both
+            let (left, right) = desk_reader_sides(c, r, style, panel=c.width >= beside_both_least)
+            reader_column(c, r, book, style, p, left~, right~, top=beside_reader_top, foot=beside_reader_top, headings=true, cut=true)
           } else if narrow {
             // a phone's: under its status bar and over its navigation (the page's bars), 28 and 72 more
             let (left, right) = desk_reader_sides(c, r, style, panel=false)
@@ -898,10 +945,12 @@ pub fn reader(
     }
   })
   |> ignore
-  if narrow {
+  if beside {
+    beside_reader_chrome(c, r, p)
+  } else if narrow {
     narrow_reader_chrome(c, r, file, style, p, back_label, on_back, room_top, room_foot)
   } else {
-    desk_reader_chrome(c, r, file, style, p, back_label, on_back)
+    desk_reader_chrome(c, r, file, style, p, back_label, on_back, move_beside~)
   }
 }
 
@@ -947,6 +996,7 @@ fn desk_reader_chrome(
   p : ReaderPaper,
   back_label : String,
   on_back : () -> Unit,
+  move_beside? : (() -> Unit)? = None,
 ) -> Unit {
   let book = r.book.get()
   let chapter = match book {
@@ -1020,6 +1070,14 @@ fn desk_reader_chrome(
       viewer_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), ink, on=r.panel == Layout, on_press=fn() {
         desk_toggle_panel(c, r, Layout)
       })
+      // (its file to a tab beside the page, once the frame's builds are over: what reads it let go then)
+      match move_beside {
+        Some(f) =>
+          viewer_tool(c, "reader/beside", "panel-open", t("web-main.preview.moveBeside"), ink, on_press=fn() {
+            c.tell("reader/beside", f)
+          })
+        None => ()
+      }
       viewer_download(c, "reader/download", ink, on_press=fn() {
         (file.save)()
       })
@@ -1041,7 +1099,16 @@ fn desk_reader_chrome(
     }
   })
   |> ignore
-  // how far through it is: a hairline along the foot
+  desk_hairline_of(c, p, share)
+  // (the layout's: nodes of the window's tree laid over it there, reader_layout_nodes)
+  if r.panel != NoPanel && r.panel != Layout {
+    c.layer(fn() { desk_panel(c, r, book, p, chapter, has_chapters) }) |> ignore
+  }
+}
+
+///|
+/// How far through it is: a hairline along the foot, `share` of it in the accent.
+fn desk_hairline_of(c : @ui.Ctx, p : ReaderPaper, share : Double) -> Unit {
   let read = dmax(desk_none, share)
   let left = dmax(desk_none, desk_whole - share)
   c.layer(fn() {
@@ -1056,11 +1123,56 @@ fn desk_reader_chrome(
     |> ignore
   })
   |> ignore
-  // (the layout's: nodes of the window's tree laid over it there, reader_layout_nodes)
+}
+
+///|
+/// What floats over the paper in a tab beside a chat (reader's `beside`): what was found, 10 under the tab's top over
+/// the text's middle; the hairline; the contents' or the search's panel at its right from its top, over the text where
+/// the tab is narrower than beside_both_least (as wide as the tab, 320 at most). No bar (the tab's tools are its) and no
+/// keys: the window's are the chat's.
+fn beside_reader_chrome(c : @ui.Ctx, r : Reading, p : ReaderPaper) -> Unit {
+  let book = r.book.get()
+  let chapter = match book {
+    Some(b) => reader_chapter(r, b)
+    None => -1
+  }
+  let has_chapters = match book {
+    Some(b) => b.chapters.length() >= 2
+    None => false
+  }
+  let both = c.width >= beside_both_least
+  if r.hit >= 0 && r.matches.length() > 0 {
+    let panel = if r.panel == NoPanel || !both { desk_none } else { desk_panel_w }
+    c.layer(fn() {
+      c.box(style=desk_found_place, fn() {
+        c.box(style=@ui.style(w=Full, h=Fixed(desk_found_gap)), fn() {  }) |> ignore
+        c.box(style=desk_found_row, fn() {
+          c.box(style=desk_grow_middle, fn() { desk_found(c, r, p) }) |> ignore
+          c.box(style=@ui.style(w=Fixed(panel)), fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  desk_hairline_of(c, p, match book {
+    Some(b) => reader_fraction(r, b)
+    None => 0.0
+  })
   if r.panel != NoPanel && r.panel != Layout {
-    c.layer(fn() { desk_panel(c, r, book, p, chapter, has_chapters) }) |> ignore
+    c.layer(fn() { desk_panel(c, r, book, p, chapter, has_chapters, beside=true) }) |> ignore
   }
 }
+
+///|
+/// A tab's reader's column from its top (and as far from its foot).
+let beside_reader_top : Double = 24.0
+
+///|
+/// The least a tab beside a chat is wide for a reader's panel and its text side by side (the panel's 320 and as much of
+/// the text): narrower, the panel over the text.
+let beside_both_least : Double = 2.0 * desk_panel_w
 
 ///|
 /// A tool's panel opened, or closed again by its own tool.
@@ -1119,16 +1231,25 @@ fn desk_panel(
   p : ReaderPaper,
   chapter : Int,
   has_chapters : Bool,
+  beside? : Bool = false,
 ) -> Unit {
   let share = match book {
     Some(b) => reader_fraction(r, b)
     None => 0.0
   }
   c.box(style=desk_panel_place, fn() {
-    c.box(style=desk_panel_top(), fn() {  }) |> ignore
+    // (a tab's: from its top, no wider than it)
+    if !beside {
+      c.box(style=desk_panel_top(), fn() {  }) |> ignore
+    }
+    let box = if beside {
+      desk_panel_box.then(@ui.style(w=Fixed(dmin(desk_panel_inner, c.width))))
+    } else {
+      desk_panel_box
+    }
     c.box(style=desk_panel_row, fn() {
       c.box(style=desk_panel_room, fn() {  }) |> ignore
-      c.box(style=desk_panel_box.then(@ui.style(bg=Data(p.ground))), id=c.id("reader/panel"), fn() {
+      c.box(style=box.then(@ui.style(bg=Data(p.ground))), id=c.id("reader/panel"), fn() {
         c.box(style=desk_panel_head, fn() {
           let title = match r.panel {
             Contents => t("web-pages.drive.reader.contents")

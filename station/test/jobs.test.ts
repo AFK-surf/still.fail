@@ -385,7 +385,7 @@ describe("jobs", { concurrency: true }, () => {
     const pgid = before.store.getJob(job.id)!.pgid!;
     assert.ok(groupAlive(pgid), "the station stopping does not stop it");
     const after = restarted(before);
-    after.jobs.relaunch();
+    await after.jobs.relaunch();
     const followed = after.store.getJob(job.id)!;
     assert.deepEqual([followed.pgid, followed.restarts], [pgid, 0], "the same run, not started again");
     assert.deepEqual(after.said(), []);
@@ -407,7 +407,7 @@ describe("jobs", { concurrency: true }, () => {
     await until("it ends", () => readExit(before.jobs.exitFile(job.id)) === 5 && !groupAlive(pgid));
     assert.equal(before.state(job.id), "running", "still running on record");
     const after = restarted(before);
-    after.jobs.relaunch();
+    await after.jobs.relaunch();
     await until("it is told as ended", () => after.state(job.id) === "exited");
     const ended = after.store.getJob(job.id)!;
     assert.deepEqual([ended.exitCode, ended.restarts], [5, 0]);
@@ -424,7 +424,7 @@ describe("jobs", { concurrency: true }, () => {
     signalGroup(pgid, "SIGKILL");
     await until("it is gone", () => !groupAlive(pgid));
     const after = restarted(before);
-    after.jobs.relaunch();
+    await after.jobs.relaunch();
     const again = after.store.getJob(job.id)!;
     assert.ok(again.pgid !== null && again.pgid !== pgid && again.restarts === 1);
     assert.deepEqual(after.said(), [`The station restarted; Job "watch" (${job.id}) was started again.`]);
@@ -503,7 +503,7 @@ describe("jobs", { concurrency: true }, () => {
     await Effect.runPromise(endGroup(job.pgid!, 50));
     rmSync(r.jobs.exitFile(job.id), { force: true });
     const next = jobsOn(r.dir, r.store, [], () => null);
-    next.relaunch();
+    await next.relaunch();
     assert.equal(r.store.getJob(job.id)!.state, "failed");
     assert.equal(readFileSync(join(r.work, "count"), "utf8"), "ran\n");
     const repeat = next.startId("remote:ws:peer:session", "once", "echo ran >> count", r.work, null, false, "remote_lost_test");

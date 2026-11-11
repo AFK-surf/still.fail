@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export type CardOutcomeField = "adb" | "signin" | "vault";
+export type CardOutcomeField = "adb" | "rig" | "signin" | "vault";
 export type CardOutcome = {
   id: string;
   thread: number;
@@ -48,6 +48,24 @@ export function cardEditPage(db: DatabaseSync, thread: number, target: string, b
   return rows.length < 64 ? { kind: "end" } : { kind: "next", before: rows.at(-1)!.position };
 }
 
+/// The queue's table, under `name`.
+const outboxTable = (name: string) => `CREATE TABLE IF NOT EXISTS ${name}(thread INTEGER NOT NULL,ts TEXT NOT NULL,id INTEGER NOT NULL,
+        agent TEXT NOT NULL,field TEXT NOT NULL CHECK(field IN ('adb','rig','signin','vault')),
+        close_card INTEGER NOT NULL CHECK(close_card IN (0,1)),outcome TEXT NOT NULL,
+        PRIMARY KEY(thread,ts,id)) WITHOUT ROWID`;
+
+/// A queue made before a rig's card had an outcome (2026-11-10) names the fields it takes in a CHECK, which SQLite
+/// does not alter: made again with one more, the outcomes waiting in it kept (a few rows at most: it is emptied as
+/// they are applied), the first time a rig's outcome is queued. A caller's savepoint holds it.
+function takeRigOutcomes(db: DatabaseSync): void {
+  const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='card_outbox'").get()?.sql;
+  if (typeof sql !== "string" || sql.includes("'rig'")) return;
+  db.exec(`${outboxTable("card_outbox_wider")};
+    INSERT INTO card_outbox_wider SELECT thread,ts,id,agent,field,close_card,outcome FROM card_outbox;
+    DROP TABLE card_outbox;
+    ALTER TABLE card_outbox_wider RENAME TO card_outbox;`);
+}
+
 /// Install only constant-size metadata. Existing messages and requests are not scanned.
 export function installCardOutbox(db: DatabaseSync): void {
   if (hasCardOutbox(db)) return;
@@ -60,10 +78,7 @@ export function installCardOutbox(db: DatabaseSync): void {
       INSERT OR IGNORE INTO card_outbox_meta VALUES(1,1,0);`);
     if (db.prepare("SELECT version FROM card_outbox_meta WHERE id=1").get()?.version !== 1)
       throw new Error("card outcome outbox has an unsupported version");
-    db.exec(`CREATE TABLE IF NOT EXISTS card_outbox(thread INTEGER NOT NULL,ts TEXT NOT NULL,id INTEGER NOT NULL,
-        agent TEXT NOT NULL,field TEXT NOT NULL CHECK(field IN ('adb','signin','vault')),
-        close_card INTEGER NOT NULL CHECK(close_card IN (0,1)),outcome TEXT NOT NULL,
-        PRIMARY KEY(thread,ts,id)) WITHOUT ROWID;
+    db.exec(`${outboxTable("card_outbox")};
       CREATE TABLE IF NOT EXISTS card_outbox_head(id INTEGER PRIMARY KEY,thread INTEGER NOT NULL,ts TEXT NOT NULL);`);
     db.exec("RELEASE card_outbox_install");
     hasCardOutbox(db);
@@ -115,6 +130,7 @@ export function saveWithCardOutcome(db: DatabaseSync, item: Omit<CardOutcome, "i
   db.exec("SAVEPOINT card_outbox_save");
   try {
     if (!hasCardOutbox(db)) installCardOutbox(db);
+    if (item.field === "rig") takeRigOutcomes(db);
     save();
     const id = enqueueCardOutcome(db, item);
     db.exec("RELEASE card_outbox_save");

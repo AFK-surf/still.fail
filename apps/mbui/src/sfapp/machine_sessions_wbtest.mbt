@@ -64,3 +64,28 @@ test "machine sessions: one looked at is a step of the same dialog, back from it
     assert_true(!@sf.presenting(), msg=at)
   }
 }
+
+///|
+/// Whether the machine's sessions' dialog is up (its runtimes' filter), and its folders' pick over it (a choice of it).
+fn dialog_and_pick(t : @ui.Tester) -> (Bool, Bool) {
+  (t.find("Claude Code 3") is Some(_), t.find("still.fail 运行的") is Some(_))
+}
+
+///|
+test "machine sessions at 大屏 with a mouse: the folders' pick over the dialog; a press outside both, Escape: the pick alone goes, the dialog stays" {
+  let steps = ["outside", "escape"]
+  let seen = []
+  for step in steps {
+    let t = machine_dialog()
+    t.tap_text("所有目录")
+    t.run_for(@ui.move_most_ms)
+    let up = dialog_and_pick(t)
+    match step {
+      "outside" => t.tap(40.0, 40.0)
+      _ => t.key_named("esc") |> ignore
+    }
+    t.run_for(@ui.move_most_ms)
+    seen.push((step, up, dialog_and_pick(t)))
+  }
+  assert_eq(seen, steps.map(fn(s) { (s, (true, true), (true, false)) }))
+}

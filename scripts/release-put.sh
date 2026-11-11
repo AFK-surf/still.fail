@@ -11,7 +11,9 @@
 # not carried to the put in a run artifact (that went up through the proxy the CI Mac's DNS sends GitHub to, 40 MB a release,
 # 2026-10-23): each left in the directory as <name>.staged, saying where it is. A put finding one takes the file back
 # from there first, and deletes it there once all is put (scripts/release-prune.ts deletes what stays after two days).
-#   release-put.sh [--files | --feeds | --stage] <dir>…
+# --unstage <dir>: what was staged taken back into <dir> beside its marker (the job making the release's deltas needs the
+# station's archives: scripts/release-deltas.ts); a put after takes the marker as taken, and deletes the staged copy.
+#   release-put.sh [--files | --feeds | --stage | --unstage] <dir>…
 #   release-put.sh --hand <dir> | --unhand <dir> <name>… | --drop <name>…
 #   release-put.sh --clean-uploaded <name> <local copy>
 set -eu
@@ -123,6 +125,8 @@ type_of() {
     *.sha256) echo "text/plain; charset=utf-8" ;;
     *.zip) echo application/zip ;;
     *.apk) echo application/vnd.android.package-archive ;;
+    *.zst) echo application/zstd ;;
+    *.xz) echo application/x-xz ;;
     *) echo application/octet-stream ;;
   esac
 }
@@ -136,6 +140,17 @@ taken=""
 case "${1:-}" in
   --files) passes="node files"; taken=yes; shift ;;
   --feeds) passes=feeds; shift ;;
+  --unstage)
+    shift
+    for dir in "$@"; do
+      for marker in $(cd "$dir" && find . -type f -name '*.staged' | sed 's|^\./||' | sort); do
+        file="$dir/${marker%.staged}"
+        [ -f "$file" ] && continue
+        get "$(cat "$dir/$marker")" "$file.part" || { rm -f "$file.part"; echo "could not get ${marker%.staged} back" >&2; exit 1; }
+        mv "$file.part" "$file"; echo "got ${marker%.staged} back"
+      done
+    done
+    exit 0 ;;
   --clean-uploaded)
     [ "$#" -eq 3 ] || { echo "usage: release-put.sh --clean-uploaded <name> <local copy>" >&2; exit 1; }
     clean_uploaded "$2" "$3"
@@ -186,7 +201,8 @@ for dir in "$@"; do
   case $passes in *files*) ;; *) continue ;; esac
   for marker in $(cd "$dir" && find . -type f -name '*.staged' | sed 's|^\./||' | sort); do
     key=$(cat "$dir/$marker")
-    get "$key" "$dir/${marker%.staged}" || { echo "could not get $key back" >&2; exit 1; }
+    # (taken back already by --unstage)
+    [ -f "$dir/${marker%.staged}" ] || get "$key" "$dir/${marker%.staged}" || { echo "could not get $key back" >&2; exit 1; }
     rm "$dir/$marker"; staged="$staged $key"
     echo "got ${marker%.staged} back from $key"
   done
@@ -197,6 +213,13 @@ for dir in "$@"; do
     pids=""
     for name in $names; do
       [ "$(pass_of "$name")" = "$pass" ] || continue
+      # (an Android release's symbols, scripts/release.sh's: never a reason to fail or hold back the put, a warning;
+      # taken out all the same, so no later put tries them again)
+      case $name in symbols/*)
+        { put "$name" "$dir/$name" "$(type_of "$name")" || echo "release-put.sh: warning: $name not put (the release goes on without it)" >&2
+          if [ -n "$taken" ]; then rm -f "$dir/$name"; fi; } &
+        pids="$pids $!"; continue ;;
+      esac
       { put "$name" "$dir/$name" "$(type_of "$name")" && clean_cache_copy "$name" "$dir/$name" && if [ -n "$taken" ]; then rm "$dir/$name"; fi; } &
       pids="$pids $!"
     done

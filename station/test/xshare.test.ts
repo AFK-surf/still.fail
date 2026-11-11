@@ -159,6 +159,7 @@ test("a chat shared with another workspace reaches its stations once a member sa
   await assert.rejects(outside(p, x, { method: "session.message", to: "c1", text: "hi" }), /read only/);
   await assert.rejects(outside(p, x, { method: "task.prepare" }), /not open to other workspaces/);
   await assert.rejects(outside(p, x, { method: "session.create" }), /not open to other workspaces/);
+  await assert.rejects(outside(p, x, { method: "session.archive", chat: "c1" }), /not open to other workspaces/);
   const s = station(S, new Roster("01W3", "Else", [{ id: S, name: "stranger" }]));
   await assert.rejects(outside(s, x, { method: "session.read", tool: "chat_read", args: { chat: "c1" } }), /shares no chat with your workspace/);
   // A station nobody vouched for cannot list chats at P.

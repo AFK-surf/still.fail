@@ -99,7 +99,7 @@ export class Notifier {
     const home = this.cloud.home();
     const by = new Map<string | undefined, Notice[]>();
     for (const notice of batch) {
-      const ws = this.store.getSession(notice.session)?.ws ?? home;
+      const ws = this.store.sessionWs(notice.session) ?? home;
       if (ws === null || this.cloud.membership(ws) === null) continue;
       const of = ws === home ? undefined : ws;
       by.set(of, [...(by.get(of) ?? []), notice]);

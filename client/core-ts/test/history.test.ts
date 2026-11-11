@@ -338,6 +338,24 @@ test("a_timeline_loaded_from_further_on_counts_entries_from_the_transcripts_star
   assert.equal(presentHistory({ loaded: true, first: 400, timeline: [] }, cx([], [], [])).more, true);
 });
 
+test("a_page_that_begins_within_a_group_leaves_it_to_the_page_before_so_an_item_is_the_same_however_many_pages_are_loaded", () => {
+  const call = (id: string) => [{ kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: id }, { kind: "tool_result", callId: id, ok: true, text: "x" }];
+  // Entries 96 to 107: the agent's words, a group of three calls (97 to 102), its words, a call, a message it posts.
+  const all = [{ kind: "assistant", text: "first" }, ...call("a"), ...call("b"), ...call("c"), { kind: "assistant", text: "then" }, ...call("d"), { kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"C/1","text":"done"}', callId: "p" }];
+  const page = (first: number) => presentHistory({ loaded: true, first, timeline: all.slice(first - 96) }, cx([], [], []));
+  const keys = (h: J) => h.items.map((i: J) => `${i.key}:${i.body.kind}`);
+  // From within the group (its second call's result on): nothing of it, the items after it as they are with all of it.
+  assert.deepEqual(keys(page(100)), ["e103:text", "e104:group", "e106:post"]);
+  assert.deepEqual(keys(page(96)), ["e96:text", "e97:group", "e103:text", "e104:group", "e106:post"]);
+  assert.deepEqual(page(100).items, page(96).items.slice(2));
+  assert.deepEqual([page(100).more, page(100).empty], [true, false]);
+  // A page with nothing but calls of a group begun before it shows none of it, and says there is more before.
+  const within = presentHistory({ loaded: true, first: 98, timeline: all.slice(2, 6) }, cx([], [], []));
+  assert.deepEqual([within.items, within.more, within.empty, within.edge], [[], true, false, "正在读取更早的执行历史"]);
+  // From the transcript's start, a group that opens it is its first item.
+  assert.deepEqual(keys(presentHistory({ loaded: true, first: 0, timeline: [...call("a"), { kind: "assistant", text: "x" }] }, cx([], [], []))), ["e0:group", "e2:text"]);
+});
+
 test("a_groups_thinking_and_calls_keep_the_order_they_came_in", () => {
   const timeline = [
     { kind: "thinking", text: "first" },

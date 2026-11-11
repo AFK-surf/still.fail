@@ -395,10 +395,10 @@ test "a revoked Codex sign-in offers sign-in from the account check" {
 }
 
 ///|
-test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, then uses one of the resets left" {
+test "a profile's quota, a narrow page with a mouse: its resets left at the row's end; pressed, asks first, then uses one" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
-  scrolled_to(t, 390.0, "还可重置 2 次")
-  t.tap_text("重置额度")
+  scrolled_to(t, 390.0, "剩 2 次")
+  t.click(Link, label="额度重置")
   t.frame()
   assert_true(@sf.presenting(), msg="asked first")
   assert_true(t.find("重置额度？") is Some(_))
@@ -408,18 +408,43 @@ test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, th
   t.tap_text("使用一次重置")
   t.frame()
   t.frame()
-  assert_true(t.find("还可重置 1 次") is Some(_))
+  assert_true(t.find("剩 1 次") is Some(_))
 }
 
 ///|
 test "reset credits show their separate expiry times at every page width" {
   for (w, platform) in page_cases {
     let t = setting_tester(Profile("ws1/st1", "cx"), w, platform~, mode="settings-profile-quota-expiry")
-    let note = "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期"
+    let note = "6 小时 35 分钟后、3 天 19 小时后到期"
     scrolled_to(t, w, note)
     assert_true(t.find(note) is Some(_), msg="reset expiries at width \{w}")
-    assert_true(t.find("重置额度") is Some(_), msg="reset action at width \{w}")
+    assert_true(t.find("剩 2 次") is Some(_), msg="how many left, on their own, at width \{w}")
   }
+}
+
+///|
+test "a subscription's resets of two kinds, a row each: what each gives back said, one usable only at a limit not offered, the other used by its kind" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, mode="settings-profile-quota-kinds")
+    scrolled_to(t, w, "Fable 重置")
+    assert_true(t.find("5 小时重置") is Some(_), msg="the 5-hour kind at width \{w}")
+    assert_true(t.find("立即恢复 5 小时额度 · 到达它能恢复的上限后才能用") is Some(_), msg="what it gives back, and why not now, at width \{w}")
+    assert_true(t.find("把本周 Fable 用掉的额度还回每周额度 · 118 天后到期") is Some(_), msg="what the Fable one gives back at width \{w}")
+    assert_true(t.find("剩 1 次") is Some(_), msg="how many left, on their own, at width \{w}")
+  }
+  let t = setting_tester(Profile("ws1/st1", "cc"), 390.0, mode="settings-profile-quota-kinds")
+  scrolled_to(t, 390.0, "Fable 重置")
+  assert_true(t.query(Link, label="5 小时重置") is None, msg="usable only at a limit: not offered")
+  t.click(Link, label="Fable 重置")
+  t.frame()
+  assert_true(@sf.presenting(), msg="asked first")
+  assert_true(t.find("将使用「Claude 主账号」的 1 次 Fable 重置：把本周 Fable 用掉的额度还回每周额度") is Some(_))
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="使用一次重置")
+  // (its row closing its room on its way)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Link, label="Fable 重置") is None, msg="the Fable reset used, by its kind")
+  assert_true(t.find("5 小时重置") is Some(_), msg="the other kind left")
 }
 
 ///|

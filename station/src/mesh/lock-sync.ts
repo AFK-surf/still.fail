@@ -102,6 +102,9 @@ export function followLock(cloud: Cloud, call: PeerCall, after: (ms: number, f: 
       // Taken out of the lock itself: the others take nothing from it (their mesh refuses it), however long it tries.
       if (!s || !s.stations.has(st.station)) continue;
       for (const p of m.peers) if (typeof p?.id === "string" && p.id !== st.station) bring(p.id, ws, m.workspace, s.seq);
+      // The workspace's rigs too (a station that only runs tasks): each pinned the lock as it joined, to know which stations may ask it, and
+      // no station is in the lock's roster for it to ask.
+      for (const r of cloud.rigs(m.workspace)) bring(r.id, ws, m.workspace, s.seq);
     }
   };
   look();

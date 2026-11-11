@@ -99,6 +99,7 @@ fn reset_globals() -> Unit {
   notices_reset()
   hand_reset()
   corners_hold.val = true
+  placed_presented.val = None
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
@@ -205,7 +206,7 @@ fn reset_globals() -> Unit {
   reset_drawing()
   let left = leaked_state()
   if left.length() > 0 {
-    abort("state kept from an earlier test: " + left.join(", "))
+    @halt.saying("state kept from an earlier test: " + left.join(", "))
   }
 }
 
@@ -508,6 +509,7 @@ pub fn Tester::new(
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)
+  gaps_steady_begin(loc.to_string(), words_over_held)
   seen_whole.val = ""
   said_log.on = false
   frame_said.val = None
@@ -860,8 +862,7 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
     if !(at > before) {
       let s = "Tester::set_frame_times: time \{i} (\{at}) is not later than " +
         (if i == 0 { "now (\{before})" } else { "the one before it (\{before})" })
-      println(s)
-      abort(s)
+      @halt.saying(s)
     }
     before = at
   }
@@ -919,6 +920,7 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     self.hold_words_over()
     self.hold_rows_steady()
     self.hold_sizes_steady()
+    self.hold_gaps_steady()
   } else if !words_over.held && !self.on_way && self.period <= frame_period_default + 1.0e-9 {
     // (where a test does not hold the rule but reads which frames show words over words: kept on a run at a rate's
     // frames as on the default's, but for those on run_for's way)
@@ -926,6 +928,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   self.hold_seen_whole_now()
   self.hold_corners()
+  // (what it drew was placed by the layout it drew by: tester_placed.mbt)
+  self.hold_placed()
   match self.each {
     Some(f) => f()
     None => ()
@@ -1133,7 +1137,7 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
 pub fn Tester::tap_text(self : Tester, s : String) -> Unit {
   match self.find(s) {
     Some((x, y)) => self.tap(x, y)
-    None => abort("no text \"\{s}\" on screen")
+    None => @halt.saying("no text \"\{s}\" on screen")
   }
 }
 
@@ -1648,7 +1652,7 @@ fn Tester::list_state(self : Tester) -> ListState {
       }
     }
   }
-  abort("no list on screen")
+  @halt.saying("no list on screen")
 }
 
 ///|
@@ -1760,7 +1764,7 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
       if name.length() == 1 {
         key_of_char(name.iter().next().unwrap())
       } else {
-        abort("no key \{name}")
+        @halt.saying("no key \{name}")
       }
   }
   self.key(code)
@@ -2003,6 +2007,31 @@ pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Doub
           (-c.inst[b + 20]).to_int(),
         ),
       )
+    }
+  }
+  out
+}
+
+///|
+/// The same glass as far as it is drawn: its rect cut to its clip (a box over it that cuts it off, a sheet's foot),
+/// (x, y, w, h); none where nothing of it is left.
+pub fn Tester::drawn_glass_cut(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let kind = c.inst[b + 5].to_int()
+    if kind == 5 || kind == 6 {
+      let (x, y, w, h) = (c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3])
+      let (cx0, cy0, cx1, cy1) = (c.inst[b + 16], c.inst[b + 17], c.inst[b + 18], c.inst[b + 19])
+      let x0 = if cx1 > cx0 { dmax(x, cx0) } else { x }
+      let y0 = if cy1 > cy0 { dmax(y, cy0) } else { y }
+      let x1 = if cx1 > cx0 { dmin(x + w, cx1) } else { x + w }
+      let y1 = if cy1 > cy0 { dmin(y + h, cy1) } else { y + h }
+      if x1 > x0 && y1 > y0 {
+        out.push((x0, y0, x1 - x0, y1 - y0))
+      }
     }
   }
   out
@@ -2298,7 +2327,7 @@ fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
 pub fn Tester::tap_run(self : Tester, s : String) -> Unit {
   let rs = self.run_rects(s)
   if rs.length() == 0 {
-    abort("no rich text \"\{s}\" on screen")
+    @halt.saying("no rich text \"\{s}\" on screen")
   }
   let (x, y, w, h) = rs[0]
   self.tap(x + w / 2.0, y + h / 2.0)
@@ -3115,8 +3144,7 @@ fn Tester::hold_corners(self : Tester) -> Unit {
   }
   let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; the rule: mbui's src/ui/corners.mbt):\n" +
     faults.join("\n")
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }
 
 ///|

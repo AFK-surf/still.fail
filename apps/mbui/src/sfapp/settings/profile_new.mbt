@@ -83,15 +83,10 @@ pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
 }
 
 ///|
-/// A sign-in under way on a station, by its id (its overview's `logins`).
+/// A sign-in under way on a station, by its id (its overview's `logins`, that part alone).
 pub fn pending_login(core : Core, station : String, id : String) -> Json? {
-  let all = (core.topic)("stations", { "scope": str(workspace_of(station)) }).get().value
-  match all {
-    Some(Array(a)) =>
-      match a.iter().find_first(fn(s) { text(Some(s), "station") == station }) {
-        Some(s) => items(field(Some(s), "overview"), "logins").iter().find_first(fn(l) { text(Some(l), "id") == id })
-        None => None
-      }
+  match station_part_in(core, workspace_of(station), station, "logins") {
+    Some(Array(a)) => a.iter().find_first(fn(l) { text(Some(l), "id") == id })
     _ => None
   }
 }

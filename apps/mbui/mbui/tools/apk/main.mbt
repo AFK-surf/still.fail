@@ -26,6 +26,9 @@
 // alone: one with anything else stops this, rather than a merge it does not do, unless the app's manifest has merged
 // it by hand: "merged"). The libraries' resources are linked beside the app's (R classes for each package); resources
 // are not shrunk; stripped of nothing, the native libraries compressed (extractNativeLibs), as the release had them.
+// Every deflated entry is then deflated again by the deflater the app carries (dev.mbui.Delta's repack, JZlib, on this
+// machine's JVM), before zipalign (which pads only stored entries) and apksigner: a phone applying an update's delta
+// deflates the entries it made with that same code, and must come to these very bytes (Delta.java's head).
 //
 // Tools: $ANDROID_HOME's platforms/android-<compileSdk>/android.jar and the newest build-tools' aapt2, zipalign and
 // apksigner; java and javac (17 or newer); R8 from Google's Maven at r8_version; curl, unzip, zip and shasum (or
@@ -597,9 +600,38 @@ fn lib_dex(r8 : String, android_jar : String, min_api : String, jar : String, ot
 }
 
 ///|
-/// The cache kept small: the newest 6 dex outputs, the newest 24 stripped libraries.
+/// dev.mbui.Delta and JZlib, of the app's Java sources, compiled for this machine's JVM (the APK's repack): kept by
+/// their sources' hash; "" where the app has no Delta. Compiled on their own rather than taken from the dex step's
+/// javac: that step's classes are there only when its dex is not kept (and are built against android.jar), while
+/// these few files compile in a second, and their key is exactly what the repack's bytes depend on besides the APK.
+fn delta_classes(srcs : Array[String], work : String) -> String {
+  let mine = srcs.filter(fn(p) { p.has_suffix("/dev/mbui/Delta.java") || p.contains("/com/jcraft/jzlib/") })
+  if !mine.iter().any(fn(p) { p.has_suffix("/dev/mbui/Delta.java") }) {
+    return ""
+  }
+  let key = mine.map(fn(p) { @sys.basename(p) + " " + sha256_file(p) })
+  key.sort_by(@rjson.str_cmp)
+  let d = @sys.join(cache_dir(), "delta/" + sub(sha256_text(key.join("\n"), work + "/deltakey"), 0, 32))
+  if !@sys.exists(@sys.join(d, ".done")) {
+    ignore(try_sh("rm -rf " + q(d)))
+    @sys.makedirs(d)
+    ignore(
+      sh(
+        "javac -nowarn -encoding UTF-8 -source 17 -target 17 -Xlint:-options -d " + q(d) + " " + mine.map(q).join(" "),
+        "javac (Delta)",
+      ),
+    )
+    ignore(@sys.write_text(@sys.join(d, ".done"), ""))
+  } else {
+    ignore(try_sh("touch " + q(d)))
+  }
+  d
+}
+
+///|
+/// The cache kept small: the newest 6 dex outputs, the newest 24 stripped libraries, the newest 6 Delta compiles.
 fn prune() -> Unit {
-  for kv in [("dex", 6), ("strip", 24)] {
+  for kv in [("dex", 6), ("strip", 24), ("delta", 6)] {
     let d = @sys.join(cache_dir(), kv.0)
     if @sys.is_dir(d) {
       ignore(try_sh("cd " + q(d) + " && ls -t | tail -n +\{kv.1 + 1} | while IFS= read -r n; do rm -rf \"$n\"; done"))
@@ -931,8 +963,17 @@ fn cmd_build(a : BuildArgs) -> Unit {
     ignore(sh("cd " + q(packed) + " && find . -type f | LC_ALL=C sort | zip -q -X " + q(unsigned) + " -@", "zip"))
   }
   t = lap("packed", t)
+  let to_align = match delta_classes(srcs, work) {
+    "" => unsigned
+    classes => {
+      let repacked = @sys.join(work, "repacked.apk")
+      ignore(sh("java -cp " + q(classes) + " dev.mbui.Delta repack " + q(unsigned) + " " + q(repacked), "repack"))
+      t = lap("repacked", t)
+      repacked
+    }
+  }
   let aligned = @sys.join(work, "aligned.apk")
-  ignore(sh(q(@sys.join(bt, "zipalign")) + " -P 16 -f 4 " + q(unsigned) + " " + q(aligned), "zipalign"))
+  ignore(sh(q(@sys.join(bt, "zipalign")) + " -P 16 -f 4 " + q(to_align) + " " + q(aligned), "zipalign"))
   let ks = if a.keystore != "" {
     a.keystore
   } else {

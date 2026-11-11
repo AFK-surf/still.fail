@@ -12,8 +12,10 @@
 /// to what it offers as it is typed in; `edited`: its words as the person's edit changes them (ui's field's), never
 /// as the app puts words in it; `placeholder_by`: its placeholder as it is now, followed (in place of
 /// `placeholder`); `label`: what a screen reader calls it, where no placeholder does (it shows none). While
-/// `disabled()`, faded, taking no press nor the focus (losing it then). The field's node (what
-/// the focus is given to).
+/// `disabled()`, faded, taking no press nor the focus (losing it then). `solid`: on a card's ground (input's
+/// `solid`, field_solid): on the canvas's ground, its line the canvas's too, the field's hover grey while it is pointed
+/// at or written in. `end`: what stands in the capsule after what is typed (a search's count), made in a box at its
+/// end. The field's node (what the focus is given to).
 pub fn input_node(
   parent : @view.View,
   field : @ui.Field,
@@ -24,12 +26,14 @@ pub fn input_node(
   placeholder_by? : () -> String,
   disabled? : () -> Bool = fn() { false },
   small? : Bool = false,
+  solid? : Bool = false,
   leaves? : Array[Int] = [],
   submitted? : (String) -> Unit = fn(_) {  },
   edited? : (String) -> Unit,
+  end? : (@view.View) -> Unit,
 ) -> @view.View {
   let line = @signals.untracked(fn() { theme().t.body_line })
-  field_frame(parent, disabled, row=true, fn(f) {
+  field_frame(parent, disabled, row=true, solid~, fn(f) {
     f
     .padding(Is((@ui.Space::px(S4), @ui.Space::px(S1_5), @ui.Space::px(S4), @ui.Space::px(S1_5))))
     |> ignore
@@ -39,7 +43,7 @@ pub fn input_node(
     } else {
       f.min_height(By(fn() { Some(theme().control_h) })).radius(By(fn() { field_round() })) |> ignore
     }
-    @ui.field(
+    let typed = @ui.field(
       f,
       field,
       placeholder~,
@@ -62,6 +66,12 @@ pub fn input_node(
     .grow(Is(1.0))
     .basis(Is(Some(0.0)))
     .shrink(Is(1.0))
+    // (what stands at its end, after what is typed, kept whole)
+    match end {
+      Some(e) => f.box(fn(b) { b.shrink(Is(0.0)) |> ignore; e(b) }) |> ignore
+      None => ()
+    }
+    typed
   })
 }
 
@@ -117,13 +127,15 @@ pub fn textarea_node(
 /// A line to type in's frame in `parent` (a row where `row`, else a column): on the surface, a line round it, the
 /// field's hover grey where what `body` makes in it (its field, the node it gives back) is written in, or pointed at
 /// (a mouse's pointer on it or its field, nothing over it there; a finger pressing its field: Ctx::lit's); faded to
-/// O55 (input_box's `disabled`) over dur_ms while `disabled()`, its field then taking no press nor the focus. The
-/// field's node.
+/// O55 (input_box's `disabled`) over dur_ms while `disabled()`, its field then taking no press nor the focus. `solid`:
+/// on the canvas's ground, its line the canvas's but where it is pointed at or written in (field_solid). The field's
+/// node.
 #callsite(autofill(loc))
 fn field_frame(
   parent : @view.View,
   disabled : () -> Bool,
   row~ : Bool,
+  solid? : Bool = false,
   body : (@view.View) -> @view.View,
   loc~ : SourceLoc,
 ) -> @view.View {
@@ -135,7 +147,7 @@ fn field_frame(
     f
     .row(Is(row))
     .lines_up(Is(if row { Some(Middle) } else { None }))
-    .ground(By(fn() { @ui.tree_theme().color(Surface) }))
+    .ground(By(fn() { @ui.tree_theme().color(if solid { Bg } else { Surface }) }))
     .alpha(By(fn() { seen.shown(f) }))
     // (pointed at as a whole, as the old frame's box is by its id: lit with the pointer on its padding too, a press
     // there passing through to what is under it, as there)
@@ -151,7 +163,8 @@ fn field_frame(
         Finger => v.pressed()
       })
     }
-    f.edge(By(fn() { (1.0, @ui.tree_theme().color(if hot() { FieldHover } else { Border })) })) |> ignore
+    f.edge(By(fn() { (1.0, @ui.tree_theme().color(if hot() { FieldHover } else if solid { Bg } else { Border })) }))
+    |> ignore
     // (disabled: no press nor the focus its field's, said over what the field says of itself)
     v.presses(By(live)).focusable(By(live), keys=0) |> ignore
     made.val = Some(v)
@@ -165,10 +178,17 @@ fn field_frame(
 let field_disabled_alpha : Double = 0.55
 
 ///|
-/// A field (field's, as nodes) in `parent`: its `label` (13, 500) over what `body` makes in it (the input), 6 apart; on
-/// a wide page not in a panel as wide as what is typed in it needs (field_box_wide), else as wide as where it is.
+/// A field (field's, as nodes) in `parent`: its `label` (13, 500) over what `body` makes in it (the input), 6 apart,
+/// what `aside` makes at its head's end where it is given; on a wide page not in a panel as wide as what is typed in it
+/// needs (field_box_wide), else as wide as where it is.
 #callsite(autofill(loc))
-pub fn field_node(parent : @view.View, label : () -> String, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+pub fn field_node(
+  parent : @view.View,
+  label : () -> String,
+  body : (@view.View) -> Unit,
+  aside? : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
   parent.box(made_for=loc, fn(f) {
     // (in a panel's body: lent where it is, panel_in_lent)
     let wide_page = look_node(f) is Wide && f.lent(panel_in_lent) is None
@@ -176,6 +196,16 @@ pub fn field_node(parent : @view.View, label : () -> String, body : (@view.View)
     f.box(fn(top) {
       style_node(top, fn() { field_top })
       words_node(top, label, fn() { field_label }) |> ignore
+      // (at the row's end, what is left of it before it: field_top's JBetween)
+      match aside {
+        Some(a) =>
+          top.box(fn(e) {
+            e.grow(Is(1.0)).row(Is(true)).lies_along(Is(End)) |> ignore
+            a(e)
+          })
+          |> ignore
+        None => ()
+      }
     })
     |> ignore
     body(f)

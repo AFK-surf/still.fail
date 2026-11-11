@@ -627,6 +627,9 @@ fn titled_ends(
   let made = Ref(0)
   let share : Ref[@view.View?] = Ref(None)
   let seg : Ref[@view.View?] = Ref(None)
+  // (the presenters as the app begins: what a test before this one left presented is over this page else, its press
+  // that one's)
+  presenters_reset()
   let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w~, h=600.0, platform=2)
   t.set_font_scale(scale)
   @ui.set_view_app(fn(root) {

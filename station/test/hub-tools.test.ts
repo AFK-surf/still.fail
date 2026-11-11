@@ -47,7 +47,7 @@ test("every tool has a name, a description and an object's input schema; the cha
   const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...remoteTools({} as Remote), ...adbTools(() => []), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
-    ["chat_post", "slack_api", "chat_state", "chat_leave", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
+    ["chat_post", "slack_api", "chat_state", "chat_leave", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "chat_archive", "session_history"],
   );
   assert.equal(new Set(ours.map((t) => t.name)).size, ours.length, "no name twice");
   for (const tool of ours) {

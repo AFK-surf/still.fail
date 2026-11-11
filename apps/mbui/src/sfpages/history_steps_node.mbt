@@ -8,10 +8,10 @@
 // core calls `work`.
 //
 // They are nodes of the window's tree, laid out from the styles below (style_node), in a page's list that holds each
-// row only while it shows (View::scrolls_window). It follows its newest end; the page before comes in above what is
-// read, which stays where it is (the list's top, where the history begins, holding nothing: what comes in comes under
-// it); the page before that is asked for as the reader nears its top again; an entry gone to is brought to the middle
-// and marked a moment.
+// row only while it shows (View::scrolls_window). It follows its newest end; the page before is asked for as the reader
+// comes within a height of its top, and comes in above what is read, which stays where it is (the list's top, where
+// the history begins, holding nothing: what comes in comes under it); an entry gone to is brought to the middle and
+// marked a moment.
 
 ///|
 /// A row of the list as it was picked: the same as another where it is (steps_row_same), so its nodes are made again
@@ -145,33 +145,49 @@ fn steps_list_node(
         }
     }
   })
-  // the first row that shows, as the list is moved for what came over it, and the first item it was told with: near
-  // its top while it is one of its first three rows (its top's and two items) and the items begin as they did then
-  let first_shown : @signals.Signal[(String, String)] = @signals.signal(("", ""), same=fn(a, b) { a == b })
-  // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once for each first
-  // item they come above
-  v.reacts(
-    fn() {
-      let h = steps_head_of(src, params, lkey)
-      let (shown, told_first) = first_shown.get()
-      let near = told_first == h.first &&
-        (match rows.get().0.search(shown) {
-          Some(i) => i <= 2
-          None => false
-        })
-      // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
-      (h.more && h.older == "" && (near || steps_own.focus.contains(fk)), h.first)
-    },
-    fn(now) {
-      guard now.0 else { return }
-      (src.call)("history.older", Json::object(params), fn(res) {
-        // (an entry asked for before what could be had: where it opens)
-        if res is Err(_) {
-          steps_own.focus.remove(fk)
-        }
-      })
-    },
-  )
+  // The page before, asked of the core while there is one and the core neither reads it nor waits after a read that
+  // failed (it says when to ask again): as the list comes within a height of its top (the list's own to say, by where
+  // it is held: View::scrolls_window's near_top; kept here as the first row shown and the first item it was told
+  // with, a page come in that left that row first was never asked past, its top waiting for ever), and for an entry
+  // before what is loaded, once for each first item the pages come above, till the entry is among what is loaded (by
+  // the entries themselves: the entry asked for is taken off only as the rows are worked out, after the first item
+  // is told, and a page more was asked for with the entry's own page just come).
+  let wants_older = fn() {
+    let h = steps_head_of(src, params, lkey)
+    h.more && h.older == ""
+  }
+  // (asked once for each first item, whichever asks: near its top and an entry before what is loaded both ask as a
+  // page comes, before the core says it reads; again once the core has said it reads or that a read failed)
+  let asked_over : Ref[String?] = Ref(None)
+  v.reacts(fn() { steps_head_of(src, params, lkey).older }, fn(older) {
+    if older != "" {
+      asked_over.val = None
+    }
+  })
+  let ask_older = fn() {
+    let first = @signals.untracked(fn() { steps_head_of(src, params, lkey).first })
+    guard asked_over.val != Some(first) else { return }
+    asked_over.val = Some(first)
+    (src.call)("history.older", Json::object(params), fn(res) {
+      // (an entry asked for before what could be had: where it opens; not asked: asked again as it nears its top)
+      if res is Err(_) {
+        steps_own.focus.remove(fk)
+        asked_over.val = None
+      }
+    })
+  }
+  let entry_before = fn() {
+    guard steps_own.focus.get(fk) is Some(e) else { return false }
+    match items(src.topic("history", params).get().value, "items").get(0) {
+      Some(i) => e < entries_of(Some(i)).map(fn(x) { x.0 }).unwrap_or(0)
+      None => true
+    }
+  }
+  v.reacts(fn() { (wants_older() && entry_before(), steps_head_of(src, params, lkey).first) }, fn(now) {
+    if now.0 {
+      ask_older()
+    }
+  })
   steps_box_node(v, steps_box, fn(b) {
     steps_fills(b)
     b.box(fn(l) {
@@ -187,9 +203,7 @@ fn steps_list_node(
         // (followed at its newest; not once gone to an entry)
         follows=fn() { !steps_own.went.contains(lkey) },
         place~,
-        first_told=fn(k) {
-          first_shown.set((k, @signals.untracked(fn() { steps_head_of(src, params, lkey).first })))
-        },
+        near_top=(1.0, wants_older, ask_older),
         fn(slot, k) {
           slot.pick(fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {
             guard picked.row is Some(row) else { return }
@@ -300,11 +314,17 @@ fn steps_pressed(
 }
 
 ///|
-/// One of what the reader opens (a fold, a line, a group, a call), by its key, opened or shut.
-fn steps_flip(key : String) -> Unit {
+/// One of what the reader opens (a fold, a line, a group, a call), by its key, opened or shut as `v`, its line in the
+/// list, is pressed. Opened where the list follows its newest end, it opens down from where its line is, the list
+/// held there (Scroll::holds_here): following its end, the line went up as far as it opened, away from the hand.
+fn steps_flip(v : @view.View, key : String) -> Unit {
   if steps_own.opened.contains(key) {
     steps_own.opened.remove(key)
   } else {
+    match v.scroll_holding() {
+      Some(s) => s.holds_here()
+      None => ()
+    }
     steps_own.opened[key] = true
   }
 }
@@ -313,7 +333,7 @@ fn steps_flip(key : String) -> Unit {
 /// A clock running in `v` from `since` (the core's time: `src.now`), read again each whole second from then as it is
 /// shown, no longer than `till` (ms after it, none: on), the test's idle not waiting on it (Ctx::every's): what reads
 /// the time of it reads what this returns.
-fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -> () -> Int {
+pub fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -> () -> Int {
   let tick : @signals.Signal[Int] = @signals.signal(0)
   fn plan() -> Unit {
     let gone = (src.now)() - since
@@ -334,7 +354,7 @@ fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -
 
 ///|
 /// The history's rows to come while it is read the first time in `v`, as its list draws them.
-fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.TipLayer) -> Unit {
+pub fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.TipLayer) -> Unit {
   let lines = [("group", 16), ("text", 24), ("group", 12), ("group", 20), ("text", 9), ("group", 18)]
   for i, line in lines {
     let (kind, n) = line
@@ -605,7 +625,7 @@ fn one_line_node(
   let open = fn() { steps_own.opened.contains(key) }
   v.box(fn(r) {
     @sf.style_node(r, fn() { h_one.then(@sf.row_least_h()) })
-    @sf.presses_node(r, fn() { steps_flip(key) })
+    @sf.presses_node(r, fn() { steps_flip(r, key) })
     lead(r)
     r.show(fn() { !open() && line != "" }, fn(l) {
       l.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
@@ -656,11 +676,31 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           inner.val = Some(i)
           body(i)
         })
+        // (opening and closing its way, from the moment it is pressed, a Move as long as what is past the cut is
+        // tall: all of it at once was a step of that many lines in one frame, what is under it with it)
+        let way = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
+        room.reacts(open, fn(o) {
+          let past = dmax(0.0, @signals.untracked(tall) - most)
+          way.go(if o { 1.0 } else { 0.0 }, @motion.move().per_unit(past), at=room.cause_at())
+        })
+        let shown = fn() {
+          way.said()
+          way.value_at(room.drawn_while(fn(t) { way.goes_at(t) }))
+        }
         // (cut from the first: measured whole however short it is cut, View::holds_whole; said once what it measures
         // is made)
         room
         .holds_whole()
-        .max_height(By(fn() { if open() { None } else if long() { Some(most) } else { Some(most + 4.0) } }))
+        .max_height(By(fn() {
+          let k = shown()
+          if k >= 1.0 {
+            None
+          } else if long() {
+            Some(most + (tall() - most) * dmax(0.0, k))
+          } else {
+            Some(most + 4.0)
+          }
+        }))
         |> ignore
       })
       f.show(long, fn(t) {
@@ -673,7 +713,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           }
         }
         steps_box_node(t, h_fold_toggle, fn(b) {
-          steps_pressed(b, fn() { steps_flip(key) }, label=words)
+          steps_pressed(b, fn() { steps_flip(b, key) }, label=words)
           @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
         })
       })
@@ -959,7 +999,7 @@ fn group_node(
       let hot = fn() { @sf.lit_node(h) }
       h.ground(By(fn() { if @sf.lit_in_node(h) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
-      steps_pressed(h, fn() { steps_flip(gk) }, label=fn() { text(g, "summary") }, folds=true, open~)
+      steps_pressed(h, fn() { steps_flip(h, gk) }, label=fn() { text(g, "summary") }, folds=true, open~)
       h.box(fn(i) {
         @sf.style_node(i, fn() { h_icon })
         @sf.icon_node(i, "chevron-right", 14.0, By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } }), name_now=fn() {
@@ -1060,7 +1100,7 @@ fn opened_node(
       @sf.style_node(line, fn() { h_step_summary.then(@sf.row_least_h()) })
       line.ground(By(fn() { if @sf.lit_in_node(line) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
-      steps_pressed(line, fn() { steps_flip(rk) }, folds=true, open~)
+      steps_pressed(line, fn() { steps_flip(line, rk) }, folds=true, open~)
       summary(line)
     })
     |> ignore
@@ -2101,3 +2141,42 @@ let steps_usage_line : @sfbase.Kept[String] = @sfbase.Kept::new()
 ///|
 // kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
 let steps_usage : @sfbase.Kept[Json?] = @sfbase.Kept::new()
+
+///|
+/// What needs seeing to in an agent's history now (HistorySummary), as `a` (the chat's agent) says it, in `parent`'s
+/// row: a quota running out (its chip, what it says and more over it while it is pointed at, in `tips`), the disk
+/// filling up (in `amber`), an account that cannot run (in `red`).
+pub fn history_attention_node(
+  parent : @view.View,
+  a : () -> Json?,
+  tips : @sf.TipLayer,
+  amber : @ui.TextStyle,
+  red : @ui.TextStyle,
+) -> Unit {
+  let notes = fn() { items(a(), "attention") }
+  parent.each(fn() { Array::makei(notes().length(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
+    let k = i.untracked()
+    let n = fn() { notes().get(k) }
+    let q = fn() { field(n(), "quota") }
+    c.pick(fn() { q() is Some(Object(_)) }, fn(x, quota) {
+      if quota {
+        @sf.fill_chip_node(
+          x,
+          fn() { number(q(), "left").to_int() },
+          fn() { text(q(), "level") },
+          fn() { text(q(), "mark") },
+          fn() { number(q(), "left").to_int().to_string() + "%" },
+          small=true,
+          said=fn() {
+            let more = text(n(), "more")
+            text(n(), "text") + (if more != "" { "\n" + more } else { "" })
+          },
+          tips~,
+        )
+        |> ignore
+      } else {
+        @sf.words_node(x, fn() { text(n(), "text") }, fn() { if text(n(), "kind") == "disk" { amber } else { red } }) |> ignore
+      }
+    })
+  })
+}

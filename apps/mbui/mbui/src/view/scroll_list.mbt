@@ -218,7 +218,7 @@ fn Scroll::stretch_drawn(self : Scroll, t : Double) -> Double {
 /// negative (Android: its heights; iOS: the points shown moved), as an old view's list's (ui's Tester::list_overscroll).
 pub fn Scroll::past(self : Scroll, tree : Tree) -> Double {
   @signals.untracked(fn() {
-    match self.past_at(tree.logic_at()) {
+    match self.past_at(tree.logic_said()) {
       Some((edge, x, _)) => x * edge.to_double()
       None => 0.0
     }

@@ -136,9 +136,9 @@ async function version(port: number): Promise<{ ws: string; agent: string } | nu
 }
 
 /// Whether a recorded process is still the one recorded.
-function stillThere(r: Running): boolean {
+async function stillThere(r: Running): Promise<boolean> {
   if (r.pid === null) return false;
-  const started = startTimeOf(r.pid);
+  const started = await startTimeOf(r.pid);
   return started !== null && (r.started === null || Math.abs(started - r.started) < 5000) && groupAlive(r.pid);
 }
 
@@ -172,7 +172,7 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
     // What answers there is this profile's Chrome (its browser's path is the one it said), not another program given
     // the port since.
     if (v === null || new URL(v.ws).pathname !== active.path) return null;
-    const known = recorded && recorded.port === active.port && stillThere(recorded) ? recorded : null;
+    const known = recorded && recorded.port === active.port && (await stillThere(recorded)) ? recorded : null;
     return {
       pid: known?.pid ?? null,
       started: known?.started ?? null,
@@ -205,7 +205,7 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
     child.once("exit", (code) => (ended = code));
     child.once("error", () => (ended = -1));
     const pid = child.pid ?? null;
-    const started = pid === null ? null : startTimeOf(pid);
+    const started = pid === null ? null : await startTimeOf(pid);
     // Chrome's own time: looked at until it answers at its port (given; or chosen, and said in DevToolsActivePort,
     // which Chrome writes only then), or ends.
     let at = port === 0 ? null : port;
@@ -250,7 +250,7 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
   }
 
   async function kill(running: Running) {
-    if (running.pid !== null && stillThere(running)) {
+    if (running.pid !== null && (await stillThere(running))) {
       for (let waited = 0; waited < END_MS && groupAlive(running.pid); waited += LOOK_MS) await wall.sleep(LOOK_MS);
       if (groupAlive(running.pid)) await Effect.runPromise(endGroup(running.pid, END_MS).pipe(Effect.provideService(Clock.Clock, liveClock)));
     }

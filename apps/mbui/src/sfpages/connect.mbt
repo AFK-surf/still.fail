@@ -4,14 +4,14 @@
 // connects; who it is and whether it is up (its picture, its name, how it is, where it is reached, its station, who
 // owns it; what is done to it less often in its ⋯); what its link needs (Slack's tokens, or why it fails); how it runs
 // (its model, how its conversations become sessions and the one they go into); a Feishu connect's app; its latest
-// sessions. Everything said is the core's (its connects view, the core's ModeWords and ModeChange). Made once as nodes
+// sessions. Everything said is the core's (its `connect` view, the core's ModeWords and ModeChange). Made once as nodes
 // of the window's tree in every frame (page_node); what has no node part yet (the tokens' fields, the model's picker,
 // the Slack app's form: shared with the old views of the new connect's dialog and a new chat) hosted as its old view.
 
 ///|
 /// A connect's page (ConnectPage, ConnectScreen) made once as nodes in node `v` (page_node, laid out by the `width`
-/// its frame gives it, narrow where none is given), by its station and id, as the core's connects view says it now: a
-/// wait until the connects are read (its station's among them), in its bones; what could not be read; one gone, that
+/// its frame gives it, narrow where none is given), by its station and id, as the core's `connect` view says it now: a
+/// wait until it is read (its station's overview), in its bones; what could not be read; one gone, that
 /// it is not there; else its page. `here`: who and where, as that changes; `stint`: its time on top (the pictures
 /// asked for on it); `tips`: the window's, else its own over it.
 pub fn connect_node(
@@ -38,15 +38,16 @@ pub fn connect_node(
     Some(w) => w
     None => fn() { v.window().0 }
   }
-  let connects = fn() { (core.topic)("connects", { "scope": str(here().workspace), "mine": Json::boolean(false) }).get() }
+  // (that connect alone, whole: its page's own ask; none while its station's overview is read, null where it is gone)
+  let read = fn() { @settings.connect_read(core, here(), station, id) }
   let found = fn() {
-    items(connects().value, "items")
-    .iter()
-    .find_first(fn(i) { text(Some(i), "station") == station && text(field(Some(i), "connect"), "id") == id })
+    match read().value {
+      Some(Object(_)) as c => c
+      _ => None
+    }
   }
-  let wait = fn() { field(connects().value, "wait") }
   let error = fn() {
-    match connects().error {
+    match read().error {
       Some(e) => error_text(e)
       None => ""
     }
@@ -54,16 +55,10 @@ pub fn connect_node(
   let back = fn() { @sf.t("web-pages.settings.nav.connects") }
   // (what it is now: read the first time, or what could not be; gone; found)
   let state = fn() {
-    if connects().value is None || (found() is None && (flag(wait(), "reading") || items(wait(), "failing").length() > 0)) {
-      if error() != "" {
-        CdFailed
-      } else {
-        CdReading
-      }
-    } else if found() is None {
-      CdGone
-    } else {
-      CdFound
+    match read().value {
+      None => if error() != "" { CdFailed } else { CdReading }
+      Some(Object(_)) => CdFound
+      Some(_) => CdGone
     }
   }
   v.pick(state, fn(p, st) {
@@ -78,7 +73,7 @@ pub fn connect_node(
       CdReading => {
         let sample = Some(cd_sample())
         let quiet = core.quiet()
-        let note = fn() -> @sf.WaitNote { { reading: flag(wait(), "reading"), text: @sf.t("web-pages.connect.loading"), failing: failing_of(wait()) } }
+        let note = fn() -> @sf.WaitNote { { reading: true, text: @sf.t("web-pages.connect.loading"), failing: [] } }
         @sf.page_node(
           p,
           back,
@@ -404,21 +399,20 @@ fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, sta
   let cv = fn() { field(item(), "connect") }
   let id = @signals.untracked(fn() { text(cv(), "id") })
   let changes = fn() { flag(item(), "runtimeChanges") }
-  // the models its station can run, each with the runtimes it runs on (the core's station view)
-  let models = fn() {
+  // whether its station runs a model on its runtime (on any, where its runtime may change): the runtimes its page says
+  // it runs, each with its models (the core's `station`)
+  let runs_none = fn() {
     let runtime = text(field(cv(), "bind"), "runtime")
-    let sv = match @settings.stations_of(core, here()).value {
-      Some(Array(a)) => a.iter().find_first(fn(s) { text(Some(s), "station") == station })
-      _ => None
-    }
-    items(sv, "models").filter(fn(m) { changes() || strings(Some(m), "runtimes").contains(runtime) })
+    !items(@settings.station_of(core, here(), station), "runtimes")
+    .iter()
+    .any(fn(r) { (changes() || text(Some(r), "runtime") == runtime) && strings(Some(r), "models").length() > 0 })
   }
   let bind_on = [("station", station), ("connect", id)]
   let binding = fn() { is_doing(core, ["connect.bindSession"], bind_on) }
   @sf.section_node(b, fn() { @sf.t("web-pages.connect.run") }, fn(sec) {
     @sf.group_node(sec, fn(g) {
       // its model: picked here, or none its station runs for its runtime (to the station's profiles)
-      g.pick(fn() { models().length() == 0 }, fn(p, none) {
+      g.pick(runs_none, fn(p, none) {
         if none {
           @sf.link_row_node(p, fn() { @sf.t("web-pages.profiles.models") }, fn() { (core.push)(Profiles(station)) }, note=fn() {
             @sf.t("web-pages.connect.noModelsFor", args=[("runtime", text(cv(), "runtimeText"))])
@@ -450,6 +444,9 @@ fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, sta
       })
       // the one they all go into: its chat, another chosen
       g.show(fn() { text(cv(), "mode") == "single-session" }, fn(s) {
+        // (what its choice lists, held while 更换 can be pressed and let go of as it goes or the page does, so the
+        // choice opens on them whole: asked as the dialog opened, its list grew by them a frame or two later)
+        src.lease_topic("connectCandidates", @settings.connect_candidates_asked(@signals.untracked(here), station, id)).bind_to(s)
         let bound = fn() { field(item(), "bound") }
         s.pick(fn() { bound() is Some(Object(_)) }, fn(r, has_bound) {
           @sf.link_row_node(
@@ -467,7 +464,7 @@ fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, sta
           @sf.link_row_node(
             r,
             fn() { @sf.t("web-pages.connect.switch") },
-            fn() { cd_choose_dialog(core, station, @signals.untracked(item)) },
+            fn() { cd_choose_dialog(core, @signals.untracked(here), station, @signals.untracked(item)) },
             chevron=false,
             goes=!busy,
             tail=fn(e) { doing_mark_node(e, binding, fn() { failed_of(core, ["connect.bindSession"], bind_on) }) },
@@ -987,7 +984,7 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
 ///|
 /// A single-session connect's session chosen (ChooseSessionDialog): a new one (its name typed, or not), or one of
 /// those it could go into (the one now marked 当前); it closes as it goes, the session's line turning meanwhile.
-fn cd_choose_dialog(core : Core, station : String, item : Json?) -> Unit {
+fn cd_choose_dialog(core : Core, here : Here, station : String, item : Json?) -> Unit {
   let cv = field(item, "connect")
   let id = text(cv, "id")
   let key = "connect-session/" + (desk_dialogs.val + 1).to_string()
@@ -1004,7 +1001,8 @@ fn cd_choose_dialog(core : Core, station : String, item : Json?) -> Unit {
     wide=true,
     fn(c, _) {
       let options = [("new", @sf.t("web-pages.connect.newSession"), @sf.t("web-pages.connect.newSessionLead"))]
-      for s in items(item, "candidates") {
+      // (the sessions it could go into: asked ahead by its page while 更换 shows (cd_run_node), here as it opens)
+      for s in @settings.connect_candidates(core, here, station, id).unwrap_or([]) {
         let sv = Some(s)
         let named = if flag(sv, "current") {
           text(sv, "titleText") + " · " + @sf.t("web-pages.connect.current")

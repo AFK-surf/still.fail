@@ -453,7 +453,7 @@ test "on the tape 关于 made once scrolled: what it holds goes under nothing of
 }
 
 ///|
-/// `base` with the station Willow (ws1/st1) named `name` in what the core says of the stations, as that is set ("" as
+/// `base` with the station Willow (ws1/st1) named `name` in what the core says of the stations and of it, as that is set ("" as
 /// it is): told as it changes, as the core tells it.
 fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
   {
@@ -480,6 +480,12 @@ fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
               ),
             ),
           }
+        // (its own page's, whole, as its archiving's title says it)
+        ("station", Some(Object(m))) if n != "" && m.get("station") == Some(Json::string("ws1/st1")) => {
+          let m2 = m.copy()
+          m2["name"] = Json::string(n)
+          { ..r, value: Some(Json::object(m2)) }
+        }
         _ => r
       }
     },

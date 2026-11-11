@@ -240,11 +240,11 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
   }
 
   /// What the station before had handled says the session and where its turn stands.
-  protected crashed(options: OpenOptions, lines: Iterable<string>, _info: RunnerInfo, events: Events) {
+  protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, _info: RunnerInfo, events: Events) {
     const turn: Turn = { busy: false, prompted: false, aborting: false, closed: false };
     const live = new LiveFromDsh();
     let sessionId = options.resume ?? "";
-    for (const line of lines) {
+    for await (const line of lines) {
       const message = parseLine("dsh", line);
       if (message === undefined) continue;
       if (message.id === OPEN && typeof message.session === "string") sessionId = message.session;

@@ -482,6 +482,15 @@ export function runtimeLabel(runtime: string): string {
   return RUNTIME_NAMES[runtime] ?? "Claude Code";
 }
 
+/// The runtimes by their short names (the app's accounts page's tags): said where how a model runs follows its name in
+/// a model control's panel, and only there; everywhere else, its control and its menu among them, the full name, where
+/// the short one is learned from (the user, 2026-11-10: 「agent runtime 可以用缩写，比如 CC，DSH」).
+const RUNTIME_SHORT: Record<string, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK", cursor: "Cursor", devin: "Devin", hermes: "Hermes", agy: "AGY" };
+
+export function runtimeShort(runtime: string): string {
+  return RUNTIME_SHORT[runtime] ?? "CC";
+}
+
 /// A connect's link to Slack in words, and its dot.
 export function connection(state: unknown, kind?: string | null): [string, string] {
   switch (str(get(state, "state")) ?? "") {

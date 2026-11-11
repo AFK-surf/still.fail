@@ -21,7 +21,7 @@ const configPath = (data: string) => process.env.STILLFAIL_CONFIG || join(data, 
 
 /// Whether `pid` is a station (its command says so), as the installer checks it: a pid left in station.json may be
 /// another process's by now.
-export const isStation = (pid: number): boolean => platform.isLauncher(pid);
+export const isStation = (pid: number): Promise<boolean> => platform.isLauncher(pid);
 
 const alive = (pid: number) => {
   try {
@@ -42,7 +42,7 @@ export function setChannelIn(data: string, channel: Channel) {
 
 /// Puts the station of `data` on `channel`: the running station asked when there is one that takes the ask, else the
 /// config written here. Its refusal is thrown with its words.
-export async function setChannel(data: string, channel: Channel, waitMs: number, station: (pid: number) => boolean = isStation): Promise<void> {
+export async function setChannel(data: string, channel: Channel, waitMs: number, station: (pid: number) => boolean | Promise<boolean> = isStation): Promise<void> {
   const run = join(data, "run");
   mkdirSync(run, { recursive: true });
   let said: any = null;
@@ -50,7 +50,7 @@ export async function setChannel(data: string, channel: Channel, waitMs: number,
     said = JSON.parse(readFileSync(join(run, "station.json"), "utf8"));
   } catch {}
   const pid = Number.isSafeInteger(said?.pid) && said.pid > 0 ? (said.pid as number) : null;
-  if (pid === null || said?.channel !== 1 || !alive(pid) || !station(pid)) return setChannelIn(data, channel);
+  if (pid === null || said?.channel !== 1 || !alive(pid) || !(await station(pid))) return setChannelIn(data, channel);
   // (the channel its config already says: nothing to ask. `stillfail update --beta` on a station on beta, each
   // release's, waited on the running station and failed when it was too busy to answer in time, 2026-10-31)
   try {

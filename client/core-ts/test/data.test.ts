@@ -595,10 +595,16 @@ test("a_logs_items_are_written_once_and_read_by_range", async () => {
   data.putItems("entry", "w/a", "7", Array.from({ length: 100 }, (_, i) => [i + 1, { n: i + 1 }]));
   await flush();
   assert.deepEqual(logs, ["entry w/a 7"]);
+  // Which items were put since a change is said (a reader that has read none reads it all).
+  const first = data.logPutSince("entry", "w/a", "7", 0);
+  assert.equal(first.put, null);
   const writes = db().writes().length;
   data.putItems("entry", "w/a", "7", [[50, { n: 50 }], [101, { n: 101 }]]);
   await flush();
   assert.equal(db().writes().length - writes, 1, "the one not held");
+  const second = data.logPutSince("entry", "w/a", "7", first.rev);
+  assert.deepEqual(second.put, [101], "only what was written");
+  assert.deepEqual(data.logPutSince("entry", "w/a", "7", second.rev).put, [], "none since");
   assert.deepEqual(data.logSpan("entry", "w/a", "7"), { min: 1, max: 101, count: 101 });
   assert.deepEqual([...data.logRange("entry", "w/a", "7", 99, 200).keys()], [99, 100, 101]);
   assert.equal(data.logCount("entry", "w/a", "7", 1, 10), 10);
@@ -608,6 +614,7 @@ test("a_logs_items_are_written_once_and_read_by_range", async () => {
   assert.deepEqual([...data.logRange("transcript", "w/a", "k1", 0, 10).values()], [{ a: 1 }, { a: 9 }]);
   data.dropThread("w/a", 7);
   assert.equal(data.logSpan("entry", "w/a", "7"), null);
+  assert.equal(data.logPutSince("entry", "w/a", "7", second.rev).put, null, "what else changes a log is not known by item");
   runner.shutdown();
 });
 

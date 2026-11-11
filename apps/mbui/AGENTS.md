@@ -90,6 +90,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - A place of the bar never opens on its bones when the device holds what it shows (the user, 2026-11-10): the list
     it opens on is one of sfbase's `lasting` (shown again at once) and of `place_reads` (asked ahead of it). A new
     place, or another list a place opens on, goes in both; `src/sfapp/place_first_wbtest.mbt` holds every place.
+    One exception (the user, 2026-11-10): how each station up is reached (`stationNet`, Station's network line) is
+    sampled of the stations, so it is asked only from a finger on Station's tab, never while Home sits; the first time
+    Station opens in a run, and before the core has said it, that line alone shows its bones.
   - A step further in is the presenters', never a page's (弹层里往里走: the user, 2026-11-02, and 2026-11-10 「系统性
     全修一下」 once the chat's own sheet and a menu's 分享… were found never to have had it). A page says `close()` and
     opens the next, and keeps no step number and no 返回 button of its own; `src/sf/presenters.mbt` does the rest on
@@ -97,7 +100,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     back, Escape and the system's back go back to the one before, a press outside, × or the sheet dragged down closes
     all of it), a menu a menu's item opens is a level of the same sheet, and on 小屏 whatever a sheet closes for comes
     in its place, one sheet all along and the scrim as it was, never one sheet sinking as the next rises
-    (presenters_wbtest's every pair of kinds holds it).
+    (presenters_wbtest's every pair of kinds holds it). On 小屏 a panel's step further in is a page of the same sheet
+    of the window's tree (`sheet_node`, every panel there but a stage or one with steps of its own): it slides in as
+    the one before slides off, and that one is kept as it was left for back.
 
 ## Made once, as nodes
 
@@ -149,7 +154,23 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar
   (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
   each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
-  anew that is sent more fails, one sent less brings its bar down.
+  anew that is sent more fails, one sent less brings its bar down. These traces' workspace is one station and a few
+  chats; what each topic weighs at a workspace's real size is measured by the core's
+  `client/core-ts/test/topic-bytes.test.ts`. Stations so: a list reads their rows (`@settings.stations_of`, sfbase's
+  `station_rows`, one ask everywhere), a station's own page that station (`@settings.station_of`), a page showing one
+  part of every station each row's own part (`@settings.station_part`); a list never takes a station whole, and a
+  field a row lacks is the core's to add, not the list's to ask whole. Connects the same: a list their rows
+  (`connects`), a connect's page that connect (`@settings.connect_of`), and a single-session connect's page, while its
+  更换 row shows, what its choice of a session lists (`connectCandidates`), so that choice opens whole; nothing else
+  asks it.
+- A replay asks the core what its run's app asked, so a way of asking brought in after a trace was recorded is
+  switched by the trace's head (`@sfcore.trace_switch`, one of `trace_switches`; a recording says all of them on), and
+  how many traces still replay without each only falls (`src/sfreplay/flows/trace_switches_test.mbt`; the user,
+  2026-11-10): such a trace's replay and its bytes are of an app no device runs. Where the old way is gone from the app,
+  the switch is the replay's alone, which gives the new asks out of what the trace has: without `MBUI_STATION_ROWS` the
+  run's `stations` are kept by the replay (`@core.Replay::keep_stations`) and the rows, a station and its parts read
+  out of them; without `MBUI_CONNECT_ROWS` one connect and its choice's sessions are read out of the run's `connects
+  {scope, mine:false}` (`src/sfreplay/source.mbt`).
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture

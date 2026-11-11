@@ -275,7 +275,7 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
     None => fail("no title")
   }
   tap_home_filter(t)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("监控中") is Some(_))
   t.tap_text("我参与的")
   assert_true(t.find("首页的列表改成按天分组") is Some(_))
@@ -782,7 +782,7 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   tap_home_filter(t)
   // (the menu open, built again from it)
   t.draw()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(mine())
   t.tap_text("我参与的")
   // half way: the list switched from going out to the left, the one picked coming in from the right (where words
@@ -831,7 +831,7 @@ test "under it all the page's own ground, dark too (the host cleared to blue the
 test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我参与的, 监控中 and 已归档, the list shown checked" {
   let t = tester("home")
   tap_home_filter(t)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   for words in ["全部会话", "我参与的", "监控中", "已归档"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
@@ -1132,7 +1132,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@sf.later_ms + @kit.presence_in_ms)
   t.tap_text("工作区 1")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_true(@sf.presenting())
   let last = "工作区 20"
   let (_, foot_y) = t.find("登录其他账号").unwrap()
@@ -1151,7 +1151,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
       break
     }
     held_drag(t, x, from_y, from_y - 60.0)
-    sheet_rested(t, "sf-present")
+    presented_rested(t)
   }
   assert_true(in_view(), msg="the last workspace scrolled into the sheet")
   t.tap_text(last)

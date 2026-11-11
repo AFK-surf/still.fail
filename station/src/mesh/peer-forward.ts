@@ -7,6 +7,7 @@
 // or when the station stops (none outlives the process). Connections go on peer-http.ts's protocol (`tcp: true`),
 // admitted and refused there as /peer requests are.
 import { type Socket, connect, createServer, type Server } from "node:net";
+import type { Duplex } from "node:stream";
 import type { Clock } from "effect";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
@@ -25,7 +26,7 @@ const REACH_MS = 10_000;
 const LOOK_MS = 1_000;
 
 /// Until `socket` can take more, or is gone.
-function drained(socket: Socket): Promise<void> {
+function drained(socket: Socket | Duplex): Promise<void> {
   return new Promise((resolve) => {
     const done = () => {
       socket.off("drain", done);
@@ -39,10 +40,10 @@ function drained(socket: Socket): Promise<void> {
 
 /// Ends a connection that failed or could not be carried: reset (RST), so the program at its other end hears it was cut
 /// off, not that it ended (an end alone is a half-close: a program that keeps its side open would wait on).
-export function abort(socket: Socket) {
+export function abort(socket: Socket | Duplex) {
   if (socket.destroyed) return;
   try {
-    socket.resetAndDestroy();
+    (socket as Socket).resetAndDestroy();
   } catch {
     socket.destroy();
   }
@@ -54,7 +55,7 @@ export function abort(socket: Socket) {
 /// way; a failure on either side (a reset, a socket error, the socket closed before the stream's end went to it) resets
 /// both. `carry`: what came on the stream past its head. The socket is half-open
 /// (`allowHalfOpen`) and may be paused; it is resumed here.
-export function pipeTcp(socket: Socket, stream: Stream, carry: Buffer = Buffer.alloc(0)): Promise<void> {
+export function pipeTcp(socket: Socket | Duplex, stream: Stream, carry: Buffer = Buffer.alloc(0)): Promise<void> {
   return new Promise((resolve) => {
     let over = false;
     // The stream's end, given to the socket.
@@ -180,15 +181,28 @@ async function listenAt(port: number, take: (socket: Socket) => void, ours: bool
   });
 }
 
-/// The way to other stations' ports (peer-http.ts `PeerHttp.tunnel`).
+/// The way to other stations' ports (peer-http.ts `PeerHttp.tunnel`), and to the devices attached to them
+/// (`tunnelDevice`, devices/).
 export type Tunnels = {
   tunnel(station: string, port: number, probe?: boolean): Promise<{ stream: Stream; carry: Buffer } | null>;
+  tunnelDevice?(station: string, device: string, session: string, probe?: boolean): Promise<{ stream: Stream; carry: Buffer } | null>;
+};
+
+/// A forward to a device (devices/): its id and name, the chat it is for, how it is reached when it is attached to this
+/// station itself (no mesh between), and who may use it: why the processes holding a connection's other end may not
+/// (the chat's own processes alone may), or null.
+export type DeviceTarget = {
+  id: string; name: string;
+  here: (() => Promise<Duplex>) | null;
+  admit: ((holders: number[]) => Promise<string | null>) | null;
 };
 
 /// A job's state as a forward tied to it needs it (the store's record).
 export type JobState = { session: string; state: string; port: number | null };
 
 export type ForwardsOptions = {
+  /// The processes holding the other end of a connection made from 127.0.0.1:`port` (devices' forwards).
+  holders?: (port: number) => Promise<number[]>;
   /// The mesh's way to the other stations, once it is up.
   route: () => Tunnels | null;
   /// The station names a station by, given its id or name (for what a forward shows), and its id.
@@ -218,11 +232,14 @@ type Forward = {
   down: { until: number; why: string } | null;
   /// Why its last connection failed, if it did.
   failed: string | null;
+  /// A device's, not a port's (`port` is 0 then).
+  device: DeviceTarget | null;
 };
 
 /// What a forward is, as its session sees it.
 export type ForwardView = {
   local: string;
+  device?: string;
   url: string;
   station: string;
   port: number;
@@ -246,8 +263,10 @@ export class Forwards {
   private unlistenJobs: () => void;
   private jobs: ForwardsOptions["jobs"];
   private closed = false;
+  private holders: (port: number) => Promise<number[]>;
 
   constructor(options: ForwardsOptions) {
+    this.holders = options.holders ?? (async () => []);
     this.route = options.route;
     this.resolve = options.resolve;
     this.fibers = new Fibers("forwards", options.clock);
@@ -268,6 +287,7 @@ export class Forwards {
 
   private view(f: Forward): ForwardView {
     const v: ForwardView = { local: `127.0.0.1:${f.local}`, url: `http://127.0.0.1:${f.local}/`, station: f.name, port: f.port, connections: f.sockets.size, served: f.served };
+    if (f.device !== null) v.device = f.device.name;
     if (f.job !== null) v.job = f.job;
     return v;
   }
@@ -299,7 +319,7 @@ export class Forwards {
     // That station takes it (it is new enough, the port is not its own, it has this one in its workspace): asked once
     // now, so what would fail every connection fails here.
     await route.tunnel(id, port, true);
-    const f: Forward = { session, id, name, port, local: 0, job: job ?? null, server: null as unknown as Server, sockets: new Set(), served: 0, quietSince: this.fibers.now(), idle: null, down: null, failed: null };
+    const f: Forward = { session, id, name, port, local: 0, job: job ?? null, server: null as unknown as Server, sockets: new Set(), served: 0, quietSince: this.fibers.now(), idle: null, down: null, failed: null, device: null };
     const take = (socket: Socket) => this.connection(f, socket);
     let note: string | undefined;
     let server = await listenAt(local ?? port, take, this.byLocal.has(local ?? port));
@@ -321,6 +341,82 @@ export class Forwards {
     return note === undefined ? this.view(f) : { ...this.view(f), note };
   }
 
+  /// Device `device` attached to `station` (its id; this station's own too) forwarded to a free port of 127.0.0.1 here
+  /// for `session`, whose processes alone are let through. One the session has already is given again. That station is
+  /// asked first whether it lets this chat reach it.
+  async openDevice(session: string, station: string, device: DeviceTarget, self: boolean): Promise<ForwardView & { note?: string }> {
+    if (this.closed) throw new Error("the station is stopping");
+    const { id, name } = self ? { id: station, name: "this station" } : this.resolve(station);
+    const had = [...this.byLocal.values()].find((f) => f.session === session && f.id === id && f.device?.id === device.id);
+    if (had !== undefined) return { ...this.view(had), note: "already forwarded" };
+    if (!self) {
+      const route = this.way();
+      if (route.tunnelDevice === undefined) throw new Error("this station cannot reach devices over the mesh");
+      await route.tunnelDevice(id, device.id, session, true);
+    }
+    const f: Forward = { session, id, name, port: 0, local: 0, job: null, server: null as unknown as Server, sockets: new Set(), served: 0, quietSince: this.fibers.now(), idle: null, down: null, failed: null, device };
+    const server = await listenAt(0, (socket) => this.connection(f, socket), false);
+    if (server === null) throw new Error("no port could be had on 127.0.0.1");
+    f.server = server;
+    f.local = (server.address() as { port: number }).port;
+    if (this.closed) {
+      server.close();
+      throw new Error("the station is stopping");
+    }
+    this.byLocal.set(f.local, f);
+    this.quiet(f);
+    log.info("mesh", "a device forwarded", { session, station: id, device: device.id, local: f.local });
+    return this.view(f);
+  }
+
+  /// The session's forwards to device `device` (every device: none named; every session's: none named) closed: its
+  /// grant ended, it was given back, or it was taken off its station.
+  closeDevice(session: string | null, device: string | null, why: string) {
+    for (const f of [...this.byLocal.values()]) {
+      if (f.device !== null && (device === null || f.device.id === device) && (session === null || f.session === session)) this.shut(f, why);
+    }
+  }
+
+  /// A device's forward's connection: let through only for its chat's processes, then carried to the device.
+  private deviceConnection(f: Forward, socket: Socket) {
+    const device = f.device!;
+    const port = socket.remotePort;
+    const admitted = device.admit === null ? Promise.resolve<string | null>(null)
+      : (port === undefined ? Promise.resolve<number[]>([]) : this.holders(port)).catch((): number[] => []).then((h) => device.admit!(h));
+    admitted.then(
+      async (why) => {
+        if (why !== null) {
+          f.failed = why;
+          return abort(socket);
+        }
+        if (socket.destroyed || this.byLocal.get(f.local) !== f) return;
+        if (device.here !== null) {
+          const d = await device.here();
+          if (socket.destroyed) return void d.destroy();
+          for (const [from, to] of [[socket, d], [d, socket]] as const) {
+            from.once("error", () => abort(to));
+            from.once("close", () => abort(to));
+            from.pipe(to);
+            from.resume();
+          }
+          return;
+        }
+        const route = this.route();
+        if (route === null || route.tunnelDevice === undefined) {
+          f.failed = "this station is not on the mesh";
+          return abort(socket);
+        }
+        const tunnel = await route.tunnelDevice(f.id, device.id, f.session);
+        if (tunnel === null) return abort(socket);
+        if (socket.destroyed || this.byLocal.get(f.local) !== f) return void tunnel.stream.reset(0).catch(() => {});
+        void pipeTcp(socket, tunnel.stream, tunnel.carry);
+      },
+    ).catch((error: Error) => {
+      f.failed = error.message;
+      abort(socket);
+    });
+  }
+
   /// One connection to a forward: carried to its station's port, or closed when it cannot be.
   private connection(f: Forward, socket: Socket) {
     if (!this.byLocal.has(f.local)) return abort(socket);
@@ -333,6 +429,7 @@ export class Forwards {
       f.sockets.delete(socket);
       if (f.sockets.size === 0 && this.byLocal.get(f.local) === f) this.quiet(f);
     });
+    if (f.device !== null) return this.deviceConnection(f, socket);
     const now = this.fibers.now();
     if (f.down !== null && now < f.down.until) return abort(socket);
     const route = this.route();
@@ -382,10 +479,12 @@ export class Forwards {
     return Promise.all(
       mine.map(async (f) => {
         const v = this.view(f);
-        if (route === null) v.station_state = "unknown: this station is not on the mesh";
+        if (f.device?.here != null) v.station_state = "online";
+        else if (route === null) v.station_state = "unknown: this station is not on the mesh";
         else {
           try {
-            await wall.within(PROBE_MS, route.tunnel(f.id, f.port, true), `offline: no answer within ${PROBE_MS / 1000} s`);
+            const probe = f.device !== null ? route.tunnelDevice!(f.id, f.device.id, f.session, true) : route.tunnel(f.id, f.port, true);
+            await wall.within(PROBE_MS, probe, `offline: no answer within ${PROBE_MS / 1000} s`);
             v.station_state = "online";
             f.down = null;
           } catch (error) {

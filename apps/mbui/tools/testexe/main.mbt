@@ -271,6 +271,8 @@ fn cmd_said(args : Array[String]) -> Unit {
     times.sort_by(fn(a, b) { b.1 - a.1 })
     let top = times[0:@cmp.minimum(5, times.length())].to_array()
     @sys.println_out("testexe: the slowest files: " + top.map(fn(t) { "\{t.0} \{t.1} s" }).join(", "))
+    // (every file's, for scripts/page-seconds.sh: check-mbui deals the pages by them, scripts/page-seconds.txt)
+    @sys.println_out("testexe: each file's seconds: " + times.map(fn(t) { "\{t.0} \{t.1}" }).join(", "))
   }
   for f in failed {
     @sys.println_out(f)

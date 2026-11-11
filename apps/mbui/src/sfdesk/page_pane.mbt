@@ -244,6 +244,9 @@ fn pane_made(
       made("place/profiles", fn(a, core, here, stint, frame, width) {
         profiles_place_node(a, src, core, here, stint, frame, width, tips~)
       })
+    // (the stations' place with one that only runs tasks picked: its page made once, in the place of the old view's)
+    Place("stations") if place_rig(src) != "" =>
+      pane_made(src, Setting(Station(place_rig(src))), tips).map(fn(m) { ("place/" + m.0, m.1) })
     // (a place of the rail's whose page is one of those: that page, at the stack's root (no back over it, place_page's),
     // made under its own kind)
     Place(name) =>

@@ -394,11 +394,11 @@ export abstract class AcpSession extends OwnProcessSession {
 
   /// What the station before had handled of its output when it crashed, read again silently: the session, whether a turn
   /// runs, what the turn had said and called so far.
-  replay(lines: Iterable<string>, resume: string | undefined) {
+  async replay(lines: AsyncIterable<string>, resume: string | undefined) {
     this.sessionId = resume ?? "";
     let open = false;
     let partial: Json[] = [];
-    for (const line of lines) {
+    for await (const line of lines) {
       const message = parseLine(this.kind, line);
       if (message === undefined) continue;
       if (message.id === OPEN) {
@@ -512,9 +512,9 @@ export abstract class AcpDriver<S extends AcpSession> extends OwnProcessDriver<S
     return session;
   }
 
-  protected crashed(options: OpenOptions, lines: Iterable<string>, _info: RunnerInfo, events: Events): S {
+  protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, _info: RunnerInfo, events: Events): Promise<S> {
     const session = this.session(options, events);
-    session.replay(lines, options.resume);
+    await session.replay(lines, options.resume);
     session.toolsUrl = options.mcpUrl;
     return session;
   }

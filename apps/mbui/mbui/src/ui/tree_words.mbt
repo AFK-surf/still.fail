@@ -54,3 +54,10 @@ pub fn style_ink(style : TextStyle) -> Int64 {
 pub fn style_cut(style : TextStyle) -> Bool {
   style.resolve(g().narrow, tree_theme().dark).w is Some(Cut)
 }
+
+///|
+/// Whether words of `style` say they fill their line (`w=Full`, `w=Grow(k)`: an old view's Fill, which its squeeze
+/// takes as the words saying they may be cut on it: Ctx::squeeze_cut_said).
+pub fn style_fills(style : TextStyle) -> Bool {
+  style.resolve(g().narrow, tree_theme().dark).w is Some(Full | Grow(_))
+}

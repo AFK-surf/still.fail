@@ -260,7 +260,9 @@ pub fn rail_stations_label(@sfbase.Source, String) -> String
 
 pub let rail_w : Double
 
-pub fn refresh_folder(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
+pub fn refresh_folder(@sfbase.Source, @sfbase.DriveAt) -> Unit
+
+pub fn refresh_folder_told(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 
 pub fn refreshing(@sfbase.DriveAt) -> Bool
 
@@ -553,6 +555,7 @@ pub(all) struct NarrowOf {
   back : () -> Unit
 }
 
+#derive(Eq)
 pub(all) struct PickAt {
   station : String
   station_name : String

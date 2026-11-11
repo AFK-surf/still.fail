@@ -612,6 +612,35 @@ pub fn Ctx::look_by(self : Ctx, i : Int, f : () -> Look) -> Unit {
 }
 
 ///|
+/// A node of the frame's as what is read later finds it (a look's closure read as the frame is painted: Ctx::look_by,
+/// bg_by…): the node itself, not the place it was built in. A list's row or a part kept as its nodes is put back
+/// elsewhere among the frame's as what is built before it makes more nodes or fewer (kept_nodes.mbt's head), its
+/// closures not made again; read by the place it was built in, they read another node there, or one left of a frame
+/// before past the frame's last, whose links are that frame's.
+struct NodeHeld {
+  c : Ctx
+  n : Node
+}
+
+///|
+/// Node `i` (built this frame), for what is read later to find where it is then (NodeHeld::at).
+pub fn Ctx::node_held(self : Ctx, i : Int) -> NodeHeld {
+  { c: self, n: self.nodes[i] }
+}
+
+///|
+/// Where the node is among the frame's nodes now (what the frame reads it by: Ctx::held_look, node_rect…); None where
+/// it is not among them (its row let go, out of the frame's as its list lays the frame's other rows).
+pub fn NodeHeld::at(self : NodeHeld) -> Int? {
+  let j = self.n.slot
+  if j >= 0 && j < self.c.count && physical_equal(self.c.nodes[j], self.n) {
+    Some(j)
+  } else {
+    None
+  }
+}
+
+///|
 /// How it is drawn now: its look as built, then what is worked out as it is painted (Ctx::look_by), read now.
 fn Drawn::look_now(self : Drawn) -> Look {
   match self.look_by {

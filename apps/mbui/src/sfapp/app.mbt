@@ -79,6 +79,7 @@ fn reset() -> Unit {
   share_in.query.set("")
   share_in.find.set("")
   share_closing.val = false
+  share_sinking.val = false
   share_wide.set(false)
   splash_waited.set(false)
   splash_from.val = -1.0
@@ -136,8 +137,9 @@ fn reset() -> Unit {
 
 ///|
 /// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
-/// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
-fn pages_shell(src : Source) -> Shell {
+/// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind; a file
+/// asked beside, in the side panel of the chat in view where the frame is the wide one (`wide`, this frame's).
+fn pages_shell(src : Source, wide : Bool) -> Shell {
   {
     home,
     close_overlays,
@@ -146,6 +148,8 @@ fn pages_shell(src : Source) -> Shell {
     open: fn(p) { open_where(src, p) },
     open_over: fn(p) { open_over_where(src, p) },
     detail: detail_where,
+    beside: fn(tab) { beside_where(src, wide, tab) },
+    beside_room: fn() { wide && app.nav.top() is Chat(_) },
     back: fn() { back_where(src) },
     show: fn() {
       if @sfdesk.is_wide(@ui.current()) {
@@ -270,6 +274,17 @@ fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
 }
 
 ///|
+/// A file's tab `tab` asked beside (Shell's `beside`): on the wide frame, in the side panel of the chat in view, in
+/// front (that file's tab there already, brought to the front): the tab put there; else nowhere (None: it opens over
+/// the whole window).
+fn beside_where(src : Source, wide : Bool, tab : String) -> String? {
+  match app.nav.top() {
+    Chat(r) if wide => Some(@sfdesk.view_beside(src, r, tab))
+    _ => None
+  }
+}
+
+///|
 /// Back to Home (the stack's root), what is over the pages put down (close_overlays: a file open over the window too,
 /// as a notification tapped opens its chat over Home).
 fn home() -> Unit {
@@ -323,7 +338,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   (@sfbase.made_frame.val)(c)
   @sfbase.held_build()
   c.after_build("held/end", fn() { @sfbase.held_end() })
-  shell.val = pages_shell(src)
+  shell_set(pages_shell(src, @sfdesk.is_wide(c)))
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is done as its action is, at
   // that moment (@settings.ask_action)
   menu_bar(c, src)
@@ -478,6 +493,16 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
         @ui.old(o, fn(c) { over_view(c, src) }).grow(Is(1.0)) |> ignore
       } else {
         app_state_tree(o, src)
+      }
+    })
+    // (the core what the settings put up by what has none at hand draws with (a station's card from a chat), said as
+    // the tree is made and as the workspace in view changes, before what is presented is made: one put up before the
+    // first frame is built (a fixture's) is made with it, not with none; the old frame says it again each build:
+    // settings' panels_frame)
+    root.reacts(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(_) {
+      match workspace_in_view(src).0 {
+        Some(w) => @settings.panels_frame(settings_core(src, w), w.id)
+        None => ()
       }
     })
     // the library's confirms in the middle of the window, each at its place in the window's stack of layers among what
@@ -736,6 +761,8 @@ fn go_place(at : Double, place : String, sets : Array[Array[String]], cur : Int)
     if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.move(points=switch_slide) },
     at~,
   )
+  // (what a finger's press on its tab asked ahead held till the place has come in: sfbase's places_ahead_node)
+  @sfbase.place_switched(place_switch.ends_at())
 }
 
 ///|

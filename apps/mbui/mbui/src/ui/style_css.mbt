@@ -58,7 +58,7 @@ priv struct CssStates {
 
 ///|
 fn[T] Css::fail(self : Css, what : String) -> T {
-  abort("css: \{what} at \{self.i} in \"\{self.s}\"")
+  @halt.saying("css: \{what} at \{self.i} in \"\{self.s}\"")
 }
 
 ///|
@@ -134,7 +134,7 @@ fn css_pow10(e : Int) -> Double {
     20 => 1.0e20
     21 => 1.0e21
     22 => 1.0e22
-    _ => abort("css: 10^\{e} is not exact")
+    _ => @halt.saying("css: 10^\{e} is not exact")
   }
 }
 

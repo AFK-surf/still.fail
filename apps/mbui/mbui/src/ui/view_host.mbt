@@ -55,6 +55,9 @@ priv struct OldIsland {
   /// old frame last laid it out, told the signal (None before it first is)
   fits : (Double, @signals.Signal[Double?])?
   mut held_box : Int
+  /// told, a `natural` one's, as what it holds comes to another height after it was first laid out, as tall as it was
+  /// before (old's `reshaped`)
+  reshaped : ((Double) -> Unit)?
 }
 
 ///|
@@ -397,6 +400,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   })
   // (a column's keys over an old view's list under the pointer: its, as ever, Ctx::list_key on on_key's way)
   t.on_old_scroll(fn() { old_list_under_pointer(g()) != 0 }, there=fn(id, x, y) { old_wheel_there(id, x, y) })
+  // (its work by part, for the hangs found in it: journal.mbt, @hostapi.work_part's clock and note)
+  t.timed_by(Some((fn() { @hostapi.work_began() }, fn(what, ms) { @hostapi.work_took(what, ms) })))
   view_app.val = Some(t)
   view_due.set(view_due.untracked() + 1)
   // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
@@ -2303,7 +2308,7 @@ fn Ctx::view_blit(
   let k = clip_top()
   // (each instance's numbers written unchecked, every one composed each frame: the room for them grown above, the
   // clip's level whole)
-  guard k >= 0 else { abort("view_blit: no clip pushed") }
+  guard k >= 0 else { @halt.saying("view_blit: no clip pushed") }
   for i in 0..<n {
     let b = at + i * inst_size
     s.unsafe_set(b, s.unsafe_get(b) + x)
@@ -2653,6 +2658,21 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   // tree's holds (View::on_drag): it is that node's, nothing of an old view's asked)
   if !(kind == 1 && view_held.val is Some(Dragging(_))) {
     old_hits_place(g(), Some(tree))
+  }
+  // (where in the window's stack of layers what of the tree's it goes down on is, its topmost modal layer's at least, as
+  // it goes down, before anything closes for it: what of the old frame's layers it is outside of where the tree takes
+  // it, Ctx::layer_keys)
+  if kind == 0 {
+    let c = g()
+    c.press_tree_stack = @signals.untracked(fn() {
+      let on = tree.stack_takes(x, y)
+      let modal = tree.modal_stack()
+      if on > modal {
+        on
+      } else {
+        modal
+      }
+    })
   }
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
@@ -3033,6 +3053,9 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// in itself): its node held shorter than what it holds asks (its holder short of room), nothing of it cut off; what it
 /// asks never the height it was given. Not with `fits` (not yet: one that fits laid out as a `natural` one is,
 /// cut where its node is shorter).
+/// `reshaped`, a `natural` one's: told, as how tall it was, as what it holds comes to another height once it was laid
+/// out, at that cause (laid out again in the same frame after it: what it said there laid out with it), for what holds
+/// it to go from that height to the new one as it holds no motion of its own (a sheet's height).
 /// `unlaid`, a `natural` one's: how tall it is taken to be till first laid out (in a list: as tall as a screen, the rows
 /// after it made only as it is known to leave room for them).
 #callsite(autofill(loc))
@@ -3044,6 +3067,7 @@ pub fn old(
   gives? : Bool = false,
   fits? : (Double, @signals.Signal[Double?]),
   unlaid? : () -> Double,
+  reshaped? : (Double) -> Unit,
   loc~ : SourceLoc,
 ) -> @view.View {
   v.hosted(make=fn(n) {
@@ -3092,6 +3116,7 @@ pub fn old(
     let held_build = fn(c : Ctx) {
       let was = island_building.val
       island_building.val = Some(id)
+      islands_built.push(id)
       // (what it says of the keyboard said anew as it is built: Ctx::on_action)
       match view_app.val {
         Some(t) => t.keys_said(id, anew=true)
@@ -3131,6 +3156,7 @@ pub fn old(
       went: @signals.signal(None, same=fn(a, b) { a == b }),
       fits: if natural { fits } else { None },
       held_box: -1,
+      reshaped: if natural { reshaped } else { None },
     })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
@@ -4119,6 +4145,17 @@ fn Ctx::island_said(self : Ctx) -> @view.NodeId? {
 }
 
 ///|
+/// The facts of a key with the focus on `focus` (view_key's, as the keymap matches it): in a field, `Field`, and
+/// `FieldEmpty` where nothing is written in it.
+fn view_key_facts(c : Ctx, focus : Int) -> Array[String] {
+  match c.editors.get(focus) {
+    Some(e) if e.text == "" => ["Field", "FieldEmpty"]
+    Some(_) => ["Field"]
+    None => []
+  }
+}
+
+///|
 /// A key (`code`, `mods` held) as the window's tree routes it: where the old views have what takes it first (the focus
 /// in a field or a key catcher of one that may take input, or on a widget that takes this key as its own:
 /// Ctx::focus_keeps; a layer of the old frame's open over all of it that takes the keys: a modal one, a menu, a
@@ -4132,8 +4169,13 @@ fn view_key(code : Int, mods : Int) -> Bool {
   let c = g()
   // (Tab and Shift+Tab, at the key's moment, among what can take the focus as the tree is then (Ctx::tab_stops), the
   // old views' as their last build said: where a field with the focus does not leave them to the app, a key catcher
-  // with it takes none)
+  // with it takes none. As any key, first what the keymap binds it to from where the focus is: an action that takes it
+  // (a list a field offers, picked from by Tab while it is open) has it; the focus moved where none does)
   if code == key_tab && (mods | mod_shift_key) == mod_shift_key && view_tab_ours(c, mods) {
+    let facts = view_key_facts(c, c.focus_allowed())
+    if tree.stroke(code, mods, view_moment(), from=focus_node_of(c.focus), facts~) {
+      return true
+    }
     tree.event(view_moment(), fn() { c.tab((mods & mod_shift_key) != 0) })
     h_frame_owed()
     return true
@@ -4161,12 +4203,12 @@ fn view_key(code : Int, mods : Int) -> Bool {
   // (where the focus is in the tree: its node, or the one an old view's stop or field with it is hosted in)
   let held = focus_node_of(c.focus)
   // (a modal layer of the tree's over where the focus is (one that leaves it in a field under it: a panel that does
-  // not take it) and over the old frame's layers that take the keys: the keys the field does not take its, before
-  // theirs)
+  // not take it; the focus in none of the tree, on what of the old frame's or nowhere) and over the old frame's layers
+  // that take the keys: the keys the field does not take its, before theirs)
   let modal = tree.modal_stack()
   let under_modal = match held {
     Some(nid) => modal > tree.stack_of(nid)
-    None => false
+    None => true
   }
   let over = match held {
     Some(nid) => tree.stack_of(nid) > old_keys
@@ -4178,11 +4220,7 @@ fn view_key(code : Int, mods : Int) -> Bool {
   // (what the keymap binds the key to, from where the focus is: the focus in a field a fact of the key, `Field`, and
   // `FieldEmpty` where nothing is written in it; a field's own keys and those with ⌘ or Ctrl held its where no action
   // takes them, as a field's in none of the tree: the old frame's)
-  let facts = match c.editors.get(focus) {
-    Some(e) if e.text == "" => ["Field", "FieldEmpty"]
-    Some(_) => ["Field"]
-    None => []
-  }
+  let facts = view_key_facts(c, focus)
   let actions = fn() { tree.stroke(code, mods, view_moment(), from=held, facts~) }
   if field_own || (field && held is None) {
     return actions()
@@ -5064,7 +5102,12 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         // given and laid out in)
         let h = if o.gives { c.asked_height(o.held_box) } else { c.nodes[o.held_box].fh }
         if s.untracked() != Some(h) {
+          let was = s.untracked()
           s.set(Some(h))
+          match (was, o.reshaped) {
+            (Some(w), Some(f)) => f(w)
+            _ => ()
+          }
           c.read_changed("an old view's height, what it holds laid out")
         }
         match o.fits {
@@ -5305,6 +5348,19 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
   // (the focus to the topmost's that gives it to something: one that gives it nothing leaves it where that put it)
   match opened.iter().filter_map(fn(o) { o.1 }).last() {
     Some(top) if t.can_focus(top) => c.focus_moved(tree_said_id(top))
+    _ => ()
+  }
+  // (the topmost opened a modal layer giving the focus nothing: what under it has the focus gives it up to it, as an
+  // old modal layer's ground takes it, Ctx::focus_taken_under: the one rule)
+  match opened.last() {
+    Some((layer, None)) if t.takes_focus_under(layer) => {
+      let inside = match focus_node_of(c.focus) {
+        Some(n) => t.holds(layer, n)
+        None => false
+      }
+      let ground = if t.can_focus(layer) { tree_said_id(layer) } else { 0 }
+      c.focus_taken_under(ground, inside)
+    }
     _ => ()
   }
 }
@@ -5729,6 +5785,14 @@ fn view_layers_first(c : Ctx) -> Unit {
       continue
     }
     let mut first = 0
+    // (only what says what its `takes` holds, where it says one: View::focus_opens_first's; an old view's, what it registered)
+    let takes = t.opens_first_takes(l.layer)
+    let said_so = fn(id : @view.NodeId) {
+      match takes {
+        Some(f) => t.said_of(id).map(f).unwrap_or(false)
+        None => true
+      }
+    }
     for at in t.focus_order() {
       if first != 0 || !t.holds(l.layer, at.id) {
         continue
@@ -5739,7 +5803,7 @@ fn view_layers_first(c : Ctx) -> Unit {
             first = f.id
           }
         }
-      } else if at.id != l.layer && t.can_focus(at.id) {
+      } else if at.id != l.layer && t.can_focus(at.id) && said_so(at.id) {
         first = tree_said_id(at.id)
       }
     }

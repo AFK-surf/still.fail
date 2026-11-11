@@ -33,7 +33,7 @@ fn emit_said(t : @ui.Tester) -> String {
   let em = emits_of(emit_chat)
   let rd = reading_of(emit_chat)
   let tu = turns_of(emit_chat)
-  "at \{t.time()} shown \{rd.shown} was_shown \{rd.was_shown} stepped_at \{tu.stepped_at} current \{em.current is Some(_)} queue \{em.queue.length()} copied \{em.copied} asks \{tu.asks.length()} wanted \{t.wanted_after()} (\{t.wanted_why()})"
+  "at \{t.time()} shown \{rd.shown} was_shown \{rd.was_shown} stepped_at \{tu.stepped_at} current \{em.current is Some(_)} queue \{em.queue.length()} copied \{em.copied} asked \{tu.asked} wanted \{t.wanted_after()} (\{t.wanted_why()})"
 }
 
 ///|

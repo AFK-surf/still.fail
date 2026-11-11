@@ -7,7 +7,12 @@
 // things by. Moved by the hand, the wheel or a fling, the anchor is the first block seen before that still shows: one
 // come in over it measured otherwise than it was counted grows up from it, what was seen staying where the move put it.
 // Scrolled so that a block comes to show, the column is marked laid out again; so that one made no more shows, it is
-// put by at once, nothing laid out: what is made is what shows.
+// put by at once, nothing laid out: what is made is what shows. What shows is worked out going out from the blocks
+// whose place is sure (the anchor; what was seen and still shows), up and down, one never measured as far as it goes
+// that way till it is measured: a block made and still in sight is never let go for one come in over it (worked out
+// from the top down by where the blocks were counted, one never measured come in at the top was all that showed till it
+// was measured, every block under it let go and made again, the anchor with them: what was read jumped as far as the
+// block was taller than counted, and a list opened at its foot made and let go its blocks several times over).
 
 ///|
 /// A block of a list's column as its tops are worked out (View::scrolls_window's `laid`): its key, its top in the
@@ -36,11 +41,13 @@ priv struct Laid[K] {
 /// scrolled back to it) is kept there as what it holds grows, till it is moved off it (a chat's newest end). `place`:
 /// what asks it to show a block or its foot at a cause (ListPlace: a block brought to the middle or to its top, back
 /// to its foot, its foot followed no further than a block), done as it is next laid out; held there as what is over it
-/// is laid out, till the column is moved otherwise (the hand, the wheel). `first_told`: told the first block that shows as that changes, the
-/// column moved first for what came or changed over it (how near its top the reader has got). `near_foot`: (screens,
+/// is laid out, till the column is moved otherwise (the hand, the wheel). `near_foot`: (screens,
 /// wanting, ask): `ask` done as it is scrolled to within so many of its heights of its foot while `wanting()` holds, as
 /// that comes to be, and again as its keys change while it is (a page more asked of what has more): how far its foot is
-/// is its own, nothing laid out read by what asks. `reused`: of a block
+/// is its own, nothing laid out read by what asks. `near_top`: the same of its top (the page before asked of what has
+/// more before it), how far that is by its anchor and its blocks' tops as its keys are now; at its foot however far
+/// that comes to be (`follows`), only once all it holds shows (room left over it to fill): its newest is what is read
+/// there, the page before wanted as the reader heads up. `reused`: of a block
 /// whose key it gives a kind, what shows is made by `make_reused` with its key as it is now, and as it no more shows put
 /// by, not let go: left in its slot out of sight, what it binds following nothing meanwhile (View::rests), so its going
 /// draws nothing again; the next of its kind to come to show takes it (moved into that one's slot: View::park,
@@ -59,8 +66,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   holds? : (K) -> Bool = fn(_) { true },
   follows? : () -> Bool = fn() { false },
   place? : ListPlace[K],
-  first_told? : (K) -> Unit = fn(_) {  },
   near_foot? : (Double, () -> Bool, () -> Unit),
+  near_top? : (Double, () -> Bool, () -> Unit),
   reused? : (K) -> Int?,
   make_reused? : (View, () -> K) -> Unit,
 ) -> View {
@@ -201,9 +208,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // measured from it, and where the scroll is put back from the anchor: what came, went or was measured anew over what
   // shows moves none of it. Nothing of this is told after the layout.
   let anchor : Ref[(K, Double)?] = Ref(None)
+  // (the others that showed as the anchor was last put and hold what shows, each with how far down its top the top of
+  // what showed was: the anchor's stand-ins, in order, once it is no more among the keys (the row a filter leaves out;
+  // an item become another), what shows held by the next of them where it was)
+  let anchor_else : Array[(K, Double)] = []
+  // (how many blocks it had, and its last, as it was said held where it is at its foot (Scroll::holds_here): blocks
+  // come or gone since, with it still at its foot, and it follows its foot again)
+  let held_with : Ref[(Int, K?)] = Ref((0, None))
+  s.held_said = fn() {
+    let ks = @signals.untracked(keys)
+    held_with.val = (ks.length(), ks.last())
+  }
   // (where the scroll was as the anchor was last put: what it moved by since, carried to the anchor)
   let anchor_x : Ref[Double?] = Ref(None)
-  let first_was : Ref[K?] = Ref(None)
   // (the column marked laid out again: not while it is laid out, its fill going on to what that changed itself)
   let laid_again = fn() {
     if self.tree.rooming != self.at {
@@ -216,14 +233,53 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     (@double.neg_infinity, @double.infinity, @double.neg_infinity, @double.infinity),
     same=fn(a, b) { a == b },
   )
+  // (the anchor among the blocks as they are counted now, or the first of its stand-ins that is: where it is among them
+  // and how far down its top the top of what shows was; none put yet, or none of them left, none)
+  let held_at = fn(all : Array[Laid[K]]) -> (Int, Double)? {
+    guard anchor.val is Some((k, off)) else { return None }
+    if laid_at.get(k) is Some(i) && i < all.length() {
+      return Some((i, off))
+    }
+    for o in anchor_else {
+      if laid_at.get(o.0) is Some(i) && i < all.length() {
+        return Some((i, o.1))
+      }
+    }
+    None
+  }
+  // (where the top of what shows is by where the blocks are counted now: the anchor's, moved as the scroll was since it
+  // was put; none yet, where the scroll is. What came in or went over what shows since has moved the blocks' tops, not
+  // yet the scroll (its fill puts it): by the scroll alone, what shows would be read off other blocks.)
+  let top_now = fn(all : Array[Laid[K]], x : Double) {
+    match (held_at(all), anchor_x.val) {
+      (Some((i, off)), Some(was)) => all[i].top + off + (x - was)
+      _ => x
+    }
+  }
+  // (where the top of what shows is with the column at its foot, showing `vh` of it: by its blocks as they are counted
+  // now and its foot's room, followed)
+  let foot_top = fn(all : Array[Laid[K]], vh : Double) {
+    let blocks_h = match all.last() {
+      Some(b) => b.top + b.h
+      None => 0.0
+    }
+    dmax(0.0, blocks_h + foot_room() + s.tuck_room.get() - vh)
+  }
   // (following its foot, scrolled back to it by the hand or the wheel, at rest there: at its foot again, kept there
   // however far that comes to be as what it holds grows, till it is moved off it; told as that comes to be so, not each
-  // time the column is scrolled)
+  // time the column is scrolled. By its own blocks and its anchor, as its near_foot is: by how far the scroll could
+  // go as last laid out, a column moved in its fill for what came in or grew over what shows (Scroll::grew_above)
+  // further than that was read at its foot before that layout said how far it goes now, and taken there: what was
+  // read 100 off its foot gone as a block 150 taller than counted came in at its top.)
   let at_most = @signals.computed(fn(_) {
-    s.seen.get() is Some(_) && at() >= s.reach() - 0.5 && s.rest_now() is None && s.glides_till() is None
+    guard s.seen.get() is Some((_, vh)) else { return false }
+    let all = laid.get()
+    top_now(all, at()) >= foot_top(all, vh) - 0.5 && s.rest_now() is None && s.glides_till() is None
   }, same=fn(a, b) { a == b })
   self.reacts(fn() { at_most.get() }, fn(foot) {
     if foot && @signals.untracked(follows) && !s.at_foot() {
+      // (back at its foot, having left it: followed again, whatever held it where it was, Scroll::holds_here)
+      s.held = false
       s.to_foot()
     }
   })
@@ -239,6 +295,32 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           None => 0.0
         }
         foot + foot_room() + s.tuck_room.get() - vh - at() < screens * vh
+      }, same=fn(a, b) { a == b })
+      self.reacts(fn() { (near.get() && wanting(), keys().length()) }, fn(now) {
+        if now.0 {
+          ask()
+        }
+      })
+    }
+    None => ()
+  }
+  match near_top {
+    Some((screens, wanting, ask)) => {
+      // (how far its top is by its anchor as its keys are now, those over it not laid out yet as tall as `est`: not
+      // by the scroll, which a page come in over what shows has not moved yet, so that it is not asked again for that
+      // page before it is laid out)
+      // (at its foot however far that comes to be: only where nothing is over what shows, by its blocks (the scroll
+      // says nothing of how far down its foot is before it is laid out there, and the room it is first laid out in may
+      // be taller than the one it gets: a panel whose head is measured a frame later))
+      let near = @signals.computed(fn(_) {
+        guard s.seen.get() is Some((_, vh)) && vh > 0.0 else { return false }
+        let all = laid.get()
+        let x = at()
+        if s.at_foot() {
+          foot_top(all, vh) <= 0.0
+        } else {
+          top_now(all, x) < screens * vh
+        }
       }, same=fn(a, b) { a == b })
       self.reacts(fn() { (near.get() && wanting(), keys().length()) }, fn(now) {
         if now.0 {
@@ -357,14 +439,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     shown_now.clear()
     shown_now.append(now)
   }
-  // (the first that shows from `y` down told as that changes)
-  let first_now = fn(all : Array[Laid[K]], y : Double) {
-    let f = first_past(all, y)
-    if f < all.length() && first_was.val != Some(all[f].key) {
-      first_was.val = Some(all[f].key)
-      first_told(all[f].key)
-    }
-  }
   // (those that show as they were measured, or as they were counted and came out so: what was seen as it is, which
   // holds where the column is as it is moved, before one come in over it measured otherwise)
   let seen_rows : Map[K, Bool] = Map([])
@@ -386,6 +460,56 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       _ => made.set((@double.neg_infinity, @double.infinity, @double.neg_infinity, @double.infinity))
     }
+  }
+  // (which show where the column shows from `top`, `vh` tall, by where they are counted: going out from those whose
+  // place is sure, `lo` to `hi` (what was seen and still shows, or the one the column is held by), up and down
+  // while one meets where it shows. One never measured is as far as it goes that way till it is measured: where those
+  // past it start is known only then; what is sure stays made whatever comes in over it or under it. `up_first`: the
+  // first of them is sure by its top (those over it sure too, measured or not); else by its foot. None sure (`lo`
+  // past `hi`): from the first that meets it down, as far as the first never measured.)
+  let window = fn(all : Array[Laid[K]], top : Double, vh : Double, lo : Int, hi : Int, up_first : Bool) -> Array[K] {
+    let now = []
+    // (showing none of it, a page under another: none made, the one it is held by neither, what it reads let go)
+    if vh <= 0.0 {
+      return now
+    }
+    if lo > hi {
+      let mut i = first_past(all, top)
+      while i < all.length() && all[i].top < top + vh {
+        now.push(all[i].key)
+        if !all[i].known {
+          break
+        }
+        i = i + 1
+      }
+      return now
+    }
+    let mut a = lo
+    if all[lo].known || up_first {
+      let mut i = lo - 1
+      while i >= 0 && all[i].top + all[i].h > top {
+        a = i
+        if !all[i].known {
+          break
+        }
+        i = i - 1
+      }
+    }
+    let mut b = hi
+    if all[hi].known {
+      let mut i = hi + 1
+      while i < all.length() && all[i].top < top + vh {
+        b = i
+        if !all[i].known {
+          break
+        }
+        i = i + 1
+      }
+    }
+    for i in a..=b {
+      now.push(all[i].key)
+    }
+    now
   }
   // Scrolled so that one more meets where it shows, or the first or the last made no more does, or the blocks counted
   // otherwise (come, gone, moved or measured anew), what meets it is shown at once by where the blocks are counted, the
@@ -419,21 +543,21 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       return
     }
-    let x = @signals.untracked(at)
     let all = laid.untracked()
-    let now = []
-    let mut i = first_past(all, x)
-    while i < all.length() && all[i].top < x + vh {
-      now.push(all[i].key)
-      // (one never measured shows as it is laid out, those under it only once it is: where they start is known then)
-      if !all[i].known {
-        break
+    let x = top_now(all, @signals.untracked(at))
+    // (what was seen and still meets where it shows is sure where it is: kept, what comes in going out from it)
+    let mut lo = all.length()
+    let mut hi = -1
+    for k in shown_now {
+      guard seen_rows.contains(k) && laid_at.get(k) is Some(i) && i < all.length() else { continue }
+      if all[i].top + all[i].h > x && all[i].top < x + vh {
+        lo = lo.min(i)
+        hi = hi.max(i)
       }
-      i = i + 1
     }
+    let now = window(all, x, vh, lo, hi, true)
     show_only(now)
     made_now(all)
-    first_now(all, x)
     // (those come in not seen yet: seen as they are laid out, Tree::alone_asks)
     let still = seen_rows.keys().filter(fn(k) { !now.contains(k) }).collect()
     for k in still {
@@ -476,7 +600,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       return
     }
     let x = @signals.untracked(at)
-    let mut follows_foot = @signals.untracked(follows) && s.at_foot()
+    // (held where it is at its foot (Scroll::holds_here): not following it, the anchor it had holding what shows; blocks
+    // come or gone since, nothing having opened: followed again)
+    if s.held && s.at_foot() {
+      let ks = @signals.untracked(keys)
+      if held_with.val != (ks.length(), ks.last()) {
+        s.held = false
+      }
+    }
+    let mut held = s.held && s.at_foot()
+    let mut follows_foot = @signals.untracked(follows) && s.at_foot() && !held
     // (the anchor as the scroll moved it since; none yet, where the scroll is)
     let start = {
       let all = laid.untracked()
@@ -488,12 +621,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           (all.length() - 1, 0.0)
         }
       }
-      match (anchor.val, anchor_x.val) {
-        (Some((k, off)), Some(was)) =>
-          match laid_at.get(k) {
-            Some(i) if i < all.length() => (i, off + (x - was))
-            _ => fresh()
-          }
+      match (held_at(all), anchor_x.val) {
+        // (held at its foot: where it was put, the scroll saying nothing of a move)
+        (Some((i, off)), Some(_)) if held => (i, off)
+        (Some((i, off)), Some(was)) => (i, off + (x - was))
         _ => fresh()
       }
     }
@@ -502,7 +633,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (moved by the hand, the wheel or a fling since: the anchor taken again where it is now, by what is counted now,
     // before what comes to show is measured; not moved, the one it had, whatever came or went over it)
     match anchor_x.val {
-      Some(was) if (x - was).abs() > 0.000001 => {
+      Some(was) if !held && (x - was).abs() > 0.000001 => {
+        // (moved by the hand: held where it was no more)
+        s.held = false
         let all = laid.untracked()
         if all.length() > 0 {
           let i = ai.min(all.length() - 1).max(0)
@@ -565,6 +698,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       None => ()
     }
+    // (asked to show a block or its foot: held where it was no more)
+    if asked {
+      s.held = false
+      held = false
+    }
     // (its foot followed no further than a block's top `margin` under where it shows from: held there, off its foot,
     // once it would go further, and followed no further after)
     let from = match place {
@@ -606,17 +744,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
         _ => ()
       }
-      // (what meets where it shows, made: one never measured as it is measured, those under it only once it is, where
-      // they start known then, none made that comes out past where it shows)
-      let now = []
-      let mut i = first_past(all, top)
-      while i < all.length() && all[i].top < top + vh {
-        now.push(all[i].key)
-        if !all[i].known {
-          break
-        }
-        i = i + 1
+      // (what meets where it shows, made, going out from the one it is held by, or from its last at its foot: one
+      // never measured as it is measured, those past it only once it is, where they start known then; none that was
+      // made and still shows let go for one come in over it)
+      let foot = follows_foot || to_end
+      let si = if foot {
+        all.length() - 1
+      } else if all[ai].top + all[ai].h > top && all[ai].top < top + vh {
+        ai
+      } else {
+        first_past(all, top).min(all.length() - 1)
       }
+      let now = window(all, top, vh, si, si, !foot && !centring)
       show_only(now)
       self.tree.room_bindings_run()
       // (each that shows measured, once in this fill, its height counted where it came out otherwise)
@@ -645,19 +784,39 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     blocks.append(live)
     let all = laid.untracked()
     // (the anchor from now: the first that holds what shows, how far down its top the top of what shows is; what is
-    // measured anew over it from now on moving none of what shows)
+    // measured anew over it from now on moving none of what shows. One never measured holds nothing sure, the top of
+    // what shows somewhere in a height it is only counted: the first measured that shows under it holds it instead,
+    // from over its top. Held by one counted 48 and measured 218 in the next fill, what showed under it went down the
+    // 170 more with it, and that fill, going out from it alone, let go of every block in sight to make them again.)
     anchor.val = if all.length() > 0 {
-      let j = holding(all, first_past(all, top).min(all.length() - 1))
+      let first = holding(all, first_past(all, top).min(all.length() - 1))
+      let mut j = first
+      while j < all.length() && all[j].top < top + vh && !(all[j].known && holds(all[j].key)) {
+        j = j + 1
+      }
+      let j = if j < all.length() && all[j].top < top + vh { j } else { first }
       Some((all[j].key, top - all[j].top))
     } else {
       None
     }
     anchor_x.val = Some(top)
+    anchor_else.clear()
+    for k in shown_now {
+      if holds(k) && laid_at.get(k) is Some(i) && i < all.length() {
+        anchor_else.push((k, top - all[i].top))
+      }
+    }
     // (what is made, the stretch it covers)
     made_now(all)
     // (the scroll put where the anchor says: moved by as much, a fling under way with it; at its foot where it follows
     // it there, as it is)
-    if !follows_foot && (top - x).abs() > 0.000001 {
+    if held {
+      // (held where it is at its foot: put there once what it holds has grown under it, its foot further down now;
+      // till then at its foot as it was)
+      if top < dmax(0.0, whole_now() - vh) - 0.5 {
+        s.put(top)
+      }
+    } else if !follows_foot && (top - x).abs() > 0.000001 {
       if s.as_list && !asked {
         s.grew_above(top - x)
       } else {
@@ -666,14 +825,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     // (back at its foot at rest, where it follows its foot: kept there from now as what it holds grows)
     if !follows_foot &&
+      !held &&
       @signals.untracked(follows) &&
       vh > 0.0 &&
       top >= dmax(0.0, whole_now() - vh) - 0.5 &&
       s.rest_now() is None &&
       s.glides_till() is None {
+      s.held = false
       s.to_foot()
     }
-    first_now(all, top)
     seen_rows.clear()
     for k in shown_now {
       seen_rows[k] = true

@@ -356,8 +356,17 @@ pub fn View::allow_ellipsis(self : View, on : Live[Bool], loc~ : SourceLoc) -> V
 }
 
 ///|
-/// Whether a node's words or their enclosing layout explicitly say that the words may be cut. A fixed width is the
-/// boundary: a constraint on a more distant holder cannot allow cutting everything inside this one.
+/// Whether the app said a node's words may be cut, as an old view's line says it (ui's squeeze.mbt,
+/// Ctx::squeeze_cut_said): the words themselves (View::allow_ellipsis; a share of their holder's width, growing into
+/// its room or giving way along a row: View::width_share, View::grow, View::shrink above 0), or they or what holds
+/// them cut short (View::cuts) or held to a width at most (View::max_width). What holds them giving way along its row
+/// lays them out narrower, never says they may be cut (an old view's Auto box in a row gives way too, and says
+/// nothing): a row's part that says when its title may be cut (link_row_node's `title_cut`) says it so. Only what the
+/// app said: the framework's own bound on one line of words in a column (Tree::capped_applied's), the giving way it
+/// makes of words said shorter ways (Tree::give_way_applied's) and a scroll's giving way down its column
+/// (View::scrolls') say nothing.
+/// A fixed width is the boundary: a constraint on a more distant holder cannot allow cutting everything inside this
+/// one.
 pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
   if !self.lives(id) {
     return false
@@ -366,8 +375,17 @@ pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
   while at >= 0 && at < self.nodes.length() {
     let n = self.nodes[at]
     let style = n.flex.style
-    if (at == id.at && n.allow_ellipsis) || style.shrink > 0.0 || style.max_width_kind() != @flex.LEN_AUTO ||
-      (at == id.at && style.width_kind() == @flex.LEN_PCT) {
+    let own = at == id.at
+    // (what lays it out: what holds it, past any slot; how it gives way or grows is across only in a row)
+    let mut p = n.parent
+    while p >= 0 && self.nodes[p].slot {
+      p = self.nodes[p].parent
+    }
+    let in_row = p >= 0 && self.nodes[p].flex.style.direction is (Row | RowReverse)
+    let max_said = n.max_w_said is Some(Some(_)) || n.max_w_within
+    // (giving way or growing along its row: the words' own say alone)
+    let along = in_row && ((match n.shrink_said { Some(s) => s > 0.0; None => false }) || style.grow > 0.0)
+    if (own && (n.allow_ellipsis || along || style.width_kind() == @flex.LEN_PCT)) || n.cut || max_said {
       return true
     }
     if style.width_kind() == @flex.LEN_PT {
@@ -549,6 +567,37 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double], loc~ : SourceLoc)
 }
 
 ///|
+/// Whether, holding nothing laid out (nothing in it, or all of it laid out nowhere: View::laid_nowhere, a show's or a
+/// pick's gone), it takes no room, as it changes: laid out nowhere itself, its padding, margins and the gap before it in
+/// what holds it none (an old view's box `gone_empty`, CSS's :empty { display: none }), what it holds left out as one
+/// laid out nowhere is. Down a column, while what it holds makes its way from nothing or closes it to nothing (View::comes:
+/// the first to come, the last to go; not one in another's place), its padding top and foot and the gap before it open
+/// or close with that way, as much of them as the most of what it holds is there: called back half way, they turn with
+/// it; what comes or goes at once, at once. Only down a column: along a row, or as a row itself, all of its room is
+/// there till the frame it holds nothing, and none of it from that frame on. What a structure makes for what it shows
+/// (a show's, a pick's, an each's row's box) is nothing to it where it made nothing: a pick of a case that makes
+/// nothing holds nothing so, and one changed to it closes the way of the one before, its padding with it. A box the
+/// app says itself holding nothing (`v.box(fn(_) {})`) is something: it may be as tall or as padded as it says; say
+/// `gone_empty` on it for it to be nothing too. Layout's.
+#callsite(autofill(loc))
+pub fn View::gone_empty(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, GoneEmpty, on, Layout, fn(on) {
+    self.tree.nodes[self.at].flex.style.set_gone_empty(on)
+    // (what lays it out told it holds such: the first not a slot holding it, its boxes', Tree::boxes_put)
+    if on {
+      let mut at = self.tree.nodes[self.at].parent
+      while at >= 0 && self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
+        at = self.tree.nodes[at].parent
+      }
+      if at >= 0 {
+        self.tree.nodes[at].flex.holds_gone = true
+      }
+    }
+  })
+  self
+}
+
+///|
 /// Laid out nowhere while `on` says so, as it changes: no room of its own in what holds it, none of the gap that leaves
 /// between what it holds (a room shut: an old view's not built while it is), left out as one its row has not the room
 /// for is (View::drops, View::left_out): it and all it holds not drawn, pressed (by a finger, by its id, by a screen
@@ -577,15 +626,43 @@ pub fn View::lines_up(self : View, along : Live[Along?], loc~ : SourceLoc) -> Vi
 }
 
 ///|
-/// Where what it holds lies along it, as it changes (its start, by default; their middle; its end): what is left of its
-/// room on its main way before it, round it or after it. Layout's.
+/// Whether it fills what holds it across the way that lays it out (`on`: stretched from its start to its end there, its
+/// margin kept, as flex's align-self: stretch), whatever that lines up what it holds by (View::lines_up), as it
+/// changes; not said, or said off, as what holds it lines it up. An old view's box said Full across (a column's w=Full, a
+/// row's h=Full). Layout's.
 #callsite(autofill(loc))
-pub fn View::lies_along(self : View, along : Live[Along], loc~ : SourceLoc) -> View {
+pub fn View::fills_across(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, FillsAcross, on, Layout, fn(on) {
+    self.tree.nodes[self.at].flex.style.align_self = if on { Stretch } else { Auto }
+  })
+  self
+}
+
+///|
+/// Where what a node holds lies along the way it lays them out (View::lies_along; flex's justify): at its start, in its
+/// middle, at its end, or `Between`, the first at its start and the last at its end, what is left of its room shared
+/// out between them (each line's, where it wraps; one alone at its start). Along is the other thing: which end of
+/// another thing (an anchor, the node across) something lines up with, where being spread between makes no sense, so
+/// the two are types of their own and neither is made of the other.
+pub(all) enum Lies {
+  Start
+  Middle
+  End
+  Between
+} derive(Eq, Show, Debug)
+
+///|
+/// Where what it holds lies along it, as it changes (its start, by default; their middle; its end; spread from its
+/// start to its end, Lies's Between): what is left of its room on its main way before it, round it, after it or between
+/// them. Layout's.
+#callsite(autofill(loc))
+pub fn View::lies_along(self : View, along : Live[Lies], loc~ : SourceLoc) -> View {
   self.bind(loc~, LiesAlong, along, Layout, fn(a) {
     self.tree.nodes[self.at].flex.style.justify = match a {
       Start => FlexStart
       Middle => Center
       End => FlexEnd
+      Between => SpaceBetween
     }
   })
   self

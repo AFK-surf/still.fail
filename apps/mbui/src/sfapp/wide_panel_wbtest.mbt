@@ -52,8 +52,9 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   // 详情 open to begin with: what runs it, its station, where its transcript is
   assert_true(t.find("Willow") is Some(_))
   assert_true(t.query(Button, label="复制路径") is Some(_))
+  // (folded on a Move, as what a column lets go)
   t.click(Button, label="详情")
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="复制路径") is None)
   // its own steps there, then left out
   let steps = t.find("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
@@ -276,6 +277,26 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
   t.click(Button, label="打开侧栏")
   t.run_for(@ui.move_most_ms)
   assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
+}
+
+///|
+test "wide: in a window wide enough for the chat's rows to keep their width as the panel slides in, the page is at rest again as the slide ends, whichever frames are drawn (24 a second: one just short of its end)" {
+  new_run()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=2400.0, h=1000.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  // (every frame on the slide's way and after it the one built whole: the Tester's own check of each, frame_watch.mbt)
+  t.click(Button, label="打开侧栏")
+  t.run_for(@ui.move_most_ms)
+  let (end, _) = t.find("只看收发").unwrap()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
+  // and out again
+  t.click(Button, label="收起侧栏")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("只看收发") is None)
 }
 
 ///|

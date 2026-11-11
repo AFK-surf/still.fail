@@ -917,7 +917,7 @@ fn Ctx::push_inst(
   a.unsafe_set(b + 14, c2c)
   a.unsafe_set(b + 15, c2d)
   let k = clip_top()
-  guard k >= 0 else { abort("push_inst: no clip pushed") }
+  guard k >= 0 else { @halt.saying("push_inst: no clip pushed") }
   a.unsafe_set(b + 16, clip_stack.unsafe_get(k))
   a.unsafe_set(b + 17, clip_stack.unsafe_get(k + 1))
   a.unsafe_set(b + 18, clip_stack.unsafe_get(k + 2))

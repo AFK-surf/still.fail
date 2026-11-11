@@ -130,3 +130,27 @@ test "a frame asked of a player is waited for only so long, and another can be a
   n.grab_frame(2000.0)
   assert_true(n.grabbing())
 }
+
+///|
+test "a player opened not to play: there at its place, paused, its frame shown, until it is played" {
+  let m = @kit.Media::new()
+  let t = @ui.Tester::new(fn(c) { m.frame(c) |> ignore }, w=390.0, h=844.0)
+  let track : @kit.MediaTrack = {
+    name: "a.mp4",
+    mime: "video/mp4",
+    audio: false,
+    read: fn(_, _, _) { fn() {  } },
+    direct: "",
+  }
+  m.open(track, start=4000.0, play=false)
+  t.draw()
+  let id = m.native().unwrap().id()
+  assert_true(t.views().contains("control \{id} 3 4000"), msg="sent to its place")
+  assert_true(!t.views().contains("control \{id} 1 0"), msg="not played")
+  m.play_pause()
+  assert_true(t.views().contains("control \{id} 1 0"), msg="played from its key")
+  // (by default it plays as it opens, as ever)
+  m.open(track)
+  let next = m.native().unwrap().id()
+  assert_true(t.views().contains("control \{next} 1 0"))
+}

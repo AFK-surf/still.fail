@@ -50,7 +50,7 @@ fn own_agent_card(name : String) -> @ui.Tester {
         _ => Some(w)
       }
     })
-  guard last is Some(at) else { abort("no agent's message") }
+  guard last is Some(at) else { @halt.saying("no agent's message") }
   t.move(at.1 - 20.0, at.2 + at.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t
@@ -65,7 +65,7 @@ test "wide: an agent's card with its model's own week: three chips whole, beside
     let one = fn(words : String) {
       match shown.filter(fn(w) { w.0 == words }) {
         [w] => w
-        found => abort("\{name}: \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
+        found => @halt.saying("\{name}: \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
       }
     }
     // each chip its mark and its figure on one line, the model's own after the account's

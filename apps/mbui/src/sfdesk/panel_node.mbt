@@ -3,7 +3,8 @@
 // at the change that opens or closes it (side_slides) and read where it is drawn, as the block's fold is (pane_view's
 // fold_goes); over a page too narrow for both, over the page from its right edge, a shadow at its side; its edge the
 // tree's (@sf.edge_node). In it an agent's history in front: its top an old view as tall as it is (the bar, the head,
-// its details: history_top), its steps nodes (sfpages' history_steps_node); any other tab the panel's old view
+// its details: history_top), its steps nodes (sfpages' history_steps_node); a file in the viewer, the panel's bar so
+// too and the file's tools and stage under it (sfbase's viewer_tab_node); any other tab the panel's old view
 // (side_panel), the page's island. On the tape the panel is a panel of its own (tape_view's tape_side_node).
 
 ///|
@@ -14,7 +15,15 @@ fn side_history_tab(front : String) -> Bool {
   !(front is ("jobs" | "files" | "letters" | "things")) &&
   tab_service(front) is None &&
   tab_file(front) is None &&
-  station_tab(front) is None
+  station_tab(front) is None &&
+  @sfbase.view_tab_file(front) is None
+}
+
+///|
+/// Whether `front` is one the window's tree shows under the panel's bar rather than the panel's old view: an agent's
+/// history, a file in the viewer.
+fn side_node_tab(front : String) -> Bool {
+  side_history_tab(front) || @sfbase.view_tab_file(front) is Some(_)
 }
 
 ///|
@@ -84,11 +93,9 @@ fn side_col(src : Source, n : @view.View, key : String, open : Bool) -> Double {
   match panel_own.goes.get(key) {
     Some(way) => {
       way.said()
-      if way.goes_at(n.logic_at()) {
-        let t = n.drawn_at()
-        if way.goes_at(t) {
-          return way.value_at(t)
-        }
+      let t = n.drawn_while(fn(at) { way.goes_at(at) })
+      if t != @double.infinity && way.goes_at(t) {
+        return way.value_at(t)
       }
     }
     None => ()
@@ -118,6 +125,12 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
     }
     let open = fn() { side_now(src, r).0.length() > 0 }
     col.reacts(open, fn(open) { side_slides(col, src, key, open) })
+    // (its page kept under another, shown no more: what a file's tab plays here paused, as when its tab is let go)
+    col.reacts(fn() { app.nav.shows(serial) }, fn(shows) {
+      if !shows {
+        @sfbase.tab_players_pause(chat=tabs_key(r))
+      }
+    })
     let over = fn() { pane_w_at(src, col) < side_both_least }
     let at = fn() { side_col(src, col, key, open()) }
     col
@@ -165,6 +178,8 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
           .grow(Is(1.0))
           .min_height(Is(Some(0.0)))
           |> ignore
+        } else if @sfbase.view_tab_file(agent) is Some(_) {
+          side_view_node(q, src, r, agent, island)
         } else {
           side_history_node(q, src, r, agent, tips, island)
         }
@@ -176,10 +191,10 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
 }
 
 ///|
-/// The agent whose history chat `r`'s panel has in front; "" another tab.
+/// The agent whose history chat `r`'s panel has in front, or the file in the viewer; "" another tab.
 fn history_in_front(src : Source, r : ChatRef) -> String {
   let front = side_shown(src, r).1
-  if side_history_tab(front) {
+  if side_node_tab(front) {
     front
   } else {
     ""
@@ -187,9 +202,9 @@ fn history_in_front(src : Source, r : ChatRef) -> String {
 }
 
 ///|
-/// Agent `agent`'s history in chat `r`'s panel, in node `q` (as large as the panel): its top an old view as tall as it
-/// is (history_top, as `island` hosts one); its steps the rest, nodes
-/// (sfpages' history_steps_node).
+/// Agent `agent`'s history in chat `r`'s panel, in node `q` (as large as the panel): the panel's bar an old view as tall
+/// as it is (side_bar_row, as `island` hosts one, every tab's), then its head (history_head_node) and its steps the
+/// rest (sfpages' history_steps_node), nodes.
 fn side_history_node(
   q : @view.View,
   src : Source,
@@ -202,18 +217,54 @@ fn side_history_node(
     q,
     fn(c) {
       match view_of_chat(src, r).0 {
-        Some(view) => history_top(c, src, r, view, side_shown(src, r).0, agent)
+        Some(view) => c.box(style=history_top_box, fn() { side_bar_row(c, src, r, view, side_shown(src, r).0, agent) }) |> ignore
         None => ()
       }
     },
     true,
   )
-  .shrink(Is(1.0))
-  .min_height(Is(Some(0.0)))
+  .shrink(Is(0.0))
   |> ignore
+  history_head_node(q, src, r, agent, tips)
   q.box(fn(s) {
     s.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     @sfpages.history_steps_node(s, src, r.station, agent, tips)
+  })
+  |> ignore
+}
+
+///|
+/// File tab `tab` in chat `r`'s panel, in node `q` (as large as the panel): the panel's bar as an agent's history has it
+/// (side_bar_row, as `island` hosts one), then the file's tools and its stage the rest (sfbase's viewer_tab_node, what
+/// it hosts of the old view in `island` too); its picture over the whole window (its 全屏) stepping through the chat's.
+fn side_view_node(
+  q : @view.View,
+  src : Source,
+  r : ChatRef,
+  tab : String,
+  island : (@view.View, (@ui.Ctx) -> Unit, Bool) -> @view.View,
+) -> Unit {
+  island(
+    q,
+    fn(c) {
+      match view_of_chat(src, r).0 {
+        Some(view) => c.box(style=history_top_box, fn() { side_bar_row(c, src, r, view, side_shown(src, r).0, tab) }) |> ignore
+        None => ()
+      }
+    },
+    true,
+  )
+  .shrink(Is(0.0))
+  |> ignore
+  q.box(fn(s) {
+    s.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    @sfbase.viewer_tab_node(s, src, tabs_key(r), tab, island, fn() {
+      let thread = match view_of_chat(src, r).0 {
+        Some(v) => v.thread
+        None => None
+      }
+      @sfbase.InChat(thread, r.session)
+    })
   })
   |> ignore
 }

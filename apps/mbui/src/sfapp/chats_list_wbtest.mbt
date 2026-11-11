@@ -21,7 +21,7 @@ fn lists_tester(calls : Array[Made], w : Double, platform : Int, regular : Bool)
 fn open_share(t : @ui.Tester) -> Unit {
   t.tap_text("分享…")
   t.frame()
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   t.run_for(if rest > t.time() && rest < 1.0e12 { rest - t.time() } else { @ui.move_most_ms })
 }
 

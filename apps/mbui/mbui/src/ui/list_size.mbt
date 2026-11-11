@@ -818,6 +818,14 @@ pub fn[T] ListRows::rows(
       self.causes.start = r.1.at()
     }
   }
+  // (told sooner than said, the way not set out yet: from the latest of its causes now, as it would have been said so,
+  // not from the moment said first: words sent timed once their row is laid out, their row's coming earlier than the
+  // usual way's share had it)
+  if !retimed.is_empty() && self.causes.start > now {
+    let mut start = now
+    self.causes.by.each(fn(_, cm) { start = dmax(start, cm.0.at()) })
+    self.causes.start = start
+  }
   self.given = true
   // the rows' way: from the last cause's moment to the latest end any was given
   if began {
@@ -1012,11 +1020,14 @@ pub fn[T] ListRows::leave(
       c.nodes[i].room_held = true
       c.draw_only(i)
       let causes = self.causes
+      // (its node where it is as it is painted: its row kept as its nodes is put back where its list lays it then)
+      let row = c.node_held(i)
       c.look_by(i, fn() {
         causes.read()
         // (as it was laid out last on the list's way; none once that is over, laid out again or not)
-        match (causes.by.get(key), causes.opened.get(key)) {
-          (Some((Goes(_), _)), Some((shown, h))) if c.moment() < causes.end - 0.001 => c.row_look(i, shown, h)
+        match (causes.by.get(key), causes.opened.get(key), row.at()) {
+          (Some((Goes(_), _)), Some((shown, h)), Some(i)) if c.moment() < causes.end - 0.001 =>
+            c.row_look(i, shown, h)
           _ => still_look
         }
       })
@@ -1048,13 +1059,15 @@ pub fn[T] ListRows::enter(
     return
   }
   let causes = self.causes
+  // (its node where it is as it is painted: its row kept as its nodes is put back where its list lays it then)
+  let row = c.node_held(i)
   c.look_by(i, fn() {
     causes.read()
     // (one going drawn as it goes, not as it came: ListRows::leave)
     // (as it was laid out last on the list's way; none once that is over, laid out again or not)
-    match (causes.by.get(key), causes.opened.get(key)) {
-      (Some((Goes(_), _)), _) => still_look
-      (_, Some((shown, h))) if c.moment() < causes.end - 0.001 => c.row_look(i, shown, h)
+    match (causes.by.get(key), causes.opened.get(key), row.at()) {
+      (Some((Goes(_), _)), _, _) => still_look
+      (_, Some((shown, h)), Some(i)) if c.moment() < causes.end - 0.001 => c.row_look(i, shown, h)
       _ => still_look
     }
   })

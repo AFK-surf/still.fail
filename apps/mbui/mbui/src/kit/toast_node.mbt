@@ -363,7 +363,7 @@ fn toast_lives(
             last.val = (d.x, d.at)
           }
           Up =>
-            if d.x - x0.val > d.w / 3.0 || quick.val > 0.5 {
+            if toast_put_away(d.x - x0.val, d.w, quick.val) {
               leave(gone)
             } else {
               dx.set(0.0)
@@ -413,11 +413,13 @@ fn ToastWay::go(self : ToastWay, n : @view.View, to : Double, spec : @motion.Spe
 
 ///|
 fn ToastWay::shown(self : ToastWay, n : @view.View) -> Double {
-  self.way.said()
   self.ended.get() |> ignore
-  if self.way.goes_at(n.logic_at()) {
-    self.way.value_at(n.drawn_at())
-  } else {
-    self.way.target()
-  }
+  self.way.shown_on(n)
+}
+
+///|
+/// Whether a toast `w` wide a finger drew `dx` aside, let go going `quick` (points a ms), is put away: landing past a
+/// third of it on from that speed (@ui.lands_past), or flicked (@ui.flung_away, as a sheet is put away).
+fn toast_put_away(dx : Double, w : Double, quick : Double) -> Bool {
+  @ui.lands_past(dx, quick, w / 3.0) || quick > @ui.flung_away
 }

@@ -83,7 +83,7 @@ test "no workspace yet as nodes, asked for a code: a code typed in its field, åˆ
 fn landing_button_at(t : @ui.Tester, label : String) -> (Double, Double) {
   match t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == label }) {
     Some(s) => (s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
-    None => abort("no button read out as \{label}")
+    None => @halt.saying("no button read out as \{label}")
   }
 }
 

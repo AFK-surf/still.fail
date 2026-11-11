@@ -1,6 +1,6 @@
 // What the agent is told about its situation, appended to the runtime's own system prompt, and how messages are put to
 // it. A change to how agents work gets a note in migrations.ts too, for the sessions begun before it.
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 import type { BackgroundTask } from "./runtime.ts";
 import { type CardChoice, STILLFAIL_SURFACE } from "../store/rows.ts";
@@ -8,19 +8,16 @@ import { STATION_AUTHOR } from "../store/rows.ts";
 
 
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
-export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string): string {
+/// `memory`: the workspace's memory as it is now (`readMemory`).
+export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string, memory: string): string {
   const projectLine = project === null ? "" : `- Project directory: ${project}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n`;
-  return instructions(projectLine, workspace, repos_dir, memory_path) + memoryOf(memory_path);
+  return instructions(projectLine, workspace, repos_dir, memory_path) + (memory === "" ? "" : `\n\n<memory path="${memory_path}">\n${memory}\n</memory>`);
 }
 
 /// The workspace's memory as it is now, told after the instructions: given with them, not by the runtime's home (a
-/// profile serves every workspace, sessions/agent-home.ts).
-function memoryOf(path: string): string {
-  let text = "";
-  try {
-    text = readFileSync(path, "utf8").trim();
-  } catch {}
-  return text === "" ? "" : `\n\n<memory path="${path}">\n${text}\n</memory>`;
+/// profile serves every workspace, sessions/agent-home.ts). Read off the station's thread, at each process's opening.
+export async function readMemory(path: string): Promise<string> {
+  return (await readFile(path, "utf8").catch(() => "")).trim();
 }
 
 const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads, Feishu chats and Comma Tasks.

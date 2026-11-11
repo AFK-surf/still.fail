@@ -90,7 +90,7 @@ export type Platform = {
   /// Whether any process of the group is there.
   groupAlive(pgid: number): boolean;
   /// When `pid` started (ms), none when it is not running or cannot be read.
-  startTimeOf(pid: number): number | null;
+  startTimeOf(pid: number): Promise<number | null>;
   /// Whether a group lives on without its leader (a Unix group while any member does; a Windows job dies with it).
   groupOutlivesLeader: boolean;
   /// Memory of each group (kB).
@@ -153,7 +153,7 @@ export type Platform = {
 
   // The launcher (native/launcher), as the CLI and the station's own update reach it.
   /// Whether process `pid` is a station's launcher (pids get reused).
-  isLauncher(pid: number): boolean;
+  isLauncher(pid: number): Promise<boolean>;
   /// Asks the launcher `pid` to hand over to a new process, to drain, or to read the channel again: Unix's SIGUSR2,
   /// SIGUSR1, SIGHUP; on Windows, which has no signals, a line on its own pipe. Throws when it is not reached.
   askLauncher(pid: number, op: "handover" | "drain" | "hup"): Promise<void>;

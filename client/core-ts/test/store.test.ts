@@ -8,8 +8,9 @@ import { holdLanguage } from "../src/i18n.ts";
 import { Output } from "../src/output.ts";
 import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
-import { COALESCE_MS, EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
+import { COALESCE_MS, EVICT_AFTER_MS, KEPT_PER_CLIENT, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
+import { version } from "../src/digest.ts";
 import { topicDebug } from "../src/protocol.ts";
 
 holdLanguage();
@@ -451,6 +452,251 @@ test("a_subscriber_from_another_of_its_subscriptions_gets_its_first_value_as_wha
   // (one not keyed, or from one it does not have: whole)
   store.subscribe(1, 12, rows(100), true, 99);
   assert.deepEqual(host.takeEmitted(), [[1, value(12, list)]]);
+});
+
+test("an_unsubscribe_that_keeps_is_answered_with_the_version_of_what_its_subscriber_holds_its_last_message", async () => {
+  const { host, store, pass } = setup();
+  store.subscribe(1, 10, overview());
+  store.set(overview(), { ok: { n: 1 } });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  // (a difference on its way as the unsubscribe comes: gone out before it, so what is held by the answer has it)
+  store.set(overview(), { ok: { n: 2 } });
+  await pass(COALESCE_MS * 2);
+  store.unsubscribe(1, 10, true);
+  const out = host.takeEmitted() as [number, Record<string, unknown>][];
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[0], [1, value(10, { n: 2 })]);
+  assert.deepEqual(out[1], [1, { id: 10, v: version({ n: 2 }) }]);
+  // (none further for it)
+  store.set(overview(), { ok: { n: 3 } });
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), []);
+  // Not kept: no answer, nothing hashed.
+  store.subscribe(1, 11, overview());
+  host.takeEmitted();
+  store.unsubscribe(1, 11);
+  assert.deepEqual(host.takeEmitted(), []);
+  // Kept of one that never had a value, or of an id unknown: answered still, with none.
+  store.subscribe(1, 12, { topic: "overview", station: "ws/other" });
+  store.unsubscribe(1, 12, true);
+  store.unsubscribe(1, 99, true);
+  assert.deepEqual(host.takeEmitted(), [
+    [1, { id: 12, v: null }],
+    [1, { id: 99, v: null }],
+  ]);
+});
+
+test("a_change_not_gone_out_as_an_unsubscribe_that_keeps_comes_is_not_in_its_version_and_follows_a_same", async () => {
+  const { host, store, pass } = setup();
+  store.subscribe(1, 10, overview());
+  store.set(overview(), { ok: { n: 1 } });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.set(overview(), { ok: { n: 2 } });
+  // (not gone out yet: the client holds n 1)
+  store.unsubscribe(1, 10, true);
+  assert.deepEqual(host.takeEmitted(), [[1, { id: 10, v: version({ n: 1 }) }]]);
+  // Asked again with it before the change goes out: what it holds is still what went last, so `same`, and then the
+  // change as to any subscriber.
+  store.subscribe(1, 11, overview(), false, undefined, version({ n: 1 }));
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [
+    [1, { id: 11, same: true }],
+    [1, value(11, { n: 2 })],
+  ]);
+});
+
+test("a_subscription_asked_with_the_version_it_holds_is_answered_same_where_the_value_is_that_one", async () => {
+  const { host, store, pass } = setup();
+  const rows: Topic = { topic: "chatRows", station: "ws/st" };
+  const list = [{ id: "a", title: "A" }, { id: "b", title: "B" }];
+  store.subscribe(1, 10, rows, true);
+  store.set(rows, { ok: list });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.unsubscribe(1, 10, true);
+  const [[, { v }]] = host.takeEmitted() as [number, { v: string }][];
+  // Still held (idle): answered at once.
+  store.subscribe(1, 11, rows, true, undefined, v);
+  assert.deepEqual(host.takeEmitted(), [[1, { id: 11, same: true }]]);
+  // Then on as any subscriber: what changes goes as keyed ops to what it holds.
+  store.set(rows, { ok: [...list, { id: "c", title: "C" }] });
+  await pass(COALESCE_MS * 2);
+  const [[, next]] = host.takeEmitted() as [number, { id: number; delta: AnyOp[] }][];
+  assert.equal(next.id, 11);
+  assert.deepEqual(applyKeyed(list, next.delta), [...list, { id: "c", title: "C" }]);
+  // A version of another value: whole.
+  store.unsubscribe(1, 11);
+  store.subscribe(1, 12, rows, true, undefined, v);
+  assert.deepEqual(host.takeEmitted(), [[1, value(12, [...list, { id: "c", title: "C" }])]]);
+  store.unsubscribe(1, 12);
+  // Let go of and dropped from the store: made again, and the same value is still answered same, the core having kept
+  // nothing of the version.
+  await pass(EVICT_AFTER_MS + EVICT_AFTER_MS / 4);
+  assert.deepEqual(store.liveTopics(), []);
+  store.subscribe(1, 13, rows, true, undefined, v);
+  store.set(rows, { ok: list.map((r) => ({ ...r })) });
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, { id: 13, same: true }]]);
+});
+
+/// Subscribes `client`'s `id` to `topic`, lets its value `v` go out, and lets go of it keeping it: the version said.
+async function keptAt(t: ReturnType<typeof setup>, client: number, id: number, topic: Topic, v: unknown, keyed: boolean): Promise<string> {
+  t.store.subscribe(client, id, topic, keyed);
+  t.store.set(topic, { ok: v });
+  await t.pass(COALESCE_MS * 2);
+  t.host.takeEmitted();
+  t.store.unsubscribe(client, id, true);
+  const out = t.host.takeEmitted() as [number, { id: number; v: string }][];
+  assert.deepEqual(out, [[client, { id, v: version(v) }]]);
+  return out[0]![1].v;
+}
+
+test("a_subscription_asked_again_with_a_version_the_core_remembers_gets_what_changed_from_it_keyed", async () => {
+  const t = setup();
+  const { host, store, pass } = t;
+  const rows: Topic = { topic: "chatRows", station: "ws/st" };
+  const list = Array.from({ length: 40 }, (_, i) => ({ id: `r${i}`, title: `Row ${i} ${"words ".repeat(8)}` }));
+  const v = await keptAt(t, 1, 10, rows, list, true);
+  assert.equal(store.keptOf(1), 1);
+  // One row changed and one added while nobody held it: what changed from the rows kept, keyed, not the 40 again.
+  const next = [...list.slice(0, 5), { ...list[5]!, title: "Renamed" }, ...list.slice(6), { id: "new", title: "New" }];
+  store.set(rows, { ok: next });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 11, rows, true, undefined, v);
+  await pass(COALESCE_MS * 2);
+  const [[, first]] = host.takeEmitted() as [number, { id: number; delta: AnyOp[]; kept: true }][];
+  assert.equal(first.id, 11);
+  assert.equal(first.kept, true);
+  assert.deepEqual(applyKeyed(list, first.delta), next);
+  // The same result as the value whole would give, and far lighter.
+  assert.ok(JSON.stringify(first).length * 4 < JSON.stringify(value(11, next)).length);
+  // Its first message gone, the core remembers none of it: asked with that version again, whole.
+  assert.equal(store.keptOf(1), 0);
+  store.unsubscribe(1, 11);
+  store.subscribe(1, 12, rows, true, undefined, v);
+  assert.deepEqual(host.takeEmitted(), [[1, value(12, next)]]);
+});
+
+test("a_subscription_asked_again_not_keyed_gets_plain_ops_from_what_the_core_remembers", async () => {
+  const t = setup();
+  const { host, store, pass } = t;
+  const was = { text: "x".repeat(400), n: 1 };
+  const v = await keptAt(t, 1, 10, overview(), was, false);
+  store.set(overview(), { ok: { ...was, n: 2 } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 11, overview(), false, undefined, v);
+  await pass(COALESCE_MS * 2);
+  const [[, first]] = host.takeEmitted() as [number, { id: number; delta: Op[]; kept: true }][];
+  assert.deepEqual({ id: first.id, kept: first.kept }, { id: 11, kept: true });
+  assert.deepEqual(applyOps(structuredClone(was), first.delta), { ...was, n: 2 });
+  // Then on as any subscriber.
+  store.set(overview(), { ok: { ...was, n: 3 } });
+  await pass(COALESCE_MS * 2);
+  const [[, then]] = host.takeEmitted() as [number, { id: number; delta: Op[] }][];
+  assert.deepEqual(applyOps(structuredClone({ ...was, n: 2 }), then.delta), { ...was, n: 3 });
+});
+
+test("a_subscription_asked_again_goes_whole_where_what_changed_is_heavier_or_nothing_of_that_version_is_remembered", async () => {
+  const t = setup();
+  const { host, store, pass } = t;
+  // What changed weighs more than the value: whole.
+  const v = await keptAt(t, 1, 10, overview(), { n: 1 }, false);
+  store.set(overview(), { ok: { n: 2 } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 11, overview(), false, undefined, v);
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(11, { n: 2 })]]);
+  assert.equal(store.keptOf(1), 0);
+  store.unsubscribe(1, 11);
+  // Another version than the one remembered: whole, and the remembered one forgotten all the same.
+  const big = { text: "x".repeat(400), n: 1 };
+  await keptAt(t, 1, 12, overview(), big, false);
+  store.set(overview(), { ok: { ...big, n: 2 } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 13, overview(), false, undefined, version({ other: true }));
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(13, { ...big, n: 2 })]]);
+  assert.equal(store.keptOf(1), 0);
+  store.unsubscribe(1, 13);
+  // Another client's: nothing remembered for this one.
+  const w = await keptAt(t, 2, 20, overview(), big, false);
+  store.set(overview(), { ok: { ...big, n: 3 } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 14, overview(), false, undefined, w);
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(14, { ...big, n: 3 })]]);
+  assert.equal(store.keptOf(2), 1);
+  // An error now: the error, nothing else.
+  store.set(overview(), { err: new CoreError("x", "gone") });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.subscribe(2, 21, overview(), false, undefined, w);
+  const out = host.takeEmitted() as [number, Record<string, unknown>][];
+  assert.equal(out.length, 1);
+  assert.ok("error" in out[0]![1]);
+  assert.equal(store.keptOf(2), 0);
+});
+
+test("a_subscription_asked_again_from_another_takes_that_ones_rows_before_what_was_kept", async () => {
+  const t = setup();
+  const { host, store, pass } = t;
+  const chats = (limit: number): Topic => ({ topic: "chatRows", station: "ws/st", limit });
+  const list = Array.from({ length: 30 }, (_, i) => ({ id: `r${i}`, title: `Row ${i} ${"words ".repeat(8)}` }));
+  const v = await keptAt(t, 1, 10, chats(50), list, true);
+  // The first rows held; more of them asked from those, with the version kept as well: from the rows held.
+  store.subscribe(1, 11, chats(20), true);
+  store.set(chats(20), { ok: list.slice(0, 20) });
+  store.set(chats(50), { ok: list });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.subscribe(1, 12, chats(50), true, 11, v);
+  await pass(COALESCE_MS * 2);
+  const [[, first]] = host.takeEmitted() as [number, Record<string, unknown>][];
+  // (the value is that version still: `same` before either)
+  assert.deepEqual(first, { id: 12, same: true });
+  store.unsubscribe(1, 12, true);
+  host.takeEmitted();
+  const more = [...list, { id: "r30", title: "Row 30" }];
+  store.set(chats(50), { ok: more });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 13, chats(50), true, 11, v);
+  await pass(COALESCE_MS * 2);
+  const [[, from]] = host.takeEmitted() as [number, { id: number; delta: AnyOp[]; from?: number; kept?: true }][];
+  assert.equal(from.from, 11);
+  assert.equal(from.kept, undefined);
+  assert.deepEqual(applyKeyed(list.slice(0, 20), from.delta), more);
+  assert.equal(store.keptOf(1), 0);
+});
+
+test("the_values_remembered_for_a_client_are_bounded_the_least_recently_let_go_of_forgotten_and_dropped_with_it", async () => {
+  const t = setup();
+  const { host, store, pass } = t;
+  const topic = (i: number): Topic => ({ topic: "overview", station: `ws/s${i}` });
+  const big = (i: number) => ({ text: "x".repeat(400), n: i });
+  const versions: string[] = [];
+  for (let i = 0; i < KEPT_PER_CLIENT + 2; i++) versions.push(await keptAt(t, 1, 100 + i, topic(i), big(i), false));
+  assert.equal(store.keptOf(1), KEPT_PER_CLIENT);
+  for (let i = 0; i < KEPT_PER_CLIENT + 2; i++) store.set(topic(i), { ok: { ...big(i), m: true } });
+  await pass(COALESCE_MS * 2);
+  // The first two let go of are forgotten: whole. The third is remembered: what changed.
+  store.subscribe(1, 200, topic(0), false, undefined, versions[0]);
+  store.subscribe(1, 201, topic(1), false, undefined, versions[1]);
+  store.subscribe(1, 202, topic(2), false, undefined, versions[2]);
+  await pass(COALESCE_MS * 2);
+  const out = (host.takeEmitted() as [number, { id: number }][]).sort((a, b) => a[1].id - b[1].id);
+  assert.deepEqual(out.map(([, m]) => ("kept" in m ? "kept" : "value" in m ? "value" : "?")), ["value", "value", "kept"]);
+  // A client gone: all of it forgotten.
+  assert.equal(store.keptOf(1), KEPT_PER_CLIENT - 1);
+  store.dropClient(1);
+  assert.equal(store.keptOf(1), 0);
+});
+
+test("a_version_is_its_values_canonical_json_length_and_hash", () => {
+  assert.equal(version({ b: 1, a: [2] }), version({ a: [2], b: 1 }));
+  assert.notEqual(version({ a: 1 }), version({ a: 2 }));
+  assert.equal(version("x").split(":")[0], (3).toString(36));
 });
 
 test("what_the_store_keeps_is_frozen_all_through_in_tests", async () => {

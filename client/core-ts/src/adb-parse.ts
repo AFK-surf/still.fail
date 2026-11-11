@@ -8,6 +8,11 @@ export const MINUTES = 60;
 export const MAX_MINUTES = 8 * 60;
 
 export type Offer = { station: string; connect: number | null; pair: number | null; device: string; android: string; package: string; minutes: number };
+/// How long a phone's grant lasts (station/src/adb/grants.ts `Scope`).
+export type PhoneScope = "hour" | "idle" | "eight" | "chat";
+/// Until when one signed now holds at the latest (seconds from now): an idle one's ends sooner on its station.
+export const SCOPE_SECONDS: Record<PhoneScope, number> = { hour: 3600, idle: 30 * 86400, eight: 8 * 3600, chat: 30 * 86400 };
+
 export type AdbCall =
   | { kind: "share"; offer: Offer }
   | { kind: "stop" }
@@ -15,8 +20,9 @@ export type AdbCall =
   | { kind: "grant"; station?: string }
   /// The ports the app found for adbd, and what the phone is: lent with them to every station a grant wants it on.
   | { kind: "ports"; ports: Omit<Offer, "station" | "minutes"> }
-  /// A chat's request for this person's phone decided (`scope`: "hour" | "chat"; null refuses it), or a grant taken back.
-  | { kind: "decide"; station: string; request: string; scope: "hour" | "chat" | null }
+  /// A chat's request for this person's phone decided (`scope`: hour, idle (an hour unused), eight (hours) or chat; null
+  /// refuses it), or a grant taken back.
+  | { kind: "decide"; station: string; request: string; scope: PhoneScope | null }
   | { kind: "revoke"; station: string; request: string }
   /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
   | { kind: "lasts"; lasts: "hour" | "chat" }
@@ -102,7 +108,7 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       if (request === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "request" }));
       if (name === "adb.revoke") return { kind: "revoke", station, request };
       const s = get(params, "scope");
-      return { kind: "decide", station, request, scope: s === "hour" || s === "chat" ? s : null };
+      return { kind: "decide", station, request, scope: s === "hour" || s === "idle" || s === "eight" || s === "chat" ? s : null };
     }
     default:
       return null;

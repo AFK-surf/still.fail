@@ -302,6 +302,8 @@ let core_source : @sfapp.Source = {
   refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,
   reads_ahead: fn() { true },
+  asks_devices: fn() { true },
+  asks_outline: fn() { true },
 }
 
 ///|
@@ -367,6 +369,9 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
+  // what the places open on, and the last few chats, are kept by the core's client as they are let go of, asked again
+  // with their version
+  @core.client.keep(@sfbase.topic_kept)
   // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
   @ui.set_vector_pictures(draw_svg)
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
@@ -402,8 +407,10 @@ fn main {
         started[name] = Json::string(v)
       }
     }
-    // (and that this app keeps its places' lists and asks them ahead: a replay's does as its trace's app did)
-    started["MBUI_PLACES_AHEAD"] = Json::string("1")
+    // (and what this app does that a replay's does only as its trace's app did: sfcore's trace_switches, all on)
+    for name in @sfcore.trace_switches {
+      started[name] = Json::string("1")
+    }
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
     // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
     // a replay's host to say the same

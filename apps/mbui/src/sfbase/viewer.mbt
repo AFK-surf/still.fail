@@ -287,6 +287,12 @@ pub(all) struct Viewer {
   /// how far the picture is lifted over the keyboard while marking (its way said as the keyboard or what is written
   /// changes, at that moment: viewer_tree.mbt)
   lift : @motion.Way
+  /// a tab's beside a chat (viewer_tab.mbt), not the one over the whole window: its stage starts under the tab's own
+  /// tools, nothing of the window's bars over it
+  beside : Bool
+  /// a film or a song played as its player opens (the whole window's always; a tab's only as the person opened it
+  /// beside just now: viewer_tab.mbt's tab_asked), else there paused until its play key
+  mut plays_now : Bool
 }
 
 ///|
@@ -839,7 +845,12 @@ pub fn preview_rest() -> Double {
 
 ///|
 /// Opens `a` of the chat on `station` (kept by the session `key`) over everything; `steps`: what an image steps
-/// through; `named`: a file a message names by its path (`a.path`), not one sent with it.
+/// through; `named`: a file a message names by its path (`a.path`), not one sent with it. `beside`: asked beside the
+/// page (by default as the command key is held as it is pressed: beside_held; a menu's 在侧边打开, the preview's
+/// 移到侧边): a tab of the side panel where the shell has one for the page in view (Shell's `beside`; a film or a song
+/// played there at once), else over everything all the same. Over everything, what the tabs beside the page play is
+/// paused; `start`: where a film or a song starts there (ms; a tab's 全屏: where the tab's player was), else where it
+/// was left.
 pub fn open_preview(
   station : String,
   key : String,
@@ -848,10 +859,20 @@ pub fn open_preview(
   steps? : Stepping = NoSteps,
   named? : Bool = false,
   at? : String = "",
+  beside? : Bool = beside_held(),
+  start? : Double = -1.0,
 ) -> Unit {
+  if beside && opens_beside(a.path, a.name) && beside_open(view_tab_key(station, key, a, drive, named), 0.0) {
+    return
+  }
   close_now()
+  tab_players_pause()
   pv_strip.leaving = None
-  viewer.set(Some(new_viewer(station, key, a, drive, steps, named~, at~)))
+  let v = new_viewer(station, key, a, drive, steps, named~, at~)
+  if start > 0.0 {
+    v.start_at = start
+  }
+  viewer.set(Some(v))
 }
 
 ///|
@@ -864,6 +885,7 @@ pub fn new_viewer(
   steps : Stepping,
   named? : Bool = false,
   at? : String = "",
+  beside? : Bool = false,
 ) -> Viewer {
   let (kind, mime, _) = preview_kind(a.name)
   let v : Viewer = {
@@ -889,7 +911,12 @@ pub fn new_viewer(
     awake_told: @signals.signal(0),
     asked_told: @signals.signal(0),
     near_bar: false,
-    zoom: @kit.Zoom::new(),
+    // (a tab's fitted as the whole window's is, but always as on a narrow stage: tab_picture_node lays it out so)
+    zoom: if beside {
+      @kit.Zoom::new(margin=fn(_) { tab_picture_margin })
+    } else {
+      @kit.Zoom::new()
+    },
     // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
     vzoom: video_zoom(),
     source: false,
@@ -953,6 +980,8 @@ pub fn new_viewer(
     speed: @ui.Velocity::new(),
     hold_off: fn() {  },
     lift: @motion.Way::new(0.0),
+    beside,
+    plays_now: !beside,
   }
   // (one named by its path read anew each time: it may have changed since)
   if !named {
@@ -1155,7 +1184,7 @@ pub fn leaving_done() -> Unit {
 /// What a viewer holds of the host's, let go.
 pub fn Viewer::let_go(self : Viewer) -> Unit {
   // read in a desktop's reader (@sf.reader): what it read let go with it
-  @sf.reader_let_go("chat\n" + self.id())
+  @sf.reader_let_go(self.read_key())
   match self.media {
     Some(m) => {
       m.close()
@@ -1524,9 +1553,11 @@ pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
   match v.shown_kind() {
     // a film or a song: the one player (@sf.player_view), read through the core a part at a time (never the whole file
     // first, a seek far ahead one more ranged read), from the frame it was left at (the thumbnail's)
+    // (a tab's its own, by its viewer: its view and what its player's view holds not the whole window's, nor another
+    // tab's)
     Some(KVideo) | Some(KAudio) => {
       if v.media is None {
-        let m = @sf.new_media("preview-media")
+        let m = @sf.new_media(if v.beside { "preview-media/" + v.serial.to_string() } else { "preview-media" })
         let start = if v.start_at > 0.0 { v.start_at } else { 0.0 }
         v.start_at = -1.0
         m.open(
@@ -1580,6 +1611,7 @@ pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
             },
           },
           start~,
+          play=v.plays_now,
         )
         v.media = Some(m)
       }
@@ -2044,17 +2076,31 @@ pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
   match self.bytes.get() {
     // kept as keep_way_of says, said once the host has answered (keep.mbt)
     Some(b) => keep_bytes(c, self.file.name, self.mime, b)
-    None if self.chat_file() => {
-      self.download_asked = true
-      self.asked_told.set(self.asked_told.untracked() + 1)
-    }
-    None => {
-      self.error.set(None)
-      self.asked = true
-      self.save_after = true
-      self.asked_told.set(self.asked_told.untracked() + 1)
-    }
+    None => self.ask_whole()
   }
+}
+
+///|
+/// 下载 pressed on a node of the window's tree (a tab's tools beside a chat: viewer_tab.mbt), outside any build: as
+/// Viewer::ask_save, what is here handed to the host at once (keep_now).
+pub fn Viewer::save_now(self : Viewer) -> Unit {
+  match self.bytes.get() {
+    Some(b) => keep_now(self.file.name, self.mime, b)
+    None => self.ask_whole()
+  }
+}
+
+///|
+/// 下载 of what is not here yet: a chat's file downloaded by the core, anything else read whole first (Viewer::ask_save's).
+fn Viewer::ask_whole(self : Viewer) -> Unit {
+  if self.chat_file() {
+    self.download_asked = true
+  } else {
+    self.error.set(None)
+    self.asked = true
+    self.save_after = true
+  }
+  self.asked_told.set(self.asked_told.untracked() + 1)
 }
 
 ///|
@@ -2722,14 +2768,19 @@ pub fn Viewer::view(self : Viewer) -> @ui.NativeView? {
 /// A film or a song in the one player (@sf.player_view, as a drive's plays), back to where it was opened from, its
 /// 下载 the preview's. Where its picture is (edge to edge, as the player puts it) is worked out here too: what it flies
 /// to from its thumbnail and back into it from (its still flying, the player's picture not placed meanwhile), and where
-/// the chat's still of it shows until its first frame does.
+/// the chat's still of it shows until its first frame does. A tab's beside a chat embedded in the tab's stage
+/// (@sf.player_view's `embedded`: on the page's ground, its picture in the room over its controls as far in as a tab's
+/// picture is, tab_picture_margin), not flying, no keys.
 pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
   let m = match v.media {
     Some(m) => m
+    // (a tab's: nothing of its own till its player is made, no keys)
     None => {
-      tap_stage(c, v, stage)
-      v.shut_on_escape(c)
+      if !v.beside {
+        tap_stage(c, v, stage)
+        v.shut_on_escape(c)
+      }
       return
     }
   }
@@ -2742,7 +2793,7 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   let still = if v.shown_kind() == Some(KVideo) { v.still(src) } else { "" }
   let z = v.vzoom
   // (clear of the bar and the controls as the player fits it: player_room)
-  let (top, foot) = @sf.player_room(c.width)
+  let (top, foot) = @sf.player_room(c.width, embedded=v.beside)
   z.boxed(c.width, c.height - top - foot, at=c.moment())
   // (as big as its player says, else as sent, else as its still: Viewer::video_natural, what its flight goes to too)
   let (nw, nh) = v.video_natural(src)
@@ -2789,6 +2840,10 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     // (closed by its fade: its controls away at once, the page showing through as it goes; flown back into its
     // thumbnail they go with it as it shrinks, its ground whole till they are gone: bars_share)
     going=v.closing && !v.flies,
+    move_beside=if !v.beside && beside_offered(v.file.path, v.file.name) { Some(fn() { v.move_beside() }) } else { None },
+    // (a tab's: in its stage under the tab's tools, which have its name, 下载 and 全屏)
+    embedded=v.beside,
+    margin=if v.beside { tab_picture_margin } else { 0.0 },
   )
 }
 
@@ -2897,10 +2952,10 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
   let w = if small { c.width - 2.0 * pdf_small_in } else { desk_pdf_width(c.width) }
   let side = (c.width - w) / 2.0
   let gap = if small { pdf_small_in } else { desk_pdf_gap }
-  let top = if small { viewer_top(c) + page_small_top } else { viewer_top(c) + desk_page_top }
-  let foot = if small { pdf_small_in } else { viewer_foot(c) + desk_pdf_foot }
+  let top = v.stage_top(c, if small { page_small_top } else { desk_page_top }, gap)
+  let foot = if v.beside { gap } else if small { pdf_small_in } else { viewer_foot(c) + desk_pdf_foot }
   let none = 0.0
-  c.list("preview/pdf/" + v.file.path, pdf.pages + 2, 400.0, fn(i) {
+  c.list(v.stage_key("preview/pdf/" + v.file.path), pdf.pages + 2, 400.0, fn(i) {
     if i == 0 {
       c.box(w=Fill(1.0), h=Px(top), fn() {  }) |> ignore
     } else if i == pdf.pages + 1 {
@@ -2956,7 +3011,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
       }
     }
     // under the bar: 60 under the status bar, a desktop's 76
-    let top = if c.width <= @sf.viewer_small_w { viewer_top(c) + page_small_top } else { viewer_top(c) + desk_page_top }
+    let top = v.stage_top(c, if c.width <= @sf.viewer_small_w { page_small_top } else { desk_page_top }, 0.0)
     c.box(w=Fill(1.0), h=Fill(1.0), pt=top, fn() {
       if page.here() && !v.closing {
         c.native(page) |> ignore
@@ -3040,16 +3095,24 @@ pub fn Viewer::lines_stage(
   // as the web's (FilePreview.css.ts fpCode 64 and the block's 16 down, 32 in, 12 on 1.6; fpPlain 76 down, 32 in, 12
   // on 1.65; under 640, 60 down, 16 in, 48 under)
   let small = c.width <= @sf.viewer_small_w && !code && markdown is None
-  let top = if small {
-    viewer_top(c) + page_small_top
-  } else {
-    viewer_top(c) + (if markdown is Some(_) { 64.0 } else if code { 80.0 } else { desk_page_top })
-  }
+  let top = v.stage_top(
+    c,
+    if small {
+      page_small_top
+    } else if markdown is Some(_) {
+      64.0
+    } else if code {
+      80.0
+    } else {
+      desk_page_top
+    },
+    beside_text_top,
+  )
   let foot = if markdown is Some(_) { 64.0 } else if small { plain_small_foot } else { desk_text_foot }
   let size = desk_code_size
   let height = if code { desk_code_line } else { desk_plain_line }
   let side = if small { plain_small_side } else { desk_text_side }
-  let key = "preview/text/" + v.file.path + (if v.source { "/source" } else { "" })
+  let key = v.stage_key("preview/text/" + v.file.path + (if v.source { "/source" } else { "" }))
   c.list(key, chunks + 3, 400.0, fn(i) {
     if i == 0 {
       if cut is Some(_) {
@@ -3068,7 +3131,7 @@ pub fn Viewer::lines_stage(
       ()
     } else if markdown is Some(words) {
       c.box(w=Fill(1.0), pl=18.0, pr=18.0, fn() {
-        @sf.markdown(c, words, key="preview-md") |> ignore
+        @sf.markdown(c, words, key=v.stage_key("preview-md")) |> ignore
       })
       |> ignore
     } else {
@@ -3105,7 +3168,7 @@ pub fn Viewer::lines_stage(
       }
       if code {
         // scrolled across, its rows as one (32 in from its sides)
-        c.sideways("preview/code/" + v.file.path, across=true, padx=32.0, words) |> ignore
+        c.sideways(v.stage_key("preview/code/" + v.file.path), across=true, padx=32.0, words) |> ignore
       } else {
         c.box(w=Fill(1.0), pl=side, pr=side, words) |> ignore
       }
@@ -3185,14 +3248,14 @@ pub fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool
   let number = "\{body_n}".length().to_double() * 8.4 + 36.0
   // a desktop's in the page's 13, 68 down to its head; a phone's in 15
   let size = desk_cell_size
-  let top = viewer_top(c) + desk_table_top
+  let top = v.stage_top(c, desk_table_top, 0.0)
   let cell = fn(s : String, w : Double, weight : Int, color : Int64) {
     c.box(w=Px(w), padx=16.0, pady=8.0, clip=true, fn() {
       c.text(s, size~, weight~, color~, wrap=false) |> ignore
     })
     |> ignore
   }
-  c.list("preview/csv/" + v.file.path, body_n + 3, 37.0, fn(i) {
+  c.list(v.stage_key("preview/csv/" + v.file.path), body_n + 3, 37.0, fn(i) {
     if i == 0 {
       c.box(w=Fill(1.0), h=Px(top), fn() {  }) |> ignore
     } else if i == 1 {
@@ -3254,6 +3317,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_strip.pinned = None
   pv_strip.near.clear()
   near_asked.clear()
+  tab_viewers_reset()
 }
 
 ///|

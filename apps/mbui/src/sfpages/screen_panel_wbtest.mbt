@@ -13,7 +13,7 @@ fn open_center(r : ScreenRig) -> Unit {
 ///|
 /// The presenters' sheet, where one is moving (a phone's 控制中心 opened or closed), at its rest.
 fn to_sheet_rest(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
@@ -375,7 +375,7 @@ test "the bar says how long it has been seen; pressed, the view's figures, and �
   assert_true(r.t.find("3") is Some(_))
   r.tap_label(tr("web-pages.screen.stat.copy"))
   r.t.draw()
-  let said = @json.parse(r.t.clipboard()) catch { _ => abort("not JSON") }
+  let said = @json.parse(r.t.clipboard()) catch { _ => @halt.saying("not JSON") }
   assert_eq(text(Some(said), "picture"), "1280x720")
   assert_eq(text(Some(said), "codec"), "jpeg")
   assert_eq(number(Some(said), "fps"), 3.0)

@@ -8,7 +8,7 @@ import { AdminApi, ControlPlane, Events, Key, MeshNative, MeshSide, Own, Parts, 
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "./peer.ts";
-import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
+import { DeviceRefused, PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
 import { followPersons } from "./person-sync.ts";
 import { tellLocks } from "./lock-events.ts";
@@ -161,7 +161,10 @@ export const MeshLive = Layer.effectDiscard(
           connections,
           Effect.tryPromise(() =>
             conn.alpn().equals(PEER_BYTES_ALPN) || conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
-            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => side.forwarded(port) })
+            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, {
+                forwarded: (port) => side.forwarded(port),
+                device: (peer, workspace, session, device, probe) => side.device == null ? Promise.reject(new DeviceRefused(404, "no devices here yet")) : side.device(peer, workspace, session, device, probe),
+              })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
             : serve(members, conn),
           ).pipe(

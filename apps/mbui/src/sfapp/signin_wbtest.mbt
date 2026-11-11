@@ -1,7 +1,7 @@
 // An agent's ask to sign in to a site, answered on its card in the chat (sfpages signin_card.mbt
 // 登录态 "Signing in from a card"): on a device with no password manager to ask, on the tab's screen; a code the page
 // asks typed on the card; a person's step a tap from the screen, and said done; signed in and to be kept, approved here
-// in place, then one line once out of sight.
+// in place, then one line in the card's place.
 
 ///|
 test "a sign-in's card: on screen where there is no password manager here, a code typed on it, a person's step said done" {
@@ -41,7 +41,7 @@ test "a sign-in's card: on screen where there is no password manager here, a cod
 }
 
 ///|
-test "signed in and to be kept: approved here once, in place; kept, one line once out of sight" {
+test "signed in and to be kept: approved here once, in place; kept, one line in the card's place" {
   let calls : Array[Made] = []
   let t = cards_core(calls, mode="chat-signin-done")
   t.draw()

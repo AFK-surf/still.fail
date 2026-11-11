@@ -128,13 +128,24 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
             if (made) prefs.inviteUsed(inner.data);
             // A write may rename, join or leave a workspace: what the account's topics show is read again first.
             if (op.method !== "GET") yield* inner.cloudSync.refreshAll();
+            // An answer on a bug report: its replies read again (the cloud says so too, on the events socket).
+            const answered = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/feedback\//.exec(op.path) : null;
+            if (answered) inner.cloudSync.feedbackChanged(decodeURIComponent(answered[1]!));
             return result;
           });
         }
         break;
       case "prefsSet":
-        // (what is brought after everything else goes by them: fill.ts)
-        return Effect.try({ try: () => (prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs()), inner.fill?.poke(), null), catch: asCoreError });
+        return Effect.try({
+          try: () => {
+            prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs());
+            // (what is brought after everything else goes by these two, fill.ts `bounds`: looked at again only for
+            // them, not for every pref set: the workspace switched to waited on it, the chats' list behind it)
+            if (isObject(call.patch) && ("fillOff" in call.patch || "fillMax" in call.patch)) inner.fill?.poke();
+            return null;
+          },
+          catch: asCoreError,
+        });
       case "keysSet":
         return Effect.try({
           try: () => {

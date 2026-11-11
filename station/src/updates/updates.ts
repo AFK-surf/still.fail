@@ -8,6 +8,10 @@
 //   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
 //   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
 //   station has been quiet a while (never back from the beta, and a version it already went for, not again).
+//   With a delta from the build it runs (release.ts takeDelta), the station downloads it and applies it first (the
+//   applying in a process apart, release.ts applyApart), shown as the installer's download step is, and hands the
+//   installer what it made (STILLFAIL_ARCHIVE in a temporary stillfail-handed directory); the update is answered as
+//   started meanwhile. A delta not used is a line in the log, and the installer downloads the release as without.
 // - Claude Code and Codex: `--version`, and the latest their npm packages say (Devin: its installer's manifest); updated
 //   the way each was installed.
 //   Cursor is no command: its SDK's package, in the station's own npm prefix (agents/cursor.ts), its version the package's.
@@ -48,7 +52,7 @@ import { forgetShellPaths, withShellCommand } from "../ops/shell-path.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
 import { holding, onLetGo } from "./holds.ts";
-import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
+import { applyApart, planUpdate, readFeed, takeDelta, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import { canSwitchCodex, captureCodex, codexBinary, hasCodexHost, missingCodexHost, restoreCodex, switchCodex, type CodexEntry } from "./codex-repair.ts";
 import {
@@ -95,6 +99,8 @@ export type Timing = {
   doneShown: number;
   /// The slow look at an update under way (beside the watch on run/).
   followLook: number;
+  /// How long the station's delta may take (its download and applying) before the installer downloads the release.
+  deltaLimit: number;
 };
 
 export const TIMING: Timing = {
@@ -103,6 +109,7 @@ export const TIMING: Timing = {
   stationLimit: 20 * 60_000,
   doneShown: 10 * 60_000,
   followLook: 5_000,
+  deltaLimit: 10 * 60_000,
 };
 
 export type UpdatesOptions = {
@@ -124,6 +131,8 @@ export type UpdatesOptions = {
   nodeDist?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
   running?: () => number;
+  /// The station's own release only (a rig runs no runtime: rig/main.ts): the runtimes' versions are not read.
+  stationOnly?: boolean;
   /// Told when a runtime was installed or updated here (the machine's logins read again), and whether it is there now.
   runtimeChanged?: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
   /// The Codex installation's code-mode host (tests can supply a probe).
@@ -256,6 +265,9 @@ export class Updates {
   /// The update of the station followed now: what ends following it.
   private following: (() => void) | null = null;
 
+  /// The runtimes whose versions are read (none on a rig).
+  private readonly kinds: readonly RuntimeKind[];
+
   constructor(o: UpdatesOptions) {
     this.app = o.app;
     this.data = o.data;
@@ -272,6 +284,7 @@ export class Updates {
     this.timing = { ...TIMING, ...o.timing };
     this.trusted = o.trusted;
     this.running = o.running ?? (() => 0);
+    this.kinds = o.stationOnly === true ? [] : RUNTIMES;
     this.runtimeChanged = o.runtimeChanged ?? (() => {});
     this.codexHostProbe = o.codexHostProbe ?? missingCodexHost;
     // Read before an update can replace the release.
@@ -460,10 +473,10 @@ export class Updates {
 
   private async read(withStation: boolean) {
     const held = this.items.station;
-    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
+    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...this.kinds.map((kind) => this.readRuntime(kind))]);
     // Put on another channel while it was read: read from that one.
     while (station.channel !== this.channel()) station = await this.readStation(this.channel());
-    for (const [kind, read] of [["station", station] as const, ...RUNTIMES.map((kind, i) => [kind, runtimes[i]!] as const)]) {
+    for (const [kind, read] of [["station", station] as const, ...this.kinds.map((kind, i) => [kind, runtimes[i]!] as const)]) {
       const item = this.items[kind];
       // One that is updating keeps what it was until it is done; but one not yet read (an update this process took
       // over following) is read.
@@ -1067,15 +1080,61 @@ export class Updates {
       Object.assign(station, before);
       throw e;
     }
+    if (plan.delta === null) {
+      if (!(await this.startPlanned(plan, {}))) {
+        Object.assign(station, before);
+        throw refused(lang, "station.updates.couldNotStart");
+      }
+      return;
+    }
+    // A delta first: answered now, its download shown as the installer's is, and the installer started after it.
+    this.set("station", (i) => {
+      i.step = "download";
+      i.percent = 0;
+    });
+    this.spawn(async () => {
+      if (await this.startPlanned(plan, await this.fromDelta(plan))) return;
+      log.warn("updates", "the station's installer not started");
+      this.set("station", (i) => Object.assign(i, { updating: null, step: null, percent: null, done: null, failed: { key: "station.updates.couldNotStart" } }));
+    });
+  }
+
+  /// What the installer is told of the release the plan's delta made (release.ts takeDelta), applied apart from the
+  /// station; nothing when it was not made.
+  private async fromDelta(plan: Plan): Promise<Record<string, string>> {
+    const over = new AbortController();
+    // timer: a deadline of an outside request (the delta's download) and of the applier; past it the installer
+    // downloads the release.
+    const cancel = this.fibers.after(this.timing.deltaLimit, () => over.abort(new DOMException("timed out", "TimeoutError")));
+    try {
+      return await takeDelta(plan, {
+        app: this.app,
+        apply: applyApart,
+        signal: over.signal,
+        progress: (percent) => this.set("station", (i) => (i.percent = percent)),
+      });
+    } finally {
+      cancel();
+    }
+  }
+
+  /// Starts the installer of `plan`, told `handed` (an archive a delta made) too, and follows it; false when it did not
+  /// start (what it was handed removed).
+  private async startPlanned(plan: Plan, handed: Record<string, string>): Promise<boolean> {
+    const runDir = join(this.data, "run");
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.env)) if (v !== undefined) env[k] = v;
-    Object.assign(env, { STILLFAIL_DATA: this.data }, plan.env);
-    const ok = await startInstaller(plan.script, runDir, env, this.app);
+    // Never what an installer gave the station it started (one run without a service passes its own environment on):
+    // an archive long taken, a handing that is not this one's.
+    delete env.STILLFAIL_ARCHIVE;
+    delete env.STILLFAIL_INSTALLER_HANDED;
+    Object.assign(env, { STILLFAIL_DATA: this.data }, plan.env, handed);
+    const ok = !this.closed && (await startInstaller(plan.script, runDir, env, this.app));
     if (!ok) {
-      Object.assign(station, before);
-      throw refused(lang, "station.updates.couldNotStart");
+      if (handed.STILLFAIL_ARCHIVE) await rm(dirname(handed.STILLFAIL_ARCHIVE), { recursive: true, force: true }).catch(() => {});
+      return false;
     }
-    log.info("updates", "updating the station", { origin, channel, to: plan.release.version });
+    log.info("updates", "updating the station", { origin: plan.env.STILLFAIL_ORIGIN, channel: plan.env.STILLFAIL_CHANNEL, to: plan.release.version, delta: handed.STILLFAIL_ARCHIVE !== undefined });
     this.tried = plan.release.version;
     const started: Started = { at: this.fibers.now(), from: stationVersion(this.app) ?? null };
     try {
@@ -1084,6 +1143,7 @@ export class Updates {
       log.warn("updates", "update.started not written; a handover or restart will not say how the update went", { error: (e as Error).message });
     }
     this.follow(started);
+    return true;
   }
 
   /// An update started before this process, when one is: followed as if started here.

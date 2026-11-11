@@ -4,14 +4,14 @@ import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import { authorNameOf } from "./entries.ts";
-import type { Topic } from "./protocol.ts";
+import { STATION_PARTS, type Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
 import * as drive from "./drive.ts";
 import * as prefsMod from "./prefs.ts";
-import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
 import { permissionsShown } from "./permissions.ts";
+import { copiesShown } from "./copies.ts";
 import { elevationShown } from "./elevation.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
@@ -73,6 +73,61 @@ function windows(list: Record<string, unknown>[], c: Clock): Record<string, unkn
   return out.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
 }
 
+/// When so many resets end, in words (none known: nothing).
+function resetEnds(count: number, expiries: unknown, c: Clock): string[] {
+  const expiry: string[] = [];
+  if (count > 0 && Array.isArray(expiries)) {
+    const ends = expiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
+      .sort((a: number, b: number) => a - b).slice(0, count);
+    if (ends.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
+    const future = ends.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
+    if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
+  }
+  return expiry;
+}
+
+/// So many resets left, and when they end.
+function resetsText(count: number, expiries: unknown, c: Clock): string {
+  return [t("core-views.present.resets_left", { n: count }), ...resetEnds(count, expiries, c)].join(" · ");
+}
+
+/// Each kind's name, and what one gives back (a provider's own reset, `credit`, says nothing of it).
+const RESET_KINDS: Record<string, [string, string | null]> = {
+  session: ["core-views.present.reset.session", "core-views.present.reset.refills.session"],
+  weekly: ["core-views.present.reset.weekly", "core-views.present.reset.refills.weekly"],
+  full: ["core-views.present.reset.full", "core-views.present.reset.refills.full"],
+  model: ["core-views.present.reset.model", "core-views.present.reset.refills.model"],
+  credit: ["core-views.present.reset.credit", null],
+};
+
+/// A kind of reset as it is offered: its name, what one gives back, how many are left (`leftText`) and till when, and whether one
+/// can be used now (else only once at a limit it refills). `id`, what the station is asked for (none: any).
+/// What its words are made from (`model`, `expiries`) stays in it, as a window keeps its `resetsAt`: an overview is put
+/// again where it goes out as another value than the one it was put in (a part of it, an account's row, one that shares
+/// with the one before: store.ts), and a row put again says what it said. Without them a row lost when it ends the
+/// second time it went out (2026-11-11).
+function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unknown> {
+  const kind = Object.prototype.hasOwnProperty.call(RESET_KINDS, str(r.kind) ?? "") ? str(r.kind)! : "credit";
+  const [name, gives] = RESET_KINDS[kind]!;
+  const model = str(r.model) ?? "Fable";
+  const left = u64(r.left) ?? 0;
+  const usable = r.usable !== false;
+  const refills = gives === null ? null : t(gives, { model });
+  return {
+    ...(typeof r.id === "string" ? { id: r.id } : {}),
+    kind,
+    ...(typeof r.model === "string" ? { model: r.model } : {}),
+    left,
+    ...(Array.isArray(r.expiries) ? { expiries: r.expiries.filter((at: unknown) => typeof at === "number" && Number.isSafeInteger(at)) } : {}),
+    usable,
+    title: t(name, { model }),
+    // (how many on their own, where they are seen at once: the user, 2026-11-10)
+    leftText: t("core-views.present.reset.left", { n: left }),
+    text: [...resetEnds(left, r.expiries, c), ...(usable ? [] : [t("core-views.present.reset.needsLimit")])].join(" · "),
+    ...(refills !== null ? { refills } : {}),
+  };
+}
+
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
 /// are put as they are drawn. A new value where anything is put; a part with nothing put is the part as it was.
 export function times(value: unknown, c: Clock): unknown {
@@ -131,15 +186,11 @@ export function times(value: unknown, c: Clock): unknown {
     }
     const count = u64(map.resetCount);
     if (count !== undefined) {
-      const expiry: string[] = [];
-      if (count > 0 && Array.isArray(map.resetExpiries)) {
-        const expiries = map.resetExpiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
-          .sort((a: number, b: number) => a - b).slice(0, count);
-        if (expiries.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
-        const future = expiries.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
-        if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
-      }
-      map.resetText = [t("core-views.present.resets_left", { n: count }), ...expiry].join(" · ");
+      map.resetText = resetsText(count, map.resetExpiries, c);
+      // Each kind of reset it holds, as it is offered: a station from before kinds, or a provider with one kind (a
+      // ChatGPT subscription's), all of them as one with no kind to ask for.
+      const kinds = Array.isArray(map.resets) ? map.resets.filter(isObject) : count > 0 ? [{ kind: "credit", left: count, expiries: map.resetExpiries, usable: true }] : [];
+      map.resets = kinds.map((r) => presentReset(r, c));
       changed = true;
     }
   }
@@ -162,7 +213,11 @@ export function ticks(topic: Topic): boolean {
 /// it does not allow is an error naming the field.
 /// A topic's shape; undefined for one that goes out as it is.
 export function shapeOf(topic: Topic): Ty | undefined {
-  if (topic.topic === "stations" && topic.brief === true) return { vec: "StationBrief" };
+  // One part of a station's overview: that field's own shape in Overview, null while there is none.
+  if (topic.topic === "stationPart") {
+    const ty = typeof topic.part === "string" && STATION_PARTS.includes(topic.part) ? fieldOf("Overview", topic.part) : undefined;
+    return ty === undefined ? undefined : typeof ty === "object" && "opt" in ty ? ty : { opt: ty };
+  }
   return TOPIC_SHAPES[topic.topic];
 }
 
@@ -182,7 +237,8 @@ export function fieldOf(ty: Ty, field: string): Ty | undefined {
 
 /// An item of a keyed list as `decorate` would make it inside its whole (output.ts).
 export function decorateItem(topic: Topic, item: unknown, c: Clock): unknown {
-  if (!ticks(topic)) return item;
+  // (a list's station rows say their times in words themselves, views.ts: none put in to be dropped by their shape)
+  if (!ticks(topic) || topic.topic === "stations") return item;
   return times(topic.topic === "sessions" ? session(item as J) : item, c);
 }
 
@@ -1158,8 +1214,6 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   switch (topic.topic) {
     case "host":
       return host(value);
-    case "footprint":
-      return footprint.shown(value, c);
     case "drive":
       return drive.shown(value, c);
     case "prefs":
@@ -1227,6 +1281,10 @@ function overview(value: J, c: Clock, station: string | null): J {
   const elevation = elevationShown(v.elevation);
   if (elevation === undefined) delete v.elevation;
   else v.elevation = elevation;
+  // Where its chats are copied (copies.ts); none said, none shown.
+  const copies = copiesShown(v.copies, c);
+  if (copies === undefined) delete v.copies;
+  else v.copies = copies;
   const decided = v.automaticDecisions;
   if (isObject(decided)) {
     const shown: J = { ...decided };
@@ -1245,7 +1303,6 @@ function overview(value: J, c: Clock, station: string | null): J {
         ? t("core-views.present.processes.none")
         : t("core-views.present.processes.running", { n: processes.length, size: mb >= 1024 ? `${format.fixed1(mb / 1024)} GB` : `${mb} MB` });
   }
-  if (isObject(v.footprint)) v.footprint = footprint.brief(v.footprint);
   const connects = arr(v.connects);
   if (connects) v.connects = connects.map(connect);
   const updates = arr(v.updates);

@@ -375,6 +375,10 @@ pub fn fixture_new_call(Fixture, String, Json) -> Result[Json, Json]?
 
 pub fn fixture_new_topic(Fixture, String) -> Json?
 
+pub fn fixture_outline(Fixture, Map[String, @json.Json]) -> @json.Json?
+
+pub fn fixture_outline_call(Fixture, String, @json.Json) -> Result[@json.Json, @json.Json]?
+
 pub fn fixture_pdf() -> Bytes
 
 pub fn fixture_peek((Json, Bytes?) -> Unit) -> Int32
@@ -445,6 +449,8 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
 
 pub fn fx_key_label(String, Bool) -> String
 
+pub let fx_key_unlisted : Array[String]
+
 pub fn fx_keys_of(Map[String, Array[String]], (String, String, Array[String], Array[String], String)) -> Array[String]
 
 pub let going_up_picture : Json
@@ -491,6 +497,14 @@ pub fn novel_text() -> String
 
 pub fn outgoing_json(String, Json, String, String) -> Json
 
+pub let outline_away_seq : Double
+
+pub fn outline_chat(String, around? : Bool) -> @json.Json
+
+pub let outline_long_away_seq : Double
+
+pub fn outline_mode(String) -> Bool
+
 pub let peeks_answer : String
 
 pub fn person(String, String, Bool) -> Json
@@ -509,7 +523,7 @@ pub fn rich_chat(Int32) -> Json
 
 pub fn round_trip(@sfbase.Source, Double) -> @sfbase.Source
 
-pub fn round_trip_again(@sfbase.Source, Double) -> @sfbase.Source
+pub fn round_trip_again(@sfbase.Source, Double, heard? : (String) -> Unit) -> @sfbase.Source
 
 pub fn round_trip_by(@sfbase.Source, () -> Double) -> @sfbase.Source
 

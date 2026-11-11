@@ -455,6 +455,54 @@ pub let started_by : Array[String] = [
 ]
 
 ///|
+/// What the released app always does that a replay's app does only where its trace's head says its run's app did: a
+/// way of asking the core that a change brought in after traces were recorded, which those traces' replays could not
+/// keep to (their asks are held to what the run asked). A recording's app says each of these is on (src/stillfail's
+/// CORETRACE env); a replay reads one by `trace_switch`, never by its own name, so none goes uncounted. How many traces
+/// still replay without each is held to its bar and only falls (src/sfreplay/flows/trace_switches_test.mbt): a replay
+/// without one tests what no device does any more, its subscriptions' bytes (topic_bytes) included.
+pub let trace_switches : Array[String] = [
+  // (#5227: what the places of the bar open on is kept, and asked ahead for as long as the bar is there; a station
+  // sampled only from a finger on its tab. In the place of #5142's MBUI_PLACES_AHEAD, whose way of asking (worked out
+  // frame by frame) is gone: the one trace recorded with it was recorded again with this one)
+  "MBUI_PLACES_BAR",
+  // (设备: the stations' places and pages ask for the workspace's devices)
+  "MBUI_DEVICES",
+  // (the stations a row each, `station` one whole, `stationPart` one part of its overview, `connects`' Slack apps and
+  // `noProfile`, `profiles`' machine logins: what the app asks since the lists stopped taking the stations whole. Unlike
+  // the others, the app does not branch on it: its old way of asking (`stations` whole, `brief`, `drive`) is
+  // gone from it, so only the replay reads it. A trace without it has its run's `stations` kept by the replay itself
+  // (@core.Replay::keep_stations), the new asks read out of the stations whole it has (src/sfreplay/source.mbt))
+  "MBUI_STATION_ROWS",
+  // (what the places open on (sfbase's `lasting`) is kept as it is let go of and asked again with its version, the
+  // core answering `same` where it has not changed: client/core-ts protocol.ts `keep`, `have`; @core.Client::keep)
+  "MBUI_HAVE_SAME",
+  // (对话目录: an open chat's page on a page wide enough for its rail, and its outline's panel, ask for its outline)
+  "MBUI_OUTLINE",
+  // (the connects a row each, `connect` one whole, `connectCandidates` what its choice of a session lists, asked by a
+  // single-session connect's page while its 更换 row shows: what the app asks since a list stopped taking each connect with every session it could deliver
+  // into. Like MBUI_STATION_ROWS the app does not branch on it, its old way (one connect read out of `connects`' whole
+  // items) gone from it, so only the replay reads it: a trace without it has the app's `connect` and
+  // `connectCandidates` read out of its run's `connects {scope, mine:false}` (src/sfreplay/source.mbt))
+  "MBUI_CONNECT_ROWS",
+  // (a chat, however it is asked, kept as it is let go of as the lists are, the last few of them, and asked again with
+  // its version: the core answering `same`, or what changed from it (`{id, delta, kept}`); sfbase's `topic_kept`)
+  "MBUI_KEEP_CHAT",
+]
+
+///|
+/// Whether the run a replay plays had `name` on (its trace's head, as its Tester was started with it): `name` one of
+/// `trace_switches`.
+pub fn trace_switch(name : String) -> Bool {
+  if !trace_switches.contains(name) {
+    @halt.saying(
+      "trace_switch: \{name} is not one of sfcore's trace_switches: say it there, and its bar in src/sfreplay/flows/trace_switches_test.mbt",
+    )
+  }
+  @ui.env(name) == "1"
+}
+
+///|
 /// An environment variable (a Tester's, as its test gives it, the host's else), or the same name with `_B64` given as
 /// base64 ("" when neither is set): @hostapi.env_text, through @ui.env.
 pub fn env_text(name : String) -> String {

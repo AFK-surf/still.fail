@@ -230,6 +230,46 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
 }
 
 ///|
+test "a station's backups are one row of its 设置, 备份, nothing to press; a new station's backup to restore its one button" {
+  for (w, platform) in page_cases {
+    let at = "\{w} platform \{platform}"
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-copies", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("备份") is Some(_), msg="its row: \{at}")
+    assert_true(t.find("已备份到 Cedar 和 Aspen · 2 分钟前") is Some(_), msg="where they are: \{at}")
+    assert_true(t.find("恢复到这台") is None, msg="nothing to press: \{at}")
+    // (after the station's own settings: its variables come before it)
+    let (_, vy) = t.find("Agent 环境变量").unwrap()
+    let (_, by) = t.find("已备份到 Cedar 和 Aspen · 2 分钟前").unwrap()
+    assert_true(vy < by, msg="after its settings: \{at}")
+    // a new station: the backup of a station no longer there in the row's place, 恢复到这台 its one button
+    let r = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-restore-offer", h=2400.0)
+    r.run_for(@ui.move_most_ms)
+    assert_true(r.find("Old Mac 的 128 个聊天") is Some(_), msg="what it would restore: \{at}")
+    assert_true(r.find("恢复到这台") is Some(_), msg="its button: \{at}")
+    // its button in the card's corner, the corner rule holding it there: concentric with the card's corner, as far in
+    // from its end as from its top and foot (the user, 2026-11-10: 「这按钮和卡片圆角也对不上」)
+    let pairs = r.corner_pairs().filter(fn(p) { p.contains("恢复到这台") })
+    assert_true(pairs.length() > 0, msg="the button counted in the card's corner: \{at}")
+    let faults = r.corner_faults().filter(fn(f) { f.contains("恢复到这台") })
+    assert_true(faults.length() == 0, msg="concentric with the card's corner: \{at} \{faults}")
+    // while it is restored, and once it is, the row says how it goes, nothing to press
+    let g = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-restore", h=2400.0)
+    g.run_for(@ui.move_most_ms)
+    assert_true(g.find("正在恢复：37 / 412 个文件") is Some(_), msg="how it goes: \{at}")
+    assert_true(g.find("恢复到这台") is None, msg="no button while it is restored: \{at}")
+    let d = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-restored", h=2400.0)
+    d.run_for(@ui.move_most_ms)
+    assert_true(d.find("已恢复 Old Mac 的 128 个聊天 · 2 分钟前") is Some(_), msg="what came of it: \{at}")
+    assert_true(d.find("恢复到这台") is None, msg="no button once it is restored: \{at}")
+    @settings.station_parts["ws1/st1"] = "overview"
+    r.draw()
+    assert_true(r.find("恢复到这台") is None, msg="not on the overview: \{at}")
+    assert_true(r.find("Old Mac 的 128 个聊天") is None, msg="not on the overview: \{at}")
+  }
+}
+
+///|
 test "an away station's 设置 shows none of what only it can change, a line saying so" {
   for (w, platform) in page_cases {
     let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-away", h=2400.0)
@@ -279,8 +319,9 @@ test "a station with many profiles can search within one kind" {
       topic_read: fn(name, params) {
         let read = base.topic(name, params).get().snapshot()
         match (name, read.value) {
-          ("stations", Some(Array(stations))) => {
-            let shaped = stations.map(fn(station) {
+          // (its page, whole: the station's own ask)
+          ("station", Some(station)) => {
+            let shaped = {
               match station {
                 Object(s) if text(Some(station), "station") == "ws1/st1" => {
                   let copy = s.copy()
@@ -315,8 +356,8 @@ test "a station with many profiles can search within one kind" {
                 }
                 _ => station
               }
-            })
-            { ..read, value: Some(Json::array(shaped)) }
+            }
+            { ..read, value: Some(shaped) }
           }
           _ => read
         }
@@ -760,6 +801,52 @@ test "a station's 进程: what still.fail uses of it, whose by whose, the overvi
   let node = drawn(t, "node")
   let whose = drawn(t, "修一下登录")
   assert_eq(node.1 + node.3 / 2.0, whose.1 + whose.3 / 2.0, msg="its chat beside its name")
+}
+
+///|
+test "a station's 进程: each total's line under its label at the tile's end, as far in as the label at its start" {
+  for case in [(390.0, 2), (720.0, 0), (1280.0, 0)] {
+    let (w, platform) = case
+    let t = station_tester("ws1/st1", part="processes", w~, platform~)
+    let label = drawn(t, "CPU")
+    let sub = drawn(t, "占 10 核的 2%")
+    let tile = ground_round(t, label)
+    let start = label.0 - tile.0
+    let end = tile.0 + tile.2 - (sub.0 + sub.2)
+    assert_true((start - end).abs() < 0.5, msg="\{w} platform \{platform}: the sub \{start} in at the start, \{end} at the end")
+  }
+}
+
+///|
+test "a station's 进程 on a wide page: the choice of whose at the bar's start, of how at its end, where the tiles end" {
+  for case in [(720.0, 0), (1280.0, 0)] {
+    let (w, platform) = case
+    assert_true(laid_wide(w))
+    let t = station_tester("ws1/st1", part="processes", w~, platform~)
+    let how = ground_round(t, drawn(t, "平铺"))
+    let last = ground_round(t, drawn(t, "↓ 1.6 KB/s"))
+    assert_true((how.0 + how.2 - (last.0 + last.2)).abs() < 0.5, msg="\{w} platform \{platform}: 分组/平铺 ends at \{how.0 + how.2}, the tiles at \{last.0 + last.2}")
+  }
+}
+
+///|
+/// The least ground drawn round words drawn at `r` (x, y, w, h): what they are on.
+fn ground_round(t : @ui.Tester, r : (Double, Double, Double, Double)) -> (Double, Double, Double, Double) raise {
+  let (cx, cy) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
+  let mut best : (Double, Double, Double, Double)? = None
+  for g in t.drawn_rects() {
+    let (x, y, gw, gh, _) = g
+    if cx >= x && cx <= x + gw && cy >= y && cy <= y + gh {
+      match best {
+        Some(b) if b.2 * b.3 <= gw * gh => ()
+        _ => best = Some((x, y, gw, gh))
+      }
+    }
+  }
+  match best {
+    Some(b) => b
+    None => fail("no ground round \{r}")
+  }
 }
 
 ///|

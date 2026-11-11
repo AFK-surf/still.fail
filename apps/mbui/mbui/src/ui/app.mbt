@@ -526,11 +526,18 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   let told = c.told.copy()
   c.told.clear()
   if tell {
+    // (each one change, as a press's handler is: what it writes told once all of it is written, never what reads it
+    // run between two of its writes and seeing half of it; an after_build's (a host's notice tapped, opening its page)
+    // as a tell's)
     for f in tells {
+      @signals.start_batch()
       f()
+      @signals.end_batch()
     }
     for t in told {
+      @signals.start_batch()
       (t.1)()
+      @signals.end_batch()
     }
     // (what is told may answer at once (a cache, a test's core): what the answer changes is shown by the frame after,
     // owed now, at this moment, not by whatever frame comes next)
@@ -777,6 +784,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   picture_at.clear()
   c.layers.clear()
   c.focusables.clear()
+  islands_built.clear()
   c.sem_hide = 0
   c.layer_cur = 0
   c.group_cur = 0
@@ -1816,6 +1824,18 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 }
 
 ///|
+/// Which way the last wheel went (on_wheel_now): 1 the window's tree, 2 an old view it hosts there, 3 the old frame
+/// (0: none yet); and, of an old view's, what scrolls there it went to (old_wheel: its id, 0 none). What a scripted
+/// run says of its `wheel` (drive.mbt `wheel_said`); nothing reads them to decide anything. Numbers written in place:
+/// a wheel turned on a device makes nothing for it.
+// kept across runs: each wheel writes them anew
+let wheel_went : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: each wheel writes it anew
+let wheel_old_target : Ref[Int] = Ref(0)
+
+///|
 fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   // what was held with it, above its phase (wheel_mod_*: ⇧ ⌃ ⌥ ⌘, and a trackpad's pinch as a wheel with ⌃ held)
   let mods = phase / 16
@@ -1833,12 +1853,17 @@ fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
   }
   // (a wheel's notch said so to the tree's: a page's list of it eases it in, as an old view's list does)
   let notch = if phase % 16 == 4 { @view.wheel_notch } else { 0 }
+  wheel_old_target.val = 0
   if view_wheel(x, y, dx, dy, mods | notch, old~) {
     if !old_took.val {
+      wheel_went.val = 1
       input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+    } else {
+      wheel_went.val = 2
     }
     return
   }
+  wheel_went.val = 3
   old_wheel(x, y, dx, dy, phase)
 }
 
@@ -1940,6 +1965,7 @@ fn old_wheel(
   let c = g()
   let (ids, rects) = wheel_scrolls(c, island)
   let mut target = wheel_target(ids, rects, x, y)
+  wheel_old_target.val = target
   // (what scrolls there in an old view a modal layer of the window's tree keeps from input: nothing scrolls, the wheel
   // taken: island_allows)
   if target != 0 && !island_allows(c.island_of_id(target)) {

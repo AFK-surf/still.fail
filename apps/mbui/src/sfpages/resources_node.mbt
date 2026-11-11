@@ -318,7 +318,6 @@ fn rs_table_node(
               |> ignore
               n.box(fn(cell) {
                 @sf.style_node(cell, fn() { rs_whose_cell }, in_row=true)
-                cell.cuts(Is(true)) |> ignore
                 rs_title_node(cell, core, g, rs_whose)
               })
               |> ignore
@@ -410,9 +409,6 @@ fn rs_heads_node(
       for i, key in heads {
         first.box(fn(cell) {
           @sf.style_node(cell, fn() { if i == 0 { rs_name_cell } else { rs_whose_cell } }, in_row=true)
-          if i > 0 {
-            cell.cuts(Is(true)) |> ignore
-          }
           @sf.words_node(cell, fn() { @sf.t(key) }, fn() { rs_head }) |> ignore
         })
         |> ignore

@@ -9,7 +9,7 @@
 
 ///|
 pub fn by_agent(maker : String, runtime : String, key : String) -> Json {
-  { "name": "Claude", "agent": Json::string(key), "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime), "here": true }
+  { "name": "Claude", "agent": Json::string(key), "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime) }
 }
 
 ///|
@@ -18,8 +18,9 @@ pub fn by_person(name : String) -> Json {
 }
 
 ///|
+/// When a message (an outgoing one, one said elsewhere) was said, as a chat says it (SaidAt).
 pub fn ago(s : String, full : String) -> Json {
-  { "createdAt": { "at": 0, "ago": Json::string(s), "full": Json::string(full), "until": "", "past": true } }
+  { "createdAt": { "ago": Json::string(s), "full": Json::string(full) } }
 }
 
 ///|
@@ -451,7 +452,9 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
-          let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
+          let v = if outline_mode(f.mode) {
+            outline_chat(f.mode, around=f.older > 0)
+          } else if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
           } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {
             with_model_limit(rich_chat(f.older), f.mode == "chat-model-limit-after")
@@ -491,6 +494,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_cache_cold(rich_chat(f.older))
           } else if f.mode == "chat-done" {
             with_state(rich_chat(f.older), done_state)
+          } else if f.mode == "chat-image-coming" {
+            with_coming_screenshot(rich_chat(f.older))
           } else if f.mode == "chat-download" || f.mode == "chat-keeping" {
             with_download_message(rich_chat(f.older))
           } else if f.mode == "chat-download-on" {
@@ -507,7 +512,16 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             _ => v
           }
         })
-        Some(with_cards(f, with_sent(base, session), session))
+        // chat-done-live: a chat whose agent's turn is over, saying where the chat stands as the core does: not while
+        // words sent are on their way or its agent works (scripts/instrbench.sh's `send`)
+        let sent = with_sent(base, session)
+        let fc = fix_chat(session)
+        let sent = if f.mode == "chat-done-live" && fc.outbox.is_empty() && fc.working < 0.0 {
+          with_state(sent, done_state)
+        } else {
+          sent
+        }
+        Some(with_cards(f, sent, session))
       } else if session.has_prefix("new:") {
         // one just made from a new chat (newChat.create): nothing in it but what is sent to it
         Some(with_sent(made_chat(session), session))
@@ -607,6 +621,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         },
       ])
     "chatJobs" => Some({ "jobs": [] })
+    // what people said in the chat, by the day (the core's `chatOutline`: outline_fixture.mbt)
+    "chatOutline" => fixture_outline(f, params)
     // what was said in the chat besides words (the core's `chatThings`: sfpages things.mbt)
     // (the chat's sheet with one pull request, as tall as the window holds: its others with chat-info-pulls)
     "chatThings" => Some(fixture_things(text(Some(Json::object(params)), "q"), many=f.mode != "chat-info"))
@@ -706,7 +722,44 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
     // chat-working: its agent's step, said in more words than a phone's line has room for
     "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
       Some({ "loaded": true, "activity": { "now": { "key": fix_working_now.val.0, "text": fix_working_now.val.1, "important": fix_working_important.val } } })
+    // chat-feedback: the still.fail team replied on a bug report sent from the chat (sfpages feedback_replies.mbt);
+    // chat-feedback-answered: and someone of the chat answered them
+    "chatFeedback" if session == "s-c1" && (f.mode == "chat-feedback" || f.mode == "chat-feedback-answered") =>
+      Some(fix_feedback(f.mode == "chat-feedback-answered"))
     _ => fixture_drive_topic(f, name, params)
+  }
+}
+
+///|
+/// The chat's bug report the still.fail team replied on, as the core's `chatFeedback` gives it; `answered`: and Ada
+/// answered them in the app.
+fn fix_feedback(answered : Bool) -> Json {
+  let replies : Array[Json] = [
+    {
+      "id": "r1",
+      "from": "team",
+      "who": "still.fail 团队",
+      "text": "谢谢反馈！能再说一下出错时 Willow 在跑什么吗？我们在日志里看到那会儿它重启过一次。\n\n临时绕过：把这条对话归档再恢复，消息就会补上。",
+      "when": "14:05",
+    },
+  ]
+  if answered {
+    replies.push({ "id": "r2", "from": "person", "who": "Ada", "text": "那会儿在跑 pnpm build，重启前内存快满了。", "when": "14:12" })
+  }
+  {
+    "reports": [
+      {
+        "id": "FB0000000000000000000000012",
+        "workspace": "ws1",
+        "account": "u1",
+        "number": 12,
+        "label": "FB-12",
+        "title": "chat_post 偶尔发不出去",
+        "heading": "still.fail 团队回复了 FB-12",
+        "latest": "谢谢反馈！能再说一下出错时 Willow 在跑什么吗？我们在日志里看到那会儿它重启过一次。",
+        "replies": Json::array(replies),
+      },
+    ],
   }
 }
 
@@ -1137,6 +1190,11 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
     Some(r) => return Some(r)
     None => ()
   }
+  // a chat's outline's (outline_fixture.mbt)
+  match fixture_outline_call(f, name, params) {
+    Some(r) => return Some(r)
+    None => ()
+  }
   let p = Some(params)
   let session = match text(p, "session") {
     "" =>
@@ -1157,7 +1215,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
         fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
         // (chat-ask-end's card answered by it at once, as the core says it: decisions.ts inMessages)
         if f.mode == "chat-ask-end" && session == "s-c1" && !fix_decided.contains(62) {
-          fix_decided[62] = { "resolved": true, "answeredBy": "你", "text": "你 回复了" }
+          fix_decided[62] = { "resolved": true, "text": "你 回复了" }
         }
         fix_later(fix_pace.val.0, fn() { fix_deliver(session, id) })
       }
@@ -1511,6 +1569,10 @@ pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false
 pub let fix_phone : Ref[String] = Ref("")
 
 ///|
+/// The length chat-phone's request was last allowed for (`adb.decide`'s scope): "" none yet.
+pub let fix_phone_scope : Ref[String] = Ref("")
+
+///|
 /// Granted, how its station's adb holds the phone, as the station says it on the card ("": not said).
 pub let fix_phone_link : Ref[String] = Ref("")
 
@@ -1530,6 +1592,62 @@ pub fn phone_post() -> Json {
   }
   msg(61, "agent", by_agent("Anthropic", "claude", "s-c1"), "申请调试你的手机：装上刚编好的测试包，看首屏在折叠屏展开时排得对不对", "刚刚", {
     "card": { "type": "options", "phoneAsk": Json::object(ask) },
+    "createdAt": Json::number(1.0e9),
+  })
+}
+
+///|
+/// How chat-rig's request for a rig, at the chat's end, went once decided here ("": waiting; granted; away: approved,
+/// the rig not reached yet; denied; ended).
+pub let fix_rig : Ref[String] = Ref("")
+
+///|
+/// What `rig.decide` was asked with here, each time (a test reads what the card sent).
+pub let fix_rig_asked : Array[Json] = []
+
+///|
+/// chat-rig's last post: an agent asking for the rig build-box (a station that only runs tasks), its card as the core says it, answered here
+/// by its person; decided, how it went. `mine`: whether the rig is the viewer's (chat-rig-other: 陈's, who is asked).
+/// `device`: for one of its devices alone (chat-rig-device: 开发板).
+pub fn rig_post(mine : Bool, device? : Bool = false) -> Json {
+  let ask : Map[String, Json] = {
+    "request": "r-1",
+    "rig": "aa11",
+    "name": "build-box",
+    "owner": if mine { "s" } else { "u-chen" },
+    "reason": "在 Linux 上跑一遍完整的 station 测试",
+    "timeoutKind": "idle",
+    "timeoutSeconds": 3600,
+    "session": "s-c1",
+    "chat": "CHAT/1",
+    "title": "修 CI",
+    "by": "lin@example.com",
+  }
+  if device {
+    ask["device"] = "1b2c3d4e5f607182"
+    ask["deviceName"] = "开发板"
+    ask["reason"] = "给开发板刷新固件，看串口输出"
+  }
+  match fix_rig.val {
+    "" => ()
+    "granted" | "away" => {
+      ask["status"] = "granted"
+      ask["delivered"] = Json::boolean(fix_rig.val == "granted")
+      ask["grantedKind"] = "fixed"
+      ask["grantedSeconds"] = 28800
+    }
+    "ended" => {
+      ask["status"] = "ended"
+      ask["why"] = "所有者已收回"
+    }
+    s => ask["status"] = Json::string(s)
+  }
+  let card : Map[String, Json] = { "type": "options", "rigAsk": Json::object(ask), "assignee": if mine { "lin@example.com" } else { "chen@example.com" } }
+  if !mine {
+    card["assigneeText"] = "等 陈 决定"
+  }
+  msg(63, "agent", by_agent("Anthropic", "claude", "s-c1"), "申请使用 station「build-box」：在 Linux 上跑一遍完整的 station 测试", "刚刚", {
+    "card": Json::object(card),
     "createdAt": Json::number(1.0e9),
   })
 }
@@ -1590,6 +1708,12 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
+  // (chat-rig: an agent's request for the viewer's rig, waiting; -other: someone else's rig; -web: on a web page;
+  // -outside: on a device not on its person's own lock; -granted, -away, -ended: decided so already)
+  let rig = f.mode.has_prefix("chat-rig")
+  if fix_rig.val == "" && (f.mode == "chat-rig-granted" || f.mode == "chat-rig-away" || f.mode == "chat-rig-ended") {
+    fix_rig.val = f.mode.unsafe_substring(start="chat-rig-".length(), end=f.mode.length())
+  }
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-outside" || f.mode == "chat-phone-none" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options;
   // chat-phone-linked-<link>[-desk]: approved, its station holding the phone as <link> says, on the phone or (-desk)
@@ -1607,7 +1731,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       None => rest
     }
   }
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end) {
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end && !rig) {
     return v
   }
   match v {
@@ -1654,6 +1778,10 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       if signin {
         all.push(signin_post(f.mode))
+      }
+      // chat-rig's request for a rig, last
+      if rig {
+        all.push(rig_post(f.mode != "chat-rig-other", device=f.mode == "chat-rig-device"))
       }
       // chat-ask-end's card, last of what was there: what was sent since comes after it, as it was said after it (put
       // at the end, words sent under it came to stand over it once the station had them, a whole row up in one frame)
@@ -1732,7 +1860,15 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
     }
     // chat-vault's request decided: how it went on its card at once, as the core puts it
     "adb.decide" if text(p, "request") == "p-1" => {
+      fix_phone_scope.val = text(p, "scope")
       fix_phone.val = if text(p, "scope") != "" { "granted" } else { "denied" }
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
+    // chat-rig's request decided: how it went on its card at once, as the core puts it
+    "rig.decide" if text(p, "request") == "r-1" => {
+      fix_rig_asked.push(params)
+      fix_rig.val = if flag(p, "allow") { "granted" } else { "denied" }
       f.changed()
       Some(Ok(Json::object({})))
     }
@@ -1803,6 +1939,62 @@ pub let viz_answer : String =
   #|```mermaid
   #|graph LR; 构建-->签名-->发布
   #|```
+
+///|
+/// MBUI_FIXTURE=chat-image-coming: a last message's two pictures still coming from their station (fixture.mbt's
+/// `file`): a photograph (its ThumbHash's field a sky over a meadow), 8400 of its thumbnail's 24000 bytes heard, and a
+/// light screenshot (a report's, 780 × 2600, its ThumbHash's field the page's colour), 0 of its 13249.
+let coming_screenshot : String = "adb-chats.png"
+
+///|
+let coming_photo : String = "meadow.jpg"
+
+///|
+/// How far each of chat-image-coming's pictures has come, by its name (None: not one of them).
+fn coming_heard(name : String) -> Json? {
+  if name == coming_screenshot {
+    Some({ "loaded": 0.0, "total": 13249.0 })
+  } else if name == coming_photo {
+    Some({ "loaded": 8400.0, "total": 24000.0 })
+  } else {
+    None
+  }
+}
+
+///|
+fn with_coming_screenshot(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      let shot = match file(coming_screenshot, 780, 2600, 182000) {
+        Object(a) => {
+          let a = a.copy()
+          a["thumbhash"] = "PAgCAgBQN4aJy7s3lnBcKvU="
+          Json::object(a)
+        }
+        a => a
+      }
+      let photo = match file(coming_photo, 1200, 860, 412000) {
+        Object(a) => {
+          let a = a.copy()
+          a["thumbhash"] = "3OcRJYB4d3h/iIeHeEh3eIhw+j3A"
+          Json::object(a)
+        }
+        a => a
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), "截图在这里。", "1 分钟前", { "ending": "all_done", "attachments": [photo, shot] }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
 
 ///|
 /// MBUI_FIXTURE=chat-file-links: a last message naming two of its files by links within a sentence, written escaped
@@ -2321,7 +2513,6 @@ pub fn with_station_update(v : Json) -> Json {
         "version": "0.25.0",
         "open": true,
         "canUpdate": true,
-        "dismissible": true,
       }
       Json::object(o)
     }
@@ -2408,7 +2599,7 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
       "seq": Json::number(seq.to_double()),
       "createdAt": Json::number(seq.to_double()),
       "by": Json::string(by),
-      "time": ago(when, "10/19 0\{seq % 10}:12:00"),
+      "time": { "createdAt": { "at": 0, "ago": Json::string(when), "full": Json::string("10/19 0\{seq % 10}:12:00"), "until": "", "past": true } },
     }
     for k, v in more {
       m[k] = v

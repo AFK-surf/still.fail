@@ -66,6 +66,22 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
 }
 
 ///|
+/// A file a message names by its path (`path`, its agent `agent`'s on `station`) held or right clicked: 在侧边打开
+/// where it is offered (beside_offered: a side panel for the chat, a file, a kind that opens there); else nothing.
+fn path_held(c : @ui.Ctx, src : Source, station : String, agent : String, path : String) -> Unit {
+  if path.has_suffix("/") || !@sfbase.beside_offered(path, stored_name(path)) {
+    return
+  }
+  pk.taken_at = c.press().frame
+  let (x, y, _) = c.pointer()
+  @sf.menu_held(c, "link") |> ignore
+  @sf.menu(
+    [Some(@sf.menu_item_of(@sf.t("web-main.preview.openBeside"), fn() { open_named(src, station, agent, path, beside=true) }, icon="panel-open"))],
+    from=@sf.at_point(x, y),
+  )
+}
+
+///|
 /// A file in a message (box `id`; a picture's image `src`, else "") held or right clicked: its menu there, as a
 /// passage's (pick.mbt): 引用 into the chat's draft (`quote`, where it is a message's), then what else it offers
 /// (`more`: 下载 and a video's 加载), then a picture's copy.

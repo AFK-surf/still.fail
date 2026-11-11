@@ -24,10 +24,12 @@ pub fn station_node(
   tips? : @sf.TipLayer,
   stint? : () -> Int = fn() { 0 },
 ) -> Unit {
+  // (that station alone, whole: none while the stations are not known, null where the workspace has no such station)
   let listed = fn() {
-    match @settings.stations_of(core, here()).value {
-      Some(Array(list)) => Some(list.iter().any(fn(s) { text(Some(s), "station") == address }))
-      _ => None
+    match @settings.station_read(core, here(), address).value {
+      Some(Object(_)) => Some(true)
+      Some(_) => Some(false)
+      None => None
     }
   }
   let manager = fn() {
@@ -41,8 +43,14 @@ pub fn station_node(
     None => @sf.TipLayer::new(fn() { Some(v) })
   }
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-  v.pick(fn() { (listed(), listed() == Some(true) && manager()) }, fn(p, k) {
+  // (one that only runs tasks is no station this device is linked to: its own page, station_rig.mbt)
+  let rig = fn() { @settings.rig_at(core, here(), address) }
+  v.pick(fn() { (if rig() is Some(_) { None } else { listed() }, listed() == Some(true) && manager(), rig() is Some(_)) }, fn(p, k) {
     p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    if k.2 {
+      rig_station_node(p, core, here, address, rig, on_back, frame, said, width, tips)
+      return
+    }
     match k.0 {
       Some(true) =>
         station_view_node(p, core, here, fn() { @settings.station_of(core, here(), address) }, k.1, None, on_back, frame, said, width, tips, stint)
@@ -118,6 +126,14 @@ fn station_view_node(
       "profiles" => station_profiles_node(b, core, here, s)
       "connects" => station_connects_node(b, core, s)
       "drive" => station_drive_node(b, s)
+      // its devices, and adding one: any member but one who only reads (a whole station's are every chat's)
+      "devices" => {
+        let id = text(@signals.untracked(s), "id")
+        @settings.station_devices_node(b, core, here, id, false, fn() {
+          let role = text(workspace_view(core, here()).value, "role")
+          role != "" && role != "viewer"
+        })
+      }
       "more" => station_more_node(b, core, address)
       "processes" => station_processes_node(b, core, here, s)
       "offline" => @sf.group_node(b, fn(g) { said_row_node(g, fn() { @sf.t("web-pages.stations.settingsOffline") }) })
@@ -131,6 +147,7 @@ fn station_view_node(
       "elevation" => station_elevation_node(b, core, address, fn() { field(field(s(), "overview"), "elevation") })
       "workspaces" => station_workspaces_node(b, core, address)
       "network" => station_network_node(b, core, address, fn() { field(field(s(), "overview"), "network") }, manager)
+      "copies" => station_copies_node(b, core, address, fn() { field(field(s(), "overview"), "copies") })
       "software" => station_software_node(b, core, s, manager, tips)
       "device" => station_device_node(b, s)
       _ => ()
@@ -188,6 +205,10 @@ fn station_overview_keys(core : Core, s : Json?) -> Array[String] {
   if field(o, "drive") is Some(Object(_)) {
     out.push("drive")
   }
+  // its devices while it is up (one is added there)
+  if flag(s, "online") {
+    out.push("devices")
+  }
   out.push("more")
   out
 }
@@ -219,6 +240,9 @@ fn station_settings_keys(s : Json?, manager : Bool) -> Array[String] {
   }
   if manager {
     out.push("workspaces")
+  }
+  if field(o, "copies") is Some(Object(_)) {
+    out.push("copies")
   }
   if field(o, "network") is Some(Object(_)) {
     out.push("network")
@@ -1616,10 +1640,6 @@ fn station_device_node(b : @view.View, s : () -> Json?) -> Unit {
         if known {
           let rows = fn() {
             let out : Array[(String, String)] = items(host(), "details").map(fn(d) { (text(Some(d), "label"), text(Some(d), "value")) })
-            let footprint = text(field(field(s(), "overview"), "footprint"), "text")
-            if footprint != "" {
-              out.push((@sf.t("web-pages.stations.page.footprint"), footprint))
-            }
             out
           }
           @sf.block_node(p, fn(k) { host_details_node(k, rows) })

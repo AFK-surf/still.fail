@@ -302,8 +302,7 @@ pub fn Anim::animate(
       // 4066.666666666667 for 4066.6666666666665, from now)
       if at > c.moment() + @ui.same_moment_ms {
         let s = "Anim::animate: start_at \{at} is later than now (\{c.moment()}), told at \{loc}"
-        println(s)
-        abort(s)
+        @halt.saying(s)
       }
       if at > c.moment() {
         c.moment()
@@ -344,6 +343,89 @@ pub fn Anim::animate(
     // (who it is for the performance record: its key and who told it, not where to)
     self.id.told_as(what, loc)
   }
+}
+
+///|
+/// Where it is and how fast it goes (per second) at moment `at` on the way it was told, as that way has it (not where a
+/// frame drew it): its start if `at` is before it.
+fn Anim::state_at(self : Anim, at : Double) -> (Double, Double) {
+  if !self.running || self.start < 0.0 {
+    return (self.value, 0.0)
+  }
+  let ms = at - self.start
+  if ms <= 0.0 {
+    return (self.from, self.v0)
+  }
+  if ms >= self.dur {
+    return (self.end, 0.0)
+  }
+  match (self.gen, self.spec) {
+    (Some(g), Motion(tr)) => {
+      let t = ms - tr.delay
+      if t < 0.0 {
+        (self.from, self.v0)
+      } else {
+        (g.next(t).value, g.velocity(t, initial=self.v0))
+      }
+    }
+    _ => self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
+  }
+}
+
+///|
+/// Where a frame drawn at moment `at` (now or later) has it on the way it was told, as Anim::get would then (to its end
+/// once its time has gone, as its time goes, whole ms), read by nothing: what is built from when it gets somewhere (a
+/// share of its way) asks when that is of it once, and is built again then (Ctx::shows_from), not each frame it goes.
+pub fn Anim::value_at(self : Anim, at : Double) -> Double {
+  if !self.running || self.start < 0.0 {
+    return self.value
+  }
+  let ms = at - self.start
+  match (self.gen, self.spec) {
+    (Some(g), Motion(tr)) => {
+      let t = @ui.whole_ms(ms) - tr.delay
+      if @ui.whole_ms(ms) >= self.dur || (t >= 0.0 && g.next(t).done) {
+        self.end
+      } else if t < 0.0 {
+        self.from
+      } else {
+        g.next(t).value
+      }
+    }
+    _ =>
+      if @ui.whole_ms(ms) >= self.dur {
+        self.end
+      } else {
+        self.spec.value_at(ms, self.dur, self.from, self.target, self.v0).0
+      }
+  }
+}
+
+///|
+/// Told at moment `at` (now, or a moment before it in this frame) to stop where it goes, one of it `points` points: on
+/// from where its way had it then and as fast, slowing to rest on a Move's way as far as that speed carries it
+/// (@ui.move_stop_points), never past its end nor back: its speed the same either side of `at`, no stop dead, wherever
+/// the frames fall. At rest, or past its end by then, it stays.
+#callsite(autofill(loc))
+pub fn Anim::stop_at(self : Anim, c : @ui.Ctx, at : Double, points~ : Double, loc~ : SourceLoc) -> Unit {
+  self.step(c)
+  if !self.running || points <= 0.0 {
+    return
+  }
+  // (a moment said after this frame's, as a press's is where the frame it is built in is drawn for an earlier vsync (a
+  // device behind its input: Android's, 2026-11-10, words sent again 118 ms after the frame's moment, abort in animate):
+  // now)
+  let at = if at > c.moment() { c.moment() } else { at }
+  let (x, v) = self.state_at(at)
+  let ahead = @ui.move_stop_points(v * points / 1000.0) / points
+  let to = if v >= 0.0 {
+    dmin(x + ahead, dmax(self.target, x))
+  } else {
+    dmax(x - ahead, dmin(self.target, x))
+  }
+  self.value = x
+  self.velocity = v
+  self.animate(c, to, Moved(points, -1.0, 0.0), velocity=v, start_at=at, loc~)
 }
 
 ///|

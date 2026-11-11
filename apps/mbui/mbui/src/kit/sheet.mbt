@@ -1,7 +1,8 @@
 // A sheet from the bottom (not one of Radix's: Vaul's Drawer; still.fail's phone sheets, its Android Sheet.kt
 // SheetHost): whether it is open the view's. Modal: the page under it dimmed (its scrim in over 300 ms, CSS's ease),
 // out of the semantics tree and taking no press, Tab kept in it (no field given the focus as it opens: the keyboard
-// would come up over it), the focus back where it was as it goes. It rises on a
+// would come up over it; nor one under it left with it: its own ground has it while it is up), the focus back where it
+// was as it goes. It rises on a
 // spring (critically damped, a third of a second) and sinks away on it. Its top (`drag_h` high: the grabber and the
 // head) drags it: a sheet with `detents` (shares of the window) settles at the one it is let go nearer, going on at
 // the finger's speed, and closes let go under `close_below`; a tap on its grabber goes to the other end; one without
@@ -223,20 +224,24 @@ pub fn sheet(
         // up is more, per second
         let v = -d.vy * 1000.0
         if !draggable {
-          if target - at > 80.0 {
+          if sheet_drag_closes(target - at, d.vy, 80.0) {
             dragged = Some(DraggedClosed)
             now = false
           } else {
             dragged = Some(DraggedBack)
             s.h.go_at(c, target, v~)
           }
-        } else if at / total < close_below {
-          dragged = Some(DraggedClosed)
-          now = false
         } else {
-          let f = nearest(detents, at / total)
-          dragged = Some(DraggedTo(f))
-          s.h.go_at(c, f * total, v~)
+          match sheet_goes_to(detents, at, d.vy, total, close_below) {
+            None => {
+              dragged = Some(DraggedClosed)
+              now = false
+            }
+            Some(f) => {
+              dragged = Some(DraggedTo(f))
+              s.h.go_at(c, f * total, v~)
+            }
+          }
         }
       }
       // a tap on the grabber (its top 30): to the other end
@@ -286,10 +291,12 @@ pub fn sheet(
     return { open: false, shown: false, dragged, stands: 0.0 }
   }
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
-  // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
+  // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself.
+  // Nor one under it kept: what has the focus outside it gives it to the sheet's own ground (@ui.layer_ground), the
+  // keyboard put away and nothing typed reaching the page under it, given back as the sheet goes)
   // (the scrim as far as it has come, as it is drawn: Ctx::bg_by on the layer's ground)
   let scrim = scrim.unwrap_or(th.scrim)
-  let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim~, inert=!now, fn() {
+  let o = c.overlay(key, modal=true, initial_focus=@ui.layer_ground, on_escape?, scrim~, inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx - raised, fn() {
       // (its look given the scrim's share as it is built: the sheet's own glass drawn solid darkens with it, a colour
       // with no form read as it is drawn; the sheet is laid out again as it goes anyway, its height and place its
@@ -390,7 +397,7 @@ pub fn sheet_rest(key : String) -> Double {
 
 ///|
 /// Of `shares`, the one nearest `f`.
-fn nearest(shares : Array[Double], f : Double) -> Double {
+fn nearest_share(shares : Array[Double], f : Double) -> Double {
   let mut best = shares[0]
   for x in shares {
     if (x - f).abs() < (best - f).abs() {
@@ -420,4 +427,52 @@ pub fn sheet_look(c : @ui.Ctx, s : SheetState, body : () -> Unit) -> Unit {
     body()
   })
   |> ignore
+}
+
+///|
+/// Whether a sheet without detents let go `down` below its place, going `speed` down (points a ms), closes: landing past
+/// `line` on from that speed (@ui.lands_past), or flicked down (@ui.flung_away) however short; else back. So one let
+/// go back never goes on down past `line` before it turns (the coordinator of the migration, 2026-11-10). Its node
+/// sheet's (sf's sheet_node) the same.
+pub fn sheet_drag_closes(down : Double, speed : Double, line : Double) -> Bool {
+  @ui.lands_past(down, speed, line) || speed >= @ui.flung_away
+}
+
+///|
+/// Where a sheet with detents (`shares` of the window, `total` tall) let go `at` tall, going `speed` down (points a ms),
+/// settles (none: it closes): flicked (@ui.flung_away) a detent on the way it was flicked from where it was let go,
+/// down from its lowest closed, up from its highest its highest; else the detent nearest where it lands on from that
+/// speed (@ui.lands_at), closed landing under `close_below` of the window. So one let go short of closing goes on
+/// down no further than it was from closing before it turns (the coordinator of the migration, 2026-11-10). Its node
+/// sheet's (sf's sheet_node) the same.
+pub fn sheet_goes_to(shares : Array[Double], at : Double, speed : Double, total : Double, close_below : Double) -> Double? {
+  let f = at / total
+  if speed >= @ui.flung_away {
+    // (the highest under it)
+    let mut below : Double? = None
+    for s in shares {
+      if s < f && (match below { Some(b) => s > b; None => true }) {
+        below = Some(s)
+      }
+    }
+    below
+  } else if speed <= -@ui.flung_away {
+    // (the lowest over it; over the highest, the highest)
+    let mut above : Double? = None
+    let mut most = shares[0]
+    for s in shares {
+      most = if s > most { s } else { most }
+      if s > f && (match above { Some(b) => s < b; None => true }) {
+        above = Some(s)
+      }
+    }
+    Some(above.unwrap_or(most))
+  } else {
+    let lands = @ui.lands_at(at, -speed) / total
+    if lands < close_below {
+      None
+    } else {
+      Some(nearest_share(shares, lands))
+    }
+  }
 }

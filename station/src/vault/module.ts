@@ -72,7 +72,7 @@ export const VaultLive = Layer.effectDiscard(
     const signIns = new SignIns({
       db: store.db, hub, cardOutcomes, now: () => wall.now(), after: (ms, f) => wall.after(ms, f),
       backfill: { previousGone: previous.exited, priority: store.backfillPriority },
-      workspace: (session) => store.getSession(session)?.ws ?? cloud.home(),
+      workspace: (session) => store.sessionWs(session) ?? cloud.home(),
       screenLink: (tab) => {
         const s = cloud.state;
         return s && s.workspace && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}/screen/${encodeURIComponent(`browser:${tab}`)}` : null;

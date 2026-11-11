@@ -13,6 +13,18 @@
 let tree_presented : Set[Int] = Set::new()
 
 ///|
+/// Whether the row of each serial draws it as a sheet (sheet_node): what a page is put on (panel_page) only where it
+/// is.
+// kept across runs: put back by presenters_reset
+let tree_as_sheet : Map[Int, Bool] = {}
+
+///|
+/// Whether `p` is drawn as a sheet of the window's tree on screen `sheet` (小屏's): sheet_node, as presented_nodes picks.
+fn tree_sheet_of(p : Presented, sheet : Bool) -> Bool {
+  sheet && (p.shows is Panel(x) && (x.nodes is Some(_) || (sheet_panel_of(x) && !over_host_sheet(p))))
+}
+
+///|
 /// Whether `p` is the window's tree's to draw (presented_nodes): a stage and a panel whose body is nodes (panel_nodes)
 /// on every screen, and a confirm, a question, a menu, a pick or a small panel not on a sheet. The rest (a sheet, a
 /// panel that goes in steps or as wide as what it holds) the host's (presented) still.
@@ -22,6 +34,9 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
     (p.shows is Panel(x) && x.stage) ||
     // (what it holds nodes: the tree's alone, the host's frame having none of it to draw)
     (p.shows is Panel(x) && x.nodes is Some(_)) ||
+    // (a panel on 小屏 that is no stage and goes in no steps of its own, whatever it holds: a sheet of the tree's, its old
+    // body an old view in it, sheet_node)
+    (sheet && p.shows is Panel(x) && sheet_panel_of(x) && !over_host_sheet(p)) ||
     (
       !sheet &&
       (
@@ -34,12 +49,24 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
 }
 
 ///|
+/// Whether `p` is presented over a sheet the host draws (one that goes in steps, a menu, a pick, a question) still
+/// open: an old panel over it is the host's too, a sheet over that one in the old frame's stack, never a layer of the
+/// tree's over the old frame, which its old view's words and what a screen reader is told of it would be under (the
+/// host's sheet's overlay is modal: what else of the old frame there is, its views in the tree's nodes among it, is
+/// inert to it).
+fn over_host_sheet(p : Presented) -> Bool {
+  presented_now.iter().any(fn(q) { q.serial < p.serial && q.open && !q.closed_now && !tree_draws(q, true) })
+}
+
+///|
 /// Whether panel `x` presented `from` is a small panel beside what opened it the window's tree draws (panel_node): not
 /// a stage, a form or one opened by nothing (a dialog in the middle of the window), nor (yet) one as wide as what it
-/// holds and a share of the window tall, or one that goes in steps (`steps`). One whose title is as it is now (`live`)
-/// heads itself with that title as it is (panel_node).
+/// holds and a share of the window tall. One whose title is as it is now (`live`) heads itself with that title as it
+/// is (panel_node). One that goes in steps (`steps`) is the tree's too, its first step: its steps are its sheet's (the
+/// model's panel: all of its models a step in on 小屏, columns side by side beside what opened it), and a step told
+/// (panel_go) beside what opened it is not drawn yet.
 fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
-  !x.stage && !x.form && from != Unanchored && !(x.fits && x.tall > 0.0) && !x.steps
+  !x.stage && !x.form && from != Unanchored && !(x.fits && x.tall > 0.0)
 }
 
 ///|
@@ -79,14 +106,22 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
   root.each(
     fn() {
       presented_said.get() |> ignore
-      let sheet = layout(root.window().0) is Small
-      presented_now.filter(fn(p) { tree_draws(p, sheet) }).map(fn(p) { p.serial })
+      let (w, _) = root.window()
+      let sheet = layout(w) is Small
+      // (a panel drawn by what screen it is on, none before the window has its size: what it is drawn as, a sheet or
+      // not, is picked as it is made)
+      presented_now
+      .filter(fn(p) { tree_draws(p, sheet) && (w > 0.0 || !(p.shows is Panel(x) && !x.stage)) })
+      .map(fn(p) { p.serial })
     },
     fn(serial) { serial },
     fn(row, item) {
       let serial = item.untracked()
       guard presented_now.search_by(fn(q) { q.serial == serial }) is Some(i) else { return }
       let p = presented_now[i]
+      // (a sheet from the window's foot, on 小屏 as it is made: sheet_node)
+      let as_sheet = tree_sheet_of(p, @signals.untracked(fn() { layout(root.window().0) is Small }))
+      tree_as_sheet[serial] = as_sheet
       // (the root's node it is in at its place in the window's stack of layers: its serial, as the host's presented are)
       row.over(Is(true)).stacked(Is(serial)) |> ignore
       // (what opened it, for every kind it is drawn as: the focus given back to that as it goes, where it still takes
@@ -98,6 +133,8 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
       }
       // (the tips of what its body and its foot are made of: the window's layer of them, panel_tips_lent)
       row.lends(panel_tips_lent, tips) |> ignore
+      // (which of its submenu rows has its menu open, one at a time, its own: panel_submenus_lent)
+      panel_submenus_lend(row)
       let open = fn() {
         presented_said.get() |> ignore
         presented_open_of(serial)
@@ -182,28 +219,41 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
             gone~,
           )
         }
-        // (what it holds nodes, on 小屏: a sheet from the window's foot, as the host's are there)
-        Panel(x) if x.nodes is Some(_) && @signals.untracked(fn() { layout(root.window().0) is Small }) =>
+        // (on 小屏, what it holds nodes or not (no stage, no steps of its own): a sheet from the window's foot, as the
+        // host's are there)
+        Panel(x) if as_sheet =>
           sheet_node(
             row,
+            "sf-present/\{serial}",
             open,
-            x,
-            x.nodes.unwrap(),
-            fn() { done(fn() {  }) },
+            // (its own, then those a step further in from it: panel_page)
+            fn() {
+              let close = fn() { done(fn() {  }) }
+              let all : Array[SheetPage] = [{ n: 0, x, nodes: x.nodes, close, from: p.from, lists: serial }]
+              for more in p.more.get() {
+                // (what its old body's lists say kept apart from every presented's own: measured_body's)
+                all.push({ n: more.n, x: more.x, nodes: more.x.nodes, close, from: more.from, lists: -(serial * 1000 + more.n) })
+              }
+              all
+            },
             fn() { dismissed_now(serial) },
-            p.from,
             shown~,
             gone~,
             covered_by=fn() { sheet_over(serial) },
             in_place?=p.in_place,
-            // (a step further in from a panel: back from it back to that one)
+            // (a step further in from another presenter's panel: back from it back to that one)
             step_back?=if p.under is Some(_) { Some(fn() { dismissed_now(serial, back=true) }) } else { None },
+            // (a page back, where it is past its first)
+            page_back=fn() { panel_pop(p) },
+            stood=fn() { p.stands },
             // (how tall it stands as it closes, for what comes in its place: close_from)
             stands_by=fn(f) { p.stands_now = Some(f) },
             taken=fn() {
               presented_said.get() |> ignore
               p.taken_by != 0
             },
+            // (dimming what is under it only where no sheet under it does, the host's sheets among them: scrim_owner)
+            dims=fn() { scrim_owner(true) == serial },
           )
         Panel(x) if x.stage =>
           stage_node(
@@ -366,6 +416,18 @@ pub fn presented_tree(page : (@ui.Ctx) -> Unit) -> (@view.View) -> Unit {
 /// panel_nodes); none outside a panel.
 pub fn panel_words_in_node(v : @view.View) -> @ui.Style {
   @ui.style(px=room(panel_words_at_node(v)))
+}
+
+///|
+/// How far in from the column a field over a panel's rows stands in node `v` of its body: in a small panel beside what
+/// opened it at the column, its capsule on the rows' grounds' line as a pick's search is (pick_node's); in a sheet or a
+/// dialog on its words' line, as a sheet's own field is (the things' 筛选); none outside a panel.
+pub fn panel_field_in_node(v : @view.View) -> @ui.Style {
+  let words = match v.lent(panel_in_lent) {
+    Some(p) if !p.small => p.words
+    _ => 0.0
+  }
+  @ui.style(px=room(words))
 }
 
 ///|

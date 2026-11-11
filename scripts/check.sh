@@ -124,8 +124,21 @@ open_tests() {
   # (One file each: the runner above them names them all.)
   for p in $(below $$); do ps -o args= -p "$p" 2>/dev/null | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") != 1 { exit 1 }' && kill -USR2 "$p" 2>/dev/null && hung="$hung $p"; done
   [ -n "$hung" ] || return 0
-  sleep 1
+  # Until each has answered, half a second at most: the runner ends the job about a second after its signal, and a
+  # whole second waited here was all of it (42939482348: test/screens.test.ts, hung with every test passed, was named
+  # and the job ended before what it had open was said).
+  w=0
+  while [ $w -lt 5 ]; do
+    answered=1
+    for p in $hung; do [ -e "$STILLFAIL_TEST_HUNG/$p" ] || answered=0; done
+    [ $answered = 0 ] || break
+    sleep 0.1
+    w=$((w + 1))
+  done
   for p in $hung; do
+    # (One that wrote nothing did not get to the signal: its thread held in a call, or the process ending. Its state
+    # and the CPU it takes say which.)
+    [ -e "$STILLFAIL_TEST_HUNG/$p" ] || ps -o pid= -o stat= -o pcpu= -o etime= -p "$p" 2>/dev/null | sed 's/^/    did not answer (pid, state, CPU %, since): /'
     sed 's/^/    /' "$STILLFAIL_TEST_HUNG/$p" 2>/dev/null
     for c in $(below "$p"); do ps -o pid= -o etime= -o args= -p "$c" 2>/dev/null | cut -c1-200 | sed 's/^/      under it: /'; done
   done
@@ -341,6 +354,22 @@ if part ts; then
       | grep -v 'timer:' > "$tmp/timers" || true
     step "no polling between still.fail's parts (in what this adds)" sh -c "! grep . '$tmp/timers'"
   fi
+  # The station's main thread waits on nothing (station/AGENTS.md): what a change adds there calls no synchronous file
+  # call, process or compression of node's (fs, child_process, zlib) unless its line says why with "sync:". What runs on
+  # no other thread may: a worker's own file (`*worker.ts`), the readers' (src/read/, but for what of it the main thread
+  # runs: the pool, the builders and their requests, and the transcripts it follows), the command line (src/cli.ts), and
+  # the update's (src/updates/command.ts, `stillfail-station update`, and the delta applier it alone runs,
+  # src/updates/delta.ts: a process apart, release.ts applyApart; flagged on main 154f6d15, 42758290890, 2026-11-10).
+  if touches '^station/src/'; then
+    {
+      added 'station/src/*.ts' ':(exclude,glob)station/src/**/*worker.ts' ':(exclude)station/src/read' ':(exclude)station/src/cli.ts' \
+        ':(exclude)station/src/updates/command.ts' ':(exclude)station/src/updates/delta.ts'
+      added 'station/src/read/pool.ts' 'station/src/read/mb-reader.ts' 'station/src/read/tail.ts' 'station/src/read/transcript.ts' \
+        'station/src/read/packed.ts' 'station/src/read/plan.ts' 'station/src/read/*-builder.ts' 'station/src/read/*-requests.ts' ':(exclude,glob)station/src/**/*worker.ts'
+    } | grep -nE '\b(access|appendFile|chmod|chown|close|copyFile|cp|exists|fchmod|fchown|fdatasync|fstat|fsync|ftruncate|futimes|lchown|link|lstat|lutimes|mkdir|mkdtemp|open|opendir|read|readdir|readFile|readlink|readv|realpath|rename|rm|rmdir|stat|statfs|symlink|truncate|unlink|utimes|write|writeFile|writev|exec|execFile|spawn|gzip|gunzip|deflate|deflateRaw|inflate|inflateRaw|unzip|brotliCompress|brotliDecompress|zstdCompress|zstdDecompress)Sync(\.native)?\(' \
+      | grep -v 'sync:' > "$tmp/syncs" || true
+    step "the station's main thread waits on nothing (in what this adds)" sh -c "! grep . '$tmp/syncs'"
+  fi
   # No way into a station from outside (AGENTS.md): every socket a station listens on is this machine's own, and says
   # so on its line (127.0.0.1; the fd the launcher holds, a Unix socket's path); the mesh's endpoint is bound by
   # mesh/native.ts. No tunnel in the station or the cloud. (A `.listen(` given a function is an event's, not a socket's.)
@@ -390,7 +419,9 @@ if [ $full = 1 ]; then
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
   # Run whenever one of what they read changed (the list `remembered` keys them by): a change to the words alone
   # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
-  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
+  # (core-ts's tests import the station's (test/rigs.test.ts its rig's grants, which import effect): its deps too, or a
+  # change that runs core-ts's tests alone fails rigs.test.ts at its import, #5386's check-linux 42962214582, 2026-11-11)
+  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$"; then prep core deps client/core-ts; prep station deps station; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core after station sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station: it and its tests run whenever it, one of its native parts or the words it says changed (station_paths:
   # scripts/plan.sh reads it from this line for CI's check-station).

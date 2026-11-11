@@ -18,9 +18,10 @@ export function workspaceSizeTools(watch: WorkspaceWatch, remote: Remote): Tool[
     run: async (session, args) => {
       const named = typeof args.station === "string" ? args.station.trim() : "";
       const station = await remote.workspaceStation(session, named);
+      await watch.ready();
       if (args.limit_gib !== undefined) {
         if (typeof args.limit_gib !== "number") throw new Error("limit_gib must be a positive whole number of GiB");
-        watch.setLimit(session, station, args.limit_gib);
+        await watch.setLimit(session, station, args.limit_gib);
       }
       return JSON.stringify({ station: station || "this station", limit_gib: watch.limit(session, station) / GIB });
     },

@@ -1,6 +1,8 @@
 // One UI client of the still.fail core, over whatever carries the protocol's JSON:
 // `{id, call, params}` and `{id, subscribe, keyed, from?}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`,
-// `{id, delta, from}` and `{fatal}` in. Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
+// `{id, delta, from}` and `{fatal}` in; a topic whose value is kept to ask with again (Client::keep) is let go of with
+// `{id, unsubscribe, keep}`, answered `{id, v}`, and asked again with `{id, subscribe, have}`, answered `{id, same}` where
+// its value is still the one kept, `{id, delta, kept}` what changed from it where it is not (client/core-ts protocol.ts). Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
 // changes with every message for it, so a view can tell what changed since its last frame without comparing values;
 // and a signal of its changes (mbui/signals) set as each comes, and as it ends: what reads the topic in a computed
 // follows it from here, the core's change pushed on to it, not looked for as it is read.
@@ -36,8 +38,11 @@ pub struct Sub {
   /// first value coming as what changed from that one's (the core's store.ts `#firstFrom`), not the whole of it again.
   priv mut from : Int?
   /// Let go of while one asked from it waits for its first value: kept till then, as the core's delta to it reads it,
-  /// its readers told it ended.
+  /// its readers told it ended. Or let go of keeping its value (`keeping`).
   priv mut ending : Bool
+  /// Let go of with `keep` (Client::keep), till the core's `{id, v}`: what comes for it before that is applied still,
+  /// that answer being its last message, so what is kept is the value `v` is the version of.
+  priv mut keeping : Bool
 }
 
 ///|
@@ -108,9 +113,13 @@ pub struct Client {
   /// Told of each subscription made (its id, its topic's name, None) and of its first message (its value, or None
   /// when it could not be read): Client::time_topics
   priv mut timing : ((Int, String, Json?, Bool) -> Unit)?
-  /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
-  /// , which would else take the app for out of view
+  /// where the app's attention is, as told last (`client.focus`): told again to a core started anew, which would else
+  /// take the app for out of view. The app's own (shown, in front, the workspace) and the chat it shows are told by
+  /// separate calls and kept apart: keeping only the last call lost the other, and a chat's call alone left a new core
+  /// taking the app for out of view, so nothing it showed was read again (未读消不掉, 2026-11-10)
   priv mut focus : Json?
+  /// the chat shown, as told last (`client.focus {chat}`; none once it is left): told again after `focus`
+  priv mut focus_chat : Json?
   /// While the device's performance record is kept (@hostapi.perf_recording): each call's name by its id until it is
   /// answered, so what the core says of it is put to its name (Client::perf_name)
   priv perf_calls : Map[Int, String]
@@ -120,6 +129,14 @@ pub struct Client {
   /// The messages come for ids nothing held, let be unread (Client::unheld), by what the id was: how many, their
   /// length in all (Client::unheld_said)
   priv unheld_counts : Map[String, (Int, Int)]
+  /// Of a topic (its name, its JSON as asked), how many values of its name are kept at most as they are let go of, to
+  /// be asked again with their version (Client::keep): 0, none
+  priv mut keeps : (String, Json) -> Int
+  /// The values kept so, by their subscriptions' lookup key: the value, the version the core said it is (`{id, v}`) and
+  /// its topic's name, the oldest first (the last `kept_most`, and of each name as many as `keeps` says). One may be kept while its topic is subscribed again (the version of the
+  /// one let go of came after the new one's first value): a version is made of the value alone, and what is kept is
+  /// only ever taken where the core says the topic's value is that version, so it is never taken for another.
+  priv kept : Map[String, (Json, String, String)]
 }
 
 ///|
@@ -152,6 +169,7 @@ pub fn Client::new(
     start_wait: fn(_) { 0 },
     end_wait: fn(_) {  },
     focus: None,
+    focus_chat: None,
     call_waits: {},
     sub_waits: {},
     echo_waits: {},
@@ -159,8 +177,31 @@ pub fn Client::new(
     perf_calls: {},
     let_go_of: {},
     unheld_counts: {},
+    keeps: fn(_, _) { 0 },
+    kept: {},
   }
 }
+
+///|
+/// The topics `f` gives a number above 0 (by name and JSON as asked) keep their value as they are let go of: the core
+/// is told so (`keep`) and answers with its version, and the topic asked again says it (`have`), the core answering
+/// `same`, no value, where it has not changed meanwhile, and what changed from it where it has (`{id, delta, kept}`,
+/// applied to the value kept); the value kept is its value then, as it was (nothing parsed, nothing made of it anew).
+/// The number is how many values of the topic's name are kept at a time, the oldest of that name forgotten past it
+/// (a chat's, the largest the app holds, a few: its count bounded by itself), all of them together `kept_most`. Said
+/// once, as the app starts.
+///
+/// The core it speaks to is always of the same build, so it knows `keep` (an unsubscribe answered `{id, v}`, the
+/// subscription held till then): a native app's core is packed in it (`core.hbc`), and the web's runs in a worker of
+/// the page's own build, which talks only to a core of that build (web/src/core/worker.ts: its channel by the build,
+/// an older build's worker retiring and its pages loaded again onto the new one).
+pub fn Client::keep(self : Client, f : (String, Json) -> Int) -> Unit {
+  self.keeps = f
+}
+
+///|
+/// How many values are kept (Client::keep), of every name together, the oldest forgotten.
+let kept_most : Int = 64
 
 ///|
 /// What the app times of its topics (still.fail's Android app's bar_switch): `f(id, topic,
@@ -312,7 +353,7 @@ fn Client::subscribe_as(self : Client, topic : String, params : Map[String, Json
       let id = self.next_id
       self.next_id += 1
       let from = self.from_of(t)
-      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false, value_generation: self.generation, from, ending: false }
+      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false, value_generation: self.generation, from, ending: false, keeping: false }
       self.subs[id] = s
       self.by_key[look] = s
       self.ask(s)
@@ -391,6 +432,11 @@ fn Client::ask(self : Client, s : Sub) -> Unit {
     Some(f) => m["from"] = Json::number(f.to_double())
     None => ()
   }
+  // (its value kept as it was let go of: the version of it, for the core to answer `same` where it is that still)
+  match self.kept.get(s.look) {
+    Some((_, v, _)) => m["have"] = Json::string(v)
+    None => ()
+  }
   (self.send)(Json::object(m).stringify())
 }
 
@@ -460,12 +506,23 @@ fn Client::end_subscription(self : Client, s : Sub) -> Unit {
       s.ending = true
       return
     }
-    self.subs.remove(s.id)
-    self.let_go(s.id, "topic " + topic_name(s.topic))
     let m : Map[String, Json] = {
       "id": Json::number(s.id.to_double()),
       "unsubscribe": Json::boolean(true),
     }
+    // (its value kept: let go of once the core says what it is, Client::take. Said so whether its first value has come
+    // yet or not: what the app sends is what it means to do with it, never which came first, the core's answer or its
+    // leaving (a replay, a slow core). What comes before the core's word of it is applied to it as ever; none come, none
+    // kept, and it is asked again as ever)
+    if s.error is None && (self.keeps)(topic_name(s.topic), s.topic) > 0 {
+      s.ending = true
+      s.keeping = true
+      m["keep"] = Json::boolean(true)
+      (self.send)(Json::object(m).stringify())
+      return
+    }
+    self.subs.remove(s.id)
+    self.let_go(s.id, "topic " + topic_name(s.topic))
     (self.send)(Json::object(m).stringify())
   }
 }
@@ -543,7 +600,21 @@ pub fn Client::call(
   on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
 ) -> Int {
   if name == "client.focus" {
-    self.focus = Some(params)
+    match params {
+      Object(o) if o.contains("chat") => self.focus_chat = Some(params)
+      // (left: only the chat it names, as the core lets go only of that one; another may have been told since)
+      Object(o) if o.contains("left") =>
+        match (self.focus_chat, o.get("left")) {
+          (Some(Object(was)), Some(Object(left))) =>
+            match was.get("chat") {
+              Some(Object(c)) if c.get("station") == left.get("station") &&
+                c.get("session") == left.get("session") => self.focus_chat = None
+              _ => ()
+            }
+          _ => ()
+        }
+      _ => self.focus = Some(params)
+    }
   }
   let id = self.next_id
   self.next_id += 1
@@ -671,7 +742,14 @@ pub fn Client::topic_said(self : Client, m : Map[String, Json]) -> Bool {
   match self.subs.get(id) {
     Some(s) =>
       !self.echo_waits.values().any(fn(w) { w.0 == id }) &&
-      (m.contains("value") || m.contains("delta") || m.contains("error") || m.contains("waiting"))
+      (
+        m.contains("value") ||
+        m.contains("delta") ||
+        m.contains("error") ||
+        m.contains("waiting") ||
+        m.contains("same") ||
+        (s.keeping && m.contains("v"))
+      )
     None => false
   }
 }
@@ -875,13 +953,25 @@ fn Client::take(self : Client, msg : Json) -> Unit {
     _ => return
   }
   match self.subs.get(id) {
-    Some(s) if s.ending =>
-      // (let go of, kept as what one asked from it reads: its value as the core has it)
-      match (m.get("value"), m.get("delta"), s.value) {
-        (Some(v), _, _) => s.value = Some(v)
-        (_, Some(Array(ops)), Some(v)) => s.value = Some(apply_delta(v, ops))
+    Some(s) if s.ending => {
+      // (let go of keeping its value: the core's last word of it, the version of what it holds now)
+      if s.keeping && m.get("v") is Some(said) {
+        self.subs.remove(id)
+        self.let_go(id, "topic " + topic_name(s.topic))
+        match (said, s.value) {
+          (String(v), Some(value)) => self.keep_value(s, value, v)
+          _ => ()
+        }
+        return
+      }
+      // (let go of, kept as what one asked from it reads, or as what is kept: its value as the core has it)
+      match (m.get("value"), m.get("delta"), m.get("error"), s.value) {
+        (_, _, Some(_), _) => s.value = None
+        (Some(v), _, _, _) => s.value = Some(v)
+        (_, Some(Array(ops)), _, Some(v)) => s.value = Some(apply_delta(v, ops))
         _ => ()
       }
+    }
     Some(s) => {
       if m.get("waiting") is Some(True) && s.value is None && s.error is None {
         // (no value of it yet: what shows it shows what is to come, the core's wait for it going on)
@@ -890,6 +980,28 @@ fn Client::take(self : Client, msg : Json) -> Unit {
         s.changes.set(-2)
         return
       }
+      // (its first message: asked with the version of the value kept, that one, the core may say, is its value still.
+      // Only the first looks: what is kept matters to nothing after it)
+      let kept = if s.value is None && s.error is None {
+        let k = self.kept.get(s.look)
+        self.kept.remove(s.look)
+        k
+      } else {
+        None
+      }
+      if m.get("same") is Some(True) {
+        match kept {
+          Some((v, _, _)) => {
+            s.value = Some(v)
+            s.error = None
+          }
+          None => {
+            // (none kept by now, forgotten for more of its name let go of since: asked again, whole)
+            self.ask(s)
+            return
+          }
+        }
+      } else {
       match (m.get("value"), m.get("delta"), m.get("error")) {
         (_, _, Some(e)) => {
           // The topic could not be read: the next message is a whole value, not a delta.
@@ -903,6 +1015,16 @@ fn Client::take(self : Client, msg : Json) -> Unit {
         (_, Some(Array(ops)), _) =>
           match (s.value, m.get("from")) {
             (Some(v), _) => s.value = Some(apply_delta(v, ops))
+            // its first value, as what changed from the value kept as it was let go of (asked with its version)
+            (None, _) if m.get("kept") is Some(True) =>
+              match kept {
+                Some((v, _, _)) => s.value = Some(apply_delta(v, ops))
+                None => {
+                  // (none kept by now, forgotten for more of its name let go of since: asked again, whole)
+                  self.ask(s)
+                  return
+                }
+              }
             // its first value, as what changed from what another of its subscriptions has
             (None, Some(Number(f, ..))) =>
               match self.subs.get(f.to_int()).bind(fn(o) { o.value }) {
@@ -917,6 +1039,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
             (None, _) => return
           }
         _ => return
+      }
       }
       self.came_from(s)
       s.waiting = false
@@ -966,6 +1089,10 @@ pub fn Client::perf_name(self : Client, msg : Json) -> String {
         "value"
       } else if m.contains("waiting") {
         "waiting"
+      } else if m.contains("same") {
+        "same"
+      } else if m.contains("v") {
+        "kept"
       } else {
         "delta"
       }
@@ -1048,9 +1175,11 @@ pub fn Client::restarted(self : Client) -> Unit {
     s.from = None
     self.ask(s)
   }
-  match self.focus {
-    Some(p) => self.call("client.focus", params=p) |> ignore
-    None => ()
+  for focus in [self.focus, self.focus_chat] {
+    match focus {
+      Some(p) => self.call("client.focus", params=p) |> ignore
+      None => ()
+    }
   }
   @signals.end_batch()
 }
@@ -1080,6 +1209,8 @@ pub fn Client::reset(self : Client) -> Unit {
   self.call_waits.clear()
   self.sub_waits.clear()
   self.focus = None
+  self.focus_chat = None
+  self.kept.clear()
   self.next_id = 1
   self.beside = None
   self.version = 0
@@ -1132,3 +1263,23 @@ fn Client::draft_came(self : Client, sub : Int) -> Unit {
 /// app as it starts.
 // kept across runs: the app's words, set once as it starts
 pub let restarted_text : Ref[String] = { val: "The core restarted; try again" }
+
+///|
+/// The value of subscription `s` kept as it was let go of, `v` the version the core says it is (Client::keep): the
+/// oldest of its topic's name forgotten past what `keeps` says of it, the oldest of all past `kept_most`.
+fn Client::keep_value(self : Client, s : Sub, value : Json, v : String) -> Unit {
+  let name = topic_name(s.topic)
+  self.kept.remove(s.look)
+  self.kept[s.look] = (value, v, name)
+  let most = (self.keeps)(name, s.topic)
+  let of_name = self.kept.iter().filter(fn(kv) { kv.1.2 == name }).map(fn(kv) { kv.0 }).collect()
+  for i in 0..<(of_name.length() - most) {
+    self.kept.remove(of_name[i])
+  }
+  if self.kept.length() > kept_most {
+    match self.kept.keys().head() {
+      Some(first) => self.kept.remove(first)
+      None => ()
+    }
+  }
+}

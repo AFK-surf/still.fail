@@ -359,7 +359,10 @@ test "a new chat's first words hold its composer as tall as it was while they ar
   assert_true(app.nav.top() is Chat(_))
   assert_eq(box(), tall)
   // let go of as they set out, the core's answers kept the while
-  let go = t.rest_of("composer/held-box/")
+  let go = match app.nav.top() {
+    Chat(r) => @sfbase.flight_lets_go(r.station + ":" + r.session).map(fn(l) { l.0 }).unwrap_or(@double.infinity)
+    _ => @double.infinity
+  }
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
   t.run_for(go - t.time())
   assert_true(box() < tall, msg="\{box()} \{tall}")
@@ -439,11 +442,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
           value: Some({
             "kept": "st1",
             "any": false,
-            "efforts": [],
-            "accounts": [],
-            "pickAccount": false,
             "waiting": false,
-            "frequent": [],
           }),
           error: None,
           version: 0,
@@ -487,3 +486,37 @@ test "a new chat while its stations are read: its page and composer as they will
   t.draw()
   assert_eq(made.val, 1)
 }
+
+///|
+test "a new chat's first words: the room under its rows goes down to where the composer comes to stand, never at once" {
+  let t = tester("home")
+  // (three lines: the composer held as tall for them till they set out, lines more than it comes to stand at)
+  let words = "第一行\n第二行\n第三行"
+  ignore(new_chat_sent(t, words))
+  // (every frame drawn from the press on, as a display draws them: the composer let go of as the words set out, its
+  // room under the rows on the list's way with it, not a step)
+  // (the chat's list's, the last list drawn, once it is the only one: the new chat's page has a list of its own
+  // before, leaving as the chat comes)
+  let foot = fn() {
+    let lists = t.list_row_boxes()
+    if !(app.nav.top() is Chat(_)) || lists.length() != 1 || lists[0].length() == 0 {
+      -1.0
+    } else {
+      lists[0][lists[0].length() - 1].3
+    }
+  }
+  let mut was = foot()
+  let end = t.time() + flight_carry_after_ms + flight_carry_ms + @ui.move_most_ms
+  while t.time() < end {
+    t.frame()
+    let now = foot()
+    if was >= 0.0 && now >= 0.0 {
+      assert_true((now - was).abs() < newchat_foot_step, msg="at \{t.time()}: the room under the rows \{was} → \{now}")
+    }
+    was = now
+  }
+}
+
+///|
+/// The most the room under a new chat's rows may change in a frame on its way (points): a line's at once is a step.
+let newchat_foot_step : Double = 8.0

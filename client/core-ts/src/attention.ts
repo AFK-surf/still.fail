@@ -11,6 +11,7 @@ import type { Owner } from "./core/routing.ts";
 import { Notices, type Changed } from "./notices.ts";
 import * as prefs from "./prefs.ts";
 import type { Topic } from "./protocol.ts";
+import * as refs from "./refs.ts";
 import type { Value } from "./store.ts";
 import { arr as arrU, get as getU, isObject, parseJson } from "./util.ts";
 
@@ -137,7 +138,10 @@ export class Attention implements Owner {
         case "focus":
           return Effect.sync(() => {
             const chat = c.focus.chat;
-            if (chat && chat.session !== null && chat.session !== "" && !chat.session.startsWith("new:")) prefs.chatOpened(core.data, chat.station, chat.session);
+            if (chat && chat.session !== null && chat.session !== "" && !chat.session.startsWith("new:")) {
+              prefs.chatOpened(core.data, chat.station, chat.session);
+              refs.opened(core.data, chat.station, chat.session);
+            }
             if (c.focus.newChat !== null && c.focus.newChat !== "") prefs.newChatOpened(core.data, c.focus.newChat);
             attend.focus(at[0], c.focus);
             // (what was typed written now, not a moment after its last change: the app leaving a chat or the front may

@@ -61,6 +61,73 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
 }
 
 ///|
+/// (the way to the newest's glide is this file's motion, counted here: motion_counted_wbtest.mbt; not judged in
+/// chat_find_wbtest, where the outline's go-to and its place kept are)
+test "a go-to in the chat keeps where the reader was: ↓ back there, ↓ again to the end, the place forgotten; reaching the end, or words sent, forget it" {
+  // (the Tester made here, this file's: the long chat of the outline's modes, away from its end at 22)
+  let outline_tester = fn(calls : Array[Made]) {
+    new_run()
+    let base = fixture("chat-outline-away")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        calls.push({ name, params, bytes: None, done, heard: None })
+        (base.call)(name, params, done)
+      },
+    }
+    open_fixture_over("chat-outline-away", src)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+    t.run_for(@ui.move_most_ms)
+    t.run_for(@ui.move_most_ms)
+    t
+  }
+  let back = fn(t : @ui.Tester) { t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" }) }
+  // ↓ back, then ↓ again: at the end, nothing kept; a go-to from there keeps nothing
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(back(t))
+  t.click(Button, label="回到刚才的位置")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(back(t))
+  t.click(Button, label="跳到最新")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(outline_reading().at_end)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(back(t))
+  // a place kept, then the end reached by ↓ without going back: forgotten
+  let t = outline_tester(calls)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(back(t))
+  t.wheel(800.0, 400.0, 100000.0)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(outline_reading().at_end)
+  assert_false(back(t))
+  // a place kept, then words sent: forgotten
+  let t = outline_tester(calls)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(back(t))
+  t.tap_text("发消息")
+  t.type_text("好的")
+  t.key(@ui.key_code_enter)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(named(calls, "composer.take").length() + named(calls, "chat.send").length() > 0)
+  assert_false(back(t))
+}
+
+///|
 test "the viewer's words on the right, everyone else's under their name" {
   let t = chat_tester("chat")
   t.move(195.0, 400.0)
@@ -381,7 +448,7 @@ test "words sent going up into the list tell the core where it is as the message
   t.run_for(fix_answer_ms)
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
-  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + 2.0 * @ui.frame_period_default)
   assert_true(t.find("收到：「测试一下」") is Some(_))
   // told as the message at the top changed, not as it moved under it
   let told = named(calls, "chat.place").map(fn(m) { field(Some(m.params), "seq") })

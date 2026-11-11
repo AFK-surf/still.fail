@@ -260,7 +260,7 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     await r.jobs.shutdown();
     state.pressure = "normal";
     const again = rig(state, r.store, r.dir);
-    again.jobs.relaunch();
+    await again.jobs.relaunch();
     await until("it ran", () => r.store.getJob(kept.id)!.state === "exited");
     assert.equal(existsSync(join(r.dir, "work", "ran")), false);
   });
@@ -299,7 +299,7 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     assert.deepEqual(r.jobs.screenAsked(one.token, "take", p1.pid!), { screen: "yours" });
     await r.jobs.shutdown();
     const again = rig(state, r.store, r.dir);
-    again.jobs.relaunch();
+    await again.jobs.relaunch();
     const waiting = again.jobs.screenAsked(two.token, "take", p2.pid!);
     assert.equal(waiting.screen, "waiting", "the next station knows who has it");
     assert.match("who" in waiting ? waiting.who ?? "" : "", /^one \(.+\) of chat s1, for \d+ min$/);

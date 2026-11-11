@@ -40,7 +40,7 @@ switch ("$($a[0]) $($a[1])".Trim()) {
     foreach ($line in @($plan)) {
       $key, $value = $line -split '=', 2
       if ($key -eq 'script') { $script = $value }
-      elseif ($key -in 'STILLFAIL_ORIGIN', 'STILLFAIL_CHANNEL', 'STILLFAIL_RELEASE_SHA256', 'STILLFAIL_NODE_SHA256', 'STILLFAIL_INSTALL_LANG') { Set-Item -Path "env:$key" -Value $value }
+      elseif ($key -in 'STILLFAIL_ORIGIN', 'STILLFAIL_CHANNEL', 'STILLFAIL_RELEASE_SHA256', 'STILLFAIL_NODE_SHA256', 'STILLFAIL_INSTALL_LANG', 'STILLFAIL_ARCHIVE') { Set-Item -Path "env:$key" -Value $value }
     }
     if (-not $script) { [Console]::Error.WriteLine('stillfail update: no installer to run'); exit 1 }
     $env:STILLFAIL_DATA = $data

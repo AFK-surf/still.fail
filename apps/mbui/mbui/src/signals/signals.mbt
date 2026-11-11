@@ -150,7 +150,7 @@ fn notify(first : ReactiveNode) -> Unit {
     // (a watch marked as it is notified, whatever batch it is in: what it holds told it may be stale before it is told
     // so as the batch ends: Watch::on_marked)
     if effect.kind is WatchNode {
-      guard effect.own is WatchOwned(o) else { abort("a watch without its own") }
+      guard effect.own is WatchOwned(o) else { @halt.saying("a watch without its own") }
       o.marked_by = setting.val
       match o.marked {
         Some(f) if !o.resting => f()
@@ -456,7 +456,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
   let flags = e.flags
   // (a watch told: what it read changed, it says so; what it read stays followed till it reads anew, Watch::read)
   if e.kind is WatchNode {
-    guard e.own is WatchOwned(o) else { abort("a watch without its own") }
+    guard e.own is WatchOwned(o) else { @halt.saying("a watch without its own") }
     // (at rest: stale, nothing it read asked whether it changed; it reads anew as it wakes, rest)
     if o.resting {
       e.flags = WATCHING
@@ -515,7 +515,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
     run.cycle += 1
     run.run_depth += 1
     if e.kind is EffectNode {
-      guard e.own is EffectOwn(f) else { abort("an effect without its fn") }
+      guard e.own is EffectOwn(f) else { @halt.saying("an effect without its fn") }
       e.cleanup = f()
     }
     run.run_depth -= 1
@@ -732,7 +732,7 @@ fn effect_scope_oper(e : ReactiveNode) -> Unit {
   // (a watch stopped, by itself or by what owns it: it follows nothing from here, so it is stale, and gone: what kept
   // it by what it read keeps nothing by it, Watch::gone)
   if e.kind is WatchNode {
-    guard e.own is WatchOwned(o) else { abort("a watch without its own") }
+    guard e.own is WatchOwned(o) else { @halt.saying("a watch without its own") }
     o.stale = true
     o.gone = true
   }

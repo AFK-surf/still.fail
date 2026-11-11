@@ -818,6 +818,8 @@ test("a session at work: the station follows it, its summary says how long its t
     // At work: followed, read, its length kept where its summary reads it.
     r.store.setRunning(key, true);
     assert.deepEqual(r.hub.live.held(), [key]);
+    // Read off the main thread: once it is.
+    await r.hub.live.idle();
     assert.equal((await summary()).transcriptLength, 5);
     const timeline = async (query: [string, string][]) => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}/timeline`, undefined, query))[1];
     const texts = (t: any) => [t.start, t.entries.map((e: any) => e.text), t.end];

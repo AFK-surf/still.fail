@@ -415,13 +415,23 @@ pub fn View::focus_opens(self : View, to : View) -> View {
 /// what the old views it hosts take, as those are built), as the old frame's trapping layers do (Ctx::overlay's
 /// initial_focus, by default); to its own ground while none does; given back as it goes (View::focus_opens's). Given
 /// once: what the person or the app does with the focus after that its own. Its ground takes the focus (View::focusable,
-/// no keys, no Tab stop: a dialog's), given it as it opens.
-pub fn View::focus_opens_first(self : View) -> View {
+/// no keys, no Tab stop: a dialog's), given it as it opens. `takes`: to the first of what it holds that takes it and says
+/// what `takes` holds (View::says; a dialog's fields and choices, not its buttons), its own ground keeping it where none
+/// does; an old view it hosts, what that registered.
+pub fn View::focus_opens_first(self : View, takes? : (Said) -> Bool) -> View {
   guard self.live() is Some(_) else { return self }
   let layer = self.id()
   let tree = self.tree
   tree.focus_firsts.add(layer)
-  self.owns(fn() { tree.focus_firsts.remove(layer) }) |> ignore
+  match takes {
+    Some(f) => tree.focus_first_takes[layer] = f
+    None => ()
+  }
+  self.owns(fn() {
+    tree.focus_firsts.remove(layer)
+    tree.focus_first_takes.remove(layer)
+  })
+  |> ignore
   self.layer_focus(Some(layer))
 }
 
@@ -430,6 +440,13 @@ pub fn View::focus_opens_first(self : View) -> View {
 /// (View::focus_opens_first).
 pub fn Tree::opens_first(self : Tree, layer : NodeId) -> Bool {
   self.focus_firsts.contains(layer)
+}
+
+///|
+/// What layer `layer` gives the focus to the first of only, as it opens: what that one says holding (View::focus_opens_first's
+/// `takes`); None, the first of what it holds that takes it, whatever it says.
+pub fn Tree::opens_first_takes(self : Tree, layer : NodeId) -> ((Said) -> Bool)? {
+  self.focus_first_takes.get(layer)
 }
 
 ///|

@@ -378,7 +378,7 @@ test "归档 made once: its own nodes; its choice chosen, what the one chosen me
 }
 
 ///|
-/// `base` with each station's own archiving (its overview's) as `f` makes it of the core's, as `f` is now (followed:
+/// `base` with each station's own archiving (its overview's, on its page and as that part) as `f` makes it of the core's, as `f` is now (followed:
 /// the core said to have it anew), and the station's save `busy()` on its way as long as that says so (the core's
 /// `doing`).
 fn archiving_as(base : Source, f : @signals.Signal[(Json) -> Json], busy : @signals.Signal[Bool]) -> Source {
@@ -387,38 +387,34 @@ fn archiving_as(base : Source, f : @signals.Signal[(Json) -> Json], busy : @sign
     topic_read: fn(name, params) {
       let r = base.topic(name, params).get().snapshot()
       match name {
-        "stations" => {
+        // (its page, whole, and that part alone, as a row of 归档 asks it)
+        "station" => {
           let g = f.get()
           let value = match r.value {
-            Some(Array(a)) =>
-              Some(
-                Json::array(
-                  a.map(fn(st) {
-                    match st {
-                      Object(m) =>
-                        match m.get("overview") {
-                          Some(Object(o)) =>
-                            match o.get("archiving") {
-                              Some(ar) => {
-                                let o2 = o.copy()
-                                o2["archiving"] = g(ar)
-                                let m2 = m.copy()
-                                m2["overview"] = Json::object(o2)
-                                Json::object(m2)
-                              }
-                              None => st
-                            }
-                          _ => st
-                        }
-                      _ => st
+            Some(Object(m)) =>
+              match m.get("overview") {
+                Some(Object(o)) =>
+                  match o.get("archiving") {
+                    Some(ar) => {
+                      let o2 = o.copy()
+                      o2["archiving"] = g(ar)
+                      let m2 = m.copy()
+                      m2["overview"] = Json::object(o2)
+                      Some(Json::object(m2))
                     }
-                  }),
-                ),
-              )
+                    None => r.value
+                  }
+                _ => r.value
+              }
             v => v
           }
           { ..r, value, }
         }
+        "stationPart" if params.get("part") == Some(Json::string("archiving")) =>
+          match r.value {
+            Some(Object(_) as ar) => { ..r, value: Some(f.get()(ar)) }
+            _ => r
+          }
         "doing" if busy.get() =>
           {
             ..r,

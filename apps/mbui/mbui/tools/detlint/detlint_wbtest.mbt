@@ -2377,3 +2377,31 @@ test "part-place" {
   )
   assert_eq(fs.map(fn(f) { f.line }), [1, 14])
 }
+
+///|
+test "abort-unsaid" {
+  // an abort of its own, in the app, in mbui and in a test alike (bare, or as @builtin's): counted; a halt that says
+  // its words, another type's abort (a request's), a definition, the words in a comment or a string, and the halt's
+  // own abort excused on its line, not
+  let fs = lint_of(
+    [
+      (
+        "src/app/flow.mbt",
+        "fn start(t : String) -> Unit {\n  if t == \"\" {\n    abort(\"flow: no trace\")\n  }\n  let n : Int = @builtin.abort(\"no n\")\n  ignore(n)\n}\n",
+      ),
+      ("src/ui/tester_wbtest.mbt", "test \"x\" {\n  guard 1 == 2 else { abort(\"no text on screen\") }\n}\n"),
+      (
+        "src/app/said.mbt",
+        "fn start(t : String) -> Unit {\n  // abort(\"in a comment\")\n  if t == \"\" {\n    @halt.saying(\"flow: no trace: abort(it)\")\n  }\n  req.abort()\n}\n\nfn abort(s : String) -> Unit {\n  ignore(s)\n}\n",
+      ),
+      (
+        "src/halt/halt.mbt",
+        "pub fn[T] saying(msg : String) -> T {\n  println(msg)\n  abort(msg) // det-ok(abort-unsaid): the one abort, its words printed above\n}\n",
+      ),
+    ],
+    rule="abort-unsaid",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), [
+    "src/app/flow.mbt:3", "src/app/flow.mbt:5", "src/ui/tester_wbtest.mbt:2",
+  ])
+}

@@ -114,6 +114,17 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     made=fn(page) { narrow_made(src, page) },
   )
   |> ignore
+  // what the places of the bar open on asked ahead of them from the moment it shows, held till its page is gone from
+  // view under another (the stack at rest: Nav::root_shows), at those moments whatever frames are drawn (sfbase's
+  // places_ahead_node)
+  @sfbase.places_ahead_node(v, src, fn() {
+    match workspace_in_view(src).0 {
+      // (its page shows, on top or beside a page sliding over it or off it: held across that slide, let go of as it
+      // is over with its page gone from view; another page sliding over one already over it is no cause of the bar's)
+      Some(w) if narrow_bar_shown(src, w) || app.nav.root_shows() => Some(w.id)
+      _ => None
+    }
+  })
   // the bottom bar told what the app's state and the window say of it as that changes, at the moment of what changed it
   // (a page put on the stack, a place come in, the bars' order, the window's width), whatever frames are drawn: the
   // frames only read where it is then (bar_tell)
@@ -262,10 +273,6 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
   first_hide(first_waiting.val)
-  // what the places of the bar in view open on, asked ahead of them once the first page has shown (sfbase's bars.mbt)
-  if !first_waiting.val {
-    @sfbase.places_ahead(src, w.id)
-  }
 }
 
 ///|
@@ -333,7 +340,7 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a device of the person's waiting on this one for a vault's key (settings/vault_prompts.mbt), the same way
   @settings.vault_prompts(settings_core(src, w), !sheet_open())
   // (the core what the settings put up over a page draws with, put up by what has none at hand)
-  @settings.panels_frame(settings_core(src, w))
+  @settings.panels_frame(settings_core(src, w), w.id)
   // what another app shares, in the wide window's panel (share.mbt; a sheet on Small, as ShareSheet)
   share_panel(c, src, w)
   // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,
@@ -665,13 +672,8 @@ fn place_comes_in(v : @view.View) -> Unit {
     }
   })
   let shown = fn() {
-    w.said()
     ended.get() |> ignore
-    if w.goes_at(v.logic_at()) {
-      w.value_at(v.drawn_at())
-    } else {
-      w.target()
-    }
+    w.shown_on(v)
   }
   v.alpha(By(shown)).offset(By(fn() { (app.switch_way.to_double() * switch_slide * (1.0 - shown()), 0.0) })) |> ignore
 }

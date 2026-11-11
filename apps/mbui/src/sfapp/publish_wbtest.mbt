@@ -57,10 +57,10 @@ test "sharing a chat on a small screen: a table wider than the screen and the us
   ]]]
   let preview = fn() -> Json {
     let p = fix_preview()
-    guard p is Object(o) else { abort("missing preview") }
+    guard p is Object(o) else { @halt.saying("missing preview") }
     let copy = o.copy()
     let list = items(Some(p), "list").copy()
-    guard list[1] is Object(m) else { abort("missing agent message") }
+    guard list[1] is Object(m) else { @halt.saying("missing agent message") }
     let message = m.copy()
     message["text"] = "A wide table"
     message["md"] = tree
@@ -74,7 +74,7 @@ test "sharing a chat on a small screen: a table wider than the screen and the us
     let t = publish_core(calls, preview~, width~, menu=true)
     open_publish_page()
     t.frame()
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@sf.presented_rest() - t.time())
     t.run_for(@ui.move_most_ms)
     t.click(Button, label="保存到相册")
     t.run_for(@kit.presence_in_ms)
@@ -95,7 +95,7 @@ test "分享图片: the page shows the picture as it would be, 取消, 复制 an
   open_publish_page()
   // the chat's sheet put down (to where it rests, gone), the page over the whole screen (the pages', as on a computer)
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")
@@ -221,7 +221,7 @@ test "分享图片: a message unticked fades on the page and is not in the pictu
   let t = publish_core(calls, menu=true)
   open_publish_page()
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   // a box to tick for each message, all ticked; the agent's words (the second) left out
   let ticks = t.all(Checkbox, label="放进图片")
   assert_eq(ticks.length(), 4)
@@ -259,7 +259,7 @@ test "多选: the chat's picture opened from a message has that message alone ti
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(9.0))
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   // the whole chat asked for, as 分享图片 asks it
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
@@ -291,7 +291,7 @@ test "多选: a message not ticked fades, its box to tick does not" {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(9.0))
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(@sfpages.publish_message_left_out(6.0))
   // the boxes of those not ticked drawn whole, not faded with their messages
   // (how opaque the box of message `i` is drawn: its own and every box's it is in)
@@ -327,7 +327,7 @@ test "多选 from a message the preview does not hold: all of it ticked" {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(11.0))
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.all(Checkbox, label="放进图片").iter().all(fn(n) { n.check == Some(On) }))
 }
 
@@ -378,7 +378,7 @@ fn publish_viz_page(calls : Array[Made], platform? : Int = 2) -> @ui.Tester {
   let t = publish_core(calls, preview=fix_preview_viz, platform~, menu=true)
   open_publish_page()
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.run_for(@ui.move_most_ms)
   t
 }

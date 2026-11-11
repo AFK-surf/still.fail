@@ -6,7 +6,7 @@
   "targetSdk": 36,
   "compileSdk": 36,
   "manifest": "app/src/main/AndroidManifest.xml",
-  "java": ["app/src/main/java"],
+  "java": ["app/src/main/java", "jzlib/src"],
   "res": ["app/src/main/res"],
   "assets": ["../out/android/apk/assets"],
   "jniLibs": ["../out/android/apk/jniLibs", "app/src/main/jniLibs"],

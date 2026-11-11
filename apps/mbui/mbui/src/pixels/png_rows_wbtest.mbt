@@ -31,11 +31,11 @@ fn png_rgb(png : Bytes) -> (Int, Int, Array[Int]) {
     s2 = (s2 + s1) % 65521
   }
   if be32(z, z.length() - 4) != ((s2 << 16) | s1) {
-    abort("its Adler-32 is not what was deflated")
+    @halt.saying("its Adler-32 is not what was deflated")
   }
   let n = w * 3
   if raw.length() != h * (n + 1) {
-    abort("not as many rows as its height")
+    @halt.saying("not as many rows as its height")
   }
   let out : Array[Int] = Array::make(w * h * 3, 0)
   for y in 0..<h {

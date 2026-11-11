@@ -629,7 +629,6 @@ fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
         ("newChat", Some(Object(v))) => {
           let m = v.copy()
           if text(v.get("station"), "id") == "st2" {
-            m["frequent"] = Json::array([])
             m["spent"] = Json::string("Opus 5.5 的额度已用完，发出的消息会等它恢复")
             m["problem"] = Json::string("Maple 上还没有选好要用的模型")
           } else {
@@ -2480,7 +2479,7 @@ fn working_agent_card(stands? : String) -> @ui.Tester {
         _ => Some(w)
       }
     })
-  guard last is Some(name) else { abort("no agent's message") }
+  guard last is Some(name) else { @halt.saying("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t

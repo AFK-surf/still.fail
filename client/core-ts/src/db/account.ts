@@ -226,6 +226,9 @@ export class Collection {
 
 /// How many items of a log a read takes from SQLite one by one, beside those parsed already; more, it reads the range.
 const LOG_READ_ALONE = 16;
+/// How many changes of a log are kept said (`logPutSince`), and of how many logs.
+const LOG_PUTS_KEPT = 64;
+const LOG_PUTS_LOGS = 512;
 
 /// Rows read by key, kept until written; the oldest go past `cap`.
 class Cache {
@@ -323,6 +326,12 @@ export class AccountDb {
   /// a long chat's count was read from SQLite again on every view of it (four times to open one, 2026-11-08).
   readonly #logSpans = new Map<string, { min: number; max: number; count: number } | null>();
   readonly #lists = new Map<string, Collection>();
+  /// What was put in each log lately (`logPutSince`), so what is made of a long log reads again only what changed: by
+  /// the log, each change's number (`#logRev`, one count for every log) and the numbers it put (null: another change,
+  /// a cut or a delete). Of the changes before `from` (a log's, else `#logPutsFrom`) nothing is known.
+  #logRev = 0;
+  #logPutsFrom = 0;
+  readonly #logPuts = new Map<string, { from: number; puts: { rev: number; put: number[] | null }[] }>();
   #closed = false;
   /// Told after each burst is written, with what it changed.
   onCommit: (changes: Changes) => void = () => {};
@@ -442,6 +451,7 @@ export class AccountDb {
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#logSpans.clear();
+      this.#logPutsForgotten();
       this.#lists.clear();
       this.#slackNames.clear();
       const again = [...this.#unwritten, ...precious];
@@ -519,11 +529,46 @@ export class AccountDb {
     } else rows.set(key, { id, archived: archived !== 0, before, after });
   }
 
-  #tellLog(table: string, station: string, id: string): void {
+  /// A log changed: `put` the numbers put in it, null for anything else.
+  #tellLog(table: string, station: string, id: string, put: number[] | null = null): void {
     this.#logIndices.delete(K(table, station, id));
     this.#logSpans.delete(K(table, station, id));
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
     if (table === "slack") this.#slackNames.delete(station);
+    const key = K(table, station, id);
+    const was = this.#logPuts.get(key);
+    const log = was ?? { from: this.#logPutsFrom, puts: [] };
+    log.puts.push({ rev: ++this.#logRev, put });
+    if (log.puts.length > LOG_PUTS_KEPT) log.from = log.puts.shift()!.rev;
+    this.#logPuts.delete(key);
+    this.#logPuts.set(key, log);
+    // (the least lately changed logs' let go: of every log's changes up to theirs nothing is known then)
+    while (this.#logPuts.size > LOG_PUTS_LOGS) {
+      const [oldest, gone] = this.#logPuts.entries().next().value!;
+      this.#logPuts.delete(oldest);
+      this.#logPutsFrom = Math.max(this.#logPutsFrom, gone.puts[gone.puts.length - 1]?.rev ?? 0);
+    }
+  }
+
+  /// Nothing known of what was put in any log until now (what is held changed otherwise: rolled back, a station forgotten).
+  #logPutsForgotten(): void {
+    this.#logPuts.clear();
+    this.#logPutsFrom = ++this.#logRev;
+  }
+
+  /// The numbers put in a log since change `since` (`rev` of an answer before; 0: none), and the change it is at now;
+  /// `put` null where that is not known (it changed otherwise, or long ago): all of it is to be read again.
+  logPutSince(table: LogTable, station: string, id: string, since: number): { rev: number; put: number[] | null } {
+    const rev = this.#logRev;
+    const log = this.#logPuts.get(K(table, station, id));
+    if (since <= 0 || since < (log?.from ?? this.#logPutsFrom)) return { rev, put: null };
+    const put = new Set<number>();
+    for (const p of log?.puts ?? []) {
+      if (p.rev <= since) continue;
+      if (p.put === null) return { rev, put: null };
+      for (const n of p.put) put.add(n);
+    }
+    return { rev, put: [...put] };
   }
 
   close(): void {
@@ -565,7 +610,7 @@ export class AccountDb {
     return this.sql.all("SELECT id FROM workspace").map((r) => String(r[0]));
   }
 
-  /// A station's overview, footprint or usage.
+  /// A station's overview or usage.
   stationDoc(station: string, kind: string): J {
     return this.#doc(K("st", station, kind), "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
   }
@@ -922,11 +967,6 @@ export class AccountDb {
     return this.sql
       .all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) AND (tone IS NOT NULL OR asks = 1)`, stations)
       .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
-  }
-
-  /// The rows of a station whose agents are at work.
-  running(station: string): J[] {
-    return this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND running = 1", [station]).map((r) => this.#chatRow(station, 0, String(r[0]), r[1], r[2]));
   }
 
   /// The viewer read a thread up to `n`: its rows unread no more where that covers their last message.
@@ -1681,7 +1721,8 @@ export class AccountDb {
         if (written.length > 0 && this.#readSlackSaid(station, id, written)) said = true;
         if (said) this.#tellLog("slack", station, id);
       }
-      if (changed) this.#tellLog(table, station, id);
+      // (what was put, unless something was cut too)
+      if (changed) this.#tellLog(table, station, id, cutAfter === null ? written.map(([n]) => n) : null);
       if (index) {
         index.put(written.map(([n]) => n), cutAfter);
         this.#logIndices.set(cacheKey, index);
@@ -2034,12 +2075,13 @@ export class AccountDb {
       }
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
+      this.#logPutsForgotten();
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#logSpans.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
       this.#tell({ topic: "$station-reset", station });
-      for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
+      for (const topic of ["overview", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });
   }
 

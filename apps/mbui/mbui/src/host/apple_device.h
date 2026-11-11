@@ -107,7 +107,8 @@ int32_t mb_host_copy_shown(void) { return 0; }
 // ---- the clipboard read ----
 
 enum { CLIP_NONE = 0, CLIP_PNG = 1, CLIP_TOO_LARGE = 2, CLIP_UNREADABLE = 3 };
-static const NSUInteger clip_png_max = 8u << 20, clip_source_max = 32u << 20, clip_file_max = 1u << 30;
+// Pictures pasted as attachments have the same bound as copied files; transports check their own when sending.
+static const NSUInteger clip_png_max = 1u << 30, clip_source_max = 32u << 20, clip_file_max = 1u << 30;
 static const double clip_pixels_max = 16.0 * 1024 * 1024;
 static NSMutableDictionary<NSNumber *, NSDictionary *> *clip_reads;
 static int32_t clip_next = 1;

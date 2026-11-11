@@ -37,7 +37,7 @@ export function num(n: number): string {
 export const SOON_MS = 300;
 
 /// The topics whose values are held here.
-const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "footprint", "loginSessions", "admin", "draft", "prefs", "drive", "drivePlace"]);
+const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "loginSessions", "admin", "draft", "prefs", "drive", "drivePlace"]);
 const LIST_TOPIC: Record<ListKind, string> = { chats: "chatRows", archived: "archivedRows", sessions: "sessions", threads: "threads", jobs: "jobs" };
 
 /// What a folder of a station's drive is kept as among the station's documents (the `drive` topic).
@@ -664,8 +664,6 @@ export class Data {
       case "overview":
         if ([...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
         return db.stationDoc(station, "overview");
-      case "footprint":
-        return db.stationDoc(station, "footprint");
       case "stationUsage":
         return db.stationDoc(station, "usage");
       case "drive":
@@ -812,8 +810,6 @@ export class Data {
       case "overview":
         this.#loginsMoved(station, value);
         return db.putStationDoc(station, "overview", value, at, topic);
-      case "footprint":
-        return db.putStationDoc(station, "footprint", value, at, topic);
       case "stationUsage":
         return db.putStationDoc(station, "usage", value, at, topic);
       case "drive":
@@ -911,9 +907,9 @@ export class Data {
 
   // ── records by table and key: the account's own and the device's ──
 
-  /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`) and chats' links (`chat_ref`), a
-  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), a station's (`place`, `link`) too; the rest the
-  /// device's; the changelog's.
+  /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`), chats' links and the chats opened
+  /// (`chat_ref`), a workspace's in its account's database (`ws:<id>:…`, `links:<id>`, `opened:<id>`), a station's
+  /// (`place`, `link`) too; the rest the device's; the changelog's.
   record(table: string, key: string): unknown {
     const [db, k] = this.#recordAt(table, key);
     this.#readQuery(this.#recordTopic(table, key, db, k));
@@ -958,6 +954,13 @@ export class Data {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
     }
+    // The chats opened on this device in a workspace, the latest last (refs.ts opened).
+    if (table === "chat_ref" && key.startsWith("opened:")) {
+      const ws = key.slice(7);
+      return [this.#ofWorkspace(ws) ?? null, [ws, "opened"]];
+    }
+    // The team's replies on bug reports from the workspace's chats, as the cloud gives them (feedback-replies.ts).
+    if (table === "feedback") return [this.#ofWorkspace(key) ?? null, [key, "feedback"]];
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
@@ -1191,10 +1194,6 @@ export class Data {
     }));
   }
 
-  running(station: string): unknown[] {
-    return this.of(station)?.running(station) ?? [];
-  }
-
   putSummary(station: string, summary: unknown): boolean {
     return this.of(station)?.putSummary(station, summary) ?? false;
   }
@@ -1326,6 +1325,13 @@ export class Data {
   logNumbers(table: LogTable, station: string, id: string): readonly number[] {
     this.#readQuery({ topic: "$log", table, station, id });
     return this.of(station)?.logNumbers(table, station, id) ?? [];
+  }
+
+  /// The numbers put in a log since change `since`, and the change it is at now (AccountDb.logPutSince); `put` null:
+  /// not known, all of it to be read again.
+  logPutSince(table: LogTable, station: string, id: string, since: number): { rev: number; put: number[] | null } {
+    this.#readQuery({ topic: "$log", table, station, id });
+    return this.of(station)?.logPutSince(table, station, id, since) ?? { rev: 0, put: null };
   }
 
   logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, unknown> {

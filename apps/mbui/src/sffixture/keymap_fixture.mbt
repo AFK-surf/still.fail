@@ -25,10 +25,19 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
   ("chat.screen", "chat", ["Shift+Mod+D"], [], "yes"),
   ("chat.latest", "chat", ["Mod+Down"], [], "empty"),
   ("chat.find", "chat", ["Mod+F"], [], "yes"),
+  ("chat.outline", "chat", ["Mod+G"], [], "yes"),
+  ("chat.said.prev", "chat", ["Alt+Shift+Up"], [], "empty"),
+  ("chat.said.next", "chat", ["Alt+Shift+Down"], [], "empty"),
   ("chat.archive", "chat", ["Shift+Mod+E"], [], "yes"),
   ("panel.close", "chat", ["Escape"], [], "yes"),
   ("files.preview", "files", ["Shift+Mod+P"], [], "yes"),
 ]
+
+///|
+/// The actions not in the list of shortcuts, only worth a key (keymap.ts UNLISTED): of those listed here, the steps
+/// between what people said in a chat.
+// kept across runs: a table, never written
+pub let fx_key_unlisted : Array[String] = ["chat.said.prev", "chat.said.next"]
 
 ///|
 /// A binding as a key cap shows it (keymap.ts label): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
@@ -87,7 +96,7 @@ pub fn fixture_keymap(changed : Map[String, Array[String]], send_key? : String =
       "labels": Json::array(labels.map(Json::string(_))),
       "text": Json::string(if labels.length() == 0 { tr("web-main.shortcuts.unset") } else { labels.join(" / ") }),
       "changed": Json::boolean(changed.contains(a.0)),
-      "listed": Json::boolean(true),
+      "listed": Json::boolean(!fx_key_unlisted.contains(a.0)),
     })
   })
   let ws = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(fn(n) {

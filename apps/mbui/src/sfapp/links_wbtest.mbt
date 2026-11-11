@@ -43,7 +43,7 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(t.opened().length(), 0)
   // (its menu, the presenters': a sheet with a finger, in)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("打开链接") is Some(_))
   // felt as it opened, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
@@ -56,7 +56,7 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
   assert_true(t.find("已复制链接") is Some(_))
   assert_true(!@sf.presenting())
   // gone as the sheet goes
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("打开链接") is None)
 }
 

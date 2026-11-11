@@ -192,7 +192,7 @@ pub fn Space::margin_px(self : Space) -> Double {
   match self {
     Exact(v) => {
       if v != v {
-        abort("style: a margin's Exact is NaN")
+        @halt.saying("style: a margin's Exact is NaN")
       }
       v
     }
@@ -324,7 +324,7 @@ fn Len::size(self : Len) -> Size {
     Grow(k) => Fill(k)
     Pct(p) => Pct(exact_ok(p, "Len Pct"))
     Fixed(v) => Px(exact_ok(v, "Len"))
-    Within(v) => abort("style: Within(\{v}) is a least across (min_w), not a size")
+    Within(v) => @halt.saying("style: Within(\{v}) is a least across (min_w), not a size")
     l => Px(l.space().unwrap().px())
   }
 }
@@ -334,7 +334,7 @@ fn Len::size(self : Len) -> Size {
 fn Len::bound(self : Len, none_is : Double) -> Double {
   match self {
     Hug | Cut | Full | Grow(_) => none_is
-    Pct(p) => abort("style: a bound is not a share (Pct(\{p}))")
+    Pct(p) => @halt.saying("style: a bound is not a share (Pct(\{p}))")
     Fixed(v) | Within(v) => exact_ok(v, "Len")
     l => l.space().unwrap().px()
   }
@@ -525,7 +525,7 @@ pub fn Opacity::value(self : Opacity) -> Double {
     O100 => 1.0
     Exact(v) => {
       if !(v >= 0.0 && v <= 1.0) {
-        abort("style: Opacity Exact(\{v}) is not within 0 … 1")
+        @halt.saying("style: Opacity Exact(\{v}) is not within 0 … 1")
       }
       v
     }
@@ -617,7 +617,8 @@ pub(all) enum Stroke {
 } derive(Eq, Show, Debug)
 
 ///|
-fn Stroke::px(self : Stroke) -> Double {
+/// How wide a border of this stroke is, in points (an old view's box's, and the library's style_node's for an edge).
+pub fn Stroke::px(self : Stroke) -> Double {
   match self {
     B0 => 0.0
     B0_5 => 0.5
@@ -661,7 +662,7 @@ pub fn Shadow::blur_y(self : Shadow) -> (Double, Double) {
 /// what it was, rather than drawn as 0.
 fn exact_ok(v : Double, what : String) -> Double {
   if !(v >= 0.0) {
-    abort("style: \{what} Exact(\{v}) is below 0")
+    @halt.saying("style: \{what} Exact(\{v}) is below 0")
   }
   v
 }

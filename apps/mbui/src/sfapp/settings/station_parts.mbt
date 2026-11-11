@@ -637,11 +637,86 @@ fn adb_state(c : @ui.Ctx, view : Json?, now : Double) -> String {
 }
 
 ///|
-/// The station at `address` as the workspace's `stations` has it.
+/// The station at `address` whole, as its own page shows it (`station`: its overview, machine, profiles' groups, the
+/// runtimes it runs and their models, …): no value while the workspace's stations are not known, null where it has no
+/// such station. Asked of the workspace the address is of (`here`'s for one without it).
+pub fn station_read(core : Core, here : Here, address : String) -> Read {
+  station_read_in(core, station_scope(here, address), address)
+}
+
+///|
+fn station_read_in(core : Core, scope : String, address : String) -> Read {
+  (core.topic)("station", { "scope": str(scope), "station": str(address) }).get()
+}
+
+///|
+/// The station at `address` whole (station_read), None while not known or where there is none.
 pub fn station_of(core : Core, here : Here, address : String) -> Json? {
-  match stations_of(core, here).value {
-    Some(Array(a)) => a.iter().find_first(fn(x) { text(Some(x), "station") == address })
+  match station_read(core, here, address).value {
+    Some(Object(_)) as s => s
     _ => None
+  }
+}
+
+///|
+/// One part of station `address`'s overview (`stationPart`: `archiving`, `automaticDecisions`, `profiles`,
+/// `machineLogins`, `logins`, `updates`), for a page that shows that part of every station, each station's row asking
+/// its own, or that part of one station that is not its page (关于's 本机 Station, its `updates`): None while not
+/// answered, null while its overview is not read or has none.
+pub fn station_part(core : Core, here : Here, address : String, part : String) -> Json? {
+  station_part_in(core, station_scope(here, address), address, part)
+}
+
+///|
+fn station_part_in(core : Core, scope : String, address : String, part : String) -> Json? {
+  (core.topic)("stationPart", { "scope": str(scope), "station": str(address), "part": str(part) }).get().value
+}
+
+///|
+/// Connect `id` of station `address` whole, as its own page shows it (`connect`: its connect, its latest sessions, the
+/// one it delivers into, how many of them run, the ways it could change): no value while its station's overview is not
+/// read, null where the station is not up or has no such connect. Asked one way wherever one connect is shown, of the
+/// workspace the address is of (`here`'s for one without it); a list of connects reads their rows (`connects`), never
+/// one whole (the user, 2026-11-10).
+pub fn connect_read(core : Core, here : Here, address : String, id : String) -> Read {
+  (core.topic)("connect", { "scope": str(station_scope(here, address)), "station": str(address), "id": str(id) }).get()
+}
+
+///|
+/// Connect `id` of station `address` whole (connect_read), None while not known or where there is none.
+pub fn connect_of(core : Core, here : Here, address : String, id : String) -> Json? {
+  match connect_read(core, here, address, id).value {
+    Some(Object(_)) as c => c
+    _ => None
+  }
+}
+
+///|
+/// The sessions connect `id` of station `address` could deliver into (`connectCandidates`: each its key, title,
+/// description and whether it is the one now, the latest first), for its choice of one alone: None while not answered
+/// or where there is no such connect. Held ahead by a single-session connect's page while its 更换 row shows
+/// (connect_candidates_asked), so the choice opens on them whole.
+pub fn connect_candidates(core : Core, here : Here, address : String, id : String) -> Array[Json]? {
+  match (core.topic)("connectCandidates", connect_candidates_asked(here, address, id)).get().value {
+    Some(Object(_)) as v => Some(items(v, "candidates"))
+    _ => None
+  }
+}
+
+///|
+/// What `connectCandidates` is asked with for connect `id` of station `address` (connect_candidates'), for what holds it
+/// ahead of the choice that reads it.
+pub fn connect_candidates_asked(here : Here, address : String, id : String) -> Map[String, Json] {
+  { "scope": str(station_scope(here, address)), "station": str(address), "id": str(id) }
+}
+
+///|
+/// The workspace a station is asked of: its address's, `here`'s for one without it.
+fn station_scope(here : Here, address : String) -> String {
+  if address.contains("/") {
+    workspace_of(address)
+  } else {
+    here.workspace
   }
 }
 

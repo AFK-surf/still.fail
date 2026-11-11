@@ -96,6 +96,8 @@ pub(all) struct Core {
   now : () -> Double
   /// run with MBUI_READONLY=1: what is said in place of an answer sent (a vault request's); "" where answers go
   read_only : String
+  /// whether the workspace's devices are asked for (the source's `asks_devices`: not in a replay of a run from before)
+  devices_on : () -> Bool
 }
 
 ///|
@@ -401,7 +403,10 @@ pub fn workspace_view(core : Core, here : Here) -> Read {
 }
 
 ///|
-/// The workspace's stations (`stations`: StationView).
+/// The workspace's stations as a list's rows (`stations`: each one's mark, name, how it is, its machine's meters, how
+/// many agents run on it, its drive), asked one way wherever a list shows them, so the core is asked them once. What a
+/// row does not carry is one station's page (station_of) or a part of its overview (station_part): a list never holds
+/// each station whole (the user, 2026-11-10: only what the UI shows or may show is subscribed to).
 pub fn stations_of(core : Core, here : Here) -> Read {
   (core.topic)("stations", { "scope": str(here.workspace) }).get()
 }
@@ -533,7 +538,7 @@ pub fn reset() -> Unit {
   connects_mine.val = false
   chosen.clear()
   builtin_open.clear()
-  panels_core.val = None
+  panels_core.set(None)
   frame_core.val = None
   at_root.val = false
   root_top.val = 0.0
@@ -563,11 +568,6 @@ pub fn reset() -> Unit {
   adding.order.clear()
   adding.picked.set("")
   adding.serial.set(0)
-  mark_pick.emojis = false
-  mark_pick.color = ""
-  mark_pick.serial = 0
-  mark_pick.asking = false
-  mark_pick.reading = ""
   mark_pictures.val = 0
   env_form.val = 0
   versions_state.updating.clear()

@@ -69,6 +69,12 @@ pub(all) struct Overlay {
 }
 
 ///|
+/// Ctx::overlay's `initial_focus` for a modal layer that gives none of what it holds the focus as it opens and keeps
+/// none under it either: its own ground takes it from what outside it has it (a sheet: a field in it focused would
+/// bring the keyboard up over it, one under it would go on taking what is typed while it is up), given back as it goes.
+pub let layer_ground : Int = -3
+
+///|
 /// A layer over the page (see the file's head), `key` its id's, built by `body`. `modal`: a ground (`scrim`, its
 /// colour; clear by default) under what it holds takes the presses and wheels it does not, and the page is hidden
 /// from the semantics tree; `trap` (with `modal` by default) keeps Tab in it. Dismissed by Escape and the back
@@ -78,7 +84,9 @@ pub(all) struct Overlay {
 /// view's own Ctx::dismiss not asked). A press on `anchor` (its trigger's id), or on what it holds, does not dismiss
 /// it; nor, its trigger a node of the window's tree (`anchor_node`: a rail's place, an old view's popover by it), one
 /// where that node is drawn (on it or what it holds). As it opens the focus goes to `initial_focus` (-1: its first focusable; 0: nowhere, it stays; -2, by
-/// default: the first focusable when it traps, else nowhere); as it goes, back to `return_focus` (0, by default: what
+/// default: the first focusable when it traps, else nowhere; -3: its own ground where what has it is outside it, none
+/// of what it holds given it, so a field under it keeps no keys and no input method (`layer_ground`: a sheet), it
+/// stays where nothing has it or it is in it already); as it goes, back to `return_focus` (0, by default: what
 /// had it as it opened). `inert`: leaving (its exit drawn): it takes no press, focus or key, is not dismissed, is
 /// hidden from the semantics tree, and the focus goes back as though it had gone; its scrim is still drawn (as it
 /// fades), taking nothing.
@@ -397,11 +405,14 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
     Some((x, y)) => {
       // (what took the press as it went down: the window's tree's, none of the old frame's)
       let target = if self.press_down_tree { 0 } else { hit_in(self.hit_ids, self.hit_rects, x, y) }
+      // (taken by what of the tree is over a layer in the window's stack of layers, or by its modal layer over it: the
+      // layer never saw it, as one under a layer of its own does not; one over that, as ever, a press outside it)
+      let under = if self.press_down_tree { self.press_tree_stack } else { -3 }
       let mut k = self.last_layers.length() - 1
       while k >= 0 {
         let l = self.last_layers[k]
         k = k - 1
-        if !self.layer_takes(l) {
+        if !self.layer_takes(l) || self.layer_stack(l) < under {
           continue
         }
         if self.in_layer(l, x, y) {
@@ -656,8 +667,20 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
     if was {
       continue
     }
+    // (its own ground in place of what outside it has the focus: Ctx::focus_taken_under, the one rule)
+    if l.initial == layer_ground {
+      self.focus_taken_under(
+        l.id,
+        self.focus == l.id ||
+        self.focusables.iter().any(fn(f) { f.id == self.focus && self.layer_built_in(f.layer, l.id) }),
+      )
+      self.layers_opened.push(l.id)
+      continue
+    }
     let target = if l.initial > 0 {
       l.initial
+    } else if l.initial == layer_ground {
+      l.id
     } else {
       let mut first = 0
       for f in self.focusables {
@@ -1149,8 +1172,10 @@ fn Ctx::back_layer_spent(self : Ctx) -> Unit {
 fn Ctx::layer_escape(self : Ctx, keys : Array[(Int, Int, Bool)]) -> Int {
   let open = self.last_layers.filter(fn(l) { self.layer_takes(l) }).rev()
   let keys_layer = self.keys_layer()
+  // (one under a modal layer of the window's tree takes no key, an Escape the tree left as none: Tree::modal_stack)
+  let modal = @signals.untracked(fn() { tree_modal_stack() })
   for l in open {
-    if l.escape {
+    if l.escape && self.layer_stack(l) >= modal {
       let mut took = false
       for k in 0..<keys.length() {
         let (code, mods, taken) = keys[k]
@@ -1215,4 +1240,19 @@ fn Ctx::on_anchor(self : Ctx, anchor : Int, target : Int, x : Double, y : Double
   let held : Array[Int] = []
   self.holders(self.hit_of(target, x, y), held)
   held.contains(anchor)
+}
+
+///|
+/// A modal layer opened over the keyboard's focus takes it (the one rule, the old frame's layers' and the window's
+/// tree's alike, whichever is over which): what outside it has the focus gives it to the layer's own `ground` (0: none),
+/// so what is typed goes into nothing under it, its keys are the topmost layer's and a field's input method is put away;
+/// as the layer goes, the focus goes back to what had it (Ctx::layers_focus's, view_layers_focus's), what was written
+/// still there. Where nothing has it, or what is in it (`inside`) has it, it stays. A layer that is not modal, or one
+/// that leaves what is typed to the field under it (View::leaves_typing, an old overlay opened with initial focus 0: a
+/// menu a finger opened beside it), is not asked.
+fn Ctx::focus_taken_under(self : Ctx, ground : Int, inside : Bool) -> Unit {
+  if self.focus == 0 || inside || self.focus == ground {
+    return
+  }
+  self.focus_moved(ground)
 }

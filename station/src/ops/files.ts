@@ -1,6 +1,6 @@
 // Files the station keeps: where its data directory is, and writing them whole (a reader never sees half a file).
 import { closeSync, fsyncSync, mkdirSync, openSync, opendirSync, readFileSync, renameSync, writeSync } from "node:fs";
-import { opendir } from "node:fs/promises";
+import { mkdir, open, opendir, rename } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { tr, type Lang } from "./i18n.ts";
@@ -61,6 +61,54 @@ export function writePrivate(path: string, data: string | Uint8Array) {
     closeSync(fd);
   }
   renameSync(tmp, path);
+}
+
+/// `writePrivate` off the station's thread: its sync waits on the disk, a fraction of a second on one kept busy.
+export async function writePrivateSoon(path: string, data: string | Uint8Array): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  const file = await open(tmp, "w", 0o600);
+  try {
+    await file.writeFile(data);
+    await file.sync();
+  } finally {
+    await file.close();
+  }
+  await rename(tmp, path);
+}
+
+/// A file of the station's own that it keeps in memory and writes through (`writePrivateSoon`): what is asked while a
+/// write is on its way is written after it, the latest only. What it gives resolves once what was asked is written.
+export class PrivateFile {
+  readonly path: string;
+  #latest: string | Uint8Array | null = null;
+  #writing: Promise<void> | null = null;
+
+  constructor(path: string) {
+    this.path = path;
+  }
+
+  write(data: string | Uint8Array): Promise<void> {
+    this.#latest = data;
+    return (this.#writing ??= this.#flush());
+  }
+
+  /// Once what was asked is written (or failed).
+  async written(): Promise<void> {
+    await this.#writing?.catch(() => undefined);
+  }
+
+  async #flush(): Promise<void> {
+    try {
+      while (this.#latest !== null) {
+        const data = this.#latest;
+        this.#latest = null;
+        await writePrivateSoon(this.path, data);
+      }
+    } finally {
+      this.#writing = null;
+    }
+  }
 }
 
 /// Seconds, as the cloud and the files say them: the machine's time.

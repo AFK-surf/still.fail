@@ -1,5 +1,5 @@
-// What the agents spent, the machine's own sessions, the agents' memory, the machine itself, and the retired footprint
-// (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint), and what
+// What the agents spent, the machine's own sessions, the agents' memory and the machine itself
+// (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host), and what
 // still.fail uses of the machine (GET /resources, POST /resources/processes/:pid/end).
 import { type Request, type Answer, error, json, param, Refused, segment } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
@@ -40,16 +40,6 @@ function cursorInteger(r: Request, name: string): bigint | null {
 
 /// A path segment (admin/mod.rs segment_decode): `+` stays itself there.
 
-/// The Rust's `/footprint` for clients from before footprint statistics were retired.
-const RETIRED = JSON.stringify({
-  checkedAt: null, tookMs: null, scanning: false, manage: false,
-  disk: { totalBytes: 0, freeBytes: 0 },
-  parts: [], elsewhere: [], chats: [],
-  unseen: { count: 0, bytes: 0 },
-  memory: { totalBytes: 0, usedBytes: 0, stationBytes: 0 },
-  processes: [],
-});
-
 export const routes = (tools: Tools): Route[] => {
   const { read, host } = tools;
   return [
@@ -88,7 +78,6 @@ export const routes = (tools: Tools): Route[] => {
       },
     },
     // Retired: old clients' route kept, without scanning.
-    { method: "GET", pattern: /^\/footprint$/, handle: async () => json(200, RETIRED) },
   ];
 };
 

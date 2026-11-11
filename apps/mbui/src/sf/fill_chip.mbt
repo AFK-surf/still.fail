@@ -98,6 +98,17 @@ pub fn fill_chip(
 }
 
 ///|
+/// How wide a fill chip of this mark and these words is laid out (fill_chip's own: its words, what is between and
+/// around them), for what picks a way of saying several by the room they need before any is laid out
+/// (nav_quota_chips: by figures wider than the ones shown).
+pub fn fill_chip_wide(c : @ui.Ctx, mark : String, words : String, small? : Bool = false, compact? : Bool = false) -> Double {
+  let side = (if small && compact { @ui.Space::S1 } else if small { @ui.Space::S1_25 } else { @ui.Space::S2 }).px()
+  let between = if mark == "" || chip_joined(mark, words) { 0.0 } else { @ui.Space::S1_25.px() }
+  let marked = if mark == "" { 0.0 } else { c.words_across(mark, chip_text) }
+  c.fitting_width(marked + c.words_across(words, chip_text), [side, side, between])
+}
+
+///|
 /// Whether its mark and figure read as one phrase in Chinese, the mark ending in a Han character and the figure
 /// beginning with one (内存剩 12.3 G, 每周剩 95%): none of chip_words' 5 between them, as Chinese sets no space between
 /// its characters; that only beside Latin and figures (CPU 空闲 72%, 5H 62%, 每周 95%), the space Chinese leaves there.

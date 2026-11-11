@@ -237,7 +237,6 @@ pub fn fix_history() -> Json {
         "tasks": [],
         "messages": [
           {
-            "key": "m1",
             "from": { "name": "林", "bound": false },
             "text": "帮我把聊天页的列表做成虚拟列表，几千条消息也要滚得顺。",
           },

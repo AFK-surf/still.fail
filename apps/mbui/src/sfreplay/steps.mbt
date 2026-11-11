@@ -72,10 +72,15 @@ pub fn Flow::start(
   @sfbase.reset()
   let r = @core.Replay::parse(trace)
   use_recorded_jobs(r)
+  // (a run from before the stations' rows: its `stations` the replay's own to keep, the app's asks of them read out of
+  // those, source.mbt)
+  if !switch_was_on(r, env, "MBUI_STATION_ROWS") {
+    r.keep_stations()
+  }
   // (asks the run's timing made, with what came for them: each test says which and why)
   for text in drop {
     if r.drop(text) == 0 {
-      abort("flow: nothing in the run holds " + text + " to drop")
+      @halt.saying("flow: nothing in the run holds " + text + " to drop")
     }
   }
   // (the core's pure calls the app has kept answers for are answered here, not asked of the run's core: src/sfreplay
@@ -93,17 +98,17 @@ pub fn Flow::start(
   let settings = match r.settings() {
     Some(s) => s
     None =>
-      abort(
+      @halt.saying(
         "flow: this test's trace has no {\"settings\":…}, what its run's host gave its frames (mbui's @ui.trace_settings): record it again (scripts/rerecord.sh)",
       )
   }
   let (w, h, scale, platform, native, dark) = match @ui.settings_of(settings) {
     Ok(s) => s
-    Err(why) => abort("flow: this test's trace: " + why + " (mbui's @ui.trace_settings): record it again (scripts/rerecord.sh)")
+    Err(why) => @halt.saying("flow: this test's trace: " + why + " (mbui's @ui.trace_settings): record it again (scripts/rerecord.sh)")
   }
   let said = fn(what : String, by_test : Double?, run : Double) {
     if by_test is Some(v) && v != run {
-      abort("flow: the test says its run's \{what} was \{v}, its trace's was \{run}")
+      @halt.saying("flow: the test says its run's \{what} was \{v}, its trace's was \{run}")
     }
   }
   said("width", w_said, w)
@@ -115,7 +120,7 @@ pub fn Flow::start(
   // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
   // not say it is one recorded before it was kept, to record again: never run as if started with nothing)
   if r.env().is_empty() && emit_path() == "" {
-    abort(
+    @halt.saying(
       "flow: this test's trace has no {\"env\":…} head, what its run's app was started with (src/stillfail: CORETRACE env): record it again (scripts/rerecord.sh)",
     )
   }
@@ -359,7 +364,7 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
   if script.val is Some(_) {
     return
   }
-  abort(s)
+  @halt.saying(s)
 }
 
 ///|
@@ -713,8 +718,7 @@ pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
     let again = flow(seed)
     if again != first {
       let s = "flow: in the pass \{seed} (\{pace_of(seed)}) the screen ends otherwise (\{again}, not \{first})"
-      println(s)
-      abort(s)
+      @halt.saying(s)
     }
   }
 }

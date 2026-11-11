@@ -255,8 +255,8 @@ extern "C" fn ffi_hold_words(channel : String, title : String, body : String) ->
 extern "C" fn ffi_app_version() -> Int = "mb_host_app_version"
 
 ///|
-#borrow(url, sha256, name)
-extern "C" fn ffi_update_fetch(url : String, sha256 : String, size : Double, name : String, now : Int) -> Unit = "mb_host_update_fetch"
+#borrow(url, sha256, name, delta)
+extern "C" fn ffi_update_fetch(url : String, sha256 : String, size : Double, name : String, now : Int, delta : String) -> Unit = "mb_host_update_fetch"
 
 ///|
 #borrow(said)
@@ -967,8 +967,8 @@ fn app_version() -> Int {
 
 ///|
 /// A newer build downloaded and made ready (@hostapi.update_fetch).
-fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
-  ffi_update_fetch(url, sha256, size, name, if now { 1 } else { 0 })
+fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool, delta : String) -> Unit {
+  ffi_update_fetch(url, sha256, size, name, if now { 1 } else { 0 }, delta)
 }
 
 ///|

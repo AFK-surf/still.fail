@@ -132,6 +132,8 @@ priv struct Moving {
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
   mut fly : (Double, Double, Double, Double, Double, Double)?
+  /// the same worked out once this frame is laid out (fly_by), in its place
+  mut fly_by : (() -> (Double, Double, Double, Double, Double, Double))?
   /// placed by its own look but flying over rows, which must make room for it
   mut flying_placed : Bool
   /// its own ground changes shape for its cause (reshape), by `spec`
@@ -504,6 +506,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     kept_drawn: false,
     scope: 0,
     fly: None,
+    fly_by: None,
     flying_placed: false,
     reshape: false,
     carry: false,
@@ -703,6 +706,20 @@ pub fn fly(
 }
 
 ///|
+/// Node `i` flown as `fly` flies it, from where and how far on as `at` gives them (x, y, scale, px, py, ps), worked out
+/// once this frame is laid out as `placed`'s are: what is read there of a way going on (where words sent are on theirs)
+/// is read as the frame is laid out, not as it is built, so that what builds it is not built again each frame it goes.
+pub fn fly_by(c : @ui.Ctx, i : Int, at : () -> (Double, Double, Double, Double, Double, Double)) -> Unit {
+  let e = moving_of(c, i)
+  if e.name == "" {
+    e.name = "fly"
+  }
+  e.fly = Some((0.0, 0.0, 1.0, 1.0, 1.0, 1.0))
+  e.fly_by = Some(at)
+  c.stratum(i, Flying)
+}
+
+///|
 /// A node placed by its own look flies over list rows, which leave its drawn room clear.
 pub fn flying_placed(c : @ui.Ctx, i : Int) -> Unit {
   let e = moving_of(c, i)
@@ -776,6 +793,28 @@ fn rec_unread(k : Int) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// The shape of what is reshaped for cause `by` (reshape's `by`: its ground's way) told at moment `at` to stop where it
+/// goes (Anim::stop_at): on from where it was then and as fast, slowing to rest, left there, short of where it is laid
+/// out, till its next cause (the coordinator of the migration, 2026-11-10: a composer growing a line as words sent from
+/// it hold it: the words gone, it grows no further for them). Only its shape: where it and its parts are placed goes on
+/// to where they are laid out, which no next cause would set going again (a box sent from as it opened, its place
+/// halfway there for good). One rule with a way set off again the other way (layout_entry): a motion changed carries
+/// its speed.
+pub fn stop_for(c : @ui.Ctx, by : String, at : Double) -> Unit {
+  if by == "" {
+    return
+  }
+  mo.recs.each(fn(_, r) {
+    if r.alive && r.by == by {
+      let way = ground_way(r, (r.x, r.y, r.w, r.h))
+      if way > 0.0 {
+        r.gp.stop_at(c, at, points=way)
+      }
+    }
+  })
 }
 
 ///|
@@ -1387,7 +1426,14 @@ pub fn reveal(
     // (as big as its room is open and gone by half, as a list's row coming and going where it is: what a card under a
     // post holds not cut by its room as it closes, 2026-10-31 the user: 「特殊情况下消息列表还是会出现比较明显的裁剪」
     // 「比如选择决策」)
-    c.look_by(inner, fn() { c.held_look(inner, share) })
+    // (read where it is as it is painted: a list's row it is in, kept as its nodes, put back elsewhere among the frame's)
+    let held = c.node_held(inner)
+    c.look_by(inner, fn() {
+      match held.at() {
+        Some(i) => c.held_look(i, share)
+        None => @ui.still_look
+      }
+    })
     let soft = @ui.cut_soft((natural - shown) / 2.0, shown / 2.0)
     c.fade_to(inner, outer, top=soft, foot=soft)
   }
@@ -2161,9 +2207,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           }
           // (set off again while it went: a Move on from that speed (move_path), past its new shape a little where it
           // went toward it fast and back, not from rest on its curve, stopped dead (the user, 2026-11-09: 「冲过一点再弹回」))
-          // (only toward its new shape: turned back, from rest, as its parts are)
-          let v = if v > 0.0 { v } else { 0.0 }
-          let spec = if sets_out_from_rest(spec) && v > reshape_moving {
+          // (turned back too: on from its speed the other way, slowing on its Move's way past where it was a little, then
+          // back to its new shape, not from rest, stopped dead as it turned (sizes_steady); the coordinator of the
+          // migration, 2026-11-10: a composer growing a line let go of by words sent from it before it has grown)
+          let spec = if sets_out_from_rest(spec) && v.abs() > reshape_moving {
             let way = ground_way(r, laid)
             move(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
           } else {
@@ -2277,7 +2324,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         None => ()
       }
     }
-    match e.fly {
+    match (match e.fly_by { Some(at) => Some(at()); None => e.fly }) {
       Some((fx, fy, fs, px, py, ps)) => {
         let s = fs + (1.0 - fs) * ps
         let x = fx + (nx - fx) * px

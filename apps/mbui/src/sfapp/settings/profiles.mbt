@@ -35,21 +35,17 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
   }
   place_page(c, core, tr("android-misc.bar.place.profiles"), back~, primary?=add, fn() {
     let blocks : Array[() -> Unit] = []
-    let offers = fn(sv : Json?) {
-      if flag(sv, "online") {
-        let station = text(sv, "station")
-        blocks.append(machine_login_offers(c, core, sv, fn(_) { (core.push)(NewProfile(station)) }))
-      }
+    let offers = fn(sv : Json?, logins : Array[Json]) {
+      let station = text(sv, "station")
+      blocks.append(machine_login_offers(c, core, sv, logins, fn(_) { (core.push)(NewProfile(station)) }))
     }
     if only == "" {
       blocks.append(workspace_profiles(c, core, here))
-      // the machine's own logins not used yet, each offered as a profile
-      match all {
-        Some(a) =>
-          for s in a {
-            offers(Some(s))
-          }
-        None => ()
+      // the machine's own logins not used yet, each offered as a profile: as the profiles' list says them, each
+      // station up that offers one (profiles_offers)
+      let said = (core.topic)("profiles", { "scope": str(here.workspace) }).get().value
+      for o in profiles_offers(said) {
+        offers(Some(o.0), o.1)
       }
     } else {
       match one {
@@ -76,12 +72,17 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
         Some(s) => {
           let sv = Some(s)
           let overview = field(sv, "overview")
-          let list = items(overview, "profiles")
+          // (its profiles, that part of its overview alone: the row says whether the overview is read)
+          let part = station_part(core, here, only, "profiles")
+          let list = match part {
+            Some(Array(a)) => a
+            _ => []
+          }
           if list.length() == 0 {
             blocks.push(fn() {
               list_card(c, fn() {
                 list_row(c, fn() {
-                  if overview is None && flag(sv, "online") {
+                  if (overview is None || part is None) && flag(sv, "online") {
                     wait_line(c, tr("common.reading"))
                   } else {
                     row_title(
@@ -113,7 +114,13 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
               ])
             }
           }
-          offers(sv)
+          // (one station's page holds no profiles' list: its logins that part of its overview alone, while it is up)
+          if flag(sv, "online") {
+            offers(sv, match station_part(core, here, only, "machineLogins") {
+              Some(Array(a)) => a
+              _ => []
+            })
+          }
         }
       }
     }
@@ -442,37 +449,37 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
           |> ignore
         None => ()
       }
-      if has(q, "resetCount") {
-        // a reset used, asked first (the subscription's own: so many left, `resetText` what it does)
-        let resetting = is_doing(core, ["profile.resetQuota"], on)
-        let left = count(q, "resetCount")
+      // each kind of reset it holds, a row each, one used asked first (so many left, what one gives back)
+      let resetting = is_doing(core, ["profile.resetQuota"], on)
+      for r in items(q, "resets") {
+        let rv = Some(r)
+        let left = count(rv, "left")
+        let usable = left > 0 && flag(rv, "usable")
+        let words = [opt_text(rv, "refills").unwrap_or(""), text(rv, "text")].filter(fn(w) { w != "" }).join(" · ")
         list_row(
           c,
           fn() {
-            row_lines(c, tr("android-settings.quota.resets"), text(q, "resetText"), wrap_sub=true, end=fn() {
+            row_lines(c, text(rv, "title"), words, wrap_sub=true, end=fn() {
               doing_mark(c, resetting, failed_of(core, ["profile.resetQuota"], on))
-              c.text(tr("android-settings.quota.reset"), style=if left > 0 { @sf.value.then(@sf.link) } else { @sf.value })
+              c.text(text(rv, "leftText"), style=if usable { @sf.value.then(@sf.link) } else { @sf.value })
               |> ignore
             })
           },
-          key=if left <= 0 || resetting { "" } else { "quota-reset" },
+          key=if !usable || resetting { "" } else { "quota-reset/" + text(rv, "kind") },
           on_press=fn() {
+            let asked = match opt_text(rv, "id") {
+              Some(kind) => obj([("station", str(station)), ("id", str(id)), ("reset", str(kind))])
+              None => obj([("station", str(station)), ("id", str(id))])
+            }
             confirm(
               tr("android-settings.quota.resetTitle"),
-              fill("android-settings.quota.resetText", [("name", text(pv, "name")), ("text", text(q, "resetText"))]),
+              fill("android-settings.quota.resetText", [("name", text(pv, "name")), ("text", [text(rv, "title"), text(rv, "leftText"), words].filter(fn(w) { w != "" }).join(" · "))]),
               tr("android-settings.quota.resetUse"),
-              fn() {
-                act(
-                  core,
-                  tr("android-settings.quota.resetWhat"),
-                  "profile.resetQuota",
-                  obj([("station", str(station)), ("id", str(id))]),
-                  done=tr("android-settings.quota.resetDone"),
-                )
-              },
+              fn() { act(core, tr("android-settings.quota.resetWhat"), "profile.resetQuota", asked, done=tr("android-settings.quota.resetDone")) },
             )
           },
         )
+        |> ignore
       }
     })
   })

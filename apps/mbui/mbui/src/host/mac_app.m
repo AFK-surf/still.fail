@@ -16,6 +16,7 @@
 #import "apple.h"
 #include "post.h"
 #include "done_watch.h"
+#include "update_delta.h"  // (the Updates' delta)
 
 // (Network's path monitor, below: the framework asked of the linker by this file, as an app of mbui's links what its
 // own moon.pkg names, which need not be Network)
@@ -2711,6 +2712,12 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
 // far, what went wrong, the build), told each time it changes (MB_OUTSIDE_UPDATE, id 1: 0 while the host works at it,
 // 1 once it is ready, -1 failed). Only an app's bundle has a version here (a build run as a bare program, 0, never
 // asks).
+// Where the core says a delta from this build (update_fetch's `delta`), that is tried first, on the same worker: it is
+// downloaded as the zip would be (`<name>.delta`), applied to this bundle's files (update_delta.h) into the release's
+// raw zip (`<name>.raw`: the same app, its entries stored), checked against the size and SHA-256 the feed says for it,
+// and staged as the zip would be. Anything wrong with it (the made zip refused by update_stage as well) is said on the
+// update's log and the zip downloaded whole as ever: no one sees a delta fail. The made zip, kept until the build is in
+// place or another is asked for, is taken again by a later start as it is; the delta goes once it is applied.
 
 static NSString *update_phase = @"idle";  // idle | downloading | retrying | ready | installing | failed
 static int update_percent = -1;
@@ -2855,18 +2862,29 @@ static NSString *update_sha256(NSString *path) {
   return s;
 }
 
-// The release downloaded whole into `dir` (what is there from before kept only if it is the part of this one), checked
-// against its SHA-256: its path, or nil and why not.
-static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, long long size, NSString *name,
-                                 NSString **why) {
+// What is in `dir` taken away but the files named (and `dir` made where it is not).
+static void update_leave_only(NSString *dir, NSArray<NSString *> *keep) {
   NSFileManager *fm = NSFileManager.defaultManager;
   [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:NULL];
+  for (NSString *f in [fm contentsOfDirectoryAtPath:dir error:NULL])
+    if (![keep containsObject:f]) [fm removeItemAtPath:[dir stringByAppendingPathComponent:f] error:NULL];
+}
+
+// The release downloaded whole into `dir` (what is there from before kept only if it is the part of this one), checked
+// against its SHA-256: its path, or nil and why not.
+static NSString *update_get(NSString *dir, NSURL *url, NSString *sha256, long long size, NSString *name, NSString **why);
+static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, long long size, NSString *name,
+                                 NSString **why) {
+  update_leave_only(dir, @[ name, [name stringByAppendingString:@".part"] ]);
+  return update_get(dir, url, sha256, size, name, why);
+}
+
+// `name` downloaded into `dir` (its bytes so far in `<name>.part`; the file there already taken where its SHA-256 is
+// the one asked for), checked against its SHA-256: its path, or nil and why not.
+static NSString *update_get(NSString *dir, NSURL *url, NSString *sha256, long long size, NSString *name, NSString **why) {
+  NSFileManager *fm = NSFileManager.defaultManager;
   NSString *zip = [dir stringByAppendingPathComponent:name];
   NSString *part = [zip stringByAppendingString:@".part"];
-  for (NSString *f in [fm contentsOfDirectoryAtPath:dir error:NULL]) {
-    NSString *p = [dir stringByAppendingPathComponent:f];
-    if (![p isEqualToString:zip] && ![p isEqualToString:part]) [fm removeItemAtPath:p error:NULL];
-  }
   if ([fm fileExistsAtPath:zip]) {
     if ([update_sha256(zip) caseInsensitiveCompare:sha256] == NSOrderedSame) return zip;
     [fm removeItemAtPath:zip error:NULL];
@@ -2905,6 +2923,81 @@ static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, lo
   return zip;
 }
 
+// One of this bundle's files for the delta (update_delta.h's ud_read_fn): its bytes, or NULL.
+static unsigned char *update_old_file(void *root, const char *rel, size_t *size) {
+  NSString *path = [(__bridge NSString *)root stringByAppendingPathComponent:@(rel)];
+  FILE *f = fopen(path.fileSystemRepresentation, "rb");
+  if (!f) return NULL;
+  unsigned char *b = NULL;
+  off_t n = (fseeko(f, 0, SEEK_END) == 0) ? ftello(f) : -1;
+  if (n >= 0 && fseeko(f, 0, SEEK_SET) == 0 && (b = malloc(n ? (size_t)n : 1)) && fread(b, 1, (size_t)n, f) != (size_t)n) {
+    free(b);
+    b = NULL;
+  }
+  fclose(f);
+  if (b) *size = (size_t)n;
+  return b;
+}
+
+static int update_made_bytes(void *out, const unsigned char *b, size_t n) { return fwrite(b, 1, n, (FILE *)out) == n; }
+
+// The release's raw zip made from the delta the core says (`d`: url, sha256, size, makes_sha256, makes_size) and this
+// bundle, in `dir` beside what update_download keeps: its path, or nil and why not (nil and no why: the zip is here
+// already, the delta not wanted).
+static NSString *update_by_delta(NSString *dir, NSDictionary *d, NSString *name, NSString **why) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  NSString *(^text)(NSString *) = ^NSString *(NSString *key) {
+    return [d isKindOfClass:NSDictionary.class] && [d[key] isKindOfClass:NSString.class] ? d[key] : @"";
+  };
+  long long (^number)(NSString *) = ^long long(NSString *key) {
+    return [d isKindOfClass:NSDictionary.class] && [d[key] isKindOfClass:NSNumber.class] ? [d[key] longLongValue] : 0;
+  };
+  NSURL *url = [NSURL URLWithString:text(@"url")];
+  NSString *sha256 = text(@"sha256"), *makes = text(@"makes_sha256");
+  long long size = number(@"size"), made_size = number(@"makes_size");
+  if (!url || sha256.length != 64 || makes.length != 64 || size <= 0 || made_size <= 0) {
+    *why = @"not a delta this host takes";
+    return nil;
+  }
+  NSString *delta = [name stringByAppendingString:@".delta"], *made = [name stringByAppendingString:@".raw"];
+  update_leave_only(dir, @[ name, [name stringByAppendingString:@".part"], delta, [delta stringByAppendingString:@".part"], made ]);
+  if ([fm fileExistsAtPath:[dir stringByAppendingPathComponent:name]]) return nil;
+  NSString *out = [dir stringByAppendingPathComponent:made];
+  if ([fm fileExistsAtPath:out]) {
+    if ([update_sha256(out) caseInsensitiveCompare:makes] == NSOrderedSame) {
+      update_log([NSString stringWithFormat:@"%@ made before, sha256 %@ as the feed says", made, makes]);
+      return out;
+    }
+    [fm removeItemAtPath:out error:NULL];
+  }
+  NSString *got = update_get(dir, url, sha256, size, delta, why);
+  if (!got) {
+    [fm removeItemAtPath:[[dir stringByAppendingPathComponent:delta] stringByAppendingString:@".part"] error:NULL];
+    *why = [NSString stringWithFormat:@"not downloaded (%@)", *why ?: @"failed"];
+    return nil;
+  }
+  NSData *bytes = [NSData dataWithContentsOfFile:got options:NSDataReadingMappedIfSafe error:NULL];
+  NSString *part = [out stringByAppendingString:@".part"], *root = NSBundle.mainBundle.bundlePath;
+  FILE *f = bytes ? fopen(part.fileSystemRepresentation, "wb") : NULL;
+  const char *e = !bytes ? "not read" : !f ? "can't write the made zip"
+                                          : ud_apply(bytes.bytes, bytes.length, update_old_file, (__bridge void *)root,
+                                                     update_made_bytes, f, (uint64_t)made_size);
+  if (f && fclose(f) != 0 && !e) e = "the made package could not be written";
+  bytes = nil;
+  [fm removeItemAtPath:got error:NULL];
+  NSString *sum = e ? nil : update_sha256(part);
+  if (!e && (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize] != made_size) e = "the made zip is not the size the feed says";
+  else if (!e && [sum caseInsensitiveCompare:makes] != NSOrderedSame) e = "the made zip is not the one the feed says (SHA-256)";
+  if (!e && ![fm moveItemAtPath:part toPath:out error:NULL]) e = "the made zip not kept";
+  if (e) {
+    [fm removeItemAtPath:part error:NULL];
+    *why = @(e);
+    return nil;
+  }
+  update_log([NSString stringWithFormat:@"%@ made from a delta of %lld bytes, sha256 %@ as the feed says", made, size, sum]);
+  return out;
+}
+
 // Whether the app at `app` is signed as this one must be: valid, all of it, and meeting this app's designated
 // requirement (its id and its signer's team); why not otherwise. (Security's code signing calls found as they are
 // first needed: an app of mbui's links what its own moon.pkg says, which need not name Security.)
@@ -2941,11 +3034,33 @@ static BOOL update_signed_as_this(NSURL *app, NSString **why) {
   return st == errSecSuccess;
 }
 
+// Where this app lives: its bundle, or where it was opened from when macOS runs it translocated (an app opened, with the
+// quarantine on it, from where Finder did not move it, e.g. Downloads, is run from a read-only copy under
+// /private/var/folders/.../AppTranslocation/, beside which nothing can be written). The update goes in place there; the
+// app it puts there carries no quarantine, so it is opened from where it is from then on. (Security's calls found as
+// they are first needed, as below.)
+static NSURL *update_home(void) {
+  static Boolean (*is_translocated)(CFURLRef, bool *, CFErrorRef *);
+  static CFURLRef (*original_of)(CFURLRef, CFErrorRef *);
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    void *sec = dlopen("/System/Library/Frameworks/Security.framework/Security", RTLD_LAZY);
+    if (!sec) return;
+    is_translocated = dlsym(sec, "SecTranslocateIsTranslocatedURL");
+    original_of = dlsym(sec, "SecTranslocateCreateOriginalPathForURL");
+  });
+  NSURL *here = NSBundle.mainBundle.bundleURL;
+  bool moved = false;
+  if (!is_translocated || !original_of || !is_translocated((__bridge CFURLRef)here, &moved, NULL) || !moved) return here;
+  CFURLRef from = original_of((__bridge CFURLRef)here, NULL);
+  return from ? (NSURL *)CFBridgingRelease(from) : here;
+}
+
 // The zip unzipped beside this app (a folder the system gives for replacing it, on its volume) and its app checked:
 // the app, or nil and why not.
 static NSURL *update_stage(NSString *zip, NSString **why) {
   NSFileManager *fm = NSFileManager.defaultManager;
-  NSURL *here = NSBundle.mainBundle.bundleURL;
+  NSURL *here = update_home();
   NSError *e = nil;
   NSURL *stage = [fm URLForDirectory:NSItemReplacementDirectory inDomain:NSUserDomainMask appropriateForURL:here
                               create:YES error:&e];
@@ -2983,7 +3098,7 @@ static void update_at_quit(void) {
   update_staged = nil;
   NSFileManager *fm = NSFileManager.defaultManager;
   NSError *e = nil;
-  if ([fm replaceItemAtURL:NSBundle.mainBundle.bundleURL withItemAtURL:app backupItemName:nil options:0
+  if ([fm replaceItemAtURL:update_home() withItemAtURL:app backupItemName:nil options:0
           resultingItemURL:NULL error:&e])
     update_log(@"in place as this one quits");
   else
@@ -2992,11 +3107,12 @@ static void update_at_quit(void) {
 }
 
 void mb_host_update_fetch(moonbit_string_t url_s, moonbit_string_t sha256_s, double size, moonbit_string_t name_s,
-                          int32_t now) {
+                          int32_t now, moonbit_string_t delta_s) {
   (void)now;  // (no network here costs more than another)
   if (update_working || mb_host_app_version() <= 0) return;
   NSURL *url = [NSURL URLWithString:mb_ns_from_string(url_s)];
   NSString *sha256 = mb_ns_from_string(sha256_s), *name = mb_ns_from_string(name_s).lastPathComponent;
+  NSData *delta_json = [mb_ns_from_string(delta_s) dataUsingEncoding:NSUTF8StringEncoding];
   if (!url || !name.length) return;
   // (ready already, or being put in place)
   if ([name isEqualToString:update_file] && ([update_phase isEqualToString:@"ready"] || [update_phase isEqualToString:@"installing"]))
@@ -3014,8 +3130,21 @@ void mb_host_update_fetch(moonbit_string_t url_s, moonbit_string_t sha256_s, dou
       stringByAppendingPathComponent:@"updates"];
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
     NSString *why = nil;
-    NSString *zip = update_download(dir, url, sha256, (long long)size, name, &why);
-    NSURL *app = zip ? update_stage(zip, &why) : nil;
+    NSURL *app = nil;
+    // the delta first, where there is one: on any trouble, said and left for the zip downloaded whole
+    if (delta_json.length) {
+      id d = [NSJSONSerialization JSONObjectWithData:delta_json options:0 error:NULL];
+      NSString *made = update_by_delta(dir, d, name, &why);
+      if (made) {
+        why = nil;
+        app = update_stage(made, &why);
+        if (!app) [NSFileManager.defaultManager removeItemAtPath:made error:NULL];
+      }
+      if (!app && why) update_log([NSString stringWithFormat:@"delta not used: %@", why]);
+      why = nil;
+    }
+    NSString *zip = app ? nil : update_download(dir, url, sha256, (long long)size, name, &why);
+    if (!app) app = zip ? update_stage(zip, &why) : nil;
     if (!app) {
       update_log([NSString stringWithFormat:@"failed: %@", why]);
       update_say(@"failed", -1, why);
@@ -3043,7 +3172,7 @@ void mb_host_update_apply(moonbit_string_t said) {
   mb_host_outside(MB_OUTSIDE_UPDATE, 1, 0);
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
     NSFileManager *fm = NSFileManager.defaultManager;
-    NSURL *here = NSBundle.mainBundle.bundleURL;
+    NSURL *here = update_home();
     NSError *e = nil;
     NSString *why = nil;
     if (![fm replaceItemAtURL:here withItemAtURL:app backupItemName:nil options:0 resultingItemURL:NULL error:&e])
@@ -3055,9 +3184,11 @@ void mb_host_update_apply(moonbit_string_t said) {
       return;
     }
     NSString *caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
-    [fm removeItemAtPath:[[[caches stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier]
-                             stringByAppendingPathComponent:@"updates"] stringByAppendingPathComponent:update_file]
-                   error:NULL];
+    NSString *updates = [[caches stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier]
+        stringByAppendingPathComponent:@"updates"];
+    // (the zip it came of, downloaded or made from a delta)
+    [fm removeItemAtPath:[updates stringByAppendingPathComponent:update_file] error:NULL];
+    [fm removeItemAtPath:[updates stringByAppendingPathComponent:[update_file stringByAppendingString:@".raw"]] error:NULL];
     update_log(@"in place; opened again as this one quits");
     dispatch_async(dispatch_get_main_queue(), ^{
       // opened again once this process has ended, said on the update's log (the app's path as $0, the log's as $1:
@@ -3069,7 +3200,7 @@ void mb_host_update_apply(moonbit_string_t said) {
         [NSString stringWithFormat:@"while /bin/kill -0 %d 2>/dev/null; do /bin/sleep 0.2; done; "
                                    @"/usr/bin/open \"$0\" && echo \"$(/bin/date) opened $0\" >> \"$1\"",
                                    getpid()],
-        NSBundle.mainBundle.bundlePath, update_log_path()
+        here.path, update_log_path()
       ];
       [again launch];
       [NSApp terminate:nil];

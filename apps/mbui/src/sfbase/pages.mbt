@@ -770,6 +770,10 @@ pub fn reset() -> Unit {
   go_tos.clear()
   go_to_passages.clear()
   go_to_words.clear()
+  // and where each chat's reader was as a go-to took its list away (jump.mbt)
+  places_back.clear()
+  go_back_offsets.clear()
+  places_back_said.set(0)
   // a new chat while it is made (fresh.mbt)
   fresh_reset()
   // how times are said (message_words.mbt)
@@ -796,6 +800,7 @@ pub fn reset() -> Unit {
   links_reset()
   menu_bar_given.val = ""
   shell.val = bare_shell()
+  beside_room_now.set(false)
   // the page shown alone in a window of its own (window.mbt)
   lone_page.val = None
   windows_open.clear()

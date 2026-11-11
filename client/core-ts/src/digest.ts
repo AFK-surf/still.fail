@@ -15,6 +15,30 @@ export function digest(v: unknown): string {
   return d;
 }
 
+/// The version of a topic's value as it went to a subscriber (store.ts: a subscription's `have`, an unsubscribe's
+/// `v`): its canonical JSON's length and its hash, `<length>:<hash>` in base 36. Made of the value alone, so a topic
+/// evicted and made again still answers `same` to a version a client kept, and nothing of it is kept to answer that
+/// (what the store remembers for a client, `#kept`, is only to send what changed where it is not the same). The
+/// length beside the hash makes two values taken for one (cyrb53 is 53 bits, not a cryptographic hash) the less likely
+/// still; were the way it is made ever changed, a version kept from before would match nothing, and the value would
+/// only go whole again.
+export function version(v: unknown): string {
+  if (v === null || typeof v !== "object" || !Object.isFrozen(v)) return versionOf(canonical(v));
+  let d = versions.get(v);
+  if (d === undefined) {
+    d = versionOf(canonical(v));
+    versions.set(v, d);
+  }
+  return d;
+}
+
+/// The versions of values that cannot change (frozen): made once.
+const versions = new WeakMap<object, string>();
+
+function versionOf(c: string): string {
+  return `${c.length.toString(36)}:${hash(c).toString(36)}`;
+}
+
 /// JSON with every object's keys sorted.
 function canonical(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map((x) => (x === undefined ? "null" : canonical(x))).join(",")}]`;

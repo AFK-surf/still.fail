@@ -302,6 +302,8 @@ pub fn keyboard() -> Bool
 
 pub fn keys_system() -> Int32
 
+pub let layer_ground : Int32
+
 pub fn line(Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Double) -> @paint.Line
 
 pub fn line_baseline(Double, size? : Double, weight? : Int32, em? : (Double, Double)) -> Double
@@ -597,6 +599,8 @@ pub fn style(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h?
 
 pub fn style_cut(TextStyle) -> Bool
 
+pub fn style_fills(TextStyle) -> Bool
+
 pub fn style_ink(TextStyle) -> Int64
 
 pub fn style_words(TextStyle) -> @view.WordsLook
@@ -654,7 +658,7 @@ pub fn tree_theme() -> Theme
 
 pub fn update_apply(String) -> Unit
 
-pub fn update_fetch(String, String, Double, String, Bool) -> Unit
+pub fn update_fetch(String, String, Double, String, Bool, String) -> Unit
 
 pub fn update_state() -> String
 
@@ -1087,6 +1091,7 @@ pub struct Ctx {
   layer_return : Map[Int32, Int32]
   mut press_down : (Double, Double)?
   mut press_down_tree : Bool
+  mut press_tree_stack : Int32
   mut inst : FixedArray[Double]
   mut ninst : Int32
   segs : Array[Double]
@@ -1375,6 +1380,7 @@ pub fn Ctx::shot(Self, String, Double, () -> Unit) -> Unit
 pub fn Ctx::show(Self, Int32) -> Unit
 pub fn Ctx::shown_across(Self, Int32, but? : String) -> (Double, Double)?
 pub fn Ctx::shows_cut(Self, Int32) -> Bool
+pub fn Ctx::shows_from(Self, Double) -> Unit
 pub fn Ctx::shows_motion(Self, Mover, Bool) -> Unit
 pub fn Ctx::shows_until(Self, Double) -> Unit
 pub fn Ctx::sideways(Self, String, w? : Size, pad? : Double, padx? : Double, pady? : Double, across? : Bool, to_end? : String, fill? : Bool, show? : Int32, bar_in? : Double, () -> Unit) -> Int32
@@ -1982,6 +1988,7 @@ pub fn[P] Nav::replace_above(Self[P], Int32, Array[P]) -> Unit
 pub fn[P] Nav::rest(Self[P]) -> Double
 pub fn[P] Nav::rise(Self[P], P) -> Unit
 pub fn[P] Nav::risen(Self[P]) -> Bool
+pub fn[P] Nav::root_shows(Self[P]) -> Bool
 pub fn[P] Nav::shows(Self[P], Int32) -> Bool
 pub fn[P] Nav::shows_when(Self[P], () -> Bool, Double) -> Unit
 pub fn[P] Nav::top(Self[P]) -> P
@@ -2430,6 +2437,7 @@ pub(all) enum Stroke {
   B4
   B8
 } derive(Eq, Show, @debug.Debug)
+pub fn Stroke::px(Self) -> Double
 
 pub(all) struct Style {
   base : Patch
@@ -2677,6 +2685,7 @@ pub fn Tester::perf_said(Self) -> (Array[Bool], Array[String])
 pub fn Tester::periodic(Self) -> Array[String]
 pub fn Tester::pick_asks(Self) -> Array[@hostapi.PickKind]
 pub fn Tester::picks(Self, Array[(String, Bytes)]) -> Unit
+pub fn Tester::placed_faults(Self) -> Array[String]
 pub fn Tester::post(Self, String, String, bytes? : Bytes) -> Unit
 pub fn Tester::post_wakes(Self) -> Int32
 pub fn Tester::posted(Self) -> Int32

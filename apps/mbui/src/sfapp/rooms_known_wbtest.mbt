@@ -50,8 +50,14 @@
 /// (share-card-senren-…), each over a new chat's composer laid out Medium on a tablet: its three chips, 90 more, 313.
 /// 归档建议 made once (2026-11-03): 4 fewer, 309. The chats' lists made once (2026-11-03): one fewer, 308. Back on 0.1.7190's chat page (#3975): 306. The reader's
 /// layout as nodes of the window's tree (reader-layout): 4 fewer, 302. 连接 and a connect's page made once (2026-11-09):
-/// 5 fewer, 297.)
-let rooms_known : Map[String, Int] = { "room": 297, "apart": 0, "hover": 0 }
+/// 5 fewer, 297. An agent's request for a rig a screen of its own (chat-rig, 2026-11-10), what every chat has: its last
+/// message's time, in the four windows it shows in, 4 more, 301; such a station's page, made once, none. An agent's history's head and details made once as nodes, 291.
+/// A new workspace over Home swept (new-workspace, new-workspace-code), what home-sheet has under it on a tablet: the new
+/// chat's three chips beside its composer, old views, the page behind counted again, 6 more, 297.
+/// A file beside a chat in the viewer a screen of its own (chat-view-side, chat-view-side-image, 2026-11-10), what
+/// chat-things-side has: its tab's close key, in the three wide windows each, 6 more, 303. A film and a song beside a
+/// chat (chat-view-side-video, chat-view-side-audio, 2026-11-11), the same: its tab's close key, 6 more, 309.)
+let rooms_known : Map[String, Int] = { "room": 309, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

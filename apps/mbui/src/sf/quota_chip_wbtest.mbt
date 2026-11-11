@@ -98,7 +98,7 @@ test "an account's windows and its models' own, five: where no line holds them t
       let at = fn(words : Array[String]) {
         match shown.filter(fn(w) { words.contains(w.0) }) {
           [w] => w
-          found => abort("\{room}: one of \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
+          found => @halt.saying("\{room}: one of \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
         }
       }
       // every window said once, whole, within the line's room
@@ -119,4 +119,42 @@ test "an account's windows and its models' own, five: where no line holds them t
     assert_true(lined >= 2 && lined < 7, msg="\{worded}: in a line where it has the room, in lines where not: \{lined}")
   }
   set_words(fn(key, _) { key })
+}
+
+///|
+test "fill_chip_wide is the width a fill chip is laid out at: small and marked, small and compact, normal, joined" {
+  let chips : Array[(String, String, Bool, Bool)] = [
+    ("Fable", "52%", true, false),
+    ("", "100%", true, true),
+    ("5H", "62%", false, false),
+    ("每周", "剩 95%", false, false),
+  ]
+  assert_true(chip_joined("每周", "剩 95%"))
+  for platform in [0, 2] {
+    let said : Array[Double] = chips.map(fn(_) { 0.0 })
+    let t = @ui.Tester::new(
+      fn(c) {
+        begin(c) |> ignore
+        c.with_theme(ui_theme(), fn() {
+          for i, chip in chips {
+            let (mark, words, small, compact) = chip
+            said[i] = fill_chip_wide(c, mark, words, small~, compact~)
+            // (each in a row of its own as wide as what it holds)
+            c.box(dir=@ui.Dir::Row, name="chip-\{i}", fn() { fill_chip(c, 52, "ok", mark, words, small~, compact~) }) |> ignore
+          }
+        })
+      },
+      w=640.0,
+      h=300.0,
+      platform~,
+    )
+    t.draw()
+    let boxes = t.boxes()
+    for i, chip in chips {
+      let holder = boxes.search_by(fn(b) { b.name == "chip-\{i}" }).unwrap()
+      let laid = boxes.filter(fn(b) { b.parent == holder })
+      assert_eq(laid.length(), 1, msg="\{platform} \{chip}")
+      assert_eq(said[i], laid[0].w, msg="\{platform} \{chip}")
+    }
+  }
 }

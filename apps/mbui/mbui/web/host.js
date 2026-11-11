@@ -2684,7 +2684,8 @@
     return over >= 1 ? over : 0;
   }
   H.imeInset = keyboardOver;
-  const PNG_MAX = 8 << 20, SOURCE_MAX = 32 << 20, PIXELS_MAX = 16 * 1024 * 1024;
+  // A clipboard picture is an attachment, as a copied file is. Transports check their own bounds when sending it.
+  const PNG_MAX = 1 << 30, SOURCE_MAX = 32 << 20, PIXELS_MAX = 16 * 1024 * 1024;
   const clips = new Map();
   let clipNext = 1;
   // what the browser's last paste had of files, for the app's read of the clipboard it set off (setupInput's `pasted`)

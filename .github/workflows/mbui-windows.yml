@@ -47,6 +47,12 @@ jobs:
       # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
       # key, installed as before.
       - uses: ./.github/actions/mbui-moonbit
+      # The SDK is pinned by win.sh's WV2_VERSION. Keep its download out of a demo's build on later runs.
+      - uses: actions/cache@v4
+        with:
+          path: apps/mbui/mbui/out/webview2
+          key: mbui-webview2-${{ hashFiles('apps/mbui/mbui/scripts/win.sh') }}
+          restore-keys: mbui-webview2-
       - uses: actions/cache/restore@v4
         with:
           path: .ci/mbc-store

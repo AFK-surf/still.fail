@@ -26,7 +26,7 @@ import { showsOf, type Shows } from "./noticeText";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, FeedbackReply, WorkspaceFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, RigView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 import { apply, asEntry, entryHash, extendLock, genesis, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
@@ -64,6 +64,10 @@ export const CLOSE = { replaced: 4000, removed: 4004, silent: 4008 } as const;
 /** Reports one sender may send in a day, and how many the console lists. */
 const FEEDBACK_PER_DAY = 20;
 const FEEDBACK_LISTED = 500;
+/** How many replies a station's agents may write on its reports a day. */
+const FEEDBACK_REPLIES_PER_DAY = 100;
+/** How many reports with replies a member's device is given of a workspace (feedbackOf). */
+const FEEDBACK_SHOWN = 200;
 
 const LIST: AccountEvent = { type: "workspaces" };
 /** The picture an account is shown with, of its row in users: the one it put up for itself (setOwnPicture), else its sign-in's. */
@@ -141,6 +145,8 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, number INTEGER NOT NULL UNIQUE, key TEXT NOT NULL, channel TEXT NOT NULL, sender TEXT NOT NULL, station TEXT, workspace TEXT, account TEXT, title TEXT NOT NULL, body TEXT NOT NULL, area TEXT NOT NULL, reporter TEXT NOT NULL DEFAULT '', context TEXT, logs TEXT, status TEXT NOT NULL DEFAULT 'new', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
       CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
+      CREATE TABLE IF NOT EXISTS feedback_replies (id TEXT PRIMARY KEY, feedback TEXT NOT NULL, author TEXT NOT NULL, by TEXT NOT NULL DEFAULT '', text TEXT NOT NULL, created_at INTEGER NOT NULL, delivered_at INTEGER);
+      CREATE INDEX IF NOT EXISTS feedback_replies_by_feedback ON feedback_replies (feedback, created_at);
       CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS lock_entries (workspace TEXT NOT NULL, seq INTEGER NOT NULL, hash TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, seq));
       CREATE TABLE IF NOT EXISTS devices (workspace TEXT NOT NULL, sub TEXT NOT NULL, device TEXT NOT NULL, base TEXT, kind TEXT, label TEXT, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (workspace, sub, device));
@@ -189,6 +195,11 @@ export class Directory extends DurableObject<Env> {
     }
     this.migrateFreePlan();
     this.migrateStationMembers();
+    // A rig (a station that only runs tasks, 2026-11-10): a machine that only runs what the workspace's stations send it, its person's (the one
+    // who added it: `enrolled_by`). `rig` is 1 on its row and on the enrollment that makes one; absent before them.
+    for (const table of ["station_members", "enrollments"]) {
+      if (!this.#rows(`PRAGMA table_info(${table})`).some((r) => r.name === "rig")) this.#run(`ALTER TABLE ${table} ADD COLUMN rig INTEGER`);
+    }
     if (sockets.where(env) === "objects") this.handOff();
     // What deliveries a restart cut short still owe.
     if (this.#one("SELECT 1 AS x FROM outbox LIMIT 1")) void ctx.blockConcurrencyWhile(() => this.#arm());
@@ -463,7 +474,7 @@ export class Directory extends DurableObject<Env> {
     return this.#rows("SELECT sub FROM members WHERE workspace = ?", workspace).map((r) => r.sub as string);
   }
 
-  /** The stations in a workspace. */
+  /** The stations in a workspace, its rigs among them (each holds a presence socket and is told its state). */
   #stationsIn(workspace: string): string[] {
     return this.#rows("SELECT station FROM station_members WHERE workspace = ?", workspace).map((r) => r.station as string);
   }
@@ -626,7 +637,7 @@ export class Directory extends DurableObject<Env> {
     const user = row ? { sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string, ...(row.own_picture ? { own_picture: true as const } : {}), ...(row.beta ? { beta: true as const } : {}) } : undefined;
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
-        (SELECT COUNT(*) FROM station_members s WHERE s.workspace = w.id) AS stations,
+        (SELECT COUNT(*) FROM station_members s WHERE s.workspace = w.id AND s.rig IS NULL) AS stations,
         (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays, w.ways_off, w.emoji, w.icon
       FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ? ORDER BY w.created_at`, sub)
       .map(({ relays, ways_off, emoji, icon, ...w }) => ({ ...w, relays: parseRelays(relays), ...offOf(ways_off), ...marks(emoji, icon) })) as unknown as WorkspaceSummary[];
@@ -719,13 +730,14 @@ export class Directory extends DurableObject<Env> {
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(${SHOWN_PICTURE}, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
     const stations = this.#stationViews(id).map(({ workspace: _, ...station }) => station);
+    const rigs = this.#rigViews(id);
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), ...offOf(w.ways_off), ways: waysOf(this.env, parseRelays(w.relays), parseRelays(w.ways_off)), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
+    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, ...(rigs.length ? { rigs } : {}), invitations, added, relays: parseRelays(w.relays), ...offOf(w.ways_off), ways: waysOf(this.env, parseRelays(w.relays), parseRelays(w.ways_off)), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
   }
 
   /**
@@ -735,8 +747,20 @@ export class Directory extends DurableObject<Env> {
   #stationViews(workspace: string | null): (StationView & { workspace: string })[] {
     return this.#rows(`SELECT m.workspace, m.station AS id, m.name, m.emoji, m.icon, m.enrolled_at, m.enrolled_by, s.last_seen, s.version,
         EXISTS (SELECT 1 FROM station_members o WHERE o.station = m.station AND (o.enrolled_at < m.enrolled_at OR (o.enrolled_at = m.enrolled_at AND o.rowid < m.rowid))) AS joined
-      FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE ? IS NULL OR m.workspace = ? ORDER BY m.enrolled_at, m.rowid`, workspace, workspace)
+      FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE (? IS NULL OR m.workspace = ?) AND m.rig IS NULL ORDER BY m.enrolled_at, m.rowid`, workspace, workspace)
       .map(({ joined, ...row }) => ({ ...row, ...(joined ? { joined: true } : {}) })) as unknown as (StationView & { workspace: string })[];
+  }
+
+  /** A workspace's rigs as its stations are told them (`rigs`); nothing said with none, as before there were any. */
+  #rigsTold(workspace: string): { rigs?: Pick<RigView, "id" | "name" | "owner" | "owner_email" | "owner_name" | "version">[] } {
+    const rigs = this.#rigViews(workspace).map(({ id, name, owner, owner_email, owner_name, version }) => ({ id, name, owner, owner_email, owner_name, version }));
+    return rigs.length ? { rigs } : {};
+  }
+
+  /** The rigs of a workspace, each with its person (who added it). */
+  #rigViews(workspace: string): RigView[] {
+    return this.#rows(`SELECT m.station AS id, m.name, m.enrolled_at, m.enrolled_by AS owner, COALESCE(u.email, '') AS owner_email, COALESCE(u.name, '') AS owner_name, s.last_seen, s.version
+      FROM station_members m LEFT JOIN stations s ON s.id = m.station LEFT JOIN users u ON u.sub = m.enrolled_by WHERE m.workspace = ? AND m.rig = 1 ORDER BY m.enrolled_at, m.rowid`, workspace) as unknown as RigView[];
   }
 
   // ── the workspace lock (lock.ts): kept and carried, not trusted ─────────────────────────
@@ -1152,9 +1176,20 @@ export class Directory extends DurableObject<Env> {
     }
     if (row!.role === "owner") this.#keepAnOwner(workspace);
     this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, target);
+    this.#rigsGone(workspace, target);
     this.#revoke(workspace, "sub", target);
     this.#changed(workspace, true, [target]);
     await this.#delivered();
+  }
+
+  /** A person no longer in a workspace: the rigs they added there leave it with them. */
+  #rigsGone(workspace: string, sub: string): void {
+    for (const r of this.#rows("SELECT station FROM station_members WHERE workspace = ? AND rig = 1 AND enrolled_by = ?", workspace, sub)) {
+      const station = r.station as string;
+      const home = this.#memberships(station)[0]!;
+      this.#run("DELETE FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
+      this.#left(station, home);
+    }
   }
 
   /**
@@ -1177,11 +1212,13 @@ export class Directory extends DurableObject<Env> {
     }
     for (const { workspace } of memberships.filter((m) => !alone.includes(m.workspace))) {
       this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, sub);
+      this.#rigsGone(workspace, sub);
       this.#revoke(workspace, "sub", sub);
       this.#changed(workspace, true);
     }
     this.ctx.storage.transactionSync(() => {
       for (const table of ["push", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE sub = ?`, sub);
+      this.#run("DELETE FROM feedback_replies WHERE feedback IN (SELECT id FROM feedback WHERE account = ?)", sub);
       this.#run("DELETE FROM feedback WHERE account = ?", sub);
       if (email) {
         this.#run("DELETE FROM pending WHERE lower(email) = lower(?)", email);
@@ -1206,13 +1243,22 @@ export class Directory extends DurableObject<Env> {
     return this.#enrollment(sub, workspace, name);
   }
 
-  async #enrollment(sub: string, workspace: string, name: unknown): Promise<{ token: string; expires_at: number }> {
+  /**
+   * A rig's enrollment: any member adds one, which is theirs (a rig holds nothing of the workspace and asks nothing
+   * of its stations; what runs on it is its person's to grant). A station is its managers' to add.
+   */
+  async createRigEnrollment(sub: string, workspace: string, name: string): Promise<{ token: string; expires_at: number }> {
+    this.#role(sub, workspace);
+    return this.#enrollment(sub, workspace, name, true);
+  }
+
+  async #enrollment(sub: string, workspace: string, name: unknown, rig = false): Promise<{ token: string; expires_at: number }> {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
     if (this.#stationsFull(workspace)) fail(429, "too_many_stations");
     const token = randomSecret();
     const expires = nowSeconds() + ENROLLMENT_TTL_SEC;
     this.#run("DELETE FROM enrollments WHERE expires_at <= ?", nowSeconds());
-    this.#run("INSERT INTO enrollments (token_hash, workspace, name, created_by, expires_at) VALUES (?, ?, ?, ?, ?)", await digest(token), workspace, clean, sub, expires);
+    this.#run("INSERT INTO enrollments (token_hash, workspace, name, created_by, expires_at, rig) VALUES (?, ?, ?, ?, ?, ?)", await digest(token), workspace, clean, sub, expires, rig ? 1 : null);
     return { token, expires_at: expires };
   }
 
@@ -1227,13 +1273,20 @@ export class Directory extends DurableObject<Env> {
    * it stays in them and joins this one too; a station whose home is locked joins locked
    * workspaces only (an unlocked one's members are this cloud's word, which the home's lock took away). It pins each
    * locked workspace's lock there. `home` is the workspace it joined first, whose say goes for the machine.
+   * `rig`: the machine enrolls as a rig, which a rig's token alone makes (a station's program from before rigs would
+   * serve the workspace as a station under a rig's name) and no other does; a rig is in one workspace, so it never
+   * joins. Its answer names its person (`rig`).
    */
-  async enroll(token: string, station: string, version: string | null, join = false, locks = false): Promise<{ workspace: string; workspace_name: string; name: string; home: string }> {
+  async enroll(token: string, station: string, version: string | null, join = false, locks = false, rig = false): Promise<{ workspace: string; workspace_name: string; name: string; home: string; rig?: { owner: string; owner_email: string; owner_name: string } }> {
     const hash = await digest(token);
-    const row = this.#one("SELECT workspace, name, created_by FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
+    const row = this.#one("SELECT workspace, name, created_by, rig FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
     if (!row) fail(404, "enrollment_not_found");
+    if ((row!.rig === 1) !== rig) fail(409, row!.rig === 1 ? "rig_enrollment" : "station_enrollment");
+    if (rig && join) fail(409, "rig_enrollment");
     const workspace = row!.workspace as string;
     const was = this.#memberships(station);
+    // A rig stays one, a station a station, where it is: its kind changes only by removing it first.
+    if (join && this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND rig = 1", station)) fail(409, "rig_enrollment");
     const member = was.includes(workspace);
     // Across a lock: a locked home into an unlocked workspace; or into a locked one, by a station that would not pin it.
     if (join && !member && was.length > 0 && (this.#locked(was[0]!) ? !this.#locked(workspace) : this.#locked(workspace) && !locks)) fail(409, "locked_workspace");
@@ -1247,9 +1300,9 @@ export class Directory extends DurableObject<Env> {
       if (join && member) this.#run("UPDATE station_members SET name = ? WHERE workspace = ? AND station = ?", row!.name, workspace, station);
       else {
         // Enrolled again where it is (moving), it keeps its emoji and icon there.
-        this.#run(`INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT (workspace, station) DO UPDATE SET name = excluded.name, enrolled_at = excluded.enrolled_at, enrolled_by = excluded.enrolled_by`,
-          workspace, station, row!.name, nowSeconds(), row!.created_by);
+        this.#run(`INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by, rig) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT (workspace, station) DO UPDATE SET name = excluded.name, enrolled_at = excluded.enrolled_at, enrolled_by = excluded.enrolled_by, rig = excluded.rig`,
+          workspace, station, row!.name, nowSeconds(), row!.created_by, rig ? 1 : null);
       }
     });
     const w = this.#one("SELECT name FROM workspaces WHERE id = ?", workspace)!;
@@ -1258,13 +1311,17 @@ export class Directory extends DurableObject<Env> {
     // Already connected (re-enrolled while running): it learns where it is now, before the answer when it left some.
     this.#sendState(station, left.length > 0);
     const home = this.#memberships(station)[0]!;
+    const owner = rig ? this.#one("SELECT email, name FROM users WHERE sub = ?", row!.created_by) : undefined;
     await this.#delivered();
-    return { workspace, workspace_name: w.name as string, name: row!.name as string, home };
+    return {
+      workspace, workspace_name: w.name as string, name: row!.name as string, home,
+      ...(rig ? { rig: { owner: row!.created_by as string, owner_email: (owner?.email as string | undefined) ?? "", owner_name: (owner?.name as string | undefined) ?? "" } } : {}),
+    };
   }
 
   /** A new name, a new emoji, a new icon (null or "" takes either away), or several; what is not given stays. */
   updateStation(sub: string, workspace: string, station: string, input: { name?: unknown; emoji?: unknown; icon?: unknown }): WorkspaceView {
-    this.#role(sub, workspace, MANAGERS);
+    if (!MANAGERS.includes(this.#role(sub, workspace)) && !this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND workspace = ? AND rig = 1 AND enrolled_by = ?", station, workspace, sub)) fail(403, "forbidden");
     const name = input.name === undefined ? undefined : cleanName(input.name) ?? fail(400, "invalid_name");
     const emoji = input.emoji === undefined ? undefined : input.emoji === null || input.emoji === "" ? null : cleanEmoji(input.emoji) ?? fail(400, "invalid_emoji");
     const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon, this.env.PUBLIC_ORIGIN) ?? fail(400, "invalid_icon");
@@ -1277,11 +1334,46 @@ export class Directory extends DurableObject<Env> {
     return this.#view(sub, workspace);
   }
 
-  /** Takes a station out of this workspace only; it stays in the others it is in. */
+  /**
+   * What a station is here: a whole one (`full`), or one that only runs tasks (`tasks`: a rig). It stays whose it is,
+   * the member who added it (`enrolled_by`), and only they change its mode, either way (the user, 2026-11-10); whole
+   * again only where they manage the workspace, as a member adds no whole station. One no member added (its adder
+   * left, or the operator enrolled it) a workspace owner may make one that runs tasks, and it is theirs then. The
+   * machine itself becomes it only by what that person's device asked of it (tasks) or they signed (full), which the
+   * app brings it first: this lists it so. A station in several workspaces stays whole (a rig is in one), and a
+   * workspace keeps one whole station at least.
+   */
+  async setStationMode(sub: string, workspace: string, station: string, mode: unknown): Promise<WorkspaceView> {
+    const role = this.#role(sub, workspace);
+    if (mode !== "full" && mode !== "tasks") fail(400, "invalid_name");
+    const row = this.#one("SELECT rig, enrolled_by FROM station_members WHERE station = ? AND workspace = ?", station, workspace) ?? fail(404, "station_not_found");
+    if ((row.rig === 1) !== (mode === "tasks")) {
+      const mine = row.enrolled_by === sub;
+      if (mode === "tasks") {
+        const nobodys = !mine && !this.#one("SELECT 1 AS x FROM members WHERE workspace = ? AND sub = ?", workspace, row.enrolled_by ?? "");
+        if (!mine && !(nobodys && role === "owner")) fail(403, "forbidden");
+        if (this.#memberships(station).length !== 1) fail(409, "station_in_others");
+        if (!this.#one("SELECT 1 AS x FROM station_members WHERE workspace = ? AND rig IS NULL AND station != ?", workspace, station)) fail(409, "last_station");
+        // Theirs already, or (no member's) theirs now.
+        this.#run("UPDATE station_members SET rig = 1, enrolled_by = ? WHERE station = ? AND workspace = ?", sub, station, workspace);
+      } else {
+        if (!mine || !MANAGERS.includes(role)) fail(403, "forbidden");
+        this.#run("UPDATE station_members SET rig = NULL WHERE station = ? AND workspace = ?", station, workspace);
+      }
+      this.#changed(workspace, true);
+      this.#sendState(station, true);
+      await this.#delivered();
+    }
+    return this.#view(sub, workspace);
+  }
+
+  /** Takes a station out of this workspace only; it stays in the others it is in. A rig: its person may too. */
   async removeStation(sub: string, workspace: string, station: string): Promise<void> {
-    this.#role(sub, workspace, MANAGERS);
+    const mine = this.#role(sub, workspace);
+    const row = this.#one("SELECT rig, enrolled_by FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
+    if (!MANAGERS.includes(mine) && !(row?.rig === 1 && row.enrolled_by === sub)) fail(403, "forbidden");
     const home = this.#memberships(station)[0];
-    if (!this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND workspace = ?", station, workspace)) return;
+    if (!row) return;
     this.#run("DELETE FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
     this.#changed(workspace, true);
     this.#left(station, home!);
@@ -1731,8 +1823,24 @@ export class Directory extends DurableObject<Env> {
     return { id, number, duplicate: false };
   }
 
-  /** The reports, newest first, with the station, workspace and account they came from. */
+  /** The reports, newest first, with the station, workspace and account they came from, and their replies. */
   adminFeedback(): AdminFeedback[] {
+    const replies = new Map<string, FeedbackReply[]>();
+    for (const r of this.#rows(`SELECT * FROM feedback_replies WHERE feedback IN (SELECT id FROM feedback ORDER BY number DESC LIMIT ${FEEDBACK_LISTED}) ORDER BY created_at, rowid`)) {
+      const team = r.author === "team";
+      const reply: FeedbackReply = {
+        id: r.id as string,
+        from: team ? "team" : "reporter",
+        by: r.by as string,
+        text: r.text as string,
+        created_at: r.created_at as number,
+        delivery: !team ? null : r.delivered_at !== null ? "delivered" : "pending",
+        delivered_at: (r.delivered_at as number | null) ?? null,
+      };
+      const list = replies.get(r.feedback as string) ?? [];
+      list.push(reply);
+      replies.set(r.feedback as string, list);
+    }
     const rows = this.#rows(`SELECT f.*, s.name AS station_name, w.name AS workspace_name, u.email AS account_email, u.name AS account_name
       FROM feedback f LEFT JOIN station_members s ON s.station = f.station AND s.workspace = f.workspace LEFT JOIN workspaces w ON w.id = f.workspace LEFT JOIN users u ON u.sub = f.account
       ORDER BY f.number DESC LIMIT ${FEEDBACK_LISTED}`);
@@ -1762,6 +1870,7 @@ export class Directory extends DurableObject<Env> {
         told_at: (r.told_at as number | null) ?? null,
         created_at: r.created_at as number,
         updated_at: r.updated_at as number,
+        replies: replies.get(r.id as string) ?? [],
       };
     });
   }
@@ -1804,6 +1913,108 @@ export class Directory extends DurableObject<Env> {
       const said = (v: unknown) => (typeof v === "string" && v ? v : null);
       return { id: r.id as string, number: r.number as number, title: r.title as string, channel: r.channel === "beta" ? "beta" : "stable", version: r.fixed_in as number, parts, session: said(context.session), thread: said(context.thread) };
     });
+  }
+
+  /**
+   * The workspace a station's report came from a chat of: the one the station said (context.workspace, from stations
+   * that say it), else the one its link names (context.link, `/o/<workspace>/…`); only while the station is in it.
+   * Not the report's `workspace`, which is the station's home where it said none. null: none to show it in.
+   */
+  #chatWorkspace(station: string | null, context: string | null): string | null {
+    if (!station) return null;
+    const said = contextOf(context);
+    const named = typeof said.workspace === "string" ? said.workspace : typeof said.link === "string" ? (/\/o\/([0-9A-HJKMNP-TV-Z]{26})\//.exec(said.link)?.[1] ?? null) : null;
+    return named && this.#memberships(station).includes(named) ? named : null;
+  }
+
+  /**
+   * The team's reply on a report (`by`: the admin's email or the feedback monitor), shown to the people of the chat it
+   * was reported from, in its workspace's members' apps (feedbackOf), never given to a station or its agents: each of
+   * them is told on its events socket. One with no such chat (an account's report, or one whose chat cannot be found)
+   * reaches no one: answered why (`undeliverable`), not kept.
+   */
+  replyToFeedback(id: string, by: string, text: string): { id: string; delivery: "pending" } | { undeliverable: "no_station" | "no_chat" } {
+    const report = this.#one("SELECT station, context FROM feedback WHERE id = ?", id);
+    if (!report) fail(404, "feedback_not_found");
+    if (!report!.station) return { undeliverable: "no_station" };
+    const workspace = this.#chatWorkspace(report!.station as string, report!.context as string | null);
+    if (!workspace || !sessionOf(report!.context as string | null)) return { undeliverable: "no_chat" };
+    const reply = ulid();
+    const now = nowSeconds();
+    this.#run("INSERT INTO feedback_replies (id, feedback, author, by, text, created_at) VALUES (?, ?, 'team', ?, ?, ?)", reply, id, by, text, now);
+    this.#run("UPDATE feedback SET updated_at = ? WHERE id = ?", now, id);
+    this.#tell(this.#members(workspace), { type: "feedback", workspace });
+    return { id: reply, delivery: "pending" };
+  }
+
+  /** The reporter's agent answers one of its station's reports (FB-`number`): kept with the team's replies. null: too many today. */
+  reporterReply(station: string, number: number, text: string, session: string | null): { id: string } | null {
+    const report = this.#one("SELECT id, context FROM feedback WHERE number = ? AND station = ?", number, station);
+    if (!report) fail(404, "feedback_not_found");
+    const now = nowSeconds();
+    const today = this.#one("SELECT COUNT(*) AS n FROM feedback_replies r JOIN feedback f ON f.id = r.feedback WHERE f.station = ? AND r.author = 'reporter' AND r.created_at > ?", station, now - 24 * 60 * 60);
+    if ((today?.n as number) >= FEEDBACK_REPLIES_PER_DAY) return null;
+    return { id: this.#reporterSaid(report!.id as string, session ? `session:${session}` : "", text, report!.context as string | null, station) };
+  }
+
+  /** A reply from the reporter's side (`by`: `session:<key>`, its agent's; `account:<sub>`, a person's in the app), told to the chat's people. */
+  #reporterSaid(id: string, by: string, text: string, context: string | null, station: string): string {
+    const reply = ulid();
+    const now = nowSeconds();
+    this.#run("INSERT INTO feedback_replies (id, feedback, author, by, text, created_at) VALUES (?, ?, 'reporter', ?, ?, ?)", reply, id, by, text, now);
+    this.#run("UPDATE feedback SET updated_at = ? WHERE id = ?", now, id);
+    const workspace = this.#chatWorkspace(station, context);
+    if (workspace) this.#tell(this.#members(workspace), { type: "feedback", workspace });
+    return reply;
+  }
+
+  /**
+   * The reports with a reply of the team's from chats of a workspace, for a member's device to show in each chat (by
+   * its station and session), newest first; the team's replies given are marked delivered. Who may read them is who
+   * may read those chats: the workspace's members.
+   */
+  feedbackOf(sub: string, workspace: string): { feedback: WorkspaceFeedback[] } {
+    this.#role(sub, workspace);
+    const rows = this.#rows(`SELECT f.id, f.number, f.title, f.station, f.context FROM feedback f JOIN station_members s ON s.station = f.station AND s.workspace = ?
+      WHERE EXISTS (SELECT 1 FROM feedback_replies r WHERE r.feedback = f.id AND r.author = 'team') ORDER BY f.number DESC LIMIT ${FEEDBACK_SHOWN}`, workspace)
+      .filter((r) => this.#chatWorkspace(r.station as string, r.context as string | null) === workspace);
+    const names = new Map<string, string>();
+    const nameOf = (by: string): string => {
+      if (!by.startsWith("account:")) return "";
+      if (!names.has(by)) {
+        const u = this.#one("SELECT name, email FROM users WHERE sub = ?", by.slice("account:".length));
+        names.set(by, u ? ((u.name as string) || (u.email as string)) : "");
+      }
+      return names.get(by)!;
+    };
+    const now = nowSeconds();
+    const feedback = rows.map((r): WorkspaceFeedback => {
+      const replies = this.#rows("SELECT id, author, by, text, created_at, delivered_at FROM feedback_replies WHERE feedback = ? ORDER BY created_at, rowid", r.id);
+      for (const reply of replies) if (reply.author === "team" && reply.delivered_at === null) this.#run("UPDATE feedback_replies SET delivered_at = ? WHERE id = ?", now, reply.id);
+      const context = contextOf(r.context as string | null);
+      return {
+        id: r.id as string,
+        number: r.number as number,
+        title: r.title as string,
+        station: r.station as string,
+        session: sessionOf(r.context as string | null) ?? "",
+        thread: typeof context.thread === "string" ? context.thread : null,
+        replies: replies.map((reply) => {
+          const by = reply.by as string;
+          const from = reply.author === "team" ? "team" : by.startsWith("account:") ? "person" : "agent";
+          return { id: reply.id as string, from, name: from === "person" ? nameOf(by) : "", text: reply.text as string, created_at: reply.created_at as number };
+        }),
+      };
+    });
+    return { feedback };
+  }
+
+  /** A member answers, in the app, a report shown in a chat of the workspace: kept as theirs. */
+  memberFeedbackReply(sub: string, workspace: string, id: string, text: string): { id: string } {
+    this.#role(sub, workspace);
+    const report = this.#one("SELECT station, context FROM feedback WHERE id = ?", id);
+    if (!report || this.#chatWorkspace(report.station as string | null, report.context as string | null) !== workspace) fail(404, "feedback_not_found");
+    return { id: this.#reporterSaid(id, `account:${sub}`, text, report!.context as string | null, report!.station as string) };
   }
 
   /** The station has told these of its reports' fixes. */
@@ -1883,13 +2094,17 @@ export class Directory extends DurableObject<Env> {
 
   /** A station's state frame (#sendState); null for one in no workspace. */
   #frame(station: string): string | null {
-    const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays FROM station_members m JOIN workspaces w ON w.id = m.workspace
+    const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays, m.rig, m.enrolled_by FROM station_members m JOIN workspaces w ON w.id = m.workspace
       WHERE m.station = ? ORDER BY m.enrolled_at, m.rowid`, station);
     if (!found.length) return null;
     const since = nowSeconds() - REVOCATION_DAYS * 86400;
-    const [home, ...joined] = found.map(({ relays: _, ...row }) => ({
+    // The rigs apart from the stations (`rigs`): a station from before them reads no such field and so takes no rig
+    // for a station (which it would let ask anything of it). A rig is told the stations (they alone ask of it), not
+    // the other rigs, and whose it is (`rig`).
+    const [home, ...joined] = found.map(({ relays: _, rig, enrolled_by, ...row }) => ({
       ...(row as { workspace: string; workspace_name: string; name: string }),
-      peers: this.#rows("SELECT m.station AS id, m.name, s.version FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE m.workspace = ? ORDER BY m.enrolled_at, m.rowid", row.workspace),
+      peers: this.#rows("SELECT m.station AS id, m.name, s.version FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE m.workspace = ? AND m.rig IS NULL ORDER BY m.enrolled_at, m.rowid", row.workspace),
+      ...(rig === 1 ? { rig: { owner: enrolled_by as string } } : this.#rigsTold(row.workspace as string)),
       revocations: this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace, since),
       lock: this.#lockHead(row.workspace as string),
       ...(this.#locked(row.workspace as string) ? { locked: true } : {}),
@@ -2007,15 +2222,15 @@ const FAMILIES: Record<string, string> = {
   isBeta: "beta",
   seen: "sockets", closed: "sockets", stationConnected: "sockets", stationState: "sockets", stationLeft: "sockets", stationSaid: "sockets",
   fetch: "sockets", webSocketMessage: "sockets", webSocketClose: "sockets", webSocketError: "sockets",
-  enroll: "stations", isStation: "stations", pushTargets: "stations", addFeedback: "stations", fixedUntold: "stations", toldFixed: "stations", markFixed: "stations",
+  enroll: "stations", isStation: "stations", pushTargets: "stations", addFeedback: "stations", fixedUntold: "stations", reporterReply: "stations", toldFixed: "stations", markFixed: "stations",
   registerPush: "push", unregisterPush: "push", dropPush: "push",
   tellAll: "broadcast", tellStations: "broadcast", modelsMade: "broadcast", tellAdmins: "broadcast", alarm: "broadcast",
 };
 for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWorkspace", "invite", "previewInvitation", "acceptInvitation", "acceptById", "declineById", "revokeInvitation",
-  "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "updateStation", "removeStation", "memberRole", "recordDevice", "devices",
+  "feedbackOf", "memberFeedbackReply", "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "createRigEnrollment", "updateStation", "setStationMode", "removeStation", "memberRole", "recordDevice", "devices",
   "lock", "appendLock", "clearLock", "requestLock", "lockRequests", "dropLockRequest"]) FAMILIES[name] = "workspaces";
 for (const name of ["adminUsers", "setMayCreate", "adminPending", "setPending", "removePending", "setBlocked", "setBeta", "adminDeleteWorkspace", "adminCreateWorkspace", "adminSetLimits",
-  "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "adminLoad"]) FAMILIES[name] = "admin";
+  "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "replyToFeedback", "adminLoad"]) FAMILIES[name] = "admin";
 /** What it runs for itself rather than being called for. */
 const UNCOUNTED = new Set(["constructor", "handOff", "migrateStationMembers", "migrateFreePlan", "send", "settled", "sweep"]);
 
@@ -2093,3 +2308,19 @@ function cleanEmoji(value: unknown): string | null {
   const first = [...new Intl.Segmenter().segment(value.trim())][0]?.segment;
   return first && first.length <= 32 && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(first) ? first : null;
 }
+
+/** A report's context as the station sent it; empty when it was cut at its limit. */
+function contextOf(text: string | null): Record<string, unknown> {
+  try {
+    const value = JSON.parse(text ?? "{}") as unknown;
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The session a report came from, which a reply goes to. */
+const sessionOf = (text: string | null): string | null => {
+  const session = contextOf(text).session;
+  return typeof session === "string" && session ? session : null;
+};

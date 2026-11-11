@@ -42,9 +42,9 @@ impl @hostapi.Host for FakeHost with exit(self, code) {
 }
 
 ///|
-/// An update asked for: kept as asked (Tester::update_asked).
-impl @hostapi.Host for FakeHost with update_fetch(_, _, _, _, name, now) {
-  update_asked.push("fetch \{name} \{now}")
+/// An update asked for: kept as asked (Tester::update_asked), with the delta it was given where there was one.
+impl @hostapi.Host for FakeHost with update_fetch(_, _, _, _, name, now, delta) {
+  update_asked.push(if delta == "" { "fetch \{name} \{now}" } else { "fetch \{name} \{now} delta \{delta}" })
 }
 
 ///|
@@ -1416,6 +1416,8 @@ impl @hostapi.Host for FakeHost with present(self, _, _, _, _, _) {
   c.flat_from(0)
   self.instances = c.ninst
   host_presented_now(c.inst, c.ninst)
+  // (what of it was drawn not as laid out, as it is presented: held at the frame's end, tester_placed.mbt)
+  placed_at_present()
 }
 
 ///|

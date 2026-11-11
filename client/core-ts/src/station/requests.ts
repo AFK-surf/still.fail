@@ -405,8 +405,9 @@ export class Requests {
             const kind = replyHeader(reply, "content-type") ?? "";
             const length = Number(replyHeader(reply, "content-length")?.trim());
             const total = Number.isInteger(length) && length >= 0 ? length : null;
-            // (its size not said, every 64 KB too: a chat's picture is a few hundred KB, and 256 KB showed 0 B until it came)
-            const step = total === null ? 64 * 1024 : Math.max(Math.floor(total / 100), 64 * 1024);
+            // (every hundredth, else every 64 KB, a small one's every twentieth: a chat's thumbnail is 11-13 KB, and
+            // every 64 KB showed 0% until it came; its size not said, every 64 KB: 256 KB showed 0 B until it came)
+            const step = total === null ? 64 * 1024 : Math.max(Math.floor(total / 100), Math.min(64 * 1024, Math.ceil(total / 20)));
             progress(0, total);
             let loaded = 0;
             let told = 0;
@@ -582,7 +583,7 @@ export class Requests {
       const span = this.#core.tracer.span(`SOCKET ${route(full)}`, Kind.Client, ctx);
       span.set("url.path", route(full));
       span.set("stillfail.stream", true);
-      const head: RequestHead = { method: "GET", path: full, headers: [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]] };
+      const head: RequestHead = { method: "GET", path: full, headers: [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()], [BUILD_HEADER, ownBuild() || "0.1.0"]] };
       const opening = this.wire.socket ? this.wire.socket(station, head) : Effect.fail(new CoreError("unsupported", t("station.core.previewNoSocket")));
       const opened = yield* Effect.result(
         Effect.raceFirst(
@@ -618,7 +619,7 @@ export class Requests {
       const span = this.#core.tracer.span(`SCREEN ${route(full)}`, Kind.Client, ctx);
       span.set("url.path", route(full));
       span.set("stillfail.stream", true);
-      const head: RequestHead = { method: "POST", path: full, headers: [["traceparent", span.context.traceparent()], [LANG_HEADER, current()]] };
+      const head: RequestHead = { method: "POST", path: full, headers: [["traceparent", span.context.traceparent()], [LANG_HEADER, current()], [BUILD_HEADER, ownBuild() || "0.1.0"]] };
       const opening = this.wire.screen ? this.wire.screen(station, head, ask) : Effect.fail(new CoreError("unsupported", t("core-misc.screen.noWire")));
       const opened = yield* Effect.result(
         Effect.raceFirst(

@@ -1898,7 +1898,7 @@ test("deleting a session ends its process and removes its workspace, the threads
 test("archiving hands an idle session to cold storage, never on a timer for what was archived before", async () => {
   const packed: string[] = [];
   const restored: string[] = [];
-  const r = new Rig({ cold: { isCold: () => false, restore: (key) => void restored.push(key), pack: (key) => void packed.push(key) } });
+  const r = new Rig({ cold: { isCold: async () => false, restore: (key) => void restored.push(key), pack: (key) => void packed.push(key) } });
   const m = message();
   await r.accept(m);
   await settle();
@@ -2664,7 +2664,13 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   assert.notEqual(second.options.profile.id, on);
   assert.equal(r.session(key).profile, second.options.profile.id);
   assert.ok(!r.session(key).profilePinned);
-  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying nothing");
+  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying no more than that it moved");
+  // Said in its chat as a change of model is, the account alone (the user, 2026-11-10).
+  const name = (id: string) => r.config.profiles.find((p: any) => p.id === id)!.name;
+  assert.equal(r.chat.texts().filter((t) => t.startsWith("已切换账号：")).length, 1);
+  assert.ok(r.chat.texts().includes(`已切换账号：${name(on)} → ${name(second.options.profile.id)}`), r.chat.texts().join("\n"));
+  const moved = r.store.entriesAfter(r.store.latestThread(key)!.thread.id, 0).find((e) => e.change !== undefined);
+  assert.deepEqual([moved?.change?.was.profile, moved?.change?.now.profile, moved?.change?.now.pinned], [on, second.options.profile.id, false]);
   // In a new runtime session of its own (sessions/afresh.ts).
   assert.equal(second.options.resume, undefined);
   assert.equal(second.prompts.length, 1);
@@ -2804,6 +2810,65 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   agent.complete();
   await settle();
   assert.ok(matches(agent.prompts[4]!, ["a job ended", "another job ended"]), agent.prompts[4]);
+  await r.close();
+});
+
+test("every account spent, a session stays on its own, and goes on on the first that refills or is reset", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" }, { ...raw.profiles[0], id: "cc3", name: "third" });
+  });
+  const HOUR = 60 * 60 * 1000;
+  const now = time.clock.currentTimeMillisUnsafe();
+  const spent = { kind: "failed" as const, reason: "rate_limit" as const, message: "usage limit reached" };
+  const moves = () => r.chat.texts().filter((t) => t.startsWith("已切换账号："));
+  const name = (id: string) => r.config.profiles.find((p: any) => p.id === id)!.name;
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  const on = r.session(key).profile;
+  const [soon, late] = ["cc", "cc2", "cc3"].filter((id) => id !== on) as [string, string];
+  // Its own week used up, as another's; a third's five hours, which refill first.
+  const full = (label: string, minutes: number, resetsAt: number) => ({ quota: { state: "ok", windows: [{ label, usedPercent: 100, resetsAt, minutes }], detail: null, checkedAt: now } });
+  r.hub.accounts.setHealth((id) => (id === soon ? full("5 小时", 300, now + 2 * HOUR) : full("每周", 10080, now + (id === on ? 72 : 120) * HOUR)));
+  first.end(spent);
+  await settle();
+  assert.equal(r.chat.lastText().split("\n\n")[0], "⚠️ 额度已用完，恢复后自动继续");
+  // A person's message is tried where it is: asked again and again which account it runs on (before each turn, three
+  // times), it is not handed from one spent account to the next (2026-11-10).
+  await r.accept(reply(m, "9999.3", "<@UBOT> 还在吗", { addressed: true }));
+  await settle();
+  assert.equal(r.claude.count(), 1, "no process on another account");
+  assert.equal(first.prompts.length, 2);
+  for (let i = 0; i < 3; i++) assert.equal(r.hub.accounts.runOn(key).id, on);
+  first.end(spent);
+  await settle();
+  assert.equal(r.session(key).profile, on);
+  assert.deepEqual(moves(), []);
+  // Not its own week, days away: the first of the accounts to refill wakes it, and it goes on there.
+  await time.adjust(2 * HOUR);
+  await settle();
+  const second = r.claude.last();
+  assert.equal(r.claude.count(), 2);
+  assert.equal(second.options.profile.id, soon);
+  assert.ok(second.prompts[0]!.includes(GO_ON_AFTER_REFILL), second.prompts[0]);
+  assert.deepEqual(moves(), [`已切换账号：${name(on)} → ${name(soon)}`]);
+  // That one spent again, all are: it waits there. The third reset by hand (its allowance read again first): it goes on.
+  r.hub.accounts.setHealth((id) => (id === soon ? full("5 小时", 300, now + 9 * HOUR) : full("每周", 10080, now + (id === on ? 72 : 120) * HOUR)));
+  second.end(spent);
+  await settle();
+  assert.equal(r.session(key).profile, soon);
+  r.hub.accounts.setHealth((id) => (id === late ? {} : id === soon ? full("5 小时", 300, now + 9 * HOUR) : full("每周", 10080, now + 72 * HOUR)));
+  await r.hub.allowanceReset(late);
+  await time.adjust(1);
+  await settle();
+  assert.equal(r.claude.count(), 3);
+  assert.equal(r.claude.last().options.profile.id, late);
+  assert.equal(moves().length, 2);
   await r.close();
 });
 
@@ -2960,7 +3025,7 @@ test("a model at capacity is no account's limit: said once, tried again after lo
   await time.adjust(60_000);
   await settle();
   assert.equal(agent.prompts.length, 3);
-  assert.equal(said().length, 1);
+  assert.equal(said().length, 1, r.chat.texts().join("\n---\n"));
   // Stopped while it waits to try again: it tries no more, and its jobs go on.
   r.store.insertJob({ ...watchJob(key), id: "build", token: "tbuild", port: null, watch: false });
   agent.end(full);
@@ -3043,7 +3108,8 @@ test("taken up by the next station, a process runs on the account it was started
   assert.equal(busyNext.options.profile.id, "cc2");
   assert.equal(r.session(busyKey).profile, "cc2");
   assert.ok(matches(busyNext.prompts[0]!, [GO_ON_AFTER_SPENT]), busyNext.prompts[0]);
-  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying nothing");
+  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying no more than that it moved");
+  assert.ok(r.chat.texts().some((t) => t.startsWith("已切换账号：") && t.endsWith(" → second")), r.chat.texts().join("\n"));
   // The idle one, given a message, leaves its process on the full account first.
   await hub.accept("cl", reply(idle, "9999.5", "<@UBOT> one more", { addressed: true }));
   await settle();
@@ -3084,7 +3150,7 @@ test("changing runtime lets the running turn finish and the next reads back the 
   assert.equal(next.options.resume, undefined);
   assert.ok(matches(next.prompts[0]!, ["This is a new conversation", `session_history with chat ${key}`, "continue"]));
   assert.equal(r.store.runtimeSessionSources(key)[0]!.runtime, "claude");
-  assert.ok(r.hub.live.before(key, 100, 100)![1].some((e) => e.text === "earlier work"));
+  assert.ok((await r.hub.live.before(key, 100, 100))![1].some((e) => e.text === "earlier work"));
   const codexPath = join(r.config.profiles[1]!.home, "sessions", "2026", "11", "03", `rollout-${next.id()}.jsonl`);
   mkdirSync(dirname(codexPath), { recursive: true });
   writeFileSync(codexPath, JSON.stringify({ type: "response_item", timestamp: "2026-10-24T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "continued work" }] } }) + "\n");
@@ -3127,7 +3193,7 @@ test("on another account a conversation goes on in a new runtime session, its hi
   assert.equal(r.store.ranOn(key, second.id()), second.options.profile.id);
   // Its history goes on from the first's.
   transcript(second.id(), "second", 1_000);
-  assert.deepEqual(r.hub.live.before(key, 100, 100)![1].filter((e) => e.kind === "user").map((e) => e.text), ["first", "second"]);
+  assert.deepEqual((await r.hub.live.before(key, 100, 100))![1].filter((e) => e.kind === "user").map((e) => e.text), ["first", "second"]);
   // Its process gone, on the same account: taken up as before.
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   second.complete();
@@ -3252,11 +3318,12 @@ test("a session from before a change is told it once, and a new one never", asyn
   assert.ok(!r.claude.last().prompts[0]!.includes("still.fail changed how you work"), "a new session has today's instructions");
   await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
-  await settle();
+  await r.quiet();
   // As a session from before the notes: told them with its next turn, once.
   r.store.setToldNotes(key, 0);
   await r.accept(reply(m, "9999.1", "还有一件"));
-  await settle();
+  // Today's instructions are written down off the main thread before the turn is given them.
+  await r.quiet();
   const prompts = r.claude.last().prompts;
   assert.ok(prompts.at(-1)!.startsWith("[still.fail changed how you work"), prompts.at(-1));
   const full = join(r.session(key).workspace, ".stillfail-instructions.md");
@@ -3265,9 +3332,9 @@ test("a session from before a change is told it once, and a new one never", asyn
   assert.equal(r.store.toldNotes(key), latest());
   await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
-  await settle();
+  await r.quiet();
   await r.accept(reply(m, "9999.2", "再一件"));
-  await settle();
+  await r.quiet();
   assert.ok(!r.claude.last().prompts.at(-1)!.includes("still.fail changed how you work"));
   await r.close();
 });

@@ -27,6 +27,7 @@ pub fn fixture_reset() -> Unit {
   new_fix.preset = ""
   new_fix.presets_late = false
   new_fix.liked.clear()
+  fix_forgotten.clear()
   new_fix.providers = false
   new_fix.borrow = false
   fix_presets_said.val = 0
@@ -52,7 +53,10 @@ pub fn fixture_reset() -> Unit {
   fix_core_for.val = 0.0
   fix_vault.val = ""
   fix_phone.val = ""
+  fix_phone_scope.val = ""
   fix_phone_link.val = ""
+  fix_rig.val = ""
+  fix_rig_asked.clear()
   fix_working_now.val = ("call:1", working_step)
   fix_working_important.val = false
   fix_working_status.val = "running"

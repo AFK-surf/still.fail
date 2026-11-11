@@ -58,6 +58,10 @@ fn panel_node(
         }
       }
       let live = fn() { !layer.leaving() }
+      // (a submenu row's menu in what it holds made in it: submenu_layer_lent)
+      submenu_layer_lend(layer)
+      // (what its fields offer made in it: offers_layer_lent)
+      offers_layer_lend(layer)
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
@@ -100,6 +104,10 @@ fn panel_node(
       let at = anchor(layer)
       // (what holds its body: what takes the focus as it opens)
       let body_box : Ref[@view.View?] = Ref(None)
+      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node,
+      // panel_search_at_hand_node)
+      let field : Ref[PanelField?] = Ref(None)
+      layer.lends(panel_field_lent, field) |> ignore
       // (its old views' words as far in as its look says: on entering, its ground first, then they; read as they are
       // painted (Ctx::look_by), so that its way in and out paints them, nothing of them built again)
       // (`fits`: how wide what its head, its body and its foot each hold is laid out, out to the panel's sides: what it
@@ -215,7 +223,7 @@ fn panel_node(
                   style_node(col, fn() { panel_grows.then(panel_part_in(over(), under)) })
                   col.grow(Is(1.0)).alpha(By(fn() { look().words })) |> ignore
                   // (laid out as a small panel's old body is: wide, its words a row's padding in)
-                  panel_in_lend(col, Wide, text_in, small=true)
+                  panel_in_lend(col, Wide, text_in, sides=panel_pad, small=true)
                   (n.body)(col, close)
                 })
                 |> ignore
@@ -263,7 +271,7 @@ fn panel_node(
                     style_node(col, fn() { held_in().then(@ui.style(pt=room(over()), pb=room(under))) })
                     col.margin(By(fn() { (0.0, -over(), 0.0, -out_under) })).alpha(By(fn() { look().words })) |> ignore
                     // (laid out as a small panel's old body is: wide, its words a row's padding in)
-                    panel_in_lend(col, Wide, text_in, small=true)
+                    panel_in_lend(col, Wide, text_in, sides=panel_pad, small=true)
                     (n.body)(col, close)
                   })
                   |> ignore
@@ -338,10 +346,11 @@ fn panel_node(
               None => ()
             }
         }
-        // (the focus what holds its body's as it opens where it takes it, else where it was; back to what had it as it
-        // goes)
-        match body_box.val {
-          Some(b) if x.focus => layer.focus_opens(b) |> ignore
+        // (the focus on the field it opens to be typed in, where it says one; else what holds its body's as it opens
+        // where it takes it, else where it was; back to what had it as it goes)
+        match (field.val, body_box.val) {
+          (Some(f), _) => layer.focus_opens(f.field) |> ignore
+          (None, Some(b)) if x.focus => layer.focus_opens(b) |> ignore
           _ => layer.focus_returns() |> ignore
         }
       })

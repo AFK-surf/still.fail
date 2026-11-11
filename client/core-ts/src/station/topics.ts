@@ -7,6 +7,7 @@ import type { Inner } from "../core.ts";
 import { membersOf } from "../db/account.ts";
 import { CoreError } from "../error.ts";
 import { nOf } from "../entries.ts";
+import { beginsItem } from "../history.ts";
 import { t } from "../i18n.ts";
 import { topicKey, topicStation, type Topic } from "../protocol.ts";
 import { terms } from "../refs.ts";
@@ -42,7 +43,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -100,12 +101,11 @@ export class StationTopics implements Owner {
     return STATION_TOPICS.has(topic.topic);
   }
 
-  /// What the station topics shown want of each station's stream: host samples, the sessions shown, the logs shown.
-  #wanted(address: string): { host: boolean; live: string[]; logs: [string, number][]; logins: string[] } {
+  /// What the station topics shown want of each station's stream: host samples, the logs shown.
+  #wanted(address: string): { host: boolean; logs: [string, number][]; logins: string[] } {
     const topics = this.#core.store.liveTopics().filter((t) => t.station === address);
     return {
       host: topics.some((t) => t.topic === "host"),
-      live: topics.filter((t) => t.topic === "live").map((t) => t.key as string),
       logs: topics.filter((t) => t.topic === "jobLog").map((t) => [t.job as string, t.lines as number] as [string, number]),
       logins: [...new Set(topics.filter((t) => t.topic === "machineLoginScreen").map((t) => t.id as string))],
     };
@@ -156,11 +156,10 @@ export class StationTopics implements Owner {
       for (const key of membersOf(this.summary(station, id))) this.#wholeHistory(station, key);
     }
     // Shown: what the sync would bring of it next (its latest page, what came after what is held, a hole) comes first,
-    // nothing it would not read anyway; let go for room before, it is the sync's again from now on. A station whose
-    // stream does not follow the sessions at work itself is told it on the stream instead (`live` named there).
+    // nothing it would not read anyway; let go for room before, it is the sync's again from now on.
     if (topic.topic === "live") {
-      const evicted = this.#core.data.opened("transcript", station, topic.key as string, true);
-      const shown = evicted || this.#sync.link(station)?.followsRunning === true ? this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown, "latest") : null;
+      this.#core.data.opened("transcript", station, topic.key as string, true);
+      const shown = this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown, "latest");
       this.#wholeHistory(station, topic.key as string, shown);
     }
     if (topic.topic === "net" || topic.topic === "way") this.#sampleNet(station, topic.topic);
@@ -433,29 +432,38 @@ export class StationTopics implements Owner {
     return { ok: value };
   }
 
-  /// The page of a transcript before what a `live` topic shows, into it: from what is held, else read now. One at a time
-  /// (asked again while it is read: nothing more); one that fails is said on the topic (`older`), and not asked for
-  /// again till a while after (less often each time it fails in a row), when the UI asks again if it is still near
-  /// the top. Whether there are pages before it still.
+  /// The page of a transcript before what a `live` topic shows, into it: from what is held, else read now; and the
+  /// pages before that, till one of the history's items begins in what came (history.ts `beginsItem`: a page that
+  /// only goes on with a group begun before it shows nothing more, and the UI, asking as it nears the top, would be
+  /// told nothing changed). One at a time (asked again while it is read: nothing more); one that fails is said on the
+  /// topic (`older`), and not asked for again till a while after (less often each time it fails in a row), when the UI
+  /// asks again if it is still near the top. Whether there are pages before it still.
   historyOlder(station: string, key: string): Effect.Effect<boolean, CoreError> {
     const topic: Topic = { topic: "live", station, key };
     const tk = topicKey(topic);
     return Effect.suspend(() => this.#older(topic, tk, Effect.gen({ self: this }, function* () {
-      const before = this.#firsts.get(tk);
-      if (before === undefined || before === 0) return false;
       const data = this.#core.data;
-      const from = Math.max(0, before - TRANSCRIPT_PAGE);
-      const held = () => data.logRange("transcript", station, key, from, before - 1);
-      // Read now unless held; its station not reached and it not held: not had now.
-      if (!held().has(before - 1)) {
-        if (!this.#sync.link(station) || !this.#sync.reachable(station)) return yield* Effect.fail(new CoreError("offline", downWords(this.#sync.link(station)?.state ?? { state: "offline" }, this.#core.views.stationName(station))));
-        yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
+      for (;;) {
+        const before = this.#firsts.get(tk);
+        if (before === undefined || before === 0) return false;
+        const from = Math.max(0, before - TRANSCRIPT_PAGE);
+        const held = () => data.logRange("transcript", station, key, from, before - 1);
+        // Read now unless held; its station not reached and it not held: not had now.
+        if (!held().has(before - 1)) {
+          if (!this.#sync.link(station) || !this.#sync.reachable(station)) return yield* Effect.fail(new CoreError("offline", downWords(this.#sync.link(station)?.state ?? { state: "offline" }, this.#core.views.stationName(station))));
+          yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
+        }
+        const items = held();
+        let first = before;
+        let begins = false;
+        while (first > from && items.has(first - 1)) {
+          first--;
+          if (beginsItem(items.get(first))) begins = true;
+        }
+        this.#firsts.set(tk, first);
+        // Nothing came (a read that brought none of it): as far as it goes for now.
+        if (first === 0 || first === before || begins) return first > 0;
       }
-      const items = held();
-      let first = before;
-      while (first > from && items.has(first - 1)) first--;
-      this.#firsts.set(tk, first);
-      return first > 0;
     })));
   }
 
@@ -497,10 +505,9 @@ export class StationTopics implements Owner {
 
   /// The thread's summary as the station's lists say.
   /// A session used now: its history brought whole in the background, down to its first entry, as the sync keeps it so
-  /// while it is used lately (a station whose stream follows its sessions at work: it says how far each goes).
+  /// while it is used lately (the station says how far each goes).
   /// `after`: what is shown of it is brought first (one task a channel: asked for while that one waits, this would be it).
   #wholeHistory(station: string, key: string, after: Deferred.Deferred<void, CoreError> | null = null): void {
-    if (this.#sync.link(station)?.followsRunning !== true) return;
     const whole = () => void this.#sync.channels.bring(transcriptOf(station, key), Priority.background, "whole");
     if (after === null) whole();
     else this.#core.runner.fork(Effect.ignore(Deferred.await(after)).pipe(Effect.andThen(Effect.sync(whole))));
@@ -822,30 +829,50 @@ export class StationTopics implements Owner {
     });
   }
 
-  /// The messages of a chat that have every word of `query` (`chat.find`), oldest first, each with how many times the
-  /// words are in its text; and whether all the chat was looked in (`whole`: all of it is on the device), with how
-  /// many of its entries were (`held` of `of`). `bring`: what is not on the device is read first, while its station
-  /// answers.
-  find(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; hits: { seq: number; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+  /// How much of a chat is on the device: `held` of its `of` entries, `whole` once all of it is (nothing left to read
+  /// of it, none let go for room).
+  held(station: string, id: number): { held: number; of: number; whole: boolean } {
+    const data = this.#core.data;
+    const whole = !data.evicted("entry", station, String(id)) && this.#sync.channels.next(entriesOf(station, id)) === null;
+    return { held: data.logSpan("entry", station, String(id))?.count ?? 0, of: this.#latest(station, id), whole };
+  }
+
+  /// What of a chat is not on the device read onto it (`chat.bring`), while its station answers; how much of it is then.
+  bring(station: string, id: number): Effect.Effect<{ held: number; of: number; whole: boolean }, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const channel = entriesOf(station, id);
-      const data = this.#core.data;
-      const whole = () => !data.evicted("entry", station, String(id)) && this.#sync.channels.next(channel) === null;
-      if (bring && this.#sync.link(station) && this.#sync.reachable(station)) {
+      if (this.#sync.link(station) && this.#sync.reachable(station)) {
         for (let read = this.#sync.channels.next(channel); read !== null; read = this.#sync.channels.next(channel)) {
           const came = yield* Effect.result(this.#sync.channels.read(channel, read, { quiet: true }));
           if (came._tag === "Failure" || came.success === 0) break;
         }
       }
+      return this.held(station, id);
+    });
+  }
+
+  /// The messages of a chat that have every word of `query`, oldest first, with their words and how many times the
+  /// words are in them (`chat.find`, `chat.outline.find`); and how much of the chat was looked in (`held`). `bring`:
+  /// what is not on the device is read first (`bring`).
+  found(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; found: { seq: number; text: string; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+    return Effect.map(bring ? this.bring(station, id) : Effect.sync(() => this.held(station, id)), (held) => {
       const words = terms(query);
-      const hits = data.findInThread(station, id, words).map(({ seq, text }) => {
+      const found = this.#core.data.findInThread(station, id, words).map(({ seq, text }) => {
         const lower = text.toLowerCase();
         let count = 0;
         for (const w of words) for (let i = lower.indexOf(w); i >= 0; i = lower.indexOf(w, i + w.length)) count++;
-        return { seq, count };
+        return { seq, text, count };
       });
-      return { words, hits, held: data.logSpan("entry", station, String(id))?.count ?? 0, of: this.#latest(station, id), whole: whole() };
+      return { words, found, ...held };
     });
+  }
+
+  /// The messages of a chat that have every word of `query` (`chat.find`), oldest first, each with how many times the
+  /// words are in its text; and whether all the chat was looked in (`whole`: all of it is on the device), with how
+  /// many of its entries were (`held` of `of`). `bring`: what is not on the device is read first, while its station
+  /// answers.
+  find(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; hits: { seq: number; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+    return Effect.map(this.found(station, id, query, bring), ({ found, ...rest }) => ({ ...rest, hits: found.map(({ seq, count }) => ({ seq, count })) }));
   }
 
   /// Whether a thread topic's window reaches its end.

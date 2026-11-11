@@ -55,8 +55,7 @@ fn press_look(
   let sink = @motion.Way::new(0.0)
   let sink_most = Ref(0.0)
   v.scale(By(fn() {
-    sink.said()
-    let s = if sink.goes_at(v.logic_at()) { sink.value_at(v.drawn_at()) } else { sink.target() }
+    let s = sink.shown_on(v)
     1.0 - sink_most.val * s
   }))
   |> ignore
@@ -169,12 +168,7 @@ let press_sink_most : Double = 0.04
 /// of its radius (@motion.ripple's).
 fn ripple_disc(d : @view.View, r : PressRipple, ink : Int64) -> Unit {
   let p = fn() {
-    r.way.said()
-    if r.way.goes_at(d.logic_at()) {
-      r.way.value_at(d.drawn_at())
-    } else {
-      r.way.target()
-    }
+    r.way.shown_on(d)
   }
   let geom = fn() {
     let (w, h) = (r.w, r.h)

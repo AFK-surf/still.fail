@@ -3,7 +3,7 @@
 // naming the field ("items[0].since: invalid type: …"), as serde_path_to_error says it.
 import { SHAPES } from "./shapes/schema.ts";
 import type { Ty } from "./shapes/dsl.ts";
-import { shaped } from "./util.ts";
+import { shaped, shapedAs } from "./util.ts";
 
 export type { Field, Shape, Ty } from "./shapes/dsl.ts";
 
@@ -96,11 +96,22 @@ export function defaultOf(ty: Ty): unknown {
   return {};
 }
 
+/// Whether `v` already went out as `ty` (output.ts, views.ts `asShaped`), to go as it went: not one a view shaped as
+/// another struct (`shapedAs`), which is shaped as this one.
+function wentOut(v: unknown, ty: Ty): boolean {
+  if (v === null || typeof v !== "object" || !shaped.has(v)) return false;
+  const as = shapedAs.get(v);
+  return as === undefined || as === ty;
+}
+
+/// What a value a view shaped as one struct was made as another, by that one (`fit`): made once while it is the same.
+const reshaped = new WeakMap<object, Map<string, unknown>>();
+
 function walk(v: unknown, ty: Ty, path: string): unknown {
+  if (typeof ty === "object" && "opt" in ty) return v === null || v === undefined ? null : walk(v, ty.opt, path);
   // What already went out through its shape (output.ts) is as it went.
-  if (v !== null && typeof v === "object" && shaped.has(v)) return v;
+  if (wentOut(v, ty)) return v;
   if (typeof ty === "object") {
-    if ("opt" in ty) return v === null || v === undefined ? null : walk(v, ty.opt, path);
     if ("vec" in ty) {
       if (!Array.isArray(v)) throw new Wrong(path, `invalid type: ${unexpected(v)}, expected a sequence`);
       return v.map((item, i) => walk(item, ty.vec, at(path, i)));
@@ -200,9 +211,9 @@ const has = Object.prototype.hasOwnProperty;
 /// it (a path written for every field, every object's keys sorted) was much of what the core did on a phone
 /// (2026-10-19). Anything that does not fit is MISFIT, for `walk` to say.
 function fit(v: unknown, ty: Ty): unknown {
-  if (v !== null && typeof v === "object" && shaped.has(v)) return v;
+  if (typeof ty === "object" && "opt" in ty) return v === null || v === undefined ? null : fit(v, ty.opt);
+  if (wentOut(v, ty)) return v;
   if (typeof ty === "object") {
-    if ("opt" in ty) return v === null || v === undefined ? null : fit(v, ty.opt);
     if ("vec" in ty) {
       if (!Array.isArray(v)) throw MISFIT;
       const out = new Array(v.length);
@@ -250,6 +261,12 @@ function fit(v: unknown, ty: Ty): unknown {
     if (typeof tag !== "string" || !has.call(shape.variants, tag) || !(shape.content in obj)) throw MISFIT;
     return { [shape.tag]: tag, [shape.content]: fit(obj[shape.content], shape.variants[tag]) };
   }
+  // (one a view shaped as another struct: as this one once, kept as it went out)
+  const other = shaped.has(obj);
+  if (other) {
+    const kept = reshaped.get(obj)?.get(ty);
+    if (kept !== undefined) return kept;
+  }
   const out: Record<string, unknown> = {};
   for (const f of shape.fields) {
     let value: unknown;
@@ -259,6 +276,13 @@ function fit(v: unknown, ty: Ty): unknown {
     else throw MISFIT;
     if (value === null && f.skipNone) continue;
     out[f.name] = value;
+  }
+  if (other) {
+    let by = reshaped.get(obj);
+    if (by === undefined) reshaped.set(obj, (by = new Map()));
+    by.set(ty, out);
+    shaped.add(out);
+    shapedAs.set(out, ty);
   }
   return out;
 }

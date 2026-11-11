@@ -127,7 +127,6 @@ fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
     r.wraps(Is(Some(nt_lines))) |> ignore
     r.box(fn(part) {
       @sf.style_node(part, fn() { nt_part }, in_row=true)
-      part.cuts(Is(true)) |> ignore
       part.box(fn(l) {
         @sf.style_node(l, fn() { nt_line })
         @sf.words_node(l, fn() { text(net(), "path") }, fn() { nt_words_cut }) |> ignore

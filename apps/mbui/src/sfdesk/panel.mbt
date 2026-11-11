@@ -13,9 +13,11 @@ fn tabs_key(r : ChatRef) -> String {
 
 ///|
 /// Whether this panel shows `tab` beside a chat of `v`: one of its agents' histories (by its session's key), 任务, 文件,
-/// agent 往来, a web service of its agents' (`service:<job>`), a visualization (`file:[…]`: service_tab.mbt).
+/// agent 往来, a web service of its agents' (`service:<job>`), a visualization (`file:[…]`: service_tab.mbt), a file in
+/// the viewer (`view:[…]`: sfbase's viewer_tab.mbt).
 fn side_shows(v : ChatView, tab : String) -> Bool {
   tab == "jobs" ||
+  @sfbase.view_tab_file(tab) is Some(_) ||
   tab == "files" ||
   tab == "letters" ||
   tab == "things" ||
@@ -78,6 +80,28 @@ pub fn side_ask(src : Source, r : ChatRef, action : String, tab : String?) -> Un
     None => ()
   }
   (src.call)("chat.tabs." + action, Json::object(params), fn(_) {  })
+}
+
+///|
+/// File tab `tab` opened beside chat `r` (the shell's `beside`: sfapp's beside_where), in front; a tab of that file open
+/// there already (the same file, what it said of itself then aside: view_tab_file's same_file), that one brought to the
+/// front, never a second: the tab put in front.
+pub fn view_beside(src : Source, r : ChatRef, tab : String) -> String {
+  let open = match @sfbase.view_tab_file(tab) {
+    Some(f) =>
+      side_now(src, r).0
+      .iter()
+      .find_first(fn(t) {
+        match @sfbase.view_tab_file(t) {
+          Some(g) => f.same_file(g)
+          None => false
+        }
+      })
+    None => None
+  }
+  let put = open.unwrap_or(tab)
+  side_change(src, r, "open", Some(put))
+  put
 }
 
 ///|
@@ -404,11 +428,15 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
 ///|
 /// Chat `r`'s page (`chat`) in workspace `w`, its side panel the tree's beside it (side_panel_node; on the tape a panel
 /// of its own, tape_side): as the panel's column slides, the page on its way to the width it leaves the page, there as
-/// the slide ends.
+/// the slide ends: built again in the first frame at or past its end (Ctx::shows_until), whether or not the page's room
+/// changes then. (A frame drawn just short of the end has the column as wide as it comes to be already; at 24 frames a
+/// second, in a window wide enough for the list to be held at its width on the way (sfpages' laid_w), the next kept the
+/// page as on its way, parting from it built anew: view_beside_wbtest, wide_panel_wbtest.)
 pub fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, chat : () -> Unit) -> Unit {
   let key = chat_key(r)
   match panel_own.goes.get(key) {
     Some(way) if !@sf.in_pane() && way.goes_at(c.moment()) => {
+      c.shows_until(way.ends_at())
       let (id, to, ends) = (@sfbase.page_way.id, @sfbase.page_way.to, @sfbase.page_way.ends)
       // (the pane as wide as the block's column leaves it at rest; on the block's own way, where that goes)
       let pane = if id != "" {
@@ -609,6 +637,11 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
     Some(label) => return (label, @sf.t("web-pages.chat.close", args=[("name", label)]))
     None => ()
   }
+  // a file in the viewer: by its name
+  match @sfbase.view_tab_file(tab) {
+    Some(f) => return (f.file.name, @sf.t("web-pages.chat.close", args=[("name", f.file.name)]))
+    None => ()
+  }
   let agent = v.agents.iter().find_first(fn(a) { a.key == tab })
   let service = match tab_service(tab) {
     Some(job) => Some(src.topic("job", { "station": Json::string(r.station), "id": Json::string(job) }).get().value)
@@ -673,7 +706,13 @@ fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : 
     }
     None => ()
   }
-  let icon = if tab_file(tab) is Some(_) {
+  let icon = if @sfbase.view_tab_file(tab) is Some(f) {
+    if @sfbase.preview_kind(f.file.name).0 == Some(@sfbase.KImage) {
+      "photo"
+    } else {
+      "file"
+    }
+  } else if tab_file(tab) is Some(_) {
     "file"
   } else if tab == "jobs" {
     "boxes"

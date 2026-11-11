@@ -350,7 +350,7 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
     _ => {
       m.watch.read(fn() { (m.fill)(self) })
       if self.count != slot + 1 {
-        abort("a made node's fill makes one node, nothing in it: \{self.count - slot} made")
+        @halt.saying("a made node's fill makes one node, nothing in it: \{self.count - slot} made")
       }
       m.node = Some(self.nodes[slot])
     }

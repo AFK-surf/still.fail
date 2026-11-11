@@ -156,7 +156,7 @@ pub fn World::step(self : World, ms? : Int = 16) -> Unit {
 ///|
 /// A tap on the text `label`: finger down, a frame, up, a frame.
 pub fn World::tap(self : World, label : String) -> Unit {
-  guard self.t.find(label) is Some((x, y)) else { abort("no \{label} on screen") }
+  guard self.t.find(label) is Some((x, y)) else { @halt.saying("no \{label} on screen") }
   self.t.touch(0, x, y)
   self.step()
   self.t.touch(2, x, y)

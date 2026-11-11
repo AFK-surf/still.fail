@@ -336,7 +336,7 @@ test "Android: a fling into the end stretches there and comes back" {
   let frames_to = fn(end : Double) {
     // (a motion told and not started yet has no end to run to: a test that says otherwise is wrong)
     if end > 1.0e300 {
-      abort("the list's motion has not started")
+      @halt.saying("the list's motion has not started")
     }
     while t.time() < end {
       t.frame()

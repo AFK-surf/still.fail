@@ -19,7 +19,7 @@ import { AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
-import { WorkspaceWatch, workspaceSessionsToMeasure, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
+import { WorkspaceWatch, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
@@ -32,7 +32,7 @@ import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.t
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Net, measure } from "../jobs/load.ts";
 import { Notifier } from "../cloud/notify.ts";
-import type { Cloud as CloudState } from "../cloud/state.ts";
+import { type Cloud as CloudState, rigGrantsPath } from "../cloud/state.ts";
 import { screenTools } from "../tools/screen.ts";
 import { permissionTools } from "../tools/permissions.ts";
 import { HelperFiles } from "../helper/files.ts";
@@ -76,6 +76,7 @@ import { InternalChat } from "./internal.ts";
 import { expireArchived, relieveArchived, startAutoArchiveTimer } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
+import { ARCHIVE, archiveForPeer } from "./chat-archive.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
@@ -196,7 +197,7 @@ export const AgentsLive = (control: Control) =>
       // In the workspace its chat is in.
       const pageOf = (key: string) => {
         const s = place();
-        const ws = store.getSession(key)?.ws ?? s?.workspace;
+        const ws = store.sessionWs(key) ?? s?.workspace;
         return s && plane.spec().pages && (ws === s.workspace || cloud.membership(ws!) !== null) ? `${s.origin}/o/${ws}/${s.station}/${encode(key)}` : undefined;
       };
 
@@ -328,7 +329,8 @@ export const AgentsLive = (control: Control) =>
         working,
         notify: (session, text) => hub.notify(session, text),
         readings: async () => {
-          const workingSessions = workspaceSessionsToMeasure(store, (session) => hub.processState(session));
+          const processes = [...hub.processes()].flatMap(([key, state]) => state === "running" ? [key] : []);
+          const workingSessions: { key: string; workspace: string }[] = JSON.parse(await readers.read("sessionsAtWork", { processes }, "zh"));
           return (await Promise.all(workingSessions.map(async (s) => {
             const found: WorkspaceReading[] = [];
             if (roomOf(data, s.workspace) !== null) {
@@ -382,6 +384,8 @@ export const AgentsLive = (control: Control) =>
           }),
         },
         clock: hub.clock,
+        // (a device's forward lets only its chat's processes through: devices/)
+        holders: platform.os === "windows" ? undefined : (port) => platform.tcpPortPids(port),
       });
       hub.onClose((session) => {
         remote.closeSession(session);
@@ -418,6 +422,8 @@ export const AgentsLive = (control: Control) =>
             return putForPeer(hub, peer, request, ws);
           case CREATE:
             return createForPeer(hub, peer, request, ws);
+          case ARCHIVE:
+            return archiveForPeer(hub, request, ws);
           case NOTICE:
             return noticeForPeer(hub, peer, request, ws);
           default:
@@ -511,11 +517,11 @@ export const AgentsLive = (control: Control) =>
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
       // So are those of a session of a workspace the station has left.
       const inItsWorkspace = (session: string) => {
-        const ws = store.getSession(session)?.ws ?? null;
+        const ws = store.sessionWs(session) ?? null;
         return ws === null || cloud.membership(ws) !== null;
       };
       // The agents' tools, and those the station's parts add as they are made (parts.ts).
-      const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, () => [...tools, ...parts.allTools()], (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
+      const mcp = new McpEndpoint((token) => store.sessionKeyByToken(token) ?? undefined, () => [...tools, ...parts.allTools()], (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
 
       let taken = false;
 
@@ -528,7 +534,8 @@ export const AgentsLive = (control: Control) =>
       const accounts: Accounts = makeAccounts({
         data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, agy: () => agy, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
-        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
+        claudeVersion: () => updates.get().find((v) => v.id === "claude")?.version ?? null,
+        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), lendClaude: (p, rejected) => sharing!.lendClaude(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
       found = accounts.found;
       accounts.start();
@@ -575,6 +582,7 @@ export const AgentsLive = (control: Control) =>
       hub.recentChatList = async (ws, home, limit, signal) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh", { signal }));
       hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
+      hub.policyChecks = async (since, viewer) => JSON.parse(await readers.read("policyChecks", { since, viewer: { workspace: viewer.workspace, home: viewer.home } }, "zh"));
       hub.openedChatSaid = async (thread, author, agentOnly) => JSON.parse(await readers.read("openedChatSaid", { thread, author, agentOnly }, "zh"));
       hub.historyMessages = async (thread, before, limit) => JSON.parse(await readers.read("chatHistoryMessages", { thread, before, limit }, "zh"));
       hub.historyPendingCard = async (thread) => JSON.parse(await readers.read("historyPendingCard", { thread }, "zh"));
@@ -655,6 +663,30 @@ export const AgentsLive = (control: Control) =>
       let joinedNow = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
       let homeNow = cloud.home();
       const follow = async () => {
+        // Listed as a rig now, as its owner's device asked of this station (cloud/state.ts `rig_due`): it ends what it
+        // runs as a station (the agents' runtimes, the connects, the chats' jobs and services), then says it is one,
+        // at which this process ends for the rig's (main.ts). Its chats stay in its database, unseen until it is a
+        // whole station again.
+        if (cloud.state?.rig_due === true) {
+          const due = cloud.state.rig_pending;
+          if (due === undefined) {
+            cloud.update((st) => void delete st.rig_due);
+            return;
+          }
+          log.warn("station", "this station only runs tasks from now on: ending the agents' runtimes, stopping jobs and services", { owner: due.owner });
+          hub.hold("unbound");
+          await hub.suspendAll();
+          for (const a of along) await a.left?.();
+          await jobs.stopAll("this station only runs tasks now");
+          rmSync(rigGrantsPath(data), { force: true });
+          cloud.update((st) => {
+            st.rig = { owner: due.owner, owner_email: due.owner_email, owner_name: due.owner_name, person: due.person };
+            delete st.rig_pending;
+            delete st.rig_due;
+            delete st.rigs;
+          });
+          return;
+        }
         const now = bound();
         const joined = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
         // A new home workspace. One it had joined took over from a home it was taken out of: the old home's chats
@@ -684,7 +716,7 @@ export const AgentsLive = (control: Control) =>
           log.info("station", "in a workspace: connects, turns and jobs go on");
           for (const a of along) await a.joined?.();
           hub.recover();
-          jobs.relaunch();
+          await jobs.relaunch();
           hub.release("unbound");
         } else {
           const why = cloud.removed() ? "the station was removed from its workspace" : "the station is in no workspace";
@@ -763,11 +795,13 @@ export const AgentsLive = (control: Control) =>
         if (inWorkspace) {
           for (const a of along) await a.taken?.();
           hub.recover();
-          jobs.relaunch();
+          await jobs.relaunch();
         } else if (cloud.removed()) {
           // Removed, and the station stopped before it stopped its jobs (or crashed): what still runs is ended now.
           await jobs.stopAll("the station was removed from its workspace");
         }
+        // (due to become a rig when it stopped, before it had: now)
+        if (cloud.state?.rig_due === true) await follow();
       };
       yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => {
         log.error("hub", "the agents' side did not start", { error: (e as Error).message });

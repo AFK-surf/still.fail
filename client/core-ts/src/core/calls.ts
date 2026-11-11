@@ -1,5 +1,7 @@
 // Named calls and their input validation; execution stays in the core (execute.ts).
 import { parseAdb, type AdbCall } from "../adb-parse.ts";
+import { parseRig, type RigCall } from "../rigs.ts";
+import { parseDevice, type DeviceCall } from "../devices.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
 import { parseScreen, type ScreenCall } from "../screens.ts";
@@ -15,6 +17,7 @@ import * as ops from "../ops.ts";
 import type { Topic } from "../protocol.ts";
 import { LOOK_COLOURS, type MermaidLook } from "../mermaid.ts";
 import { draftAt } from "../refs.ts";
+import { OUTLINE_ROWS } from "../things.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
 import { readConnects, readPeople, type RelayConnect, type RelayPerson } from "../relay-pick.ts";
@@ -65,6 +68,10 @@ export type Call =
   | { kind: "chatCc"; station: string; thread: number; to: number; on: boolean }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
+  /// A chat's outline: the rest of the chat read onto the device; what it lists for words looked for.
+  | { kind: "chatBring"; station: string; thread: number }
+  | { kind: "chatOutlineFind"; station: string; thread: number; query: string; bring: boolean }
+  | { kind: "chatOutlineRows"; station: string; thread: number; seqs: number[] }
   | { kind: "historyOlder"; station: string; key: string }
   | { kind: "historyDetail"; station: string; key: string; from: number; to: number }
   | { kind: "stationMeasure"; station: string }
@@ -151,6 +158,10 @@ export type Call =
   | { kind: "mermaidLoad"; bytes: Uint8Array }
   | { kind: "ask"; ask: Ask }
   | { kind: "adb"; call: AdbCall }
+  /// A workspace's rigs (rigs.ts): `rig.<name>`.
+  | { kind: "rig"; call: RigCall }
+  /// A workspace's devices (devices.ts): `device.<name>`.
+  | { kind: "device"; call: DeviceCall }
   /// A station's screen seen and driven (screens.ts): `screen.view` and what goes on it.
   | { kind: "screen"; call: ScreenCall }
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
@@ -583,6 +594,32 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       ]);
       return { kind: "chatFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
     }
+    case "chat.outline.find": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["query", S, "req"],
+        ["bring", "bool", "opt"],
+      ]);
+      return { kind: "chatOutlineFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
+    }
+    case "chat.outline.rows": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["seqs", "u64s", "req"],
+      ]);
+      const seqs = p.seqs as number[];
+      if (seqs.length > OUTLINE_ROWS) throw CoreError.invalid(t("core-misc.params.invalid", { error: `invalid length ${seqs.length}, expected at most ${OUTLINE_ROWS} seqs` }));
+      return { kind: "chatOutlineRows", station: p.station as string, thread: p.thread as number, seqs };
+    }
+    case "chat.bring": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+      ]);
+      return { kind: "chatBring", station: p.station as string, thread: p.thread as number };
+    }
     case "history.older": {
       const p = read(params, [
         ["station", S, "req"],
@@ -626,6 +663,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
     case "newChat.migrate":
     case "pick.set":
     case "pick.like":
+    case "pick.forget":
     case "pick.save":
     case "pick.repick":
     case "pick.borrow": {
@@ -1149,6 +1187,10 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
   const p = orEmpty(params);
   const adb = parseAdb(name, p);
   if (adb) return { kind: "adb", call: adb };
+  const rig = parseRig(name, p);
+  if (rig) return { kind: "rig", call: rig };
+  const device = parseDevice(name, p);
+  if (device) return { kind: "device", call: device };
   const screen = parseScreen(name, p, bytes);
   if (screen) return { kind: "screen", call: screen };
   const ask = parseAsk(name, p);

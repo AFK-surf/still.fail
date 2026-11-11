@@ -43,6 +43,9 @@ struct NavPage[P] {
   // its time on top: a number of its own each time it is put there (pushed, or come back to as the one over it went),
   // what is built on it reads (Ctx::page_stint)
   mut stint : Int
+  // what in it had the keyboard's focus as a page was put over it (0: none), given back as it is on top again
+  // (Nav::focus_follows); gone with it, where it leaves the stack before
+  mut focus_kept : Int
 }
 
 ///|
@@ -54,7 +57,7 @@ let nav_serial : Ref[Int] = { val: 0 }
 ///|
 fn[P] nav_page(page : P, under : P?) -> NavPage[P] {
   nav_serial.val = nav_serial.val + 1
-  { serial: nav_serial.val, ended: false, page, under, rise: false, over: false, stint: next_stint() }
+  { serial: nav_serial.val, ended: false, page, under, rise: false, over: false, stint: next_stint(), focus_kept: 0 }
 }
 
 ///|
@@ -153,6 +156,10 @@ struct Nav[P] {
   // (Nav::flat_owned): then that alone decides, Nav::shows_when's frames none of it
   mut flat_kept : (Int, Int)?
   mut flat_owner : Bool
+  // put in place under an owner (Nav::flat_owned), the stay of the page that left and what in it had the focus, till
+  // the owner says at the same cause whether it keeps that page shown (Nav::flat_keep): kept, the focus stays in it
+  // till it is let go; else, or let go, none has it (Nav::focus_kept_settle)
+  mut focus_shown_gone : ((Int, Int), Int)?
   // the page being built (Ctx::nav, Ctx::nav_flat), what Nav::under answers for
   mut built : NavPage[P]?
   // the pages at and under this index are not the stack's to slide or go back from (Ctx::nav's `floor`: a pane's stack
@@ -220,6 +227,7 @@ pub fn[P] Nav::new(
     flat_from: -1.0,
     flat_kept: None,
     flat_owner: false,
+    focus_shown_gone: None,
     built: None,
     floor: 0,
     hosted: None,
@@ -509,6 +517,7 @@ pub fn[P] Nav::flat_owned(self : Nav[P], owned : Bool) -> Unit {
     self.flat_kept = None
     self.told()
   }
+  self.focus_kept_settle()
 }
 
 ///|
@@ -520,6 +529,23 @@ pub fn[P] Nav::flat_keep(self : Nav[P], stay : (Int, Int)?) -> Unit {
   if self.flat_kept != stay {
     self.flat_kept = stay
     self.told()
+  }
+  self.focus_kept_settle()
+}
+
+///|
+/// The focus in a page that left a stack drawn flat by an owner (Nav::focus_follows), as the owner says what it keeps
+/// shown (at that cause: the same as the page left, or as the one it kept is let go): kept shown, it stays; else none
+/// has it (where nothing else took it meanwhile).
+fn[P] Nav::focus_kept_settle(self : Nav[P]) -> Unit {
+  guard self.focus_shown_gone is Some((stay, f)) else { return }
+  if self.flat_owner && self.flat_kept == Some(stay) {
+    return
+  }
+  self.focus_shown_gone = None
+  let c = g()
+  if c.focus == f {
+    c.focus_moved(0)
   }
 }
 
@@ -584,8 +610,79 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
+/// What one cause does to the stack (a push, a rise, a pop, back to a depth, a page let go, one or more put in place),
+/// told as one: what reads it (`said`, `shown`) sees it whole, never half done (its pages pushed, its slide not yet set
+/// out: none beside its top, at rest; or a slide under way ended, the pages that replace it not yet there).
+fn[T] told_once(f : () -> T) -> T {
+  @signals.start_batch()
+  let r = f()
+  @signals.end_batch()
+  r
+}
+
+///|
+/// What one cause does to the stack, told once (told_once), and the keyboard's focus as it leaves the page on top: the
+/// focus is only in what shows (the one rule, Ctx::focus_taken_under's; #5297, here the stack its third caller, the old
+/// frame's layers and the tree's the others). A page put over the one on top takes the focus from what in that one had
+/// it (put aside with it, the input method put away; the new page's own way of taking it, as it is first built, its
+/// own); the page on top again gives it back to what had it as it was covered, where nothing else took it meanwhile
+/// (none has it, or what is let go of with the page over it); a page gone takes it with it (none has it then; one the
+/// owner of a stack drawn flat keeps shown in its place till the one put there has its view, as that owner lets it go:
+/// Nav::focus_kept_settle). At the
+/// cause's moment, never as a frame is built: a finger's back gives it back as it is let go and goes back, not as it
+/// drags; called off, nothing. Where the window's tree does not hold the stack (an old view's own), nothing.
+fn[P, T] Nav::told_focus(self : Nav[P], f : () -> T) -> T {
+  let before = self.pages[self.pages.length() - 1]
+  told_once(fn() {
+    let r = f()
+    self.focus_follows(before)
+    r
+  })
+}
+
+///|
+/// The focus as the page on top went from `before` to what is on top now (Nav::told_focus).
+fn[P] Nav::focus_follows(self : Nav[P], before : NavPage[P]) -> Unit {
+  guard self.hosted is Some(h) else { return }
+  let top = self.pages[self.pages.length() - 1]
+  if physical_equal(top, before) {
+    return
+  }
+  let c = g()
+  let covered = self.pages.iter().any(fn(e) { physical_equal(e, before) })
+  if covered {
+    // (what had it in the page covered: put aside with that page, under the one put over it)
+    if c.focus != 0 && (h.holds)(c.focus) {
+      before.focus_kept = c.focus
+      c.focus_taken_under(0, false)
+    }
+  } else if c.focus != 0 && (h.holds)(c.focus) {
+    if self.flat_owner {
+      // (in a page put out of place where an owner may keep it shown till the one put there has its view: as the owner
+      // says at this cause, Nav::flat_keep; sfdesk's page_wait.mbt)
+      self.focus_shown_gone = Some(((before.serial, before.stint), c.focus))
+    } else {
+      // (in a page gone: with it)
+      c.focus_moved(0)
+    }
+  }
+  let kept = top.focus_kept
+  if kept != 0 {
+    top.focus_kept = 0
+    if (c.focus == 0 || (h.holds)(c.focus)) && (h.still)(kept) {
+      c.focus_moved(kept)
+    }
+  }
+}
+
+///|
 /// Pushes `page`, over the one on top (Nav::push_over) or not: what it is known as it sets out (Nav::go).
 fn[P] Nav::pushes(self : Nav[P], page : P, over : Bool) -> Unit {
+  self.told_focus(fn() { self.pushes_now(page, over) })
+}
+
+///|
+fn[P] Nav::pushes_now(self : Nav[P], page : P, over : Bool) -> Unit {
   self.settle()
   self.pages.push(nav_page(page, Some(self.top())))
   self.pages[self.pages.length() - 1].over = over
@@ -622,6 +719,11 @@ pub fn[P] Nav::top_over(self : Nav[P]) -> Bool {
 /// Pushes `page` rising from the bottom over the one on top, which stays where it is (App.kt: a new chat, 380 ms on
 /// (.2, .8, .2, 1)); back, it sinks down the same way (swiped back, it goes down with the finger).
 pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
+  self.told_focus(fn() { self.rise_now(page) })
+}
+
+///|
+fn[P] Nav::rise_now(self : Nav[P], page : P) -> Unit {
   self.settle()
   let e = nav_page(page, Some(self.top()))
   e.rise = true
@@ -652,6 +754,11 @@ pub fn[P] Nav::risen(self : Nav[P]) -> Bool {
 ///|
 /// Back a page: the top slides away; false when there is none under it.
 pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
+  self.told_focus(fn() { self.pop_now() })
+}
+
+///|
+fn[P] Nav::pop_now(self : Nav[P]) -> Bool {
   if self.pages.length() < 2 {
     return false
   }
@@ -691,6 +798,11 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
 /// Back to the page `depth` deep (1 the root): the top slides away over it, those between taken off as they are, never
 /// shown again (forgotten, `on_leave` told, as the top's slide begins); false when the stack is no deeper than that.
 pub fn[P] Nav::pop_to(self : Nav[P], depth : Int) -> Bool {
+  self.told_focus(fn() { self.pop_to_now(depth) })
+}
+
+///|
+fn[P] Nav::pop_to_now(self : Nav[P], depth : Int) -> Bool {
   if depth < 1 || self.pages.length() <= depth {
     return false
   }
@@ -706,6 +818,11 @@ pub fn[P] Nav::pop_to(self : Nav[P], depth : Int) -> Bool {
 ///|
 /// The top page replaced by `page`, in place (nothing slides).
 pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
+  self.told_focus(fn() { self.replace_now(page) })
+}
+
+///|
+fn[P] Nav::replace_now(self : Nav[P], page : P) -> Unit {
   self.settle()
   // (told once, as the new one is on top: never with no page)
   let was = self.pages.pop()
@@ -730,6 +847,11 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 /// list's row choosing the page beside it in place of whatever was open over the list). Never with no page: `pages`
 /// empty, `keep` 1 at least.
 pub fn[P] Nav::replace_above(self : Nav[P], keep : Int, pages : Array[P]) -> Unit {
+  self.told_focus(fn() { self.replace_above_now(keep, pages) })
+}
+
+///|
+fn[P] Nav::replace_above_now(self : Nav[P], keep : Int, pages : Array[P]) -> Unit {
   let keep = if keep < 0 { 0 } else { keep }
   if pages.is_empty() && (keep == 0 || self.pages.length() <= keep) {
     return
@@ -829,8 +951,7 @@ fn[P] Nav::gesture(
         // (Tracker::velocity_at)
         self.track.up(t, x)
         self.vel = self.track.velocity_at(t)
-        let flung = dx > 40.0 && self.vel > 0.6
-        if self.p > 1.0 / 3.0 || dx > back_far || flung {
+        if back_goes(dx, w, self.vel) {
           self.let_go(dmax(self.vel, 0.0) / w)
         } else {
           // back to rest, as fast as the finger let it go (its widths per ms)
@@ -859,6 +980,11 @@ let back_far : Double = 120.0
 ///|
 /// Gone back from where a finger left the page: on from there, as fast as it let it go (`v`, its widths per ms).
 fn[P] Nav::let_go(self : Nav[P], v : Double) -> Unit {
+  self.told_focus(fn() { self.let_go_now(v) })
+}
+
+///|
+fn[P] Nav::let_go_now(self : Nav[P], v : Double) -> Unit {
   self.leaving = self.pages.pop()
   self.topped()
   self.told()
@@ -1370,4 +1496,12 @@ pub fn[P] Ctx::nav_flat(
     self.owner = saved
     self.stint = saved_stint
   })
+}
+
+///|
+/// Whether a page a finger drew `dx` across of `w`, let go going `vel` (points a ms), goes back: landing a third across
+/// or back_far on from that speed (lands_past), or flung (past 40, faster than 0.6).
+fn back_goes(dx : Double, w : Double, vel : Double) -> Bool {
+  let flung = dx > 40.0 && vel > 0.6
+  lands_past(dx, vel, w / 3.0) || lands_past(dx, vel, back_far) || flung
 }

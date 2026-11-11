@@ -1,8 +1,8 @@
 // How old a core this station still answers (CONTRIBUTING.md: what is kept for older versions goes 7 days after what
 // replaces it ships). Each core says its build with every request (`stillfail-build`, as `0.1.<n>`), and each answer
 // says the station's. A change that takes out what a station kept for older cores raises OLDEST_CORE, in the same
-// change, to the build that first did without it: a core older than that (or one from before it said its build) is
-// told to update (426), not answered the old way. The core keeps the same floor for stations
+// change, to the build that first did without it: a core that says a build older than that is told to update (426),
+// not answered the old way (one that says none is answered: `coreTooOld`). The core keeps the same floor for stations
 // (client/core-ts/src/station/oldest.ts).
 import { version } from "../ops/version.ts";
 
@@ -23,15 +23,20 @@ export function buildOf(said: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/// Whether a core asking with these headers is older than OLDEST_CORE (`oldest`, a test's). One saying no build is a
-/// core from before it said one where it says its language (`stillfail-lang`, every core's since languages); what
-/// says neither is no core (a test's own request, a tool's).
+/// Whether a core asking with these headers is older than OLDEST_CORE (`oldest`, a test's): one that says a release's
+/// build under it. One that says no build is held to no floor: the app on the web never told its core a build (its
+/// host says what the device is nowhere; `0.1.0` only since #5187, 2026-11-10), so a web page of any release before
+/// that, and a tab not loaded again since, asks exactly as a core from before builds were said does (#3612,
+/// 2026-11-03), a language and no build. Told to update as those were (#5187), every such page had each of its
+/// requests refused: its stations up and none reached, its chats as they were when it was last open, and nothing it
+/// could update (2026-11-10, the stable web on these stations). A core from before #3612 is answered as any, without
+/// the sidebar rows and thread summaries a station made for it until then. Not to be turned back before the web says
+/// its release's build and that has been out 7 days.
 export function coreTooOld(headers: Record<string, unknown>, oldest = OLDEST_CORE): boolean {
   if (oldest <= 0) return false;
-  const said = (name: string) => Object.entries(headers).find(([k]) => k.toLowerCase() === name)?.[1];
-  const build = buildOf(typeof said(BUILD_HEADER) === "string" ? (said(BUILD_HEADER) as string) : undefined);
-  if (build === null) return said("stillfail-lang") !== undefined;
-  return build >= COUNTED_FROM && build < oldest;
+  const said = Object.entries(headers).find(([k]) => k.toLowerCase() === BUILD_HEADER)?.[1];
+  const build = buildOf(typeof said === "string" ? said : undefined);
+  return build !== null && build >= COUNTED_FROM && build < oldest;
 }
 
 /// This station's build, as answers say it.

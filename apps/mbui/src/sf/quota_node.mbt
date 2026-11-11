@@ -5,7 +5,8 @@
 /// A fill chip (fill_chip's, as a node) in `parent`: on the neutral ground, filled from the left as far as `fill` (0–100)
 /// says now, grey while `level` is ok, faintly the level's colour once it is not; `mark` and `words` in the text's
 /// colour; `small` a lower one. `said` (what is left and when it fills again) over it while it is pointed at, in `tips`.
-/// In a page's bones, one piece.
+/// In a page's bones, one piece. Never squeezed, but `squeezes`: given way to its row where that has not the room for it
+/// left, its figure cut short with an ellipsis (meter_chips_brief_node's, the old line's `keep`).
 #callsite(autofill(loc))
 pub fn fill_chip_node(
   parent : @view.View,
@@ -16,6 +17,7 @@ pub fn fill_chip_node(
   small? : Bool = false,
   said? : () -> String,
   tips? : TipLayer,
+  squeezes? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
   let part = fn() {
@@ -29,8 +31,14 @@ pub fn fill_chip_node(
     }
   }
   let chip = parent.box(made_for=loc, fn(b) {
-    style_node(b, fn() { if small { chip_box_small } else { chip_box } })
-    b.bone_whole(Is(true)).shrink(Is(0.0)) |> ignore
+    // (as high as its words' line at the system's size of words where that is higher than the chip: at 1.3 a small
+    // chip's 16 held words of 20, over the line above and below it, a station's row in 选择运行的 station, main
+    // df98aad1 42956992852, 2026-11-11)
+    style_node(b, fn() { chip_box_at(b.words_scale(), small) })
+    b.bone_whole(Is(true)).shrink(Is(if squeezes { 1.0 } else { 0.0 })) |> ignore
+    if squeezes {
+      b.min_width(Is(Some(0.0))) |> ignore
+    }
     // (its fill a plain rectangle cut along the chip's corners, its end square where it stops)
     b.box(fn(f) {
       style_node(f, fn() { chip_fill_row })
@@ -71,7 +79,12 @@ pub fn fill_chip_node(
         }
       })
       w.show(fn() { mark() != "" }, fn(m) { words_node(m, mark, fn() { chip_text }) |> ignore })
-      words_node(w, words, fn() { chip_text }) |> ignore
+      let f = words_node(w, words, fn() { chip_text })
+      // (squeezed where it may be: its figure cut short with an ellipsis, as the old line's chips kept to the last are)
+      if squeezes {
+        w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        f.shrink(Is(1.0)).min_width(Is(Some(0.0))).cuts(Is(true)).allow_ellipsis(Is(true)) |> ignore
+      }
     })
     |> ignore
   })
@@ -279,4 +292,52 @@ fn dial_node(
   )
   |> ignore
   d.show(fn() { detail().unwrap_or("") != "" }, fn(s) { words_node(s, fn() { detail().unwrap_or("") }, fn() { dl_detail }) |> ignore })
+}
+
+///|
+/// A machine's CPU, memory and disk (meter_line's, as nodes) in `parent`, as `meters` says them now: each a chip, what
+/// is left in it, filled as far as is used, its mark before it; 8 apart in a line; what it is (its name, how much of
+/// how much, a note) over it while it is pointed at, in `tips`.
+#callsite(autofill(loc))
+pub fn meter_chips_node(parent : @view.View, meters : () -> Array[Json], tips? : TipLayer, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(r) {
+    style_node(r, fn() { meter_line_way }, in_row=true)
+    r.shrink(Is(0.0)) |> ignore
+    r.each(fn() { Array::makei(meters().length(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
+      let k = i.untracked()
+      let m = fn() { meters().get(k) }
+      fill_chip_node(
+        c,
+        fn() { 100 - chip_left(m()) },
+        fn() { chip_str(m(), "level") },
+        fn() { chip_str(m(), "short") },
+        fn() { chip_str(m(), "remaining") },
+        said=fn() {
+          let note = chip_str(m(), "note")
+          match chip_str(m(), "label") {
+            "" => ""
+            label => label + " " + chip_str(m(), "value") + (if note != "" { " · " + note } else { "" })
+          }
+        },
+        tips?,
+      )
+      |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+/// A fill chip's box (chip_box's, chip_box_small's) at the system's size of words `scale`: as high as chip_text's line
+/// drawn at that size where that is higher than the chip (list_looks_at's way for a row's lines).
+fn chip_box_at(scale : Double, small : Bool) -> @ui.Style {
+  let box = if small { chip_box_small } else { chip_box }
+  let h = if small { fill_chip_small_h } else { fill_chip_h }
+  let look = @ui.style_words(chip_text)
+  let line = if look.line < 0.0 { -look.line * @ui.sp_at(scale, look.size) } else { @ui.sp_at(scale, look.line) }
+  if line > h {
+    box.then(@ui.style(h=Fixed(line)))
+  } else {
+    box
+  }
 }

@@ -55,13 +55,17 @@ import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
 import { install as installShareIn } from "./share-in.ts";
 import { Changelog } from "./changelog.ts";
+import { FeedbackReplies } from "./feedback-replies.ts";
 import { FontFiles } from "./font-files.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
+import { Rigs } from "./rigs.ts";
+import { Devices } from "./devices.ts";
+import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { bindPerson, keepToPerson, lockSeen, personalStations, refusedAgain, tellStations } from "./views/lock.ts";
+import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -75,7 +79,7 @@ import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
 import * as fill from "./fill.ts";
-import { get, isObject } from "./util.ts";
+import { get, isObject, sha256 } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
@@ -137,6 +141,10 @@ export class Inner {
   changelog!: Changelog;
   forms!: Forms;
   adb!: Adb;
+  /// The workspaces' rigs (rigs.ts).
+  rigs!: Rigs;
+  /// The workspaces' devices (devices.ts).
+  devices!: Devices;
   viewCalls!: ViewCalls;
   /// This device's downloads of chats' files (views/downloads.ts).
   downloads!: downloads.Downloads;
@@ -270,7 +278,7 @@ export class Core {
       inner.choose = installChoose(inner);
       installShareIn(inner);
       inner.forms = installForms(inner);
-      const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to));
+      const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to), (address) => inner.views?.stationNow(address) ?? address);
       asks.follow(inner.accounts);
       // A release may be out (still.fail cloud said one is, or its events socket opened again: what it said while closed
       // is not said again): the newest of each feed read again when next asked, and the app told (the `releases`
@@ -299,12 +307,16 @@ export class Core {
           cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
+          signKey: () => signerOf(inner),
+          ...ownLockEnv(inner),
           changed: () => {
             inner.adb.touched();
+            inner.rigs?.touched();
             for (const [ws] of inner.workspaces.owned()) {
               lockSeen(inner).touch(`lock ${ws}`);
               inner.runner.fork(bindPerson(inner, ws));
               inner.runner.fork(keepToPerson(inner, ws));
+              inner.runner.fork(ownLockFor(inner, ws));
               refusedAgain(inner, ws);
             }
           },
@@ -321,11 +333,52 @@ export class Core {
         },
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
+      // The workspaces' rigs (a station that only runs tasks), as their stations say them; what their person signs for them.
+      inner.rigs = new Rigs({
+        host: inner.host,
+        store: inner.store,
+        personal: () => inner.adb.personal(),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        view: (workspace) => inner.data.shared({ topic: "workspace", workspace }),
+        call: (station, method, path, body) => inner.stations.requests.call(station, method, path, body, { quiet: true }),
+        cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
+        first: (asks, at) => answersOf(inner, asks, tookOrRefused, at),
+        lock: {
+          locked: (workspace) => signsAs(inner, workspace).locked,
+          enrolled: (sub, workspace, made) => enrolled(inner, sub, workspace, made),
+          signsAs: (workspace) => signsAs(inner, workspace).as,
+          signAdd: (_workspace, bytes) =>
+            Effect.flatMap(Signer.load(inner.host), (signer) =>
+              signer === null ? Effect.fail(new CoreError("lock_no_signer", t("core-misc.rig.notSigner"))) : Effect.succeed({ key: signer.id, sig: signer.signBytes(bytes) })),
+        },
+        sha256,
+      });
+      handlers.rig = (_i, call) => inner.rigs.run((call as Extract<Call, { kind: "rig" }>).call);
+      // (read whole as a station is first read; after that its `rigs` event says each change, a stream that was away
+      // told the last of them as it goes on)
+      inner.stations.also.push({ read: (address) => inner.rigs.read(address), event: (address, name, data) => inner.rigs.heard(address, name, data) });
+      // The workspaces' devices: the whole stations' own, the rigs' (as the rigs say them), the phones lent to stations.
+      inner.devices = new Devices({
+        host: inner.host,
+        store: inner.store,
+        rigs: () => inner.rigs,
+        personal: () => inner.adb.personal(),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        emailOf: (workspace) => {
+          const sub = inner.workspaces.owner(workspace);
+          return sub === null ? null : (inner.accounts.list().find((a) => a.sub === sub)?.email ?? null);
+        },
+        view: (workspace) => inner.data.shared({ topic: "workspace", workspace }),
+        call: (station, method, path, body) => inner.stations.requests.call(station, method, path, body, { quiet: true }),
+      });
+      handlers.device = (_i, call) => inner.devices.run((call as Extract<Call, { kind: "device" }>).call);
+      inner.stations.also.push({ read: (address) => inner.devices.read(address), event: (address, name, data) => inner.devices.heard(address, name, data) });
       // This person's chats' grants of their phone, as each station says them.
       inner.stations.also.push({ read: (address) => inner.adb.readGrants(address), event: (address, name, data) => (name === "adb-grant" ? inner.adb.heard(address, data) : undefined), resume: true });
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
+      inner.router.owners.push(new FeedbackReplies(inner.host, inner.data, (workspace) => inner.workspaces.owner(workspace)));
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
       handlers.historyTool = (_i, call) => {
         const c = call as Extract<Call, { kind: "historyTool" }>;
@@ -476,9 +529,9 @@ export class Core {
     const inner = this.inner;
     switch (message.kind) {
       case "subscribe":
-        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from);
+        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from, message.have);
       case "unsubscribe":
-        return inner.store.unsubscribe(client, message.id);
+        return inner.store.unsubscribe(client, message.id, message.keep === true);
       case "cancel": {
         const key = `${client}/${message.id}`;
         const fiber = inner.calls.get(key);

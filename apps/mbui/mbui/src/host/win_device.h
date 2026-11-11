@@ -7,39 +7,7 @@ void mb_host_clipboard_set(moonbit_string_t s);
 
 // ---- a key catcher (@hostapi.key_catch) ----
 
-static int key_catching;
-
-void mb_host_key_catch(int32_t on) { key_catching = on != 0; }
-
-// A key down with the focus a key catcher's: the named keys (as the framework's codes, src/ui/desktop.mbt), a
-// character with Ctrl, Alt or the Windows key held as its key (1000 + it, lower case; Ctrl with Alt is AltGr, a
-// character typed). 0: not the catcher's as a key (a character comes as WM_CHAR, Space too).
-static int catch_vk(WPARAM vk) {
-  int mods = mods_now(), code = 0;
-  switch (vk) {
-    case VK_BACK: code = 1; break;
-    case VK_DELETE: code = 2; break;
-    case VK_LEFT: code = 3; break;
-    case VK_RIGHT: code = 4; break;
-    case VK_UP: code = 5; break;
-    case VK_DOWN: code = 6; break;
-    case VK_RETURN: code = 7; break;
-    case VK_HOME: code = 8; break;
-    case VK_END: code = 9; break;
-    case VK_PRIOR: code = 15; break;
-    case VK_NEXT: code = 16; break;
-    case VK_ESCAPE: code = 17; break;
-    case VK_TAB: code = 18; break;
-    default: break;
-  }
-  if (!code && (mods & (2 | 4 | 8)) && (mods & (2 | 4)) != (2 | 4)) {
-    UINT ch = MapVirtualKeyW((UINT)vk, MAPVK_VK_TO_CHAR) & 0x7FFF;
-    if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A';
-    if (ch >= 32) code = 1000 + (int)ch;
-  }
-  if (code) mb_cb.key(code, mods);
-  return code;
-}
+#include "win_keys.h"
 
 // ---- the soft keyboard: none told here ----
 
@@ -55,7 +23,8 @@ int32_t mb_host_copy_shown(void) { return 0; }
 // a thread of their own, told as the next frame after begins (device_tell).
 enum { CLIP_NONE = 0, CLIP_PNG = 1, CLIP_TOO_LARGE = 2, CLIP_UNREADABLE = 3 };
 #define CLIP_READS 8
-#define CLIP_PNG_MOST (8u * 1024 * 1024)
+// A pasted picture is an attachment, as a copied picture file is. A screen's transport checks its own bound.
+#define CLIP_PNG_MOST FILE_MOST
 typedef struct {
   int32_t id;
   volatile LONG done;    // all of it read

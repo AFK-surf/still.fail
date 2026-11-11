@@ -186,7 +186,7 @@ fn ScreenRig::sess(self : ScreenRig) -> ScreenSess {
   for _, sess in screens_open {
     return sess
   }
-  abort("no screen open")
+  @halt.saying("no screen open")
 }
 
 ///|
@@ -195,7 +195,7 @@ fn ScreenRig::ui(self : ScreenRig) -> ScreenUi {
   for _, ui in screen_uis {
     return ui
   }
-  abort("no screen open")
+  @halt.saying("no screen open")
 }
 
 ///|
@@ -334,7 +334,7 @@ fn ScreenRig::labelled(self : ScreenRig, label : String) -> (Double, Double)? {
 fn ScreenRig::tap_label(self : ScreenRig, label : String) -> Unit {
   match self.labelled(label) {
     Some((x, y)) => self.t.tap(x, y)
-    None => abort("nothing labelled " + label)
+    None => @halt.saying("nothing labelled " + label)
   }
 }
 
@@ -1229,6 +1229,13 @@ test "the device's picture pasted as PNG; past 8 MB said, not sent; a text-only 
   assert_eq(sent.length(), 1)
   assert_eq(field(Some(sent[0].1), "png"), Some(Json::boolean(true)))
   assert_eq(sent[0].2, Some(png))
+  // The clipboard reader accepts attachments now; this screen's transport still refuses pictures past its bound.
+  r.t.clipboard_gives_png(Bytes::new(8 * 1024 * 1024 + 1))
+  r.tap_label("粘贴手机剪贴板")
+  r.t.draw()
+  assert_true(r.t.find("图片过大，上限 8 MB") is Some(_))
+  assert_eq(r.told("screen.clipboard").length(), 1)
+  r.t.run_for(@sf.toast_ms)
   r.t.clipboard_gives_clip({ text: "", picture: TooLarge, files: [] })
   r.tap_label("粘贴手机剪贴板")
   r.t.draw()
@@ -1276,7 +1283,7 @@ test "files go onto the machine one after another, the first beside the one of i
     }
     let path = text(Some(p), "path")
     if text(Some(p), "root") != "/Users/alice/Downloads" {
-      abort("the upload's root: " + text(Some(p), "root"))
+      @halt.saying("the upload's root: " + text(Some(p), "root"))
     }
     if path == "季度报告.pdf" {
       return Some(Err({ "code": "exists", "message": "there is already a file by that name", "status": 409.0 }))

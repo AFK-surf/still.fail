@@ -15,7 +15,7 @@ import { signalGroup } from "../src/ops/group.ts";
 import { LOOK_MS } from "../src/jobs/admit.ts";
 import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { blobId, listLocal } from "../src/jobs/dirsync.ts";
-import { MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, hash, readJson, writeJson } from "../src/jobs/remote.ts";
+import { MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, hash, readJson, writeJson, written } from "../src/jobs/remote.ts";
 import { DISK_LOW_BYTES } from "../src/ops/disk.ts";
 import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "../src/mesh/peer.ts";
 import { type Json, Store } from "../src/store/store.ts";
@@ -579,7 +579,8 @@ describe("dirsync", { concurrency: true }, () => {
     await until("it is committed", () => p.state.asked.includes("sync.commit"));
     const last = await p.use("station_task", { key: "k", action: "start" });
     assert.equal(last.sync.sent.files, 1);
-    assert.equal(last.job.state, "running");
+    // Started: running, or (`wc` is quick, and the start's record is written before it answers) already ended.
+    assert.ok(["running", "exited"].includes(last.job.state), last.job.state);
     assert.equal(p.state.asked.filter((m) => m === "sync.begin").length, 1);
     await until("it ends", () => p.b.store.getJob(last.job.id)!.state !== "running");
     // A start after that is one asked again: the same job (its sync only finds the task started).
@@ -664,7 +665,7 @@ describe("dirsync", { concurrency: true }, () => {
     mkdirSync(own);
     writeFileSync(join(own, "keep"), "x\n");
     const later = Date.now() + MIRROR_IDLE_MS + 60_000;
-    usedAt(p, { fresh: later - 1000 });
+    await usedAt(p, { fresh: later - 1000 });
     await p.b.remote.sweep(later);
     assert.ok(!existsSync(p.mirror("old")), "the unused mirror went");
     assert.ok(existsSync(join(p.mirror("fresh"), "c.txt")), "the one used within the day stays");
@@ -695,7 +696,7 @@ describe("dirsync", { concurrency: true }, () => {
     await p.b.remote.relieve(now);
     assert.deepEqual(left(), ["older", "recent", "busy"], "the longest unused went, and only it");
     // Still low: the rest go, but the one used within the hour and the one a task runs in.
-    usedAt(p, { recent: now - 60_000 });
+    await usedAt(p, { recent: now - 60_000 });
     p.disk.free = () => DISK_LOW_BYTES - 1;
     await p.b.remote.relieve(now);
     assert.deepEqual(left(), ["recent", "busy"]);

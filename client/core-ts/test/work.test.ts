@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { work, workSince } from "../src/work.ts";
 import { call, subscribe } from "./helpers.ts";
-import { base, started, threadView } from "./station-fixture.ts";
+import { base, entry, session, started, threadView } from "./station-fixture.ts";
 
 const ST = "ws/st";
 /// A chat's entry `n`: the agent's a few lines of Markdown, the person's one.
@@ -65,17 +65,21 @@ test("a_new_message_costs_the_same_with_150_messages_shown_as_with_50", async ()
 });
 
 /// Home's list (its first 50 chats) on a station of `n` chats while one of them moves to the top 10 times, as its station
-/// tells each new message in it.
+/// tells each new message in it: the sidebar made here of the summaries held and the station's marks (rows-made.ts).
 async function homeChanging(n: number) {
-  const row = (i: number, at: number) => ({ id: String(i), thread: i, session: `k${i}`, title: `第 ${i} 个`, agents: [], lastActiveAt: at });
-  const answers: Record<string, unknown> = { ...base(), "GET /chats": Array.from({ length: n }, (_, i) => row(i, 1_000_000 - i * 1000)) };
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const sessions = Array.from({ length: n }, (_, i) => ({ ...session(`k${i}`), lastActiveAt: 1_000_000 - i * 1000 }));
+  const threads = Array.from({ length: n }, (_, i) => ({ ...threadView(i, 1), sessions: [{ thread: i, session: `k${i}`, connect: "ember", joinedAt: 1 }], lastMessage: { ...threadView(i, 1).lastMessage, createdAt: 1_000_000 - i * 1000 } }));
+  const answers: Record<string, unknown> = { ...base(), "GET /sessions": sessions, "GET /threads": threads, "GET /chats?marks=1": marks, "GET /chats": [] };
   const { host, core, push } = await started(answers);
+  push("made", { rows: true, marks: true });
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "chats", scope: "ws", mine: false, limit: 50 });
   await host.time.pass(1_000, 50);
   const from = { ...work };
   for (let k = 1; k <= 10; k++) {
-    push("chat", row(100 + k * 7, 2_000_000 + k * 1000));
+    const id = 100 + k * 7;
+    push("thread", { id, entries: [{ ...entry(2, "新的"), thread: id, authorKind: "agent", author: `k${id}`, at: 2_000_000 + k * 1000 }] });
     await host.time.pass(200, 50);
   }
   const counted = workSince(from);

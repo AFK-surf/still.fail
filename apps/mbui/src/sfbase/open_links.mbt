@@ -336,7 +336,8 @@ pub fn open_item(
       Some(seq) => {
         // (what the end-to-end flows of a notification tapped look for: e2e/flows/40-notice-wait.check)
         @hostapi.log("notice opens \{station}|\{session} at \{seq.to_int()}")
-        go_to(r, seq)
+        // (one that opens the chat: no place kept to go back to)
+        go_to(r, seq, keep_place=false)
       }
       None => ()
     }

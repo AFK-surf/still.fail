@@ -7,7 +7,9 @@
 fn painted_at(t : @ui.Tester, color : Int64) -> (Double, Double, Double, Double) raise {
   let found = t.drawn_rects().filter(fn(r) { r.4 >> 8 == color >> 8 })
   assert_eq(found.length(), 1, msg="one box of \{color}")
-  (found[0].0, found[0].1, found[0].2, found[0].3)
+  // (to a thousandth of a point: what one layout sums another way, never seen)
+  let near = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
+  (near(found[0].0), near(found[0].1), near(found[0].2), near(found[0].3))
 }
 
 ///|
@@ -166,4 +168,63 @@ test "a panel a share of the window caps whose body is nodes, as tall as what it
   assert_eq(sheet[1], sheet[0])
   let dialog = hugging(menu_tester(1280.0, 800.0, 0))
   assert_eq(dialog[1], dialog[0])
+}
+
+///|
+/// The ways a panel is shown that a field it opens to be typed in has the keys in (@sf.panel_opens_in_node): `at`,
+/// the window (width, height, platform) and where it is opened from: a sheet on a phone by touch and with keyboard and
+/// mouse, beside what opened it and in the middle of a wide window.
+let field_panel_ways : Array[(String, Double, Double, Int, @sf.Anchor)] = [
+  ("小屏 touch sheet", 390.0, 844.0, 2, Unanchored),
+  ("小屏 keyboard sheet", 390.0, 844.0, 0, Unanchored),
+  ("大屏 beside", 1280.0, 800.0, 0, At(600.0, 300.0, 0.0, 0.0)),
+  ("大屏 middle", 1280.0, 800.0, 0, Unanchored),
+]
+
+///|
+test "a panel whose body says its field is typed in as it opens: that field has the keys as it opens on a sheet, beside what opened it and in the window's middle (the input method up for it by touch); back where they were as it goes" {
+  for way in field_panel_ways {
+    let (at, w, h, platform, from) = way
+    let t = menu_tester(w, h, platform)
+    let was = t.focus_said()
+    let name = @ui.Field::new()
+    @sf.panel_nodes("面板", from~, fn(v, _) {
+      v.box(fn(b) { @sf.panel_opens_in_node(@sf.input_node(b, name, placeholder="名字")) }) |> ignore
+    })
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.focus_said().has_prefix("TextField \"名字\""), msg="\{at}: \{t.focus_said()}")
+    if platform == 2 {
+      assert_true(t.ime().0, msg="\{at}: the input method")
+    }
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg="\{at}: gone")
+    assert_eq(t.focus_said(), was, msg="\{at}: given back")
+  }
+}
+
+///|
+test "a panel whose body says its search is at hand: that search has the keys as it opens beside what opened it and in the window's middle, given back as it goes; on a sheet (by touch or with keyboard and mouse) not, no input method up" {
+  for way in field_panel_ways {
+    @sf.presenters_reset()
+    let (at, w, h, platform, from) = way
+    let t = menu_tester(w, h, platform)
+    let was = t.focus_said()
+    let query = @ui.Field::new()
+    @sf.panel_nodes("面板", from~, fn(v, _) {
+      v.box(fn(b) { @sf.panel_search_at_hand_node(@sf.input_node(b, query, placeholder="搜索")) }) |> ignore
+    })
+    t.run_for(@ui.move_most_ms)
+    assert_true(@sf.presenter_visible(), msg="\{at}: up")
+    if w < 600.0 {
+      assert_false(t.focus_said().has_prefix("TextField \"搜索\""), msg="\{at}: \{t.focus_said()}")
+      assert_false(t.ime().0, msg="\{at}: the input method")
+    } else {
+      assert_true(t.focus_said().has_prefix("TextField \"搜索\""), msg="\{at}: \{t.focus_said()}")
+    }
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg="\{at}: gone")
+    assert_eq(t.focus_said(), was, msg="\{at}: given back")
+  }
 }

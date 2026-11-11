@@ -39,6 +39,26 @@ test "密钥, at each width and with either hand: the request's card, encrypted,
 }
 
 ///|
+test "密钥, at each width and with either hand, a vault of the viewer's waiting to be keyed anew: said on a card under its name, on which station, read meanwhile and not changed; 全部密钥 there still" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(Vault, w, platform~, mode="settings-vault-waits")
+    let at = "\{w} platform \{platform}"
+    let said = "有设备被移除。你的设备连上 station「Willow」后会自动换好；在这之前照常能查看和使用，不能修改"
+    scrolled_to(t, w, said)
+    t.run_for(@ui.move_most_ms)
+    for words in ["等待换钥匙", said] {
+      assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
+    }
+    scrolled_to(t, w, "全部密钥")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("全部密钥") is Some(_), msg=at)
+    let faults = t.audit()
+    assert_true(faults.is_empty(), msg=at + ": " + faults.join(" | "))
+  }
+}
+
+///|
 test "全部密钥, at each width and with either hand: 添加 asks what; every secret a row of one list, its kind and what is worth knowing of it under its name; the profiles' accounts folded at its foot; found by any of their words" {
   for case in page_cases {
     let (w, platform) = case
@@ -140,6 +160,6 @@ fn page_add(t : @ui.Tester) -> @ui.SemNode? {
 /// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
 /// a dialog (with a pointer) past its coming.
 fn presented_in(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
 }

@@ -2,6 +2,9 @@
 // screen: squeezed, or words over words at rest. The bar it may only fall from; a screen not listed has none. Counted
 // as the sweep first ran (2026-11-10): 87 screens (each language counted) with 229, and the share card's looks
 // (share-card-senren-*) with 770, most of those words laid over words by the look's design, as at the default size.
+// The window tree's nodes held to the squeeze as an old view's are (squeeze_tree.mbt, 2026-11-11) added what each line
+// beside it says (`was`: its bar before), each to be mended and its bar brought down: 定高不随字号 a box of a fixed height
+// its words' line outgrows at this size; 真问题 squeezed as it shows.
 
 ///|
 let words_large_known : Map[String, Int] = {
@@ -12,14 +15,11 @@ let words_large_known : Map[String, Int] = {
     ("phone-zh search-jobs", 3),
     ("phone-zh search-results", 7),
     ("phone-zh chat-agent", 3),
-    ("phone-zh chat-peek", 1),
     ("phone-zh chat-preview-csv", 6),
     ("phone-zh chat-screens", 4),
-    ("phone-zh history-details", 3),
     ("phone-zh place-stations", 1),
     ("phone-zh share-card", 3),
     ("phone-zh share-card-dark", 3),
-    ("phone-zh newchat-station", 2),
     ("phone-zh screen-agent-driving", 1),
     ("phone-zh screen-agent-paused", 1),
     ("phone-zh screen-clipboard-driving", 3),
@@ -33,6 +33,7 @@ let words_large_known : Map[String, Int] = {
     ("phone-zh screen-read-only", 1),
     ("phone-zh screen-trackpad", 1),
     ("phone-zh screen-trackpad-command", 1),
+    ("phone-zh settings-workspace", 1),  // was 0, +1 (g) page_node.mbt:935 / workspace_page.mbt:397 真问题，待修
     ("phone-zh settings-stations", 1),
     ("phone-zh settings-stations-add", 1),
     ("phone-zh settings-stations-existing", 1),
@@ -42,6 +43,12 @@ let words_large_known : Map[String, Int] = {
     ("phone-zh settings-kept", 1),
     ("phone-zh settings-kept-many", 1),
     ("phone-zh settings-vault-words", 14),
+    ("phone-zh settings-add-people", 1),  // was 0, +1 (g) page_node.mbt:935 / workspace_page.mbt:397 真问题，待修
+    ("phone-zh settings-workspace-mark", 1),  // was 0, +1 (g) page_node.mbt:935 / workspace_page.mbt:397 真问题，待修
+    ("phone-zh settings-stations-tasks", 1),
+    ("phone-zh place-stations-tasks", 1),
+    ("phone-zh settings-stations-devices", 1),
+    ("phone-zh place-stations-devices", 1),
     ("phone-zh settings-run", 1),
     ("phone-zh share-card-poster", 3),
     ("phone-zh share-card-receipt", 3),
@@ -74,18 +81,18 @@ let words_large_known : Map[String, Int] = {
     ("phone-en chat-info", 2),
     ("phone-en chat-letters-info", 4),
     ("phone-en chat-info-pulls", 2),
-    ("phone-en chat-peek", 1),
     ("phone-en chat-preview-csv", 7),
     ("phone-en chat-preview-html", 1),
     ("phone-en chat-publish", 1),
     ("phone-en chat-screens", 4),
+    // (its switch's title 「Send as file in this chat」 on two lines beside the switch, 40,642 224×50: the old panel's, told
+    // of its nodes again as the tree's squeeze came to say what shares their row; it was 1 before its panel became nodes)
     ("phone-en chat-station-sheet", 1),
-    ("phone-en history-details", 4),
+    ("phone-en history-details", 1),
     ("phone-en drive-upload", 1),
     ("phone-en place-stations", 1),
     ("phone-en share-card", 3),
     ("phone-en share-card-dark", 3),
-    ("phone-en newchat-station", 2),
     ("phone-en screen-agent-driving", 1),
     ("phone-en screen-agent-paused", 1),
     ("phone-en screen-clipboard-driving", 3),
@@ -105,12 +112,20 @@ let words_large_known : Map[String, Int] = {
     ("phone-en settings-stations-command", 1),
     ("phone-en settings-adb-connected", 1),
     ("phone-en settings-adb-failed", 1),
+    ("phone-en settings-profile-signin", 1),  // was 0, +1 (e) accounts.mbt:601 真问题，待修
     ("phone-en settings-new-connect-app", 1),
+    ("phone-en settings-memory-doc", 1),  // was 0, +1 (g) page_node.mbt:1267 真问题，待修
     ("phone-en settings-kept", 1),
     ("phone-en settings-kept-many", 1),
     ("phone-en settings-vault-words", 14),
     ("phone-en settings-vault-add", 1),
+    ("phone-en settings-stations-tasks", 1),
+    ("phone-en place-stations-tasks", 1),
+    ("phone-en settings-stations-devices", 1),
+    ("phone-en place-stations-devices", 1),
     ("phone-en settings-run", 1),
+    ("phone-en settings-about", 1),  // was 0, +1 (g) page_node.mbt:1267 真问题，待修
+    ("phone-en settings-notify-denied", 1),  // was 0, +1 (g) notify_node.mbt:671 真问题，待修
     ("phone-en share-card-poster", 3),
     ("phone-en share-card-receipt", 3),
     ("phone-en share-card-terminal", 6),

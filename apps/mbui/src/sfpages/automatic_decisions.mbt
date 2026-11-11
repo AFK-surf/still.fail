@@ -161,7 +161,8 @@ pub fn completion_node(
               None => None
             }
           }
-          let view = fn() { field(field(s(), "overview"), "automaticDecisions") }
+          // (its rule, that part of its overview alone, asked by its own section)
+          let view = fn() { @settings.station_part(core, here(), station, "automaticDecisions") }
           @sf.section_node(b, fn() { text(s(), "name") }, fn(sec) {
             sec.pick(
               fn() {
@@ -169,7 +170,7 @@ pub fn completion_node(
                   ""
                 } else if !flag(s(), "online") {
                   "web-pages.automaticDecisions.offlineNote"
-                } else if !(field(s(), "overview") is Some(Object(_))) {
+                } else if !(field(s(), "overview") is Some(Object(_))) || view() is None {
                   "common.connecting"
                 } else {
                   "web-pages.automaticDecisions.upgrade"
@@ -378,7 +379,7 @@ fn form_rows_node(
 /// Where what someone set going shows how it is (doing_mark's) as nodes: a spinner while it is under way, a small red
 /// mark while it failed a moment ago, why said under the pointer (in `tips`, where given). `size`: its spinner's and its mark's
 /// (doing_mark's: 12 beside a row's words, inline; 14 otherwise).
-fn doing_mark_node(
+pub fn doing_mark_node(
   v : @view.View,
   running : () -> Bool,
   failed : () -> String?,

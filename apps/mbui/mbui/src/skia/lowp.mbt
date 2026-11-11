@@ -344,7 +344,7 @@ fn LowP::stage(self : LowP, s : Stage) -> Bool {
         let y = p.fy[i]
         p.fx[i] = (x * x + y * y).sqrt()
       }
-    _ => abort("lowp: no such stage")
+    _ => @halt.saying("lowp: no such stage")
   }
   true
 }

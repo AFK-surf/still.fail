@@ -608,12 +608,13 @@ fn app_version() -> Int {
 }
 
 ///|
-fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
+fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool, delta : String) -> Unit {
   ignore(url)
   ignore(sha256)
   ignore(size)
   ignore(name)
   ignore(now)
+  ignore(delta)
 }
 
 ///|

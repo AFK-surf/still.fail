@@ -96,6 +96,11 @@ let share_window : @ui.Style = @ui.css("w=Full h=Full px=S5 pt=S6 bg=Bg")
 let share_closing : Ref[Bool] = Ref(false)
 
 ///|
+/// Its sheet closed (by hand, or a chat picked): what it shows kept as it was while it sinks away, let go of once it has
+/// gone (share_in_frame).
+let share_sinking : Ref[Bool] = Ref(false)
+
+///|
 /// 打开 still.fail, as a link's words (semibold, the link's ink).
 // kept across runs: a value (no field of it changes)
 let open_app_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Link)
@@ -250,17 +255,17 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       _ => ()
     }
   } else if share_in.raised.get() && sheet_host.kind != ShareSheet && !share_wide.get() && !share_inline() {
-    // closed (the scrim, back, dragged down): let go; over another app, the app goes once the sheet has sunk away
-    share_in.shared.set(None)
-    share_in.files.set([])
+    // closed (the scrim, back, dragged down): what it shows kept as it was while it sinks away, let go of once it has
+    // (below); over another app, the app goes then
     share_in.raised.set(false)
+    share_sinking.val = true
     if share_over.get() {
       share_closing.val = true
     }
   }
   // put up once shared: in a sheet on a Small window or over another app, the wide panel otherwise; filling the window
   // the browser extension opened
-  if share_in.shared.get() is Some(_) && !share_in.raised.get() {
+  if share_in.shared.get() is Some(_) && !share_in.raised.get() && !share_sinking.val {
     if share_inline() {
       ()
     } else if !share_over.get() && !sheet_small(c) {
@@ -269,6 +274,11 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       raise_sheet(ShareSheet)
     }
     share_in.raised.set(true)
+  }
+  if share_sinking.val && !@sf.presented_drawn() {
+    share_sinking.val = false
+    share_in.shared.set(None)
+    share_in.files.set([])
   }
   if share_closing.val && share_over.get() && !@sf.presented_drawn() {
     share_closing.val = false
@@ -817,9 +827,9 @@ fn share_opened(
     shared_into[key] = list
     @sfbase.draft_given(key)
   }
-  share_in.shared.set(None)
-  share_in.files.set([])
+  // (what the sheet shows kept as it was while it sinks away, let go of once it has: share_in_frame)
   share_in.raised.set(false)
+  share_sinking.val = true
   share_wide.set(false)
   lower_sheet()
   @hostapi.log("share in: into \{key}, \{files.length()} files")

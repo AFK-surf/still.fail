@@ -25,6 +25,13 @@ pub fn TopicState::snapshot(self : TopicState) -> Topic {
 }
 
 ///|
+/// Whether the value is what the core last said before it was let go of (`lasting`, shown again at once while its
+/// answer comes), not its answer now: its version is below every core's (LastSaid).
+pub fn TopicState::kept(self : TopicState) -> Bool {
+  self.version < -1
+}
+
+///|
 /// A legacy topic read leaves by name; an owned read releases only the supplied, independently owned reader.
 pub(all) enum TopicLeave {
   Legacy
@@ -136,6 +143,12 @@ pub(all) struct Source {
   /// whether what the places open on is kept as last said (`lasting`) and asked ahead of them (places_ahead): not of
   /// a run seen again that was recorded before the app did, whose core is asked only what the run asked
   reads_ahead : () -> Bool
+  /// whether the stations' places and pages ask for the workspace's devices (`devices`): not of a run seen again that
+  /// was recorded before the app did
+  asks_devices : () -> Bool
+  /// whether an open chat's page asks for its outline (`chatOutline`: its rail of ticks, its outline's panel): not of a
+  /// run seen again that was recorded before the app did
+  asks_outline : () -> Bool
 }
 
 ///|
@@ -193,7 +206,7 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
     }
   }
   // (a view's own source reads through the one it is of, which keeps them: topic_scope none)
-  if src.topic_scope is None && lasting.contains(name) && !params.contains("q") && !params.contains("brief") && (src.reads_ahead)() {
+  if src.topic_scope is None && lasting.contains(name) && !params.contains("q") && (src.reads_ahead)() {
     let key = name + "\u{1}" + Json::object(params).stringify()
     match (topic.value, topic.error) {
       (Some(value), _) => last_put(src, key, value)
@@ -215,10 +228,34 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
 /// The lists a place of the bar or the rail opens on: what the core last said of each is kept (last_said) and shown at
 /// once when it is asked again, until its answer comes. A place left lets go of what it read, and come back to drew
 /// its bones until the core answered across its thread (the user, 2026-11-10). Lists read only: nothing typed for
-/// (`q`), nothing written in (a form, a draft), no chat, nor the stations as a chat names its own (`brief`: what
-/// changed while nothing read it is never shown as it was, core_signal_wbtest.mbt).
+/// (`q`), nothing written in (a form, a draft), no chat. The stations' rows are one ask for every list, a chat's name of
+/// its station too, which takes no kept value (station_marks: what changed while nothing read it is never shown as it
+/// was, core_signal_wbtest.mbt).
 // kept across runs: a value (nothing of it changes)
 let lasting : Array[String] = ["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive"]
+
+///|
+/// How many values of topic `name` asked with `params` (its JSON as the core is asked it, its name in it too) the
+/// core's client keeps as they are let go of, to ask them again with their version (@core.Client::keep: the core
+/// answers `same` where one has not changed, what changed from it where it has); 0, none. The lists the places open
+/// on (`lasting`, as many as last_said keeps), and a chat however it is asked (its session, a thread, `compact`):
+/// `chats_kept` of those, a decoded chat being the largest tree the app holds. Unlike the lists (last_said), a chat's
+/// value kept is never shown before the core's answer: a chat's page and a row's read ahead have it only as that comes.
+pub fn topic_kept(name : String, params : Json) -> Int {
+  if name == "chat" {
+    chats_kept
+  } else if lasting.contains(name) && !(params is Object(p) && p.contains("q")) {
+    last_most
+  } else {
+    0
+  }
+}
+
+///|
+/// How many chats' values are kept at a time (topic_kept), the oldest forgotten: a chat opened again, or read ahead
+/// again from its row, among the last few is answered with what changed in it, not the whole of it (a phone's ~180 KB,
+/// 17-21 ms to decode).
+let chats_kept : Int = 4
 
 ///|
 /// What a source last said of a lasting topic. `version` is below every core's (those count up from 0), another for
@@ -476,6 +513,8 @@ pub fn made_source(
     refresh: fn(_, _) {  },
     read_only: false,
     reads_ahead: fn() { true },
+    asks_devices: fn() { true },
+    asks_outline: fn() { true },
   }
 }
 

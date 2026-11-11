@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, usageTotalsComplete, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
 import { usageCompactionsReady } from "./usage-compactions.ts";
-import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage, noteCompactContexts, compactContexts, seedCompactContext } from "./usage-compact.ts";
+import { type ContextSnapshot, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage, noteCompactContexts, compactContexts, seedCompactContext } from "./usage-compact.ts";
 import { retiredUsage } from "./usage-retire.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
@@ -95,6 +95,8 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
   const recent: [UsageCall, UsageFor][] = [];
   if (file.session !== null) {
     let seeded = false;
+    // What the seed read of its context, for the note after the calls (the same transaction's).
+    let snapshot: ContextSnapshot | null = null;
     const insert = db.prepare(
       `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window${compact ? ", compact_counted" : ""})
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19${compact ? ", 1" : ""})
@@ -112,7 +114,7 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
       // call must neither read nor write the context, and seeding after a write could mistake the saved total for stale.
       if (compact && !seeded) {
         seeded = true;
-        if (usageTotalsComplete(db, file.session)) seedCompactContext(db, file.session);
+        if (usageTotalsComplete(db, file.session)) snapshot = seedCompactContext(db, file.session);
       }
       if (was !== undefined && grow !== null) grow.run(c.output, c.id);
       else insert.run(
@@ -122,7 +124,7 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
       if (was === undefined) { added++; if (compact && !c.subagent) recent.push([c, of]); }
       if (options?.changed !== undefined) options.changed.from = Math.min(options.changed.from, c.at);
     }
-    if (recent.length > 0) noteCompactContexts(db, file.session, runtime, recent);
+    if (recent.length > 0) noteCompactContexts(db, file.session, runtime, recent, snapshot);
   }
   db.prepare(
     `INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)

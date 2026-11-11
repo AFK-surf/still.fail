@@ -237,7 +237,6 @@
       "src/sfapp/decide.mbt": 6,
       "src/sfapp/drive.mbt": 11,
       "src/sfapp/drive_parts.mbt": 14,
-      "src/sfapp/history.mbt": 39,
       "src/sfapp/home.mbt": 12,
       "src/sfapp/pages.mbt": 9,
       "src/sfapp/service.mbt": 5,
@@ -247,8 +246,7 @@
       "src/sfapp/settings/profile_new.mbt": 13,
       "src/sfapp/settings/profiles.mbt": 42,
       "src/sfapp/settings/run_more.mbt": 87,
-      "src/sfapp/settings/station_add.mbt": 72,
-      "src/sfapp/settings/station_mark.mbt": 1,
+      "src/sfapp/settings/station_add.mbt": 29,
       "src/sfapp/settings/station_parts.mbt": 9,
       "src/sfapp/settings/stations.mbt": 32,
       "src/sfapp/share.mbt": 36,
@@ -258,7 +256,7 @@
       "src/sfbase/viewer_marks.mbt": 14,
       "src/sfkit/glass.mbt": 49,
       "src/sfkit/kit.mbt": 29,
-      "src/sfpages/service.mbt": 13,
+      "src/sfpages/service.mbt": 4,
       "src/stillfail/main.mbt": 3
     },
     "box-loose": {
@@ -276,7 +274,6 @@
       "src/sfapp/decide.mbt": 2,
       "src/sfapp/drive.mbt": 5,
       "src/sfapp/drive_parts.mbt": 5,
-      "src/sfapp/history.mbt": 20,
       "src/sfapp/home.mbt": 6,
       "src/sfapp/pages.mbt": 4,
       "src/sfapp/service.mbt": 2,
@@ -287,8 +284,7 @@
       "src/sfapp/settings/profile_new.mbt": 10,
       "src/sfapp/settings/profiles.mbt": 23,
       "src/sfapp/settings/run_more.mbt": 45,
-      "src/sfapp/settings/station_add.mbt": 32,
-      "src/sfapp/settings/station_mark.mbt": 2,
+      "src/sfapp/settings/station_add.mbt": 14,
       "src/sfapp/settings/station_parts.mbt": 5,
       "src/sfapp/settings/stations.mbt": 24,
       "src/sfapp/share.mbt": 34,
@@ -299,7 +295,7 @@
       "src/sfdesk/switcher.mbt": 1,
       "src/sfkit/glass.mbt": 17,
       "src/sfkit/kit.mbt": 20,
-      "src/sfpages/service.mbt": 14,
+      "src/sfpages/service.mbt": 3,
       "src/sfpages/service_marks.mbt": 1,
       "src/stillfail/main.mbt": 2
     },
@@ -401,7 +397,6 @@
       "src/sfpages/message.mbt": 1,
       "src/sfpages/message_files.mbt": 1,
       "src/sfpages/recent.mbt": 1,
-      "src/sfpages/relay.mbt": 1,
       "src/sfpages/resources.mbt": 2,
       "src/sfpages/screen_stage.mbt": 3,
       "src/sfpages/screen_view.mbt": 1,
@@ -466,7 +461,6 @@
       "src/sf/presenters.mbt": 1,
       "src/sf/reader.mbt": 3,
       "src/sf/side_rows.mbt": 1,
-      "src/sfapp/history.mbt": 1,
       "src/sfapp/settings/archive.mbt": 1,
       "src/sfapp/settings/parts.mbt": 2,
       "src/sfapp/share.mbt": 1,
@@ -488,10 +482,11 @@
     },
     "old-island": {
       "src/sf/menu_node.mbt": 1,
-      "src/sf/panel_centred_node.mbt": 6,
+      "src/sf/panel_centred_node.mbt": 5,
       "src/sf/panel_node.mbt": 4,
       "src/sf/pick_node.mbt": 1,
       "src/sf/presented_node.mbt": 1,
+      "src/sf/sheet_node.mbt": 1,
       "src/sf/stage_node.mbt": 2,
       "src/sfapp/app.mbt": 3,
       "src/sfapp/entry_tree.mbt": 1,
@@ -509,41 +504,29 @@
       "src/sfpages/security.mbt": 1
     },
     "old-panel": {
-      "src/sfapp/context.mbt": 1,
       "src/sfapp/settings/run_more.mbt": 2,
-      "src/sfapp/settings/station_add.mbt": 1,
-      "src/sfapp/settings/station_mark.mbt": 1,
-      "src/sfapp/settings/station_peek.mbt": 1,
-      "src/sfapp/settings/vault_ask.mbt": 1,
       "src/sfapp/sheet.mbt": 1,
       "src/sfapp/sheets.mbt": 4,
-      "src/sfbase/updates.mbt": 1,
       "src/sfdesk/attention.mbt": 1,
       "src/sfdesk/drag.mbt": 1,
       "src/sfdesk/drive_dialogs.mbt": 1,
-      "src/sfdesk/station_pick.mbt": 1,
       "src/sfpages/accounts.mbt": 2,
       "src/sfpages/agent_work.mbt": 1,
       "src/sfpages/attach.mbt": 1,
-      "src/sfpages/composer_ref.mbt": 2,
       "src/sfpages/decision.mbt": 1,
       "src/sfpages/model_triple.mbt": 2,
-      "src/sfpages/new_chat.mbt": 1,
-      "src/sfpages/relay.mbt": 1,
       "src/sfpages/screen_debug.mbt": 1,
       "src/sfpages/screen_panel.mbt": 1,
       "src/sfpages/screen_view.mbt": 1,
-      "src/sfpages/service.mbt": 2,
       "src/sfpages/settings_page.mbt": 1,
       "src/sfpages/station_page.mbt": 1,
-      "src/sfpages/stations_now.mbt": 1,
-      "src/sfpages/workspace.mbt": 2,
-      "src/sfpages/workspace_page.mbt": 2
+      "src/sfpages/stations_now.mbt": 1
     },
     "click-read": {},
     "key-read": {},
     "part-place": {},
-    "layout-told": {}
+    "layout-told": {},
+    "abort-unsaid": {}
   },
   "excused": {
     "frame-request": {},
@@ -611,7 +594,7 @@
     },
     "motion-length": {
       "src/sfbase/under_post.mbt": 1,
-      "src/sfpages/composer.mbt": 3
+      "src/sfpages/composer.mbt": 2
     },
     "tester-branch": {},
     "frame-number": {},
@@ -624,6 +607,7 @@
     "click-read": {},
     "key-read": {},
     "part-place": {},
-    "layout-told": {}
+    "layout-told": {},
+    "abort-unsaid": {}
   }
 }

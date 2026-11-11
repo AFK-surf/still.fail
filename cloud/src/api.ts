@@ -15,7 +15,7 @@ import type { AdminFeedback, FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { serveModels } from "./models";
-import { receiveFeedback } from "./feedback";
+import { FEEDBACK_LIMITS, receiveFeedback, receiveReply } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
@@ -29,7 +29,7 @@ const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
   already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400, invalid_way: 400, last_relay: 409,
-  last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409,
+  last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409, rig_enrollment: 409, station_enrollment: 409, station_in_others: 409, last_station: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400, invalid_limits: 400,
@@ -67,9 +67,16 @@ async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
 export const onTestChannel = new WeakSet<Request>();
 /** What a request's account's object said of its token, asked once a request (index.ts asks first on the test channel). */
 const said = new WeakMap<Request, Promise<Live>>();
+/**
+ * The locks' routes (the workspace's lock, the person's own, the devices that came): kept here only for the stations
+ * and devices from before the stations carried them (the root AGENTS.md, The cloud is the account system), and counted
+ * apart from the account system's requests a minute (account.ts `charge`), which they are not to use up. They go with
+ * what they serve.
+ */
+const LOCK_ROUTE = /^\/v1\/(me\/personal-lock|workspaces\/[^/]+\/(lock(\/.*)?|devices))$/;
 export function liveOf(request: Request, env: Env, claims: Claims): Promise<Live> {
   let live = said.get(request);
-  if (!live) said.set(request, (live = env.ACCOUNTS.getByName(claims.sub).live(claims, onTestChannel.has(request))));
+  if (!live) said.set(request, (live = env.ACCOUNTS.getByName(claims.sub).live(claims, onTestChannel.has(request), LOCK_ROUTE.test(new URL(request.url).pathname))));
   return live;
 }
 
@@ -139,7 +146,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => ({
       // `locks`: a station that pins a lock in each workspace it joins (one from before would take a locked one's
       // members on this cloud's word).
-      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join", input.locks === true)),
+      // `rig`: it enrolls as a rig, which a rig's token alone makes (directory.ts `enroll`).
+      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join", input.locks === true, input.rig === true)),
       station: input.station,
       ...relays(env),
       grant_keys: grantKeys(env),
@@ -186,6 +194,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 
   // Which of its reports are fixed and out, for a station to tell who reported them; what changed, for anyone (changelog.ts).
   if (path === "/v1/feedback/fixed" && method === "POST") return serveFixed(request, env);
+  // Its agents' answers on its reports (feedback.ts). A station reads none of the team's replies: they are the apps'.
+  if (path === "/v1/feedback/reply" && method === "POST") return receiveReply(request, env);
   if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
   // What models can do and cost, for stations (models.ts): models.dev's, as still.fail reads it. No secret.
   if (path === "/v1/models" && method === "GET") return serveModels(request);
@@ -300,6 +310,14 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...made, url: `${env.PUBLIC_ORIGIN}/invite#${made.token}` };
     });
   }
+  // The bug reports from the workspace's chats the team replied on, with the replies, for its members' apps to show in
+  // those chats; a member's answer on one: { text }.
+  if (kind === "feedback" && !target && method === "GET") return directory(() => dir.feedbackOf(sub, ws));
+  if (kind === "feedback" && target && action === "reply" && method === "POST") {
+    const said = text("text").trim().slice(0, FEEDBACK_LIMITS.reply);
+    if (!said || !/^[0-9A-Z]{26}$/.test(target)) return reply({ error: "invalid_request" }, 400);
+    return directory(() => dir.memberFeedbackReply(sub, ws, target, said));
+  }
   if (kind === "relays" && !target && method === "PUT") return directory(() => dir.setRelays(sub, ws, input.relays));
   if (kind === "ways" && !target && method === "PUT") return directory(() => dir.setWay(sub, ws, input.way, input.on));
   if (kind === "invitations" && target && method === "DELETE") return directory(() => dir.revokeInvitation(sub, ws, target));
@@ -313,6 +331,15 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       // Asked on the test channel (its host, or a beta app's x-stillfail-channel), the installer is the test channel's.
       const beta = betaOrigin(env);
       return withCommands(env, made, (beta !== null && url.origin === beta) || header(request, "channel") === "beta");
+    });
+  }
+  // A rig's enrollment (a station that only runs tasks): the same commands, to which the app adds that it is one with its person's own lock
+  // to pin (`rig:<hash>`, `--rig <hash>`), as it adds a workspace lock's hash: the cloud never says whose lock that is.
+  if (kind === "rigs" && target === "enrollments" && !action && method === "POST") {
+    return directory(async () => {
+      const made = await dir.createRigEnrollment(sub, ws, text("name"));
+      const beta = betaOrigin(env);
+      return { ...withCommands(env, made, (beta !== null && url.origin === beta) || header(request, "channel") === "beta"), rig: true };
     });
   }
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
@@ -343,6 +370,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   }
   if (kind === "devices" && !target && method === "GET") return directory(() => dir.devices(sub, ws));
   if (kind === "stations" && target && validKeyHex(target)) {
+    // (what it is, a whole station or one that only runs tasks: asked alone)
+    if (!action && method === "PATCH" && input.mode !== undefined) return directory(() => dir.setStationMode(sub, ws, target, input.mode));
     if (!action && method === "PATCH") return directory(async () => dir.updateStation(sub, ws, target, { name: input.name, emoji: input.emoji, icon: await icon() }));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));
   }
@@ -367,6 +396,40 @@ export async function feedbackList(env: Env): Promise<AdminFeedback[]> {
   const entries = await changelog(env.RELEASES);
   await dir.markFixed(entries.flatMap((e) => e.fixes.map((number) => ({ number, version: e.version, parts: e.parts }))));
   return dir.adminFeedback();
+}
+
+/** Where a report's status is marked: the console's admin's, and the feedback monitor's with its token (index.ts). */
+export const FEEDBACK_STATUS_PATH = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/;
+
+/**
+ * Marks where a report is. Only its status: a station is told of a fix only once the changelog marks it (markFixed,
+ * fixedUntold), and a report marked otherwise is not told of until it is marked fixed again.
+ */
+export async function setFeedbackStatus(env: Env, id: string, status: unknown): Promise<Response> {
+  if (!FEEDBACK_STATUSES.includes(status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
+  return directory(() => env.DIRECTORY.getByName("primary").setFeedbackStatus(id, status as FeedbackStatus));
+}
+
+/** Where the team replies to a report: the console's admin, and the feedback monitor with its token (index.ts). */
+export const FEEDBACK_REPLY_PATH = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/reply$/;
+
+/**
+ * The team's reply on a report, `by` the admin's email or the feedback monitor: { text } → 201 { id, delivery:
+ * "pending" }, shown to the people of the chat it came from in their apps, never to a station or its agents; 409 {
+ * error: "undeliverable", reason } where there is no such chat (`no_station`: an account's report; `no_chat`: one
+ * whose chat or its workspace cannot be told, or the station left it), not kept.
+ */
+export async function replyToFeedback(env: Env, id: string, by: string, text: unknown): Promise<Response> {
+  const said = typeof text === "string" ? text.trim().slice(0, FEEDBACK_LIMITS.reply) : "";
+  if (!said) return reply({ error: "invalid_request" }, 400);
+  try {
+    const made = await env.DIRECTORY.getByName("primary").replyToFeedback(id, by, said);
+    if ("undeliverable" in made) return reply({ error: "undeliverable", reason: made.undeliverable }, 409);
+    return reply(made, 201);
+  } catch (error) {
+    if (error instanceof Error && error.message === "feedback_not_found") return reply({ error: "feedback_not_found" }, 404);
+    throw error;
+  }
 }
 
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
@@ -437,11 +500,11 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   if (path === "/v1/admin/feedback" && method === "GET") {
     return directory(async () => ({ feedback: await feedbackList(env) }));
   }
-  const status = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/.exec(path);
-  if (status && method === "POST") {
-    if (!FEEDBACK_STATUSES.includes(input.status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
-    return directory(() => dir.setFeedbackStatus(status[1]!, input.status as FeedbackStatus));
-  }
+  const status = FEEDBACK_STATUS_PATH.exec(path);
+  if (status && method === "POST") return setFeedbackStatus(env, status[1]!, input.status);
+  // A reply to the session that reported it: { text }.
+  const replied = FEEDBACK_REPLY_PATH.exec(path);
+  if (replied && method === "POST") return replyToFeedback(env, replied[1]!, claims.email, input.text);
   // How loaded the relays are (relay-load.ts).
   if (path === "/v1/admin/relays" && method === "GET") return reply(await relaysLoad(env));
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);

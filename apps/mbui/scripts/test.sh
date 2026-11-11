@@ -14,7 +14,9 @@
 # nothing built here. APP_BUILD_OUT: sfapp's test program built only, it, its tests' list and the tool put in that
 # directory for them. REPLAY_EXE (with REPLAY_INFO, __blackbox_test_info.json) and REPLAY_BUILD_OUT: the same for the
 # flows' program (src/sfreplay/flows), check-mbui's replay-build job's, run at every frame rate (replay-fps); the
-# core's tests run where it is built (REPLAY_BUILD_OUT), after it is put there.
+# core's tests run where it is built (REPLAY_BUILD_OUT), after it is put there. PKGS_BUILD_OUT (APP_GROUP=pkgs): the
+# small packages' test programs and their tests' lists put there as they are built, then run here at the default rate;
+# PKGS_EXE: that directory, its programs run beside sfapp's pages (@pkgs, check-mbui's app 1/4 at each rate).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 # (the whole suite is CI's, a PR's: on Studio or a laptop it is half an hour of wasm-gc in a row where CI's native runs
@@ -58,7 +60,9 @@ for t in $targets; do
     # (APP_GROUP=k/n: one runner's share of sfapp's runs, app_group_of below, each building sfapp's program alone;
     # APP_GROUP=pkgs: the small packages' run alone, on a runner of its own. Their five programs were built by the
     # first group beside sfapp's, each much of the app again: its build 168-209 s after a change where the others'
-    # was 57-89, the first's job the check's longest, 2026-10-29, 40807235675)
+    # was 57-89, the first's job the check's longest, 2026-10-29, 40807235675) (built once since, at the default rate
+    # (PKGS_BUILD_OUT), their runs at the other rates on what it built (PKGS_EXE): each rate's runner built the same
+    # programs again, 72-90 s, to run them 21-51 s, 2026-11-11)
     if [ "${APP_GROUP:-}" = pkgs ]; then pkgs="-p stillfail/sf -p stillfail/sfpages -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player -p stillfail/sfgraphic"
     elif [ -n "${APP_GROUP:-}" ]; then pkgs="-p stillfail/sfapp"; fi
     # (with ThinLTO, MBC_LTO=thin: only the program of the whole app. What ThinLTO's tests are for is the code that
@@ -149,7 +153,49 @@ for t in $targets; do
     # (then the core's tests here, the flows' left to replay-fps's runs of it)
     pkgs="${pkgs/ -p stillfail\/sfreplay\/flows/}"
   fi
+  # (the small packages' test programs and their tests' lists put where PKGS_BUILD_OUT says, each under its package's
+  # path, with the tool; then run here as ever. A kind a package has none of is a stand-in, MBC_EMPTY_TESTS: not put)
+  if [ -n "${PKGS_BUILD_OUT:-}" ]; then
+    for p in $pkgs; do
+      [ "$p" = -p ] && continue
+      q=${p#stillfail/} n=$(basename "$p") b=_build/native/release/test/$p
+      [ -d "src/$q" ] || continue
+      for k in internal blackbox whitebox; do
+        [[ " $MBC_EMPTY_TESTS " = *" $q/$n.${k}_test "* ]] && continue
+        [ -f $b/$n.${k}_test.exe ] || { echo "test.sh: no $b/$n.${k}_test.exe to put in $PKGS_BUILD_OUT" >&2; exit 1; }
+        mkdir -p "$PKGS_BUILD_OUT/$q" && cp $b/$n.${k}_test.exe $b/__${k}_test_info.json "$PKGS_BUILD_OUT/$q/" || exit 1
+      done
+    done
+    cp "$(bash "$D/testexe" path)" "$PKGS_BUILD_OUT/testexe" || exit 1
+    echo "test.sh: the packages' test programs put in $PKGS_BUILD_OUT ($(du -sh "$PKGS_BUILD_OUT" | cut -f1))"
+  fi
   s=$(date +%s)
+  # The page files FILE... dealt to the runners SPECS (each "programs,cores,others,times": its programs for the pages,
+  # its cores, the seconds its other runs take of them, and how many times it runs each page, two where it runs two
+  # rates in turn): a line "k FILE" each, the longest first, onto the k that, with it, would end the soonest (its pages
+  # over its programs, or with its other runs over its cores, whichever is longer; the lowest k among equals). A file's
+  # time is its line's in scripts/page-seconds.txt at the rate (MBUI_TEST_FPS: the default, 60, 120, 24 or 7), 1 where
+  # it is 0, and a file not there yet counts as one of the longest (the column's ninetieth percentile), so it is dealt
+  # early to whichever runner has room: as the median, chat_find_wbtest (116 s at 120 a second, new in #5283) went with
+  # app 1/4 at 120 fps's own and made it 280 s of its 5 minutes (42936333352, 2026-11-11). Every runner at one rate
+  # deals the same.
+  page_deal() {
+    local specs=$1
+    shift
+    [ $# = 0 ] && return
+    printf '%s\n' "$@" | awk -v col=$(case "${MBUI_TEST_FPS:-}" in "") echo 2 ;; 60) echo 3 ;; 120) echo 4 ;; *) echo 5 ;; esac) '
+      FNR == NR { if ($1 !~ /^#/) { w[$1] = $col > 0 ? $col : 1; if ($col > 0) v[++m] = $col }; next }
+      FNR == 1 { for (i = 2; i <= m; i++) for (j = i; j > 1 && v[j - 1] > v[j]; j--) { t = v[j]; v[j] = v[j - 1]; v[j - 1] = t }
+        new = m ? v[int(m * 9 / 10) + 1] : 1 }
+      { b = $0; sub(/.*\//, "", b); print ((b in w) ? w[b] : new), $0 }' "$D/page-seconds.txt" - |
+      LC_ALL=C sort -k1,1nr -k2,2 | awk -v specs="$specs" '
+        function end(g, l) { l *= x[g]; return (l / p[g] > (o[g] + l) / c[g]) ? l / p[g] : (o[g] + l) / c[g] }
+        BEGIN { k = split(specs, s, " ")
+          for (g = 1; g <= k; g++) { split(s[g], q, ","); p[g] = q[1]; c[g] = q[2]; o[g] = q[3]; x[g] = q[4] } }
+        { best = 1
+          for (g = 2; g <= k; g++) if (end(g, load[g] + $1) < end(best, load[best] + $1)) best = g
+          load[best] += $1; print best, $2 }'
+  }
   # Moon runs each test program serially; shard sfapp alongside the other packages.
   runs=("$pkgs")
   if [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
@@ -162,15 +208,38 @@ for t in $targets; do
     # (preview_tree's 121 tests in two: one process of it at 120 frames a second was 104-175 s, the longest of its
     # part's job by 110 s and more, the job 156-263 s of its 5 minutes, main d2791a7a 42719997459,
     # core/bound-devices-sign 42720203578, 2026-11-10)
+    # (FILE:@N, in two at its test N: preview_tree's halves by count were 140-242 s and 72-88 s of app 4/4 at 120 fps,
+    # its part 1/2 260 s of its 5 minutes, main c96bf86e 42774790006, 2026-11-10: its test 54, the long name's bar at
+    # each platform, size of words, width and state, 48 viewers opened, is a fifth of the file's time alone (13 s of 62
+    # in Wasm on Studio, the others 1 s each). Cut before it, the two are 28 s and 34 s; a test added before it moves N)
+    # (kept_rows_kinds' four by count put three of its longest (中屏 read out, both scrolled) in one run, 166-233 s at 120 a
+    # second alone, app 3/4 at 120 fps part 2/2 226-247 s of its 5 minutes, main e1c758fc 42939211803, mbui-chooser-node
+    # 42940297713, 2026-11-11: those three a run each, @2@3@4@5@8, the last run still 8-11 on the second)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:2)
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
+      src/sfapp/words_large_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
       f=${w%:*} k=${w##*:}
       [ -f "$f" ] || continue
+      # (at a rate, MBUI_TEST_FPS, no run of the screens', squeeze_said's and words_large's: each checks a screen at
+      # rest, as the corners and contrast sweeps do, which run at the default rate alone (their groups are only
+      # there). Screens' draws its frames at the Mac's recorded moments, so a rate changes nothing in it (wasm-gc on one
+      # machine: 16.2 s at the default rate, 14.6 s at 7, 15.3 s at 120: the same run again); words_large and
+      # squeeze_said did not once fail at a rate alone in a day's 490 pipeline runs, 2026-11-10. The three at the four
+      # rates were 788 of the app tests' 6,599 process-seconds in 42928153698. Still sweeps: never dealt among the pages)
+      if [ -n "${MBUI_TEST_FPS:-}" ]; then
+        case $f in */screens_wbtest.mbt | */squeeze_said_wbtest.mbt | */words_large_wbtest.mbt) continue ;; esac
+      fi
       # (in k runs of its tests by their index: moon test FILE --index FROM-TO, the tests in the file's order)
       m=$(grep -c '^test "' "$f")
+      # (@N@M…: cut before each of those tests, as their time says, not by count)
+      if [ "${k#@}" != "$k" ]; then
+        a=0
+        for c in ${k//@/ } $m; do [ "$c" -gt "$a" ] && [ "$c" -le "$m" ] && runs+=("$f --index $a-$c") && a=$c; done
+        continue
+      fi
       if [ "$k" -le 1 ] || [ "$m" -le 1 ]; then runs+=("$f"); continue; fi
       for ((j = 0; j < k; j++)); do
         a=$((j * m / k)) b=$(((j + 1) * m / k))
@@ -192,19 +261,43 @@ for t in $targets; do
       # taken late by name, ran 162 s of its 265 at 120 fps, mbui-motion-layer3 42659257481, 2026-11-10) (six to the
       # fourth and four to the first since: at 60 a second the fourth's pages were 243 s, its job 254 of its 5 minutes,
       # the first's job 59 s, core-unheld-messages 42723740236, main 2c1c63b8 42723386381, 2026-11-10)
+      # (each run's files the largest first, as its programs take the next: by name, a group's longest files came
+      # last (tape_wbtest 110-138 s at 120 a second, quote_image 146 s, of the fourth's 140 the 121st and later) and ran
+      # on alone after the rest, app 1/4 at 120 fps 278 s and 283 s, delta-updates 42749767767,
+      # fix/cached-android-java-sources 42755835282, 2026-11-10; the files dealt to a group change as files come)
+      # (each file onto the group, then the part, that would end the soonest with it, the longest first by its time in
+      # CI, scripts/page-seconds.txt. A group's runners: the first's pages on four programs, the second's on two, the
+      # third's on one, the fourth's on four, each on four cores; at 120 a second the second, third and fourth on two
+      # runners (APP_PART), and at 24 and 7 the fourth a runner a rate where the others run both in turn
+      # (mbui-check.yml's app-rates). Their other runs, seconds of their cores, from main's runs of 2026-11-10 and 11
+      # and ci/pages-dealt-by-time 42928057443: the first's preview_tree 80 at the default rate and 180 at 60; the
+      # second's sweeps 160, 400 at 60, 340 on its two at 120, 210 at 24 and 7; the third's kept_rows 240, 340, 370 and
+      # 450; the fourth's 220 on its two at 120, 190 at 24 and at 7. Dealt by place (four, four, one and six of each
+      # fifteen) or by shares alone, the second's pages beside its sweeps were 225-268 s of app 2/4 at 60 fps, its two
+      # programs each on a file of 92-111 s, main da1d0b20 42919874518, 35383456 42925799584, 42928057443)
+      # (at a rate since the screens', squeeze_said's and words_large's sweeps are none (above): the second's other run
+      # is kept_rows' last alone, 15 s at 60, 26 at 120, 9 and 5 at 24 and 7, so its pages have its four cores, four
+      # programs as the first's and the fourth's, and at 60 one runner again; the fourth's at 24 and at 7 is
+      # preview_tree's alone, 173 and 73 (42928153698, 2026-11-11, before this); the first's has the packages' programs
+      # too (@pkgs), five side by side beside its pages: 107 s at 60 beside preview_tree's 220, 157 at 120, 46 and 43 at
+      # 24 and 7, its job at 120 211 s with them counted 40 (ci-rates-for-what-they-test 42942660697, 2026-11-11))
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
+        case "${MBUI_TEST_FPS:-}" in
+          60) specs="4,4,330,1 4,4,20,1 1,4,340,1 4,4,0,1" ;;
+          120) specs="4,4,160,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
+          24 | 7) specs="4,4,90,2 4,4,14,2 1,4,450,2 4,4,170,1" ;;
+          *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
+        esac
         g1=() g2=() g3=() g4=()
-        for i in "${!pages[@]}"; do
-          case $((i % 15)) in
-            0 | 2 | 4 | 6 | 8 | 10) g4+=("${pages[i]}") ;;
-            1 | 7 | 12 | 13) g1+=("${pages[i]}") ;;
-            3 | 9 | 11 | 14) g2+=("${pages[i]}") ;;
-            *) g3+=("${pages[i]}") ;;
-          esac
-        done
-        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
+        while read -r g f; do
+          case $g in 1) g1+=("$f") ;; 2) g2+=("$f") ;; 3) g3+=("$f") ;; *) g4+=("$f") ;; esac
+        done < <(page_deal "$specs" "${pages[@]}")
+        # (the second's pages on two programs beside its sweeps at the default rate, on $n at a rate, where it has none)
+        p2=2
+        [ -z "${MBUI_TEST_FPS:-}" ] || p2=$n
+        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 $p2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
       else
-        runs+=("@pages 0 $n ${pages[*]}")
+        runs+=("@pages 0 $n $(page_deal 1,1,0,1 "${pages[@]}" | cut -d' ' -f2 | tr '\n' ' ')")
       fi
       export APP_JOBS=$n
     else
@@ -214,6 +307,8 @@ for t in $targets; do
         [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
       done
     fi
+    # (the small packages' programs built once at the default rate, PKGS_EXE: their runs at a rate here, on the first)
+    [ -z "${PKGS_EXE:-}" ] || runs+=("@pkgs")
   fi
   # The flows seen again (src/sfreplay/flows, one program): their files in REPLAY_SHARDS moon tests side by side (3),
   # the core's tests in another. One moon test ran them one after another, 83 s of the replay part's run on CI's four
@@ -264,12 +359,23 @@ for t in $targets; do
     if [ "$n" != 4 ]; then echo 1; return; fi
     case "$1 $2 $3" in
       "-p "*) echo 1 ;;
+      # (the small packages' programs, at a rate: on the first, beside its pages)
+      "@pkgs  ") echo 1 ;;
       # (corners' three runs on a runner of their own since, beside the four: its English run alone 240 s of the second's
       # 252 on arch/next, its Chinese 200 of the first's, each push near its 5 minutes and some cut, ci-corners-once
       # 42003619842, 2026-11-05: back among the four once a screen opens in one build, as on main)
       "src/sfapp/corners_wbtest.mbt "*) echo corners ;;
       "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
+      # (screens', squeeze_said's and words_large's at the default rate alone: the sweeps' loop above says why)
+      # (words_large's sweep, every screen at the system's larger words, on the second, whose jobs had the most room:
+      # dealt with the pages by name it was the fourth's at 60 a second, one of its last files to start, 51-59 s of its
+      # 214-262, 2026-11-10. It was the fourth's at 24 and at 7, which has a runner for each, while it ran at a rate:
+      # the second ran both in turn, 138 s and 117 s of pages beside its four sweeps, 267 s of its 5 minutes, main
+      # 62fed392 42751653901)
+      # (its two, the app's two languages, a run each: in one at 120 a second it was 173 s of the second's part 2/2, 257 s
+      # of its 5 minutes on main caa9c272, 42759467421, 2026-11-10)
+      "src/sfapp/words_large_wbtest.mbt "*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its
@@ -292,7 +398,7 @@ for t in $targets; do
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done
     runs=("${mine[@]}")
-    # (APP_PART=k/m: the k-th of m shares of this group's pages' files, every m-th of them, and of its other runs: a
+    # (APP_PART=k/m: the k-th of m shares of this group's pages' files (page_deal's), and every m-th of its other runs: a
     # group too long for one runner's five minutes at a rate's frames (mbui-check's at 120 a second) on m. Its other
     # runs were all the first's: kept_rows' three runs and half the pages 228 s, the pages' 70 s of it beside them, the
     # second's same number of pages alone 18 s, main c1c5a1b0, 42653215101, 2026-11-10)
@@ -301,11 +407,9 @@ for t in $targets; do
       for r in "${runs[@]}"; do
         if [ "${r%% *}" = @pages ]; then
           read -r -a words <<< "$r"
-          kept=() i=0
-          for f in "${words[@]:3}"; do
-            [ $((i % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && kept+=("$f")
-            i=$((i + 1))
-          done
+          kept=()
+          specs=$(printf '1,1,0,1 %.0s' $(seq ${APP_PART#*/}))
+          while read -r g f; do [ "$g" = "${APP_PART%/*}" ] && kept+=("$f"); done < <(page_deal "$specs" "${words[@]:3}")
           [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
         else
           [ $((o % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && mine+=("$r")
@@ -316,6 +420,7 @@ for t in $targets; do
     fi
   fi
   run_name() {
+    [ "$1" = @pkgs ] && { echo "the packages$(cd "$PKGS_EXE" && find . -name '*_test.exe' | sed 's|^\./| |; s|/[^/]*$||' | LC_ALL=C sort -u | tr -d '\n')"; return; }
     [ "$1" = @flows ] && shift
     [ "$1" = @pages ] && shift 3
     case " $* " in
@@ -338,8 +443,25 @@ for t in $targets; do
     rm -rf "$d"
     return $c
   }
+  # pkgs_run DIR: the small packages' programs put there (PKGS_BUILD_OUT), side by side, each one process of all its
+  # files as moon test runs a package's (one testexe part: no file's seconds said, which scripts/page-seconds.sh would
+  # take for a page's)
+  pkgs_run() {
+    local e q k i=0 c=0 pids=() o
+    o=$(mktemp -d)
+    for e in $(cd "$1" && find . -name '*_test.exe' | sed 's|^\./||' | LC_ALL=C sort); do
+      q=$(dirname "$e") k=${e%_test.exe}
+      k=${k##*.}
+      exe_run "$1/$e" "$1/$q/__${k}_test_info.json" 1 "stillfail/$q" src/$q/*.mbt > "$o/$i" 2>&1 &
+      pids+=($!) i=$((i + 1))
+    done
+    for e in "${pids[@]}"; do wait $e || c=1; done
+    for ((e = 0; e < i; e++)); do cat "$o/$e"; done
+    rm -rf "$o"
+    return $c
+  }
   # (the tool, built before the runs side by side, not by each: TESTEXE, or scripts/testexe's)
-  if [ -n "${APP_EXE:-}" ] || [[ " ${runs[*]} " = *" @flows "* ]]; then
+  if [ -n "${APP_EXE:-}" ] || [[ " ${runs[*]} " = *" @flows "* ]] || [[ " ${runs[*]} " = *" @pkgs "* ]]; then
     # (in development the script itself: its program is Wasm, run by node)
     if [ -n "${GITHUB_ACTIONS:-}" ]; then [ -n "${TESTEXE:-}" ] || TESTEXE=$(bash "$D/testexe" path) || exit 1
     else TESTEXE=${TESTEXE:-$D/testexe}; fi
@@ -353,7 +475,9 @@ for t in $targets; do
         f=_build/$t/release/test/stillfail/sfreplay/flows
         exe_run "$fx" "${REPLAY_INFO:-$f/__blackbox_test_info.json}" ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
           ${runs[i]#@flows } > "$out.$i" 2>&1
-      # (the packages' run is moon test's even then: only sfapp's program is APP_EXE)
+      # (the packages' programs built elsewhere, PKGS_EXE: at a rate; at the default rate their run is moon test's)
+      elif [ "${runs[i]}" = @pkgs ]; then
+        pkgs_run "$PKGS_EXE" > "$out.$i" 2>&1
       elif [ "${runs[i]%% *}" = @pages ]; then
         set -- ${runs[i]}
         exe_run "$APP_EXE" "$APP_INFO" $3 stillfail/sfapp "${@:4}" > "$out.$i" 2>&1
@@ -369,6 +493,11 @@ for t in $targets; do
   # (how what moves goes, said where a run counts it (MBUI_TEST_MOTION=count): all of it kept, past LINES_OUT's tail)
   [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
   grep -v "$F" "$out" | grep -av '^MOTION ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  # (and each test that failed, whole, its lines under it too, wherever it fell: past LINES_OUT's tail behind a run's
+  # CLOCKREAD lines, main df98aad1's words_large failures were in no line of app 2/4's log nor in its What failed,
+  # 42956992852, 2026-11-11)
+  awk '/^\[[^]]*\] test .* failed/ { on = 1; print; next } on && /^  / { print; next } { on = 0 }' "$out" |
+    sed '1s/^/test.sh: what failed, whole:\n/'
   grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || cat "$out".time.* 2>/dev/null | sort -rn | sed 's/^/test.sh: a run of /'
   rm -f "$out".time.*
