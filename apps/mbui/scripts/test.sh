@@ -150,6 +150,29 @@ for t in $targets; do
     pkgs="${pkgs/ -p stillfail\/sfreplay\/flows/}"
   fi
   s=$(date +%s)
+  # The page files FILE... dealt to the runners SPECS (each "programs,cores,others,times": its programs for the pages,
+  # its cores, the seconds its other runs take of them, and how many times it runs each page, two where it runs two
+  # rates in turn): a line "k FILE" each, the longest first, onto the k that, with it, would end the soonest (its pages
+  # over its programs, or with its other runs over its cores, whichever is longer; the lowest k among equals). A file's
+  # time is its line's in scripts/page-seconds.txt at the rate (MBUI_TEST_FPS: the default, 60, 120, 24 or 7), or that
+  # column's median where it has none: every runner at one rate deals the same.
+  page_deal() {
+    local specs=$1
+    shift
+    [ $# = 0 ] && return
+    printf '%s\n' "$@" | awk -v col=$(case "${MBUI_TEST_FPS:-}" in "") echo 2 ;; 60) echo 3 ;; 120) echo 4 ;; *) echo 5 ;; esac) '
+      FNR == NR { if ($1 !~ /^#/ && $col > 0) { w[$1] = $col; v[++m] = $col }; next }
+      FNR == 1 { for (i = 2; i <= m; i++) for (j = i; j > 1 && v[j - 1] > v[j]; j--) { t = v[j]; v[j] = v[j - 1]; v[j - 1] = t }
+        mid = m ? v[int((m + 1) / 2)] : 1 }
+      { b = $0; sub(/.*\//, "", b); print ((b in w) ? w[b] : mid), $0 }' "$D/page-seconds.txt" - |
+      LC_ALL=C sort -k1,1nr -k2,2 | awk -v specs="$specs" '
+        function end(g, l) { l *= x[g]; return (l / p[g] > (o[g] + l) / c[g]) ? l / p[g] : (o[g] + l) / c[g] }
+        BEGIN { k = split(specs, s, " ")
+          for (g = 1; g <= k; g++) { split(s[g], q, ","); p[g] = q[1]; c[g] = q[2]; o[g] = q[3]; x[g] = q[4] } }
+        { best = 1
+          for (g = 2; g <= k; g++) if (end(g, load[g] + $1) < end(best, load[best] + $1)) best = g
+          load[best] += $1; print best, $2 }'
+  }
   # Moon runs each test program serially; shard sfapp alongside the other packages.
   runs=("$pkgs")
   if [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
@@ -202,20 +225,30 @@ for t in $targets; do
       # last (tape_wbtest 110-138 s at 120 a second, quote_image 146 s, of the fourth's 140 the 121st and later) and ran
       # on alone after the rest, app 1/4 at 120 fps 278 s and 283 s, delta-updates 42749767767,
       # fix/cached-android-java-sources 42755835282, 2026-11-10; the files dealt to a group change as files come)
-      largest() { [ $# = 0 ] || ls -S "$@" | tr '\n' ' '; }
+      # (each file onto the group, then the part, that would end the soonest with it, the longest first by its time in
+      # CI, scripts/page-seconds.txt. A group's runners: the first's pages on four programs, the second's on two, the
+      # third's on one, the fourth's on four, each on four cores; at 120 a second the second, third and fourth on two
+      # runners (APP_PART), at 60 the second (#5322), and at 24 and 7 the fourth a runner a rate where the others run
+      # both in turn (mbui-check.yml's app-fps). Their other runs, seconds of their cores, from main's runs of 2026-11-10 and 11 and
+      # ci/pages-dealt-by-time 42928057443: the first's preview_tree 80 at the default rate and 180 at 60; the second's
+      # sweeps 160, 400 at 60, 340 on its two at 120, 210 at 24 and 7; the third's kept_rows 240, 340, 370 and 450; the
+      # fourth's 220 on its two at 120, 190 at 24 and at 7. Dealt by place (four, four, one and six of each fifteen) or
+      # by shares alone, the second's pages beside its sweeps were 225-268 s of app 2/4 at 60 fps, its two programs
+      # each on a file of 92-111 s, main da1d0b20 42919874518, 35383456 42925799584, 42928057443)
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
+        case "${MBUI_TEST_FPS:-}" in
+          60) specs="4,4,180,1 4,8,400,1 1,4,340,1 4,4,0,1" ;;
+          120) specs="4,4,0,1 4,8,340,1 2,8,370,1 8,8,220,1" ;;
+          24 | 7) specs="4,4,0,2 2,4,210,2 1,4,450,2 4,4,190,1" ;;
+          *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
+        esac
         g1=() g2=() g3=() g4=()
-        for i in "${!pages[@]}"; do
-          case $((i % 15)) in
-            0 | 2 | 4 | 6 | 8 | 10) g4+=("${pages[i]}") ;;
-            1 | 7 | 12 | 13) g1+=("${pages[i]}") ;;
-            3 | 9 | 11 | 14) g2+=("${pages[i]}") ;;
-            *) g3+=("${pages[i]}") ;;
-          esac
-        done
-        runs+=("@pages 1 $n $(largest ${g1[*]})" "@pages 2 2 $(largest ${g2[*]})" "@pages 3 1 $(largest ${g3[*]})" "@pages 4 $n $(largest ${g4[*]})")
+        while read -r g f; do
+          case $g in 1) g1+=("$f") ;; 2) g2+=("$f") ;; 3) g3+=("$f") ;; *) g4+=("$f") ;; esac
+        done < <(page_deal "$specs" "${pages[@]}")
+        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
       else
-        runs+=("@pages 0 $n $(largest ${pages[*]})")
+        runs+=("@pages 0 $n $(page_deal 1,1,0,1 "${pages[@]}" | cut -d' ' -f2 | tr '\n' ' ')")
       fi
       export APP_JOBS=$n
     else
@@ -310,7 +343,7 @@ for t in $targets; do
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done
     runs=("${mine[@]}")
-    # (APP_PART=k/m: the k-th of m shares of this group's pages' files, every m-th of them, and of its other runs: a
+    # (APP_PART=k/m: the k-th of m shares of this group's pages' files (page_deal's), and every m-th of its other runs: a
     # group too long for one runner's five minutes at a rate's frames (mbui-check's at 120 a second, and the second's
     # at 60) on m. Its other runs were all the first's: kept_rows' three runs and half the pages 228 s, the pages'
     # 70 s of it beside them, the second's same number of pages alone 18 s, main c1c5a1b0, 42653215101, 2026-11-10)
@@ -319,11 +352,9 @@ for t in $targets; do
       for r in "${runs[@]}"; do
         if [ "${r%% *}" = @pages ]; then
           read -r -a words <<< "$r"
-          kept=() i=0
-          for f in "${words[@]:3}"; do
-            [ $((i % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && kept+=("$f")
-            i=$((i + 1))
-          done
+          kept=()
+          specs=$(printf '1,1,0,1 %.0s' $(seq ${APP_PART#*/}))
+          while read -r g f; do [ "$g" = "${APP_PART%/*}" ] && kept+=("$f"); done < <(page_deal "$specs" "${words[@]:3}")
           [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
         else
           [ $((o % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && mine+=("$r")
