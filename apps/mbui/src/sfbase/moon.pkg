@@ -14,6 +14,8 @@ import {
   "mbui/dmath",
   "mbui/signals",
   "mbui/view",
+  "mbui/html",
+  "mbui/widget",
   "stillfail/sf",
   "stillfail/gallery",
   "stillfail/sfapp/settings",

@@ -2807,6 +2807,7 @@ priv enum Prop {
   BoneWhole
   Comes
   GoneEmpty
+  CssLaid
 } derive(Eq, Show)
 
 ///|
@@ -2897,6 +2898,7 @@ fn Prop::ord(self : Prop) -> Int {
     BoneWhole => 80
     Comes => 81
     GoneEmpty => 82
+    CssLaid => 83
   }
 }
 
