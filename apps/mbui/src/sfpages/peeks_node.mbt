@@ -8,7 +8,7 @@
 // link_card's: a pull request's or an issue's card, a page's tile, the bones of the one it will be while it is read,
 // its address to copy at its foot's end. Read as peek_read reads it: as the pointer comes onto the row and while the
 // card is there, let go of once neither, so the next time it shows it is read again; the pictures its value names asked
-// as it is read (@sfbase.link_pictures_here), the card showing as it does while it is read till they are here.
+// as it is read (@sfbase.link_pictures_ask), the card showing as it does while it is read till they are here.
 
 ///|
 /// A web link's card (web_peek's) over `row` (what draws it: the node the pointer rests on, what is pressed) while a
@@ -58,11 +58,11 @@ pub fn web_peek_node(
   row.reacts(
     fn() {
       match warm.get() {
-        Some(read) => @sfbase.link_pictures_here(src, station, @signals.untracked(href), read.get().value)
-        None => true
+        Some(read) => read.get().value
+        None => None
       }
     },
-    fn(_) {  },
+    fn(v) { @sfbase.link_pictures_ask(src, station, @signals.untracked(href), v) },
   )
   let set_open = fn(on : Bool) {
     if on == open.untracked() {
@@ -306,7 +306,7 @@ priv enum PeekShows {
 ///|
 /// The card (link_card's) in `parent`, of what `read` reads (`href`, `words`, `peek` as web_peek_node's) of station
 /// `station`: what it shows made again as that changes kind, its words and facts as they are read, as it is while it is
-/// read till the pictures they name are here (@sfbase.link_pictures_here); `copy` makes what copies it, at its foot's
+/// read till the pictures they name are here (@sfbase.link_pictures_here_told); `copy` makes what copies it, at its foot's
 /// end.
 fn link_card_node(
   parent : @view.View,
@@ -318,15 +318,18 @@ fn link_card_node(
   peek : () -> String,
   copy : (@view.View) -> Unit,
 ) -> Unit {
+  // (the pictures its value names asked as it is read, as that changes: told to what reads them as each comes, none
+  // asked as a binding runs)
+  parent.reacts(fn() { (href(), read.get().value) }, fn(r) { @sfbase.link_pictures_ask(src, station, r.0, r.1) })
   let value = fn() -> Json? {
     match read.get().value {
-      Some(Object(_)) as v if @sfbase.link_pictures_here(src, station, href(), v) => v
+      Some(Object(_)) as v if @sfbase.link_pictures_here_told(src, station, href(), v) => v
       _ => None
     }
   }
   // (a picture of it, as its image's key: "" none)
   let picture = fn(which : String) {
-    @sfbase.picture_drawn(@sfbase.link_picture(src, station, href(), value(), which))
+    @sfbase.picture_drawn(@sfbase.link_picture_told(src, station, href(), value(), which))
   }
   let shows = fn() {
     let v = value()
