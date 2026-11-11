@@ -1836,32 +1836,24 @@ fn fx_usage_summary() -> Json {
 
 ///|
 /// What the core's `usage` view says (views/usage.ts) of a made-up workspace: its days split by the list `split`
-/// asks for, of the one person, account or model `only` names (its key) alone.
+/// asks for, of the one person, account or model `only` names (its key) alone; as it is sent (client/core-ts
+/// schema.ts UsageView: not its accounts' allowances, its scale's lines, a day's calls and parts, an item's calls).
 fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : String = "", details_pending? : Bool = false) -> Json {
   // (the one alone: a part of everything)
   let part = if only == "" { 1.0 } else { 0.42 }
   let daily : Array[Json] = []
   for i in 0..<days {
     let cost = (((i * 37 + 11) % 23).to_double() + 4.0) * part
-    let a = cost * 0.6
-    let b = cost * 0.3
-    let rest = cost - a - b
     daily.push(
       obj([
         ("day", str("2026-10-" + (if i + 1 < 10 { "0" } else { "" }) + (i + 1).to_string())),
         ("label", str("10/" + (i + 1).to_string())),
-        ("today", Json::boolean(i == days - 1)),
         ("cost", Json::number(cost)),
         ("costText", str("$" + cost.to_int().to_string())),
-        ("calls", Json::number(cost * 12.0)),
-        ("callsText", str((cost * 12.0).to_int().to_string() + " 次调用")),
-        ("parts", [Json::number(a), Json::number(b), Json::number(rest)]),
-        ("partsText", [str("$" + a.to_int().to_string()), str("$" + b.to_int().to_string()), str("$" + rest.to_int().to_string())]),
         // (what the core says of it: views/usage.ts)
         ("name", str(if i == days - 1 { "今天" } else { "10/" + (i + 1).to_string() })),
         ("tick", str(if i == days - 1 { "今天" } else if days <= 10 || (days - 1 - i) % 7 == 0 { "10/" + (i + 1).to_string() } else { "" })),
         ("shares", [Json::number(0.6), Json::number(0.3), Json::number(0.1)]),
-        ("sharesText", [str("60%"), str("30%"), str("10%")]),
       ]),
     )
   }
@@ -1870,15 +1862,10 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
       ("key", str(key)),
       ("title", str(title)),
       ("sub", str(sub)),
-      ("cost", Json::number(share * 100.0)),
       ("costText", str(cost)),
       ("share", Json::number(share)),
       ("shareText", str(shareText)),
-      ("calls", Json::number(0.0)),
-      ("callsText", str("")),
       ("tokensText", str("")),
-      // (its calls and tokens, as its share of the week's 1,416 calls and 2,353 万 tokens)
-      ("detail", str((share * 1416.0).to_int().to_string() + " 次调用 · " + (share * 2353.0).to_int().to_string() + " 万 token")),
     ])
   }
   let series = match split {
@@ -1913,14 +1900,13 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
   let day_name = if day == "" { "" } else { "10/" + (if dd.has_prefix("0") { dd.substring(start=1) } else { dd }) }
   let only_shown = match lists.search_by(fn(l) { l.2.search_by(fn(it) { it.0 == only }) is Some(_) }) {
     Some(k) if only != "" => {
-      let (list, _, its) = lists[k]
+      let (_, _, its) = lists[k]
       let it = its[its.search_by(fn(it) { it.0 == only }).unwrap()]
-      obj([("list", str(list)), ("key", str(only)), ("title", str(it.1))])
+      obj([("title", str(it.1))])
     }
     _ => Json::null()
   }
   obj([
-    ("days", Json::number(days.to_double())),
     ("split", str(split)),
     ("only", only_shown),
     ("wait", obj([("reading", Json::boolean(details_pending)), ("failing", []), ("empty", Json::boolean(false))])),
@@ -1932,71 +1918,34 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         obj([
           ("label", str("折合费用")),
           ("value", str(if details_pending { "$0" } else if day_cost != "" { day_cost } else if only != "" { "$50" } else if days == 7 { "$118" } else { "$486" })),
-          ("sub", str("按 API 标准单价估算")),
           // (a day picked: against nothing)
           ("change", if details_pending || day != "" { Json::null() } else { str(if days == 7 { "↑18%" } else { "↓6.4%" }) }),
-          ("trend", str(if details_pending { "" } else if days == 7 { "up" } else { "down" })),
         ]),
         obj([
           ("label", str("模型调用")),
           ("value", str(if only != "" { "595 次" } else if days == 7 { "1,416 次" } else { "5,830 次" })),
-          ("sub", str(if days == 7 { "日均 202 次" } else { "日均 194 次" })),
           ("change", str(if days == 7 { "↑9.2%" } else { "↓3.1%" })),
-          ("trend", str(if days == 7 { "up" } else { "down" })),
         ]),
         obj([
           ("label", str("输入 token")),
           ("value", str(if only != "" { "970 万" } else if days == 7 { "2,310 万" } else { "9,870 万" })),
-          ("sub", str("缓存命中 91%")),
           ("change", str(if days == 7 { "↑21%" } else { "↑2.5%" })),
-          ("trend", str(if days == 7 { "up" } else { "up" })),
         ]),
         obj([
           ("label", str("输出 token")),
           ("value", str(if only != "" { "18 万" } else if days == 7 { "43 万" } else { "1.8 亿" })),
-          ("sub", str("平均每次 304")),
           ("change", str(if days == 7 { "↓4.0%" } else { "持平" })),
-          ("trend", str(if days == 7 { "down" } else { "" })),
         ]),
       ],
     ),
     ("versus", str("比前 " + days.to_string() + " 天")),
     ("period", str(if day != "" { day_name } else { "近 " + days.to_string() + " 天" })),
-    ("day", if day == "" { Json::null() } else { str(day) }),
-    // (公司 Claude's allowance, as its profile shows it)
-    (
-      "accounts",
-      [
-        obj([
-          ("key", str("lin@claude")),
-          ("title", str("lin@example.com")),
-          ("cost", Json::number(84.0)),
-          ("costText", str("$84")),
-          (
-            "quota",
-            obj([
-              ("state", str("ok")),
-              (
-                "windows",
-                [
-                  obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("2 小时后恢复"))]),
-                  obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str("星期一恢复"))]),
-                ],
-              ),
-              ("checkedAt", Json::number(0.0)),
-            ]),
-          ),
-        ]),
-      ],
-    ),
     ("summary", fx_usage_summary()),
     ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1))]) }))),
     ("daily", Json::array(daily)),
     ("many", Json::boolean(days > 10)),
-    ("max", Json::number(27.0)),
     // (the scale the core works out for it: views/usage.ts scale)
     ("top", Json::number(30.0)),
-    ("ticks", [obj([("value", Json::number(10.0)), ("label", str("10"))]), obj([("value", Json::number(20.0)), ("label", str("20"))]), obj([("value", Json::number(30.0)), ("label", str("30"))])]),
     (
       "lists",
       Json::array(
@@ -2008,8 +1957,8 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
             ("key", str(key)),
             ("title", str(title)),
             ("items", Json::array(listed)),
-            // (its first three and the rest: as many here)
-            ("parts", Json::array(listed)),
+            // (its first three and the rest: as many here, each its key)
+            ("parts", Json::array(shown.map(fn(it) { obj([("key", str(it.0))]) }))),
           ])
         }),
       ),
@@ -2693,14 +2642,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("group", str(text(Some(p), "group"))),
           ("groupTitle", str(text(Some(p), "groupTitle"))),
           ("station", str("ws1/st1")),
-          ("stationId", str("st1")),
-          ("stationName", str("Willow")),
-          ("profile", p),
+          // (as the list is sent it: client/core-ts schema.ts WorkspaceProfile, ListedProfile)
+          ("profile", listed_profile_said(p)),
           ("title", str(if text(Some(p), "email") == "" { text(Some(p), "name") } else { text(Some(p), "email") })),
-          ("shared", Json::boolean(false)),
-          ("host", str("st1")),
-          ("hostName", str("Willow")),
-          ("hostOnline", Json::boolean(true)),
           ("usable", Json::boolean(true)),
           ("state", state),
           ("look", Json::boolean(look)),
@@ -2708,26 +2652,30 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "stations",
             [
-              obj([("id", str("st1")), ("station", str("ws1/st1")), ("name", str("Willow")), ("online", Json::boolean(true)), ("allowed", Json::boolean(true))]),
-              obj([("id", str("st2")), ("station", str("ws1/st2")), ("name", str("Maple")), ("online", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+              obj([("id", str("st1")), ("name", str("Willow")), ("online", Json::boolean(true))]),
+              obj([("id", str("st2")), ("name", str("Maple")), ("online", Json::boolean(false))]),
             ],
           ),
           (
             "members",
-            if fx.profile_hosts && text(pv, "id") == "cc" { Json::array(fx_profile_hosts().filter(fn(m) { !fx.profile_pending || text(Some(m), "stationId") != "st2" })) } else { [
-              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Willow")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0))]),
+            if fx.profile_hosts && text(pv, "id") == "cc" {
+              Json::array(
+                fx_profile_hosts()
+                .filter(fn(m) { !fx.profile_pending || text(Some(m), "stationId") != "st2" })
+                .map(fn(m) { fields_dropped(m, ["stationName", "profileName", "checkText", "usedBy"]) }),
+              )
+            } else { [
+              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkTone", str("green"))]),
             ] },
           ),
           (
             "places",
             if fx.profile_hosts && text(pv, "id") == "cc" {
-              Json::array(fx_profile_places())
+              Json::array(fx_profile_places().map(fn(pl) { fields_dropped(pl, ["stationId"]) }))
             } else {
-              [obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Willow")), ("profileId", str(text(pv, "id"))), ("online", Json::boolean(true)), ("usable", Json::boolean(true)), ("sourceName", str("")), ("state", Json::null())])]
+              [obj([("station", str("ws1/st1")), ("stationName", str("Willow")), ("profileId", str(text(pv, "id"))), ("online", Json::boolean(true)), ("usable", Json::boolean(true)), ("sourceName", str("")), ("state", Json::null())])]
             },
           ),
-          ("editable", Json::boolean(true)),
-          ("canShare", Json::boolean(true)),
         ])
       })
       let attention = list.filter(fn(e) { flag(Some(e), "look") }).length()

@@ -195,7 +195,7 @@ pub fn agent(maker : String, runtime : String) -> Json {
     "agentText": Json::string(maker + " · " + runtime),
   }
   if maker != "" {
-    a["maker"] = { "id": Json::string(maker), "name": Json::string(maker) }
+    a["maker"] = { "id": Json::string(maker) }
   }
   Json::object(a)
 }
@@ -279,7 +279,32 @@ pub fn row(
       r["swipeAsk"] = Json::string(others + state)
     }
   }
+  // (its people and who started it as a row is sent them: client/core-ts schema.ts RowPerson, RowCreator; its thread's
+  // place, `origin`, and `archivable` the core's)
+  match r.get("people") {
+    Some(Array(ps)) => r["people"] = Json::array(ps.map(row_person))
+    _ => ()
+  }
+  match r.get("creator") {
+    Some(Object(c)) => r["creator"] = { "id": c.get("id").unwrap_or(Json::string("")) }
+    _ => ()
+  }
+  r.remove("origin")
+  r.remove("archivable")
   Json::object(r)
+}
+
+///|
+/// Person `p` (person) as a row's pictures are sent them: who, their email, their name, picture and whether it is the
+/// viewer.
+fn row_person(p : Json) -> Json {
+  let shown = field(Some(p), "shown")
+  let face : Map[String, Json] = { "name": Json::string(text(shown, "name")), "mine": Json::boolean(flag(shown, "mine")) }
+  match field(shown, "picture") {
+    Some(String(_) as pic) => face["picture"] = pic
+    _ => ()
+  }
+  { "id": Json::string(text(Some(p), "id")), "email": Json::string(text(Some(p), "email")), "shown": Json::object(face) }
 }
 
 ///|
@@ -668,20 +693,13 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   }
   // each with how many of its agents are at work, as the core says it (views.ts: looks.doing): Willow's one at work,
   // Maple down; the card to share's (share-card, and share-card-… over the rest of the app) more of them, on more stations
+  // (each as its rows read it: its state and what it does are the stations' rows', client/core-ts schema.ts StationState)
   let stations : Json = if f.mode == "webdemo" {
-    [{ "id": "ws1/st1", "name": "Willow" }]
+    [{ "station": "ws1/st1" }]
   } else if f.mode.has_prefix("share-card") {
-    [
-      { "id": "ws1/st1", "station": "ws1/st1", "name": "Willow", "state": "online", "running": 5, "doing": "5 个正在运行" },
-      { "id": "ws1/st3", "station": "ws1/st3", "name": "Birch", "state": "online", "running": 3, "doing": "3 个正在运行" },
-      { "id": "ws1/st4", "station": "ws1/st4", "name": "Cedar", "state": "online", "running": 1, "doing": "1 个正在运行" },
-      { "id": "ws1/st2", "station": "ws1/st2", "name": "Maple", "state": "error", "running": 0, "doing": "连不上" },
-    ]
+    [{ "station": "ws1/st1" }, { "station": "ws1/st3" }, { "station": "ws1/st4" }, { "station": "ws1/st2" }]
   } else {
-    [
-      { "id": "ws1/st1", "station": "ws1/st1", "name": "Willow", "state": "online", "running": 1, "doing": "1 个正在运行" },
-      { "id": "ws1/st2", "station": "ws1/st2", "name": "Maple", "state": "offline", "running": 0, "doing": "离线" },
-    ]
+    [{ "station": "ws1/st1" }, { "station": "ws1/st2" }]
   }
   let rich = f.mode.has_prefix("share-card")
   let running = if rich { 9 } else { 1 }
@@ -754,9 +772,7 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     _ => (days, 0)
   }
   let chats : Json = {
-    "me": { "email": "lin@example.com" },
     "stations": if scope == "ws1" { stations } else { [] },
-    "loading": false,
     "days": Json::array(days),
     "leading": "agents",
     "note": { "reading": false, "failing": [], "empty": Json::boolean(empty) },

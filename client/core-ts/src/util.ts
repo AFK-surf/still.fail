@@ -204,6 +204,11 @@ export function compareKeys(a: string, b: string): number {
 /// What went out of the store as it is (output.ts): never changed after, so it is shared and not shaped again.
 export const shaped = new WeakSet<object>();
 
+/// Of those, the struct one was shaped as where a view shaped it once for every topic that sends it (views.ts
+/// `asShaped`): a topic whose shape has another struct there (a station's overview, `Overview`, on its page as
+/// `StationOverview`) is sent it as its own shape says (conform.ts `reshaped`), not as it was shaped.
+export const shapedAs = new WeakMap<object, string>();
+
 /// Whether what is shared is frozen where it is shared (「谁能改什么」): what the store keeps,
 /// what a view makes and what goes out. On in the core's tests (node --test, or STILLFAIL_CHECK_SHARED=1) and in the
 /// web's development build (`checkShared`); off in what people run, where only what the core freezes anyway is (the
