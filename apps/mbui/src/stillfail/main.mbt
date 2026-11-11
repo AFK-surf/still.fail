@@ -433,17 +433,8 @@ fn main {
       @core.trace_note(m)
     })
   }
-  // (a remote screen's frames and sound, and its acknowledgements' answers, change nothing a frame reads: taken as they
-  // come, they build nothing, sfpages' screen.mbt)
-  @core.quiet("screen.view", @sfpages.screen_value_quiet)
-  for name in @sfpages.screen_unread_calls() {
-    @core.unread(name)
-  }
-  // (a draft's words told and a ref asked at the caret, as each key is typed: their answers change only signals, taken
-  // as they come, the page they were typed in not built whole for them, sfbase's calls_said)
-  for name in @sfbase.calls_said() {
-    @core.said(name)
-  }
+  // (how what the core says is taken, the same in a replay: sfapp's core_taking)
+  @sfcore.listening.val = @sfapp.core_taking()
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()
     @ui.run(@sf.product(), fn(c) {

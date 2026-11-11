@@ -115,8 +115,9 @@ pub fn Flow::start(
   said("height", h_said, h)
   said("platform", platform_said.map(fn(p) { p.to_double() }), platform.to_double())
   emit_start(seed, w, h, if platform == 2 { env + [("MBUI_PLATFORM", "android")] } else { env })
-  // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
-  @ui.on_message("core", @core.receive)
+  // what the core says taken as the app takes it on a device (sfcore.start's listen: through mbui's queue, what changes
+  // only signals as it comes)
+  @sfcore.listen(@sfapp.core_taking())
   // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
   // not say it is one recorded before it was kept, to record again: never run as if started with nothing)
   if r.env().is_empty() && emit_path() == "" {

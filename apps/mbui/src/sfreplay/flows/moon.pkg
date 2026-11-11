@@ -3,6 +3,7 @@ import {
   "moonbitlang/core/json",
   "stillfail/core",
   "stillfail/sfreplay",
+  "stillfail/sfcore",
   "stillfail/sfapp",
   "stillfail/sfbase",
   "stillfail/sffixture",

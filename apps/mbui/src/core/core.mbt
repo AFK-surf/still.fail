@@ -215,6 +215,13 @@ pub fn unread(name : String) -> Unit {
 }
 
 ///|
+/// Whether call `name`'s answers are taken as they come (said or unread): for a test holding that a replay takes them as
+/// a device does (still.fail's sfreplay).
+pub fn taken_as_they_come(name : String) -> Bool {
+  client.taken_as_they_come(name)
+}
+
+///|
 /// The answer of call `name` changes only signals: taken as it comes, what read them is built again, nothing else
 /// (Client::said). Said once, as the app starts.
 pub fn said(name : String) -> Unit {
