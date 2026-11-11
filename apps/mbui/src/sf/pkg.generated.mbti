@@ -1949,6 +1949,10 @@ pub fn rule_ink(@ui.Ctx) -> Int64
 
 pub let rule_line : @ui.Style
 
+pub fn run_begin() -> Unit
+
+pub let run_begun_by_app : Ref[() -> Bool]
+
 pub fn said_row(@ui.Ctx, String, String, value? : () -> Unit, lead? : (@ui.Ctx) -> Unit) -> Unit
 
 pub fn said_row_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit

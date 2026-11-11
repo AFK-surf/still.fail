@@ -26,6 +26,9 @@ fn init {
       @sfdesk.open_jobs_pop()
     }
   }
+  // the library's run begun by the app's own reset where one was said by hand since a Tester last began (new_run): that
+  // Tester begins none again, what the test opened in between is its run's (sf's run_begins.mbt)
+  @sf.run_begun_by_app.val = fn() { reset_by_hand.val }
   @ui.on_reset(fn() {
     if !reset_by_hand.val {
       reset()
@@ -123,6 +126,8 @@ fn reset() -> Unit {
   @sf.viewer_reset()
   // the menu open (@sf.menu_of, context_items)
   @sf.parts_reset()
+  // the library as a run begins (what is presented): this is the moment the run begins where it is said by hand
+  @sf.run_begin()
   outside_reset()
   attach_reset()
   // the menu bar given (menu_bar.mbt)
