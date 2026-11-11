@@ -66,24 +66,27 @@ pub fn window_keys_at(width : Double) -> (Double, Double) {
 }
 
 ///|
-/// In a window's whole, how far in from the window's side the last button stands.
-fn window_keys_side() -> Double {
-  window_key_in(window_keys_in)
+/// In a window's whole, how far in from the window's side the last button stands, the window's corner worked out from
+/// `roots` (the old views', as they ask it; a node's, followed: @ui.tree_corner_roots_now).
+fn window_keys_side(roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
+  window_key_in(window_keys_in, roots~)
 }
 
 ///|
 /// On the tape, how far in from the window's side the last button stands: as the last key of the bar of the panel at
-/// the window's edge stands in its top right corner.
-fn window_keys_side_tape() -> Double {
-  window_in + line_end_in(tape_edge.radius(@ui.corner_roots()), window_keys_in - window_in)
+/// the window's edge stands in its top right corner, the window's corner worked out from `roots` (window_keys_side's).
+fn window_keys_side_tape(roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
+  window_in + line_end_in(tape_edge.radius(roots), window_keys_in - window_in)
 }
 
 ///|
 /// What a top row at the window's top right in a window's whole (laid out Large) leaves the buttons, from the
-/// window's side to before their rule: none where they are not the app's (window_end_in, window_clear_in).
-pub fn window_keys_room() -> Double {
+/// window's side to before their rule: none where they are not the app's (window_end_in, window_clear_in). `roots` as
+/// window_keys_side's: a node of the window's tree asks it with its own (the old views' read is the window's corner
+/// only as they build).
+pub fn window_keys_room(roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
   if @ui.window_keys_own() {
-    window_keys_side() + window_keys_w()
+    window_keys_side(roots~) + window_keys_w()
   } else {
     0.0
   }
@@ -102,10 +105,12 @@ pub fn window_keys_room_at(width : Double) -> Double {
 
 ///|
 /// The same on the tape (laid out Medium), from the window's side (tape_bar_end; the strip of a panel at the window's
-/// right holding them: sfdesk's tape_shows_right).
-pub fn window_keys_room_tape() -> Double {
+/// right holding them: sfdesk's tape_shows_right), `roots` as window_keys_room's (the old views' read where none builds
+/// put the last key of a page's bar made as nodes, sfdesk's pane_bar_node, against their rule: 20 nearer it than a
+/// chat's bar's last).
+pub fn window_keys_room_tape(roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
   if @ui.window_keys_own() {
-    window_keys_side_tape() + window_keys_w()
+    window_keys_side_tape(roots~) + window_keys_w()
   } else {
     0.0
   }
