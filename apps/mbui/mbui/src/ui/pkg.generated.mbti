@@ -2690,6 +2690,7 @@ pub fn Tester::posted(Self) -> Int32
 pub fn Tester::presented(Self) -> (FixedArray[Double], Int32, (Double, Double, Double))
 pub fn Tester::press(Self, String) -> Unit
 pub fn Tester::press_at(Self, Double, Double) -> Unit
+pub fn Tester::press_lands_at(Self, Double, Double) -> String
 pub fn Tester::presses_unheld(Self) -> Array[String]
 pub fn Tester::probe_at(Self, Double, Double) -> String
 pub fn Tester::query(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> SemNode?

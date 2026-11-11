@@ -3,37 +3,47 @@
 // the app's presses there (mbui's mac host: its canvas opaque to window moves under the system's bar).
 
 ///|
-/// Whether a press at (x, y) lands on a control: what its semantics say it is, named (a box pressed for itself alone,
-/// a page's, a list's, says no name; a panel's edge, dragged, is a Separator named).
+/// Whether a press at (x, y) lands on a control: on what does something pressed, as the hit test has it
+/// (Tester::press_lands_at: a node of the window's tree with its press or its drag said, as the rule of a press's room
+/// measures by Tree::target_at; an old view's target whose press is read), not on what is only named (a part that
+/// takes the press and does nothing with it is no control: the coordinator of the migration, 2026-11-12).
 fn control_at(t : @ui.Tester, x : Double, y : Double) -> Bool {
-  t.semantics().iter().any(fn(s) {
-    let (sx, sy, sw, sh) = s.rect
-    let control = s.role
-      is (Button | Link | Tab | Switch | Checkbox | Radio | TextField | Combobox | MenuItem | Slider | Option | Separator)
-    !s.hidden && control && s.label != "" && x >= sx && x < sx + sw && y >= sy && y < sy + sh
-  })
+  t.press_lands_at(x, y) == "pressed"
 }
 
 ///|
 /// Across the window's top row at `y`, every 8 points: what is not a control drags the window, and so does some of the
-/// page's part of it (from `from` on).
-fn row_drags(t : @ui.Tester, what : String, from : Double, y? : Double = 22.0) -> Unit raise {
+/// page's part of it (from `from` on). `known`: the points where a press is neither, as the page is now (not the
+/// chat's bar's: row_dead_known), held to be those and no more.
+fn row_drags(t : @ui.Tester, what : String, from : Double, y? : Double = 22.0, known? : Array[Double] = []) -> Unit raise {
   let mut x = 2.0
   let mut page = false
+  let neither : Array[Double] = []
   while x < t.ctx().width {
     let drags = t.drags_window_at(x, y)
     if !drags && !control_at(t, x, y) {
-      fail("\{what}: a press at \{x} is neither a control's nor the window's")
+      neither.push(x)
     }
     if drags && x >= from {
       page = true
     }
     x = x + 8.0
   }
+  if neither != known {
+    fail("\{what}: a press at each of \{Repr(neither)} is neither a control's nor the window's (known so: \{Repr(known)})")
+  }
   if !page {
     fail("\{what}: nothing of the page's top row drags the window")
   }
 }
+
+///|
+/// Where a press in a page's top row is neither a control's nor the window's as the page is now, its own (each a
+/// segmented choice's 2 of padding past its first or last choice, a box that takes the press and does nothing with it:
+/// 文件's 显示方式 at 922, a station's screen's 只看 / 控制 at 1266), found as the press's judgment came to be the hit
+/// test's (Tester::press_lands_at). Only falls.
+// kept across runs: a value (no field of it changes)
+let row_dead_known : Map[String, Array[Double]] = { "文件": [922.0], "a window of its own": [1266.0] }
 
 ///|
 test "a Mac's window: the top row drags it on every page, with a bar there or not, but for what is pressed there" {
@@ -58,7 +68,7 @@ test "a Mac's window: the top row drags it on every page, with a bar there or no
   let t = wide_tester(calls, window_inset=true)
   app.nav.replace(Files)
   t.run_for(@ui.move_most_ms)
-  row_drags(t, "文件", 400.0)
+  row_drags(t, "文件", 400.0, known=row_dead_known.get("文件").unwrap_or([]))
   // laid out Medium, on the tape: the sidebar in use, then the page's panel brought over
   let t = wide_tester(calls, mode="chat", w=690.0, h=840.0, window_inset=true)
   t.run_for(@ui.move_most_ms)
@@ -200,7 +210,7 @@ test "a window of its own, a station's screen live alone in it (the window's tre
   let center = read().iter().find_first(fn(s) { s.label == @sf.t("web-pages.screen.panel") && s.role is Button })
   // (the window of its own it is, its screen live (控制中心 there), none of the app's)
   assert_eq((shell.val == Lone, center is Some(_), t.find("新建对话") is None), (true, true, true), msg="\{Repr(read().map(fn(s) { s.label }))}")
-  row_drags(t, "a window of its own", 0.0)
+  row_drags(t, "a window of its own", 0.0, known=row_dead_known.get("a window of its own").unwrap_or([]))
   let inputs = fn() { calls.filter(fn(c) { c.name == "screen.input" }).length() }
   let sent_since = fn(n : Int) { calls.filter(fn(c) { c.name == "screen.input" })[n:].to_owned().map(fn(c) { c.params.stringify() }) }
   let (cx, cy) = match center {
