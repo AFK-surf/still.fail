@@ -1093,7 +1093,7 @@ test "a copy of another station's profile is paused here from its page and used 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
