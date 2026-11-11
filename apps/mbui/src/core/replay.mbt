@@ -936,6 +936,15 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
       }
       k = k - 1
     }
+    // (the first step: from the first of the run that happened again here, by their gap in the run, not from what
+    // this pace's frames took last before it)
+    for j in 0..<i {
+      let e = self.evs[j]
+      if e.at >= 0.0 && (e.has_wall || !e.out) && self.evs[i].has_wall {
+        let gap = self.evs[i].wall - e.wall
+        return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      }
+    }
   }
   let mut j = i - 1
   while j >= 0 {
