@@ -6,7 +6,8 @@
 
 ///|
 /// The fixture's entry of the outbox: `state` (sending, sent, failed); refused as it is (`final`); why; what it waits
-/// on and how far; followed by the viewer's next; with a file.
+/// on and how far; followed by the viewer's next; with a file, or a picture 800 × 600 (`picture`); quoting `quotes`
+/// (as the core gives them).
 fn out_entry(
   state : String,
   final? : Bool = false,
@@ -15,6 +16,8 @@ fn out_entry(
   progress? : Double,
   followed? : Bool = false,
   file? : Bool = false,
+  picture? : Bool = false,
+  quotes? : Array[Json] = [],
 ) -> Outgoing {
   let o : Map[String, Json] = {
     "id": "o-1",
@@ -33,6 +36,12 @@ fn out_entry(
   }
   if file {
     o["attachments"] = [{ "name": "发布说明.pdf", "path": "/tmp/发布说明.pdf", "size": 24680 }]
+  }
+  if picture {
+    o["attachments"] = [{ "name": "here.png", "path": "/tmp/here.png", "size": 24680, "width": 800, "height": 600 }]
+  }
+  if quotes.length() > 0 {
+    o["quotes"] = Json::array(quotes)
   }
   let view = @sfbase.chat_view_made({ "title": "发布", "messages": [], "outbox": [Json::object(o)] })
   view.outbox[0]

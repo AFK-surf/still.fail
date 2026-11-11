@@ -205,14 +205,20 @@ pub fn video_capsule(
 
 ///|
 /// A video's capsule (video_capsule's, as a node, at rest: nothing coming) laid over `parent`, in its foot's start corner
-/// concentric with a message's file's: a small play mark and how long it is (`duration`, none where that is not known)
-/// on the video's shade.
+/// concentric with a message's file's (or `corner`, a quote's picture's): a small play mark and how long it is
+/// (`duration`, none where that is not known) on the video's shade.
 #callsite(autofill(loc))
-pub fn video_capsule_node(parent : @view.View, duration : Double, loc~ : SourceLoc) -> Unit {
+pub fn video_capsule_node(parent : @view.View, duration : Double, corner? : Double = message_file_corner, loc~ : SourceLoc) -> Unit {
   let length = if duration > 0.0 { clock(duration) } else { "" }
   parent.box(made_for=loc, fn(foot) {
     foot.over(Is(true)) |> ignore
-    style_node(foot, fn() { video_capsule_foot })
+    style_node(foot, fn() {
+      if corner == message_file_corner {
+        video_capsule_foot
+      } else {
+        video_capsule_foot.then(@ui.style(p=room_of(capsule_fit(corner, video_capsule_h, video_capsule_alone_in))))
+      }
+    })
     foot.box(fn(b) {
       // (as high as its words' line where the system's size of words draws it higher than the capsule: box_at)
       style_node(b, fn() { box_at(video_capsule_kept, video_capsule_box, video_capsule_h, video_capsule_words, b.words_scale()) })

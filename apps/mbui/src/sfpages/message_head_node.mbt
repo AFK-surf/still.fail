@@ -9,7 +9,8 @@
 /// Where a message's nodes are shown (MessageHere's, made once): its chat (its station, its session, its view as it
 /// changes), how wide its list is laid out (as it changes: what says whether its heads are inline, message_inline, and
 /// how wide the viewer's words are at most, mine_most_of), the window's tips, and the page's time on top (what the
-/// faces' pictures are asked for on).
+/// faces' pictures are asked for on), and where a quote's card leads (`jump`: the message it quotes by its ts, and the
+/// passage; None, nowhere: MessageHere's `go`, the one it is given finding the message).
 pub(all) struct MessageNodeHere {
   station : String
   session : String
@@ -17,6 +18,7 @@ pub(all) struct MessageNodeHere {
   width : () -> Double
   tips : @sf.TipLayer
   stint : () -> Int
+  jump : ((String, String) -> Unit)?
 }
 
 ///|

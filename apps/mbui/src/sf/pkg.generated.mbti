@@ -1800,6 +1800,7 @@ pub fn quota_lines_node(@view.View, () -> @json.Json?, small? : Bool, gap? : Dou
 pub fn quota_said(@json.Json?) -> String
 
 pub fn quote_card(@ui.Ctx, String, String, String, role? : String, comment? : String, composer? : Bool, jump? : Bool, remove? : Bool, picture? : () -> Unit, comment_field? : () -> Unit, words_width? : Double, words_key? : String) -> QuoteCardDone
+pub fn quote_card_node(@view.View, TipLayer, () -> String, () -> String, () -> String, () -> String, () -> Bool, () -> Unit, pictured? : () -> Bool, picture? : (@view.View) -> Unit) -> @view.View
 
 pub let quote_picture_corner : Double
 
@@ -2437,7 +2438,7 @@ pub fn video_capsule(@ui.Ctx, String, Double, coming? : Double?, corner? : Doubl
 
 pub let video_capsule_h : Double
 
-pub fn video_capsule_node(@view.View, Double) -> Unit
+pub fn video_capsule_node(@view.View, Double, corner? : Double) -> Unit
 
 pub let video_ground : @ui.Color
 

@@ -170,6 +170,7 @@ fn card_new(
         width: fn() { w },
         tips,
         stint: fn() { 0 },
+        jump: None,
       }
       let core = Some(@sfbase.settings_core(src, card_ws))
       root.box(fn(f) {
