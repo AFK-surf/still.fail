@@ -254,7 +254,7 @@ jobs:
         run: |
           TC=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
           scripts/mbc check "--cc=$TC/aarch64-linux-android30-clang" --nm="$TC/llvm-nm" --obj=out/mbc-check \
-            "--cflags=-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM -Dmain=mbui_main" \
+            "--cflags=-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC -Dmain=mbui_main" \
             out/android/mod/_build/native/release/build/demo/demo.c
       - uses: actions/upload-artifact@v4
         with:

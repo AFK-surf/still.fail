@@ -212,8 +212,11 @@ for t in $targets; do
     # its part 1/2 260 s of its 5 minutes, main c96bf86e 42774790006, 2026-11-10: its test 54, the long name's bar at
     # each platform, size of words, width and state, 48 viewers opened, is a fifth of the file's time alone (13 s of 62
     # in Wasm on Studio, the others 1 s each). Cut before it, the two are 28 s and 34 s; a test added before it moves N)
+    # (kept_rows_kinds' four by count put three of its longest (中屏 read out, both scrolled) in one run, 166-233 s at 120 a
+    # second alone, app 3/4 at 120 fps part 2/2 226-247 s of its 5 minutes, main e1c758fc 42939211803, mbui-chooser-node
+    # 42940297713, 2026-11-11: those three a run each, @2@3@4@5@8, the last run still 8-11 on the second)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:@54
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
@@ -231,8 +234,13 @@ for t in $targets; do
       fi
       # (in k runs of its tests by their index: moon test FILE --index FROM-TO, the tests in the file's order)
       m=$(grep -c '^test "' "$f")
-      if [ "${k#@}" != "$k" ] && [ "${k#@}" -lt "$m" ]; then runs+=("$f --index 0-${k#@}" "$f --index ${k#@}-$m"); continue; fi
-      if [ "${k#@}" != "$k" ] || [ "$k" -le 1 ] || [ "$m" -le 1 ]; then runs+=("$f"); continue; fi
+      # (@N@M…: cut before each of those tests, as their time says, not by count)
+      if [ "${k#@}" != "$k" ]; then
+        a=0
+        for c in ${k//@/ } $m; do [ "$c" -gt "$a" ] && [ "$c" -le "$m" ] && runs+=("$f --index $a-$c") && a=$c; done
+        continue
+      fi
+      if [ "$k" -le 1 ] || [ "$m" -le 1 ]; then runs+=("$f"); continue; fi
       for ((j = 0; j < k; j++)); do
         a=$((j * m / k)) b=$(((j + 1) * m / k))
         [ $b -gt $a ] && runs+=("$f --index $a-$b")

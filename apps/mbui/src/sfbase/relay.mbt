@@ -8,7 +8,7 @@
 /// The picker open (`thread` -1: none), its places as read (0 being read, 1 read, 2 not: `error` says why), the bot
 /// picked ("" the chat's own), all the places asked for, the place picked (a row of the view), what the core showed
 /// for what was asked last (kept while the next is on its way) and what that was; the people of where it goes (read for
-/// `people_of`, the place as `relay_target` says it, "" none yet) and whom the note can mention (as `relay_view`): the
+/// `people_of`, the place as `relay_target` says it, "" none yet) and whom the note can mention (as the view): the
 /// one chosen among them (for the `@` and words it was chosen for) and the `@` whose menu was closed (-1 none).
 pub(all) struct Relaying {
   station : @signals.Signal[String]
@@ -87,10 +87,12 @@ pub fn relay_reset() -> Unit {
 /// The picker opened for the chat `thread` of `station`: its places asked for.
 pub fn relay_open(src : Source, station : String, thread : Double) -> Unit {
   relay_reset()
+  relay_opened.val = relay_opened.val + 1
+  let opened = relay_opened.val
   relaying.station.set(station)
   relaying.thread.set(thread)
   (src.call)("chat.relayPlaces", { "station": Json::string(station), "thread": Json::number(thread) }, fn(res) {
-    if relaying.thread.get() != thread || relaying.station.get() != station {
+    if relay_opened.val != opened || relaying.thread.get() != thread || relaying.station.get() != station {
       return
     }
     match res {
@@ -104,44 +106,6 @@ pub fn relay_open(src : Source, station : String, thread : Double) -> Unit {
       }
     }
   })
-}
-
-///|
-/// What the picker shows now (relay-pick.ts RelayView: `link`, `bot`, `bots`, `rows`, `recent`, `total`, `empty`,
-/// `unread`), asked of the core once the frame is built when what is typed, the bot or all changed; what it showed for
-/// what was asked before until it answers (None before its first answer).
-pub fn relay_view(c : @ui.Ctx, src : Source) -> Json? {
-  if relaying.read.get() != 1 {
-    return None
-  }
-  let params : Map[String, Json] = {
-    "connects": Json::array(relaying.connects.get()),
-    "query": Json::string(relaying.query.text()),
-  }
-  if relaying.all.get() {
-    params["all"] = Json::boolean(true)
-  }
-  if relaying.bot.get() != "" {
-    params["bot"] = Json::string(relaying.bot.get())
-  }
-  let params = Json::object(params)
-  let asked = params.stringify()
-  if asked != relaying.asked.get() {
-    let thread = relaying.thread.get()
-    // (asked once the frame's builds are over: the last build's ask is the one kept)
-    c.after_build("relay/chat.relayView", fn() {
-      if relaying.asked.get() != asked && relaying.thread.get() == thread {
-        relaying.asked.set(asked)
-        (src.call)("chat.relayView", params, fn(res) {
-          match res {
-            Ok(v) if relaying.thread.get() == thread && relaying.asked.get() == asked => relaying.view.set(Some(v))
-            _ => ()
-          }
-        })
-      }
-    })
-  }
-  relaying.view.get()
 }
 
 ///|
@@ -173,90 +137,15 @@ fn relay_target(view : Json?) -> Map[String, Json]? {
 }
 
 ///|
-/// Whom the note can mention now (relay-pick.ts MentionView `rows`: each person, with the note as it is once they are
-/// picked), none till an `@` is typed in it, nor for an `@` whose menu was closed: the people of where it goes read then
-/// (once for each place), the core asked once the frame is built when they or the note changed (as `relay_view`).
-pub fn relay_mentions(c : @ui.Ctx, src : Source, view : Json?) -> Array[Json] {
-  let shown = relay_mentions_asked(c, src, view)
-  let at = if shown is Some(_) { number(shown, "at").to_int() } else { -1 }
-  if at < 0 || at == relaying.mention_closed.get() {
-    return []
-  }
-  // (another `@`, or other words after it: the first chosen again)
-  let typed = at.to_string() + "\u{1}" + text(shown, "query")
-  if relaying.mention_for.get() != typed {
-    relaying.mention_for.set(typed)
-    relaying.mention_active.set(0)
-  }
-  items(shown, "rows")
-}
-
-///|
-/// The one chosen among the `n` offered (as the composer's refs_active): moved `by` (round), or put `to` one.
-pub fn relay_mention_active(n : Int, by? : Int = 0, to? : Int) -> Int {
-  match to {
-    Some(i) => relaying.mention_active.set(i)
-    None => ()
-  }
-  if n <= 0 {
-    return 0
-  }
-  relaying.mention_active.set(((relaying.mention_active.get() + by) % n + n) % n)
-  relaying.mention_active.get()
-}
-
-///|
 /// The menu closed for the `@` it is at (Escape, a press away): not opened again till another.
 pub fn relay_mentions_close() -> Unit {
   relaying.mention_closed.set(number(relaying.mentions.get(), "at").to_int())
 }
 
 ///|
-/// The core's MentionView for the note as it is (None till an `@` is typed and it has answered).
-fn relay_mentions_asked(c : @ui.Ctx, src : Source, view : Json?) -> Json? {
-  let note = relaying.note.text()
-  let target = match relay_target(view) {
-    Some(p) if note.contains("@") => p
-    _ => return None
-  }
-  let thread = relaying.thread.get()
-  let of = Json::object(target).stringify()
-  if relaying.people_of.get() != of {
-    c.after_build("relay/chat.relayPeople", fn() {
-      if relaying.people_of.get() != of && relaying.thread.get() == thread {
-        relaying.people_of.set(of)
-        relaying.people.set([])
-        (src.call)("chat.relayPeople", Json::object(target), fn(res) {
-          match res {
-            Ok(v) if relaying.thread.get() == thread && relaying.people_of.get() == of => relaying.people.set(items(Some(v), "people"))
-            _ => ()
-          }
-        })
-      }
-    })
-    return None
-  }
-  let params = Json::object({ "people": Json::array(relaying.people.get()), "note": Json::string(note) })
-  let asked = params.stringify()
-  if asked != relaying.mentions_asked.get() {
-    c.after_build("relay/chat.relayMentions", fn() {
-      if relaying.mentions_asked.get() != asked && relaying.thread.get() == thread {
-        relaying.mentions_asked.set(asked)
-        (src.call)("chat.relayMentions", params, fn(res) {
-          match res {
-            Ok(v) if relaying.thread.get() == thread && relaying.mentions_asked.get() == asked => relaying.mentions.set(Some(v))
-            _ => ()
-          }
-        })
-      }
-    })
-  }
-  relaying.mentions.get()
-}
-
-///|
 /// The chat relayed to the place picked, or to the thread of the Slack message's link typed (through the bot gone on
-/// through), with the note: said where it went when done, why not when not; `done` told once it went.
+/// through), with the note: said where it went when done, why not when not; `done` told once it went (the picker
+/// closing on it), what it held left as it was for the picker's way out: put back as it opens next (relay_open).
 pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> Unit {
   let p = match relay_target(view) {
     Some(p) => p
@@ -271,8 +160,168 @@ pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> U
   act(src, @sf.t("web-main.relay.verb"), "", "chat.relay", Json::object(p), ok=fn(v) {
     toast_later(@sf.t("web-main.relay.done", args=[("place", text(Some(v), "place"))]))
     if relaying.thread.get() == thread {
-      relay_reset()
+      relaying.busy.set(false)
     }
     done()
   }, failed=fn() { relaying.busy.set(false)})
+}
+
+///|
+/// Which opening of the picker this is (relay_open's): what the core answers for one before another is let fall.
+// kept across runs: counted as it opens, read by what it asked
+let relay_opened : Ref[Int] = Ref(0)
+
+///|
+/// What the picker is asked for now (relay_view's params, written out; "" while its places are not read).
+fn relay_view_asking() -> String {
+  if relaying.read.get() != 1 {
+    return ""
+  }
+  relay_view_params().stringify()
+}
+
+///|
+/// What `chat.relayView` is asked with: the connects read, what is typed, all of them or not, the bot gone on through.
+fn relay_view_params() -> Json {
+  let params : Map[String, Json] = {
+    "connects": Json::array(relaying.connects.get()),
+    "query": Json::string(relaying.query.text()),
+  }
+  if relaying.all.get() {
+    params["all"] = Json::boolean(true)
+  }
+  if relaying.bot.get() != "" {
+    params["bot"] = Json::string(relaying.bot.get())
+  }
+  Json::object(params)
+}
+
+///|
+/// The picker's asks of the core in node `v` (its body's, made once as it opens): what it shows asked as what is typed,
+/// the bot or all changes (`chat.relayView`, each once), the people where it goes once an `@` is typed in the note
+/// (`chat.relayPeople`, once for each place), whom the note can mention as they or the note change
+/// (`chat.relayMentions`), the first of them chosen for another `@` or other words after it; each at the moment what it
+/// is asked by changes, what is answered for an ask made before or for an opening before this one let fall.
+pub fn relay_asks_node(v : @view.View, src : Source) -> Unit {
+  let opened = relay_opened.val
+  let now = fn(thread : Double) { relay_opened.val == opened && relaying.thread.get() == thread }
+  v.reacts(relay_view_asking, fn(asked) {
+    if asked == "" || asked == relaying.asked.get() {
+      return
+    }
+    let thread = relaying.thread.get()
+    relaying.asked.set(asked)
+    (src.call)("chat.relayView", @signals.untracked(relay_view_params), fn(res) {
+      match res {
+        Ok(view) if now(thread) && relaying.asked.get() == asked => relaying.view.set(Some(view))
+        _ => ()
+      }
+    })
+  })
+  v.reacts(relay_people_asking, fn(of) {
+    if of == "" || of == relaying.people_of.get() {
+      return
+    }
+    let thread = relaying.thread.get()
+    relaying.people_of.set(of)
+    relaying.people.set([])
+    let target = @json.parse(of) catch { _ => Json::null() }
+    (src.call)("chat.relayPeople", target, fn(res) {
+      match res {
+        Ok(p) if now(thread) && relaying.people_of.get() == of => relaying.people.set(items(Some(p), "people"))
+        _ => ()
+      }
+    })
+  })
+  v.reacts(relay_mentions_asking, fn(asked) {
+    if asked == "" || asked == relaying.mentions_asked.get() {
+      return
+    }
+    let thread = relaying.thread.get()
+    relaying.mentions_asked.set(asked)
+    let params = Json::object({ "people": Json::array(relaying.people.get()), "note": Json::string(relaying.note.text()) })
+    (src.call)("chat.relayMentions", params, fn(res) {
+      match res {
+        Ok(m) if now(thread) && relaying.mentions_asked.get() == asked => relaying.mentions.set(Some(m))
+        _ => ()
+      }
+    })
+  })
+  // (another `@`, or other words after it: the first chosen again)
+  v.reacts(relay_mention_typed, fn(typed) {
+    if typed != "" && relaying.mention_for.get() != typed {
+      relaying.mention_for.set(typed)
+      relaying.mention_active.set(0)
+    }
+  })
+}
+
+///|
+/// What the picker shows now (relay-pick.ts RelayView), what it showed for what was asked before till the core answers;
+/// None while its places are not read, or before its first answer.
+pub fn relay_view_now() -> Json? {
+  if relaying.read.get() != 1 {
+    return None
+  }
+  relaying.view.get()
+}
+
+///|
+/// Where the note's people are read for now (relay_target written out), "" where the note has no `@` or it goes nowhere
+/// yet.
+fn relay_people_asking() -> String {
+  if !relaying.note.text().contains("@") {
+    return ""
+  }
+  match relay_target(relay_view_now()) {
+    Some(p) => Json::object(p).stringify()
+    None => ""
+  }
+}
+
+///|
+/// What whom the note can mention is asked with now (the people read and the note, written out), "" till the people of
+/// where it goes are asked for.
+fn relay_mentions_asking() -> String {
+  let of = relay_people_asking()
+  if of == "" || relaying.people_of.get() != of {
+    return ""
+  }
+  Json::object({ "people": Json::array(relaying.people.get()), "note": Json::string(relaying.note.text()) }).stringify()
+}
+
+///|
+/// The core's MentionView for the note as it is, where it is asked for now (None: no `@`, nowhere to go, or no answer).
+fn relay_mentions_shown() -> Json? {
+  if relay_mentions_asking() == "" {
+    return None
+  }
+  relaying.mentions.get()
+}
+
+///|
+/// The `@` and the words after it the people shown are for ("" none, or one whose menu was closed).
+fn relay_mention_typed() -> String {
+  let shown = relay_mentions_shown()
+  let at = if shown is Some(_) { number(shown, "at").to_int() } else { -1 }
+  if at < 0 || at == relaying.mention_closed.get() {
+    return ""
+  }
+  at.to_string() + "\u{1}" + text(shown, "query")
+}
+
+///|
+/// Whom the note can mention now (relay_mentions' rows, as it is asked of no frame): none till an `@` is typed in it,
+/// nor for an `@` whose menu was closed.
+pub fn relay_mentions_now() -> Array[Json] {
+  if relay_mention_typed() == "" {
+    return []
+  }
+  items(relay_mentions_shown(), "rows")
+}
+
+///|
+/// What the people the note can mention are shown for: the words typed after the `@` ("" none).
+pub fn relay_mention_query() -> String {
+  text(relay_mentions_shown(), "query")
 }

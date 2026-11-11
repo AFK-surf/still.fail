@@ -397,7 +397,6 @@
       "src/sfpages/message.mbt": 1,
       "src/sfpages/message_files.mbt": 1,
       "src/sfpages/recent.mbt": 1,
-      "src/sfpages/relay.mbt": 1,
       "src/sfpages/resources.mbt": 2,
       "src/sfpages/screen_stage.mbt": 3,
       "src/sfpages/screen_view.mbt": 1,
@@ -506,7 +505,6 @@
     "old-panel": {
       "src/sfapp/settings/run_more.mbt": 2,
       "src/sfapp/settings/station_add.mbt": 1,
-      "src/sfapp/settings/vault_ask.mbt": 1,
       "src/sfapp/sheet.mbt": 1,
       "src/sfapp/sheets.mbt": 4,
       "src/sfdesk/attention.mbt": 1,
@@ -518,7 +516,6 @@
       "src/sfpages/decision.mbt": 1,
       "src/sfpages/model_triple.mbt": 2,
       "src/sfpages/new_chat.mbt": 1,
-      "src/sfpages/relay.mbt": 1,
       "src/sfpages/screen_debug.mbt": 1,
       "src/sfpages/screen_panel.mbt": 1,
       "src/sfpages/screen_view.mbt": 1,

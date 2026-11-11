@@ -27,7 +27,7 @@ import type { Rigs } from "../src/rigs.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, OUTLINED, OUTLINED_ENTRIES, UP, devicesSaid, fixture, hostReading, messageAdded, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { CHAT, CHAT_MESSAGES, OPENS, OUTLINED, OUTLINED_ENTRIES, UP, devicesSaid, fixture, hostReading, messageAdded, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
 import { applyKeyed } from "../src/collections.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
 
@@ -41,7 +41,8 @@ const BAR_KB = 32;
 const DELTA_BAR_KB = 4;
 
 /// Each way the app asks a topic (apps/mbui/src: `.topic("name"`, sfbase/bars.mbt `place_reads`; a chat's and its
-/// jobs' `compact`, sfbase/source.mbt `core_topic_params`), by a name of its own.
+/// jobs' `compact`, sfbase/source.mbt `core_topic_params`), by a name of its own. The chat is held as it opens, its last
+/// page read (`OPENS`), and again as `… six pages`, its six pages loaded (`LONG`).
 const station = CHAT.station;
 const key = CHAT.keys[0];
 const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
@@ -66,6 +67,8 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "settings": { topic: "settings", scope: "ws" },
   "chat": { topic: "chat", station, session: key },
   "chat compact": { topic: "chat", station, session: key, compact: true },
+  "chat six pages": { topic: "chat", station, session: key },
+  "chat compact six pages": { topic: "chat", station, session: key, compact: true },
   "chatJobs compact": { topic: "chatJobs", station, session: key, compact: true },
   "chatJobs summary": { topic: "chatJobs", station, session: key, compact: true, summary: true },
   "history": { topic: "history", station, key },
@@ -87,10 +90,13 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "chatOutline": { topic: "chatOutline", station: OUTLINED.station, thread: OUTLINED.thread },
 };
 
+/// Those measured with the chat's six pages loaded (`CHAT_MESSAGES`), the rest with its last alone.
+const LONG = new Set(["chat six pages", "chat compact six pages"]);
+
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
 const OVER: Record<string, number> = {
-  "chat": 344,
-  "chat compact": 328,
+  "chat six pages": 248,
+  "chat compact six pages": 248,
   "profiles": 160,
   "usage": 144,
   "chats": 88,
@@ -99,13 +105,13 @@ const OVER: Record<string, number> = {
   "pick": 64,
   "station": 56,
   "history": 56,
+  "chat": 48,
+  "chat compact": 48,
 };
 
 /// Those over `DELTA_BAR_KB` as something changes, by `<name>/<cause>`: the heaviest message, KB as in `OVER`.
 const OVER_DELTA: Record<string, number> = {
   "newChat/quota": 8,
-  "chat/quota": 8,
-  "chat compact/quota": 8,
   "pick/quota": 8,
 };
 
@@ -235,9 +241,11 @@ const topicOf = (name: string): Topic => {
   return t;
 };
 
-/// A rig with every view, a new chat's and a model's pickers, the changelog; the real-size workspace set in it, and
-/// every topic of `ASKED` subscribed as the app subscribes (keyed), its messages to each by id.
-async function held() {
+/// A rig with every view, a new chat's and a model's pickers, the changelog; the real-size workspace set in it, the chat
+/// with its six pages loaded (`long`) or its last alone, the chat of four weeks held whole, and every topic of `ASKED` measured so subscribed as the app
+/// subscribes (keyed), its messages to each by id.
+async function held(long = false) {
+  const chat = long ? CHAT_MESSAGES : OPENS;
   // (the workspace's devices as core.ts makes them: what each up station says, the rigs' none here)
   let devices: Devices | null = null;
   const t = setup({
@@ -257,12 +265,12 @@ async function held() {
     },
   });
   const base = t.host.nowMs();
-  const names = Object.keys(ASKED);
+  const names = Object.keys(ASKED).filter((name) => LONG.has(name) === long);
   names.forEach((name, i) => t.store.subscribe(1, i + 1, topicOf(name), true));
   // Set as the topics are watched, and again once the views watch what they found they are made of (a value set of a
   // topic nothing watches is not kept: the core's station topics read what is watched).
   for (let round = 0; round < 2; round++) {
-    for (const [topic, value] of fixture(base)) t.set(topic, value);
+    for (const [topic, value] of fixture(base, chat)) t.set(topic, value);
     t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), outlinedLog(base));
     for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
     await t.host.time.pass(100);
@@ -293,65 +301,85 @@ async function held() {
     }
     return out;
   };
-  return { t, base, first, during };
+  return { t, base, chat, first, during };
+}
+
+/// What each of `ASKED` is sent whole as it subscribes: the chat's six pages' with the rest.
+async function firstOfAll(): Promise<Map<string, J>> {
+  const all = new Map<string, J>();
+  for (const long of [false, true]) {
+    const { t, first } = await held(long);
+    try {
+      for (const [name, m] of first) all.set(name, m);
+    } finally {
+      t.store.runner.shutdown();
+    }
+  }
+  return all;
 }
 
 test("what each topic the app asks is sent whole holds to its bar on a workspace of real size", async () => {
-  const { t, first } = await held();
-  try {
-    const failed = Object.keys(ASKED).flatMap((name) => {
-      const m = first.get(name);
-      return m === undefined ? [`${name}: no value came`] : "error" in m ? [`${name}: ${JSON.stringify(m.error)}`] : [];
-    });
-    const measured = new Map([...first].filter(([, m]) => "value" in m).map(([name, m]) => [name, bytes(m)]));
-    const faults = [...failed, ...judge(measured, BAR_KB, OVER, "OVER")];
-    if (print || faults.length > 0) {
-      console.log(table(`What each topic is sent whole (bar ${BAR_KB} KB):`, [...first].map(([name, m]) => ({ name, bytes: bytes(m), bar: OVER[name] !== undefined ? 0 : BAR_KB, value: m.value }))));
-      if (first.get("stations")?.value !== undefined) console.log(beside(first.get("stations").value));
-    }
-    assert.deepEqual(faults, []);
-  } finally {
-    t.store.runner.shutdown();
+  const first = await firstOfAll();
+  const failed = Object.keys(ASKED).flatMap((name) => {
+    const m = first.get(name);
+    return m === undefined ? [`${name}: no value came`] : "error" in m ? [`${name}: ${JSON.stringify(m.error)}`] : [];
+  });
+  const measured = new Map([...first].filter(([, m]) => "value" in m).map(([name, m]) => [name, bytes(m)]));
+  const faults = [...failed, ...judge(measured, BAR_KB, OVER, "OVER")];
+  if (print || faults.length > 0) {
+    console.log(table(`What each topic is sent whole (bar ${BAR_KB} KB):`, [...first].map(([name, m]) => ({ name, bytes: bytes(m), bar: OVER[name] !== undefined ? 0 : BAR_KB, value: m.value }))));
+    if (first.get("stations")?.value !== undefined) console.log(beside(first.get("stations").value));
   }
+  assert.deepEqual(faults, []);
 });
 
-test("what each topic the app asks is sent as the workspace changes holds to its bar", async () => {
-  const { t, base, during } = await held();
-  try {
-    const st = 0;
-    const causes: [string, Map<string, J[]>][] = [];
-    causes.push(["host", await during(() => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000)]);
-    causes.push(["quota", await during(() => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000)]);
-    causes.push(["message", await during(() => {
-      for (const [topic, value] of messageAdded(base, t.host.nowMs())) t.set(topic, value);
-    }, 1000)]);
-    // The chat of four weeks: its agent writing on (twice), a person's words edited, a person saying something.
-    const log = (item: [number, unknown]) => t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [item]);
-    causes.push(["agent", await during(() => {
-      log(outlinedWorking(base, 1));
-      log(outlinedWorking(base, 2));
-    }, 1000)]);
-    causes.push(["edit", await during(() => log(outlinedEdit(base, t.host.nowMs())), 1000)]);
-    causes.push(["said", await during(() => log(outlinedSaid(base, t.host.nowMs())), 1000)]);
-    causes.push(["minute", await during(() => {}, 60_000)]);
-    const heaviestOf = new Map<string, number>();
-    const rows: { name: string; bytes: number; bar: number; value?: unknown }[] = [];
-    for (const [cause, sent] of causes) {
-      for (const [name, messages] of sent) {
-        const sizes = messages.map(bytes);
-        const top = Math.max(...sizes);
-        const at = `${name}/${cause}`;
-        heaviestOf.set(at, top);
-        const m = messages[sizes.indexOf(top)];
-        rows.push({ name: `${at} (${messages.length}, ${sizes.reduce((a, b) => a + b, 0)} B in all)`, bytes: top, bar: OVER_DELTA[at] !== undefined ? 0 : DELTA_BAR_KB, value: m.value ?? m.delta });
+/// What goes out to each of `ASKED` as the workspace changes, by cause: the chat's six pages' with the rest.
+async function causesOfAll(): Promise<[string, Map<string, J[]>][]> {
+  const causes: [string, Map<string, J[]>][] = [];
+  for (const long of [false, true]) {
+    const { t, base, chat, during } = await held(long);
+    try {
+      const st = 0;
+      causes.push(["host", await during(() => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000)]);
+      causes.push(["quota", await during(() => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000)]);
+      causes.push(["message", await during(() => {
+        for (const [topic, value] of messageAdded(base, t.host.nowMs(), chat)) t.set(topic, value);
+      }, 1000)]);
+      if (!long) {
+        // The chat of four weeks: its agent writing on (twice), a person's words edited, a person saying something.
+        const log = (item: [number, unknown]) => t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [item]);
+        causes.push(["agent", await during(() => {
+          log(outlinedWorking(base, 1));
+          log(outlinedWorking(base, 2));
+        }, 1000)]);
+        causes.push(["edit", await during(() => log(outlinedEdit(base, t.host.nowMs())), 1000)]);
+        causes.push(["said", await during(() => log(outlinedSaid(base, t.host.nowMs())), 1000)]);
       }
+      causes.push(["minute", await during(() => {}, 60_000)]);
+    } finally {
+      t.store.runner.shutdown();
     }
-    const faults = judge(heaviestOf, DELTA_BAR_KB, OVER_DELTA, "OVER_DELTA");
-    if (print || faults.length > 0) console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
-    assert.deepEqual(faults, []);
-  } finally {
-    t.store.runner.shutdown();
   }
+  return causes;
+}
+
+test("what each topic the app asks is sent as the workspace changes holds to its bar", async () => {
+  const causes = await causesOfAll();
+  const heaviestOf = new Map<string, number>();
+  const rows: { name: string; bytes: number; bar: number; value?: unknown }[] = [];
+  for (const [cause, sent] of causes) {
+    for (const [name, messages] of sent) {
+      const sizes = messages.map(bytes);
+      const top = Math.max(...sizes);
+      const at = `${name}/${cause}`;
+      heaviestOf.set(at, top);
+      const m = messages[sizes.indexOf(top)];
+      rows.push({ name: `${at} (${messages.length}, ${sizes.reduce((a, b) => a + b, 0)} B in all)`, bytes: top, bar: OVER_DELTA[at] !== undefined ? 0 : DELTA_BAR_KB, value: m.value ?? m.delta });
+    }
+  }
+  const faults = judge(heaviestOf, DELTA_BAR_KB, OVER_DELTA, "OVER_DELTA");
+  if (print || faults.length > 0) console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
+  assert.deepEqual(faults, []);
 });
 
 // ── what a chat's outline answers ──
@@ -445,84 +473,84 @@ test("what looking in a chat's outline finds holds to the bar on a chat of real 
 const KEPT = new Set(["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive", "chat"]);
 
 /// Those whose first message asked again after a cause is over `DELTA_BAR_KB`, by `<name>/<cause>`: KB as in `OVER`.
-const OVER_AGAIN: Record<string, number> = {
-  "chat/quota": 8,
-  "chat compact/quota": 8,
-};
+const OVER_AGAIN: Record<string, number> = {};
 
 /// What `m`, a first message, is: `same`, `kept` (what changed from what was kept), `value` (whole), else `?`.
 const said = (m: J): string => ("same" in m ? "same" : "kept" in m ? "kept" : "value" in m ? "value" : "?");
 
 test("what a topic the app keeps is sent as it is asked again after something changed holds to its bar", async () => {
-  const { t, base } = await held();
-  try {
-    const names = Object.keys(ASKED).filter((name) => KEPT.has(ASKED[name]!.topic));
-    const st = 0;
-    const causes: [string, () => void, number][] = [
-      ["host", () => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000],
-      ["quota", () => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000],
-      ["message", () => {
-        for (const [topic, value] of messageAdded(base, t.host.nowMs())) t.set(topic, value);
-      }, 1000],
-      ["minute", () => {}, 60_000],
-    ];
-    /// The first message to `id` once `f` was done.
-    const firstTo = async (id: number, f: () => void): Promise<J> => {
-      t.host.takeEmitted();
-      f();
-      await t.host.time.pass(100);
-      return t.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && !("waiting" in m));
-    };
-    let id = 10_000;
-    const measured = new Map<string, number>();
-    const rows: { name: string; whole: number; now: number; how: string }[] = [];
-    const faults: string[] = [];
-    for (const [cause, f, ms] of causes) {
-      // Each subscribed as the app asks it, and let go of keeping what it was sent.
-      const kept = new Map<string, { value: unknown; v: string }>();
-      for (const name of names) {
-        const at = ++id;
-        const m = await firstTo(at, () => t.store.subscribe(1, at, topicOf(name), true));
-        const v = await firstTo(at, () => t.store.unsubscribe(1, at, true));
-        if (m === undefined || !("value" in m) || typeof v?.v !== "string") faults.push(`${name}/${cause}: nothing kept (${JSON.stringify(m)?.slice(0, 80)}, ${JSON.stringify(v)})`);
-        else kept.set(name, { value: m.value, v: v.v });
-      }
-      t.host.takeEmitted();
-      f();
-      await t.host.time.pass(ms, 100);
-      // Asked again with it; and as one that kept nothing, whole, to weigh it against.
-      for (const [name, { value, v }] of kept) {
-        const again = ++id;
-        const fresh = ++id;
-        const m = await firstTo(again, () => t.store.subscribe(1, again, topicOf(name), true, undefined, v));
-        const w = await firstTo(fresh, () => t.store.subscribe(1, fresh, topicOf(name), true));
-        t.store.unsubscribe(1, again);
-        t.store.unsubscribe(1, fresh);
-        const at = `${name}/${cause}`;
-        if (m === undefined || w === undefined || !("value" in w)) {
-          faults.push(`${at}: ${JSON.stringify(m)?.slice(0, 80)}, ${JSON.stringify(w)?.slice(0, 80)}`);
-          continue;
+  // (each measured where `held` holds it: the chat at its last page, and with its six pages loaded)
+  let id = 10_000;
+  const measured = new Map<string, number>();
+  const rows: { name: string; whole: number; now: number; how: string }[] = [];
+  const faults: string[] = [];
+  for (const long of [false, true]) {
+    const { t, base, chat } = await held(long);
+    try {
+      const names = Object.keys(ASKED).filter((name) => KEPT.has(ASKED[name]!.topic) && LONG.has(name) === long);
+      const st = 0;
+      const causes: [string, () => void, number][] = [
+        ["host", () => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000],
+        ["quota", () => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000],
+        ["message", () => {
+          for (const [topic, value] of messageAdded(base, t.host.nowMs(), chat)) t.set(topic, value);
+        }, 1000],
+        ["minute", () => {}, 60_000],
+      ];
+      /// The first message to `id` once `f` was done.
+      const firstTo = async (id: number, f: () => void): Promise<J> => {
+        t.host.takeEmitted();
+        f();
+        await t.host.time.pass(100);
+        return t.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && !("waiting" in m));
+      };
+      for (const [cause, f, ms] of causes) {
+        // Each subscribed as the app asks it, and let go of keeping what it was sent.
+        const kept = new Map<string, { value: unknown; v: string }>();
+        for (const name of names) {
+          const at = ++id;
+          const m = await firstTo(at, () => t.store.subscribe(1, at, topicOf(name), true));
+          const v = await firstTo(at, () => t.store.unsubscribe(1, at, true));
+          if (m === undefined || !("value" in m) || typeof v?.v !== "string") faults.push(`${name}/${cause}: nothing kept (${JSON.stringify(m)?.slice(0, 80)}, ${JSON.stringify(v)})`);
+          else kept.set(name, { value: m.value, v: v.v });
         }
-        // (what it holds then is what it would be sent whole)
-        const holds = "same" in m ? value : "kept" in m ? applyKeyed(value, m.delta) : m.value;
-        if (JSON.stringify(canonical(holds)) !== JSON.stringify(canonical(w.value))) faults.push(`${at}: asked again (${said(m)}), it holds another value than the one whole`);
-        measured.set(at, bytes(m));
-        rows.push({ name: at, whole: bytes(w), now: bytes(m), how: said(m) });
+        t.host.takeEmitted();
+        f();
+        await t.host.time.pass(ms, 100);
+        // Asked again with it; and as one that kept nothing, whole, to weigh it against.
+        for (const [name, { value, v }] of kept) {
+          const again = ++id;
+          const fresh = ++id;
+          const m = await firstTo(again, () => t.store.subscribe(1, again, topicOf(name), true, undefined, v));
+          const w = await firstTo(fresh, () => t.store.subscribe(1, fresh, topicOf(name), true));
+          t.store.unsubscribe(1, again);
+          t.store.unsubscribe(1, fresh);
+          const at = `${name}/${cause}`;
+          if (m === undefined || w === undefined || !("value" in w)) {
+            faults.push(`${at}: ${JSON.stringify(m)?.slice(0, 80)}, ${JSON.stringify(w)?.slice(0, 80)}`);
+            continue;
+          }
+          // (what it holds then is what it would be sent whole)
+          const holds = "same" in m ? value : "kept" in m ? applyKeyed(value, m.delta) : m.value;
+          if (JSON.stringify(canonical(holds)) !== JSON.stringify(canonical(w.value))) faults.push(`${at}: asked again (${said(m)}), it holds another value than the one whole`);
+          measured.set(at, bytes(m));
+          rows.push({ name: at, whole: bytes(w), now: bytes(m), how: said(m) });
+        }
       }
+    } finally {
+      t.store.runner.shutdown();
     }
-    faults.push(...judge(measured, DELTA_BAR_KB, OVER_AGAIN, "OVER_AGAIN"));
-    if (print || faults.length > 0) {
-      const lines = [`What a topic kept is sent asked again, its first message (bar ${DELTA_BAR_KB} KB), beside its value whole:`];
-      for (const r of rows) {
-        const over = r.now > DELTA_BAR_KB * 1024;
-        lines.push(`  ${over ? "!" : " "} ${r.name.padEnd(28)} ${r.how.padEnd(6)} ${String(r.now).padStart(9)} B ${kb(r.now).toFixed(1).padStart(7)} KB   whole ${String(r.whole).padStart(9)} B ${kb(r.whole).toFixed(1).padStart(7)} KB`);
-      }
-      console.log(lines.join("\n"));
-    }
-    assert.deepEqual(faults, []);
-  } finally {
-    t.store.runner.shutdown();
   }
+  faults.push(...judge(measured, DELTA_BAR_KB, OVER_AGAIN, "OVER_AGAIN"));
+  if (print || faults.length > 0) {
+    const lines = [`What a topic kept is sent asked again, its first message (bar ${DELTA_BAR_KB} KB), beside its value whole:`];
+    for (const r of rows) {
+      const over = r.now > DELTA_BAR_KB * 1024;
+      lines.push(`  ${over ? "!" : " "} ${r.name.padEnd(36)} ${r.how.padEnd(6)} ${String(r.now).padStart(9)} B ${kb(r.now).toFixed(1).padStart(7)} KB   whole ${String(r.whole).padStart(9)} B ${kb(r.whole).toFixed(1).padStart(7)} KB`);
+    }
+    console.log(lines.join("\n"));
+  }
+  assert.deepEqual(faults, []);
 });
 
 /// `v` with every object's keys in order: two values alike whatever order their keys were made in.

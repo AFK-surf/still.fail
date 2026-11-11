@@ -187,7 +187,8 @@ pub(all) struct Style {
   // it. `come_k`: the share of what it comes to its last layout was (1 none), read by the column for that gap.
   // `come_v`: how fast (points a ms) its height went as it set out, its way a Move on from that speed (move_path), as
   // one set out again while it went goes on from its way's (come_state); `come_goal`: how tall it went to, as last laid
-  // out (NaN none yet).
+  // out (NaN none yet); `come_plan`: how tall it went to as its way's length and turn were said, the first time it was
+  // laid out so (NaN till then): that way's length and turn kept whatever it comes to after (come_way_by).
   mut come_from : Double
   mut come_to : Double
   mut come_at : Double
@@ -200,6 +201,7 @@ pub(all) struct Style {
   // written only where the way is worked out (come_height), read only by what lays it out whole in that in the same
   // layout (size_uncached), its way's end the same; flex's alone, never read across layouts or by anything else.
   mut come_whole : Double
+  mut come_plan : Double
   // Not CSS's: what an item's come way is to the box holding it (come_*), where that box takes no room holding nothing
   // (`gone_empty`): whether this way is it going from holding nothing or to it (set out from none, going to none, or
   // turned back on such a way), not one in another's place (a pick's, from as tall as that one was).
@@ -308,6 +310,7 @@ pub fn Style::new() -> Style {
     come_v: 0.0,
     come_goal: 0.0 / 0.0,
     come_whole: 0.0 / 0.0,
+    come_plan: 0.0 / 0.0,
     come_fill: false,
     gone_empty: false,
     structural: false,

@@ -162,6 +162,23 @@ yet and you can add one, add it.
   it asks of the system goes through `tools/sys` (sys.c on native, wasmrun's "tsys" on Wasm). No new Python; a Python
   script that needs a change is rewritten instead (those left are going one by one).
 
+## The Android app's allocator
+
+- MoonBit's runtime in the Android app allocates with mimalloc 2.1.7, compiled from its source into libmbui.so
+  (`scripts/android.sh`: `MOONBIT_ALLOCATOR_MIMALLOC`, `mimalloc_obj`), the one moon's native builds (the Mac's and
+  Windows' apps) link prebuilt; it overrides no `malloc`, so the rest of the process keeps scudo. It is compiled by way
+  of `src/host/mimalloc_android.c`, which takes away the `SYS_*` names its raw `syscall(…)`s are made by, so it calls
+  libc's: Android's seccomp filter for apps kills a raw `access` (it killed kitdemo on x86_64 at once). Decided 2026-11-11
+  (the owner: 「你自己决定」): the same 349 KB `chat` message `@json.parse`d and let go, the same C, median ms to
+  decode / to let go: a phone (Snapdragon SM8850, Android 17) 7.3-15 / 2.4-4.9 with scudo, 2.6-5.3 / 0.7-0.85 with
+  mimalloc; an arm64 emulator 7.3 / 2.5 against 2.7 / 0.5; the Mac (mimalloc) 2.6 / 0.5. Scudo had been there only
+  because moon ships mimalloc as a macOS object alone (zzj3720/mbui 191a3ed321). Given up, known and taken: scudo's
+  hardening (and memory tagging where a phone has it), about 145 KB of the app (157 KB of still.fail's libmbui.so,
+  56 KB of its APK), and memory mimalloc keeps once freed.
+  Do not change it back without measuring again. Every compile of the Android app's C says the same allocator
+  (`scripts/android.sh`'s `CFLAGS`, its Wasm shell's too; mbui-ci's `mbc check`): a MoonBit object freed by the
+  other one is memory corrupted. iOS stays on the system's until CI runs the iOS app built so.
+
 ## Before a PR
 
 - One PR per piece of work. Squash with `git reset --soft $(git merge-base HEAD origin/main)`, never onto

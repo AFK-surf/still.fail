@@ -122,7 +122,6 @@ using @sfbase {
   relaying,
   relay_open,
   relay_reset,
-  relay_view,
   relay_connect,
   relay_go,
   act,

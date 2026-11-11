@@ -115,9 +115,10 @@ export class Output {
 
 class ItemWrong extends Error {}
 
-/// A page needs its agents' identities and status, not their full histories. A client that asks for the compact chat
-/// reads the histories and jobs through their own topics; the full value stays available inside the core and to older
-/// clients. Invalid fields are left for the normal shape check to report.
+/// A page needs its agents' identities and status, not their jobs. A client that asks for the compact chat reads them
+/// through their own topic (`chatJobs`); the full value stays available inside the core and to older clients. (An
+/// agent's turns and threads go out to neither: its shape, ChatAgent, has them not.) Invalid fields are left for the
+/// normal shape check to report.
 function compactChat(value: unknown): unknown {
   if (!isObject(value) || !Array.isArray(value.agents)) return value;
   return {
@@ -125,8 +126,10 @@ function compactChat(value: unknown): unknown {
     agents: value.agents.map((agent: unknown) => {
       if (!isObject(agent)) return agent;
       const out = { ...agent };
-      for (const field of ["turns", "threads", "jobs"]) if (Array.isArray(agent[field])) out[field] = [];
-      if (Array.isArray(agent.jobs)) out.hasJobs = agent.jobs.length > 0;
+      if (Array.isArray(agent.jobs)) {
+        out.jobs = [];
+        out.hasJobs = agent.jobs.length > 0;
+      }
       return out;
     }),
   };

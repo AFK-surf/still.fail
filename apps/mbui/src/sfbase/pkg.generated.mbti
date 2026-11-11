@@ -1407,21 +1407,23 @@ pub fn refs_sent_runs(String, String) -> @json.Json?
 
 pub fn refs_still_at(@ui.Field, (Int32, String)?, String, String) -> Bool
 
+pub fn relay_asks_node(@view.View, Source) -> Unit
+
 pub fn relay_connect(String) -> @json.Json?
 
 pub fn relay_go(Source, @json.Json?, done? : () -> Unit) -> Unit
 
-pub fn relay_mention_active(Int32, by? : Int32, to? : Int32) -> Int32
-
-pub fn relay_mentions(@ui.Ctx, Source, @json.Json?) -> Array[@json.Json]
+pub fn relay_mention_query() -> String
 
 pub fn relay_mentions_close() -> Unit
+
+pub fn relay_mentions_now() -> Array[@json.Json]
 
 pub fn relay_open(Source, String, Double) -> Unit
 
 pub fn relay_reset() -> Unit
 
-pub fn relay_view(@ui.Ctx, Source) -> @json.Json?
+pub fn relay_view_now() -> @json.Json?
 
 pub let relaying : Relaying
 
