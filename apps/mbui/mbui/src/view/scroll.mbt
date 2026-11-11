@@ -452,9 +452,14 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
 /// once for it (made again with another node in its place, it is where it was put then, as far as the hand left it);
 /// put there again while what it holds comes short of that as it is laid out, till the hand is on it; its foot keeping
 /// the room it lacks to go there however few what it holds is (a page's list's: View::scrolls_window) while `kept()`
-/// says so, whether `v` shows or not. Where `v` is laid out is its own reading, not its caller's.
+/// says so, whether `v` shows or not. Where `v` is laid out is its own reading, not its caller's. What of `v` lies under
+/// what covers the top (all of it, tucked) is out of sight and takes no finger nor pointer there, nor is reached from
+/// round it (Tree::input_bounds), wherever it is scrolled to.
 pub fn Scroll::tucks(self : Scroll, v : View, cover : () -> Double, kept? : () -> Bool = fn() { true }) -> Unit {
   guard self.host is Some(host) && v.alive() else { return }
+  // (what of it lies under what covers its top is out of sight: found by no finger nor pointer, Tree::tucked_bound)
+  v.tree.nodes[v.at].tucked_under = Some((host.at, cover))
+  v.tree.hits = v.tree.hits + 1
   v.reacts(fn() { v.laid_size_told() is Some(_) }, fn(laid) {
     guard laid && self.tuck_at.untracked() is None else { return }
     // (not scrolled yet: where it is in what it holds is where it is laid out in it)

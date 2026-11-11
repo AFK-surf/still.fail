@@ -18,6 +18,8 @@ fn window_case(
   place? : @view.ListPlace[Int],
   near_foot? : (Double, () -> Bool, () -> Unit),
   tucks? : Int,
+  cover? : Double = 0.0,
+  presses? : Bool = false,
 ) -> WindowCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(10, fn(i) { i }), same=fn(a, b) { a == b })
@@ -40,12 +42,15 @@ fn window_case(
       o.scrolls_window(scroll, fn() { keys.get() }, est=80.0, holds~, follows~, place?, near_foot?, fn(b, k) {
         made.push(k)
         if tucks == Some(k) {
-          scroll.tucks(b, fn() { 0.0 })
+          scroll.tucks(b, fn() { cover })
         }
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
         let h = tall(k)
         b.height(By(fn() { Some(h.get()) })) |> ignore
+        if presses {
+          b.on_press(fn() {  }) |> ignore
+        }
       })
       |> ignore
     })
@@ -237,6 +242,24 @@ test "Scroll::tucks: put as the block is first laid out so its foot is at the to
   // (two of 40 in 100: the second's foot 80 down, room kept under them to go there)
   assert_eq(c.scroll.at(c.tree), 80.0)
   assert_eq(c.scroll.most(), 80.0)
+}
+
+///|
+test "Scroll::tucks: what is tucked under what covers the top is out of sight and takes no press there; scrolled down into sight, it does below what covers the top alone" {
+  // (block 0 tucked under a bar 30 over the top: its foot put 30 down, 10 of it scrolled past the top)
+  let c = window_case(tucks=0, cover=30.0, presses=true)
+  let (b0, b1) = (c.live[0].id(), c.live[1].id())
+  let (_, y0, _, h0) = c.live[0].rect()
+  assert_eq((c.scroll.at(c.tree), y0 + h0), (10.0, 30.0))
+  assert_true(!(c.tree.target_at(150.0, 15.0) is Pressed(t) && t == b0), msg="under the bar, tucked")
+  assert_true(!(c.tree.target_at(150.0, 29.5) is Pressed(t) && t == b0), msg="under the bar's foot, tucked")
+  assert_true(c.tree.target_at(150.0, 30.5) is Pressed(t) && t == b1, msg="the block after it, past the bar")
+  // (scrolled to the top: drawn 0 to 40, under the bar to 30, in sight past it)
+  c.tree.wheel_at(150.0, 50.0, 0.0, -100.0, 0, 10.0) |> ignore
+  c.tree.frame(390.0, 844.0) |> ignore
+  assert_eq(c.scroll.at(c.tree), 0.0)
+  assert_true(!(c.tree.target_at(150.0, 15.0) is Pressed(t) && t == b0), msg="under the bar, in the top")
+  assert_true(c.tree.target_at(150.0, 35.0) is Pressed(t) && t == b0, msg="in sight past the bar")
 }
 
 ///|

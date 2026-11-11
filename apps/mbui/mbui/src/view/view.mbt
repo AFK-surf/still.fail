@@ -446,6 +446,9 @@ struct Node {
   mut size_cell : @signals.Signal[(Double, Double)?]?
   /// what it holds is found by a finger or the pointer within it alone (View::bounds_input)
   mut bounds_input : Bool
+  /// tucked over the top of what scrolls it (Scroll::tucks): that node, and how far down its top what covers it reaches
+  /// (a bar): what of it lies there is out of sight, found by no finger nor pointer
+  mut tucked_under : (Int, () -> Double)?
   /// what it and what it holds are drawn clear of the fading and stretching of (View::drawn_clear_of)
   mut drawn_clear : NodeId?
   /// how far in from its right edge the pointer brings its bar out (View::bar_near; 0 none), and whether it does now
@@ -1537,6 +1540,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.focused_cell = None
       n.size_cell = None
       n.bounds_input = false
+      n.tucked_under = None
       n.drawn_clear = None
       n.bar_near = 0.0
       n.bar_across = false
@@ -1661,6 +1665,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         focused_cell: None,
         size_cell: None,
         bounds_input: false,
+        tucked_under: None,
         drawn_clear: None,
         bar_near: 0.0,
         bar_across: false,
@@ -3807,10 +3812,19 @@ pub fn Tree::drawn_clear_of(self : Tree, id : NodeId, by : NodeId) -> Bool {
 pub fn Tree::input_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, Double) {
   let mut b = (-1.0e9, -1.0e9, 1.0e9, 1.0e9)
   guard self.alive_id(id) else { return b }
+  let m = self.nodes[id.at]
+  // (tucked out of sight over the top of what scrolls it, it or what holds it: found below what covers that alone,
+  // Scroll::tucks)
+  if m.tucked_under is Some(t) {
+    b = self.tucked_bound(t, b)
+  }
   // (on a flight's way, it or what holds it: bound by nothing that holds that, shared.mbt)
-  let mut i = if self.nodes[id.at].lift is Some(_) { -1 } else { self.nodes[id.at].parent }
+  let mut i = if m.lift is Some(_) { -1 } else { m.parent }
   while i >= 0 {
     let n = self.nodes[i]
+    if n.tucked_under is Some(t) {
+      b = self.tucked_bound(t, b)
+    }
     if n.bounds_input {
       let (x, y, sc) = self.placed(i)
       let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
@@ -3822,6 +3836,21 @@ pub fn Tree::input_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, 
     i = n.parent
   }
   b
+}
+
+///|
+/// `b` (x0, y0, x1, y1 in the window) cut, for a node tucked over the top of what scrolls it (Scroll::tucks: that node,
+/// how far down its top what covers it reaches), to below what covers that top (a phone's top bar over Home's list):
+/// what lies under it is out of sight, found by no finger nor pointer, as what is scrolled out of a list is not
+/// (View::bounds_input). As placed now, nothing followed.
+fn Tree::tucked_bound(
+  self : Tree,
+  tucked : (Int, () -> Double),
+  b : (Double, Double, Double, Double),
+) -> (Double, Double, Double, Double) {
+  let (host, cover) = tucked
+  let (_, hy, _) = self.placed(host)
+  (b.0, dmax(b.1, hy + @signals.untracked(cover)), b.2, b.3)
 }
 
 ///|
@@ -6931,6 +6960,7 @@ fn View::let_go(self : View) -> Unit {
   n.claims = None
   n.claims_from = None
   n.bounds_input = false
+  n.tucked_under = None
   n.drawn_clear = None
   n.bar_near = 0.0
   n.bar_across = false

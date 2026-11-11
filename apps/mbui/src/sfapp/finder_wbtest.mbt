@@ -581,3 +581,66 @@ test "wide, the chat shown chosen again: no entry of its own; what the frame lan
   t.frame()
   assert_true(app.nav.pages() == landed)
 }
+
+///|
+/// A finger's tap at (x, y) on a phone's Home just shown (its search tucked under the top bar), the press done with:
+/// whether it opened the search.
+fn tucked_tap(x : Double, y : Double) -> Bool {
+  let t = screen_in("home", corner_windows[0], "zh")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  @sfpages.search_opened()
+}
+
+///|
+test "a phone's Home: its search tucked under the top bar out of sight takes no finger, below the bar's keys nor on the bar between them; scrolled into sight, it does" {
+  let t = screen_in("home", corner_windows[0], "zh")
+  let tree = @ui.view_tree().unwrap()
+  let boxes = tree.press_boxes()
+  let named = fn(b : (@view.NodeId, (Double, Double, Double, Double), Int, Int)) {
+    match tree.said_of(b.0) {
+      Some(s) => s.label
+      None => ""
+    }
+  }
+  // (found as a screen reader finds it: what takes presses where it is found does not count it, tucked)
+  let (fx, fy, fw, fh) = t.get(Button, label="搜索全部内容").rect
+  let field = (fx, fy, fx + fw, fy + fh)
+  // (the bar's keys: what takes presses whose top is above the field's foot, the field's line under them)
+  let keys = boxes.filter(fn(b) { b.1.1 < field.3 && named(b) != "搜索全部内容" }).map(fn(b) { (named(b), b.1) })
+  assert_true(keys.length() >= 3, msg="the bar's keys: \{keys}")
+  // (tucked: its foot no lower than the bar's keys' feet are, past them by 8)
+  let bar_foot = keys.fold(init=0.0, fn(m, k) { if k.1.3 > m { k.1.3 } else { m } })
+  assert_true(field.3 <= bar_foot + 8.0, msg="tucked: the field \{field}, the keys' foot \{bar_foot}")
+  // (the bar between its keys, a finger's room clear of each, at its keys' middle line: the first such place over the
+  // field's middle third)
+  let my = (keys[0].1.1 + keys[0].1.3) / 2.0
+  let mut clear : Double? = None
+  let mut x = field.0 + (field.2 - field.0) / 3.0
+  while x < field.2 && clear is None {
+    if keys.iter().all(fn(k) { x < k.1.0 - 22.0 || x > k.1.2 + 22.0 }) {
+      clear = Some(x)
+    }
+    x += 2.0
+  }
+  // (read all of this one before the next is made)
+  assert_false(@sfpages.search_opened(), msg="open as Home shows")
+  ignore(t)
+  for k in keys {
+    let (name, (x0, _, x1, y1)) = k
+    for d in [1.0, 7.0] {
+      assert_false(tucked_tap((x0 + x1) / 2.0, y1 + d), msg="\{d} below \{name} at \{k.1}")
+    }
+  }
+  match clear {
+    Some(x) => assert_false(tucked_tap(x, my), msg="on the bar at \{x},\{my}")
+    None => ()
+  }
+  // (scrolled down into sight under the bar: pressed, it opens the search)
+  let t = screen_in("home", corner_windows[0], "zh")
+  list_up_to_top(t)
+  t.draw()
+  tap_search_field(t)
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sfpages.search_opened(), msg="the field in sight, pressed")
+}
