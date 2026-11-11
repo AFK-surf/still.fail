@@ -89,17 +89,6 @@ fn ZPath::new() -> ZPath {
 }
 
 ///|
-impl @ui.Moving for ZPath with rest_at(self, now, frame) {
-  ignore(now)
-  ignore(frame)
-  if self.on {
-    self.end()
-  } else {
-    -1.0
-  }
-}
-
-///|
 /// When it is there: its time goes in whole ms (Spec::value_at), so at the first whole ms its length is out.
 fn ZPath::end(self : ZPath) -> Double {
   self.start + self.dur.ceil()

@@ -19,13 +19,11 @@
 // row come).
 
 ///|
-/// A block of a list's column as it is counted now (View::scrolls_window's `laid`, a Column's): its key, its top in
-/// the column, its height, and whether it was laid out (else as tall as said it would be).
-priv struct Laid[K] {
-  key : K
+/// A block of a list's column as it is counted now (View::scrolls_window's `laid`, a Column's): its top in the column
+/// and its height.
+priv struct Laid {
   top : Double
   h : Double
-  known : Bool
 }
 
 ///|
@@ -76,17 +74,6 @@ fn[K] Column::new() -> Column[K] {
 ///|
 fn[K] Column::length(self : Column[K]) -> Int {
   self.keys.length()
-}
-
-///|
-/// All of it again: `keys`, each with its height as laid out on the grid of `g` pixels a point and whether it was laid
-/// out.
-fn[K : Eq] Column::fill(self : Column[K], keys : Array[K], hs : Array[(Double, Bool)], g : Double) -> Unit {
-  self.refill(keys, g, whole=true) |> ignore
-  for i, h in hs {
-    self.put(i, h.0, h.1)
-  }
-  self.summed()
 }
 
 ///|
@@ -232,13 +219,13 @@ fn[K] Column::known(self : Column[K], i : Int) -> Bool {
 
 ///|
 /// Block `i` as it is counted now.
-fn[K] Column::op_get(self : Column[K], i : Int) -> Laid[K] {
-  { key: self.keys[i], top: self.top(i), h: self.hs[i], known: self.knowns[i] }
+fn[K] Column::op_get(self : Column[K], i : Int) -> Laid {
+  { top: self.top(i), h: self.hs[i] }
 }
 
 ///|
 /// The last block as it is counted now; none where there is none.
-fn[K] Column::last(self : Column[K]) -> Laid[K]? {
+fn[K] Column::last(self : Column[K]) -> Laid? {
   if self.keys.length() == 0 {
     None
   } else {

@@ -1754,7 +1754,7 @@ impl @hostapi.Host for FakeHost with cl_set(self, text, png, label) {
 /// A read of the clipboard asked (its id, from 1: the ask's place): answered by what the test gave before it, if it
 /// did, else by what it gives next.
 impl @hostapi.Host for FakeHost with cl_read(self) {
-  let ask = { frame: g().frame_no, answer: None }
+  let ask : FakeClipRead = { answer: None }
   if self.dev.held.length() > 0 {
     ask.answer = Some((self.dev.held.remove(0), g().frame_no))
     self.wants = true

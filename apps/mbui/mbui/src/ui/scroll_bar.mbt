@@ -57,7 +57,7 @@ pub let scrollbar_fade_ms : Double = 200.0
 
 ///|
 /// How a bar shows (the file's head): what scrolls holds one; how long it scrolls the bar is told by it.
-struct Bar {
+priv struct Bar {
   /// when it last came in (the frames' clock), and from how far it showed then
   mut in_at : Double
   mut in_from : Double
@@ -268,19 +268,6 @@ fn Ctx::float_takes(
   } else {
     (0.0, y1 - f.y + scroll_bar_clear)
   }
-}
-
-///|
-/// Whether node `i` is node `root` or in it.
-fn Ctx::under(self : Ctx, i : Int, root : Int) -> Bool {
-  let mut p = i
-  while p >= 0 {
-    if p == root {
-      return true
-    }
-    p = self.nodes[p].parent
-  }
-  false
 }
 
 ///|

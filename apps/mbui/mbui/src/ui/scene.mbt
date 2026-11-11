@@ -348,7 +348,7 @@ fn[A : ClipNumbers] clip_cutting(
 
 ///|
 /// What a clip's 12 numbers are read from: clip_stack, an instance list, a kept clip's.
-trait ClipNumbers {
+priv trait ClipNumbers {
   clip_number(Self, Int) -> Double
 }
 

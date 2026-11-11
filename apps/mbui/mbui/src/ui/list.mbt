@@ -719,7 +719,6 @@ fn Ctx::place_list(
     st.moving_said.set(st.held || st.moving() || st.glide)
     return
   }
-  let nan = 0.0 / 0.0
   let top_rows : Array[Int] = [] // above the pivot, nearest first
   let rows : Array[Int] = [] // the pivot and below
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
@@ -1209,16 +1208,6 @@ fn Ctx::rows_carried(self : Ctx, i : Int) -> Unit {
     self.rows_carried(c)
     c = self.nodes[c].next
   }
-}
-
-///|
-/// The list node `i` is in (its nearest), or -1.
-fn Ctx::list_of(self : Ctx, i : Int) -> Int {
-  let mut p = self.nodes[i].parent
-  while p >= 0 && self.nodes[p].kind != kind_list {
-    p = self.nodes[p].parent
-  }
-  p
 }
 
 ///|

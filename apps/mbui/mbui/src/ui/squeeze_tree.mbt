@@ -179,7 +179,7 @@ fn Ctx::tree_facts(
 /// out as the tree draws them (view_host's words: at its node's size of words, Tree::words_scale_of), said they may be
 /// cut as the tree says it (Tree::allows_ellipsis).
 fn Ctx::tree_words_facts(
-  self : Ctx,
+  _self : Ctx,
   w : Node,
   d : @view.Drawn,
   contents : Map[Int, (@view.Content, Double)],

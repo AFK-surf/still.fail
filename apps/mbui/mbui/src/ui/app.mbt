@@ -42,7 +42,7 @@ let bench : Bench = {
 }
 
 ///|
-struct Bench {
+priv struct Bench {
   mut mode : Int
   mut frames : Int
   cpu : Array[Double]
@@ -1166,7 +1166,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // what lies under it waits for the finger's way (claim.mbt); the innermost meanwhile
     claim_down(c, x, y)
     for id in c.press_chain {
-      sideways_down(c, id, x, y)
+      sideways_down(id)
     }
     c.editor_drag = false
     c.handle_drag = 0

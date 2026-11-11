@@ -43,12 +43,8 @@ fn AttrOp::matches(self : AttrOp, value : String) -> Bool {
 ///|
 priv enum PseudoClass {
   FirstChild
-  Link
-  Visited
-  Hover
-  Active
-  Focus
-  Lang(String)
+  /// :link, :visited, :hover, :active, :focus, :lang(…): none of them matches here
+  Unmatched
 }
 
 ///|
@@ -530,7 +526,7 @@ priv enum SelToken {
   TId(String)
   TAttr(String, AttrOp)
   TPseudo(String)
-  TLang(String)
+  TLang
   TDescendant
   TChild
   TAdjacent
@@ -655,7 +651,7 @@ fn parse_selector(text : String) -> (Selector?, Int) {
             finished = true
             return Some((None, false))
           }
-          return Some((Some(TLang(lang)), true))
+          return Some((Some(TLang), true))
         }
         return Some((Some(TPseudo(ident)), true))
       } else if c == 0x3E || c == 0x2B {
@@ -744,16 +740,12 @@ fn parse_selector(text : String) -> (Selector?, Int) {
       Some(TPseudo(i)) => {
         let class = match i {
           "first-child" => FirstChild
-          "link" => Link
-          "visited" => Visited
-          "hover" => Hover
-          "active" => Active
-          "focus" => Focus
+          "link" | "visited" | "hover" | "active" | "focus" => Unmatched
           _ => return (None, s.pos)
         }
         add_sub(SubPseudo(class))
       }
-      Some(TLang(l)) => add_sub(SubPseudo(Lang(l)))
+      Some(TLang) => add_sub(SubPseudo(Unmatched))
       Some(TDescendant) => combinator = Descendant
       Some(TChild) => combinator = Child
       Some(TAdjacent) => combinator = Adjacent
@@ -847,7 +839,7 @@ fn match_component(comp : Component, doc : XDoc, id : Int) -> Bool {
           None => return false
         }
       SubPseudo(FirstChild) => if prev_sibling_element(doc, id) >= 0 { return false }
-      SubPseudo(_) => return false
+      SubPseudo(Unmatched) => return false
     }
   }
   true

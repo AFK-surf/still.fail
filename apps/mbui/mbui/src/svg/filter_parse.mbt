@@ -2,7 +2,6 @@
 
 ///|
 priv struct Filter {
-  id : String
   rect : @skia.NonZeroRect
   primitives : Array[Primitive]
 }
@@ -26,7 +25,7 @@ priv enum FeInput {
   SourceGraphic
   SourceAlpha
   Reference(String)
-} derive(Eq)
+}
 
 ///|
 priv enum ColorMatrixKind {
@@ -61,7 +60,7 @@ priv enum EdgeMode {
   EdgeNone
   EdgeDuplicate
   EdgeWrap
-} derive(Eq)
+}
 
 ///|
 priv enum ColorChannel {
@@ -123,8 +122,8 @@ fn convert_filters(doc : SDoc, node : Int, state : State, object_bbox : @skia.No
     match object_bbox {
       Some(b) => {
         let rect = base.bbox_transform(b)
+        cache.gen_filter_id() |> ignore
         filters.push({
-          id: cache.gen_filter_id(),
           rect,
           primitives: [{ rect, color_interpolation: SRGB, result: "result", kind }],
         })
@@ -313,7 +312,7 @@ fn convert_filter_url(
   if !cacheable && cache.filters.contains(id) {
     id = cache.gen_filter_id()
   }
-  let f : Filter = { id, rect, primitives }
+  let f : Filter = { rect, primitives }
   cache.filters[id] = f
   Ok(Some(f))
 }
@@ -914,7 +913,7 @@ fn convert_fe_image(doc : SDoc, fe : Int, sub : @skia.NonZeroRect, state : State
   }
   if link >= 0 {
     let root = Group::empty()
-    convert_element(doc, link, { ..state, fe_image_link: true }, cache, root)
+    convert_element(doc, link, state, cache, root)
     if root.children.is_empty() {
       return dummy_primitive()
     }

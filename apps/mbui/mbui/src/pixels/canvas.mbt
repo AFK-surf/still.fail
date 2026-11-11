@@ -44,7 +44,7 @@ pub fn Canvas::fill(self : Canvas, color : Int64) -> Unit {
 pub fn Canvas::draw(
   self : Canvas,
   sw : Int,
-  sh : Int,
+  _sh : Int,
   src : FixedArray[Byte],
   from : (Int, Int, Int, Int),
   to : (Double, Double, Double, Double),

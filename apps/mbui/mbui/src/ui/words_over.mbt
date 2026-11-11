@@ -284,12 +284,6 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
 }
 
 ///|
-/// All visible overlaps, including intentional closing fades (for diagnostics).
-fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)] {
-  self.words_over_details().map(fn(f) { (f.0, f.1, f.2, f.3) })
-}
-
-///|
 /// The rule held on the frame just drawn, where something on it moves: a pair not found before by this Tester, past
 /// its file's bar, fails the test at once, with what and where.
 fn Tester::hold_words_over(self : Tester) -> Unit {

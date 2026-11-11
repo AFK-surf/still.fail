@@ -28,7 +28,7 @@
 // same page pushed again starts afresh.
 
 ///|
-struct NavPage[P] {
+priv struct NavPage[P] {
   serial : Int
   mut ended : Bool
   mut page : P

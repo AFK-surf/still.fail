@@ -163,13 +163,6 @@ fn HighP::run(self : HighP, stages : Array[Stage]) -> Unit {
 fn HighP::stage(self : HighP, s : Stage) -> Bool {
   let p = self
   match s {
-    MoveSourceToDestination =>
-      for i in 0..<8 {
-        p.dr[i] = p.r[i]
-        p.dg[i] = p.g[i]
-        p.db[i] = p.b[i]
-        p.da[i] = p.a[i]
-      }
     MoveDestinationToSource =>
       for i in 0..<8 {
         p.r[i] = p.dr[i]

@@ -1,7 +1,7 @@
 ///|
 /// What is kept for each of the window tree's nodes, by its index, the node's making kept with it (an index made again
 /// is another node, none of this one's): looked up for each node drawn every frame, so by its index, no hash of its id.
-struct ByNode[V] {
+priv struct ByNode[V] {
   mut slots : Array[(Int, V)?]
   mut count : Int
 }
@@ -52,11 +52,6 @@ fn[V] ByNode::remove(self : ByNode[V], id : @view.NodeId) -> Unit {
 fn[V] ByNode::clear(self : ByNode[V]) -> Unit {
   self.slots = []
   self.count = 0
-}
-
-///|
-fn[V] ByNode::length(self : ByNode[V]) -> Int {
-  self.count
 }
 
 ///|

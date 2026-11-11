@@ -33,7 +33,6 @@ priv struct ScrollCase {
   tree : @view.Tree
   scroll : @view.Scroll
   now : Ref[Double]
-  pressed : Ref[Int]
   outer : Ref[Double]
   rows : @signals.Signal[Int]
   focus : Ref[@view.NodeId?]
@@ -84,7 +83,7 @@ fn scroll_case() -> ScrollCase {
     time=fn() { now.val },
   )
   tree.frame(390.0, 844.0) |> ignore
-  { tree, scroll, now, pressed, outer, rows, focus }
+  { tree, scroll, now, outer, rows, focus }
 }
 
 ///|

@@ -3,111 +3,6 @@
 // wake it asked for, a motion of its own.
 
 ///|
-/// What the part is built from, and how many times it was built.
-priv struct TestPart {
-  builds : Ref[Int]
-  count : @signals.Signal[Int]
-  key : Ref[String]
-  /// its build asks for a frame this long after it (0: none)
-  wake : Ref[Double]
-  /// its build sets a move of its own out, once
-  moves : Ref[Bool]
-}
-
-///|
-fn TestPart::new() -> TestPart {
-  { builds: Ref(0), count: @signals.signal(0), key: Ref("a"), wake: Ref(0.0), moves: Ref(false) }
-}
-
-///|
-/// How far the part's move goes in its tests, and for how long; when its wake comes.
-let kept_move_ms : Double = 300.0
-
-///|
-let kept_wake_ms : Double = 1000.0
-
-///|
-/// A list of rows at the left (150 wide), the part at the right.
-fn TestPart::view(self : TestPart) -> (Ctx) -> Unit {
-  fn(c) {
-    c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-      c.box(w=Px(150.0), h=Fill(1.0), fn() {
-        c.list("rows", 40, 40.0, fn(i) {
-          c.box(h=Px(40.0), fn() { c.text("row \{i}", size=10.0) |> ignore }) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-        c.kept_part(c.id("part"), self.key.val, fn() {
-          self.builds.val = self.builds.val + 1
-          let n = self.count.get()
-          if self.moves.val {
-            self.moves.val = false
-            c.move_state([("kept", ["--kept-x"])], duration=kept_move_ms)
-          }
-          let x = c.moved("--kept-x", if n > 0 { 40.0 } else { 0.0 })
-          c.box(w=Px(160.0), h=Px(60.0), ml=x, bg=0x3366CCFFL, radius=8.0, fn() {
-            c.text("count \{n}", size=12.0) |> ignore
-          })
-          |> ignore
-          if self.wake.val > 0.0 {
-            c.wake_in(self.wake.val, later=true)
-          }
-        })
-      })
-      |> ignore
-    })
-    |> ignore
-  }
-}
-
-///|
-/// The last frame's instances drawn at the part's side (from 150 across), as numbers.
-fn kept_drawn() -> Array[Double] {
-  let c = g()
-  let out = []
-  for k in 0..<c.ninst {
-    let b = k * inst_size
-    if c.inst[b] >= 150.0 {
-      for j in 0..<inst_size {
-        out.push(c.inst[b + j])
-      }
-    }
-  }
-  out
-}
-
-///|
-/// A part kept beside a list (as TestPart's), a mark in it turned and fading by the clock (Ctx::cycle_look); how many
-/// times it was built.
-fn looked_part(builds : Ref[Int]) -> (Ctx) -> Unit {
-  fn(c) {
-    c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-      c.box(w=Px(150.0), h=Fill(1.0), fn() {
-        c.list("rows", 40, 40.0, fn(i) {
-          c.box(h=Px(40.0), fn() { c.text("row \{i}", size=10.0) |> ignore }) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-        c.kept_part(c.id("part"), "", fn() {
-          builds.val = builds.val + 1
-          c.box(w=Px(160.0), h=Px(60.0), bg=0x3366CCFFL, radius=8.0, align=ACenter, justify=JCenter, fn() {
-            let mark = c.box(w=Px(20.0), h=Px(8.0), bg=0xFFFFFFFFL, fn() {  })
-            c.cycle_look(mark, looked_turn_ms, fn(f) { look(rot=f * 6.283185307179586, alpha=0.5 + 0.5 * f) })
-          })
-          |> ignore
-        })
-      })
-      |> ignore
-    })
-    |> ignore
-  }
-}
-
-///|
 /// How long a wheel's notch is let ease on in the tests below.
 let kept_ease_ms : Double = 400.0
 
@@ -279,34 +174,8 @@ test "a part kept drawn again: what takes the focus in it is in Tab's order, as 
     nodes_run.on = true
     (went, ids, again)
   }
-  let (went_kept, ids, again) = run(true)
+  let (went_kept, ids, _) = run(true)
   let (went_built, _, _) = run(false)
   assert_eq(went_kept, ids)
   assert_eq(went_built, went_kept)
 }
-
-///|
-/// A part kept in a box `at` across (its margin, set between frames: what holds the part moved, not the part), in a
-/// box that clips, its builds counted; what it draws reaching past its box.
-fn moved_part_view(at : Ref[Double], builds : Ref[Int]) -> (Ctx) -> Unit {
-  fn(c) {
-    c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
-      c.box(w=Px(200.0), h=Px(120.0), ml=at.val, fn() {
-        c.kept_part(c.id("part"), "k", fn() {
-          builds.val = builds.val + 1
-          c.box(w=Fill(1.0), h=Fill(1.0), bg=0x3366CCFFL, radius=8.0, fn() {
-            c.text("moved with its box", size=12.0) |> ignore
-            c.box(w=Px(260.0), h=Px(20.0), min_w=260.0, bg=0xCC6633FFL, fn() {  }) |> ignore
-          })
-          |> ignore
-        })
-      })
-      |> ignore
-    })
-    |> ignore
-  }
-}
-
-///|
-/// Where the box holding the part is put, frame by frame (moved_part_view).
-let moved_part_at : Array[Double] = [30.0, 90.0, 150.0, 410.0, 380.0, -190.0, 0.3, 0.0]

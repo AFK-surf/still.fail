@@ -13,7 +13,6 @@ priv struct Laid {
   in_b : Ref[(() -> Unit)?]
   b_go : @signals.Signal[Int]
   done_in_b : Ref[Int]
-  builds_a : Ref[Int]
 }
 
 ///|
@@ -25,9 +24,7 @@ fn laid_islands(spec? : () -> Spec = fn() { tween(push_ms, ease=Linear) }, two? 
   let in_b : Ref[(() -> Unit)?] = Ref(None)
   let b_go = @signals.signal(0, same=fn(a, b) { a == b })
   let done_in_b = Ref(0)
-  let builds_a = Ref(0)
   let view_a = fn(c : @ui.Ctx) {
-    builds_a.val = builds_a.val + 1
     poked.get() |> ignore
     c.column(fn() {
       c.box(h=Px(top.get()), fn() {  }) |> ignore
@@ -75,7 +72,7 @@ fn laid_islands(spec? : () -> Spec = fn() { tween(push_ms, ease=Linear) }, two? 
   })
   t.draw()
   frame_by_clock(t)
-  { t, top, poked, in_b, b_go, done_in_b, builds_a }
+  { t, top, poked, in_b, b_go, done_in_b }
 }
 
 ///|

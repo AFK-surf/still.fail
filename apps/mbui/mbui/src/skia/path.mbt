@@ -97,7 +97,7 @@ pub fn Path::segments(self : Path) -> PathSegmentsIter {
 }
 
 ///|
-pub fn Path::clear(self : Path) -> PathBuilder {
+pub fn Path::clear(_self : Path) -> PathBuilder {
   PathBuilder::new()
 }
 

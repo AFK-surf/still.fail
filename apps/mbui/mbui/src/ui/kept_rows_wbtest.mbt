@@ -274,19 +274,6 @@ test "on a host that sets things on whole pixels, what a list's rows hold is on 
 }
 
 ///|
-/// The pointer over the rows, the wheel turned notch by notch: the row under it lit as they pass.
-fn rows_wheel(t : Tester, k : TestRows) -> Unit {
-  ignore(k)
-  t.move(160.0, 200.0)
-  for _ in 0..<20 {
-    t.wheel(160.0, 200.0, 40.0)
-    t.run_for(rows_notch_ms)
-  }
-  t.move(160.0, 300.0)
-  t.run_for(rows_notch_ms)
-}
-
-///|
 /// The list dragged a little and still: row 3's mark changed, its button tapped, another row's button after it.
 fn rows_taps(t : Tester, k : TestRows) -> Unit {
   t.drag(160.0, 390.0, 160.0, 340.0, steps=5)
@@ -560,28 +547,6 @@ test "a list's rows read out as they are dragged and flung: kept, read out as bu
 }
 
 ///|
-/// 30 rows, each saying once a frame's builds are over that it showed (Ctx::after_build), its button telling once of a
-/// tap on it (Ctx::tell): how many times each said it showed, how many taps were told.
-fn telling_rows(seen : Array[Int], taps : Ref[Int]) -> (Ctx) -> Unit {
-  fn(c) {
-    c.list("telling", 30, 50.0, fn(i) {
-      let go = c.id("go")
-      c.on_press(go, fn() {
-        c.tell("tapped", fn() { taps.val = taps.val + 1 })
-      })
-      c.after_build("shown", fn() { seen[i] = seen[i] + 1 })
-      c.box(h=Px(50.0), dir=Row, padx=10.0, align=ACenter, fn() {
-        c.box(w=Fill(1.0), fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
-        c.box(id=go, w=Px(60.0), h=Px(30.0), bg=0x3366CCFFL, fn() { c.text("go \{i}", size=10.0) |> ignore })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  }
-}
-
-///|
 test "a list's rows kept as their nodes on the device's pixels as a host lays them: at its end as what is under them grows, dragged, flung" {
   let foot = @signals.signal(20.0)
   let t = Tester::new(pixel_rows(foot), w=390.0, h=700.0, platform=2, scale=2.625)
@@ -778,4 +743,14 @@ test "a list's rows under a ground made once: kept as they are under one built e
   let built = run(false)
   assert_true(kept.kept > 200, msg="rows drawn again: \{kept.kept}")
   rows_same(kept, built)
+}
+
+///|
+/// The list node `i` is in (its nearest), or -1.
+fn Ctx::list_of(self : Ctx, i : Int) -> Int {
+  let mut p = self.nodes[i].parent
+  while p >= 0 && self.nodes[p].kind != kind_list {
+    p = self.nodes[p].parent
+  }
+  p
 }

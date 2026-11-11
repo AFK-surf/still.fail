@@ -146,8 +146,8 @@ fn clip_element(
   path.fill = Some(Fill::default())
   let root = Group::empty()
   root.children.push(NPath(path))
+  cache.gen_clip_path_id() |> ignore
   let clip : ClipPath = {
-    id: cache.gen_clip_path_id(),
     transform: @skia.Transform::default(),
     clip_path: None,
     root,
@@ -289,7 +289,7 @@ fn convert_clip_path(
   if root.children.is_empty() {
     return None
   }
-  let clip : ClipPath = { id, transform, clip_path, root }
+  let clip : ClipPath = { transform, clip_path, root }
   cache.clip_paths[id] = clip
   Some(clip)
 }
@@ -358,7 +358,7 @@ fn convert_mask(
     id = cache.gen_mask_id()
   }
   if mask_all {
-    let m : Mask = { id, rect, kind: Luminance, mask: None, root: Group::empty() }
+    let m : Mask = { rect, kind: Luminance, mask: None, root: Group::empty() }
     cache.masks[id] = m
     return Some(m)
   }
@@ -392,7 +392,7 @@ fn convert_mask(
     }
   }
   update_paint_servers(root, @skia.Transform::default(), None, None, cache)
-  let m : Mask = { id, rect, kind, mask: sub, root }
+  let m : Mask = { rect, kind, mask: sub, root }
   cache.masks[id] = m
   Some(m)
 }

@@ -1305,7 +1305,7 @@ fn EditorState::caret_box(
 /// _CaretPainter): a caret of its own follows the finger's way, not stopping between letters, a little bigger than the
 /// caret and see-through; the field's caret put where it would land, drawn grey there; let go, the one it draws slides
 /// there (float_caret_back_ms) and is the caret again.
-struct FloatCaret {
+priv struct FloatCaret {
   /// where in the window the host said the finger began, and where the caret stood then in the field's words (from
   /// their top left: where it stands, its line's middle)
   fx : Double
@@ -1473,12 +1473,6 @@ fn Ctx::paint_float_caret(
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
 fn Node::hint_shown(self : Node) -> TextLayout {
   self.field_box().hint_shown()
-}
-
-///|
-/// How the field `n` lays its placeholder out without soft wrapping (FieldBox::hint_lay).
-fn Node::hint_lay(self : Node) -> (String) -> TextLayout {
-  self.field_box().hint_lay()
 }
 
 ///|

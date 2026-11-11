@@ -2,6 +2,11 @@
 // scripts/scrollplot.py table, a reference written apart from this), and
 // lists scrolled by scripted touches as each platform's would scroll.
 
+using @view {
+  edge_spring_at,
+  first_when,
+}
+
 ///|
 fn approx(got : Double, want : Double, tol : Double) -> Unit raise {
   if (got - want).abs() > tol || got != got {

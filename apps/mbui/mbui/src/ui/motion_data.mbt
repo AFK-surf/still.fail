@@ -316,19 +316,6 @@ fn Ctx::motion_owed(self : Ctx) -> Bool {
   owed
 }
 
-///|
-/// When the last of what is said to move is at rest (-1: none moves).
-fn Ctx::motion_end(self : Ctx) -> Double {
-  let mut last = -1.0
-  for e in self.movers {
-    let r = e.m.rest_at(self.clock, self.frame_no)
-    if r > last {
-      last = r
-    }
-  }
-  last
-}
-
 // ── a spring, solved ─────────────────────────────────────────────────────────
 
 ///|

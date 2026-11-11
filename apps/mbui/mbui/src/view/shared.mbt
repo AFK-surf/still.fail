@@ -64,18 +64,14 @@ priv struct Departure {
 }
 
 ///|
-/// A flight under way: its id, the new node, the old one's copy (none once let go), its start and length, how far along
-/// it is at each ms, how far off the new one's place and size it set out, the look it set out from, the layer it is
-/// drawn over, and what ends it (its binding and its end on the timeline).
+/// A flight under way: the new node, the old one's copy (none once let go), its start and length, how far along it is
+/// at each ms, the layer it is drawn over, and what ends it (its binding and its end on the timeline).
 priv struct Flying {
-  id : String
   node : NodeId
   mut ghost : NodeId?
   start : Double
   dur : Double
   along : (Double) -> Double
-  d : (Double, Double, Double, Double)
-  from : FromLook
   top : Int
   mut stop : () -> Unit
 }
@@ -554,14 +550,11 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
   let at = self.cause_now()
   let top = self.top_node_of(to.at)
   let f : Flying = {
-    id: d.id,
     node: to,
     ghost: Some({ at: ghost, gen: g.gen }),
     start: at,
     dur: ms,
     along,
-    d: dd,
-    from: d.look,
     top,
     stop: fn() {  },
   }

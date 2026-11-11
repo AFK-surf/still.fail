@@ -344,28 +344,6 @@ fn Ctx::insts_replay(self : Ctx, insts : FixedArray[Double], floats : Int, segs 
 }
 
 ///|
-/// Where what is laid out in node `i` can show (x0, y0, x1, y1): what holds it all (the window, a layer over it), cut by
-/// each box round it that clips, as laid out.
-fn Ctx::shown_at(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
-  let mut x0 = -@double.infinity
-  let mut y0 = -@double.infinity
-  let mut x1 = @double.infinity
-  let mut y1 = @double.infinity
-  let mut j = self.nodes[i].parent
-  while j >= 0 {
-    let n = self.nodes[j]
-    if n.clip || n.parent < 0 {
-      x0 = dmax(x0, n.x)
-      y0 = dmax(y0, n.y)
-      x1 = dmin(x1, n.x + n.fw)
-      y1 = dmin(y1, n.y + n.fh)
-    }
-    j = n.parent
-  }
-  (x0, y0, x1, y1)
-}
-
-///|
 /// Every part and row kept built anew from the next build: what they show changed by what they do not read (the
 /// screen's corners as the host first says them).
 pub fn Ctx::forget_parts(self : Ctx) -> Unit {

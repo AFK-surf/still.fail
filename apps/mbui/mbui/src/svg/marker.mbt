@@ -94,7 +94,8 @@ fn resolve_marker(
     p.fill = Some(Fill::default())
     let root = Group::empty()
     root.children.push(NPath(p))
-    let c : ClipPath = { id: cache.gen_clip_path_id(), transform: @skia.Transform::default(), clip_path: None, root }
+    cache.gen_clip_path_id() |> ignore
+    let c : ClipPath = { transform: @skia.Transform::default(), clip_path: None, root }
     Some(c)
   } else {
     None

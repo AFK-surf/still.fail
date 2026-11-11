@@ -1485,7 +1485,7 @@ fn r(x : Double) -> Int {
 ///|
 /// The laid-out tree as text: one node per line, indented by depth, with its
 /// rectangle; text nodes with their text and line count.
-pub fn Tester::dump(self : Tester) -> String {
+pub fn Tester::dump(_self : Tester) -> String {
   let sb = StringBuilder()
   dump_node(sb, 0, 0)
   sb.to_string()

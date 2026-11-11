@@ -170,9 +170,6 @@ const GPROPS_LIGATURE : Int = 0x04
 const GPROPS_MARK : Int = 0x08
 
 ///|
-const GPROPS_CLASS_MASK : Int = 0x0E
-
-///|
 const GPROPS_SUBSTITUTED : Int = 0x10
 
 ///|
@@ -209,9 +206,6 @@ const SCRATCH_HAS_VARIATION_SELECTOR_FALLBACK : Int = 0x40
 
 ///|
 const SCRATCH_HAS_CONTINUATIONS : Int = 0x80
-
-///|
-const SCRATCH_SHAPER0 : Int = 0x01000000
 
 ///|
 fn GlyphInfo::general_category(self : GlyphInfo) -> Int {
@@ -425,11 +419,6 @@ fn Buffer::cur(self : Buffer, i : Int) -> GlyphInfo {
 }
 
 ///|
-fn Buffer::cur_pos(self : Buffer) -> GlyphPosition {
-  self.pos[self.idx]
-}
-
-///|
 fn Buffer::prev(self : Buffer) -> GlyphInfo? {
   if self.out_len == 0 {
     None
@@ -631,13 +620,6 @@ fn Buffer::output_glyph(self : Buffer, glyph : Int) -> Unit {
 fn Buffer::output_info(self : Buffer, info : GlyphInfo) -> Unit {
   self.make_room_for(0, 1)
   self.set_out_info(self.out_len, info)
-  self.out_len += 1
-}
-
-///|
-fn Buffer::copy_glyph(self : Buffer) -> Unit {
-  self.make_room_for(0, 1)
-  self.set_out_info(self.out_len, self.info[self.idx])
   self.out_len += 1
 }
 

@@ -246,26 +246,6 @@ fn SDoc::ancestors(self : SDoc, id : Int) -> Array[Int] {
 }
 
 ///|
-fn SDoc::text(self : SDoc, id : Int) -> String {
-  let n = self.nodes[id]
-  match n.kind {
-    SText => n.text
-    SElem =>
-      if n.children.is_empty() {
-        ""
-      } else {
-        let c = self.nodes[n.children[0]]
-        if c.kind == SText {
-          c.text
-        } else {
-          ""
-        }
-      }
-    SRoot => ""
-  }
-}
-
-///|
 fn SDoc::attr_index(self : SDoc, id : Int, aid : String) -> Int {
   let n = self.nodes[id]
   for i in n.attr_start..<n.attr_end {
@@ -475,14 +455,6 @@ fn SDoc::attr_color(self : SDoc, id : Int, aid : String) -> SColor? {
 }
 
 ///|
-fn SDoc::attr_paint(self : SDoc, id : Int, aid : String) -> SPaint? {
-  match self.attr(id, aid) {
-    Some(v) => parse_paint(v)
-    None => None
-  }
-}
-
-///|
 /// A number list; None where one of its numbers is not one.
 fn SDoc::attr_numbers(self : SDoc, id : Int, aid : String) -> Array[Float]? {
   match self.attr(id, aid) {
@@ -491,23 +463,6 @@ fn SDoc::attr_numbers(self : SDoc, id : Int, aid : String) -> Array[Float]? {
       for n in parse_number_list(v) {
         match n {
           Some(n) => out.push(Float::from_double(n))
-          None => return None
-        }
-      }
-      Some(out)
-    }
-    None => None
-  }
-}
-
-///|
-fn SDoc::attr_lengths(self : SDoc, id : Int, aid : String) -> Array[Length]? {
-  match self.attr(id, aid) {
-    Some(v) => {
-      let out = []
-      for n in parse_length_list(v) {
-        match n {
-          Some(n) => out.push(n)
           None => return None
         }
       }

@@ -6,7 +6,6 @@ priv struct State {
   parent_markers : Array[Int]
   context_element : (Fill?, SStroke?)?
   context_path : (@skia.Transform, @skia.NonZeroRect?)?
-  fe_image_link : Bool
   view_box : @skia.NonZeroRect
   use_size : (Float?, Float?)
   opt : Options
@@ -151,7 +150,6 @@ fn convert_doc(doc : SDoc, opt : Options) -> Tree? {
     parent_markers: [],
     context_element: None,
     context_path: None,
-    fe_image_link: false,
     view_box: view_box.rect,
     use_size: (None, None),
     opt,
@@ -230,7 +228,6 @@ fn resolve_svg_size(doc : SDoc, svg : Int, opt : Options) -> (@skia.Size?, Bool)
     parent_markers: [],
     context_element: None,
     context_path: None,
-    fe_image_link: false,
     view_box: @skia.NonZeroRect::from_xywh(0.0, 0.0, 100.0, 100.0).unwrap(),
     use_size: (None, None),
     opt,

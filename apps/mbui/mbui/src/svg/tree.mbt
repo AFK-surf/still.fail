@@ -6,7 +6,7 @@ priv struct Rgb {
   r : Int
   g : Int
   b : Int
-} derive(Eq)
+}
 
 ///|
 let rgb_black : Rgb = { r: 0, g: 0, b: 0 }
@@ -20,7 +20,6 @@ priv struct Stop {
 
 ///|
 priv struct BaseGradient {
-  id : String
   units : Units
   transform : @skia.Transform
   spread : @skia.SpreadMode
@@ -49,7 +48,6 @@ priv struct RadialGradient {
 
 ///|
 priv struct SPattern {
-  id : String
   units : Units
   content_units : Units
   transform : @skia.Transform
@@ -132,7 +130,6 @@ fn SStroke::to_skia(self : SStroke) -> @skia.Stroke {
 
 ///|
 priv struct ClipPath {
-  id : String
   transform : @skia.Transform
   clip_path : ClipPath?
   root : Group
@@ -142,11 +139,10 @@ priv struct ClipPath {
 priv enum MaskType {
   Luminance
   Alpha
-} derive(Eq)
+}
 
 ///|
 priv struct Mask {
-  id : String
   rect : @skia.NonZeroRect
   kind : MaskType
   mask : Mask?
@@ -244,7 +240,6 @@ priv struct SImage {
   size : @skia.Size
   rendering : ImageRendering
   kind : ImageData
-  abs_transform : @skia.Transform
   abs_bbox : @skia.NonZeroRect
 }
 
@@ -252,7 +247,6 @@ priv struct SImage {
 /// Text, drawn as its outlines (`flattened`); its own bounding boxes as laid out.
 priv struct SText {
   id : String
-  abs_transform : @skia.Transform
   bounding_box : @skia.Rect
   abs_bounding_box : @skia.Rect
   stroke_bounding_box : @skia.Rect
@@ -359,20 +353,6 @@ fn Node::abs_stroke_bounding_box(self : Node) -> @skia.Rect? {
     NPath(p) => p.abs_stroke_bounding_box()
     NImage(i) => Some(i.abs_bbox.to_rect())
     NText(t) => Some(t.abs_stroke_bounding_box)
-  }
-}
-
-///|
-fn Node::abs_layer_bounding_box(self : Node) -> @skia.NonZeroRect? {
-  match self {
-    NGroup(g) => g.abs_layer_bounding_box()
-    NPath(p) =>
-      match p.abs_bounding_box() {
-        Some(r) => r.to_non_zero_rect()
-        None => None
-      }
-    NImage(i) => Some(i.abs_bbox)
-    NText(t) => t.abs_bounding_box.to_non_zero_rect()
   }
 }
 
@@ -486,14 +466,6 @@ fn Group::layer_bounding_box(self : Group) -> @skia.NonZeroRect? {
     None => layer
   }
   layer.to_non_zero_rect()
-}
-
-///|
-fn Group::abs_layer_bounding_box(self : Group) -> @skia.NonZeroRect? {
-  match self.layer_bounding_box() {
-    Some(r) => r.transform(self.abs_transform)
-    None => None
-  }
 }
 
 ///|

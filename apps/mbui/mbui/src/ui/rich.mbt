@@ -28,7 +28,7 @@ pub using @text {
 
 ///|
 /// A paragraph as its node keeps it: its runs and its own look.
-struct Rich {
+priv struct Rich {
   runs : Array[Run]
   size : Double
   weight : Int

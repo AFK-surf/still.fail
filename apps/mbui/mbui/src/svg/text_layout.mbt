@@ -518,7 +518,6 @@ fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
   }
   Some({
     id: text.id,
-    abs_transform: text.abs_transform,
     bounding_box,
     abs_bounding_box,
     stroke_bounding_box: stroke_bbox.to_rect(),
@@ -1260,7 +1259,6 @@ fn raster_glyph(g : PosGlyph) -> (SImage, @skia.Transform)? {
     size,
     rendering: OptimizeQuality,
     kind: Encoded("png", bg.png),
-    abs_transform: @skia.Transform::default(),
     abs_bbox,
   }
   let upem = fi(g.units_per_em)

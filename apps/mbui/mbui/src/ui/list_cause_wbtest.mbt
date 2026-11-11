@@ -6,7 +6,6 @@
 ///|
 priv struct CauseCase {
   t : Tester
-  scroll : @view.Scroll
   keys : @signals.Signal[Array[Int]]
   /// how many times each key's block was made, and let go
   made : Map[Int, Int]
@@ -52,7 +51,7 @@ fn cause_case(keys : Array[Int], follows : Bool) -> CauseCase {
     |> ignore
   })
   t.draw()
-  { t, scroll, keys, made, gone }
+  { t, keys, made, gone }
 }
 
 ///|

@@ -654,7 +654,7 @@ fn across_scroll(c : Ctx, x : Double, y : Double) -> Int {
 
 ///|
 /// A finger down on a sideways box: it stops, and what it lies in is found (for a move up or down).
-fn sideways_down(c : Ctx, id : Int, x : Double, y : Double) -> Unit {
+fn sideways_down(id : Int) -> Unit {
   match sideways.get(id) {
     Some(st) => {
       // (where it was last drawn: a fling stepped as it was painted alone, Ctx::sideways_drawn)
