@@ -1,6 +1,7 @@
 // A node's properties each bound on its own (View::bind, by Prop): many of one node each followed as what says it
 // changes, none letting go of another's; the two ways of saying its width one binding, the last said in force.
 // Where what a node holds lies along it (View::lies_along, Lies): at its start, its end, or spread between them.
+// One filling what holds it across (View::fills_across), whatever that lines it up by, its margin kept.
 
 ///|
 test "props: one node's ground, opacity, scale, corner, words centred and words each followed as they change, none letting go of another" {
@@ -190,4 +191,88 @@ test "props: what a column holds lies between its top and its foot (Lies's Betwe
   let lies = @signals.signal(@view.Lies::Between)
   let at = lies_tree(lies, 3, row=false)
   assert_eq(at(), [(0.0, 0.0), (0.0, 40.0), (0.0, 80.0)])
+}
+
+///|
+/// A box 100 across (a column 100 wide, or a row 100 high) lining what it holds up as `lines` says, holding one 20
+/// across (along the way it lays it out, 10) that fills it across as `fills` says, `margin` round it: where that one is
+/// drawn and how big (x, y, w, h).
+fn fills_tree(
+  fills : @signals.Signal[Bool],
+  lines : @view.Along,
+  row? : Bool = false,
+  margin? : (Double, Double, Double, Double) = (0.0, 0.0, 0.0, 0.0),
+) -> () -> (Double, Double, Double, Double) {
+  let id : Ref[@view.NodeId?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.lines_up(Is(Some(Start))) |> ignore
+      root.box(fn(r) {
+        r.row(Is(row)).lines_up(Is(Some(lines))) |> ignore
+        if row {
+          r.width(Is(Some(10.0))).height(Is(Some(100.0))) |> ignore
+        } else {
+          r.width(Is(Some(100.0))).height(Is(Some(10.0))) |> ignore
+        }
+        r.box(fn(b) {
+          id.val = Some(b.id())
+          b.ground(Is(0x336699FFL)).margin(Is(margin)).fills_across(By(fn() { fills.get() })) |> ignore
+          if row {
+            b.width(Is(Some(10.0))) |> ignore
+          } else {
+            b.height(Is(Some(10.0))) |> ignore
+          }
+          // (20 across of its own: what it holds)
+          b.box(fn(i) {
+            if row {
+              i.height(Is(Some(20.0))) |> ignore
+            } else {
+              i.width(Is(Some(20.0))) |> ignore
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  fn() {
+    t.frame(390.0, 844.0) |> ignore
+    match t.drawn().search_by(fn(d) { d.id == id.val.unwrap() }) {
+      Some(i) => (t.drawn()[i].x, t.drawn()[i].y, t.drawn()[i].w, t.drawn()[i].h)
+      None => (-1.0, -1.0, -1.0, -1.0)
+    }
+  }
+}
+
+///|
+test "props: one said to fill what holds it across does, whatever that lines what it holds up by, in a column and in a row" {
+  let fills = @signals.signal(true)
+  for lines in [@view.Along::Start, Middle, End] {
+    assert_eq(fills_tree(fills, lines)(), (0.0, 0.0, 100.0, 10.0), msg="a column lining up \{lines}")
+    assert_eq(fills_tree(fills, lines, row=true)(), (0.0, 0.0, 10.0, 100.0), msg="a row lining up \{lines}")
+  }
+}
+
+///|
+test "props: one filling what holds it across keeps its margin there" {
+  let fills = @signals.signal(true)
+  assert_eq(fills_tree(fills, Middle, margin=(6.0, 0.0, 4.0, 0.0))(), (6.0, 0.0, 90.0, 10.0))
+  assert_eq(fills_tree(fills, Middle, row=true, margin=(0.0, 6.0, 0.0, 4.0))(), (0.0, 6.0, 10.0, 90.0))
+}
+
+///|
+test "props: one said to fill what holds it across, then said not to, is lined up as what holds it says again" {
+  let fills = @signals.signal(false)
+  let starts = fills_tree(fills, Start)
+  let middles = fills_tree(fills, Middle)
+  let ends = fills_tree(fills, End)
+  let before = [starts(), middles(), ends()]
+  assert_eq(before, [(0.0, 0.0, 20.0, 10.0), (40.0, 0.0, 20.0, 10.0), (80.0, 0.0, 20.0, 10.0)])
+  fills.set(true)
+  assert_eq([starts(), middles(), ends()], [(0.0, 0.0, 100.0, 10.0), (0.0, 0.0, 100.0, 10.0), (0.0, 0.0, 100.0, 10.0)])
+  fills.set(false)
+  assert_eq([starts(), middles(), ends()], before)
 }
