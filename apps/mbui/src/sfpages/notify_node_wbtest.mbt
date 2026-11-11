@@ -281,3 +281,31 @@ test "通知 made once: a kind opened shows its ways and the preview its banner;
     assert_true(t.all(Switch, label=@sf.t("web-pages.notifications.ways.banner")).is_empty(), msg=at)
   }
 }
+
+///|
+test "通知 made once: the preview's banner says the last notice's words on two lines at most, the second ending in an ellipsis, as its style says (notify_banner_body)" {
+  let long = "智能体已经跑完了这次的构建和测试，一共改了十二个文件，其中有三个测试没有过，需要你看一下失败的原因再决定要不要继续往下做。"
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
+      {
+        ..base,
+        topic_read: fn(name, params) {
+          if name == "notices" {
+            let said : Json = { "items": [{ "kind": "failed", "title": "构建", "body": long }] }
+            { value: Some(said), error: None, version: 1 }
+          } else {
+            base.topic(name, params).get().snapshot()
+          }
+        },
+      }
+    })
+    let failed = @sf.t("web-pages.notifications.kinds.failed")
+    t.click(Button, label=failed)
+    t.draw()
+    let lines = t.lines_of("智能体已经")
+    assert_eq(lines.length(), 2, msg="\{at}: \{lines}")
+    assert_true(lines[1].has_suffix("…"), msg="\{at}: \{lines}")
+  }
+}

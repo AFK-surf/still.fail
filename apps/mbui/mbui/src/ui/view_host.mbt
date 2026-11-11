@@ -562,8 +562,10 @@ fn view_words_measure_set(
     line=view_line(scale, look),
     spacing=view_spacing(scale, look),
     style=view_words_style(),
+    max_lines=look.max_lines,
   )
-  // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size)
+  // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size;
+  // cut after their last line, as those lines are)
   (if width >= 0.0 && look.wrap && soft_wrapped(tl.line_end, tl.shaped.cu) { width } else { tl.w }, tl.h)
 }
 
@@ -690,7 +692,7 @@ fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLo
     spacing: view_spacing(scale, look),
     base: 0,
     select: false,
-    max_lines: 0,
+    max_lines: look.max_lines,
     faces: if set.words { faces_style(true, 0) } else { view_words_style() },
     shaped_in: words_shaped_in.get(),
   }
@@ -706,9 +708,18 @@ fn runs_over(r : Rich, lay : RichLayout, w : Double) -> Bool {
 }
 
 ///|
+/// Whether a node's words in pieces wrapped and laid out as `lay` come to more lines than they say they are drawn on
+/// (WordsLook's `max_lines`, view_rich's), cut after the last of them so (view_runs_laid), as an old view's paragraph is
+/// (Node::rich_layout's).
+fn runs_past(r : Rich, lay : RichLayout) -> Bool {
+  r.max_lines > 0 && r.wrap && lay.line_start.length() > r.max_lines
+}
+
+///|
 /// A node's words in pieces as they are drawn `w` wide (view_rich): wrapped in that width as laid out, as an old view's
-/// paragraph is where it is placed (Node::rich_layout's); on one line wider than it, cut to it, ending in an ellipsis,
-/// as its plain words are (and whether they were), at `scale` (view_rich's), its breaks kept where `kept`.
+/// paragraph is where it is placed (Node::rich_layout's), cut after the last of the lines it says it is drawn on (and
+/// whether they were); on one line wider than it, cut to it, ending in an ellipsis, as its plain words are (and whether
+/// they were), at `scale` (view_rich's), its breaks kept where `kept`.
 fn view_runs_laid(
   runs : Array[@text.Run],
   look : @view.WordsLook,
@@ -719,10 +730,14 @@ fn view_runs_laid(
 ) -> (Rich, RichLayout, Bool) {
   let r = view_rich(runs, look, set, scale, kept)
   let lay = layout_rich(r, if r.wrap { w } else { 1.0e9 })
-  let over = runs_over(r, lay, w)
-  if over {
+  if runs_over(r, lay, w) {
     let cut_r = cut_rich({ ..r, max_lines: 1 }, lay, w)
     (cut_r, layout_rich(cut_r, 1.0e9), true)
+  } else if runs_past(r, lay) {
+    // (wrapped on more lines than it says it is drawn on: cut after its last, as an old view's paragraph is,
+    // Node::rich_layout's)
+    let cut_r = cut_rich(r, lay, w)
+    (cut_r, layout_rich(cut_r, w), true)
   } else {
     (r, lay, false)
   }
@@ -763,7 +778,11 @@ fn view_runs_measure_set(
   width : Double,
   scale : Double,
 ) -> (Double, Double) {
-  let lay = layout_rich(view_rich(runs, look, set, scale, kept), if width < 0.0 || !look.wrap { 1.0e9 } else { width })
+  let r = view_rich(runs, look, set, scale, kept)
+  let w = if width < 0.0 || !look.wrap { 1.0e9 } else { width }
+  let lay = layout_rich(r, w)
+  // (on more lines than it says it is drawn on: cut after the last, as it is drawn, view_runs_laid)
+  let lay = if runs_past(r, lay) { layout_rich(cut_rich(r, lay, w), w) } else { lay }
   // (broken where the width ran out: as wide as it, as leaf_size has an old view's)
   (if width >= 0.0 && look.wrap && soft_wrapped(lay.line_end, lay.cu) { width } else { lay.w }, lay.h)
 }
@@ -2225,6 +2244,8 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
       let lay = layout_rich(r, if r.wrap { c.w } else { 1.0e9 })
       let lay = if runs_over(r, lay, c.w) {
         layout_rich(cut_rich({ ..r, max_lines: 1 }, lay, c.w), 1.0e9)
+      } else if runs_past(r, lay) {
+        layout_rich(cut_rich(r, lay, c.w), c.w)
       } else {
         lay
       }
@@ -2235,7 +2256,7 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
       let k = c.words_look
       let (size, line, style, spacing) = (view_sp(words_scale, k.size), view_line(words_scale, k), view_words_style(), view_spacing(words_scale, k))
       let words = view_words_set(shown, k, c.words_breaks)
-      let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
+      let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~, max_lines=k.max_lines)
       let tl = if !k.wrap && tl.w > c.w + 0.5 {
         ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
       } else {
@@ -2323,7 +2344,7 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     let (size, line, style, spacing) = (view_sp(words_scale, k.size), view_line(words_scale, k), view_words_style(), view_spacing(words_scale, k))
     // (wrapped in its width as laid out, as an old view's words are where they are placed: Node::text_layout's)
     let words = view_words_set(shown, k, c.words_breaks)
-    let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
+    let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~, max_lines=k.max_lines)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
       ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
     } else {

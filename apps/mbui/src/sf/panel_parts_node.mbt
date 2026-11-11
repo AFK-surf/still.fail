@@ -400,7 +400,7 @@ fn panel_row_by(
         .basis(Is(Some(0.0)))
         .min_width(Is(Some(0.0)))
         .words(By(label))
-        .words_look(By(fn() { { size: t().t.ui, weight: 400, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false } }))
+        .words_look(By(fn() { { size: t().t.ui, weight: 400, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 } }))
         .ink(By(fn() { if danger { t().p.red } else { t().p.text } }))
         |> ignore
       })
@@ -410,7 +410,7 @@ fn panel_row_by(
       w
       .words(By(note))
       .words_look(By(fn() {
-        { size: t().t.meta, weight: 400, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false }
+        { size: t().t.meta, weight: 400, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { t().p.muted }))
       |> ignore
@@ -452,7 +452,7 @@ pub fn panel_said_row_node(
 ) -> Unit {
   let t = fn() { theme() }
   let quiet = fn() -> @view.WordsLook {
-    { size: t().t.meta, weight: 400, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false }
+    { size: t().t.meta, weight: 400, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   }
   let said = fn(into : @view.View) {
     into.box(fn(w) {
@@ -462,7 +462,7 @@ pub fn panel_said_row_node(
       .min_width(Is(Some(0.0)))
       .words_runs(By(words))
       .words_look(By(fn() {
-        { size: t().t.ui, weight: if chosen() { 500 } else { 400 }, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false }
+        { size: t().t.ui, weight: if chosen() { 500 } else { 400 }, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { if chosen() { t().p.accent_text } else { t().p.text } }))
       .allow_ellipsis(Is(true))

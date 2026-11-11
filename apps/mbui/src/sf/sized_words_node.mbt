@@ -32,6 +32,7 @@ pub fn sized_words_node(
         wrap: wrap && !cut,
         tracking: @view.letters_own,
         balance: false,
+        max_lines: 0,
       }
     }))
     .ink(By(ink))

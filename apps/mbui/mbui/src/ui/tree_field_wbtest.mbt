@@ -1487,7 +1487,7 @@ fn field_or_words(
         v.over(Is(true)).offset(By(fn() { local.get() })).width(Is(Some(200.0))) |> ignore
         if words {
           v
-          .words(Is("abcdefghij"), look={ size: 10.0, weight: 400, line: tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own, balance: false })
+          .words(Is("abcdefghij"), look={ size: 10.0, weight: 400, line: tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
           .ink(By(fn() { tree_theme().color(Fg) }))
           |> ignore
         } else {

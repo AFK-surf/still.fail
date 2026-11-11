@@ -48,7 +48,7 @@ pub fn check_node(
     b.show(on, fn(m) {
       m
       .words(Is("✓"))
-      .words_look(Is({ size: check_side * 0.7, weight: 700, line: check_side, wrap: false, tracking: @view.letters_own, balance: false }))
+      .words_look(Is({ size: check_side * 0.7, weight: 700, line: check_side, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }))
       .ink(By(fn() { @ui.tree_theme().on_primary }))
       |> ignore
     })

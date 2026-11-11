@@ -38,7 +38,7 @@ fn tree_scaled(x : Double, inner : Double, outer : Double) -> Array[(Double, Dou
           b
           .width(Is(Some(301.0)))
           .scale(Is(inner))
-          .words(Is(scaled_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false })
+          .words(Is(scaled_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
           .ink(By(fn() { tree_theme().color(Fg) }))
           |> ignore
         })
@@ -106,7 +106,7 @@ fn back_to_size(node : Bool) -> Array[(Double, Double, Int64)] {
             b
             .width(Is(Some(301.3)))
             .scale(Is(0.5))
-            .words(Is(scaled_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false })
+            .words(Is(scaled_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
             .ink(By(fn() { tree_theme().color(Fg) }))
             |> ignore
           })
@@ -151,7 +151,7 @@ fn off_words(how : Int, s : Double, old_view : Bool) -> Array[(Double, Double, I
         })
         |> ignore
       } else {
-        b.words(Is(scaled_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false }).ink(By(fn() { tree_theme().color(Fg) })) |> ignore
+        b.words(Is(scaled_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }).ink(By(fn() { tree_theme().color(Fg) })) |> ignore
       }
     })
     |> ignore

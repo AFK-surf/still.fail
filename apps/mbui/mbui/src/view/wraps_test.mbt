@@ -59,7 +59,7 @@ test "wraps: what has not the room on its line goes on the next, the lines as fa
 test "wraps: words that fit beside each other stay on one line, the first growing to the line's room; the second under it where they do not" {
   let width = @signals.signal(300.0)
   let ids : Array[@view.NodeId] = []
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   let t = @view.Tree::new(
     fn(root) {
       root.lines_up(Is(Some(Start))) |> ignore
@@ -106,7 +106,7 @@ test "wraps: words exactly as wide as the line beside each other stay on it, wha
   let width = @signals.signal(1000.0)
   let grows = @signals.signal(0.0)
   let ids : Array[@view.NodeId] = []
-  let look : @view.WordsLook = { size: 27.5, weight: 400, line: 35.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 27.5, weight: 400, line: 35.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   let t = @view.Tree::new(
     fn(root) {
       root.lines_up(Is(Some(Start))) |> ignore

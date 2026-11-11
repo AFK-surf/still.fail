@@ -386,7 +386,7 @@ fn tip_look_node(
     .words(By(fn() { label() }))
     .words_look(By(fn() {
       let (size, line) = theme().text_size(Meta)
-      { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
+      { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
     }))
     .ink(By(fn() { theme().color(OnPrimary) }))
     .alpha(By(fn() {

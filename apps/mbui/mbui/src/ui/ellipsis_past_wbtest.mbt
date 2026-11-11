@@ -14,7 +14,7 @@ fn past_words(past : @signals.Signal[Bool], clip : Bool) -> (Tester, @view.View?
       r.box(fn(v) {
         v
         .width(Is(Some(4.0)))
-        .words(Is("abcdef"), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false })
+        .words(Is("abcdef"), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
         .ellipsis_past(By(fn() { past.get() }))
         |> ignore
         words.val = Some(v)

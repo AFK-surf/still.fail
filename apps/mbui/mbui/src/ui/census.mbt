@@ -90,7 +90,7 @@ pub fn Tester::census(self : Tester) -> Census {
         if n.words {
           // (its size, line and letters' spacing as it is drawn, as an old view's text says them: view_line's and
           // view_spacing's, at its size of words)
-          let look : @view.WordsLook = { size: n.size, weight: 400, line: n.line, wrap: true, tracking: n.tracking, balance: false }
+          let look : @view.WordsLook = { size: n.size, weight: 400, line: n.line, wrap: true, tracking: n.tracking, balance: false, max_lines: 0 }
           let spacing = view_spacing(n.words_scale, look)
           text[census_num(view_sp(n.words_scale, n.size)) +
             "/" +

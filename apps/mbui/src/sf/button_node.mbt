@@ -174,7 +174,7 @@ fn button_by(
     }
     let words = v.box(fn(w) {
       w
-      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own, balance: false })
+      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
       .ink(By(fn() { looks().2 }))
       |> ignore
     })

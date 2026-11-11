@@ -91,7 +91,8 @@ fn balanced(tl : TextLayout, laid : (Double) -> TextLayout) -> TextLayout {
 
 ///|
 /// Words laid out in `w` as a node's are, the old tree's (Node::text_layout) and the window's tree's (measured,
-/// drawn, their bones): wrapped where `wrap`, broken by balanced where `balance` says, else as layout_text breaks them.
+/// drawn, their bones): wrapped where `wrap`, cut after their `max_lines`th line where they come to more (lines_cut),
+/// else broken by balanced where `balance` says, else as layout_text breaks them.
 fn layout_words(
   text : String,
   size : Double,
@@ -103,10 +104,14 @@ fn layout_words(
   trim? : Bool = false,
   spacing~ : Double,
   style~ : Int,
+  max_lines? : Int = 0,
 ) -> TextLayout {
   let laid = fn(w : Double) { layout_text(text, size, weight, w, wrap, line~, trim~, spacing~, style~) }
   let tl = laid(w)
-  if balance && wrap {
+  // (cut after their last line where they say how many they are drawn on, unbalanced: Node::text_layout's)
+  if max_lines > 0 && wrap && tl.line_start.length() > max_lines {
+    lines_cut(text, tl, w, max_lines, fn(s, w, wrap) { layout_text(s, size, weight, w, wrap, line~, trim~, spacing~, style~) })
+  } else if balance && wrap {
     balanced(tl, laid)
   } else {
     tl
@@ -194,10 +199,20 @@ fn ellipsized(s : String, tl : TextLayout, w : Double, lay : (String) -> TextLay
 /// line up to the one it was made in (Node::text_layout): the lines before are the same in any of them, and what did
 /// not fit the last line in the widest does not in a narrower one, what did still does.
 fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
+  let lay = fn(s : String, w : Double, wrap : Bool) {
+    layout_text(s, n.font_size, n.weight, w, wrap, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
+  }
+  lines_cut(n.text, tl, w, n.max_lines, lay)
+}
+
+///|
+/// Words `text` wrapped in `w` as `tl` cut after their `most`th line (cut_to_lines's, an old view's and a node's alike:
+/// View::words' WordsLook `max_lines`), `lay` laying words out as they are set (in a width, wrapped or not).
+fn lines_cut(text : String, tl : TextLayout, w : Double, most : Int, lay : (String, Double, Bool) -> TextLayout) -> TextLayout {
   let s = tl.shaped
   let count = s.starts.length()
-  let a = tl.line_start[n.max_lines - 1]
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
+  let a = tl.line_start[most - 1]
+  let dots = lay("…", 1.0e9, false)
   let room = w - dots.w
   let mut x = 0.0
   let mut end = a
@@ -210,8 +225,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
     end = end - 1
   }
   let cut = if end < count { s.starts[end] } else { s.len }
-  let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
+  lay(text.view(end_offset=cut).to_string() + "…", w, true)
 }
 
 ///|

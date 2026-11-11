@@ -34,6 +34,7 @@ fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme) ->
           wrap: true,
           tracking: @view.letters_own,
           balance: false,
+          max_lines: 0,
         })
         |> ignore
       })
@@ -93,7 +94,7 @@ fn shaped_words(
   t.tabular_wider(0.5)
   t.ui_face_wider(0.1)
   let node : Ref[@view.View?] = Ref(None)
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     set_tree_theme(fn() { { ..Theme::light(), tabular: tabular.get() } })
     // (the app's words' face given before any words are made, `face`)
@@ -252,7 +253,7 @@ test "a node's words made once, drawn frame after frame while an old view draws 
     })
     |> ignore
     root.box(fn(n) {
-      n.words(Is("AB"), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+      n.words(Is("AB"), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
     })
     |> ignore
   })
@@ -306,7 +307,7 @@ test "a node's words hidden (what holds them faded out) hold no room in the atla
   let first_shown = @signals.signal(true, same=fn(a, b) { a == b })
   let second_there = @signals.signal(false, same=fn(a, b) { a == b })
   let (one, two) = (letters(0x4E00, 40), letters(0x5000, 40))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(h) {
@@ -363,7 +364,7 @@ test "a node's words made as the atlas has no room for them this frame (an old v
     })
     |> ignore
     root.show(fn() { there.get() }, fn(n) {
-      n.offset(Is((0.0, 100.0))).words(Is(word), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+      n.offset(Is((0.0, 100.0))).words(Is(word), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
     })
   })
   t.draw()
@@ -531,7 +532,7 @@ test "a node's words in a line shorter than their font, measured again as lines 
   t.check_looks(false)
   set_web_lines(false)
   // (a font taller than its line: 20 in lines of 14)
-  let look : @view.WordsLook = { size: 20.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 20.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   let node : Ref[@view.View?] = Ref(None)
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
@@ -560,7 +561,7 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   t.ui_face_wider(0.1)
   let words = @signals.signal("界面草图", same=fn(a, b) { a == b })
   let parts : Ref[(@view.View?, @view.View?, @view.View?)] = Ref((None, None, None))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(row) {
       row.row(Is(true)).width(Is(Some(300.0))) |> ignore
@@ -605,7 +606,7 @@ test "a row that leaves out what has not the room (View::fits) counts what is ke
   t.check_looks(false)
   let w = @signals.signal(300.0, same=fn(a, b) { a == b })
   let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(row) {
       row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
@@ -637,7 +638,7 @@ test "kept whole in a row that leaves out what has not the room (View::fit_whole
   t.check_looks(false)
   let w = @signals.signal(300.0, same=fn(a, b) { a == b })
   let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(row) {
       row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
@@ -745,7 +746,7 @@ test "words and words in pieces in a node that clips, 100 down the window: drawn
   let (plain, runs) = (0x112233FFL, 0x445566FFL)
   let down = @signals.signal(100.0, same=fn(a, b) { a == b })
   let clips = @signals.signal(true, same=fn(a, b) { a == b })
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(p) {
@@ -883,7 +884,7 @@ fn runs_whole_tester(
       b.width(Is(Some(w))).lines_up(Is(Some(Start))) |> ignore
       b.box(fn(n) {
         n
-        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
         .runs_look(By(fn() { { ..@view.runs_plain, code_ground: ground.get() } }))
         |> ignore
       })

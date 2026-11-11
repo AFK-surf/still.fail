@@ -162,6 +162,7 @@ let pair_code_look : @view.WordsLook = {
   wrap: false,
   tracking: @view.letters_own,
   balance: false,
+  max_lines: 0,
 }
 
 ///|

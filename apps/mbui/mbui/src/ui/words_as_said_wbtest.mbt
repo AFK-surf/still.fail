@@ -5,7 +5,7 @@
 ///|
 /// How these tests' words are set: 10 points on a line of 14, on one line.
 fn was_look() -> @view.WordsLook {
-  { size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false }
+  { size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|

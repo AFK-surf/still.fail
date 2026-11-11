@@ -43,3 +43,32 @@ test "a link's card, its row carried from under a still pointer on a way: open a
   t.run_for(hover_close_ms + (hover_close_ms + hover_out_ms) * 2.0)
   assert_eq((opened, midway, card()), (1, 1, 0))
 }
+
+///|
+test "a link's card: what its page is called on two lines at most, the second ending in an ellipsis (peek_tile_title), as the old view's card drew it" {
+  @sfbase.reset()
+  let src = @sfbase.made_source()
+  let words = "一个名字很长很长的网页，长到在卡片里放两行都放不下，后面还有很多字要被收进省略号里去才对；" +
+    "再写上一大段，让它在最宽的卡片里也要排到第三行、第四行去，看它是不是在第二行的末尾收住"
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=800.0, h=800.0, native=Mouse, pointing=Mouse)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(row) {
+      row
+      .width(Is(Some(200.0)))
+      .height(Is(Some(32.0)))
+      .on_press(fn() {  })
+      .says(Is(Some(@view.said(Button, label="链接"))))
+      |> ignore
+      web_peek_node(row, src, "st", fn() { "https://example.com/a/long/page" }, fn() { words })
+    })
+    |> ignore
+  })
+  t.draw()
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="链接").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(hover_open_ms * 2.0)
+  let lines = t.lines_of("一个名字")
+  assert_eq(lines.length(), 2, msg="\{lines}")
+  assert_true(lines[1].has_suffix("…"), msg="\{lines}")
+}

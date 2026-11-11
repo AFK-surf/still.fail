@@ -432,7 +432,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
           .words_look(By(fn() {
             // (a size alone said, its line the theme's text_line times it, as Ctx::text has it)
             let size = @sf.theme().t.body
-            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
+            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { @sf.theme().p.muted }))
           |> ignore
@@ -1448,7 +1448,7 @@ pub fn file_progress_node(
       }))
       .words_look(By(fn() {
         let (size, line) = @ui.tree_theme().text_size(Body)
-        { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @ui.tree_theme().color(Muted) }))
       |> ignore
@@ -1632,7 +1632,7 @@ fn viewer_note_node(
       .words(By(fn() { pv_fill("android-chat.file.loadFailed", [("error", vw.error.get().unwrap_or(""))]) }))
       .words_look(By(fn() {
         let size = @sf.theme().t.body
-        { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @sf.theme().p.muted }))
       |> ignore
@@ -1870,7 +1870,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
       .words_centered(Is(true))
       .words_look(By(fn() {
         let s = size()
-        { size: s, weight, line: @ui.tree_theme().text_line * s, wrap: true, tracking: @view.letters_own, balance: false }
+        { size: s, weight, line: @ui.tree_theme().text_line * s, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(ink))
       |> ignore
@@ -1898,7 +1898,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
         .words(Is(ext))
         .words_look(By(fn() {
           let s = @sf.theme().t.ui
-          { size: s, weight: 700, line: s, wrap: false, tracking: @view.letters_own, balance: false }
+          { size: s, weight: 700, line: s, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
         }))
         .ink(By(fn() { p().accent_text }))
         |> ignore

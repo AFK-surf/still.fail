@@ -84,7 +84,7 @@ fn way_in_words(size : @ui.TextSize, weight : Int, line : @ui.Leading?, wrap : B
     None => own
     Some(l) => th.leading(l).unwrap_or(0.0)
   }
-  { size: px, weight, line, wrap, tracking: @view.letters_own, balance: false }
+  { size: px, weight, line, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|

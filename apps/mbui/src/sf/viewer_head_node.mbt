@@ -79,7 +79,7 @@ pub fn viewer_head_node(
           .words(By(name))
           .words_look(By(fn() {
             let (size, line) = @ui.tree_theme().text_size(Body)
-            { size, weight: 600, line, wrap: false, tracking: @view.letters_own, balance: false }
+            { size, weight: 600, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { @ui.tree_theme().color(Fg) }))
           // (read out whole, however much of it is drawn)
@@ -94,7 +94,7 @@ pub fn viewer_head_node(
           .words(By(meta))
           .words_look(By(fn() {
             let (size, line) = @ui.tree_theme().text_size(Meta)
-            { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
+            { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { @ui.tree_theme().color(Muted) }))
           .says(By(fn() { Some(@view.said(Text, label=meta())) }))

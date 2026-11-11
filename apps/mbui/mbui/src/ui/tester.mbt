@@ -1733,7 +1733,8 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
   }
   // (or the words of a node of the window's tree, as it draws them (shorter ones in their place where it says them:
   // View::shorter, none of them where they are none): laid out as the tree lays them out at its width,
-  // view_words_measure's; on one line too long for it, cut with an ellipsis as it is drawn)
+  // view_words_measure's; on one line too long for it, or on more than it says it is drawn on, cut with an ellipsis as it
+  // is drawn)
   match view_tree() {
     Some(tree) => {
       let found : Ref[Array[String]?] = Ref(None)
@@ -1756,6 +1757,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
           line=view_line(scale, look),
           spacing=view_spacing(scale, look),
           style=view_words_style(),
+          max_lines=look.max_lines,
         )
         let lines = Array::makei(tl.line_start.length(), fn(l) {
           let (a, b) = tl.line_range(l)

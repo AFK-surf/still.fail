@@ -59,7 +59,7 @@ fn link_card_made(
       b.box(fn(n) {
         ids["words"] = n.id()
         n
-        .words_runs(By(fn() { runs.get() }), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .words_runs(By(fn() { runs.get() }), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
         |> ignore
         words.val = Some(n)
       })

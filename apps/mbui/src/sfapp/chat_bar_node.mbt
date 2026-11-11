@@ -129,7 +129,7 @@ fn bar_middle_node(row : @view.View, src : Source, r : ChatRef, view : () -> Cha
       }))
       .words_look(By(fn() {
         let th = @sf.theme()
-        { size: th.t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false }
+        { size: th.t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @sf.theme().p.text }))
       // (whole while what follows it may leave the row, cut short once nothing more may: the old views' `keep`)
@@ -328,7 +328,7 @@ fn station_chip_node(v : @view.View, address : String, s : Station, stint : () -
       t
       .words(Is(s.name))
       .words_look(By(fn() {
-        { size: @sf.theme().t.caption, weight: 400, line: 16.0, wrap: false, tracking: @view.letters_own, balance: false }
+        { size: @sf.theme().t.caption, weight: 400, line: 16.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @sf.theme().p.muted }))
       .cuts(Is(true))
@@ -478,7 +478,7 @@ fn agent_station_node(v : @view.View, a : Agent, station : Station?, stint : () 
                 t
                 .words(Is(s.name))
                 .words_look(By(fn() {
-                  { size: @sf.theme().t.caption, weight: 400, line: said_line, wrap: false, tracking: @view.letters_own, balance: false }
+                  { size: @sf.theme().t.caption, weight: 400, line: said_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
                 }))
                 .ink(By(fn() { @sf.theme().p.muted }))
                 .cuts(Is(true))
