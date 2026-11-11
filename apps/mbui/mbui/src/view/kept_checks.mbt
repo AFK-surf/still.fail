@@ -22,7 +22,13 @@
 //   Tree::order_put_in where it goes (box_put_in), else View::boxes_again.
 // - A shared node's flight and landing (shared.mbt: Tree::paired takes the old copy out of what held it, the held
 //   one parked or let go; Tree::lifted_order): the order made whole while any flight is (Tree::order_again, `flights`).
-// - Let go (View::drop, View::let_go): Tree::order_taken_out the node, not one under another being let go.
+// - Let go (View::drop, View::let_go): Tree::order_taken_out the node, but not one held by a node being let go (Tree's
+//   `letting`), whose run goes with that one's. One a scope lets go as it stops while what holds that scope's node is
+//   being let go, held elsewhere (a tip in a layer over the window, View::lives_with), is held by none of those and is
+//   taken out by itself (order_let_go_owned_wbtest.mbt; #5620's CI, tool_node and relay_panel).
+// - What takes input, as the root's children (the window's layers) come, go or move: Tree::boxes_put tells all of it
+//   (Tree::modals_told within the root), and a modal layer let go tells all of it as its being said off does
+//   (modal_let_go_wbtest.mbt; tool_node's "a modal layer coming over it").
 // - An old view's host makes no node of the tree (ui's view_host draws its Ctx inside the node View::box made).
 
 ///|
@@ -30,13 +36,15 @@
 /// since this was last asked: none where all is the same.
 pub fn Tree::kept_said(self : Tree) -> String? {
   let w = self.work
-  let (orders, structure, inputs) = self.kept_seen
+  let (orders, structure, inputs, order_structure, inputs_structure) = self.kept_seen
   // (what the looks below walk, counted as they walk it: put back after, as it was)
   let walked = (w.boxes_walked, w.order_copied)
   let mut said : String? = None
-  // (each looked at once nothing of it is still due to be worked out, as the frame left it)
+  // (each looked at once nothing of it is still due to be worked out, as the frame left it; and not only where its own
+  // work was done since the last look, but wherever the structure changed too: a change that should have told it and
+  // did not leaves its own count as it was, and a look by that count alone would never see it)
   let order_settled = !self.order_due && self.order_ins.is_empty() && self.order_outs.is_empty()
-  if w.orders != orders && order_settled {
+  if (w.orders != orders || w.structure != order_structure) && order_settled {
     said = self.order_kept_said()
   }
   let boxes_settled = self.boxes_held_at.is_empty()
@@ -46,16 +54,29 @@ pub fn Tree::kept_said(self : Tree) -> String? {
   // (not while what takes input is still to be told: what its rows left out, once all of a layout is done
   // (Tree::outs_told), or the modal layers at a change's end)
   let inputs_settled = !self.inputs_whole && self.inputs_in.is_empty() && !self.outs_changed && !self.modals_due
-  if said is None && w.inputs_walked != inputs && inputs_settled {
+  if said is None && (w.inputs_walked != inputs || w.structure != inputs_structure) && inputs_settled {
     said = self.inputs_kept_said()
+  }
+  // (still due as a frame ends, and again as the next one ends: never looked at, which is a fault of its own)
+  if order_settled && inputs_settled {
+    self.kept_waits = 0
+  } else {
+    self.kept_waits = self.kept_waits + 1
+  }
+  if said is None && self.kept_waits > 1 {
+    said = Some(
+      "still due after two frames, so never held to what is worked out whole: the drawing order \{!order_settled}, what takes input \{!inputs_settled} (all of it \{self.inputs_whole}, some \{self.inputs_in.length()}, rows left out \{self.outs_changed}, the modal layers \{self.modals_due})",
+    )
   }
   w.boxes_walked = walked.0
   w.order_copied = walked.1
-  // (what takes input still to be told: looked at once it is)
+  // (what is still due: looked at once it is)
   self.kept_seen = (
     if order_settled { w.orders } else { orders },
     if boxes_settled { w.structure } else { structure },
     if inputs_settled { w.inputs_walked } else { inputs },
+    if order_settled { w.structure } else { order_structure },
+    if inputs_settled { w.structure } else { inputs_structure },
   )
   said
 }
@@ -115,15 +136,43 @@ fn Tree::order_kept_said(self : Tree) -> String? {
     }
     return None
   }
+  // (the first place the two differ by the node there, after the root's own entry, whose end differs with any)
   let m = if whole.length() < order.length() { whole.length() } else { order.length() }
-  let mut j = 0
-  while j < m && whole[j] == order[j] && whole_holder[j] == holder[j] && whole_end[j] == end[j] {
+  let mut j = 1
+  while j < m && whole[j] == order[j] {
     j = j + 1
   }
+  if j >= m && whole.length() == order.length() {
+    // (the same nodes, held or ended otherwise: the first place that differs so; one longer, its first past the other)
+    j = 0
+    while j < m && whole[j] == order[j] && whole_holder[j] == holder[j] && whole_end[j] == end[j] {
+      j = j + 1
+    }
+  }
   let at = fn(a : Array[Int], i : Int) { if i < a.length() { a[i].to_string() } else { "none" } }
+  let times = fn(a : Array[Int], x : Int) { a.iter().filter(fn(y) { y == x }).count() }
+  let kept_node = if j < order.length() {
+    let x = order[j]
+    "\{self.order_node_said(x, gens)}; in the kept \{times(order, x)} times, in the whole \{times(whole, x)}; its holder: \{self.order_node_said(self.nodes[x].parent, gens)}"
+  } else {
+    "none"
+  }
+  let whole_node = if j < whole.length() { self.order_node_said(whole[j], whole_gens) } else { "none" }
   Some(
-    "the drawing order kept is not the one made whole: at \{j} of \{order.length()} (whole \{whole.length()}), kept node \{at(order, j)} held at \{at(holder, j)} ending \{at(end, j)}, whole node \{at(whole, j)} held at \{at(whole_holder, j)} ending \{at(whole_end, j)}",
+    "the drawing order kept is not the one made whole: \{order.length()} kept, \{whole.length()} whole; first apart at \{j}: kept node \{at(order, j)} held at \{at(holder, j)} ending \{at(end, j)} (\{kept_node}), whole node \{at(whole, j)} held at \{at(whole_holder, j)} ending \{at(whole_end, j)} (\{whole_node})",
   )
+}
+
+///|
+/// What node `at` is, for the order's check: a slot or not, living, what holds it, left out of its row, leaving,
+/// parked (held from the root or not), where it was made (under a Tester), and the making the order has of it (`gens`)
+/// against its own.
+fn Tree::order_node_said(self : Tree, at : Int, gens : Array[Int]) -> String {
+  guard at >= 0 && at < self.nodes.length() else { return "no node \{at}" }
+  let n = self.nodes[at]
+  let (made, part) = self.source_of({ at, gen: n.gen })
+  let g = if at < gens.length() { gens[at].to_string() } else { "none" }
+  "slot \{n.slot}, live \{n.live}, held by \{n.parent}, left out \{n.out}, leaving \{n.left_at >= 0.0}, held from the root \{self.held_from_root(at)}, made at \{made}\{if part != "" { " in " + part } else { "" }}, its making \{n.gen} (the order's \{g})"
 }
 
 ///|

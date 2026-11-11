@@ -764,15 +764,18 @@ pub struct Tree {
   /// what holds each there, the rest of it as it was; none, or `order_whole`, all of it (Tree::order_again)
   order_in : Array[Int]
   /// what the checks of what is kept against what is worked out whole (kept_checks.mbt) last saw of the work: the
-  /// order made again, the structure changed, what takes input told
-  mut kept_seen : (Int, Int, Int)
+  /// order made again, the structure changed (as the boxes', the order's and the inputs' looks each last saw it), what
+  /// takes input told; and how many looks in a row found the order or what takes input still due
+  mut kept_seen : (Int, Int, Int, Int, Int)
+  mut kept_waits : Int
   /// nodes made since the order was last worked out to be put in it by their own runs (Tree::order_put_in), each with
   /// what lays it out; and those let go to be taken out of it so, each with its making and what held it
   /// (Tree::order_taken_out): the rest of the order as it was, where nothing else changed in it (Tree::order_spliced)
   order_ins : Array[(Int, Int)]
   order_outs : Array[(Int, Int, Int)]
-  /// how deep in letting go a node's holders it is (View::let_go): what goes with one let go goes out of the order with it
-  mut letting_go : Int
+  /// the nodes being let go as they let go of what they hold (View::let_go): one held by them goes out of the order with
+  /// them; anything else let go meanwhile (what one's scope owned, in another layer: a tip, View::lives_with) by itself
+  letting : Array[Int]
   mut order_whole : Bool
   mut due : Bool
   /// the host is being told that a frame is due (Tree::marked)
@@ -1252,10 +1255,11 @@ pub fn Tree::new(
     layout_due: true,
     order_due: true,
     order_in: [],
-    kept_seen: (0, 0, 0),
+    kept_seen: (0, 0, 0, 0, 0),
+    kept_waits: 0,
     order_ins: [],
     order_outs: [],
-    letting_go: 0,
+    letting: [],
     order_whole: true,
     due: true,
     telling_due: false,
@@ -7268,17 +7272,21 @@ fn View::let_go(self : View) -> Unit {
   let kids = n.kids.map(fn(k) { self.tree.handle(k) })
   n.kids.clear()
   // (what it holds goes out of the order with it, its run whole: none of theirs taken out by itself)
-  self.tree.letting_go = self.tree.letting_go + 1
+  self.tree.letting.push(self.at)
   for k in kids {
     k.let_go()
   }
-  self.tree.letting_go = self.tree.letting_go - 1
+  self.tree.letting.pop() |> ignore
   n.live = false
   if n.on_back is Some(_) || n.on_back_step is Some(_) {
     self.tree.backs = self.tree.backs - 1
   }
+  // (a modal layer let go: what it kept from taking input, wherever it is held, told anew, as its being said off does)
   match self.tree.modals.search(self.at) {
-    Some(i) => self.tree.modals.remove(i) |> ignore
+    Some(i) => {
+      self.tree.modals.remove(i) |> ignore
+      self.tree.modals_told()
+    }
     None => ()
   }
   match n.stop {
@@ -7391,8 +7399,10 @@ fn View::let_go(self : View) -> Unit {
   }
   self.tree.removed.push({ at: self.at, gen: self.gen })
   self.tree.free.push(self.at)
-  // (its run taken out of the order by itself, the rest as it was; one held by what is let go with it, none)
-  if self.tree.letting_go == 0 {
+  // (its run taken out of the order by itself, the rest as it was; one held by what is being let go, none: its run goes
+  // with that one's. Not by how deep in letting go this is: what a scope let go of as it stopped, in another layer, is
+  // held by none of those and goes by itself)
+  if !self.tree.letting.contains(parent) {
     self.tree.order_taken_out(self.at, self.gen, parent)
   }
   self.tree.work.let_go = self.tree.work.let_go + 1
@@ -7508,11 +7518,16 @@ fn Tree::boxes_put(self : Tree, at : Int) -> Unit {
   }
   self.layout_marked_at(at, within=true)
   self.order_marked_in(at)
-  // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held. Whether each it
-  // holds takes input is what holds it and the modal layers say (Tree::pressless_at), none of which a child come, gone
-  // or moved among the others changes: one come is told by what made it (View::box_appended, take_in), one leaving by
-  // View::leave, one let go needs none; not all it holds told again)
-  self.modals_marked()
+  // (what is drawn over what, among what holds it, changed. The root's: its children are the window's layers, and one
+  // come, gone or moved among them changes which modal layer is over what (Tree::pressless_at's allows_at), so all
+  // that may take input is told again, as ever. Any other's: whether each it holds takes input is what holds it and the
+  // modal layers say, none of which a child come, gone or moved among the others changes: one come is told by what made
+  // it (View::box_appended, take_in), one leaving by View::leave, one let go needs none; not all it holds told again)
+  if at == 0 {
+    self.modals_told(within=0)
+  } else {
+    self.modals_marked()
+  }
 }
 
 ///|
