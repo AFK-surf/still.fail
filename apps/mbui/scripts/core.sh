@@ -332,9 +332,10 @@ chat_open() {
 }
 
 # A workspace switched to, in Hermes (core/wsswitch.m; client/core-ts/bench/ws-switch-seed.ts seeds two of real size):
-# how long after the switch each of Home's topics is answered, and how long something asked meanwhile waits. Run twice
-# on the same data: the first imports it, the second is the app started again (the one to read). AWAY_MS: how long
-# away before the last switch (70 s: past what the core keeps of a topic let go of, store.ts EVICT_AFTER_MS).
+# what the app sends at a switch and when each answer comes, how long the person waits and when the new screen is whole.
+# SCREEN=small|wide: 小屏's Home or 大屏's frame. Run twice on the same data: the first imports it, the second is the app
+# started again (the one to read). AWAY_MS: how long away before the last switch (70 s: past what the core keeps of a
+# topic let go of, store.ts EVICT_AFTER_MS).
 ws_switch() {
   core_program wsswitch || return 1
   local dir=$(mktemp -d /tmp/mbui-ws-switch.XXXXXX) code=0
