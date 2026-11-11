@@ -1,0 +1,30 @@
+diff --git a/apps/mbui/src/sffixture/chat_fixture.mbt b/apps/mbui/src/sffixture/chat_fixture.mbt
+index 0cfb43b0f1..af1daf6d87 100644
+--- a/apps/mbui/src/sffixture/chat_fixture.mbt
++++ b/apps/mbui/src/sffixture/chat_fixture.mbt
+@@ -1966,13 +1966,14 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
+       if label.contains("失败") {
+         return Some(Err({ "code": "unavailable", "message": "Willow 没有回应" }))
+       }
++      let take = fn() {
+       fix_decided[seq] = decided_json(label)
+       fix_replied[seq] = label
+       fix_reply_at["r:\{seq}"] = (fix_reply_at.length(), fix_chat("s-c1").sent.length())
+       // its agent takes the answer up as it takes words sent (fix_deliver): at work at once, its answer a moment
+       // later out of its avatar, its turn over a moment after that
+       fix_chat("s-c1").working = 0.0
+-      fix_later(fix_answer_ms, fn() {
++      fix_later(fix_pace.val.1, fn() {
+         fix_serial.val += 1
+         fix_later(fix_turn_end_ms, fn() { fix_chat("s-c1").working = -1.0 })
+         fix_reply_at["c:\{fix_card_replies.length()}"] = (fix_reply_at.length(), fix_chat("s-c1").sent.length())
+@@ -1985,7 +1986,8 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
+           }),
+         )
+       })
+-      f.changed()
++      }
++      if fix_core_for.val > 0.0 { fix_later(fix_core_for.val, take) } else { take(); f.changed() }
+       Some(Ok(Json::object({})))
+     }
+     "decision.dismiss" => {

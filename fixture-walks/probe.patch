@@ -1,0 +1,24 @@
+diff --git a/apps/mbui/mbui/src/ui/gaps_steady.mbt b/apps/mbui/mbui/src/ui/gaps_steady.mbt
+index 59564e8a21..7d7cf9c833 100644
+--- a/apps/mbui/mbui/src/ui/gaps_steady.mbt
++++ b/apps/mbui/mbui/src/ui/gaps_steady.mbt
+@@ -126,6 +126,7 @@ fn Tester::gaps_steady_faults(self : Tester, now : Double, period : Double) -> A
+     w.1 + w.3 > 0.0 &&
+     w.1 < self.w
+   })
++  zz_words(now, lines)
+   let here : Set[String] = Set([])
+   for a in lines {
+     // (the nearest under it across some of the same width)
+diff --git a/apps/mbui/mbui/src/ui/rows_steady.mbt b/apps/mbui/mbui/src/ui/rows_steady.mbt
+index 8519698844..40e99d32a0 100644
+--- a/apps/mbui/mbui/src/ui/rows_steady.mbt
++++ b/apps/mbui/mbui/src/ui/rows_steady.mbt
+@@ -160,6 +160,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
+       Some(c) => c.keys
+       None => []
+     }
++    self.zz_rows(now, ln, st, keys)
+     let mut said = false
+     let mut r = ln.first
+     while r >= 0 {
