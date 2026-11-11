@@ -1726,6 +1726,9 @@ web-pages.vault.uses.last
 web-pages.vault.uses.none
 web-pages.vault.uses.title
 web-pages.vault.vaults
+web-pages.vault.waits.mine
+web-pages.vault.waits.theirs
+web-pages.vault.waits.title
 
 web-pages.drive.viewAll
 web-pages.drive.pinnedFolders

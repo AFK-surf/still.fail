@@ -1605,6 +1605,9 @@
     "one": "{n} new device has no key yet",
     "other": "{n} new devices have no key yet"
   },
+  "web-pages.vault.waits.title": "Waiting for new keys",
+  "web-pages.vault.waits.mine": "A device was taken out. One of your devices gives it new keys once it reaches the station “{station}”; until then it can be read and used, not changed",
+  "web-pages.vault.waits.theirs": "A device was taken out. One of {owner}'s devices gives it new keys once it reaches the station “{station}”; until then it can be read and used, not changed",
   "web-pages.vault.addDevice": "Give them the key",
   "web-pages.vault.addDeviceWhat": "give the new devices the key",
   "web-pages.vault.addedDevice": "The new devices have the key",
