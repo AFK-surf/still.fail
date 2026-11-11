@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
+import { entriesInBlob, makeApk, parseHeader, readOld, wholeFiles, zipEntries } from "../scripts/delta.ts";
 
 // An Android update's delta is made into the released APK by the app's own applier (dev.mbui.Delta, Java, its deflater
 // JZlib), the release's APK repacked first by the same code (tools/apk). Here: the Java applier makes the new APK byte
@@ -220,6 +221,40 @@ test("repack refuses a zip64 zip and what is not a zip, leaving nothing", { skip
     assert.match(r.stderr, why);
     assert.equal(existsSync(join(dir, "out.zip")), false);
   }
+});
+
+test("an APK with most of its entries kept: those found whole in the old blob, its delta made back by the Java applier", { skip }, (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "delta-apk-kept-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const f = (name: string) => join(dir, name);
+  const rand = prng(31);
+  const entries: Entry[] = [100, 3000, 20_000, 80_000, 150_000, 40_000, 9000, 120_000].map((n, i) => ({ name: `assets/${i}.bin`, data: texty(rand, n), deflate: i % 3 !== 1 }));
+  const changed = (e: Entry) => { const data = Buffer.from(e.data); data.write("build 8147", data.length >> 1); return { ...e, data }; };
+  // (5 deflated and changed: inflated in place; 7 stored and changed; 2 gone; one new)
+  const neu = entries.map((e, i) => (i === 5 || i === 7 ? changed(e) : e)).filter((_, i) => i !== 2);
+  neu.push({ name: "assets/new.bin", data: texty(rand, 30_000), deflate: true });
+  writeFileSync(f("old.apk"), zip(entries));
+  writeFileSync(f("new.apk"), zip(neu));
+  for (const n of ["old", "new"]) {
+    const r = java(["repack", f(`${n}.apk`), f(`${n}.re.apk`)]);
+    assert.equal(r.status, 0, r.stderr);
+  }
+  assert.equal(makeApk(f("old.re.apk"), f("new.re.apk"), f("d.delta"), "none"), 1);
+  const applied = java(["apply", f("old.re.apk"), f("d.delta"), f("out.apk")]);
+  assert.equal(applied.status, 0, applied.stderr);
+  assert.ok(readFileSync(f("out.apk")).equals(readFileSync(f("new.re.apk"))), "the new APK, byte for byte");
+  // each entry's data where it is in the old blob: the inflated one inflated, the others as they are in the APK
+  const oldZip = readFileSync(f("old.re.apk")), d = readFileSync(f("d.delta")), h = parseHeader(d), blob = readOld(h, { apk: f("old.re.apk") });
+  const ranges = entriesInBlob(oldZip, h.inflate), list = zipEntries(oldZip);
+  assert.equal(ranges.length, list.length);
+  list.forEach((e, i) => {
+    const body = oldZip.subarray(e.at, e.at + e.packed), r = ranges[i]!;
+    const want = h.inflate.some((x) => x.at === e.at) ? inflateRawSync(body) : body;
+    assert.ok(blob.subarray(r.at, r.at + r.len).equals(want), e.name);
+  });
+  const found = wholeFiles(blob, ranges, readFileSync(f("new.re.apk"))).reduce((n, r) => n + r.len, 0);
+  assert.ok(found > blob.length / 8, `${found} of ${blob.length} bytes found whole`);
+  t.diagnostic(`delta ${d.length} bytes, ${found} of the old blob's ${blob.length} found whole`);
 });
 
 // Two released APKs (DELTA_APK_OLD, DELTA_APK_NEW): repacked, their delta made, applied by Java in 256 MB of heap.

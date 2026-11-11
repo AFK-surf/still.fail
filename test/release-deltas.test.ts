@@ -347,6 +347,22 @@ test("run again, nothing changes; one pair at a time, the same is made", (t) => 
   assert.deepEqual(snapshot(again), first, "the same at --jobs 1");
 });
 
+test("by default the 10 newest bases: the published build and 9 of the builds its deltas are from", (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), "release-deltas-test-"));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const pub = join(tmp, "pub"), rel = join(tmp, "rel");
+  for (let n = 89; n <= 100; n++) put(pub, MAC(n), macZip(n));
+  const froms = Array.from({ length: 11 }, (_, i) => 99 - i);
+  put(pub, "mac/beta/latest.json", { versionCode: 100, versionName: "0.1.100", ...file(MAC(100), macZip(100)), deltas: froms.map((from) => ({ from, file: `${MAC(100)}.from-${from}.delta`, sha256: "c".repeat(64), size: 10 })) });
+  put(rel, MAC(101), macZip(101));
+  put(rel, "mac/beta/latest.json", { versionCode: 101, versionName: "0.1.101", ...file(MAC(101), macZip(101)) });
+  run(rel, pub);
+  const mac = json(rel, "mac/beta/latest.json");
+  assert.deepEqual(mac.deltas.map((d: { from: number }) => d.from), [100, 99, 98, 97, 96, 95, 94, 93, 92, 91]);
+  const stored = storedZip(macZip(101));
+  for (const d of mac.deltas) assert.ok(applied(tmp, strip(macFiles(d.from), "Test.app/"), join(rel, d.file)).equals(stored), `mac from ${d.from}`);
+});
+
 test("--into: the deltas and the amended feeds there, the release directory as it was", (t) => {
   const w = world(t);
   const into = join(w.tmp, "into");

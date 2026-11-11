@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { crc32, deflateRawSync, gzipSync, inflateRawSync } from "node:zlib";
-import { CHUNK, applyFile, encodeHeader, info, makeApk, makeTree, parseHeader, storedZip, suffixArray, treeFiles, zipEntries } from "../scripts/delta.ts";
+import { CHUNK, WINDOW, applyFile, encodeHeader, info, makeApk, makeDelta, makeTree, parseHeader, sparseSuffixArray, storedZip, suffixArray, treeFiles, wholeFiles, zipEntries } from "../scripts/delta.ts";
 
 // Deltas are applied by the apps' own appliers (C, Java) from this format: the reference applier here must refuse
 // what they refuse, and every delta made must give back the package byte for byte.
@@ -432,4 +432,98 @@ test("the raw command writes a .tar.gz's tar and a .zip stored", (t) => {
   const bad = cli("raw", join(dir, "nothing.txt"), join(dir, "out2"));
   assert.equal(bad.status, 1);
   assert.match(bad.stderr, /raw form/);
+});
+
+// --- the old files found whole ---
+
+/** Bytes from a small LCG, the same for a seed each time. */
+function lcg(seed: number) {
+  let s = seed >>> 0;
+  return (n: number) => {
+    const b = Buffer.alloc(n);
+    for (let i = 0; i < n; i++) { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; b[i] = s >>> 24; }
+    return b;
+  };
+}
+/** Files one after another, as a tree's old blob is, and their ranges in it. */
+const blobOf = (files: Buffer[]) => {
+  const ranges: { at: number; len: number }[] = [];
+  let at = 0;
+  for (const f of files) { ranges.push({ at, len: f.length }); at += f.length; }
+  return { blob: Buffer.concat(files), ranges };
+};
+/** A tar-like package: each file after a 512-byte header of its own. */
+const tarLike = (files: [string, Buffer][]) => Buffer.concat(files.flatMap(([name, data]) => {
+  const head = Buffer.alloc(512);
+  head.write(`${name} ${data.length}`);
+  return [head, data];
+}));
+
+test("the old files found whole: every unchanged one at least a window long, wherever it is, never overlapping", () => {
+  const bytes = lcg(5);
+  const [a, b, c, d, e, f] = [3000, 1000, WINDOW - 1, 5000, 2000, 700].map((n) => bytes(n)) as Buffer[];
+  const old = blobOf([a!, b!, c!, d!, e!, f!]);
+  const changed = Buffer.from(e!);
+  changed[1000] = changed[1000]! ^ 1;
+  const order: [string, Buffer][] = [["d", d!], ["b", b!], ["a", a!], ["e", changed], ["c", c!], ["b2", b!], ["f", f!]];
+  const made = tarLike(order), at: Record<string, number> = {};
+  order.reduce((o, [name, data]) => { at[name] = o + 512; return o + 512 + data.length; }, 0);
+  const runs = wholeFiles(old.blob, old.ranges, made);
+  // (d, b, a, then b again and f; not e, changed, nor c, shorter than the window)
+  const whole = (name: string, i: number) => ({ made: at[name]!, old: old.ranges[i]!.at, len: old.ranges[i]!.len });
+  assert.deepEqual(runs, [whole("d", 3), whole("b", 1), whole("a", 0), whole("b2", 1), whole("f", 5)]);
+  for (let i = 0; i < runs.length; i++) {
+    const r = runs[i]!;
+    assert.ok(made.subarray(r.made, r.made + r.len).equals(old.blob.subarray(r.old, r.old + r.len)));
+    if (i > 0) assert.ok(runs[i - 1]!.made + runs[i - 1]!.len <= r.made, "sorted, not overlapping");
+  }
+  // the rest of the old blob sorted, each suffix by its offset in the old blob, the empty one first
+  const I = sparseSuffixArray(old.blob, runs);
+  assert.equal(I[0], old.blob.length);
+  const outside = [...Array(old.blob.length).keys()].filter((o) => !runs.some((r) => o >= r.old && o < r.old + r.len));
+  assert.deepEqual([...I.subarray(1)].sort((x, y) => x - y), outside);
+  // a file that begins with a window of one byte is not looked for, though it is there whole
+  const zeros = Buffer.concat([Buffer.alloc(WINDOW), bytes(900)]), flat = blobOf([zeros, a!]);
+  const there = tarLike([["z", zeros], ["a", a!]]);
+  assert.deepEqual(wholeFiles(flat.blob, flat.ranges, there), [{ made: 512 + zeros.length + 512, old: flat.ranges[1]!.at, len: a!.length }]);
+});
+
+test("a delta made with the old files found whole gives the package, as small as without them, the same each time", (t) => {
+  const dir = temp(t);
+  const bytes = lcg(8147);
+  const sizes = [100, 255, 256, 700, 3000, 12_000, 40_000, 90_000, 150_000, 300_000];
+  const old: Record<string, Buffer> = {};
+  for (let i = 0; i < 30; i++) old[`f${String(i).padStart(2, "0")}`] = bytes(sizes[i % sizes.length]!);
+  const neu: Record<string, Buffer> = { ...old };
+  delete neu.f03;
+  neu.f31 = bytes(20_000);
+  for (const [name, at] of [["f07", 100], ["f09", 50_000], ["f18", 2000], ["f29", 299_000]] as const) {
+    const edited = Buffer.from(old[name]!);
+    edited.write("build 8147", at);
+    neu[name] = name === "f09" ? Buffer.concat([edited.subarray(0, 60_000), bytes(300), edited.subarray(60_000)]) : edited;
+  }
+  tree(join(dir, "old"), old);
+  const made = tarLike(Object.entries(neu).sort(([x], [y]) => (x < y ? -1 : 1)));
+  writeFileSync(join(dir, "new.tar"), made);
+  makeTree(join(dir, "old"), join(dir, "new.tar"), join(dir, "d.delta"));
+  makeTree(join(dir, "old"), join(dir, "new.tar"), join(dir, "again.delta"));
+  const delta = readFileSync(join(dir, "d.delta"));
+  assert.ok(readFileSync(join(dir, "again.delta")).equals(delta), "the same delta each time");
+  const files = treeFiles(join(dir, "old")), o = blobOf(files.map((f) => old[f]!));
+  const runs = wholeFiles(o.blob, o.ranges, made), found = runs.reduce((n, r) => n + r.len, 0);
+  assert.ok(found > o.blob.length / 2, `${found} of ${o.blob.length} bytes found whole`);
+  const without = makeDelta(o.blob, made, files, [], []);
+  t.diagnostic(`with the files found whole ${delta.length} bytes, without ${without.length}`);
+  assert.ok(delta.length <= without.length + 512, `${delta.length} bytes, ${without.length} without`);
+});
+
+test("with too little of the old blob found whole, the delta is the one made without the files", () => {
+  const bytes = lcg(9);
+  const kept = bytes(1000), others = [bytes(50_000), bytes(40_000)];
+  const old = blobOf([others[0]!, kept, others[1]!]);
+  const edit = (b: Buffer) => { const c = Buffer.from(b); for (let i = 0; i < c.length; i += 300) c[i] = c[i]! ^ 0xff; return c; };
+  for (const made of [tarLike([["x", bytes(20_000)], ["y", bytes(5000)]]), tarLike([["a", edit(others[0]!)], ["k", kept], ["b", edit(others[1]!)]])]) {
+    assert.ok(wholeFiles(old.blob, old.ranges, made).reduce((n, r) => n + r.len, 0) < old.blob.length / 8);
+    assert.ok(makeDelta(old.blob, made, ["a", "k", "b"], [], [], old.ranges).equals(makeDelta(old.blob, made, ["a", "k", "b"], [], [])));
+  }
 });
