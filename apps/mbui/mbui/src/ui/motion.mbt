@@ -209,3 +209,9 @@ pub fn Ease::at(self : Ease, t : Double) -> Double {
     Flight => bezier_at(0.6, 0.0, 0.2, 1.0, t)
   }
 }
+
+///|
+/// PRINT ONLY: a sheet's way said.
+pub fn zz_sheet_way(kind : String, at : Double, from : Double, v : Double, to : Double) -> Unit {
+  @flex.zz_way(kind, at, from, v, to)
+}

@@ -7414,6 +7414,7 @@ fn View::comes(
   st.come_goal = if to <= 0.0 { 0.0 } else { 0.0 / 0.0 }
   st.come_at = at
   st.come_now = at
+  @flex.zz_way("come", at, from, speed, to)
   // (going: as long as its way to nothing; coming, as far as what it comes to, the first time it is laid out)
   st.come_ends = if to <= 0.0 { at + @flex.come_way_ms(from, speed, 0.0) } else { 0.0 / 0.0 }
   st.come_plan = st.come_goal
@@ -7572,6 +7573,7 @@ fn Tree::come_group_settle(self : Tree, col : Int, g : @flex.ComeGroup, views : 
     ms.come_v = sp
     ms.come_at = at
     ms.come_now = at
+    @flex.zz_way("come again", at, h, sp, ms.come_goal)
     ms.come_plan = ms.come_goal
     ms.come_ends = at + @flex.come_way_ms(h, sp, ms.come_goal)
     ms.come_group = None

@@ -515,6 +515,7 @@ pub fn come_group_set(g : ComeGroup) -> Unit {
     v = v + (if d >= 0.0 { m.come_v } else { -m.come_v })
   }
   g.v = v
+  zz_way("group n=\{g.members.length()}", g.at, 0.0, v, 0.0)
   // (turned away as a whole: slowing at one rate to rest, as one (come_turned's, of its speed and how far all of it
   // goes back: its gain then a Move's from rest for all of it, ω²·D, where it is all but still), each carried as far as
   // its own speed is of the group's, then its way back from there; what each then goes worked out again from how far
@@ -675,4 +676,14 @@ pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
     }
   }
   Some((fmax(tall, 0.0), v))
+}
+
+///|
+/// PRINT ONLY: the test file a Tester was made in, for the ways said (set by ui as a Tester is made).
+pub let zz_file : Ref[String] = Ref("")
+
+///|
+/// PRINT ONLY: a way said, for comparing runs at two rates.
+pub fn zz_way(kind : String, at : Double, from : Double, v : Double, to : Double) -> Unit {
+  println("MOTION way \{zz_file.val}: \{kind} at=\{at} from=\{from} v=\{v} to=\{to}")
 }

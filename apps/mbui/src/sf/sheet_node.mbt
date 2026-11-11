@@ -450,6 +450,7 @@ fn sheet_node(
         guard seen_from(at, true) is Some((stood, v, left)) else { return }
         placed_plan.val = own_now()
         placed.set(Some((stood, at, left, v)))
+        @ui.zz_sheet_way("sheet reshape (old body)", at, stood, v, 0.0)
         reach.set(dmax(reach.untracked(), sheet_under + stood))
       }
       layer.reacts(fn() { layer.leaving() }, fn(going) {
@@ -1285,6 +1286,7 @@ fn SheetRise::go(
     // from rest at its foot, as long as how tall it is as each frame lays it out, as before; NaN)
     let plan = if late && up && u - off.0 == 0.0 && v0 == 0.0 { @double.not_a_number } else { h }
     self.way = Some({ at, up, u0: u - off.0, v0, plan, kept: @ui.come_kept() })
+    @ui.zz_sheet_way(if up { "sheet rise" } else { "sheet sink" }, at, u - off.0, v0, plan)
     self.said.set(self.said.untracked() + 1)
   }
   match sheet.val {
