@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [391fece48](https://github.com/AFK-surf/still.fail/commit/391fece48955a0b82e59fd5c195e2541ab7550e6) mbui: a node's words with links in them are a grou | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 152.78 |
 | [bde639b67](https://github.com/AFK-surf/still.fail/commit/bde639b67982d4f531947e6cf11984830b929aef) core: `live` sends a chat what its activity line r | 1.83 | 2.44 | 10.17 | 28.92 | 35.9 | 25.75 | 47.75 | 94.42 | 151.97 |
 | [7ec136989](https://github.com/AFK-surf/still.fail/commit/7ec13698930c8d0c43d01110e9fff0c48a8bc72f) ci: the merge queue's branches start no push workf | 1.82 | 2.44 | 10.17 | 28.91 | 35.89 | 25.74 | 47.74 | 94.34 | 172.94 |
 | [c11e8c7d2](https://github.com/AFK-surf/still.fail/commit/c11e8c7d26359a8b78abb2f82c3cffb386b9acf4) app: 引用 over words a mouse picked comes in the fra | 1.82 | 2.43 | 10.16 | 28.89 | 35.85 | 25.73 | 47.72 | 94.24 | 166.21 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7eb12a296](https://github.com/AFK-surf/still.fail/commit/7eb12a29623ab0f3dbe85dada5ea4f416cd6f435) sf: list_turns says what it does, and what did not | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.52 | 149.03 |
 | [df98aad1f](https://github.com/AFK-surf/still.fail/commit/df98aad1f9ce6419cc52f4f1bcbb167acd756250) app: a drive upload's id leaves out the path of th | 1.81 | 2.42 | 10.09 | 28.83 | 35.6 | 25.67 | 47.52 | 94.37 | 162.3 |
 | [7456d7f11](https://github.com/AFK-surf/still.fail/commit/7456d7f117a21e630e5cf7f741540ed40e945544) sf: a style said Full across fills what holds it a | 1.81 | 2.42 | 10.08 | 28.81 | 35.57 | 25.66 | 47.49 | 94.55 | 177.51 |
-| [5111040ef](https://github.com/AFK-surf/still.fail/commit/5111040ef78d86e8936eccbca41f2bc42725601c) app: a reader left where it last held still does n | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.66 | 47.47 | 94.32 | 178.63 |
