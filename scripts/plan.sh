@@ -68,7 +68,7 @@ decide() {
   # The mbui app's own tests (check-mbui, mbui-check.yml; main's run there on their own): for a change to it, or
   # to mbui (apps/mbui/mbui).
   mbui=false
-  if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$' || has '^\.github/workflows/merge-queue\.yml$'; then mbui=true; fi
+  if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
   # The station's tests (check-station: scripts/check.sh's station-tests, in slices on Linux runners): for a change to
   # what they read, as check.sh says it (its station_paths, read from there: said once), to the check itself, or to
   # CI's own files (which make every check run whole: pipeline.yml).
