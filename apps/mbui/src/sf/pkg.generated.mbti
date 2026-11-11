@@ -2616,7 +2616,7 @@ pub fn window_keys_room(roots? : @paint.CornerRoots) -> Double
 
 pub fn window_keys_room_at(Double) -> Double
 
-pub fn window_keys_room_tape() -> Double
+pub fn window_keys_room_tape(roots? : @paint.CornerRoots) -> Double
 
 pub fn window_keys_w() -> Double
 

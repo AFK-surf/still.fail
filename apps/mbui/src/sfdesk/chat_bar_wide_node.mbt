@@ -14,13 +14,15 @@
 /// how much taller it is over its buttons (`over`: the tape's line), how far it is moved in from its ends while the
 /// folded sidebar is shown a while (`margins`, before and after: less than none before, drawn moved back), its room
 /// at its start (`start`) and at its end (`end`, given whether the side panel is open beside it and ⌘F's bar is in it),
-/// the corner its buttons share with the window's (`linked`: none on the tape).
+/// the corner its buttons share with the window's (`linked`: none on the tape), its ground as drawn in node `bar`
+/// (`ground`: the page's; on the tape, the page's panel's, a step darker while that is behind the one in use).
 pub(all) struct ChatBarEnds {
   over : () -> Double
   margins : () -> (Double, Double)
   start : () -> Double
   end : (Bool, Bool) -> Double
   linked : () -> @ui.CornerOf?
+  ground : (@view.View) -> Int64
 }
 
 ///|
@@ -79,8 +81,9 @@ fn wide_bar_of(b : @view.View, src : Source, r : ChatRef, ends : ChatBarEnds, ti
     |> ignore
     bar_room_node(held, fn() { dmax(0.0, (ends.margins)().0) })
     held.box(fn(bar) {
-      @sf.style_node(bar, fn() { chat_bar_box }, in_row=true)
+      @sf.style_node(bar, fn() { chat_bar_box_node }, in_row=true)
       bar
+      .ground(By(fn() { (ends.ground)(bar) }))
       .height(By(fn() { Some(high()) }))
       .padding(By(fn() { (0.0, (ends.over)(), 0.0, 1.0) }))
       // (its empty part drags the window, in one with its buttons in the app's top row: what is in it taking presses
@@ -95,6 +98,8 @@ fn wide_bar_of(b : @view.View, src : Source, r : ChatRef, ends : ChatBarEnds, ti
         // ⌘F's bar, in place of the buttons while it is open: it covers none of the chat
         inner.pick(fn() { finding() }, fn(e, open) {
           if open {
+            // (what holds it giving way as it does: the old row's had none of its own)
+            e.row(Is(true)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
             @sfpages.find_bar_node(
               e,
               src,
@@ -124,23 +129,16 @@ fn wide_bar_of(b : @view.View, src : Source, r : ChatRef, ends : ChatBarEnds, ti
 }
 
 ///|
-/// What the bar's title row shows, once the view is read (`shown`: the view, the station it is on), and what tells one
-/// such from another (`key`: what of them the row draws), each as `key` says.
-priv struct WideMarks {
-  key : String
-  shown : (ChatView, Station?)?
-}
-
-///|
-impl Eq for WideMarks with equal(a, b) {
-  a.key == b.key
-}
+/// The bar's box as chat_bar_box but for its ground, the frame's (ChatBarEnds' `ground`).
+// kept across runs: a value (no field of it changes)
+let chat_bar_box_node : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_size, pb=SPx, align=ACenter)
 
 ///|
 /// The bar's title row in `inner` (chat_bar_title_row's: never narrower than what is left in it needs, ⌘F's field
 /// beside it giving way first): the title, 42% of the bar's width (`across`) at most, 80 at least, cut short; then,
 /// once the view is read, its station's tag while no agent is in it, its people (the first to leave the row short of
-/// room), its agents (the last but the first leaving next), made again as any of them changes.
+/// room), its agents (the last but the first leaving next), each made again as what it draws changes. Each of them the
+/// row's own (what leaves it, as the old row's boxes: a row leaves out of what it holds, View::fits).
 fn wide_bar_title_row(
   inner : @view.View,
   src : Source,
@@ -154,59 +152,83 @@ fn wide_bar_title_row(
     @sf.style_node(row, fn() { chat_bar_title_row }, in_row=true)
     row.keeps_held(Is(true)).fits(Is(true)) |> ignore
     wide_bar_title(row, src, r, view, across, tips)
-    let marks = fn() {
-      match view() {
-        Some(v) => {
-          let w = match @sfbase.workspace_in_view(src).0 {
-            Some(w) => w.id
-            None => ""
-          }
-          let station = @sfbase.station_marks(src, w).iter().find_first(fn(x) { x.address == r.station })
-          let s = match station {
-            Some(s) => "\{s.name}\u{1}\{s.emoji}\u{1}\{s.icon}\u{1}\{s.via}"
-            None => ""
-          }
-          let ps = v.people.map(fn(p) { "\{p.id}\u{1}\{p.display}\u{1}\{p.picture}" }).join("\u{2}")
-          let front = side_of(v).1
-          let ag = v.agents.map(fn(x) { "\{x.key}\u{1}\{x.maker}\u{1}\{x.runtime}\u{1}\{x.badge}\u{1}\{x.who}" }).join("\u{2}")
-          { key: "read\u{3}" + s + "\u{3}" + ps + "\u{3}" + ag + "\u{3}" + front, shown: Some((v, station)) }
-        }
-        None => { key: "", shown: None }
+    // (the station the chat runs on, as the workspace's marks have it)
+    let station = fn() {
+      let w = match @sfbase.workspace_in_view(src).0 {
+        Some(w) => w.id
+        None => ""
+      }
+      @sfbase.station_marks(src, w).iter().find_first(fn(x) { x.address == r.station })
+    }
+    let station_key = fn() {
+      match station() {
+        Some(s) => "\{s.name}\u{1}\{s.emoji}\u{1}\{s.icon}\u{1}\{s.via}"
+        None => ""
       }
     }
-    row.pick(marks, fn(m, marks) {
-      // (what it holds is the row's: laid in it as though held by it alone)
-      m.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2_5))) |> ignore
-      guard marks.shown is Some((v, station)) else { return }
-      // (who is in it by its title, beside the system's bars too: the user, 2026-10-28)
-      if v.agents.length() == 0 {
-        match station {
-          Some(s) => wide_station_tag(m, r.station, s, tips, stint)
+    let agents = fn() {
+      match view() {
+        Some(v) => v.agents
+        None => []
+      }
+    }
+    // (who is in it by its title, beside the system's bars too: the user, 2026-10-28)
+    row.show(fn() { view() is Some(_) && agents().length() == 0 && station() is Some(_) }, fn(x) {
+      x.pick(station_key, fn(y, _) {
+        match @signals.untracked(station) {
+          Some(s) => wide_station_tag(y, r.station, s, tips, stint)
           None => ()
         }
-      }
-      if v.people.length() > 0 {
-        m.box(fn(p) {
-          p.drops(Is(chat_bar_drop_people)) |> ignore
-          wide_people(p, src, v.people, 5, tips, stint)
-        })
-        |> ignore
-      }
-      let front = side_of(v).1
-      for i, a in v.agents {
-        let marked = v.agents.length() > 1 && front == a.key
-        let s = if i == 0 { station } else { None }
-        if i == 0 {
-          wide_agent_tile(m, src, r, a, marked, s, tips, stint)
-        } else {
-          m.box(fn(k) {
-            k.drops(Is(chat_bar_drop_agents)) |> ignore
-            wide_agent_tile(k, src, r, a, marked, s, tips, stint)
-          })
-          |> ignore
-        }
-      }
+      })
     })
+    let people = fn() {
+      match view() {
+        Some(v) => v.people
+        None => []
+      }
+    }
+    row.show(fn() { people().length() > 0 }, fn(p) {
+      p.drops(Is(chat_bar_drop_people)) |> ignore
+      p.pick(fn() { people().map(fn(p) { "\{p.id}\u{1}\{p.display}\u{1}\{p.picture}" }).join("\u{2}") }, fn(q, _) {
+        wide_people(q, src, @signals.untracked(people), 5, tips, stint)
+      })
+    })
+    // (each of its agents by what it draws: marked among several while its history shows; the first with the station)
+    let agent_key = fn(i : Int, a : Agent) {
+      let all = agents()
+      let front = match view() {
+        Some(v) => side_of(v).1
+        None => ""
+      }
+      let marked = all.length() > 1 && front == a.key
+      "\{i}\u{1}\{a.key}\u{1}\{a.maker}\u{1}\{a.runtime}\u{1}\{a.badge}\u{1}\{a.who}\u{1}\{marked}" +
+      (if i == 0 { "\u{1}" + station_key() } else { "" })
+    }
+    let tile = fn(k : @view.View, i : Int) {
+      let all = @signals.untracked(agents)
+      guard i < all.length() else { return }
+      let a = all[i]
+      let front = match @signals.untracked(view) {
+        Some(v) => side_of(v).1
+        None => ""
+      }
+      let s = if i == 0 { @signals.untracked(station) } else { None }
+      wide_agent_tile(k, src, r, a, all.length() > 1 && front == a.key, s, tips, stint)
+    }
+    row.show(fn() { agents().length() > 0 }, fn(f) {
+      f.pick(fn() { agent_key(0, agents()[0]) }, fn(k, _) { tile(k, 0) })
+    })
+    row.each(
+      fn() {
+        let all = agents()
+        Array::makei(dmax_int(0, all.length() - 1), fn(j) { (j + 1, agent_key(j + 1, all[j + 1])) })
+      },
+      fn(x) { x.1 },
+      fn(k, it) {
+        k.drops(Is(chat_bar_drop_agents)) |> ignore
+        tile(k, @signals.untracked(fn() { it.get() }).0)
+      },
+    )
   })
   |> ignore
 }
@@ -248,9 +270,10 @@ fn wide_bar_title(
   }
   let failed = fn() { core_failed(src, ["chat.rename"], on) }
   row.box(fn(t) {
-    // (42% of the bar at most, 80 at least)
+    // (42% of the bar at most, 80 at least; giving way with ⌘F's field once the people have left, down to 4 of its
+    // letters)
     @sf.style_node(t, fn() { chat_title_room.then(@ui.style(max_w=Fixed(dmax(chat_title_least, across() * chat_title_part)))) }, in_row=true)
-    t.fit_whole(Is(true)) |> ignore
+    t.shrink(Is(1.0)) |> ignore
     @sf.words_node(
       t,
       title,

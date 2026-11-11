@@ -17,9 +17,9 @@ fn page_one(
   aside : Double,
 ) -> Unit {
   let top = page == app.nav.top()
-  // (a chat's bar off the tape the page node's, dragging the window itself where nothing of it takes the press:
+  // (a chat's bar the page node's, dragging the window itself where nothing of it takes the press:
   // chat_bar_wide_node; the old view's row there would take what is over it)
-  if @ui.window_inset() && !(page is Chat(_) && !wide.tape.get() && pane_makes.val) {
+  if @ui.window_inset() && !(page is Chat(_) && pane_makes.val) {
     title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape.get() { @sf.tape_bar_over() } else { 0.0 }))
   }
   c.sized(main_w, ph, fn() {
@@ -438,6 +438,7 @@ fn pane_chat_bar_ends(src : Source, n : @view.View) -> ChatBarEnds {
       }
     },
     linked: fn() { if @ui.window_keys_own() { None } else { Some(@sf.window_corner_key()) } },
+    ground: fn(_) { @sf.theme().p.bg },
   }
 }
 

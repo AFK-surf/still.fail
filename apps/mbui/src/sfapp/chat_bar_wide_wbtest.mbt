@@ -1,9 +1,9 @@
-// The open chat's bar on 大屏 (sfdesk's chat_bar_wide_node over the chat's page): what it shows in each state the
+// The open chat's bar on 大屏 and 中屏 (sfdesk's chat_bar_wide_node over the chat's page): what it shows in each state the
 // chat can be in, laid out as the old bar laid it (the two compared word by word and rectangle by rectangle as the bar
 // was made of nodes), and what each of its presses does.
 
 ///|
-/// The fixture's chat (`mode`) on 大屏, a window `w` × `h` of `platform`, the system's bars handed it where `able`;
+/// The fixture's chat (`mode`) on 大屏 (中屏 where `w` is one's), a window `w` × `h` of `platform`, the system's bars handed it where `able`;
 /// its calls kept in `calls` and answered with nothing; each topic as `over` makes it; `inset`: a Windows 11 window's
 /// (its corners 8, its own buttons the app's, in its top row).
 fn wide_bar_at(
@@ -203,6 +203,7 @@ fn wide_bar_large(calls : Array[Made]) -> Array[(String, () -> @ui.Tester)] {
     ("SCREENS", fn() { wide_bar_at(calls, mode="chat-station-screens") }),
     ("BESIDE", fn() { wide_bar_at(calls, mode="chat-history-side") }),
     ("FIND", fn() { wide_bar_at(calls, mode="chat-find") }),
+    ("NARROW-FIND", fn() { wide_bar_at(calls, mode="chat-find", over=wide_bar_people(7), w=860.0) }),
     ("ARCHIVABLE", fn() { wide_bar_at(calls, over=wide_bar_chat_field("archivable", fn(_) { Json::boolean(true) })) }),
     (
       "ARCHIVE-JOBS",
@@ -344,6 +345,22 @@ fn wide_bar_medium(calls : Array[Made]) -> Array[(String, () -> @ui.Tester)] {
         t
       },
     ),
+    (
+      "M-TIP-ARCHIVE",
+      fn() {
+        let t = wide_bar_at(calls, w=720.0, over=wide_bar_chat_field("archivable", fn(_) { Json::boolean(true) }))
+        wide_bar_tip(t, @sf.t("web-pages.chat.archive"))
+        t
+      },
+    ),
+    (
+      "M-TIP-PANEL",
+      fn() {
+        let t = wide_bar_at(calls, w=720.0)
+        wide_bar_tip(t, @sf.t("web-pages.chat.openPanel"))
+        t
+      },
+    ),
   ]
 }
 
@@ -370,7 +387,8 @@ fn wide_bar_held(states : Array[(String, () -> @ui.Tester)]) -> Array[String] {
     let (name, make) = s
     let t = make()
     let (ww, _) = t.ctx().window_size()
-    // (the bar's own: its agents' marks and its buttons, by what they are called)
+    // (the bar's own: its agents' marks and its buttons, by what they are called, none as tall as a panel (中屏's side
+    // panel off the tape, said 打开侧栏))
     let own = [
       @sf.t("web-pages.chat.archive"),
       @sf.t("web-pages.chat.services"),
@@ -379,7 +397,9 @@ fn wide_bar_held(states : Array[(String, () -> @ui.Tester)]) -> Array[String] {
       @sf.t("common.more"),
       @sf.t("web-pages.chat.openPanel"),
     ]
-    let bar = t.all(Button).filter(fn(b) { b.rect.1 < 90.0 && (own.contains(b.label) || b.label.has_suffix("的执行历史")) })
+    let bar = t
+      .all(Button)
+      .filter(fn(b) { b.rect.1 < 90.0 && b.rect.3 < 90.0 && (own.contains(b.label) || b.label.has_suffix("的执行历史")) })
     // (in the bar's middle, each: its buttons and its agents' marks alike)
     let mids = bar.map(fn(b) { b.rect.1 + b.rect.3 / 2.0 })
     if mids.length() > 1 && mids.iter().any(fn(m) { (m - mids[0]).abs() > 0.5 }) {
@@ -406,10 +426,18 @@ test "大屏: the bar in each state of its chat, as the old one laid it out; wha
   let faults = wide_bar_held(wide_bar_large(calls))
   assert_eq(faults, [], msg=faults.join("\n"))
 }
+
 ///|
-/// The bar's button said `label` (its topmost), where it is.
+test "中屏: the bar in each state of its chat, as the old one laid it out; what the audit says of it the old one's own, pinned" {
+  new_run()
+  let calls : Array[Made] = []
+  let faults = wide_bar_held(wide_bar_medium(calls))
+  assert_eq(faults, [], msg=faults.join("\n"))
+}
+///|
+/// The bar's button said `label` (its topmost; none as tall as a panel), where it is.
 fn wide_bar_button(t : @ui.Tester, label : String) -> (Double, Double, Double, Double)? {
-  match t.all(Button).filter(fn(b) { b.label == label && b.rect.1 < 90.0 }) {
+  match t.all(Button).filter(fn(b) { b.label == label && b.rect.1 < 90.0 && b.rect.3 < 90.0 }) {
     [b, ..] => Some(b.rect)
     _ => None
   }
@@ -424,12 +452,13 @@ fn wide_bar_tap(t : @ui.Tester, r : (Double, Double, Double, Double)) -> Unit {
 }
 
 ///|
-/// The windows a bar's press is held to: a Mac's 1280 × 800 (Large).
+/// The windows a bar's press is held to: a Mac's 1280 × 800 (Large), 720 wide (Medium: the chat in the page's panel of
+/// the tape).
 // kept across runs: a value
-let wide_bar_windows : Array[(String, Double)] = [("大屏", 1280.0)]
+let wide_bar_windows : Array[(String, Double)] = [("大屏", 1280.0), ("中屏", 720.0)]
 
 ///|
-test "大屏: the bar's 对话信息 opens the chat's info under it and closes it again, its services' button their popover" {
+test "大屏, 中屏: the bar's 对话信息 opens the chat's info under it and closes it again, its services' button their popover" {
   for win in wide_bar_windows {
     let calls : Array[Made] = []
     let t = wide_bar_at(calls, w=win.1, over=wide_bar_jobs("fail"))
@@ -455,7 +484,7 @@ test "大屏: the bar's 对话信息 opens the chat's info under it and closes i
 }
 
 ///|
-test "大屏: the bar's \"…\" opens the chat's menu beside it; its side panel's switch opens its first agent's history; its agent's mark the same" {
+test "大屏, 中屏: the bar's \"…\" opens the chat's menu beside it; its side panel's switch opens its first agent's history; its agent's mark the same" {
   for win in wide_bar_windows {
     let calls : Array[Made] = []
     let t = wide_bar_at(calls, w=win.1)
@@ -482,7 +511,7 @@ test "大屏: the bar's \"…\" opens the chat's menu beside it; its side panel'
 }
 
 ///|
-test "大屏: 归档 on a chat with nothing left in it puts it in the archive (chat.archive)" {
+test "大屏, 中屏: 归档 on a chat with nothing left in it puts it in the archive (chat.archive)" {
   for win in wide_bar_windows {
     let calls : Array[Made] = []
     let t = wide_bar_at(calls, w=win.1, over=wide_bar_chat_field("archivable", fn(_) { Json::boolean(true) }))
@@ -506,7 +535,7 @@ test "大屏: a press on the bar where nothing of it takes one drags the window,
 }
 
 ///|
-test "大屏: a button of the bar says its keys in its tip after its words, as the app says them" {
+test "大屏, 中屏: a button of the bar says its keys in its tip after its words, as the app says them" {
   for win in wide_bar_windows {
     let calls : Array[Made] = []
     let tips = [
@@ -556,7 +585,7 @@ fn wide_bar_under(d : (Double, Double, Double, Double), b : (Double, Double, Dou
 }
 
 ///|
-test "大屏: the bar's popovers keep by their buttons as the window changes, opened by a press or by a key; closed, the focus where it was" {
+test "大屏, 中屏: the bar's popovers keep by their buttons as the window changes, opened by a press or by a key; closed, the focus where it was" {
   for win in wide_bar_windows {
     let calls : Array[Made] = []
     for which in ["info", "jobs"] {
@@ -613,6 +642,56 @@ test "大屏: the bar's popovers keep by their buttons as the window changes, op
 }
 
 ///|
+/// The words `w` drawn in the bar (over 90), seen: where they are and how wide, the first of them.
+fn wide_bar_seen(t : @ui.Tester, w : String) -> (Double, Double)? {
+  match t.words().filter(fn(x) { x.0 == w && x.2 < 90.0 && x.5 > 0.0 && x.3 > 0.0 }) {
+    [x, ..] => Some((x.1, x.3))
+    _ => None
+  }
+}
+
+///|
+test "大屏, 中屏: ⌘F's bar open in a bar short of room: the chat's people leave first, its title cut to 4 of its letters, its field the rest, none of it past the bar" {
+  // (not the old bar's, on purpose (the coordinator, 2026-11-12): the old title row's least was 12 + 64 + 10 + 20 =
+  // 106, its agent's piece's least taken as 20 where it drew 41.6, so the 21.6 more it took came off the title's 4
+  // letters (大屏 860 with 7 people: the title 42.4, the field 262.4; 中屏 720: 42.4 and 305.9; 760: 60.4), never meant
+  // so (K2, measured in the old code). Here the title keeps its 4 letters, the field gives the rest (860: 248.6, 720:
+  // 292.1))
+  let calls : Array[Made] = []
+  // (a letter of the title as the bar draws it with room: its whole width, its letters)
+  let letter = match wide_bar_seen(wide_bar_at(calls), "整理发布清单") {
+    Some((_, w)) => w / "整理发布清单".length().to_double()
+    None => fail("no title with room")
+  }
+  let states = [
+    ("NARROW-FIND", fn() { wide_bar_at(calls, mode="chat-find", over=wide_bar_people(7), w=860.0) }, ["P", "+2"]),
+    ("M-FIND", fn() { wide_bar_at(calls, mode="chat-find", w=720.0) }, ["你", "A"]),
+  ]
+  for s in states {
+    let (name, make, people) = s
+    let t = make()
+    let (ww, _) = t.ctx().window_size()
+    for p in people {
+      assert_true(wide_bar_seen(t, p) is None, msg="\{name}: its people left out (\{p}): \{Repr(t.words().filter(fn(w) { w.2 < 90.0 }))}")
+    }
+    let (tx, tw) = match wide_bar_seen(t, "整理发布清单") {
+      Some(x) => x
+      None => fail("\{name}: no title")
+    }
+    assert_true((tw - 4.0 * letter).abs() < 0.5, msg="\{name}: its title 4 letters wide: \{tw}, a letter \{letter}")
+    match (wide_bar_seen(t, "在对话中查找"), wide_bar_seen(t, "无结果")) {
+      (Some((fx, _)), Some((x, w))) => {
+        assert_true(fx > tx + tw, msg="\{name}: the field after the title: \{fx} \{Repr((tx, tw))}")
+        assert_true(x + w <= ww, msg="\{name}: its count within the window: \{Repr((x, w))} \{ww}")
+      }
+      _ => fail("\{name}: no field or count in ⌘F's bar")
+    }
+    let audit = t.audit().filter(fn(f) { f.contains("chat_bar_wide_node") || f.contains("find_bar_node") })
+    assert_eq(audit, [], msg=name)
+  }
+}
+
+///|
 /// Whether something is drawn on `r` (a half of the agent's tile lit: its ground the hover's, none while it is not).
 fn wide_bar_lit(t : @ui.Tester, r : (Double, Double, Double, Double)) -> Bool {
   let (x, y, w, h) = r
@@ -637,7 +716,7 @@ fn wide_bar_card_under(t : @ui.Tester, r : (Double, Double, Double, Double)) -> 
 }
 
 ///|
-test "大屏: where the agent's room reaches over its station's half, the pointer resting there lights the agent alone and opens its card alone; on the rest of that half, the station's alone" {
+test "大屏, 中屏: where the agent's room reaches over its station's half, the pointer resting there lights the agent alone and opens its card alone; on the rest of that half, the station's alone" {
   for win in wide_bar_windows {
     let calls : Array[Made] = []
     let t = wide_bar_at(calls, w=win.1)
@@ -678,7 +757,7 @@ test "大屏: where the agent's room reaches over its station's half, the pointe
 }
 
 ///|
-test "大屏: the window's own buttons in its top row (Windows) pressed from 2 off them as on them, the bar's own part beside them none of theirs" {
+test "大屏, 中屏: the window's own buttons in its top row (Windows) pressed from 2 off them as on them, the bar's own part beside them none of theirs" {
   for win in wide_bar_windows {
     let calls : Array[Made] = []
     let t = wide_bar_at(calls, w=win.1, platform=3, inset=true)

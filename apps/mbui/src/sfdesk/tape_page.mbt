@@ -500,10 +500,52 @@ fn tape_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, tape_page_one, key=tape_island_key) |> ignore },
+          fn(v, _page, _under, _stint, k) {
+            // (its bar the tree's, over the page's old view: chat_bar_wide_node, keeping clear of the panel's corners as a
+            // page's bar on the tape does; the tape's head over it none, tape_bar_head)
+            @sfbase.chat_page_made(
+              v,
+              src,
+              k,
+              tape_page_one,
+              key=tape_island_key,
+              drawn=fn(serial) { tape_page_wait.draws(serial) },
+              over=fn(o, src, page, stint) { chat_bar_wide_node(o, src, page, tape_chat_bar_ends(), tips, stint) },
+            )
+            |> ignore
+          },
         ),
       )
     _ => None
+  }
+}
+
+///|
+/// Where a chat's bar in the page's panel on the tape keeps clear at its ends (chat_bar_wide_node's): as a page's bar
+/// there (pane_bar_node's, the same rule: tape_bar_start_room, tape_bar_end_room), the panel's corners as they are
+/// told it (tape_bar_head's); as much taller over its buttons as the tape's line has them (tape_bar_over); its title
+/// on the panel's words' line; what ends it, ⌘F's field where that is open, concentric with the panel's top right
+/// corner; its buttons round on that line, no corner of the window's; its ground the panel's (tape_page_ground), as a
+/// page's bar there has it.
+fn tape_chat_bar_ends() -> ChatBarEnds {
+  let corners = fn() {
+    let side = tape_shown_side()
+    let under = if side is None { tape_room_now().under } else { 0.0 }
+    beside_column(tape_pane_corners(Page, side is Some(_)), under)
+  }
+  {
+    over: fn() { @sf.tape_bar_over() },
+    margins: fn() { (0.0, 0.0) },
+    start: fn() { tape_bar_start_room(corners(), false) },
+    end: fn(_, finding) {
+      if finding {
+        tape_bar_end_room(corners(), side=@sfpages.find_field_h)
+      } else {
+        tape_bar_end_room(corners())
+      }
+    },
+    linked: fn() { None },
+    ground: tape_page_ground,
   }
 }
 

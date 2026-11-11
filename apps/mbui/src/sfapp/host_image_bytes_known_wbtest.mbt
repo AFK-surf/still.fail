@@ -6,6 +6,7 @@
 ///|
 fn init {
   @ui.host_image_bytes_known([
+    ("src/sfapp/chat_bar_wide_wbtest.mbt", 89156),
     ("src/sfapp/chat_images_told_wbtest.mbt", 57845),
     ("src/sfapp/chat_keys_wbtest.mbt", 127704),
     ("src/sfapp/chat_wbtest.mbt", 960538),
