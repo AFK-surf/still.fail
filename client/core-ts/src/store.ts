@@ -595,11 +595,14 @@ export class Store {
       try {
         while (this.#firstPending.size > 0 || this.#updatesPending.size > 0) {
           // A new page takes its turn immediately after background work; alternating while both queues have work
-          // also gives already queued updates a turn if pages keep opening.
-          const first: boolean = this.#firstPending.size > 0 && (this.#updatesPending.size === 0 || !wasFirst);
-          const queue = first ? this.#firstPending : this.#updatesPending;
-          const [key, entry] = queue.entries().next().value!;
-          queue.delete(key);
+          // also gives already queued updates a turn if pages keep opening. An update of a topic nobody subscribes
+          // to or watches (let go of, kept a while for its page coming back) waits behind both: the marks of a
+          // workspace just left were made again, 8 ms in Hermes, ahead of the chat list and the jobs of the one
+          // switched to (2026-11-11).
+          const update = this.#nextUpdate(this.#firstPending.size === 0);
+          const first: boolean = this.#firstPending.size > 0 && (update === undefined || !wasFirst);
+          const [key, entry] = first ? this.#firstPending.entries().next().value! : update!;
+          (first ? this.#firstPending : this.#updatesPending).delete(key);
           if (this.#topics.get(key) !== entry || !entry.emitScheduled) continue;
           wasFirst = first;
           const topic = entry.topic;
@@ -617,6 +620,16 @@ export class Store {
         }
       }
     });
+  }
+
+  /// The update to take next: the first queued of a topic something subscribes to or watches; else, with `idle`, the
+  /// first queued at all.
+  #nextUpdate(idle: boolean): [string, Entry] | undefined {
+    for (const pending of this.#updatesPending) {
+      const entry = pending[1];
+      if (entry.subscribers.length > 0 || entry.watchers.length > 0) return pending;
+    }
+    return idle ? this.#updatesPending.entries().next().value : undefined;
   }
 
   #heldFor(topic: Topic, t0: number, spentFrom: Record<string, number> | null): void {
