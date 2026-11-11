@@ -318,3 +318,61 @@ test "went_over: placed above its anchor, then its anchor gone: beside nothing" 
   t.frame(400.0, 500.0) |> ignore
   assert_eq((placed, t.went_over(ids["b"])), (Some(@view.Side::Top), None))
 }
+
+///|
+test "beside a piece of its anchor (`piece`): by that piece, given how big the anchor is laid out, following the anchor moved; with none now, where it last was; what the piece reads alone changing places nothing" {
+  let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let aw = @signals.signal(40.0, same=fn(a, b) { a == b })
+  // (a plain value, not followed: what the piece reads, as it is placed)
+  let piece_at = Ref(Some((10.0, 5.0)))
+  let given : Array[(Double, Double)] = []
+  let ids : Map[String, @view.NodeId] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(By(fn() { Some(aw.get()) })).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b
+        .width(Is(Some(60.0)))
+        .height(Is(Some(30.0)))
+        .beside(ids["a"], side=Bottom, along=Start, offset=6.0, piece=fn(w, h) {
+          given.push((w, h))
+          piece_at.val.map(fn(p) { (p.0, p.1, 20.0, 10.0) })
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let at = fn() {
+    let d = t.drawn_of(ids["b"]).unwrap()
+    (d.x, d.y)
+  }
+  assert_eq((at(), given), ((110.0, 121.0), [(40.0, 20.0)]), msg="under the piece, at its start")
+  t.event(10.0, fn() { ay.set(150.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (110.0, 171.0), msg="following the anchor moved")
+  // (what the piece reads changed alone: nothing placed again)
+  piece_at.val = Some((30.0, 5.0))
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (110.0, 171.0), msg="its piece's reads are not followed")
+  // (the anchor laid out again: asked again, given its new size)
+  t.event(20.0, fn() { aw.set(50.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq((at(), given[given.length() - 1]), ((130.0, 171.0), (50.0, 20.0)), msg="asked again as it is laid out")
+  // (no such piece now: where it last was, the anchor moved or not)
+  piece_at.val = None
+  t.event(30.0, fn() { ay.set(200.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (130.0, 171.0), msg="no piece: where it was")
+  piece_at.val = Some((10.0, 5.0))
+  t.event(40.0, fn() { ay.set(210.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (110.0, 231.0), msg="by it again")
+}
