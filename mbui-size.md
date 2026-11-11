@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a5accdbad](https://github.com/AFK-surf/still.fail/commit/a5accdbad8ac91788c618d28ebdd6e0fde00e90b) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.27 | 149.89 |
 | [7eb12a296](https://github.com/AFK-surf/still.fail/commit/7eb12a29623ab0f3dbe85dada5ea4f416cd6f435) sf: list_turns says what it does, and what did not | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.52 | 149.03 |
 | [df98aad1f](https://github.com/AFK-surf/still.fail/commit/df98aad1f9ce6419cc52f4f1bcbb167acd756250) app: a drive upload's id leaves out the path of th | 1.81 | 2.42 | 10.09 | 28.83 | 35.6 | 25.67 | 47.52 | 94.37 | 162.3 |
 | [7456d7f11](https://github.com/AFK-surf/still.fail/commit/7456d7f117a21e630e5cf7f741540ed40e945544) sf: a style said Full across fills what holds it a | 1.81 | 2.42 | 10.08 | 28.81 | 35.57 | 25.66 | 47.49 | 94.55 | 177.51 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [40f35d3be](https://github.com/AFK-surf/still.fail/commit/40f35d3be2e7c649b0f7d2ffadc3961fb30a3dfd) mbui: a scripted run's img: finds a picture or sha | 1.78 | 2.38 | 9.91 | 28.54 | 34.72 | 25.48 | 46.89 | 94.32 | 137.98 |
 | [bb7577768](https://github.com/AFK-surf/still.fail/commit/bb757776884b3ae1cd67c868e160dcd9e16ec64a) web: the core's worker gives the core its build, s | 1.78 | 2.38 | 9.91 | 28.54 | 34.71 | 25.48 | 46.89 | 94.21 | 175.79 |
 | [b590244da](https://github.com/AFK-surf/still.fail/commit/b590244da315d8f530efda565efd5c3de33fb558) sf: a panel's search at hand has the keys as it op | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 93.44 | 126.79 |
-| [6fe59f6a9](https://github.com/AFK-surf/still.fail/commit/6fe59f6a9297bc81d55d767780f43bc8b3fd4139) fix: forward Windows shortcuts from the remote scr | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 93.96 | 158.29 |
