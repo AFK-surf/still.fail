@@ -7108,7 +7108,8 @@ pub fn View::show(
 /// A node made by `make` for what `which` is, made anew (the one before let go) as that changes, kept as it does not.
 /// Down a column the new one makes its way from as tall as the one before was to as tall as it comes to (View::comes),
 /// but `at_once`; along a row, where `along_row` is said, from as wide as the one
-/// before was (Tree::along_row_at).
+/// before was (Tree::along_row_at). `leave`: what it showed stays over its place, fading out over that long, what it
+/// shows now seen once that is gone and its place holds it whole, its place one node making its way (pick_leave.mbt).
 #callsite(autofill(loc))
 pub fn[K : Eq] View::pick(
   self : View,
@@ -7116,11 +7117,17 @@ pub fn[K : Eq] View::pick(
   make : (View, K) -> Unit,
   at_once? : Bool = false,
   along_row? : Bool = false,
+  leave? : Double = 0.0,
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot(loc)
   slot.along_row_said(along_row, at_once, "pick", loc)
+  // (what it showed leaving over a time as what it shows now waits to be seen: pick_leave.mbt)
+  if leave > 0.0 {
+    slot.pick_leaving(which, make, at_once, leave, loc)
+    return
+  }
   let had : Ref[(K, View)?] = Ref(None)
   let stop = slot.tree.structured(which, fn(k) {
     guard slot.alive() else { return }
