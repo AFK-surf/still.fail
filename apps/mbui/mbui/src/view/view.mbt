@@ -7299,6 +7299,7 @@ fn View::comes(
   st.come_now = at
   // (going: as long as its way to nothing; coming, as far as what it comes to, the first time it is laid out)
   st.come_ends = if to <= 0.0 { at + @flex.come_way_ms(from, speed, 0.0) } else { 0.0 / 0.0 }
+  st.come_plan = st.come_goal
   n.coming = true
   n.look.clips = true
   (n.come_off)()
