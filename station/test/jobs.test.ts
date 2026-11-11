@@ -190,16 +190,19 @@ describe("jobs", { concurrency: true }, () => {
 
   test("a job runs apart, its output logged and its agent told how it ended", async () => {
     const r = new Rig();
-    const job = r.jobs.start("s1", "build", "echo compiling; echo done >&2; exit 3", r.work, null, false);
+    const job = r.jobs.start("s1", "build", "printf '%70000s' ''; echo warning; echo compiling; echo done >&2; exit 3", r.work, null, false);
     assert.equal(job.state, "running");
     await until("it ends", () => r.state(job.id) === "exited");
     const ended = r.store.getJob(job.id)!;
     assert.equal(ended.exitCode, 3);
-    assert.equal(tail(ended.log, 10), "compiling\ndone");
+    assert.equal(readFileSync(ended.log, "utf8"), " ".repeat(70_000) + "warning\ncompiling\ndone\n");
     await until("its agent is told", () => r.said().length > 0);
     const said = r.said();
     assert.ok(said[0].startsWith(`Job "build" (${job.id}) ended with exit code 3.`), said[0]);
     assert.ok(said[0].includes("compiling\ndone"));
+    assert.ok(said[0].length < 1000, "column padding is summarized before reaching the agent");
+    assert.match(said[0], /spaces\/tabs omitted/);
+    assert.ok(said[0].includes(`job_log with id=${job.id}`));
     assert.equal(r.told[0][0], "s1");
   });
 

@@ -22,6 +22,7 @@ import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 import { inSandbox, keyPart, sandboxed, stopSandbox } from "../agents/sandbox.ts";
 import { outputAt, tail } from "../read/jobs.ts";
+import { noticeExcerpt } from "./notice.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
@@ -829,7 +830,7 @@ export class Jobs {
     }
     const said = code !== null ? `exit code ${code}` : "a signal";
     const lines = tail(job.log, 20);
-    const last = lines === "" ? "" : `\nIts last lines:\n\`\`\`\n${lines}\n\`\`\``;
+    const last = lines === "" ? "" : `\nIts last lines (excerpt):\n${noticeExcerpt(lines)}\nFor more use job_log with id=${job.id}; the original log is at ${job.log}.`;
     if (job.port === null) {
       // The connection to its sandbox lost, not the job ending: started again once there.
       if (existsSync(this.lostFile(id)) && job.restarts === 0) {

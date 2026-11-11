@@ -21,7 +21,8 @@ available to workspace members through its returned link.
   failure: its completion wakes you. Do not end `waiting` on a guessed duration with nothing watching.
 - Inside long jobs, `stillfail-job notify "<words>"` reports meaningful milestones or trouble, not every line.
   Notices arrive via="station"; relay only what matters and act on failures.
-- Completion includes the exit code and log tail. `job_log` reads more (up to 1000 lines); `job_list` shows your
+- Completion includes the exit code and a bounded log excerpt (long lines and padding have marked omissions).
+  The original log is kept unchanged; `job_log` reads more (up to 1000 lines); `job_list` shows your
   jobs; `job_stop` stops one. A completed step needs no separate user post unless it is useful news.
 
 ## Watches

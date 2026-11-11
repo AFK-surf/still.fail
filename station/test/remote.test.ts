@@ -926,11 +926,16 @@ describe("remote", { concurrency: true }, () => {
     const listed = await use("station_task", { station: "B", action: "list" });
     assert.deepEqual(listed.tasks[0].spec, { name: "upper", command, requestedBy: "ann" });
     // What it says on the way reaches the session that started it, once: B tells A, which asks then.
-    b.jobs.notified(job.token, "half way");
+    const progress = "half way " + "x".repeat(3500) + " end of progress";
+    b.jobs.notified(job.token, progress);
     await until("its notice is told", () => a.told.length > 0);
     assert.equal(a.told.length, 1);
     assert.equal(a.told[0][0], "s1");
     assert.ok(a.told[0][1].startsWith("Remote task k1 on B: {") && a.told[0][1].includes("half way"), a.told[0][1]);
+    assert.ok(a.told[0][1].length < 2500, "remote progress cannot embed the full result in the prompt");
+    assert.match(a.told[0][1], /\[omitted\]/);
+    const progressResult = await use("station_task", { station: "B", key: "k1", action: "get" });
+    assert.ok(JSON.stringify(progressResult.notices).includes(progress), "explicit reads keep the full notice");
     await writeFile(gate, "go");
     await until("its end is told", () => a.told.length > 1);
     assert.equal(a.told.length, 2);

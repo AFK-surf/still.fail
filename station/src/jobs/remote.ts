@@ -29,6 +29,7 @@ import { type Cloud, UNPROTECTED } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
 import { detailed, summary } from "./load.ts";
+import { remoteNotice } from "./notice.ts";
 import { type Inbox, MESH_WAIT_MS, NoBytes, type PeerCall, PeerBus, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
 import { fileBytes, readBytes, stopBytes, writeBytes } from "../mesh/files.ts";
 import { Bulk, LINK, PACKED, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
@@ -2036,7 +2037,7 @@ export class Remote {
     }
     if (finished && entry.brought !== undefined && typeof result === "object") result.back = entry.brought;
     if (finished || (Array.isArray(notices) && notices.length > 0 && !isDeepStrictEqual(field(entry, "notices"), notices))) {
-      const message = `Remote task ${text(entry, "key")} on ${text(entry, "station")}: ${JSON.stringify(result)}`;
+      const message = remoteNotice(text(entry, "key"), text(entry, "station"), result);
       let told = true;
       try {
         await this.notify(text(entry, "session"), message);
