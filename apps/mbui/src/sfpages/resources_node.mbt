@@ -483,12 +483,7 @@ fn rs_figures_node_of(
 /// its row has less room; else its title.
 fn rs_title_node(p : @view.View, core : Core, g : () -> Json?, style : @ui.TextStyle) -> Unit {
   let chat = fn() { field(g(), "chat") }
-  let session = fn() {
-    match field(chat(), "thread") {
-      Some(Number(n, ..)) => n.to_int64().to_string()
-      _ => text(chat(), "session")
-    }
-  }
+  let session = fn() { text(chat(), "session") }
   p.pick(fn() { chat() is Some(Object(_)) && session() != "" }, fn(x, link) {
     x.cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
     if link {
