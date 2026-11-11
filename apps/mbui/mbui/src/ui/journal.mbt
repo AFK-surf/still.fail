@@ -469,7 +469,7 @@ fn journal_work(what : Done, start : Double, end : Double) -> Unit {
     Event(_) | FrameEnd => true
     _ => false
   }
-  if foldable && end - start < journal_floor_ms {
+  if foldable && end < start + journal_floor_ms {
     if journal_small[0] == 0.0 {
       journal_small[2] = start
     }

@@ -215,7 +215,7 @@ pub fn rest_of(name : String) -> Double {
 /// moment as it is. A moment already past: nothing.
 pub fn Tester::input_at(self : Tester, at : Double) -> Unit {
   if self.host_frames {
-    let last = self.origin + ((at - self.origin) / self.period + 1.0e-9).floor() * self.period
+    let last = grid_moment(self.origin, ((at - self.origin) / self.period + 1.0e-9).floor(), self.period)
     if last > self.fake.time + 1.0e-9 {
       self.run_for(last - self.fake.time)
     }
@@ -308,10 +308,26 @@ fn Tester::asks_frames(self : Tester) -> Bool {
 fn Tester::between_after(self : Tester, t : Double) -> Double {
   let hair = grid_hair * self.between
   let mut k = ((t - self.origin) / self.between).floor() - 1.0
-  while self.origin + k * self.between <= t + hair {
+  while grid_moment(self.origin, k, self.between) <= t + hair {
     k = k + 1.0
   }
-  self.origin + k * self.between
+  grid_moment(self.origin, k, self.between)
+}
+
+///|
+/// The `k`th of a grid's frames after `origin`, `period` (ms) apart, worked out at once: never summed frame by frame,
+/// and where the period is a whole rate's (1000 over a whole number of frames a second, to the bit: 1000/24, 1000/7) k
+/// times 1000 over that rate, rounded once. So what is one moment at two rates is one double (24's nth frame and 120's
+/// 5nth; tester_grid_wbtest), and what is worked out of it, a fling's place there and a row's where it is drawn, the
+/// same to the bit (list_drawn_band_wbtest): k times the period, a rounding already, came out a few last bits apart at
+/// the two. Another period (a run's tape's, Tester::set_frame_period) k times itself.
+fn grid_moment(origin : Double, k : Double, period : Double) -> Double {
+  let rate = (1000.0 / period).round()
+  if rate >= 1.0 && 1000.0 / rate == period {
+    origin + (k * 1000.0) / rate
+  } else {
+    origin + k * period
+  }
 }
 
 ///|

@@ -1217,7 +1217,7 @@ pub fn list_keys(
     lm.unghost.remove(k)
   }
   let stale : Array[Int] = []
-  lm.arrived.each(fn(k, at) { if now - at >= 500.0 { stale.push(k) } })
+  lm.arrived.each(fn(k, at) { if now >= at + 500.0 { stale.push(k) } })
   for k in stale {
     lm.arrived.remove(k)
   }
@@ -1269,7 +1269,7 @@ pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
   match mo.lists.get(list) {
     Some(lm) =>
       match lm.lifted.get(motion_key(key)) {
-        Some(at) if c.moment() - at < lift_ms => {
+        Some(at) if c.moment() < at + lift_ms => {
           // (read by what is built: built again each frame while it passes over the others, Ctx::shows_motion)
           c.shows_motion(lm.lift_mover, true)
           c.moment() - at
@@ -2145,7 +2145,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
                 match l.arrived.get(e.key) {
                   Some(at) => {
                     l.arrived.remove(e.key)
-                    c.moment() - at < 400.0
+                    c.moment() < at + 400.0
                   }
                   None => false
                 }

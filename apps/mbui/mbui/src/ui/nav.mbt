@@ -951,7 +951,7 @@ fn[P] Nav::gesture(
           // its progress to 0 first, on its spring, the finger's place kept); the page goes back with that progress,
           // not standing where the finger left it. (A finger held still: its progress comes to where the finger is,
           // by no more than it lagged.)
-          if t - self.moved_at > tracker_gap_ms && self.moved_progress > 0.0 && progress < self.moved_progress {
+          if t > self.moved_at + tracker_gap_ms && self.moved_progress > 0.0 && progress < self.moved_progress {
             self.p = self.moved_p * progress / self.moved_progress
             self.finger.set(self.p)
             self.track.add(t, self.x0 + self.p * w)

@@ -43,7 +43,7 @@ fn perf_touch_started() -> Unit {
 fn perf_touch_submitted(at : Double) -> Unit {
   let start = perf_touch_at.val
   perf_touch_at.val = -1.0
-  if start >= 0.0 && @hostapi.perf_recording() && at - start >= probe_slow_ms {
+  if start >= 0.0 && @hostapi.perf_recording() && at >= start + probe_slow_ms {
     @hostapi.perf_line("touch: to_submit=\{((at - start) * 10.0).round() / 10.0}ms")
   }
 }
@@ -120,6 +120,13 @@ fn frame_perf() -> FramePerf {
 /// frames); else the moment it asked to be woken at; +inf, none.
 pub fn Tester::wanted_after(self : Tester) -> Double {
   self.reads_own()
+  self.wanted_next()
+}
+
+///|
+/// Tester::wanted_after, its Tester not asked to be the one made last: the Tester's own check of its frames
+/// (Tester::frame_at_said).
+fn Tester::wanted_next(self : Tester) -> Double {
   let c = g()
   if self.fake.wants ||
     c.wants_frame ||

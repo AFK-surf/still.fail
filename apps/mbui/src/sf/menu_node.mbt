@@ -206,7 +206,7 @@ pub fn menu_node(
           match (if k.mods == 0 || k.mods == @ui.mod_shift_key { typed_char(k.code) } else { None }) {
             Some(ch) => {
               // (a second's worth together: the same letter again moves on to the next it starts)
-              let s = if k.at - typed_at.val <= @kit.typeahead_ms { typed.val + ch.to_string() } else { ch.to_string() }
+              let s = if k.at < typed_at.val + @kit.typeahead_ms { typed.val + ch.to_string() } else { ch.to_string() }
               typed.val = s
               typed_at.val = k.at
               match typeahead_to(items, s, now) {
