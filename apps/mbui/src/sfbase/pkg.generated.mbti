@@ -1494,6 +1494,8 @@ pub fn screen_link_card(@ui.Ctx, Source, String, String, @sf.LinkTo, String?) ->
 
 pub fn screen_links(@ui.Ctx, Source, String) -> @sf.Screens
 
+pub fn screen_links_node(Source) -> @sf.ScreensNode
+
 pub let screen_made_stream : @ref.Ref[(@json.Json, (@json.Json, Bytes?) -> Unit, (Result[@json.Json, @json.Json]) -> Unit) -> Int32]
 
 pub fn screen_peek(@ui.Ctx, String, String, String, ScreenCard, target? : Int32) -> Unit
