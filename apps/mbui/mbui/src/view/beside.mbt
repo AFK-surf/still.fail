@@ -111,7 +111,8 @@ pub fn place_beside(
 
 ///|
 /// What a node goes beside (View::beside): its anchor, on which side of it, lined up how, how far off, kept how far
-/// inside the window; `at_pointer`: beside the point of it the pointer is at while the pointer is on it, not all of it.
+/// inside the window; `at_pointer`: beside the point of it the pointer is at while the pointer is on it, not all of it;
+/// `along_offset`: moved that much further along its side, in its own points.
 pub(all) struct Beside {
   anchor : NodeId
   side : Side
@@ -120,6 +121,7 @@ pub(all) struct Beside {
   padding : Double
   at_pointer : Bool
   width : BesideWidth
+  along_offset : Double
 } derive(Eq, Debug)
 
 ///|
@@ -150,7 +152,10 @@ pub(all) enum BesideWidth {
 /// places nothing again by itself. The anchor's words set again, its size, its place or what holds it moving does (the
 /// anchor laid out or placed again); a signal of the app's it reads does not: a piece by which of the words is picked
 /// (View::runs_picked) stays by the words picked when it was last placed as the pick moves on, till something is laid
-/// out or placed again. So it reads the anchor's words as they are laid out, nothing else.
+/// out or placed again. So it reads the anchor's words as they are laid out, nothing else. `along_offset`: moved
+/// that much further along its side (Ctx::place's): right, or down, beside a side across the anchor; right to left, the
+/// other way; from all of the anchor, or from its `piece` where it has one; in its own points, drawn as it is; kept in
+/// the window as ever (`padding`).
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -161,6 +166,7 @@ pub fn View::beside(
   at_pointer? : Bool = false,
   width? : BesideWidth = Own,
   piece? : (Double, Double) -> (Double, Double, Double, Double)?,
+  along_offset? : Double = 0.0,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.beside_piece = piece
@@ -171,7 +177,7 @@ pub fn View::beside(
     Some(_) => ()
     None => self.tree.beside_widths.remove(self.at)
   }
-  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, width })
+  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, width, along_offset })
   if !self.tree.besides_at.contains(self.at) {
     self.tree.besides_at.push(self.at)
   }
@@ -329,6 +335,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       side=b.side,
       along=b.along,
       offset=b.offset,
+      along_offset=b.along_offset * hs,
       padding=b.padding,
     )
     // (where it grows from, where it is drawn bigger or smaller about the side it went on: View::scale's FromBeside)
