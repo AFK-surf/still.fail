@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [af3a678a1](https://github.com/AFK-surf/still.fail/commit/af3a678a11e4028dcf45e4dd277ca27fdd252cc1) core, app: 关于 shows this machine's station, its ne | 1.8 | 2.4 | 10.01 | 28.66 | 35.13 | 25.6 | 47.27 | 93.87 | 132.53 |
 | [a24c7b2fb](https://github.com/AFK-surf/still.fail/commit/a24c7b2fb484cfc8072637696e34eb0cbf444f66) mbui: one shown in another's place has the gap bef | 1.8 | 2.4 | 10.01 | 28.66 | 35.12 | 25.59 | 47.26 | 94.52 | 137.98 |
 | [5de26a9c8](https://github.com/AFK-surf/still.fail/commit/5de26a9c84b79b9880f5307606e3ba2b3e99408a) android: a native crash's report carries the crash | 1.8 | 2.4 | 10 | 28.64 | 35.08 | 25.58 | 47.22 | 94.32 | 130.52 |
 | [400a6b98e](https://github.com/AFK-surf/still.fail/commit/400a6b98e2567eaf732bea8251226ae78cc01517) mbui: what the app did while shown says its frames | 1.79 | 2.39 | 9.95 | 28.6 | 34.94 | 25.53 | 47.12 | 94.32 | 171.62 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0f96ed1e8](https://github.com/AFK-surf/still.fail/commit/0f96ed1e8401cf9bfba0026bb3641bdca312f64a) ci: words_large's sweep in two runs, a language ea | 1.76 | 2.36 | 9.8 | 28.4 | 34.32 | 25.38 | 46.64 | 93.55 | 181.79 |
 | [fc221c3fe](https://github.com/AFK-surf/still.fail/commit/fc221c3fefc93a91693ad68795951fa6666a6506) kit: a menu's item the pointer rests on takes the  | 1.76 | 2.35 | 9.79 | 28.4 | 34.31 | 25.38 | 46.64 | 93.82 | 169.65 |
 | [e77e01edf](https://github.com/AFK-surf/still.fail/commit/e77e01edf003bfdc0ecce3a73d255420e6f91453) ci: the app's page files handed to their programs  | 1.76 | 2.35 | 9.79 | 28.4 | 34.29 | 25.38 | 46.63 | 93.64 | 146.17 |
-| [a7b60f6b2](https://github.com/AFK-surf/still.fail/commit/a7b60f6b22673771b8f1cfe19bfd7e5b67dcb910) mbui: a stack's pages put in place, or gone back t | 1.76 | 2.35 | 9.79 | 28.4 | 34.29 | 25.38 | 46.63 | 94.03 | 162.11 |
