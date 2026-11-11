@@ -206,12 +206,12 @@ fn Ctx::tree_words_facts(
   w.allow_ellipsis = cut_said
   w.w = if cut_said && !k.wrap { Cut } else { Auto }
   w.shorter = match tree.laid_facts(d.id) {
-    Some(f) => f.shorter.map(fn(s) { view_words_set(s, k) })
+    Some(f) => f.shorter.map(fn(s) { view_words_set(s, k, false) })
     None => []
   }
   if c.runs.is_empty() {
     let lay = fn(s : String) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) }
-    let shown = view_words_set(c.words_drawn.unwrap_or(c.words), k)
+    let shown = view_words_set(c.words_drawn.unwrap_or(c.words), k, c.words_breaks)
     let tl = layout_words(shown, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 { ellipsized(shown, tl, c.w, lay) } else { tl }
     w.tl = Some(tl)
@@ -220,11 +220,11 @@ fn Ctx::tree_words_facts(
   } else {
     w.kind = kind_rich
     w.text = c.words
-    let rich = view_rich(c.runs, k, c.runs_look, scale)
+    let rich = view_rich(c.runs, k, c.runs_look, scale, c.words_breaks)
     let whole = layout_rich(rich, 1.0e9)
     w.rich = Some(rich)
     w.rl_whole = if k.wrap { @double.not_a_number } else { whole.w }
-    if !k.wrap && whole.w > c.w + 0.5 {
+    if runs_over(rich, whole, c.w) {
       let cut = cut_rich({ ..rich, max_lines: 1 }, whole, c.w)
       w.rcut = Some(cut)
       w.rl = Some(layout_rich(cut, 1.0e9))

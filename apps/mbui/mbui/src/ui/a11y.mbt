@@ -720,7 +720,7 @@ fn Ctx::a11y_tree_pass(self : Ctx, tree : @view.Tree, full : Bool, out : Array[A
         _ => ""
       }
     },
-    set=view_words_set,
+    set=fn(w, k) { view_words_set(w, k, false) },
     under=old_modal,
     whole=full,
   )

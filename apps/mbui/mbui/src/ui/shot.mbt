@@ -130,6 +130,8 @@ pub fn take_picture(
       },
       measure=view_words_measure,
       measure_runs=view_runs_measure,
+      measure_kept=view_words_measure_kept,
+      measure_runs_kept=view_runs_measure_kept,
       measure_shorter=view_shorter_measure,
       time=fn() { h_event_time() },
     )

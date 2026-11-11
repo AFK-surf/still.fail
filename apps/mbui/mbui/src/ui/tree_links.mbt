@@ -195,7 +195,7 @@ pub fn runs_links(
 fn runs_link_pieces(v : @view.View, w : Double) -> Array[(Int, Double, Double, Double, Double)] {
   let (rs, look, set) = v.runs_set_now()
   guard !rs.is_empty() else { return [] }
-  let (r, lay, _) = view_runs_laid(rs, look, set, w, v.tree.words_scale_of(v.id()))
+  let (r, lay, _) = view_runs_laid(rs, look, set, w, v.tree.words_scale_of(v.id()), kept=v.words_breaks_now())
   rich_link_pieces(r, lay, 0.0, 0.0, center_in=if v.words_centered_now() { w } else { -1.0 })
 }
 
