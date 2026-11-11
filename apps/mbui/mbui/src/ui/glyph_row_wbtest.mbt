@@ -6,12 +6,15 @@ test "a line's glyphs share a pixel row when its baseline falls half way between
   let sc = 1.5
   // 30.5 pixels down at 150%
   let base = 20.0 + 1.0 / 3.0
-  let rows = []
-  for py in -20..<-8 {
-    let oy = py.to_double() / sc
-    rows.push((on_glyph_row(base, oy, sc) * sc - py.to_double()).round())
-  }
-  for r in rows {
-    assert_eq(r, rows[0])
+  // (its box's top on the pixels, and a third of one off them)
+  for top in [0.0, 1.0 / 3.0 / sc] {
+    let rows = []
+    for py in -20..<-8 {
+      let oy = py.to_double() / sc
+      rows.push((on_glyph_row(top, base - top, oy, sc) * sc - py.to_double()).round())
+    }
+    for r in rows {
+      assert_eq(r, rows[0])
+    }
   }
 }

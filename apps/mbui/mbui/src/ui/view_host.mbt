@@ -2563,7 +2563,7 @@ fn Ctx::view_blit(
     let (i, gx, base, goy, own_x, own_y) = gl
     let b = at + i * inst_size
     s.unsafe_set(b, (if lx == x { on_pixels(x + gx, sc) } else { x + on_pixels(lx + gx, sc) - lx }) + own_x)
-    s.unsafe_set(b + 1, (if ly == y { on_glyph_row(y + base, goy, sc) } else { y + on_glyph_row(ly + base, goy, sc) - ly }) + own_y)
+    s.unsafe_set(b + 1, (if ly == y { on_glyph_row(y, base, goy, sc) } else { y + on_glyph_row(ly, base, goy, sc) - ly }) + own_y)
   }
   // (its own ground drawn off where it is laid out, bigger and as round as it says (View::ground_drawn): before its
   // glass's capture is told where it is)
