@@ -108,11 +108,17 @@ fn said_view() -> ChatView {
 
 ///|
 /// What the old view draws by `draw` (its Ctx, the fixture's source, where it is: out of a list, inline where `w` is
-/// narrow), `w` wide, in a row's room.
-fn said_old(w : Double, draw : (@ui.Ctx, Source, MessageHere) -> Unit, platform? : Int = 0) -> @ui.Tester {
+/// narrow), `w` wide (`h` high), in a row's room; the source `src` where it is given (else history's).
+fn said_old(
+  w : Double,
+  draw : (@ui.Ctx, Source, MessageHere) -> Unit,
+  platform? : Int = 0,
+  src? : Source,
+  h? : Double = 320.0,
+) -> @ui.Tester {
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
-  let src = @sffixture.fixture("history")
+  let src = src.unwrap_or(@sffixture.fixture("history"))
   let view = said_view()
   let here : MessageHere = {
     station: "ws1/st1",
@@ -130,30 +136,33 @@ fn said_old(w : Double, draw : (@ui.Ctx, Source, MessageHere) -> Unit, platform?
       c.with_theme(@sf.ui_theme(), fn() { c.box(style=head_frame, fn() { draw(c, src, here) }) |> ignore })
     },
     w~,
-    h=320.0,
+    h~,
     platform~,
   )
 }
 
 ///|
 /// A message `m` as the old view draws it in its row (message_row in row_box).
-fn said_old_row(w : Double, m : Message, platform? : Int = 0) -> @ui.Tester {
-  said_old(w, platform~, fn(c, src, here) { row_box(c, row_side(w), 0.0, fn() { message_row(c, src, here, m) }) |> ignore })
+fn said_old_row(w : Double, m : Message, platform? : Int = 0, src? : Source, h? : Double = 320.0) -> @ui.Tester {
+  said_old(w, platform~, src?, h~, fn(c, src, here) { row_box(c, row_side(w), 0.0, fn() { message_row(c, src, here, m) }) |> ignore })
 }
 
 ///|
 /// What the nodes draw by `draw` (a column's node, the fixture's source, where it is: its list `w` wide, or as
-/// `width_now` says), `w` wide; what is presented over it drawn where `presents`.
+/// `width_now` says), `w` wide; what is presented over it drawn where `presents`; the source `src` where it is given
+/// (else history's).
 fn said_new(
   w : Double,
   draw : (@view.View, Source, MessageNodeHere) -> Unit,
   platform? : Int = 0,
   width_now? : @signals.Signal[Double],
   presents? : Bool = false,
+  src? : Source,
+  h? : Double = 320.0,
 ) -> @ui.Tester {
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
-  let src = @sffixture.fixture("history")
+  let src = src.unwrap_or(@sffixture.fixture("history"))
   let view = said_view()
   @ui.Tester::new(
     fn(c) {
@@ -184,7 +193,7 @@ fn said_new(
       }
     },
     w~,
-    h=320.0,
+    h~,
     platform~,
   )
 }
