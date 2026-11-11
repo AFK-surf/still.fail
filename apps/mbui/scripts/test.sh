@@ -509,7 +509,9 @@ for t in $targets; do
   [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
   # (each flow's pace passes, where each split from its strict pass (src/sfreplay's orders), past LINES_OUT's tail)
   grep -a '^PACE [^ ]*: ' "$out"
-  grep -v "$F" "$out" | grep -av '^MOTION ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  grep -v "$F" "$out" | grep -av '^MOTION ' | grep -av '^ROOMS-DIFF ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  # TEMPORARY (a run that only counts, not to merge): every ROOMS-DIFF line, past the tail
+  grep -a '^ROOMS-DIFF ' "$out" | sort | uniq -c
   # (and each test that failed, whole, its lines under it too, wherever it fell: past LINES_OUT's tail behind a run's
   # CLOCKREAD lines, main df98aad1's words_large failures were in no line of app 2/4's log nor in its What failed,
   # 42956992852, 2026-11-11)

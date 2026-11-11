@@ -138,8 +138,26 @@ fn tree_source_said(id : @view.NodeId, paren? : Bool = false) -> String {
 /// screen back, both at the last frame's moment (Tester::contrast_faults): what is read right after it (the words, the
 /// draw list) and the clock are as they were before it.
 pub fn Tester::audit(self : Tester) -> Array[String] {
+  // TEMPORARY (a run that only counts, not to merge): each line the hit test's rooms say and main's do not, or main's
+  // and not the hit test's, printed; what is returned main's, so nothing fails for it
+  let was = self.tree_room_faults_was()
+  let now = self.tree_room_faults()
+  let (ww, wh) = match view_tree() {
+    Some(tree) => tree.root().window()
+    None => (0.0, 0.0)
+  }
+  for f in was {
+    if !now.contains(f) {
+      println("ROOMS-DIFF \{ww}x\{wh} \{native_pointing()} main-only: " + f)
+    }
+  }
+  for f in now {
+    if !was.contains(f) {
+      println("ROOMS-DIFF \{ww}x\{wh} \{native_pointing()} reach-only: " + f)
+    }
+  }
   self.room_faults() +
-  self.tree_room_faults() +
+  was +
   self.squeeze_faults() +
   self.gap_faults() +
   self.corner_faults() +

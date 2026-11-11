@@ -320,3 +320,57 @@ pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
   }
   out
 }
+
+///|
+/// TEMPORARY (a run that only counts, not to merge): the rule as main measures it, for ROOMS-DIFF.
+fn Tester::tree_room_faults_was(self : Tester) -> Array[String] {
+  ignore(self)
+  guard view_tree() is Some(tree) else { return [] }
+  let targets = tree.press_boxes()
+  let drawn = tree.drawn()
+  let named = fn(k : Int) -> String {
+    let (id, (x0, y0, x1, y1), _, _) = targets[k]
+    // (the first words drawn within it)
+    let words = match
+      drawn.search_by(fn(d) {
+        d.words != "" && d.x >= x0 - 0.5 && d.y >= y0 - 0.5 && d.x + d.w <= x1 + 0.5 && d.y + d.h <= y1 + 0.5
+      }) {
+      Some(j) => "「\{words_short(drawn[j].words)}」 "
+      None => "a box "
+    }
+    words +
+    "(a node of the window's tree's at \{x0.round()},\{y0.round()} \{(x1 - x0).round()}×\{(y1 - y0).round()}" +
+    tree_source_said(id) +
+    ")"
+  }
+  let (ww, wh) = tree.root().window()
+  let window = (0.0, 0.0, ww, wh)
+  let holds = fn(a : Int, b : Int) {
+    let mut k = targets[b].2
+    while k >= 0 {
+      if k == a {
+        return true
+      }
+      k = targets[k].2
+    }
+    false
+  }
+  let out : Array[String] = []
+  let rooms = rooms_parted(
+    targets.map(fn(t) { t.1 }),
+    targets.map(fn(t) { if t.2 >= 0 { targets[t.2].1 } else { window } }),
+    window,
+    fn(j, k) { targets[j].3 == targets[k].3 && !holds(j, k) && !holds(k, j) },
+    fn(j, k, gx, gy) {
+      out.push("apart: \{named(j)} and \{named(k)} are drawn over each other by \{gx.round()}×\{gy.round()}")
+    },
+  )
+  let least = room_least()
+  for j, r in rooms {
+    let (w, h) = (r.2 - r.0, r.3 - r.1)
+    if w < least - gap_slack || h < least - gap_slack {
+      out.push("room: \{named(j)} has \{w.round()}×\{h.round()} to be pressed in, under \{least}")
+    }
+  }
+  out
+}
