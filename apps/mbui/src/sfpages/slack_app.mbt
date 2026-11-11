@@ -746,23 +746,14 @@ fn sa_avatar_picker_node(
         guard @signals.untracked(all).iter().find_first(fn(a) { a.id == id }) is Some(a) else { return }
         let label = if a.label.has_prefix("android-") { @sf.t(a.label) } else { a.label }
         let tile = t.box(fn(b) {
-          @sf.style_node(b, fn() { sa_tile })
           let on = fn() { d.picked.get() == a.id }
+          // (its edge: picked, sa_tile_on's; under the pointer, sa_tile_lit's, its hovered{border_color=FieldHover})
+          @sf.style_node(b, fn() { if on() { sa_tile_on } else if b.pointed() { sa_tile_lit } else { sa_tile } })
           b
           .width(By(fn() { Some(side()) }))
           .height(By(fn() { Some(side()) }))
           .ground(Is(@sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)))
           .clips(Is(true))
-          .edge(By(fn() {
-            let th = @ui.tree_theme()
-            if on() {
-              (2.0, th.color(Fg))
-            } else if b.pointed() {
-              (1.0, th.color(FieldHover))
-            } else {
-              (1.0, th.color(Line))
-            }
-          }))
           .says(By(fn() { Some(@view.said(Button, label~, selected=on())) }))
           |> ignore
           @sf.presses_node(b, fn() { pick(a) })
@@ -1373,6 +1364,11 @@ let sa_picker_row : @ui.Style = @ui.css("row w=Full gap=S1_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let sa_tile : @ui.Style = @ui.css("radius=Lg clip border=B1 border_color=Line align=ACenter justify=JCenter hovered{border_color=FieldHover}")
+
+///|
+/// A tile under the pointer (sa_tile's hovered, as a node takes it).
+// kept across runs: a value (no field of it changes)
+let sa_tile_lit : @ui.Style = sa_tile.then(@ui.css("border_color=FieldHover"))
 
 ///|
 // kept across runs: a value (no field of it changes)

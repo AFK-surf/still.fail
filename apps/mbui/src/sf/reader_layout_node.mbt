@@ -275,16 +275,12 @@ fn layout_swatch(
     presses_node(s, press)
     s.says(By(fn() { Some(@view.said(Button, label=glyph() + " " + name())) })) |> ignore
     s.box(fn(g) {
-      style_node(g, fn() { (if on() { desk_swatch_on } else { desk_swatch_off }).then(@ui.style(bg=Data(paper.ground))) })
-      g
-      .edge(By(fn() {
-        if on() {
-          (desk_swatch_on_line, p().accent)
-        } else {
-          (desk_swatch_off_line, alpha(p().ink, desk_swatch_line))
-        }
-      }))
-      |> ignore
+      // (its ring desk_swatch_on's B2 in the accent where it is on, desk_swatch_off's B1 in the page's ink, faint)
+      style_node(g, fn() {
+        (if on() { desk_swatch_on } else { desk_swatch_off }).then(
+          @ui.style(bg=Data(paper.ground), border_color=Data(if on() { p().accent } else { alpha(p().ink, desk_swatch_line) })),
+        )
+      })
       g.box(fn(m) {
         m
         .words_runs(By(fn() { [@ui.span(glyph(), serif=true)] }))
@@ -299,13 +295,6 @@ fn layout_swatch(
   })
   |> ignore
 }
-
-///|
-/// A swatch's ring (desk_swatch_on's border=B2, desk_swatch_off's B1).
-let desk_swatch_on_line : Double = 2.0
-
-///|
-let desk_swatch_off_line : Double = 1.0
 
 ///|
 /// A size's key in `row` (desk_size_key's): A− or A+, 32 high, 44 wide at least, quiet where it can go no further (not
