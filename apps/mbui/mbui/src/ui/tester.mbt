@@ -540,6 +540,7 @@ pub fn Tester::new(
   looks_check.val = true
   looks_made_at.val = loc.to_string()
   looks_unjudged.val = false
+  motion_unjudged.val = false
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)
@@ -710,8 +711,8 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 /// A run that judges motion (MBUI_TEST_MOTION, test_motion_judged) judges those too, at a display's rate (60 a second
 /// or more): every frame a host at that rate draws while something moves.
 pub fn Tester::judges_motion(self : Tester) -> Bool {
-  // (a run whose frames are not judged: Tester::frames_unjudged)
-  if looks_unjudged.val {
+  // (a run whose frames are not judged: Tester::frames_unjudged; nor how what moves goes: Tester::motion_unjudged)
+  if looks_unjudged.val || motion_unjudged.val {
     return false
   }
   if self.between > 0.0 {

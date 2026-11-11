@@ -222,6 +222,22 @@ pub fn Tester::frames_unjudged(self : Tester, on : Bool) -> Unit {
 }
 
 ///|
+/// Whether this Tester's frames are not judged for how what moves goes (words_over, rows_steady, sizes_steady,
+/// gaps_steady), all else of them judged as ever: a sweep of every screen at rest, each opened with motion reduced, whose
+/// frames are only the way to the screen it looks at (the app's corners, contrast, squeeze_said and words_large). For
+/// CI's time while its runners are few (the user, 2026-11-12: 「先省吧，明天加机器，再改回来」): judged again once there
+/// are more.
+// kept across runs: set by the Tester that asks it (Tester::motion_unjudged), off as each Tester is made
+let motion_unjudged : Ref[Bool] = Ref(false)
+
+///|
+/// This Tester's frames not judged for how what moves goes (motion_unjudged): `on` for its run.
+pub fn Tester::motion_unjudged(self : Tester, on : Bool) -> Unit {
+  ignore(self)
+  motion_unjudged.val = on
+}
+
+///|
 /// Whether each frame of the looks alone is drawn whole after it as well and the two compared (on in every Tester:
 /// frame_watch.mbt's head): off for a run measured as a host runs it (mbui/src/film's bench).
 pub fn Tester::check_looks(self : Tester, on : Bool) -> Unit {
