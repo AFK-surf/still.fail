@@ -518,6 +518,8 @@
   "station.drive.path_escape": "路径不能超出已固定的文件夹",
   "station.drive.protected": "无法打开 station 自身的数据",
   "station.drive.permission": "station 无权执行此操作",
+  "station.presets.clone.invalid": "不是能克隆的 Git 地址",
+  "station.presets.clone.readOnly": "只读成员不能往这台 station 克隆仓库",
   "station.drive.manage": "只读成员无法固定文件夹",
   "station.drive.is_a_directory": "这是一个文件夹",
   "station.drive.not_a_directory": "此项不是文件夹",

@@ -556,23 +556,29 @@ pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
 pub let station_files_asked : Ref[(Source, String) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
-/// The files' page's folder picker (sfdesk drive_dialogs.mbt) drawn inside something else (a preset's dialog, in
-/// place of what it held): put at a station's home (its address), drawn each frame where it is shown, the folder it
-/// shows ("" while it is read, or one the station may not read), let go.
-// kept across runs: what the app says once as it starts
-pub let folder_browse_open : Ref[(String) -> Unit] = Ref(fn(_) {  })
+/// A folder to choose on a station (sfdesk drive_dialogs.mbt's picker, folder_pick_asked): its panel's `title` and what it
+/// says under it (`note`, "" nothing), the `stations` it can be chosen on and the one it starts on (`station`), the
+/// folder it starts in there (`at`, "" the station's home); its button's words given the name of the folder shown
+/// (`action`), whether that folder is taken already (`taken`, given the station and its path: the button disabled,
+/// `taken_words` its words then); what a folder chosen does (`pick`, given its station, its path, its name, and what
+/// closes the picker).
+pub(all) struct FolderPick {
+  title : String
+  note : String
+  stations : Array[@sf.StationChoice]
+  station : String
+  at : String
+  action : (String) -> String
+  taken : (String, String) -> Bool
+  taken_words : String
+  pick : (String, String, String, () -> Unit) -> Unit
+}
 
 ///|
+/// The folder picker put up (`src` what it asks the stations by), a step further in from the panel that asked for it
+/// as that one closes for it: sfdesk's folder_pick (浏览文件夹 of a preset's folders, sfpages presets.mbt).
 // kept across runs: what the app says once as it starts
-pub let folder_browse_body : Ref[(@ui.Ctx, Source, String) -> Unit] = Ref(fn(_, _, _) {  })
-
-///|
-// kept across runs: what the app says once as it starts
-pub let folder_browse_here : Ref[() -> String] = Ref(fn() { "" })
-
-///|
-// kept across runs: what the app says once as it starts
-pub let folder_browse_close : Ref[() -> Unit] = Ref(fn() {  })
+pub let folder_pick_asked : Ref[(Source, FolderPick) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
 /// Chat `r`'s services and jobs put up (an agent's card's jobs pressed, sfpages): the screen's (sfapp's: the desktop's

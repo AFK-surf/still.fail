@@ -348,7 +348,9 @@ fn panel_node(
         // (the focus on the field it opens to be typed in, where it says one; else what holds its body's as it opens
         // where it takes it, else where it was; back to what had it as it goes)
         match (field.val, body_box.val) {
-          (Some(f), _) => layer.focus_opens(f.field) |> ignore
+          (Some(f), _) if f.keyed(false) => layer.focus_opens(f.field) |> ignore
+          // (a search at hand by touch: the focus left where it is, as on a sheet)
+          (Some(_), _) => layer.focus_returns() |> ignore
           (None, Some(b)) if x.focus => layer.focus_opens(b) |> ignore
           _ => layer.focus_returns() |> ignore
         }

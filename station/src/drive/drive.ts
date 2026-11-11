@@ -74,6 +74,22 @@ export const TOO_BIG = "too big to send";
 export const MOST_ROOTS = 32;
 /// A listing stops at this many entries (`truncated`).
 const MOST_ENTRIES = 50_000;
+/// How many folders' `.git` are looked for at once (folders()).
+const GIT_LOOKS = 32;
+
+/// `f` of each of `items`, at most `most` at a time; their answers in their order.
+async function inBatches<T, A>(items: T[], most: number, f: (item: T) => Promise<A>): Promise<A[]> {
+  const out: A[] = new Array(items.length);
+  let next = 0;
+  const one = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await f(items[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(most, items.length) }, one));
+  return out;
+}
 /// The most one read gives.
 export const MAX_READ = 8 * 1024 * 1024;
 /// What an upload's file is called beside where it goes, until it is whole: left out of listings.
@@ -194,7 +210,8 @@ function failed(e: unknown): DriveError {
 const real = (path: string) => direct.real(path);
 
 /// A folder to pick a root from: its name, where it is, whether the station may list it, whether it is a disk.
-export type Folder = { name: string; path: string; unreadable: boolean; disk?: boolean };
+/// `git`: a git repository (a `.git` in it, a directory or a worktree's file), where the station looked.
+export type Folder = { name: string; path: string; unreadable: boolean; disk?: boolean; git?: true };
 export type Folders = { path: string; parent: string | null; home: string; folders: string[]; entries: Folder[]; unreadable: boolean; crumbs: { name: string; path: string }[]; places: Folder[] };
 
 /// The home's own folders offered as places to start from, as they are named on disk (Videos: Linux and Windows).
@@ -597,7 +614,7 @@ export class Drive {
   /// For the settings that name the roots: the folders in `path` (the home when none), for owners and admins to pick
   /// one. Hidden ones (a name starting with `.`) and what is protected are left out; each says whether the station may
   /// list it (`unreadable`: macOS keeps Documents, Desktop, Downloads and removable volumes from a station launchd
-  /// runs). With it, the way there (`crumbs`, from the home when it is under it) and the usual places to start from
+  /// runs) and whether it is a git repository (`git`). With it, the way there (`crumbs`, from the home when it is under it) and the usual places to start from
   /// (`places`: the home's own folders, the disks mounted), in the asker's words. `folders`, the names alone, for the
   /// pages from before.
   async folders(path: string, home: string, lang: Lang = "zh"): Promise<Folders> {
@@ -621,8 +638,16 @@ export class Drive {
         if (d.stat?.dir && !(await this.isProtected(asked, d.real, protect))) entries.push({ name: d.name, path: asked, unreadable: await this.#unreadable(asked) });
       }
       entries.sort((a, b) => collator.compare(a.name, b.name));
+      // Which are repositories: a `.git` looked for in each the station may read, through what listed them, so many at a
+      // time. Not in one reached otherwise than its folder (a protected folder in the home's listing): only still.fail
+      // Helper reaches it, and a look of the station's own there would wait on macOS asking the person.
+      const reach = this.#locked(at);
+      const looked = entries.filter((e) => !e.unreadable && this.#locked(e.path) === reach);
+      const marked = await inBatches(looked, GIT_LOOKS, (e) => fs.stat(join(e.path, ".git")).then(() => true, () => false));
+      const git = new Set(looked.filter((_, i) => marked[i]));
+      const shown = entries.map((e) => (git.has(e) ? { ...e, git: true as const } : e));
       const parent = dirname(at);
-      return { path: at, parent: parent === at ? null : parent, home, folders: entries.map((e) => e.name), entries, unreadable: listed.unreadable, crumbs: crumbs(at, home, lang), places: await this.places(home, lang, protect) };
+      return { path: at, parent: parent === at ? null : parent, home, folders: shown.map((e) => e.name), entries: shown, unreadable: listed.unreadable, crumbs: crumbs(at, home, lang), places: await this.places(home, lang, protect) };
     } catch (e) {
       throw failed(e);
     }

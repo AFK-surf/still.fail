@@ -1251,6 +1251,13 @@ function presetsOf(now: number, station: number): J {
       ]
       : [],
     candidates: repos.map((r, i) => ({ path: `/Users/${s.host}/src/${r}`, name: r, repo: `github.com/acme/${r}`, chats: 40 - i * 6, lastAt: now - (i + 1) * 5 * HOUR, where: `~/src/${r}` })),
+    // (one being cloned, one that failed: a repository of the organisation's the person is not let into)
+    clones: station === 0
+      ? [
+        { id: "c-docs", url: "https://github.com/acme/docs.git", repo: "github.com/acme/docs", name: "docs", state: "cloning", error: "", by: PEOPLE[0].email, startedAt: now - 40 * 1000 },
+        { id: "c-billing", url: "git@github.com:acme/billing.git", repo: "github.com/acme/billing", name: "billing", state: "failed", error: "ERROR: Repository not found.\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.", by: PEOPLE[1].email, startedAt: now - 2 * HOUR },
+      ]
+      : [],
   };
 }
 

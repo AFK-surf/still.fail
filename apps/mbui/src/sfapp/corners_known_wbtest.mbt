@@ -67,7 +67,10 @@ let corners_tape_rail : Array[String] = [
   "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split",
   "files-transfers", "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents",
   "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark",
-  "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
+  "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station",
+  // (a preset's dialog over 新对话 and its steps further in: the rail behind them, not the panel)
+  "newchat-preset-new", "newchat-preset-new-add", "newchat-preset-new-browse", "newchat-preset-new-browse-repos",
+  "newchat-preset-new-clone", "newchat-preset-new-clones", "player-audio", "player-ended",
   "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized",
   "service-stopped", "share-in", "share-in-files", "share-in-stations", "lock-security", "lock-upgrade", "screen-agent-driving",
   "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",

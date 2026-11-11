@@ -173,9 +173,10 @@ test "a panel a share of the window caps whose body is nodes, as tall as what it
 ///|
 /// The ways a panel is shown that a field it opens to be typed in has the keys in (@sf.panel_opens_in_node): `at`,
 /// the window (width, height, platform) and where it is opened from: a sheet on a phone by touch and with keyboard and
-/// mouse, beside what opened it and in the middle of a wide window.
+/// mouse, in the middle of a fold laid open by touch, beside what opened it and in the middle of a wide window.
 let field_panel_ways : Array[(String, Double, Double, Int, @sf.Anchor)] = [
   ("小屏 touch sheet", 390.0, 844.0, 2, Unanchored),
+  ("中屏 touch middle", 674.0, 842.0, 2, Unanchored),
   ("小屏 keyboard sheet", 390.0, 844.0, 0, Unanchored),
   ("大屏 beside", 1280.0, 800.0, 0, At(600.0, 300.0, 0.0, 0.0)),
   ("大屏 middle", 1280.0, 800.0, 0, Unanchored),
@@ -204,7 +205,7 @@ test "a panel whose body says its field is typed in as it opens: that field has 
 }
 
 ///|
-test "a panel whose body says its search is at hand: that search has the keys as it opens beside what opened it and in the window's middle, given back as it goes; on a sheet (by touch or with keyboard and mouse) not, no input method up" {
+test "a panel whose body says its search is at hand: that search has the keys as it opens beside what opened it and in the window's middle with keyboard and mouse, given back as it goes; on a sheet (by touch or with keyboard and mouse) and in the window's middle by touch not, no input method up" {
   for way in field_panel_ways {
     @sf.presenters_reset()
     let (at, w, h, platform, from) = way
@@ -216,7 +217,7 @@ test "a panel whose body says its search is at hand: that search has the keys as
     })
     t.run_for(@ui.move_most_ms)
     assert_true(@sf.presenter_visible(), msg="\{at}: up")
-    if w < 600.0 {
+    if w < 600.0 || platform == 2 {
       assert_false(t.focus_said().has_prefix("TextField \"搜索\""), msg="\{at}: \{t.focus_said()}")
       assert_false(t.ime().0, msg="\{at}: the input method")
     } else {

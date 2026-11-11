@@ -155,3 +155,32 @@ test "by_room: what it makes saying its own box by its room is a fault, told, th
   ])
   assert_eq(@signals.batch_depth(), 0)
 }
+
+///|
+test "by_room: every word measured again as its room is laid out, its own box marked once all of it is laid out" {
+  let tree : Ref[@view.Tree?] = Ref(None)
+  let again = @signals.signal(false)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(col) {
+        col.by_room(fn(held, room) {
+          // (as the system's size of words is asked of the host there, it changed: Tree::words_again)
+          held.pick(at_once=true, fn() { room.width() > 0.0 && again.get() }, fn(_, now) {
+            if now {
+              tree.val.unwrap().words_again()
+            }
+          })
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.val = Some(t)
+  t.frame(400.0, 300.0) |> ignore
+  let redone = t.root().words_redone()
+  again.set(true)
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(t.root().words_redone(), redone + 1, msg="told once, after its layout, not a fault in it")
+}

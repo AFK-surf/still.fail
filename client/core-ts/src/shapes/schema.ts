@@ -1583,6 +1583,7 @@ export const SHAPES: Record<string, Shape> = {
   StationPresets: struct([
     ["presets", vec("Preset")],
     ["candidates", vec("PresetCandidate")],
+    ["clones", vec("PresetClone"), { default: true, doc: "Repositories being cloned into the station's cache for the workspace, and those that failed, newest first (a\nstation from before sends none)." }],
   ], { doc: "A workspace's presets on a station (the `presets` topic), and the directories offered for a\nnew one." }),
   Preset: struct([
     ["id", "String"],
@@ -1609,6 +1610,16 @@ export const SHAPES: Record<string, Shape> = {
     ["cached", opt("bool"), { doc: "Only the station's cache has it (no checkout of the person's on the machine)." }],
     ["icon", opt("String"), { doc: "Its own picture (its favicon, its logo), a data URL." }],
   ], { doc: "A directory offered for a new preset: a clone of the station's repository cache, or one a preset names." }),
+  PresetClone: struct([
+    ["id", "String"],
+    ["url", "String", { said: true, doc: "The address it is cloned from, without a name and password in it." }],
+    ["repo", "String", { said: true, doc: "The repository: github.com/acme/app." }],
+    ["name", "String", { said: true, doc: "Its last part: app." }],
+    ["state", "String", { doc: "cloning, failed." }],
+    ["error", "String", { default: true, said: true, doc: "What git said as it failed: its last lines." }],
+    ["by", "String", { default: true, doc: "Who started it (their e-mail)." }],
+    ["startedAt", "i64", { client: "I54" }],
+  ], { doc: "A repository being cloned into the station's cache (`preset.clone`), or one that failed to: once there, it is one\nof the candidates." }),
   StationMemory: struct([
     ["global", "MemoryFile"],
     ["skills", vec("SkillFile")],

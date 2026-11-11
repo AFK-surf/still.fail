@@ -28,7 +28,9 @@ fn panel_centred_node(
   // (one that goes in steps: Escape and back a step back first, its steps' own)
   // (a step further in from a panel: back to that one)
   let within = fn() { steps_escape(keyed) || back_under(keyed) }
-  dialog_layer_node(parent, open, cancel, outside=true, first_stop=keyed.steps is None, first_takes?=if x.nodes is Some(_) { Some(fn(s : @view.Said) { opens_on_role(s.role) }) } else { None }, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
+  // (its own ground keeps the focus as it opens, none of what it holds given it: a search at hand by touch)
+  let own_ground : Ref[Bool] = Ref(false)
+  dialog_layer_node(parent, open, cancel, outside=true, first_stop=fn() { keyed.steps is None && !own_ground.val }, first_takes?=if x.nodes is Some(_) { Some(fn(s : @view.Said) { opens_on_role(s.role) }) } else { None }, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
     // (one that goes in steps: each its own head and foot, sliding in whole; the dialog untitled round them)
     let steps = keyed.steps
@@ -505,11 +507,15 @@ fn panel_centred_node(
     // not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: where what it holds is nodes,
     // only what takes what is typed or the arrows (opens_on_role), none of it where nothing does (its own ground: the
     // keys its, Escape; Enter nothing), as the old dialog's went to the first of its fields and choices it registered)
-    match (field.val, opens_on.val) {
-      (Some(f), _) => f.field
-      (None, Some(first)) => first
-      (None, None) => layer
+    let (to, own) = match (field.val, opens_on.val) {
+      (Some(f), _) if f.keyed(false) => (f.field, false)
+      // (a search at hand by touch: its own ground, no input method raised over what it lists)
+      (Some(_), _) => (layer, true)
+      (None, Some(first)) => (first, false)
+      (None, None) => (layer, false)
     }
+    own_ground.val = own
+    to
   })
 }
 

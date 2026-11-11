@@ -144,7 +144,7 @@ export function originOf(path: string): string | null {
 }
 
 /// The origin a git config names, as `host/owner/name`.
-function originIn(config: string): string | null {
+export function originIn(config: string): string | null {
   const at = config.search(/\[remote "origin"\]/);
   if (at < 0) return null;
   const url = /^\s*url\s*=\s*(.+)$/m.exec(config.slice(at))?.[1]?.trim();
@@ -358,6 +358,8 @@ export async function candidates(reposDir: string, presets: Preset[], found: Can
   const list = async (dir: string) => readdir(dir).catch(() => [] as string[]);
   const cached = await Promise.all(
     (await list(reposDir)).map(async (name): Promise<Candidate | null> => {
+      // (one being cloned, sessions/clones.ts: not there until it is whole)
+      if (name.startsWith(".")) return null;
       const path = join(reposDir, name);
       const git = join(path, ".git");
       const at = await stat(git).catch(() => null);
