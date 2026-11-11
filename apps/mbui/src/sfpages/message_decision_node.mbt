@@ -355,44 +355,43 @@ fn need_card_node(
   seq : () -> Double,
 ) -> Unit {
   let said = fn() { @sf.ask_line_words(@sf.theme().chat_list.state_turn.then(chat_state_wraps)) }
-  // (an arrangement by the list's width, as message_inline's: what the window does to the width is no motion)
-  v.pick(at_once=true, fn() { @sf.native_on() && (here.width)() <= chat_narrow_w }, fn(p, stacked) {
-    @sf.ask_line_card_node(p, stacked, fn(card) {
-      card.box(fn(w) {
-        @sf.style_node(w, fn() { need_card_words }, in_row=!stacked)
-        w.says(By(fn() { Some(@view.said(Text, label=words())) })) |> ignore
-        // (the bell where an option's number is, in the middle of its disc: concentric with the row's corner as it is)
-        @sf.ask_line_mark_node(w, fn(m) { lead_icon_node(m, "need", fn() { @sf.theme().p.text }, centred=true) })
-        |> ignore
-        w.show(fn() { rest() != "" }, fn(r) {
-          // (taking what is left along the line, wrapping in it)
-          r.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-          @sf.words_node(r, rest, said) |> ignore
-        })
-      })
+  // (narrow by the list's width, as message_inline's; the card lays itself out by it: what the window does to the
+  // width is no motion)
+  @sf.ask_line_card_node(v, fn() { (here.width)() <= chat_narrow_w }, fn(card, stacked) {
+    card.box(fn(w) {
+      @sf.style_node(w, fn() { need_card_words }, in_row=!stacked)
+      w.says(By(fn() { Some(@view.said(Text, label=words())) })) |> ignore
+      // (the bell where an option's number is, in the middle of its disc: concentric with the row's corner as it is)
+      @sf.ask_line_mark_node(w, fn(m) { lead_icon_node(m, "need", fn() { @sf.theme().p.text }, centred=true) })
       |> ignore
-      // (忽略 the library's button ending the row, concentric with its end corner)
-      card.show(fn() { decision_thread(here) is Some(_) }, fn(e) {
-        if stacked {
-          @sf.style_node(e, fn() { need_card_actions })
-        }
-        @sf.ask_line_button_node(
-          e,
-          fn() { @sf.t("web-main.chat.asks.dismiss") },
-          state_icon,
-          fn() {
-            match decision_thread(here) {
-              Some(thread) => dismissed.has(seq_key(here.station, thread, seq()))
-              None => true
-            }
-          },
-          fn() { let_go(src, here, @signals.untracked(seq)) },
-        )
-        |> ignore
+      w.show(fn() { rest() != "" }, fn(r) {
+        // (taking what is left along the line, wrapping in it)
+        r.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        @sf.words_node(r, rest, said) |> ignore
       })
     })
     |> ignore
+    // (忽略 the library's button ending the row, concentric with its end corner)
+    card.show(fn() { decision_thread(here) is Some(_) }, fn(e) {
+      if stacked {
+        @sf.style_node(e, fn() { need_card_actions })
+      }
+      @sf.ask_line_button_node(
+        e,
+        fn() { @sf.t("web-main.chat.asks.dismiss") },
+        state_icon,
+        fn() {
+          match decision_thread(here) {
+            Some(thread) => dismissed.has(seq_key(here.station, thread, seq()))
+            None => true
+          }
+        },
+        fn() { let_go(src, here, @signals.untracked(seq)) },
+      )
+      |> ignore
+    })
   })
+  |> ignore
 }
 
 ///|

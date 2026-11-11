@@ -31,7 +31,7 @@ priv struct PressLook {
 ///|
 /// A press's ripple and sink over node `v`, as big as the press says it is laid out as it goes down (Drag's `w`, `h`:
 /// nothing read back of its layout), its corners
-/// `corner`, the disc in `ink` (black at .1 by default, @motion.ripple_ink); sunk while pressed where `grounded` (a
+/// `corner`, the disc in `ink` as it is now (black at .1 by default, @motion.ripple_ink; a theme's, followed as it changes); sunk while pressed where `grounded` (a
 /// ground of its own). Told the press's where, when and how big it is then; its letting go is the node's
 /// (View::pressed). A finger's press in what scrolls shows once it has stayed tap_indication_ms (Ctx::pressed's, Compose's
 /// clickable in a scrollable container): one that goes on to scroll shows nothing; a tap quicker than that shows
@@ -41,7 +41,7 @@ fn press_look(
   v : @view.View,
   corner : @view.Live[Double],
   grounded : () -> Bool,
-  ink? : Int64 = @motion.ripple_ink,
+  ink? : () -> Int64 = fn() { @motion.ripple_ink },
   loc~ : SourceLoc,
 ) -> PressLook {
   // (the ripples going, by their numbers, in the order they began)
@@ -166,7 +166,7 @@ let press_sink_most : Double = 0.04
 /// ripple's way has it as each frame is drawn while it goes; its alpha the ink's from .13 of the way and fading from .4;
 /// its radius 2.3 times that half diagonal and 10 more, times the progress; from where it went down to the middle by .5; blurred by .27
 /// of its radius (@motion.ripple's).
-fn ripple_disc(d : @view.View, r : PressRipple, ink : Int64) -> Unit {
+fn ripple_disc(d : @view.View, r : PressRipple, ink_now : () -> Int64) -> Unit {
   let p = fn() {
     r.way.shown_on(d)
   }
@@ -193,6 +193,7 @@ fn ripple_disc(d : @view.View, r : PressRipple, ink : Int64) -> Unit {
     let (_, _, radius, k) = geom()
     let sub = fn(a : Double, b : Double) { (dmin(dmax(k, a), b) - a) / (b - a) }
     let fade = dmin(sub(0.0, 0.13), 1.0 - sub(0.4, 1.0))
+    let ink = ink_now()
     let alpha = ((ink & 0xFFL).to_double() * dmax(fade, 0.0)).round().to_int64()
     (radius * 0.27, 0.0, (ink & 0xFFFFFF00L) | alpha)
   }))

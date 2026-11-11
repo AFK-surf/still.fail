@@ -6,22 +6,26 @@
 
 ///|
 /// One line asked of the viewer in `parent` (ask_line_card's, as nodes): a row laid as an option's alone, pad_in in on
-/// every side, an option row's corner, on the text at 5%; `column` lays it a column instead. `body` makes what it
-/// holds. The node.
+/// every side, an option row's corner, on the text at 5%; a column instead where the system lays out the app's tabs
+/// itself (the native bars: @sf.native_on) and where it is is `narrow` (as its caller's width says), at once as that
+/// changes (an arrangement, not a coming or a going). `body` makes what it holds, told whether it is a column. The
+/// node.
 #callsite(autofill(loc))
 pub fn ask_line_card_node(
   parent : @view.View,
-  column : Bool,
-  body : (@view.View) -> Unit,
+  narrow : () -> Bool,
+  body : (@view.View, Bool) -> Unit,
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(v) {
-    style_node(v, fn() {
-      (if column { ask_line_column } else { ask_line_row })
-      .then(ask_line_ground)
-      .then(@ui.style(p=room(option_type().pad_in)))
+  parent.box(made_for=loc, fn(holder) {
+    holder.pick(at_once=true, fn() { native_on() && narrow() }, fn(v, column) {
+      style_node(v, fn() {
+        (if column { ask_line_column } else { ask_line_row })
+        .then(ask_line_ground)
+        .then(@ui.style(p=room(option_type().pad_in)))
+      })
+      body(v, column)
     })
-    body(v)
   })
 }
 
