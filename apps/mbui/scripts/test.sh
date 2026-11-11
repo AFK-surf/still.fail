@@ -410,8 +410,7 @@ for t in $targets; do
       [ -n "${r// /}" ] || continue
       # (APP_GROUP=contrast, corners: that sweep's runs alone, on a runner of their own, beside the four)
       if [ "$APP_GROUP" = contrast ] || [ "$APP_GROUP" = corners ]; then [ "$(app_group_of 4 $r)" = "$APP_GROUP" ] && mine+=("$r")
-      # (APP_GROUP=real-size: real_size's two runs alone, whichever of the four each is dealt to: the merge queue's, at
-      # the default rate on what would merge (mbui-check.yml's app-queue says why))
+      # (APP_GROUP=real-size: real_size's two runs alone, whichever of the four each is dealt to)
       elif [ "$APP_GROUP" = real-size ]; then [ "${r%% *}" = src/sfapp/real_size_wbtest.mbt ] && mine+=("$r")
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done

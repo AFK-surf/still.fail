@@ -4,12 +4,11 @@
   checks run and, on main, what is deployed (the beta of each part); `scripts/plan-covers.ts` checks that every file a
   deployed part is built from deploys it. `contributions` runs forks' pull requests on GitHub's runners with no
   secrets; never give pipeline a fork's trigger.
-- A pull request merges through main's merge queue (`gh pr merge` puts it there; it is merged once the queue's run,
-  `workflows/merge-queue.yml`, passed): that run is what a branch's pushes leave out, the mbui app's tests and mbui's
-  own at 120, 60, 24 and 7 frames a second (the user, 2026-11-11: 帧率只在合并前跑), and one check of a branch's push
-  again on what would merge, the app's sweep of every screen on a workspace of real size (`mbui-check.yml`'s
-  `app-queue`): a check whose bars every page's change moves, green on two branches apart and red on them together,
-  belongs there too. Red there, the pull request leaves the queue: mend it and merge again.
+- A pull request merges once its own checks passed (`gh pr merge --squash`), no queue before it. What a branch's
+  pushes leave out, the mbui app's tests and mbui's own at 120, 60, 24 and 7 frames a second, runs on main after the
+  merge (`workflows/mbui-check.yml`, `workflows/mbui-ci.yml`; the user, 2026-11-11 15:51 UTC: 「直接合，帧率在 main 上合并后
+  跑」). Red there holds no one back and is mended forward by whoever brought it, never rolled back: the run's
+  `rates-said` says what merged since the last run that went through, the likeliest first (`scripts/rates-said.sh`).
 - Every job says `timeout-minutes`, 5 at most (`scripts/ci-timeouts.py`; only its `LONGER`, runs of the day's or by
   hand, 10). A job that needs longer is made faster.
 - No paid runners (GitHub's larger ones): Linux on GitHub's standard runners, the rest on the self-hosted machines

@@ -104,9 +104,9 @@ yet and you can add one, add it.
   a function of the inputs and that moment, at 60 Hz, at 120 Hz, or in one jump.
 - So every test the Tester runs, mbui's and the app's, runs again with frames drawn on `run_for`'s way (while the app
   asks for them, as a host draws them) at 60, 120, 24 and 7 a second (`MBUI_TEST_FPS`, `scripts/fps_check.sh`; in CI
-  mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate; once before a merge, in the merge
-  queue (`.github/workflows/merge-queue.yml`), not on a branch's pushes (the user, 2026-11-11: 帧率只在合并前跑), and in
-  the day's run: main's run after a merge is at the default rate alone), and must come out the same; the app's sweeps of
+  mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate; on main after a merge, not on a branch's
+  pushes (the user, 2026-11-11 15:51 UTC: 「直接合，帧率在 main 上合并后跑」: red there mended forward), and in the
+  day's run), and must come out the same; the app's sweeps of
   each screen at rest (screens, squeeze_said, words_large, corners, contrast) only at the default rate, a rate having
   found nothing in them the default run did not (the user, 2026-11-11: each part of the tests is run for what it is
   for); and for now how what moves goes is not judged on those sweeps' frames (`Tester::motion_unjudged`: their screens

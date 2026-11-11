@@ -63,6 +63,7 @@ jobs:
           RELEASE_BUILD: ${{ inputs.build }}
   tests:
     needs: guard
+    permissions: { contents: read, actions: read }
     uses: ./.github/workflows/mbui-check.yml
   # Queued tests can outlast the release's ten minutes. Start its build and signing only after the tests finish.
   # The explicit skip_tests choice still permits uploading after failed tests.

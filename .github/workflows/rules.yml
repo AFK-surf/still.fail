@@ -3,7 +3,7 @@
 name: rules
 on:
   push:
-    branches: ["**", "!gh-readonly-queue/**"]
+    branches: ["**"]
     paths:
       - "rules/**"
       - ".github/workflows/rules.yml"

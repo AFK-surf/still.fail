@@ -15,16 +15,15 @@ on:
   schedule:
     - cron: "41 3 * * *"
   workflow_dispatch:
-  # (main's merge queue's call, merge-queue.yml: the rates alone, a pull request's pushes having run the rest)
-  workflow_call:
-    inputs:
-      rates: { type: string, default: "" }
+# main: one run at a time, the newest waiting (a run covers every merge since the one before it); a pull request's own
+concurrency:
+  group: ${{ github.event_name == 'push' && 'mbui-ci-main' || format('mbui-ci-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 
 
 jobs:
   test:
-    if: inputs.rates != 'only'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     # (every step's script run with no network: a test that reaches for it fails every time, scripts/offline.sh)
@@ -95,13 +94,12 @@ jobs:
     name: native${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}
     # (and the same tests again with frames drawn on run_for's way while the app asks for them (scripts/fps_check.sh),
     # at 120, at 60, and at 24 then 7, a runner each beside it: what a test asserts at a moment the same however many
-    # frames came before it. Once before a merge, in main's merge queue (merge-queue.yml calls this with rates: only),
-    # the day's run and one by hand; a pull request's pushes and main's push after a merge at the default rate alone
-    # (the user, 2026-11-11: 帧率只在合并前跑, as mbui-check's))
+    # frames came before it. On main after a merge (the user, 2026-11-11: 「直接合，帧率在 main 上合并后跑」, as
+    # mbui-check's), the day's run and one by hand; a pull request's pushes at the default rate alone)
     strategy:
       fail-fast: false
       matrix:
-        fps: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'pull_request') && '[""]' || inputs.rates == 'only' && '["120", "60", "24 7"]' || '["", "120", "60", "24 7"]') }}
+        fps: ${{ fromJSON(github.event_name == 'pull_request' && '[""]' || '["", "120", "60", "24 7"]') }}
     # (what it builds kept between runs, as mbui-check's native job keeps the app's: moon's own build (moonc's C) and the
     # units each test's C is split into, by content (MBC_STORE: main's newest and a branch's own together). Without,
     # every run compiled all of mbui's C again: a change to ui 154 units of ui's blackbox tests and 230 of its whitebox
@@ -208,7 +206,7 @@ jobs:
   motion-bars:
     name: native (mbui's bars against what was found)
     needs: native
-    if: ${{ always() && inputs.rates != 'no' && github.event_name != 'push' && github.event_name != 'pull_request' }}
+    if: ${{ always() && inputs.rates != 'no' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -221,8 +219,19 @@ jobs:
           find "$RUNNER_TEMP/motion" -type f | xargs -r cat > "$RUNNER_TEMP/motion.txt"
           bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "mbui's bars against what 60 and 120 fps found" >> "$GITHUB_STEP_SUMMARY"
 
+  # On main, after a merge: what failed and what merged since the last run that went through, the likeliest first
+  # (scripts/rates-said.sh), for whoever brought it to mend forward; it holds no pull request back
+  rates-said:
+    needs: [test, native, macos, android]
+    if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions: { contents: read, actions: read }
+    steps:
+      - uses: actions/checkout@v5
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: bash scripts/rates-said.sh mbui-ci
   macos:
-    if: inputs.rates != 'only'
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -258,7 +267,6 @@ jobs:
           if-no-files-found: ignore
 
   android:
-    if: inputs.rates != 'only'
     defaults:
       run:
         working-directory: apps/mbui/mbui
