@@ -477,10 +477,11 @@ pub fn chat_row_node(
         }
         was_on.val = (k, o)
       })
-      // (another row gone back from since: this one's ground gone at once)
+      // (another row gone back from since: this one's ground gone at once, put, no way set going (at once is no way,
+      // and this is told as often by a row taken for another chat as its list is laid out, a frame's finding: #5420))
       row.reacts(fn() { row_left_said.get() }, fn(k) {
         if k != @signals.untracked(key) {
-          left.go_from(row, 0.0, 0.0, @motion.Snap(0.0))
+          left.put(0.0)
         }
       })
     }
