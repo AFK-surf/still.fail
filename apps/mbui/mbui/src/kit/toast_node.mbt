@@ -421,5 +421,5 @@ fn ToastWay::shown(self : ToastWay, n : @view.View) -> Double {
 /// Whether a toast `w` wide a finger drew `dx` aside, let go going `quick` (points a ms), is put away: landing past a
 /// third of it on from that speed (@ui.lands_past), or flicked (@ui.flung_away, as a sheet is put away).
 fn toast_put_away(dx : Double, w : Double, quick : Double) -> Bool {
-  @ui.lands_past(dx, quick, w / 3.0) || quick > @ui.flung_away
+  @ui.lands_past(dx, quick, w / 3.0) || @ui.flung_away_at(quick)
 }

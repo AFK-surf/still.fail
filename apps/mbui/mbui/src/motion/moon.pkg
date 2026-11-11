@@ -1,6 +1,7 @@
 import {
   "mbui/halt",
   "mbui/ui",
+  "mbui/flex",
   "mbui/signals",
   "moonbitlang/core/math",
   "mbui/dmath",
