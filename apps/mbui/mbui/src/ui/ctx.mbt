@@ -666,6 +666,16 @@ pub struct Ctx {
   // being built, the dismissals asked for since, where a press went down since the last frame
   mut layers : Array[Layer]
   mut last_layers : Array[Layer]
+  /// the nodes the last whole build came to, taken as each build ends (frame_body), against which the last frame's
+  /// layers are held (Ctx::modal_layer). Two jobs: mid-build it is the build before's, so a layer of the last frame's is
+  /// asked of that frame whole, not of the nodes this build has written so far over it (`count` starts again from
+  /// none); after the build it is this one's, so a layer of the last frame's this build made no more (its node past
+  /// it, the layers' nodes made last) is passed over at once, in the frame it closed in, by what asks between the
+  /// build's end and Ctx::layers_frame_end (the hand, the cursor, the focus given back, back's chain)
+  mut built_count : Int
+  /// where each of `last_layers` stood in the window's stack of layers (Ctx::old_layer_stack) as its frame ended, by
+  /// id: asked as the next frame is built, no node read (Ctx::old_modal_stack)
+  last_stacks : Map[Int, Int]
   /// the layers this frame has given the focus as they opened (their ids): once a frame, at the first build they are in
   layers_opened : Array[Int]
   /// what the view tells outside of what it built, by key, this build's (Ctx::after_build): done once the frame's
@@ -917,6 +927,8 @@ fn Ctx::new() -> Ctx {
     group_cur: 0,
     layers: [],
     last_layers: [],
+    built_count: 0,
+    last_stacks: Map([]),
     layers_opened: [],
     tells: [],
     told: [],
@@ -1084,6 +1096,8 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.layers.shrink_to_fit()
   self.last_layers.clear()
   self.last_layers.shrink_to_fit()
+  self.built_count = 0
+  self.last_stacks.clear()
   self.layers_opened.clear()
   self.layers_opened.shrink_to_fit()
   self.tells.clear()
