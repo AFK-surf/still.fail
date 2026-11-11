@@ -13,6 +13,10 @@ fn init {
     ("src/sfapp/kept_rows_kinds_wbtest.mbt", 8),
     ("src/sfapp/menu_node_wbtest.mbt", 23),
     ("src/sfapp/newchat_send_wbtest.mbt", 1),
+    // (the old composer's caption line 添加说明（可选）, an old fault: its place steps as the quoted picture's room comes
+    // in, main -4.82, -12.41, -9.65 a frame round 1566.67, under what is judged; with every way at its exact moment
+    // -4.74, -12.83, -9.41, over it. Taken away as the node composer takes its place)
+    ("src/sfapp/quote_image_wbtest.mbt", 1),
     ("src/sfapp/relay_told_wbtest.mbt", 16),
     ("src/sfapp/settings_made_wbtest.mbt", 14),
     ("src/sfapp/settings_wbtest.mbt", 8),

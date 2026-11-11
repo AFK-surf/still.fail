@@ -289,8 +289,8 @@ pub fn Spec::duration(self : Spec, from : Double, to : Double, v : Double) -> Do
 
 ///|
 /// Where `spec` is `ms` after it started from `from` to `to` with velocity
-/// `v` (per second), and how fast (per second): as Compose plays it, its
-/// time in whole milliseconds, at its end once its duration `dur` is out.
+/// `v` (per second), and how fast (per second): its time as it is (@ui.gone_ms: on the moments' grid, never whole
+/// milliseconds), at its end once its duration `dur` is out.
 pub fn Spec::value_at(
   self : Spec,
   ms : Double,
@@ -299,7 +299,7 @@ pub fn Spec::value_at(
   to : Double,
   v : Double,
 ) -> (Double, Double) {
-  let t = @ui.whole_ms(ms)
+  let t = @ui.gone_ms(ms)
   match self {
     // where its generator is (it may end elsewhere than `to`: inertia, keyframes)
     Motion(tr) => {
@@ -307,12 +307,13 @@ pub fn Spec::value_at(
         return (from, v)
       }
       let g = tr.generator(from, to, v)
-      let u = dmin(t, dur) - tr.delay
-      return (g.next(u).value, if t >= dur { 0.0 } else { g.velocity(u, initial=v) })
+      let end = @ui.gone_ms(dur)
+      let u = (if t >= end { dur } else { t }) - tr.delay
+      return (g.next(u).value, if t >= end { 0.0 } else { g.velocity(u, initial=v) })
     }
     _ => ()
   }
-  if t >= dur {
+  if t >= @ui.gone_ms(dur) {
     return (to, 0.0)
   }
   match self {

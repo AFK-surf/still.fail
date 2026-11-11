@@ -57,7 +57,7 @@ fn Anim::way(self : Anim, c : @ui.Ctx) -> AnimWay {
   // (going by its way at this moment: where it is, stepped by the clock, and its getting to its end as the frame goes
   // are no change of it; still, or at its end by now: where it is)
   let now = c.moment()
-  let going = self.running && !(self.start >= 0.0 && @ui.whole_ms(now - self.start) >= self.dur)
+  let going = self.running && !(self.start >= 0.0 && @ui.gone_ms(now - self.start) >= @ui.gone_ms(self.dur))
   {
     running: going,
     value: if going {
@@ -160,14 +160,14 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   match (self.gen, self.spec) {
     (Some(g), Motion(tr)) => {
       // as Motion plays it: its generator at the time since it started (whole ms), done when it says so
-      let t = @ui.whole_ms(ms) - tr.delay
+      let t = @ui.gone_ms(ms) - tr.delay
       if t < 0.0 {
         return
       }
       let st = g.next(t)
       self.value = st.value
       self.velocity = g.velocity(t, initial=self.v0)
-      if st.done || @ui.whole_ms(ms) >= self.dur {
+      if st.done || @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) {
         self.finish()
       }
       return
@@ -177,7 +177,7 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   let (x, v) = self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
   self.value = x
   self.velocity = v
-  if @ui.whole_ms(ms) >= self.dur {
+  if @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) {
     self.finish()
   }
 }
@@ -322,7 +322,7 @@ pub fn Anim::animate(
   // (this frame shows it at its start: where it is now)
   self.start = match start_at {
     Some(at) => {
-      // (the motion before done at its end as whole_ms has it, its end summed another way than now: the same moment,
+      // (the motion before done at its end as gone_ms has it, its end summed another way than now: the same moment,
       // 4066.666666666667 for 4066.6666666666665, from now)
       if at > c.moment() + @ui.same_moment_ms {
         let s = "Anim::animate: start_at \{at} is later than now (\{c.moment()}), told at \{loc}"
@@ -408,8 +408,8 @@ pub fn Anim::value_at(self : Anim, at : Double) -> Double {
   let ms = at - self.start
   match (self.gen, self.spec) {
     (Some(g), Motion(tr)) => {
-      let t = @ui.whole_ms(ms) - tr.delay
-      if @ui.whole_ms(ms) >= self.dur || (t >= 0.0 && g.next(t).done) {
+      let t = @ui.gone_ms(ms) - tr.delay
+      if @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) || (t >= 0.0 && g.next(t).done) {
         self.end
       } else if t < 0.0 {
         self.from
@@ -418,7 +418,7 @@ pub fn Anim::value_at(self : Anim, at : Double) -> Double {
       }
     }
     _ =>
-      if @ui.whole_ms(ms) >= self.dur {
+      if @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) {
         self.end
       } else {
         self.spec.value_at(ms, self.dur, self.from, self.target, self.v0).0

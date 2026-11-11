@@ -188,7 +188,7 @@ fn MoveRun::at(self : MoveRun, now : Double, frame : Int) -> Double {
     }
     self.dur = move_ms(self.far)
   }
-  let t = whole_ms(now - self.start)
+  let t = gone_ms(now - self.start)
   if t <= 0.0 {
     0.0
   } else if t >= self.dur || self.dur <= 0.0 {

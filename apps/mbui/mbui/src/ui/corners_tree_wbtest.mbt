@@ -687,3 +687,38 @@ test "corners of the window's tree: a round key 12 in a node's 20, 6 and 10 in, 
     msg="\{off} | \{taking} | \{off_again} | \{taking_again}",
   )
 }
+
+///|
+/// What the rule says of a box said concentric (radius=Inner) at the top of a card 20 round, 6 in, `tall` tall: its
+/// foot as far from the card's as 108 - tall + 6 (the old view's way, Ctx's inner_faults).
+fn inner_foot_faults(tall : Double) -> Array[String] {
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Px(200.0), h=Px(120.0), pad=6.0, radius=20.0, bg=0x333333FFL, fn() {
+        c.box(w=Px(188.0), h=Px(108.0), fn() {
+          c.box(style=style(w=Full, h=Fixed(tall), radius=Inner, bg=Faint), fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  t.draw()
+  g().inner_faults.copy()
+}
+
+///|
+test "the corner rule, a box said concentric whose foot is at the card's corner's radius: at it, or a float's breadth short of it (a size laid by a sum), it is not near that edge; a hundredth of a point inside, it is, as before" {
+  // (its foot 20 from the card's, the card 20 round: 108 - 94 + 6)
+  let at_radius = inner_foot_faults(94.0)
+  // (as a laid size summed one way comes to it: 19.999999999999886, a float's breadth inside)
+  let a_hair_in = inner_foot_faults(94.0 + 1.1e-13)
+  // (a hundredth inside: near it, its edges at 6 and 19.99, said)
+  let inside = inner_foot_faults(94.01)
+  assert_eq((at_radius, a_hair_in), ([], []))
+  assert_true(inside.length() == 1, msg="\{inside}")
+}

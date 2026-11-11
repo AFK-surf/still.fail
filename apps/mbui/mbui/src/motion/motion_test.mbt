@@ -151,14 +151,14 @@ test "springs end as Compose reckons their duration" {
 }
 
 ///|
-test "a tween goes by whole milliseconds on its curve, after its delay" {
+test "a tween goes on its curve by the time as it is, after its delay" {
   let s = @motion.tween(300.0, ease=Out, delay=100.0)
   let dur = s.duration(0.0, 10.0, 0.0)
   assert_eq(dur, 400.0)
   let (x0, _) = s.value_at(50.0, dur, 0.0, 10.0, 0.0)
   assert_eq(x0, 0.0)
   let (x1, _) = s.value_at(250.9, dur, 0.0, 10.0, 0.0)
-  assert_true(near(x1, 10.0 * @ui.Out.at(150.0 / 300.0), 1.0e-9))
+  assert_true(near(x1, 10.0 * @ui.Out.at(150.9 / 300.0), 1.0e-9))
   let (x2, v2) = s.value_at(400.0, dur, 0.0, 10.0, 0.0)
   assert_eq((x2, v2), (10.0, 0.0))
 }
@@ -1154,12 +1154,12 @@ test "a chain of tweens each from the one before's declared end, whichever frame
     t.run_for(if until - t.time() < look_ms { until - t.time() } else { look_ms })
   }
   // each frame: the segment it is in, as far on as the time since the chain's start says (once its segment is told;
-  // in whole ms, as a motion's time goes)
+  // on the moments' grid, as a motion's time goes: @ui.gone_ms)
   let ends = [start + lengths[0], start + lengths[0] + lengths[1], start + lengths[0] + lengths[1] + lengths[2]]
   for f in seen {
     let (now, j, v) = f
     let from = if j == 0 { start } else { ends[j - 1] }
-    let want = if now >= ends[j] { 1.0 } else { (now - from).floor() / lengths[j] }
+    let want = if now >= ends[j] { 1.0 } else { @ui.gone_ms(now - from) / lengths[j] }
     assert_true(near(v, want, 1.0e-9), msg="at \{now} segment \{j}: \{v} not \{want}")
   }
   // the last one's end: the three lengths from the first's start, exactly

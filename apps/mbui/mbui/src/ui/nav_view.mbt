@@ -38,13 +38,7 @@ fn[P] Nav::shown_told(self : Nav[P]) -> Unit {
 /// and how), or where it is held (by a finger, waiting, at rest).
 fn[P] Nav::p_at(self : Nav[P], now : Double) -> Double {
   if (self.mode == 1 || self.mode == 2 || self.mode == 4) && self.t0 >= 0.0 {
-    let t = if self.dur <= 0.0 || now >= self.t0 + self.dur {
-      1.0
-    } else {
-      dmax((now - self.t0) / self.dur, 0.0)
-    }
-    let (x, _) = move_path(self.p0 - self.p1, self.v0, t * self.dur, self.dur)
-    self.p1 + x
+    self.slid_at(now)
   } else {
     self.p
   }

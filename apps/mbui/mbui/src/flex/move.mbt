@@ -62,7 +62,8 @@ pub fn move_at(t : Double) -> Double {
 /// of a Move from rest (so from rest it is move_at's way, and it leaves as fast as `v`). Its offset from its end and how
 /// fast it goes (per ms).
 pub fn move_path(d : Double, v : Double, t : Double, dur : Double) -> (Double, Double) {
-  if dur <= 0.0 || t >= dur {
+  // (its end where the time gone, on the moments' grid, comes to its length on that grid: a hair short is the end)
+  if dur <= 0.0 || t >= time_gone(dur, 0.0) {
     return (0.0, 0.0)
   }
   if t <= 0.0 {
@@ -241,7 +242,7 @@ fn come_back_k_of(k : Double) -> Double {
 /// Move's own, ω²·d·move_start_gain, and `w` 1) a Move from rest, `c` none. Its offset from its end
 /// and how fast it goes.
 pub fn come_back_path(d : Double, a : Double, w : Double, t : Double, dur : Double) -> (Double, Double) {
-  if dur <= 0.0 || t >= dur {
+  if dur <= 0.0 || t >= time_gone(dur, 0.0) {
     return (0.0, 0.0)
   }
   if t <= 0.0 {
@@ -450,7 +451,7 @@ pub fn come_way_by(
       return (from, 0.0)
     }
     let dur = come_move_ms(plan - from, 0.0, along)
-    if dur <= 0.0 || t >= dur {
+    if dur <= 0.0 || t >= time_gone(dur, 0.0) {
       return (from + far, 0.0)
     }
     let (off, ov) = move_path(-far, 0.0, t, dur)
@@ -594,7 +595,7 @@ fn come_group_way(g : ComeGroup, s : Style, goal : Double, t : Double) -> (Doubl
     (start + (goal - start) * (1.0 - y), -(goal - start) * yv)
   } else {
     // (one Move for all, on from the group's speed, as a share of how far all of it goes)
-    let (p, pv) = if g.d <= 0.0 || g.dur <= 0.0 || t >= g.dur {
+    let (p, pv) = if g.d <= 0.0 || g.dur <= 0.0 || t >= time_gone(g.dur, 0.0) {
       (1.0, 0.0)
     } else {
       let v = fmin(g.v, move_k / g.dur * g.d)
@@ -632,8 +633,8 @@ fn come_height(s : Style, natural : Double) -> Double {
     s.come_plan = goal
   }
   let dur = s.come_ends - s.come_at
-  let t = s.come_now - s.come_at
-  if dur <= 0.0 || t >= dur {
+  let t = time_gone(s.come_now, s.come_at)
+  if dur <= 0.0 || t >= time_gone(dur, 0.0) {
     s.come_k = fmax(fmin(s.come_to, 1.0), 0.0)
     return if s.come_to >= 1.0 { 0.0 / 0.0 } else { goal }
   }
@@ -663,8 +664,8 @@ pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
     return None
   }
   let dur = s.come_ends - s.come_at
-  let t = at - s.come_at
-  if dur <= 0.0 || t >= dur {
+  let t = time_gone(at, s.come_at)
+  if dur <= 0.0 || t >= time_gone(dur, 0.0) {
     return Some((s.come_goal, 0.0))
   }
   let (tall, v) = match s.come_group {
@@ -675,4 +676,14 @@ pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
     }
   }
   Some((fmax(tall, 0.0), v))
+}
+
+///|
+/// The one way a motion's time gone is taken: `now` less `start` (ms), put on the moments' grid (1e-6 ms), so that a
+/// moment summed one way or another (1316.9999999999998 for 1317) reads the same to the bit wherever it is read, and
+/// nothing coarser (whole ms stepped 8, 8, 9 ms at 120 frames a second: the coordinator of the migration, 2026-11-11).
+/// A difference of two moments each on the grid is not on it: the grid is taken here, on the difference, never on a
+/// moment alone. At a way's fastest (some 3 points a ms) the grid is 3e-6 points, under any device's pixel.
+pub fn time_gone(now : Double, start : Double) -> Double {
+  ((now - start) / 1.0e-6).round() * 1.0e-6
 }
