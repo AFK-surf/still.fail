@@ -57,7 +57,7 @@ fn chat_rows_reset() -> Unit {
   rows.swiped_off.clear()
   rows.felt_past.clear()
   match chat_menu_waits.val {
-    Some(stop) => stop()
+    Some(w) => w.end()
     None => ()
   }
   chat_menu_waits.val = None
@@ -1286,49 +1286,30 @@ pub fn open_chat_menu(
 ) -> Unit {
   ignore(scope)
   match chat_menu_waits.val {
-    Some(stop) => {
+    Some(w) => {
       chat_menu_waits.val = None
-      stop()
+      w.end()
     }
     None => ()
   }
-  match chat_menu_whole(src, r, extra, share_from=fn() { from }) {
-    Some(items) => @sf.menu(items, from~, along~)
-    None => {
-      // (its chat's whole row not answered yet, asked as its page opened: opened whole the moment it is; owned by
-      // nothing, as what waits is no part of what reads now, neither the owner set nor what is reading as it is made:
-      // the system's bars' … (sfdesk rail_native.mbt) is chosen as a frame is read, and an effect made there is that
-      // frame's watch's, let go by the next frame before the row is answered: @signals.effect_in_watch)
-      let done = Ref(false)
-      let owner = @signals.set_owner(None)
-      let stop = @signals.untracked(fn() {
-        @signals.effect(fn() {
-          if !done.val && chat_menu_whole(src, r, extra, share_from=fn() { from }) is Some(_) {
-            done.val = true
-            @signals.untracked(fn() {
-              match chat_menu_whole(src, r, extra, share_from=fn() { from }) {
-                Some(items) => @sf.menu(items, from~, along~)
-                None => ()
-              }
-            })
-          }
-        })
-      })
-      @signals.set_owner(owner) |> ignore
-      if done.val {
-        stop()
-      } else {
-        chat_menu_waits.val = Some(stop)
-      }
+  // (its chat's whole row not answered yet, asked as its page opened and held while it is open (chat_whole_held): the
+  // menu opened whole the moment it is, while what it was asked in stays as it was (sfbase's press_wait: the chat
+  // left, the workspace switched or something else put up, it opens nothing; what it read is the page's, let go of
+  // with it). The system's bars' … too, told once the frame's builds are over (sfdesk rail_native.mbt))
+  let w = @sfbase.press_wait(fn() { chat_menu_whole(src, r, extra, share_from=fn() { from }) is Some(_) }, fn() {
+    match chat_menu_whole(src, r, extra, share_from=fn() { from }) {
+      Some(items) => @sf.menu(items, from~, along~)
+      None => ()
     }
-  }
+  })
+  chat_menu_waits.val = if w.waiting() { Some(w) } else { None }
 }
 
 ///|
-/// What waits to open the chat's "…" asked before its chat's whole row was answered (open_chat_menu): stopped as
-/// another is asked, or the run ends.
+/// What waits to open the chat's "…" asked before its chat's whole row was answered (open_chat_menu): ended as
+/// another is asked, or the run ends; given up as what it was asked in goes (press_wait).
 // kept across runs: put back by chat_rows_reset
-let chat_menu_waits : Ref[(() -> Unit)?] = Ref(None)
+let chat_menu_waits : Ref[@sfbase.PressWait?] = Ref(None)
 
 
 ///|

@@ -107,6 +107,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     it is at rest (`src/sfapp/declared_read_wbtest.mbt`). A bridge while pages are built by the old view: a page made
     as nodes says what it reads where it is made, and writes nothing here (the coordinator of the migration,
     2026-11-12).
+  - A press that waits for the core before it opens something (a menu, a panel, a question) goes through sfbase's
+    `press_wait` (`src/sfbase/press_wait.mbt`), never a wait of its own: it waits only while what it was pressed in
+    stays as it was (the page, the workspace, nothing else put up) and lets go of what it asked when it stops
+    (`src/sfapp/press_waits_wbtest.mbt`; the coordinator of the migration, 2026-11-12).
   - A step further in is the presenters', never a page's (弹层里往里走: the user, 2026-11-02, and 2026-11-10 「系统性
     全修一下」 once the chat's own sheet and a menu's 分享… were found never to have had it). A page says `close()` and
     opens the next, and keeps no step number and no 返回 button of its own; `src/sf/presenters.mbt` does the rest on

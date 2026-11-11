@@ -741,12 +741,14 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         None => ()
       }
     } else if id.has_prefix("page/") {
+      // (what the page's action does is told once the frame's builds are over, as a press's handler does it, never as
+      // this builds: its "…" opens a menu, or waits for the core to (sfbase press_wait.mbt))
       match nav_page_was.get(id) {
-        Some(act) => act()
+        Some(act) => c.tell(id, act)
         // (a row of an action's menu: bar_action rows)
         None =>
           match nav_rows_was.get(id) {
-            Some(act) => act()
+            Some(act) => c.tell(id, act)
             None => ()
           }
       }
