@@ -437,13 +437,13 @@ test "对话目录: the pointer moved onto a row takes the keys there, one groun
     t.drawn_rects().filter(fn(r) { r.4 == hover && r.0 >= px && r.0 + r.2 <= px + pw + 0.5 && r.1 >= py && r.1 + r.3 <= py + ph + 0.5 })
   }
   let at_first = grounds()
-  assert_eq(at_first.length(), 1, msg="\{at_first}")
+  assert_eq(at_first.length(), 1, msg="\{Repr(at_first)}")
   // (onto the row under the reader's: 林's 10:35, seq 23)
   let (gx, gy, gw, gh, _) = at_first[0]
   t.move_to(gx + gw / 2.0, gy + gh * 1.5)
   t.run_for(@ui.move_most_ms)
   let after = grounds()
-  assert_eq(after.length(), 1, msg="\{after}")
+  assert_eq(after.length(), 1, msg="\{Repr(after)}")
   assert_eq(after[0].1, gy + gh)
   t.key(@ui.key_code_enter)
   t.run_for(@ui.move_most_ms)
@@ -735,7 +735,7 @@ test "对话目录: in the sheet its day headings on the title's line, the rows'
   // (round as a pick's rows are, row_corner, not a card's corner that made a capsule of it)
   let r = @sf.row_corner.to_int()
   let lines = t.frame_export().filter(fn(l) { l.has_prefix("rect ") && l.contains(" " + hover + " ") })
-  assert_true(lines.iter().any(fn(l) { l.contains(" r=\{r},\{r},\{r},\{r}") }), msg="\{lines}")
+  assert_true(lines.iter().any(fn(l) { l.contains(" r=\{r},\{r},\{r},\{r}") }), msg="\{Repr(lines)}")
   assert_eq(outline_faults(t), [])
 }
 
@@ -745,9 +745,9 @@ test "对话目录: in the sheet to a finger no row has a ground at rest, the re
   let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2)
   let hover = outline_hex(@sf.theme().p.hover)
   let grounds = outline_drawn(t, "rect").filter(fn(r) { r.4 == hover && r.2 > 200.0 })
-  assert_eq(grounds.length(), 0, msg="\{grounds}")
+  assert_eq(grounds.length(), 0, msg="\{Repr(grounds)}")
   let accent = outline_hex(@sf.theme().p.accent_text)
-  assert_true(outline_drawn(t, "glyphs").iter().any(fn(g) { g.4 == accent }), msg="\{outline_drawn(t, "glyphs")}")
+  assert_true(outline_drawn(t, "glyphs").iter().any(fn(g) { g.4 == accent }), msg="\{Repr(outline_drawn(t, "glyphs"))}")
   assert_eq(outline_faults(t), [])
 }
 
