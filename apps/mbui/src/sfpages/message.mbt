@@ -772,8 +772,18 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
   let retry = m.notice_retry_session != "" && here.list is Some(_)
   let retry_key = "notice-retry/" + station + "/" + m.ts
   let retry_share = @motion.animate(c, retry_key, if retry { 1.0 } else { 0.0 }, spec=@motion.tween(@ui.row_size_ms, ease=Out))
+  // gone to (a notification's, the outline's), its pill alone lit in the accent's ground: a row's band across the
+  // list (chat_list's row_box) would stand square behind the round pill
+  let lit = match here.list {
+    Some(l) => flash_of(c, reading_of(l.rk), m.ts)
+    None => 0.0
+  }
   let pill = fn() {
     c.box(style=notice_pill_of(failed, open), id~, fn() {
+      if lit > 0.0 {
+        let g = c.layer(fn() { c.box(style=if open { notice_lit_open } else { notice_lit }, fn() {  }) |> ignore })
+        c.look(g, @ui.look(alpha=lit))
+      }
       c.box(style=notice_line, fn() {
         c.box(style=notice_words_room, fn() {
           if m.notice_short != "" || m.notice_lines.length() > 0 {
@@ -1372,6 +1382,15 @@ let notice_pill_failed : @ui.Style = notice_pill.then(@ui.css("bg=DangerBg"))
 ///|
 // kept across runs: a value (no field of it changes)
 let notice_pill_failed_open : @ui.Style = notice_pill_open.then(@ui.css("bg=DangerBg"))
+
+///|
+/// A notice gone to, lit: the accent's ground over its pill's, as round (system_notice).
+// kept across runs: a value (no field of it changes)
+let notice_lit : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=AccentBg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let notice_lit_open : @ui.Style = notice_lit.then(@ui.css("radius=Xl1_5"))
 
 ///|
 /// Its words and what is done at their end (msgSystemLine, msgSystemEnd): the words cut short before it, which keeps

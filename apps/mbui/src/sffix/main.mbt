@@ -4,8 +4,8 @@
 // row's chat open over Home); files, drive…, reader… (the drive's pages, src/sfapp/drive_fixture.mbt); newchat,
 // newchat-station, newchat-model (a new chat, its sheets), home-bars (the bottom bar's panel of the other bars),
 // home-sheet (the workspaces' sheet), place (the 文件 place); settings, settings-<page> (a page of the settings over
-// it: src/sfapp/settings/fixture.mbt), -dark after either for the dark theme; chat-flash, chat-flash-mine (the chat
-// opened at a message from a notification, flashing), settings-notify-off (settings, notifications off); chat-cards,
+// it: src/sfapp/settings/fixture.mbt), -dark after either for the dark theme; chat-flash, chat-flash-mine, chat-flash-notice (the
+// chat opened at a message or a notice from a notification, flashing), settings-notify-off (settings, notifications off); chat-cards,
 // chat-answering (the chat's card answered and 保留 failed a moment ago; an option under way); chat-screens (links to a
 // station's screens and its 共享调试 as their cards, a tab's live).
 
