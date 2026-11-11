@@ -138,6 +138,11 @@ struct Nav[P] {
   mut wait_from : Double
   mut waited : Bool
   mut held_most : Double
+  // when its last slide came to rest (-1: none yet): that slide's own end in its data, t0 + dur, kept as it settles
+  // (Nav::settle), nothing worked out apart. Read only by nav_rest (Nav::rested_at), what a test asks of when the
+  // stacks' slides stop, so it says that end once the slide is over, whichever frames were drawn on its way; no state
+  // the stack runs by (what moves and is idle is Moving's rest_at, Nav::ends_at)
+  mut ended : Double
   // a slide bringing a page in, its start moved on by how late its first frame reached the screen: whether it is still
   // to be, and that frame's time (-1: not drawn yet)
   mut waits_late : Bool
@@ -216,6 +221,7 @@ pub fn[P] Nav::new(
     wait_from: -1.0,
     waited: false,
     held_most: 0.0,
+    ended: -1.0,
     waits_late: false,
     late_at: -1.0,
     flat_shown: None,
@@ -372,6 +378,18 @@ impl[P] Moving for Nav[P] with rest_at(self, now, frame) {
 }
 
 ///|
+/// When its slide is over (Nav::ends_at), or the last one was where none slides now (Nav::ended): what nav_rest says
+/// of it, the same whether the frames drawn have passed that moment or not.
+fn[P] Nav::rested_at(self : Nav[P], frame : Int) -> Double {
+  let r = self.ends_at(frame)
+  if r < 0.0 {
+    self.ended
+  } else {
+    r
+  }
+}
+
+///|
 /// When its slide is over, as a test runs to it (Nav::rest, nav_rest): Moving's rest_at, but for a slide held by the
 /// window's tree, the latest it could end (its wait's most, then its way), as one held by the frames says it.
 fn[P] Nav::ends_at(self : Nav[P], frame : Int) -> Double {
@@ -392,8 +410,9 @@ fn[P] Nav::ends_at(self : Nav[P], frame : Int) -> Double {
 
 ///|
 /// When the stacks built in the last frame (Ctx::nav) are all at rest: the latest of their slides' ends (the frames'
-/// clock; -1: none slides; +inf: told to slide, not started yet). What a test runs to after a page pushed, popped or
-/// let go, when it holds no stack itself (an app's own).
+/// clock; +inf: told to slide, not started yet), a slide over its end as it was (Nav::rested_at); -1: none has slid.
+/// What a test runs to after a page pushed, popped or let go, when it holds no stack itself (an app's own): the same
+/// moment whether the frames on its way have passed it or not.
 pub fn nav_rest() -> Double {
   g().nav_rest
 }
@@ -408,6 +427,9 @@ pub fn[P] Nav::rest(self : Nav[P]) -> Double {
 ///|
 /// Ends what moves at once, where it was going.
 fn[P] Nav::settle(self : Nav[P]) -> Unit {
+  if (self.mode == 1 || self.mode == 2 || self.mode == 4) && self.t0 >= 0.0 {
+    self.ended = self.t0 + self.dur
+  }
   match self.leaving {
     Some(e) => {
       // forgotten at the next frame
@@ -1050,7 +1072,7 @@ pub fn[P] Ctx::nav(
   if nav.t0 == nav_held {
     // held for what the page pushed shows (Nav::comes_when): where it was, not moving yet; at rest by the latest its
     // slide could end (nav_rest)
-    let r = nav.ends_at(self.frame_no)
+    let r = nav.rested_at(self.frame_no)
     if r > self.nav_rest {
       self.nav_rest = r
     }
@@ -1078,10 +1100,13 @@ pub fn[P] Ctx::nav(
     } else {
       self.wake_at_time(nav.t0 + nav.dur)
     }
-    let r = nav.ends_at(self.frame_no)
+    let r = nav.rested_at(self.frame_no)
     if r > self.nav_rest {
       self.nav_rest = r
     }
+  } else if nav.ended > self.nav_rest {
+    // (at rest: its last slide's end, as it was)
+    self.nav_rest = nav.ended
   }
   let n = nav.pages.length()
   let top = match nav.leaving {

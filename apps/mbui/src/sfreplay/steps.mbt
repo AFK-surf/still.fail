@@ -732,8 +732,10 @@ pub fn Flow::clear(self : Flow) -> Unit {
 }
 
 ///|
-/// On the frames' clock to `end`, a motion's own end as it says it (`@kit.sheet_rest(key)`, `@ui.nav_rest()`): the
-/// test fails if it has not started yet (+inf: draw first) or does not move (-1).
+/// On the frames' clock to `end`, a motion's own end as it says it (`@kit.sheet_rest(key)`, `@ui.nav_rest()`,
+/// `@sf.presented_rest()`, `@sfapp.bar_rest()`), or none where the clock is past it already (the run's own waiting took
+/// it there: each says its end as it was once it is over, whichever frames were drawn): the test fails if it has not
+/// started yet (+inf: draw first) or nothing of it ever moved (-1).
 pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
   if end < 0.0 || end > 1.0e300 {
     self.fail("no motion to run to (its end: \{end}); said since the last step that acted: \{self.said.join(" | ")}")

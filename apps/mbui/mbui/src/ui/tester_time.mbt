@@ -153,9 +153,9 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     // (a frame on the way a hair from the end or from what is due is at that moment: the same moment summed another
     // way (the 10th of 24's frames from the origin, 2e-13 short of a 416.67 ms run's end), drawn there and not a hair
     // before it, where what changes at it has not)
-    if (end - next).abs() < 1.0e-6 {
+    if (end - next).abs() < due_hair {
       next = end
-    } else if due > self.fake.time + 1.0e-9 && (due - next).abs() < 1.0e-6 {
+    } else if due > self.fake.time + 1.0e-9 && (due - next).abs() < due_hair {
       next = due
     }
     // (one of the rate's own, on the way: neither the end nor what is due)
@@ -215,7 +215,7 @@ fn Tester::on_grid(self : Tester, t : Double) -> Double {
   // (never before it: a moment a hair past the display's frame, a motion's end summed as t0 + dur, is its own; drawn
   // at the frame just before it, the motion would be a rounding short of its end)
   let tick = self.tick_at(t)
-  if tick >= t && tick - t < 1.0e-6 {
+  if tick >= t && tick - t < due_hair {
     tick
   } else {
     t

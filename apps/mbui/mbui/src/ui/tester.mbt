@@ -761,9 +761,28 @@ fn Tester::clock_frame(self : Tester, ms? : Double = 0.0) -> Unit {
     // a moment the test says: drawn there, whatever the display's frames
     self.frame_at(self.on_grid(want))
   } else {
-    self.frame_at(if want > next { self.tick_at(want) } else { next })
+    self.frame_at(self.at_due(if want > next { self.tick_at(want) } else { next }))
   }
 }
+
+///|
+/// A display's frame at `t`, or the moment something is due at (Tester::next_due: a wake, a motion's end) where that
+/// is within `due_hair` of it: the same moment summed one way or another, drawn at what is due, not a hair before it,
+/// where what ends then has not (a fade's end 5e-13 ms after the frame a grid of 7 a second put there: the frame drawn
+/// of its looks alone kept what the whole build let go). run_for's on_grid holds the same the other way.
+fn Tester::at_due(self : Tester, t : Double) -> Double {
+  let due = self.next_due()
+  if due > self.fake.time && (due - t).abs() < due_hair {
+    due
+  } else {
+    t
+  }
+}
+
+///|
+/// How near (ms) a frame and what is due are the same moment (Tester::at_due, run_for's frames on the way): a moment
+/// summed one way or another.
+let due_hair : Double = 1.0e-6
 
 ///|
 /// The display's first frame after `t` (Tester::frame): of its frames' times (set_frame_times) while they last, else on

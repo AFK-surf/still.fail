@@ -181,7 +181,8 @@ test "flat stack on the tree: one pushed over it says when its slide rests, as a
   t.run_for(end - t.time())
   assert_eq(flat_drawn(t).map(fn(d) { d.0 }), ["c"])
   t.frame()
-  assert_eq(nav_rest(), -1.0)
+  // (over: its end as it was)
+  assert_eq(nav_rest(), end)
 }
 
 ///|

@@ -7,7 +7,7 @@
 /// What each sheet of the window's tree presented says of when its motions end, by a number of its own, let go with its
 /// layer.
 // kept across runs: each let go with its sheet's layer; presenters_reset empties it
-let presented_sheet_rests : Map[Int, () -> Double] = {}
+let presented_sheet_rests : Map[Int, (Bool) -> Double] = {}
 
 ///|
 // kept across runs: only counts; presenters_reset puts it back
@@ -21,13 +21,14 @@ let presented_sheet_ended : Ref[Double] = Ref(-1.0)
 
 ///|
 /// Layer `layer` (a sheet of the tree's the presenters hold up) says when its motions end with `rest`, till it is let
-/// go.
-fn presented_sheet_rest(layer : @view.View, rest : () -> Double) -> Unit {
+/// go: `rest(true)` as it is laid out as of now (asked between frames), `rest(false)` as it was last laid out (asked as
+/// the layer is let go, nothing laid out anew then).
+fn presented_sheet_rest(layer : @view.View, rest : (Bool) -> Double) -> Unit {
   presented_sheet_next.val += 1
   let k = presented_sheet_next.val
   presented_sheet_rests[k] = rest
   layer.owns(fn() {
-    let r = rest()
+    let r = rest(false)
     if r > presented_sheet_ended.val {
       presented_sheet_ended.val = r
     }
@@ -47,7 +48,7 @@ pub fn presented_rest() -> Double {
     end = presented_sheet_ended.val
   }
   for _, rest in presented_sheet_rests {
-    let r = rest()
+    let r = rest(true)
     if r > end {
       end = r
     }

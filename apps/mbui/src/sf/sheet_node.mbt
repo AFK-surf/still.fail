@@ -660,15 +660,11 @@ fn sheet_node(
         .on_press(fn() {  })
         |> ignore
         // (when its motions end, as presented_rest asks: its rise or sink as long as its own height makes it, from where
-        // it stood in another's place, its scrim, a height it goes to, its way back from under a finger: each said with
-        // its cause's moment and its length)
-        presented_sheet_rest(layer, fn() {
-          let (_, own, _) = drawn.val
-          let mut e = below.ends(h=own)
-          match placed.untracked() {
-            Some((stood, at, least, v)) => e = dmax(e, at + placed_end(own, stood, v, least))
-            None => ()
-          }
+        // it stood in another's place (moved_by's own end, at the height it is laid out as of the logic's moment, not
+        // as the frame last drawn had it: View::moved_end), its scrim, a height it goes to, its way back from under a
+        // finger, what it holds making its way in or out: each said with its cause's moment and its length)
+        presented_sheet_rest(layer, fn(laid) {
+          let mut e = sheet.moved_end(laid~)
           // (its pages' slides)
           for _, way in ways {
             let v = way.untracked()
@@ -677,7 +673,8 @@ fn sheet_node(
           for x in [dim, back, tall, recede] {
             e = dmax(e, x.end())
           }
-          e
+          // (what it holds making its way in or out, growing or shrinking it: each way's end as it was said)
+          dmax(e, sheet.comes_end(laid~))
         })
         // its top (sheet_drag_h: the grabber and the head) drags it: what a finger put down there does, as the host's
         // (@kit.sheet's): one that grows taller or shorter, settling at the detent it is let go nearer, closing let go
