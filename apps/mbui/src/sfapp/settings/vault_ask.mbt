@@ -642,63 +642,7 @@ pub fn vault_foot(
         fill("android-settings.vault.timeout.button." + scope, [("time", duration)])
       }
       let open_panel = fn() {
-        let unit : Ref[String] = Ref(if minutes % 60 == 0 { "hours" } else { "minutes" })
-        let field = @ui.Field::new(text=(if unit.val == "hours" { minutes / 60 } else { minutes }).to_string())
-        let chosen : Ref[String] = Ref(if scope == "fixed" { "fixed" } else { "idle" })
-        let duration : Ref[String] = Ref(if scope == "once" { "once" } else { minutes.to_string() })
-        let duration_words = fn(n : Int) -> String {
-          let days = n % 1440 == 0
-          let hours = n % 60 == 0
-          fill(if days { "android-settings.vault.timeout.nDays" } else if hours { "android-settings.vault.timeout.nHours" } else { "android-settings.vault.timeout.nMinutes" }, [("n", (if days { n / 1440 } else if hours { n / 60 } else { n }).to_string())])
-        }
-        @sf.panel(tr("android-settings.vault.timeout.title"), from=Unanchored, form=true, fn(pc, close) {
-          ignore(close)
-          pc.box(style=@sf.panel_words_in().then(vault_timeout_panel), fn() {
-            @sf.field(pc, tr("android-settings.vault.timeout.duration"), fn() {
-              let presets = [60, 1440, 2160, 10080, 43200]
-              let values = presets.filter(fn(n) { n <= max_minutes && n != minutes && (presets.contains(minutes) || n != 2160) })
-              values.push(minutes)
-              values.sort()
-              let options = [("once", tr("android-settings.vault.scope.once"))]
-              for n in values { options.push((n.to_string(), duration_words(n))) }
-              options.push(("custom", tr("android-settings.vault.timeout.custom")))
-              @sf.select(pc, "vault-timeout-duration", duration.val, options, fn(v) { duration.val = v }, label=tr("android-settings.vault.timeout.duration"))
-            })
-            if duration.val == "custom" {
-              @sf.field(pc, tr("android-settings.vault.timeout.custom"), aside=fn() {
-                let id = "vault/" + request + "/panel-unit"
-                let entries = ["hours", "minutes"].map(fn(u) { @kit.menu_radio(u, u == unit.val, label=tr("android-settings.vault.timeout." + u)) })
-                let menu = @sf.chooser(pc, id, tr("android-settings.vault.timeout." + unit.val), entries, fn() { vault_menu.val == id }, fn(on) { vault_menu_set(id, on) })
-                match menu.chosen {
-                  Some(u) if u != unit.val => {
-                    let current = if field.text().length() > 5 { 0 } else { int_of(field.text(), 0) * (if unit.val == "hours" { 60 } else { 1 }) }
-                    field.set(if u == "hours" && current % 60 != 0 { "" } else { (if u == "hours" { current / 60 } else { current }).to_string() })
-                    unit.val = u
-                    vault_menu.val = ""
-                  }
-                  _ => ()
-                }
-              }, fn() { @sf.input(pc, "vault-timeout-value", solid=true, field~).text |> ignore })
-            }
-            if duration.val != "once" {
-              @sf.field(pc, tr("android-settings.vault.timeout.method"), fn() {
-                for k in ["idle", "fixed"] {
-                  @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, tr("android-settings.vault.timeout." + k), note=tr("android-settings.vault.timeout.detail." + k), on_press=fn() { chosen.val = k })
-                }
-              })
-            }
-          }) |> ignore
-        }, foot=fn(pc, close) {
-          let n = if duration.val == "custom" {
-            if field.text().length() > 5 { 0 } else { int_of(field.text(), 0) * (if unit.val == "hours" { 60 } else { 1 }) }
-          } else { int_of(duration.val, 0) }
-          let once = duration.val == "once"
-          @sf.button(pc, tr("android-settings.vault.timeout.done"), key="vault-timeout-done", tone=Primary, disabled=!once && (n < 1 || n > max_minutes), on_press=fn() {
-            vault_picked[request] = if once { "once" } else { chosen.val }
-            if !once { vault_timeout_minutes[request] = n }
-            close()
-          })
-        })
+        vault_timeout_open(request, minutes, max_minutes, scope)
       }
       @sf.chooser(c, "vault/" + request + "/scope", words, [], fn() { false }, fn(on) { if on { open_panel() } }, disabled=under) |> ignore
     } else if picks {
@@ -871,3 +815,117 @@ let ask_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Subtle")
 ///|
 // kept across runs: a value (no field of it changes)
 let ask_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")
+
+///|
+/// The length of use of request `request` chosen in a panel (授权时限, a form: in the window's middle, a sheet with a
+/// finger), as `minutes` (at most `max_minutes`) and `scope` (once, idle, fixed) say it now: 时长, one of the presets or
+/// 自定义 (its minutes or hours typed, the unit at the head's end: a choice of the two, what is typed turned into the
+/// other as it is chosen); 失效方式 (idle or fixed) where it is not once. 完成 keeps them for the card (vault_picked,
+/// vault_timeout_minutes), not pressed while what is typed is out of bounds. What it holds nodes of the window's tree,
+/// made once as it opens (@sf.panel_nodes), its choices signals of its own: what it shows as 完成 closes it is what it
+/// shows on its way out.
+fn vault_timeout_open(request : String, minutes : Int, max_minutes : Int, scope : String) -> Unit {
+  let same = fn(a : String, b : String) { a == b }
+  let unit = @signals.signal(if minutes % 60 == 0 { "hours" } else { "minutes" }, same~)
+  let field = @ui.Field::new(text=(if minutes % 60 == 0 { minutes / 60 } else { minutes }).to_string())
+  // (what the field holds, as it is typed and as it is put in it here: what binds reads this)
+  let typed = @signals.signal(field.text(), same~)
+  let chosen = @signals.signal(if scope == "fixed" { "fixed" } else { "idle" }, same~)
+  let duration = @signals.signal(if scope == "once" { "once" } else { minutes.to_string() }, same~)
+  let duration_words = fn(n : Int) -> String {
+    let days = n % 1440 == 0
+    let hours = n % 60 == 0
+    fill(if days { "android-settings.vault.timeout.nDays" } else if hours { "android-settings.vault.timeout.nHours" } else { "android-settings.vault.timeout.nMinutes" }, [("n", (if days { n / 1440 } else if hours { n / 60 } else { n }).to_string())])
+  }
+  let presets = [60, 1440, 2160, 10080, 43200]
+  let values = presets.filter(fn(n) { n <= max_minutes && n != minutes && (presets.contains(minutes) || n != 2160) })
+  values.push(minutes)
+  values.sort()
+  let options = [("once", tr("android-settings.vault.scope.once"))]
+  for n in values {
+    options.push((n.to_string(), duration_words(n)))
+  }
+  options.push(("custom", tr("android-settings.vault.timeout.custom")))
+  // (what is typed in minutes, as the unit it is in says: none where it is longer than five figures)
+  let typed_minutes = fn(words : String, u : String) {
+    if words.length() > 5 { 0 } else { int_of(words, 0) * (if u == "hours" { 60 } else { 1 }) }
+  }
+  @sf.panel_nodes(
+    tr("android-settings.vault.timeout.title"),
+    from=Unanchored,
+    form=true,
+    fn(v, _) {
+      v.box(fn(b) {
+        @sf.style_node(b, fn() { @sf.panel_words_in_node(b).then(vault_timeout_panel) })
+        @sf.field_node(b, fn() { tr("android-settings.vault.timeout.duration") }, fn(f) {
+          @sf.select_node(f, fn() { duration.get() }, fn() { options }, fn(x) { duration.set(x) }, label=fn() {
+            tr("android-settings.vault.timeout.duration")
+          })
+        })
+        b.show(fn() { duration.get() == "custom" }, fn(s) {
+          @sf.field_node(
+            s,
+            fn() { tr("android-settings.vault.timeout.custom") },
+            fn(f) {
+              @sf.input_node(f, field, label=tr("android-settings.vault.timeout.custom"), solid=true, edited=fn(w) {
+                typed.set(w)
+              })
+              |> ignore
+            },
+            aside=fn(a) {
+              @sf.chooser_node(
+                a,
+                fn() { tr("android-settings.vault.timeout." + unit.get()) },
+                fn() { ["hours", "minutes"].map(fn(u) { (u, tr("android-settings.vault.timeout." + u)) }) },
+                fn() { unit.get() },
+                fn(u) {
+                  let was = unit.untracked()
+                  if u != was {
+                    let current = typed_minutes(field.text(), was)
+                    field.set(if u == "hours" && current % 60 != 0 { "" } else { (if u == "hours" { current / 60 } else { current }).to_string() })
+                    typed.set(field.text())
+                    unit.set(u)
+                  }
+                },
+              )
+              |> ignore
+            },
+          )
+        })
+        b.show(fn() { duration.get() != "once" }, fn(s) {
+          @sf.field_node(s, fn() { tr("android-settings.vault.timeout.method") }, fn(f) {
+            for k in ["idle", "fixed"] {
+              @sf.choice_row_node(
+                f,
+                fn() { tr("android-settings.vault.timeout." + k) },
+                fn() { chosen.get() == k },
+                note=fn() { tr("android-settings.vault.timeout.detail." + k) },
+                press=fn() { chosen.set(k) },
+              )
+            }
+          })
+        })
+      })
+      |> ignore
+    },
+    foot=fn(v, close) {
+      let n = fn() { if duration.get() == "custom" { typed_minutes(typed.get(), unit.get()) } else { int_of(duration.get(), 0) } }
+      let once = fn() { duration.get() == "once" }
+      @sf.button_node(
+        v,
+        fn() { tr("android-settings.vault.timeout.done") },
+        fn() {
+          let o = once()
+          vault_picked[request] = if o { "once" } else { chosen.untracked() }
+          if !o {
+            vault_timeout_minutes[request] = @signals.untracked(n)
+          }
+          close()
+        },
+        tone=Primary,
+        disabled=fn() { !once() && (n() < 1 || n() > max_minutes) },
+      )
+      |> ignore
+    },
+  )
+}
