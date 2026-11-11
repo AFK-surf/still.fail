@@ -742,7 +742,8 @@ fn Ctx::place_list(
     let lead_off = if middle { 0.0 } else { st.row_lead_off(k, self.clock) }
     let by = if middle { st.row_middle(k, shown, h) } else { lead_off }
     // (what comes and goes in it, where something in it is so: not what it is drawn on, Node's `room_held`)
-    for ch in (if st.causes is Some(_) { self.room_held_in(r) } else { [] }) {
+    let held = if st.causes is Some(_) { self.room_held_in(r) } else { [] }
+    for ch in held {
       let n = self.nodes[ch]
       let pn = self.nodes[n.parent]
       let d = pn.y + n.fl.top + n.ty + n.moved_y + by - n.y
@@ -756,6 +757,21 @@ fn Ctx::place_list(
     } else {
       self.nodes[r].fh = h
       h
+    }
+    // (a row kept as its nodes is put back as its build laid it, and what is done to it here done again each frame:
+    // what it drew kept is drawn again only where that came to the same, else painted as it is now)
+    match kept_nodes.get((self.nodes[li].id, k)) {
+      Some(rn) => {
+        let put = if held.is_empty() { 0.0 } else { by }
+        let rw = self.nodes[r]
+        if rn.laid_by != put || rn.laid_h != rw.fh || rn.laid_cut != rw.clip {
+          row_drawing_forget(rn)
+          rn.laid_by = put
+          rn.laid_h = rw.fh
+          rn.laid_cut = rw.clip
+        }
+      }
+      None => ()
     }
     st.set_height(k, h)
     st.row_shown(k, h, lead_off~)
