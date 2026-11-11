@@ -63,12 +63,16 @@ export const BEHIND_MS = 3_000;
 export const BEHIND_TRIES = 5;
 /// How long what is signed waits for one of the stations serving the lock to take it, before the cloud is what does.
 export const TAKEN_MS = 15_000;
-/// How long a person's write to the cloud (a member added, taken out or given a role, a station taken out or enrolled:
-/// `roster`, `added`, `enrolled`) waits on the workspace's stations for its lock, all told: the lock read again before
-/// it is signed, and a station taking what was signed. Past it the lock is signed as held here (the stations' events
-/// keep that level, and no read brings more of ones that do not answer) and what is signed goes to the cloud as where
-/// no station took it. 2026-11-11 a member added in a locked workspace whose stations were not reached turned its
-/// button for minutes: each of these waits had no end, or TAKEN_MS each.
+/// How long a call a person waits on waits on the workspace's stations for its lock, all told: the lock read again
+/// before it is signed, a station taking what was signed, and the read after. Those are the lock's own calls (`run`: a
+/// device taken out or renewed, the lock turned off, the page read) and the writes to the cloud the lock has a part in
+/// (a member added, taken out or given a role, a station taken out or enrolled: `roster`, `added`, `enrolled`). Past
+/// it the lock is signed as held here (the stations' events keep that level, and no read brings more of ones that do
+/// not answer), what is signed goes to the cloud as where no station took it, and the reads go on behind. 2026-11-11 a
+/// member added in a locked workspace whose stations were not reached turned its button for minutes; 2026-11-12, with
+/// a workspace's one station asleep, 移除设备, turning safe mode off and approving a device each took 45 s, three waits
+/// of TAKEN_MS, and with the cloud's reads unanswered too never answered (a device approved face to face, views/pair.ts
+/// `approve`, still waits by TAKEN_MS).
 export const ASKED_MS = 3_000;
 /// A device of the person's own added this recently is pointed out on their other devices.
 const RECENT_SECS = 7 * 86400;
@@ -123,17 +127,24 @@ export function answersOf<A, E>(inner: Inner, asks: Effect.Effect<A, E>[], after
 /// The stations that did not answer a read in time (answersOf `at`), until they answer one.
 const silentOf = new WeakMap<Inner, Set<string>>();
 
-/// One call's wait on the stations (ASKED_MS from when it was made): `wait(work)` runs `work` to its end in a fiber of
+/// One call's wait on the stations (ASKED_MS from its first `wait`): `wait(work)` runs `work` to its end in a fiber of
 /// the core's (what it reads is held when it comes, whoever still waits) and gives its answer if that came by then,
-/// else none; once it is over nothing more is waited for.
+/// else none; once it is over nothing more is waited for. Its time begins with the first wait, not with the call: the
+/// person asked first (turning the lock off: a fingerprint, seconds of theirs) would have used it up, and stations that
+/// answer would not be waited on at all, the cloud alone taking the entry (the root AGENTS.md, The cloud is the account
+/// system).
 type Asked = { wait<A>(work: Effect.Effect<A>): Effect.Effect<A | undefined> };
 function asked(inner: Inner): Asked {
   const late = Deferred.makeUnsafe<void>();
   let over = false;
-  inner.runner.fork(Effect.andThen(Effect.sleep(ASKED_MS), Effect.sync(() => { over = true; Deferred.doneUnsafe(late, Effect.void); }))); // timer: a deadline on what a call waits for
+  let begun = false;
   return {
     wait: <A>(work: Effect.Effect<A>) =>
       Effect.suspend((): Effect.Effect<A | undefined> => {
+        if (!begun) {
+          begun = true;
+          inner.runner.fork(Effect.andThen(Effect.sleep(ASKED_MS), Effect.sync(() => { over = true; Deferred.doneUnsafe(late, Effect.void); }))); // timer: a deadline on what a call waits for
+        }
         const done = Deferred.makeUnsafe<A>();
         inner.runner.fork(Effect.flatMap(work, (a) => Effect.sync(() => { Deferred.doneUnsafe(done, Effect.succeed(a)); })));
         if (over) return Effect.succeed(undefined);
@@ -1780,17 +1791,21 @@ function draftView(inner: Inner, ws: string): J {
   };
 }
 
+/// A `lock.*` call. What it waits on of the stations ends with one ASKED_MS for the call (see `ASKED_MS`), but where
+/// it names a station (`addStation`, `joinStation`: that one's answer is what it is for).
 function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
     const sub = inner.workspaces.owner(c.workspace);
     if (sub === null) return yield* Effect.fail(CoreError.invalid("not a workspace of the signed-in accounts"));
-    const lock = new Lock(inner, c.workspace, sub, ctx, true);
+    const within = asked(inner);
+    const lock = new Lock(inner, c.workspace, sub, ctx, { byHand: true, within });
     const param = (k: string) => str(c.params[k]) ?? "";
     let result: unknown;
     switch (c.name) {
+      // The page: as held once its wait is over; what the read brings later is held and tells the topic (`hold`).
       case "state":
         yield* Effect.ignore(lock.base(), { log: "Unhandled", message: "lock base read" });
-        yield* Effect.ignore(read(inner, c.workspace), { log: "Unhandled", message: "lock read" });
+        yield* within.wait(Effect.ignore(read(inner, c.workspace), { log: "Unhandled", message: "lock read" }));
         return lockView(inner, c.workspace);
       // The notice that the lock is off, closed for good on this device (prefs `lockNotice`).
       case "dismiss":
@@ -1858,8 +1873,9 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       default:
         return yield* Effect.fail(CoreError.invalid(`no lock call ${c.name}`));
     }
-    // What changed is read again before the call answers (the pages show it at once).
-    yield* Effect.ignore(read(inner, c.workspace), { log: "Unhandled", message: "lock read" });
+    // What changed is read again before the call answers (the pages show it at once), within the call's wait: what it
+    // signed is held already (`append`), and a read that comes later tells the pages as it lands.
+    yield* within.wait(Effect.ignore(read(inner, c.workspace), { log: "Unhandled", message: "lock read" }));
     return result;
   });
 }
@@ -1987,7 +2003,7 @@ export function roster(inner: Inner, sub: string, ws: string, what: Roster): Eff
     const m = yield* managed(inner, sub, ws, within);
     if (m === null) return null;
     const f = fold(m.entries);
-    const lock = new Lock(inner, ws, sub, null, false, within);
+    const lock = new Lock(inner, ws, sub, null, { within, read: true });
     if ("station" in what) return f.stations.has(what.station) ? yield* lock.append("station.remove", { key: what.station }) : null;
     const member = f.members.get(what.member);
     if ("gone" in what) return member === undefined ? null : yield* lock.append("member.remove", { sub: what.member });
@@ -2022,7 +2038,7 @@ export function added(inner: Inner, sub: string, ws: string, role: string, answe
         return name === null ? [] : [{ sub: name, email: "" }];
       }),
     ];
-    const lock = new Lock(inner, ws, sub, null, false, within);
+    const lock = new Lock(inner, ws, sub, null, { within, read: true });
     for (const w of wanted) {
       const has = fold(held(inner, ws)?.entries ?? m.entries).members.get(w.sub);
       if (has?.role === role) continue;
@@ -2047,16 +2063,25 @@ export class Lock {
   /// What a person does (a call): the cloud's "too many requests" waited out (the account's devices share a budget a
   /// minute), not said at once as the call's failure.
   readonly #byHand: boolean;
-  /// A write to the cloud's (`roster`, `added`): its waits on the stations end with that call's ASKED_MS.
+  /// A call a person waits on (`run`, `roster`, `added`): its waits on the stations end with that call's ASKED_MS,
+  /// and what it signs is held here as signed, so the next entry follows it and the pages show it whether or not a
+  /// station took it. None: a change no one waits on (a person's own lock bound, their devices kept to it), and a device
+  /// approved face to face (views/pair.ts `approve`), which wait for the stations by TAKEN_MS and read the cloud as long
+  /// as it takes.
   readonly #within: Asked | null;
+  /// Whether the lock is still to be read before the first entry signed (within that wait): not where the call that
+  /// made it read it already (`managed`).
+  #toRead: boolean;
 
-  constructor(inner: Inner, ws: string, sub: string, ctx: SpanContext | null, byHand = false, within: Asked | null = null) {
+  /// `read`: the maker read the lock already, within `within`.
+  constructor(inner: Inner, ws: string, sub: string, ctx: SpanContext | null, how: { byHand?: boolean; within?: Asked; read?: boolean } = {}) {
     this.#inner = inner;
     this.ws = ws;
     this.sub = sub;
     this.#ctx = ctx;
-    this.#byHand = byHand;
-    this.#within = within;
+    this.#byHand = how.byHand === true;
+    this.#within = how.within ?? null;
+    this.#toRead = this.#within !== null && how.read !== true;
   }
 
   #cloud(method: string, path: string, body: unknown = null) {
@@ -2085,12 +2110,16 @@ export class Lock {
   }
 
   /// The chain as the stations keep it (the longest that goes on from the one held), read now; as the cloud does when
-  /// none of them answers.
+  /// none of them answers. For a call a person waits on (`within`), read once within its wait (or by its maker), and
+  /// as held here after that: past the wait, what is held is what it signs after, and each entry it signs is held.
   #chain(): Effect.Effect<{ head: Head | null; entries: Entry[] }, CoreError> {
     const self = this;
     return Effect.gen(function* () {
-      // A write to the cloud's: `managed` read it for this call, within its wait, and what is held is what it signs after.
       if (self.#within !== null) {
+        if (self.#toRead) {
+          self.#toRead = false;
+          yield* self.#within.wait(Effect.ignore(read(self.#inner, self.ws), { log: "Unhandled", message: "lock read before an entry is signed" }));
+        }
         const h = held(self.#inner, self.ws);
         return { head: h?.head ?? null, entries: h?.entries ?? [] };
       }
@@ -2229,8 +2258,9 @@ export class Lock {
   /// One more entry, signed by this app's key, after the chain as the stations keep it: to each station of the lock,
   /// done once one of them took it (they bring each other level, lock-sync.ts), the call not waiting on the rest: one
   /// offline held an approval up until asking it gave up, some ten seconds to minutes. To the cloud too, for the stations
-  /// and devices from before that read it there, waited on only when no station took it. `waitFor`: the stations whose
-  /// answers the call waits for (one just taken in pins only what this device brings it).
+  /// and devices from before that read it there, waited on only when no station took it. A call a person waits on
+  /// (`within`) waits for a station to take it only till its ASKED_MS is over, and holds what it signed. `waitFor`: the
+  /// stations whose answers the call waits for, however long (one just taken in pins only what this device brings it).
   append(kind: string, body: unknown, waitFor: string[] = []): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
@@ -2256,19 +2286,21 @@ export class Lock {
       const took = Object.values(pinned).some(taken) || (yield* self.#firstTaken(chain, others.filter((s) => serving.has(s)), taken));
       // Not taken as far as this device heard: the cloud may have kept it all the same, its answer lost on the way
       // back (a gateway's 502, the line gone). Then it is done: asked again, it would say it failed while it went.
-      // (a write to the cloud's waits on that read only till its ASKED_MS is over: not known kept then, the failure is
-      // the call's)
+      // (a call a person waits on waits ASKED_MS on that read, a wait of its own: the cloud is what takes the entry
+      // where the stations' wait is over already, and a read left to that wait was never made, the entry kept said to
+      // have failed; not known kept by then, the failure is the call's)
       yield* Effect.catch(self.#toCloud([entry], took), (e) => {
         const reread = Effect.orElseSucceed(Effect.map(self.#cloud("GET", "/lock"), (r) => arr(get(r, "entries")) as Entry[]), () => null);
-        return Effect.flatMap(self.#within === null ? reread : Effect.map(self.#within.wait(reread), (k) => k ?? null), (kept) => {
+        const known = Effect.map(Effect.timeoutOption(reread, ASKED_MS), (o) => (o._tag === "Some" ? o.value : null)); // timer: a deadline
+        return Effect.flatMap(self.#within === null ? reread : known, (kept) => {
           const there = kept?.find((x) => x.seq === entry.seq);
           return there !== undefined && entryHash(there) === entryHash(entry) ? Effect.void : Effect.fail(e);
         });
       });
       const signed: Head = { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis };
-      // A write to the cloud's reads nothing between the entries it signs one after another (`added` signs one for each
-      // person): the chain is held here with this one on it, so the next follows it. Where what is held moved on
-      // meanwhile, a read brought more already, and it is left as it is.
+      // A call a person waits on reads nothing between the entries it signs one after another (`added` signs one for
+      // each person): the chain is held here with this one on it, so the next follows it, and the pages show it though
+      // no station answered. Where what is held moved on meanwhile, a read brought more already, and it is left as it is.
       if (self.#within !== null) {
         const was = held(self.#inner, self.ws);
         if (was?.head?.hash === head.hash) yield* hold(self.#inner, self.ws, self.sub, signed, chain, was.seen ?? null);
@@ -2279,8 +2311,8 @@ export class Lock {
 
   /// Entries brought to each of `stations`, each on its own (one offline hears of them later): whether one of them
   /// took them (`taken`, as its answer says), as soon as one did; false once none did, there are none, or none
-  /// answered by TAKEN_MS, or by the end of its ASKED_MS for a write to the cloud's (the cloud then is what takes them,
-  /// as before).
+  /// answered by TAKEN_MS, or by the end of its ASKED_MS for a call a person waits on (the cloud then is what takes
+  /// them, as before).
   #firstTaken(entries: Entry[], stations: string[], taken: (head: unknown) => boolean): Effect.Effect<boolean> {
     const self = this;
     return Effect.gen(function* () {
