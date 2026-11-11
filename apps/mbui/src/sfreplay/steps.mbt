@@ -180,6 +180,11 @@ pub fn Flow::start(
   ignore(t.settings_said(settings.stringify()))
   // (a pace pass: its failures said, not ended on; a frame found not built whole too, LOOKS-FAIL, listed apart)
   pace_pass.val = pace_between(seed) is Some(_)
+  // (a pace pass's frames are not the run's: its steps at the run's moments, from one to the next, and no frame drawn
+  // past the next ahead of it, Tester::inputs_next; the strict pass's frames are the run's own, mapped with its steps)
+  if pace_pass.val {
+    r.chain_steps()
+  }
   pace_failed.val = false
   t.looks_said_only(pace_pass.val)
   // (what it says from here, MOTION lines too, the pace pass's till its PACE-END)
@@ -366,7 +371,9 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
       }
       // (and what it sets off drawn on the host's frames up to the next step's moment, none past it: the next input
       // comes at its own moment at any frame rate, Tester::inputs_next)
-      self.t.inputs_next(self.r.next_step_at())
+      if pace_pass.val {
+        self.t.inputs_next(self.r.next_step_at())
+      }
     }
     None => ()
   }

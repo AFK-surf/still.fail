@@ -72,6 +72,9 @@ pub struct Replay {
   priv mut seed : UInt
   /// when what came is given (`pace`): at once, or at the run's own pace
   priv mut pace : Pace
+  /// whether a step of the script's is timed from the step before it (Replay::chain_steps: a pace pass's, its frames
+  /// not the run's), else from what happened again before it
+  priv mut steps_chained : Bool
   /// whether every ask of the run's before a message waits it (else only its own and those that are not reports)
   priv mut strict : Bool
   /// the clock the replay's events are timed on (a Tester's: when an ask is made again, a message given)
@@ -334,6 +337,7 @@ pub fn Replay::parse(log : String) -> Replay {
     wall: 0.0,
     walls: [],
     pace: AtOnce,
+    steps_chained: false,
     strict: true,
     clock: fn() { 0.0 },
     seed: 0,
@@ -922,7 +926,7 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
   // (a step of the script's: on from the step before it as the run's script went on from it, by their gap in the
   // run, whenever what came between them was taken here: an input is the run's own moment at any frame rate, not one
   // that follows what this pace's frames took when)
-  if is_step(self.evs[i].msg) {
+  if self.steps_chained && is_step(self.evs[i].msg) {
     let mut k = i - 1
     while k >= 0 {
       let e = self.evs[k]
@@ -948,6 +952,14 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
     j = j - 1
   }
   -@double.infinity
+}
+
+///|
+/// Each step of the script's timed from the step before it, by their gap in the run (Replay::due_at): for a pass whose
+/// frames are not the run's (a pace pass, at a display's rate), so its inputs come at the run's moments whatever its
+/// frames took when. The strict pass's frames and steps are mapped from the run together: not so.
+pub fn Replay::chain_steps(self : Replay) -> Unit {
+  self.steps_chained = true
 }
 
 ///|
