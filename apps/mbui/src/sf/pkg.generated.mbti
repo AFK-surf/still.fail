@@ -1506,6 +1506,8 @@ pub fn panel_switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Uni
 
 pub fn panel_text(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn panel_tip_node(@view.View, () -> String) -> Unit
+
 pub let panel_w : Double
 
 pub fn panel_whole() -> Bool

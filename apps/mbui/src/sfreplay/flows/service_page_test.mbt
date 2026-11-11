@@ -44,9 +44,9 @@ test "47-service-page" {
     f.tap("icon:more")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("页面尺寸")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest())
     f.tap("手机")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest())
     // left by its bar's 对话 (the system's back would step the page back first while it has a page behind it, as the
     // view says: service_link_wbtest.mbt)
     f.tap("=对话")

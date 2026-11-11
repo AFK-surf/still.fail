@@ -3207,7 +3207,7 @@ pub(all) struct ServicePage {
   mut site : @ui.NativeView?
   mut port : Int32
   cookies : Map[String, String]
-  mut viewport : Viewport?
+  viewport : @signals.Signal[Viewport?]
   mut restarting : Bool
   calls : @sf.LiveMap[Int32, Int32]
   mut asked : Int32
@@ -3216,14 +3216,13 @@ pub(all) struct ServicePage {
   address : @ui.Field
   link : PageLink
   view : @kit.Zoom
-  mut moving : Bool
+  moving : @signals.Signal[Bool]
   mut placed : Placed?
   mut hold : StageHold?
   mut tapped_at : Double
   mut name : String
   mut session : String
   marks : PageMarks
-  mut custom_typing : Bool
   custom_w : @ui.Field
   custom_h : @ui.Field
 }

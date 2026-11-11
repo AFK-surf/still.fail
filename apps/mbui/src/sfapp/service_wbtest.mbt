@@ -54,21 +54,21 @@ test "a phone's size, in its ⋯: its sizes in a sheet; 移动页面 on, said on
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   t.tap_text("页面尺寸")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_true(t.find("自适应") is Some(_), msg="its sizes")
   assert_true(t.find("自定义") is Some(_), msg="any size")
   // moving the page by a finger, from the sheet (the sheet goes: what it changes is the page under it)
   t.click(Switch, label="移动页面")
   t.frame()
   let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
-  assert_true(p.moving, msg="moving")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(p.moving.get(), msg="moving")
+  presented_rested(t)
   // said on the size key in the ⋯'s place, which stops it at once
   assert_true(t.query(Button, label="停止移动页面") is Some(_), msg="the key says it")
   assert_true(t.query(Button, label="更多操作") is None, msg="in the ⋯'s place")
   t.click(Button, label="停止移动页面")
   t.frame()
-  assert_true(!p.moving, msg="stopped")
+  assert_true(!p.moving.get(), msg="stopped")
   assert_true(t.query(Button, label="更多操作") is Some(_))
 }
 
@@ -140,12 +140,12 @@ test "a size chosen: kept on the device (prefs), read as a page opens in a later
     "previewSizes": { "ws1/st1\nj-a": "390x844", "ws1/st1\nj-b": "1280", "ws1/st1\nj-d": "wide" },
   }
   let a = service_page_for("ws1/st1", "j-a", prefs=Some(prefs))
-  assert_true(a.viewport == Some({ width: 390, height: Some(844) }))
+  assert_true(a.viewport.get() == Some({ width: 390, height: Some(844) }))
   let b = service_page_for("ws1/st1", "j-b", prefs=Some(prefs))
-  assert_true(b.viewport == Some({ width: 1280, height: None }))
+  assert_true(b.viewport.get() == Some({ width: 1280, height: None }))
   // one that does not read: as big as the preview
   let d = service_page_for("ws1/st1", "j-d", prefs=Some(prefs))
-  assert_true(d.viewport is None)
+  assert_true(d.viewport.get() is None)
 }
 
 ///|
