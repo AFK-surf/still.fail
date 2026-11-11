@@ -1043,6 +1043,8 @@ struct Bound {
   mut live : Bool
   /// when what it read was told changed (-1: not since it ran)
   mut told_at : Double
+  /// NUMBERS ONLY: told so as a list's fill gave a block put by another key (fill_told.mbt)
+  mut told_fill : Bool
   /// what follows what it read (none once let go)
   mut watch : @signals.Watch?
   mut run : () -> Unit
@@ -2555,7 +2557,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them. One object with its watch: a node's bindings are made and let go with it, each object more
   // an allocation and a free of every node)
-  let b : Bound = { at, queued: false, marked: false, live: true, told_at: -1.0, watch: None, run: bound_runs_not }
+  let b : Bound = { at, queued: false, marked: false, live: true, told_at: -1.0, told_fill: false, watch: None, run: bound_runs_not }
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
@@ -2564,6 +2566,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
         Some(f) => f()
         None => self.logic
       }
+      b.told_fill = b.told_fill || filling.val
       self.bindings_due.push(b)
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
@@ -2572,6 +2575,10 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
     }
   })
   w.on_marked(fn() {
+    // (NUMBERS ONLY: marked as a fill tells it, what it reads worked out only later, as it is pulled or queued)
+    if filling.val {
+      b.told_fill = true
+    }
     if b.live && !b.marked {
       b.marked = true
       self.pulls_marked.push(b)
@@ -2592,11 +2599,15 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
     let was = self.cause_at
     self.cause_at = b.told_at
     b.told_at = -1.0
+    let fill_was = told_from_fill.val
+    told_from_fill.val = b.told_fill || filling.val
+    b.told_fill = false
     // (untracked: what it sets read by nothing that reads now)
     let was_sub = @signals.set_active_sub(None)
     then(v)
     @signals.set_active_sub(was_sub) |> ignore
     self.cause_at = was
+    told_from_fill.val = fill_was
   }
   (b.run)()
   self.bindings = self.bindings + 1
@@ -2655,6 +2666,7 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_start? : Bool = true) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
+  let told_fill = Ref(false)
   // (the watch reads anew as it is told; let go as it stops)
   let watch : Ref[@signals.Watch?] = Ref(None)
   let w = @signals.watch(fn() {
@@ -2665,10 +2677,17 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
       // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
       guard live.val else { return false }
       let v = w.read(read)
+      let fill = told_fill.val || filling.val
+      told_fill.val = false
       if last.val != Some(v) {
         last.val = Some(v)
         if live.val {
-          self.structure_done(fn() { then(v) })
+          self.structure_done(fn() {
+            let fill_was = told_from_fill.val
+            told_from_fill.val = fill
+            then(v)
+            told_from_fill.val = fill_was
+          })
         }
         true
       } else {
@@ -2677,6 +2696,12 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
     })
   })
   watch.val = Some(w)
+  // (NUMBERS ONLY: marked as a fill tells it, worked out only later as the change it is of is told whole)
+  w.on_marked(fn() {
+    if filling.val {
+      told_fill.val = true
+    }
+  })
   let v = w.read(read)
   last.val = Some(v)
   let stop = fn() {
@@ -2689,9 +2714,11 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
   }
   // (one change, as each after it is: Tree::at_cause)
   self.committing += 1
+  let fill_was = filling.val
   @signals.start_batch()
   self.structure_done(fn() { then(v) })
   @signals.end_batch()
+  filling.val = fill_was
   self.committing -= 1
   self.modals_settled()
   if self.committing == 0 && self.cause_at < 0.0 {
@@ -2727,6 +2754,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   self.advance_logic(at)
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
+  let fill_was = filling.val
   @signals.start_batch()
   self.advance_clock(at)
   let was = self.cause_at
@@ -2736,6 +2764,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   // between two of its writes and seeing half of it)
   let changed = f()
   @signals.end_batch()
+  filling.val = fill_was
   self.committing -= 1
   self.modals_settled()
   self.cause_at = was
@@ -7394,6 +7423,7 @@ fn View::comes(
   }
   let st = n.flex.style
   let at = tree.cause_now()
+  fill_way_said("come", tree.source_of(v.id()).0)
   // (set off again on its way: from where that way had it at this moment and as fast, not from rest, stopped dead as
   // it turned. Its end and how tall it goes to are known by then whether a frame was drawn since or not: going, it goes
   // to nothing, said with it (below); coming, it is measured as the change that said it is over (after_flush, below).
