@@ -202,6 +202,8 @@ pub(all) struct Style {
   // layout (size_uncached), its way's end the same; flex's alone, never read across layouts or by anything else.
   mut come_whole : Double
   mut come_plan : Double
+  // Not CSS's: its way's turn, worked out once for its speed and length (move.mbt's come_style_turn); None till then.
+  mut come_turn : ComeTurn?
   // Not CSS's: the one way of its column it goes on with others come or going at the same moment (ComeGroup), none
   // alone. flex's alone to read.
   mut come_group : ComeGroup?
@@ -314,6 +316,7 @@ pub fn Style::new() -> Style {
     come_goal: 0.0 / 0.0,
     come_whole: 0.0 / 0.0,
     come_plan: 0.0 / 0.0,
+    come_turn: None,
     come_group: None,
     come_fill: false,
     gone_empty: false,

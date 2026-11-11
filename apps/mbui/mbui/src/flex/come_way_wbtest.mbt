@@ -54,18 +54,10 @@ test "come_way set out a little toward where it goes and a little away from it: 
     let near = come_way_ms(100.0, 0.0, 300.0) * eps
     assert_true((up - down).abs() <= near && (up - rest).abs() <= near, msg="at \{t}: \{up} \{down} \{rest}")
   }
-  assert_eq(come_way_ms(100.0, eps, 300.0), come_way_ms(100.0, -eps, 300.0))
-}
-
-///|
-test "come_way turned back as fast either side of where its slowing's share and its least speed meet (0.4): nearly the same way" {
-  for t in [0.0, 20.0, 60.0, 150.0, 250.0, 400.0] {
-    let (a, _) = come_way(100.0, -0.399, 300.0, t)
-    let (b, _) = come_way(100.0, -0.401, 300.0, t)
-    // (as far apart as the speeds' difference goes in the way's length)
-    let near = come_way_ms(100.0, -0.4, 300.0) * 0.002
-    assert_true((a - b).abs() <= near, msg="at \{t}: \{a} \{b}")
-  }
+  // (as long, but for its slowing turned, all but none: as long as eps is of its gain then)
+  assert_true(
+    (come_way_ms(100.0, eps, 300.0) - come_way_ms(100.0, -eps, 300.0)).abs() <= come_way_ms(100.0, 0.0, 300.0) * eps,
+  )
 }
 
 ///|
@@ -122,4 +114,143 @@ test "come_way at speed toward where it goes, less than half a point from it: on
   assert_eq(come_way(0.0, 0.3, 0.4, w.ends - w.start, along=w).0, 0.4)
   // (from rest, as near: there at once, no speed to lose)
   assert_eq(come_way_ms(0.0, 0.0, 0.4), 0.0)
+}
+
+///|
+/// A way from 100 to 0 set out at `v`: where it is at each 60th of a second, 32 of them.
+fn turned_frames(v : Double) -> Array[Double] {
+  let out = []
+  let mut t = 0.0
+  while out.length() < 32 {
+    out.push(come_way(100.0, v, 0.0, t).0)
+    t = t + 1000.0 / 60.0
+  }
+  out
+}
+
+///|
+test "come_way at speeds either way, a hundredth of a point a ms apart: the ways near, none taking another shape; from rest a Move to the bit" {
+  // (in the place of the test of either side of where the slowing's share and its least speed met: no such place now,
+  // any two speeds near each other going near ways)
+  let ms = come_way_ms(100.0, 0.0, 0.0)
+  let mut was = turned_frames(-0.2)
+  let mut i = -19
+  while i <= 20 {
+    let v = i.to_double() / 100.0
+    let now = turned_frames(v)
+    let mut most = 0.0
+    for k in 0..<now.length() {
+      most = fmax(most, (now[k] - was[k]).abs())
+    }
+    // (no further apart than 13.5 points: 12.9 at the most, between 0 and 0.01 away, where how long it slows grows from
+    // all but none (come_turn_w): its way back setting out later; a way going on, 0.15)
+    assert_true(most <= 13.5, msg="\{v}: \{most}")
+    was = now
+    i = i + 1
+  }
+  let mut t = 0.0
+  for x in turned_frames(0.0) {
+    assert_eq(x, 0.0 + move_path(100.0, 0.0, t, ms).0)
+    t = t + 1000.0 / 60.0
+  }
+}
+
+///|
+test "come_way turned back: slowing at one rate and its way back meet with its place, speed and gain going on; never past where it goes" {
+  for c in [(345.0, 0.76, 0.0), (44.0, 0.3, 0.0), (10.0, 1.5, 0.0), (100.0, 0.08, 0.0), (100.0, 0.02, 0.0)] {
+    let (from, v, goal) = c
+    let tr = come_turned(v, goal - from, None)
+    // (a thousandth of a ms each side: a finer step is a truer gain at the join itself, its way back's gain changing
+    // fast as it sets out, so a hundredth of a ms off it the gain measured has already moved on by more than its 2%)
+    let h = 0.001
+    let at = fn(t : Double) { come_way(from, v, goal, t) }
+    let (xa, va) = at(tr.t1 - h)
+    let (xb, vb) = at(tr.t1 + h)
+    assert_true((xa - xb).abs() < 0.01 && (va - vb).abs() <= 2.5 * h * tr.a + 1.0e-9, msg="\{c}: \{xa} \{xb}, \{va} \{vb}")
+    // (its gain each side: as it slowed, -a; as it sets back out, within what is taken off to rest at its end)
+    let before = (at(tr.t1 - h).1 - at(tr.t1 - 2.0 * h).1) / h
+    let after = (at(tr.t1 + 2.0 * h).1 - at(tr.t1 + h).1) / h
+    assert_true((before - after).abs() <= 0.02 * tr.a + 1.0e-6, msg="\{c}: gain \{before} then \{after}, a \{tr.a}")
+    let mut t = 0.0
+    while t <= come_way_ms(from, v, goal) {
+      assert_true(at(t).0 >= goal - 1.0e-9, msg="\{c} past \{goal} at \{t}: \{at(t).0}")
+      t = t + 1.0
+    }
+    assert_eq(at(come_way_ms(from, v, goal)).0, goal)
+  }
+}
+
+///|
+/// How finely come_way's place is sampled about a moment (ms): its gain there as second differences.
+let turn_gain_step : Double = 0.001
+
+///|
+test "come_way turned back: its gain goes on wherever it changes fastest as it slows and turns, its place sampled either side" {
+  for c in [(345.0, 0.76, 0.0), (44.0, 0.3, 0.0), (10.0, 1.5, 0.0), (100.0, 0.08, 0.0), (100.0, 0.02, 0.0)] {
+    let (from, v, goal) = c
+    let h = turn_gain_step
+    let x = fn(t : Double) { come_way(from, v, goal, t).0 }
+    let gain = fn(t : Double) { (x(t + h) - 2.0 * x(t) + x(t - h)) / (h * h) }
+    // (where its gain changes most in a ms, over the first half of its way, where it slows and turns, before it comes
+    // to rest at its end as any Move does; then halved down to that change's place, four steps wide)
+    let half = come_way_ms(from, v, goal) / 2.0
+    let mut a = h * 4.0
+    let mut most = -1.0
+    let mut t = a
+    while t + 1.0 < half {
+      let change = (gain(t + 1.0) - gain(t)).abs()
+      if change > most {
+        most = change
+        a = t
+      }
+      t = t + 1.0
+    }
+    let mut b = a + 1.0
+    while b - a > 4.0 * h {
+      let m = (a + b) / 2.0
+      if (gain(m) - gain(a)).abs() >= (gain(b) - gain(m)).abs() {
+        b = m
+      } else {
+        a = m
+      }
+    }
+    // (its gain just before that and just after, each from its own side alone)
+    let before = (x(a - h) - 2.0 * x(a - 2.0 * h) + x(a - 3.0 * h)) / (h * h)
+    let after = (x(b + 3.0 * h) - 2.0 * x(b + 2.0 * h) + x(b + h)) / (h * h)
+    assert_true(
+      (before - after).abs() <= 0.02 * fmax(before.abs(), after.abs()) + 1.0e-6,
+      msg="\{c}: at \{a} ms, gain \{before} then \{after}",
+    )
+  }
+}
+
+///|
+/// How far a way turned back slower than it can be seen (up to half turn_judged_from) may be from the way from rest at
+/// any moment, as a share of how far it goes: a longer way goes faster, so the same small lag in setting out costs it
+/// more points; as a share of its length it is the same at every length (2.3 to 2.4 hundredths at half
+/// turn_judged_from, 43 points to 667; a tenth of that at a third less speed).
+let turn_slow_share : Double = 0.03
+
+///|
+test "come_way turned back slower than it can be seen: nowhere further from the way from rest than three hundredths of its length" {
+  for far in [43.0, 190.0, 345.0, 486.0, 667.0] {
+    for i in 1..=50 {
+      let v = turn_judged_from / 2.0 * i.to_double() / 50.0
+      let end = fmax(come_way_ms(far, v, 0.0), come_way_ms(far, 0.0, 0.0))
+      let mut t = 0.0
+      while t <= end {
+        let off = (come_way(far, v, 0.0, t).0 - come_way(far, 0.0, 0.0, t).0).abs()
+        assert_true(off <= turn_slow_share * far, msg="\{far} at \{v}: \{off} off the way from rest at \{t} ms")
+        t = t + 1.0
+      }
+    }
+  }
+}
+
+///|
+test "come_turn_w: a Move from rest's at rest, as far as its speed carries it fast" {
+  assert_eq(come_turn_w(0.0), 1.0)
+  assert_true(come_turn_w(0.76) < 0.005)
+  assert_eq(come_turn_w(0.05), 0.5)
+  assert_eq(come_turn_w(-0.05), come_turn_w(0.05))
 }
