@@ -508,6 +508,7 @@ fn view_forget() -> Unit {
   view_blocks.clear()
   view_shape_bands.clear()
   ride_let_go_all()
+  stretch_painted.clear()
   island_watches_clear()
   ridings.clear()
   ridings_rows.val = 0
@@ -1538,6 +1539,25 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       let k = clip_top()
       let (c0, c1) = if c.clips { (clip_stack[k + 1], clip_stack[k + 3]) } else { (y, y + c.h * s) }
       stretching.push((c.id, ov, y, c.h * s, c0, c1))
+      // (stretched otherwise than the paint before drew it: each of its instances moved where it shows, told as drawn
+      // anew there, none of them compared for how far it went, as what scrolled is; stretched as it was, held still
+      // by the finger, nothing told: compared, the same, nothing drawn. What it is told only adds to what the
+      // comparison finds, so one not told where it might have been (stretched as it was some paints before) is drawn as
+      // it changed all the same.)
+      if !shooting.val && stretch_painted.get(c.id) != Some(ov) {
+        damage_known.push(
+          (
+            dmax(x, clip_stack[k]),
+            dmax(y, clip_stack[k + 1]),
+            dmin(x + c.w * s, clip_stack[k + 2]),
+            dmin(y + c.h * s, clip_stack[k + 3]),
+          ),
+        )
+        if stretch_painted.length() >= stretch_painted_most {
+          stretch_painted.clear()
+        }
+        stretch_painted[c.id] = ov
+      }
     }
     if ring_at >= 0 && ring_at < self.ninst {
       let (held, by) = self.view_ring_take(ring_at)
