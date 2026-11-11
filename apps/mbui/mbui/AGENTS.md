@@ -70,6 +70,12 @@ yet and you can add one, add it.
   tree's own (`View::moved_by`, `Scroll::tucks`); an old view's build is given its node's room and side by its host
   (`@ui.old_given`, `@ui.old_went`); which piece of a node the pointer is over is worked out by the tree as it places
   things (`View::pointer_piece`).
+- What a still pointer is over (the hand: `View::pointed`, a tip, a hover card) is worked out at an input, in a change
+  at its moment, and at the end of a way that may move something under it (`Tree::hand_at_end`: a Move, a way in or
+  out, a glide; one that changes only how a thing looks, a fade, a bar's hiding, is none: `Prop::moves_hits`), never on a frame as something goes (the coordinator of the migration, 2026-11-11: no highlight jumping
+  along the rows passing under it). A drag is inputs, each found once; a wheel's every notch is one; the glide after a
+  fling is let go is a way: found at its end. What the clock, a frame's laying out or the hand itself tells is no
+  change of it (`Tree::hits_bump`).
 - `Ctx` is going: no new code is built on it. What is left is counted by detlint (`old-island`, `old-list`,
   `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only
   fall; an API goes from mbui once its count is none.

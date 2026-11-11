@@ -359,14 +359,45 @@ test "keys under a modal layer: a key catcher of the page's under it gets no key
   on_key(key_of_char('q'), 0)
   on_text(0, "hi", 0, 0)
   assert_true(g().dev.catchers.values().all(fn(st) { st.came.is_empty() }))
-  // over the page's list
-  assert_eq((g().px, g().py), (75.0, 100.0))
+  // over the page's list, the pointer still; the layer come over it a change, what is under it found then
+  // (view_hand_at): the old view's under the layer pointed at no longer
+  assert_eq((view_point.val, g().px), (Some((75.0, 100.0)), -1.0))
   on_key(key_page_down, 0)
   on_key(key_down, 0)
   t.draw()
   assert_eq(offset(under_list), 0.0)
   // over the layer's
   finger(1, 275.0, 100.0)
+  on_key(key_page_down, 0)
+  t.draw()
+  assert_true(offset(top_list) > 0.0)
+}
+
+///|
+test "keys under a modal layer, the pointer moved over the page's list after the layer came: neither the list under it nor its key catcher takes them; the layer's list does" {
+  let on = @signals.signal(false, same=fn(x, y) { x == y })
+  let (t, under_list, top_list) = keyed_window(on)
+  let offset = fn(id : Ref[Int]) {
+    match g().lists.get(id.val) {
+      Some(st) => st.offset()
+      None => -1.0
+    }
+  }
+  on.set(true)
+  t.draw()
+  // the mouse moved over the page's list, the layer on: an input, what is under it found then, the page's list
+  // what the old frame finds under the pointer (old_list_under_pointer), the layer keeping its keys from it
+  finger(1, 75.0, 150.0)
+  assert_eq(view_point.val, Some((75.0, 150.0)))
+  assert_eq(old_list_under_pointer(g()), under_list.val)
+  on_key(key_page_down, 0)
+  on_key(key_down, 0)
+  on_key(key_of_char('q'), 0)
+  t.draw()
+  assert_eq(offset(under_list), 0.0)
+  assert_true(g().dev.catchers.values().all(fn(st) { st.came.is_empty() }))
+  // over the layer's
+  finger(1, 275.0, 150.0)
   on_key(key_page_down, 0)
   t.draw()
   assert_true(offset(top_list) > 0.0)

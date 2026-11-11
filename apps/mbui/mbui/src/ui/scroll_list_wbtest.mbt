@@ -487,3 +487,76 @@ test "a page's list flung down, its foot laid out where it stands and back again
     assert_true(s.at(tree) > at + 100.0, msg="\{platform}: at rest at \{s.at(tree)}, let go at \{at}")
   }
 }
+
+///|
+/// A page's list on the Mac turned a notch of the wheel (`notches` 2: then another as that one eases in, its target
+/// said again, no frame between the two: what a host gives as input is on its frames, so a notch turned between them
+/// is at another moment at each rate), the display's frames `period` apart from then (0: none between): when it said
+/// it would be at rest as the last was turned, where it is at that moment, where it is each 50 ms for half a second
+/// after, and whether it says it moves by itself then.
+fn notch_rests(notches : Int, period : Double) -> (Double?, Double, Array[Double], Double?) {
+  let (t, s) = same_tree(40, 0)
+  let tree = view_tree().unwrap()
+  t.wheel_phase(200.0, 400.0, 40.0, 4)
+  if notches > 1 {
+    t.advance(same_notch_ms)
+    t.wheel_phase(200.0, 400.0, 40.0, 4)
+  }
+  let rest = s.glides_till()
+  if period > 0.0 {
+    t.set_frame_period(period)
+  }
+  // (to the moment said, the display's frames on the way where there are any: run_for_exact)
+  t.run_for_exact(rest.unwrap_or(t.time()) - t.time())
+  let at_end = s.at(tree)
+  let after = []
+  for _ in 0..<10 {
+    t.run_for_exact(met_step_ms)
+    after.push(s.at(tree))
+  }
+  (rest, at_end, after, s.glides_till())
+}
+
+///|
+test "a page's list's wheel notch: when it is at rest said from what it was as it set out alone, the same at any frame rate, and still from then" {
+  let ones = []
+  for notches in [1, 2] {
+    let (rest, at_end, after, then) = notch_rests(notches, 0.0)
+    assert_true(rest is Some(_), msg="\{notches}: not moving by itself")
+    assert_true(after.iter().all(fn(x) { x == at_end }), msg="\{notches}: at rest at \{at_end}, after \{after}")
+    assert_eq(then, None)
+    ones.push(rest)
+    for period in [1000.0 / 60.0, 1000.0 / 120.0, 1000.0 / 24.0, 1000.0 / 7.0] {
+      let got = notch_rests(notches, period)
+      assert_eq(got, (rest, at_end, after, then), msg="\{notches} at \{period}: \{got}, in one jump \{(rest, at_end, after, then)}")
+    }
+  }
+  // (turned again, said again: at rest later than the one alone)
+  assert_true(ones[1].unwrap() > ones[0].unwrap(), msg="\{ones}")
+}
+
+///|
+/// How much is grown above a page's list's rows as a notch of the wheel eases in: a part of a point, so its rows are
+/// set on other pixels than they were.
+let notch_grown_by : Double = 0.3
+
+///|
+test "a page's list grown above by a part of a pixel as a notch eases in: at rest at the moment it says, nothing of it drawn anew after" {
+  let above = @signals.signal(0.0)
+  let (t, s) = same_tree(40, 0, above~)
+  let tree = view_tree().unwrap()
+  t.set_frame_period(1000.0 / 60.0)
+  t.wheel_phase(200.0, 400.0, 40.0, 4)
+  t.run_for(same_notch_ms)
+  above.set(notch_grown_by)
+  t.draw()
+  let rest = s.glides_till().unwrap()
+  t.run_for_exact(rest - t.time())
+  let at = s.at(tree)
+  let drawn = same_drawn(t)
+  for _ in 0..<10 {
+    t.run_for(met_step_ms)
+    assert_eq((s.at(tree), same_drawn(t)), (at, drawn), msg="at \{t.time()}, at rest at \{rest}")
+  }
+  assert_eq(s.glides_till(), None)
+}
