@@ -5772,6 +5772,14 @@ fn view_layers_first(c : Ctx) -> Unit {
       continue
     }
     let mut first = 0
+    // (only what says what its `takes` holds, where it says one: View::focus_opens_first's; an old view's, what it registered)
+    let takes = t.opens_first_takes(l.layer)
+    let said_so = fn(id : @view.NodeId) {
+      match takes {
+        Some(f) => t.said_of(id).map(f).unwrap_or(false)
+        None => true
+      }
+    }
     for at in t.focus_order() {
       if first != 0 || !t.holds(l.layer, at.id) {
         continue
@@ -5782,7 +5790,7 @@ fn view_layers_first(c : Ctx) -> Unit {
             first = f.id
           }
         }
-      } else if at.id != l.layer && t.can_focus(at.id) {
+      } else if at.id != l.layer && t.can_focus(at.id) && said_so(at.id) {
         first = tree_said_id(at.id)
       }
     }
