@@ -124,7 +124,10 @@ pub fn ask_history_trigger_node(
     |> ignore
     presses_node(b, fn() { open(b) })
     b.box(fn(w) {
+      // (giving way to the chevron where the line has not the room for both: its words wrap, as the old row's do)
       w
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
       .words_runs(By(words))
       .words_look(By(fn() { @ui.style_words(style()) }))
       .ink(By(fn() { @ui.style_ink(style()) }))

@@ -21,9 +21,13 @@ fn card_view() -> ChatView {
 }
 
 ///|
-/// The core's doing with `call` about request r-1 on the chat's station under way.
-fn card_doing(call : String) -> Json {
-  { "doing": [{ "call": Json::string(call), "stage": "sent", "params": { "station": "ws1/st1", "request": "r-1" } }] }
+/// The core's doing with `call` about `request` on the chat's station under way.
+fn card_doing(call : String, request? : String = "r-1") -> Json {
+  {
+    "doing": [
+      { "call": Json::string(call), "stage": "sent", "params": { "station": "ws1/st1", "request": Json::string(request) } },
+    ],
+  }
 }
 
 ///|
@@ -127,8 +131,15 @@ fn card_old_rig(c : @ui.Ctx, here : MessageHere, m : Message) -> Unit {
 }
 
 ///|
-/// The same post as the nodes draw it in its row (message_others_node, message_card_node), `m` as it changes.
-fn card_new(w : Double, src : Source, m : () -> Message, platform? : Int = 0) -> @ui.Tester {
+/// The same post as the nodes draw it in its row (message_others_node, its words' place by `body`: message_card_node
+/// unless it says otherwise), `m` as it changes.
+fn card_new(
+  w : Double,
+  src : Source,
+  m : () -> Message,
+  platform? : Int = 0,
+  body? : ((@view.View, MessageNodeHere, @settings.Core?) -> Unit)? = None,
+) -> @ui.Tester {
   @settings.reset()
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
@@ -163,7 +174,12 @@ fn card_new(w : Double, src : Source, m : () -> Message, platform? : Int = 0) ->
               })
             },
             None,
-            fn(b) { message_card_node(b, here, core, m) },
+            fn(b) {
+              match body {
+                Some(f) => f(b, here, core)
+                None => message_card_node(b, here, core, m)
+              }
+            },
           )
           |> ignore
         })
@@ -381,4 +397,355 @@ test "a rig's request decided as its card shows: the card goes, the line saying 
 /// Whether `t` draws `words` as a run of its own (Tester::find also finds them within others).
 fn card_has(t : @ui.Tester, words : String) -> Bool {
   t.words().iter().any(fn(w) { w.0 == words })
+}
+
+///|
+/// A login of the chat's station as the core says it (`state`, active or not), `more` over it.
+fn card_login(active : Bool, state : String, more? : Map[String, Json] = {}) -> Json {
+  let l : Map[String, Json] = {
+    "id": "login-1",
+    "title": "在 Willow 上登录 gh",
+    "state": Json::string(state),
+    "active": Json::boolean(active),
+    "statusText": "等你在浏览器里登录",
+    "domain": "github.com",
+  }
+  for k, v in more {
+    l[k] = v
+  }
+  Json::object(l)
+}
+
+///|
+/// The fixture's source, its station's login as `login` says (None: none it knows), finished here where `can`; its
+/// calls kept in `calls`, never answered.
+fn card_login_src(login : Json?, can? : Bool = true, calls? : Array[(String, Json)] = []) -> Source {
+  let base = @sffixture.fixture("chat")
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      match name {
+        "machineLogin" => { value: Some(login.unwrap_or(Json::null())), error: None, version: 1 }
+        "machineLogins" => { value: Some({ "canLogin": Json::boolean(can), "canRelay": true }), error: None, version: 1 }
+        _ => (base.topic_read)(name, params)
+      }
+    },
+    call: fn(name, params, _) { calls.push((name, params)) },
+  }
+}
+
+///|
+/// The agent's post asking its login to be finished (`who`: who is to finish it; `asked`: 忽略 under it; `settled`:
+/// answered; `station`: another station of the workspace's, by its name there).
+fn card_login_post(who? : String = "", asked? : Bool = false, settled? : Bool = false, station? : String = "") -> Message {
+  let card : Map[String, Json] = { "type": "login", "login": "login-1" }
+  if station != "" {
+    card["station"] = Json::string(station)
+  }
+  if who != "" {
+    card["assigneeText"] = Json::string(who)
+  }
+  card_said_then(
+    @sffixture.msg(9, "agent", @sffixture.by_agent("Anthropic", "claude", "s-c1"), "在 Willow 上登录一下 gh，我再接着推。", "", {
+      "card": Json::object(card),
+      "asked": Json::boolean(asked),
+      "decision": if settled { { "resolved": true } } else { { "resolved": false } },
+    }),
+  )
+}
+
+///|
+/// The login's states by name: its source, the post.
+fn card_login_cases() -> Array[(String, Source, Message)] {
+  [
+    ("under way", card_login_src(Some(card_login(true, "browser"))), card_login_post()),
+    ("not here", card_login_src(Some(card_login(true, "browser")), can=false), card_login_post()),
+    ("whose, asked", card_login_src(Some(card_login(true, "browser"))), card_login_post(who="等 林 完成", asked=true)),
+    ("settled", card_login_src(Some(card_login(true, "browser"))), card_login_post(who="等 林 完成", asked=true, settled=true)),
+    ("done", card_login_src(Some(card_login(false, "done", more={ "statusText": "已在 Willow 上登录 gh" }))), card_login_post()),
+    ("failed", card_login_src(Some(card_login(false, "failed", more={ "statusText": "登录失败" }))), card_login_post()),
+    ("unknown, asked", card_login_src(None), card_login_post(asked=true)),
+  ]
+}
+
+///|
+/// The login's post `m` over `src` as the old view draws it (its words plain, message_decision under them in a list's
+/// row), `w` wide at `scale`; then as the nodes do (message_decision_node with the core): both, and the new one's Tester.
+fn card_login_both(
+  src : Source,
+  m : Message,
+  w : Double,
+  at : String,
+  scale? : Double = 1.0,
+) -> (String, String, @ui.Tester) {
+  let old = card_old(w, src, m, at, fn(x, here) {
+    x.text(m.text, style=dec_words) |> ignore
+    message_decision(x, src, here, m, here.list.map(fn(l) { l.turns }))
+  })
+  old.set_font_scale(scale)
+  old.run_for(@ui.move_most_ms)
+  let was = head_drawn(old)
+  let t = card_login_new(w, src, fn() { m })
+  t.set_font_scale(scale)
+  t.run_for(@ui.move_most_ms)
+  (was, head_drawn(t), t)
+}
+
+///|
+/// The login's post `m` (as it changes) over `src` as the nodes draw it, `w` wide.
+fn card_login_new(w : Double, src : Source, m : () -> Message) -> @ui.Tester {
+  card_new(w, src, m, body=Some(fn(b, here, core) {
+    @sf.words_node(b, fn() { m().text }, fn() { dec_words }) |> ignore
+    message_decision_node(b, src, here, m, core~)
+  }))
+}
+
+///|
+test "a login's card under its post, made once as nodes, is drawn as the old view drew it: under way, not to be finished here, whose it is with 忽略, answered, done, failed, one the core does not know; wide and narrow, at 1.3" {
+  let cases = card_login_cases()
+  for w in [760.0, 390.0] {
+    let drawn : Map[String, String] = {}
+    for c in cases {
+      let at = "\{c.0} at \{w}"
+      let (was, now, t) = card_login_both(c.1, c.2, w, at)
+      assert_eq(now, was, msg=at)
+      drawn[c.0] = now
+      dec_audit(t, at)
+    }
+    // (each state drawn as it is, not as the one it is told from: under way, or answered from whose it is)
+    for c in cases {
+      let from = if c.0 == "settled" { "whose, asked" } else { "under way" }
+      if c.0 != from {
+        assert_true(drawn.get(c.0) != drawn.get(from), msg="\{c.0} at \{w}: drawn as \{from}")
+      }
+    }
+  }
+  for i in [0, 2] {
+    let c = cases[i]
+    let at = "\{c.0} at 1.3"
+    let (was, now, t) = card_login_both(c.1, c.2, 390.0, at, scale=1.3)
+    assert_eq(now, was, msg=at)
+    dec_audit(t, at)
+  }
+}
+
+///|
+test "a login's card under its post: its × cancels it on the card's station (another of the workspace's where the card says so), 忽略 lets the ask go" {
+  for other in ["", "st2"] {
+    let calls : Array[(String, Json)] = []
+    let src = card_login_src(Some(card_login(true, "browser")), calls~)
+    let t = card_login_new(760.0, src, fn() { card_login_post(asked=true, station=other) })
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label=@sf.t("web-main.logins.cancelWhat"))
+    t.run_for(@ui.move_most_ms)
+    let made = calls.filter(fn(c) { c.0 == "machineLogin.cancel" })
+    assert_eq(made.length(), 1, msg=other)
+    assert_eq(text(Some(made[0].1), "station"), if other == "" { "ws1/st1" } else { "ws1/st2" }, msg=other)
+    assert_eq(text(Some(made[0].1), "id"), "login-1", msg=other)
+    dec_audit(t, "cancelled " + other)
+  }
+  rows_reset()
+  let calls : Array[(String, Json)] = []
+  let src = card_login_src(Some(card_login(true, "browser")), calls~)
+  let t = card_login_new(390.0, src, fn() { card_login_post(asked=true) })
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="忽略")
+  t.run_for(@ui.move_most_ms)
+  let made = calls.filter(fn(c) { c.0 == "decision.dismiss" })
+  assert_eq(made.length(), 1)
+  assert_eq(number(Some(made[0].1), "seq"), 9.0)
+  assert_false(card_has(t, "忽略"))
+  assert_true(card_has(t, "在 Willow 上登录 gh"))
+  dec_audit(t, "let go")
+  rows_reset()
+}
+
+///|
+/// chat-phone's post asking for the viewer's phone, decided as `state` says ("": waiting; granted, denied, ended), its
+/// station holding it as `link` says once granted; `lasts`: the longest its owner lets it be granted for; `theirs`:
+/// another's to answer (陈's).
+fn card_phone(state : String, link? : String = "", lasts? : String = "", theirs? : Bool = false) -> Message {
+  @sffixture.fix_phone.val = state
+  @sffixture.fix_phone_link.val = link
+  let j = @sffixture.phone_post()
+  @sffixture.fix_phone.val = ""
+  @sffixture.fix_phone_link.val = ""
+  match j {
+    Object(o) =>
+      match o.get("card") {
+        Some(Object(card)) => {
+          if theirs {
+            card["assignee"] = "chen@example.com"
+            card["assigneeText"] = "等 陈 决定"
+          }
+          match card.get("phoneAsk") {
+            Some(Object(ask)) => {
+              if lasts != "" {
+                ask["lasts"] = Json::string(lasts)
+              }
+              if state == "ended" {
+                ask["why"] = "对话已归档"
+              }
+            }
+            _ => ()
+          }
+        }
+        _ => ()
+      }
+    _ => ()
+  }
+  card_said_then(j)
+}
+
+///|
+/// The fixture `mode`'s source for a phone's request (card_src's), its `adbShare` saying the request comes from a station
+/// from before signatures where `old`.
+fn card_phone_src(mode : String, doing? : Json? = None, old? : Bool = false, calls? : Array[(String, Json)] = []) -> Source {
+  let base = card_src(mode, doing~, calls~)
+  if !old {
+    return base
+  }
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "adbShare" {
+        { value: Some({ "on": true, "grants": [{ "id": "p-1", "status": "pending", "oldStation": true }] }), error: None, version: 1 }
+      } else {
+        (base.topic_read)(name, params)
+      }
+    },
+  }
+}
+
+///|
+/// The phone's request's states by name: its source, the post.
+fn card_phone_cases() -> Array[(String, Source, Message)] {
+  [
+    ("waiting", card_phone_src("chat-phone"), card_phone("")),
+    ("an hour alone", card_phone_src("chat-phone"), card_phone("", lasts="hour")),
+    ("theirs", card_phone_src("chat-phone"), card_phone("", theirs=true)),
+    ("not approved", card_phone_src("chat-phone-outside"), card_phone("")),
+    ("old station", card_phone_src("chat-phone", old=true), card_phone("")),
+    ("under way", card_phone_src("chat-phone", doing=Some(card_doing("adb.decide", request="p-1"))), card_phone("")),
+    ("granted", card_phone_src("chat-phone"), card_phone("granted")),
+    ("granted, held", card_phone_src("chat-phone-linked-connected"), card_phone("granted", link="connected")),
+    ("granted, to pair", card_phone_src("chat-phone-linked-unpaired-desk"), card_phone("granted", link="unpaired")),
+    ("granted, off", card_phone_src("chat-phone-linked-off"), card_phone("granted", link="off")),
+    ("denied", card_phone_src("chat-phone"), card_phone("denied")),
+    ("ended", card_phone_src("chat-phone"), card_phone("ended")),
+  ]
+}
+
+///|
+/// The phone's request `m` over `src` as the old view draws it (phone_ask_card in a list's row), `w` wide at `scale`;
+/// then as the nodes do: both, and the new one's Tester.
+fn card_phone_both(src : Source, m : Message, w : Double, at : String, scale? : Double = 1.0) -> (String, String, @ui.Tester) {
+  let old = card_old(w, src, m, at, fn(x, here) {
+    match m.card {
+      Some({ phone: Some(ask), .. } as card) => phone_ask_card(x, here, m, card, ask)
+      _ => ()
+    }
+  })
+  old.set_font_scale(scale)
+  old.run_for(@ui.move_most_ms)
+  let was = head_drawn(old)
+  let t = card_new(w, src, fn() { m })
+  t.set_font_scale(scale)
+  t.run_for(@ui.move_most_ms)
+  (was, head_drawn(t), t)
+}
+
+///|
+test "a phone's request in place of its post's words, made once as nodes, is drawn as the old view drew it: waiting, an hour alone, another's, this device not approved, a station from before, under way; granted, held, to be paired on the phone, its debugging off, refused, ended; wide and narrow, at 1.3" {
+  let cases = card_phone_cases()
+  for w in [760.0, 390.0] {
+    let mut waiting = ""
+    for c in cases {
+      let at = "\{c.0} at \{w}"
+      let (was, now, t) = card_phone_both(c.1, c.2, w, at)
+      assert_eq(now, was, msg=at)
+      if c.0 == "waiting" {
+        waiting = now
+      } else {
+        assert_true(now != waiting, msg=at + ": drawn as waiting")
+      }
+      // (decided, its line right under the head; on two lines, narrow, tall enough to leave them their room)
+      let waits = c.2.card is Some({ phone: Some({ status: "", .. }), .. })
+      card_audit(t, at, if waits || (c.0 == "granted, to pair" && w < 760.0) { 0 } else { 3 })
+    }
+  }
+  // (at 1.3 narrow, waiting with its length's choice, the old view's foot goes on to a second line whose choice breaks
+  // the corner rule, which stops its Tester: an hour alone, no choice, in its place)
+  for i in [1, 8] {
+    let c = cases[i]
+    let at = "\{c.0} at 1.3"
+    let (was, now, t) = card_phone_both(c.1, c.2, 390.0, at, scale=1.3)
+    assert_eq(now, was, msg=at)
+    card_audit(t, at, 0)
+  }
+}
+
+///|
+test "a phone's request allowed: adb.decide for its station and request, for the length chosen at its card's foot; refused, with none; this device not approved, 查看步骤 in 允许's place asks nothing" {
+  @sf.presenters_reset()
+  let calls : Array[(String, Json)] = []
+  let t = card_new(760.0, card_phone_src("chat-phone", calls~), fn() { card_phone("") })
+  t.run_for(@ui.move_most_ms)
+  let scope = fn(s : String) { @sf.t("android-settings.vault.scope." + s) }
+  t.click(Button, label=scope("idle"))
+  t.run_for(@ui.move_most_ms)
+  for s in ["hour", "eight", "chat"] {
+    assert_true(card_has(t, scope(s)), msg=s)
+  }
+  t.tap_text(scope("chat"))
+  t.run_for(@ui.move_most_ms)
+  assert_false(card_has(t, scope("hour")))
+  t.click(Button, label="允许")
+  t.run_for(@ui.move_most_ms)
+  let made = calls.filter(fn(c) { c.0 == "adb.decide" })
+  assert_eq(made.length(), 1)
+  let p = Some(made[0].1)
+  assert_eq(text(p, "station"), "ws1/st1")
+  assert_eq(text(p, "request"), "p-1")
+  assert_eq(text(p, "scope"), "chat")
+  assert_true(t.get(Button, label="允许").disabled)
+  assert_true(t.get(Button, label="拒绝").disabled)
+  card_audit(t, "allowed", 0)
+  let calls : Array[(String, Json)] = []
+  let t = card_new(390.0, card_phone_src("chat-phone", calls~), fn() { card_phone("") })
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="拒绝")
+  t.run_for(@ui.move_most_ms)
+  let made = calls.filter(fn(c) { c.0 == "adb.decide" })
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].1), "scope"), "")
+  card_audit(t, "refused", 0)
+  let calls : Array[(String, Json)] = []
+  let t = card_new(390.0, card_phone_src("chat-phone-outside", calls~), fn() { card_phone("") })
+  t.run_for(@ui.move_most_ms)
+  assert_false(card_has(t, "允许"))
+  t.click(Button, label=@sf.t("android-misc.adb.ask.how"))
+  t.run_for(@ui.move_most_ms)
+  assert_eq(calls.filter(fn(c) { c.0 == "adb.decide" }).length(), 0)
+}
+
+///|
+test "a phone's request decided as its card shows: the card goes, the line saying how it went in its place; pressed, what was asked read again" {
+  @sf.presenters_reset()
+  let m = @signals.signal(card_phone(""))
+  let t = card_new(390.0, card_phone_src("chat-phone"), fn() { m.get() })
+  t.run_for(@ui.move_most_ms)
+  m.set(card_phone("granted"))
+  t.run_for(@ui.move_most_ms)
+  assert_false(card_has(t, "允许"))
+  let line = "已允许调试手机 · 本对话内"
+  assert_true(card_has(t, line))
+  card_audit(t, "decided", 3)
+  t.click(Button, label=line + " · " + @sf.t("web-main.history.details"))
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sf.presenting())
+  assert_true(card_has(t, "装上刚编好的测试包，看首屏在折叠屏展开时排得对不对"))
+  @sf.close_all_presented()
+  t.run_for(@ui.move_most_ms)
+  assert_false(@sf.presenting())
 }
