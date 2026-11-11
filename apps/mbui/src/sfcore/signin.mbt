@@ -488,6 +488,9 @@ pub let trace_switches : Array[String] = [
   // (a chat, however it is asked, kept as it is let go of as the lists are, the last few of them, and asked again with
   // its version: the core answering `same`, or what changed from it (`{id, delta, kept}`); sfbase's `topic_kept`)
   "MBUI_KEEP_CHAT",
+  // (what a page covered by another read kept as it is let go of, whatever the topic, and asked again with its version
+  // as it shows: sfbase's Source::shown_by, @core.Client::keep_left)
+  "MBUI_KEEP_COVERED",
 ]
 
 ///|

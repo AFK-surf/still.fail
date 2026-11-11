@@ -43,6 +43,9 @@ pub struct Sub {
   /// Let go of with `keep` (Client::keep), till the core's `{id, v}`: what comes for it before that is applied still,
   /// that answer being its last message, so what is kept is the value `v` is the version of.
   priv mut keeping : Bool
+  /// How many values of its name its reader asked to be kept as it is let go of, whatever the client keeps of the name
+  /// itself (Client::keep_left: a page covered by another, which reads it again as it shows); 0, none asked
+  priv mut kept_left : Int
 }
 
 ///|
@@ -353,7 +356,7 @@ fn Client::subscribe_as(self : Client, topic : String, params : Map[String, Json
       let id = self.next_id
       self.next_id += 1
       let from = self.from_of(t)
-      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false, value_generation: self.generation, from, ending: false, keeping: false }
+      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false, value_generation: self.generation, from, ending: false, keeping: false, kept_left: 0 }
       self.subs[id] = s
       self.by_key[look] = s
       self.ask(s)
@@ -514,7 +517,7 @@ fn Client::end_subscription(self : Client, s : Sub) -> Unit {
     // yet or not: what the app sends is what it means to do with it, never which came first, the core's answer or its
     // leaving (a replay, a slow core). What comes before the core's word of it is applied to it as ever; none come, none
     // kept, and it is asked again as ever)
-    if s.error is None && (self.keeps)(topic_name(s.topic), s.topic) > 0 {
+    if s.error is None && self.keeps_of(s) > 0 {
       s.ending = true
       s.keeping = true
       m["keep"] = Json::boolean(true)
@@ -1265,13 +1268,37 @@ fn Client::draft_came(self : Client, sub : Int) -> Unit {
 pub let restarted_text : Ref[String] = { val: "The core restarted; try again" }
 
 ///|
+/// How many values of subscription `s`'s name are kept as it is let go of: what the client keeps of the name
+/// (Client::keep), or what its reader asked (Client::keep_left), the more of them.
+fn Client::keeps_of(self : Client, s : Sub) -> Int {
+  let k = (self.keeps)(topic_name(s.topic), s.topic)
+  if s.kept_left > k {
+    s.kept_left
+  } else {
+    k
+  }
+}
+
+///|
+/// Topic `topic` asked with `params`, as it is let go of, kept (`most` values of its name at most, the oldest forgotten)
+/// and asked again with its version (`have`), whatever Client::keep says of it: its reader holds what it read of it
+/// meanwhile and reads it again once it shows (sfbase's Source::shown_by, a page covered by another). Said while it is
+/// held; let go of before, nothing.
+pub fn Client::keep_left(self : Client, topic : String, params? : Map[String, Json] = {}, most~ : Int) -> Unit {
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) if most > s.kept_left => s.kept_left = most
+    _ => ()
+  }
+}
+
+///|
 /// The value of subscription `s` kept as it was let go of, `v` the version the core says it is (Client::keep): the
 /// oldest of its topic's name forgotten past what `keeps` says of it, the oldest of all past `kept_most`.
 fn Client::keep_value(self : Client, s : Sub, value : Json, v : String) -> Unit {
   let name = topic_name(s.topic)
   self.kept.remove(s.look)
   self.kept[s.look] = (value, v, name)
-  let most = (self.keeps)(name, s.topic)
+  let most = self.keeps_of(s)
   let of_name = self.kept.iter().filter(fn(kv) { kv.1.2 == name }).map(fn(kv) { kv.0 }).collect()
   for i in 0..<(of_name.length() - most) {
     self.kept.remove(of_name[i])

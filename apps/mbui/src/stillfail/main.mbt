@@ -300,6 +300,9 @@ let core_source : @sfapp.Source = {
       @core.leave_topic(name, params=@sfbase.core_topic_params(name, params)) },
   release: fn(name, params) { @core.release_topic(name, params=@sfbase.core_topic_params(name, params)) },
   refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  keep_left: fn(name, params) {
+    @core.keep_left(name, params=@sfbase.core_topic_params(name, params), most=@sfbase.covered_kept)
+  },
   read_only,
   reads_ahead: fn() { true },
   asks_devices: fn() { true },

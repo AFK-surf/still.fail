@@ -64,7 +64,9 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
         tape_bar_head(b, k, made && !chat, tips)
       },
       // (a page of the library's made once in its place, where it is: its bar the tape's, from what the page is)
-      made=fn(p) { tape_made(src, p, tips) },
+      made=fn(p) {
+        @sfbase.shown_made(app.nav, src, fn(s) { tape_made(s, p, tips) }, kept=fn(kind) { kind == "chat" })
+      },
       // (what its bar said kept till its entry leaves the stack: shown again (beside the one over it as that goes back),
       // its bar there with it before its page is built again)
       gone=fn(k) { tape_bars.remove(k) },

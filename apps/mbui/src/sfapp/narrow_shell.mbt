@@ -111,7 +111,9 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     // (each page's island built again as what it is laid out by besides what it reads changes: narrow_page_key)
     page_key=fn(_page) { narrow_island_key(src) },
     // (the pages made once as nodes: narrow_made)
-    made=fn(page) { narrow_made(src, page) },
+    made=fn(page) {
+      @sfbase.shown_made(app.nav, src, fn(s) { narrow_made(s, page) }, kept=fn(kind) { kind == "chat" })
+    },
   )
   |> ignore
   // what the places of the bar open on asked ahead of them from the moment it shows, held till its page is gone from

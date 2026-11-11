@@ -268,6 +268,12 @@ pub fn release_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
 }
 
 ///|
+/// The topic kept as it is let go of, whatever the client keeps of it itself (Client::keep_left).
+pub fn keep_left(topic : String, params? : Map[String, Json] = {}, most~ : Int) -> Unit {
+  client.keep_left(topic, params~, most~)
+}
+
+///|
 /// A legacy source reader ended; a direct subscription remains held.
 pub fn leave_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
   client.leave_topic(topic, params~)

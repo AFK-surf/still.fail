@@ -158,7 +158,9 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
     },
     page_key=fn(_) { tape_island_key() },
     // (a page of the library's made once in its place: 关于)
-    made=fn(p) { pane_made(src, p, tips) },
+    made=fn(p) {
+      @sfbase.shown_made(app.nav, src, fn(s) { pane_made(s, p, tips) }, kept=fn(kind) { kind == "chat" })
+    },
     // (which show, as the stack stands whole: the page made once that shows, by its entry)
     shown=fn(ks) { fold_goes.shown = ks },
   )

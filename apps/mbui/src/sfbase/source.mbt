@@ -137,6 +137,9 @@ pub(all) struct Source {
   release : (String, Map[String, Json]) -> Unit
   /// ask an already held topic for a fresh value without dropping its readers
   refresh : (String, Map[String, Json]) -> Unit
+  /// a held topic kept as it is let go of and asked again with its version, whatever the core's client keeps of it
+  /// itself (@core.Client::keep_left: a page covered by another, Source::shown_by)
+  keep_left : (String, Map[String, Json]) -> Unit
   /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept, nothing sent, no
   /// draft kept, no file put up
   read_only : Bool
@@ -250,6 +253,12 @@ pub fn topic_kept(name : String, params : Json) -> Int {
     0
   }
 }
+
+///|
+/// How many values of each topic's name the core's client keeps of what a page covered by another read
+/// (Source::keep_left, Source::shown_by), the oldest forgotten: a page shows few of each, and the client keeps 64 at
+/// most of all (@core's kept_most), so what is kept for covered pages is bounded by the topics they read.
+pub let covered_kept : Int = 2
 
 ///|
 /// How many chats' values are kept at a time (topic_kept), the oldest forgotten: a chat opened again, or read ahead
@@ -511,6 +520,7 @@ pub fn made_source(
       },
     release: fn(_, _) {  },
     refresh: fn(_, _) {  },
+    keep_left: fn(_, _) {  },
     read_only: false,
     reads_ahead: fn() { true },
     asks_devices: fn() { true },

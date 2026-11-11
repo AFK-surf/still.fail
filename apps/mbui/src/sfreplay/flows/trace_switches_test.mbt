@@ -31,6 +31,8 @@
 /// ask for its outline) off in all 81 as it came.
 /// MBUI_KEEP_CHAT (2026-11-11: a chat kept as it is let go of, the last few, asked again with its version) off in all
 /// 81 as it came: none had been recorded with MBUI_HAVE_SAME on either.
+/// MBUI_KEEP_COVERED (2026-11-11: what a page covered by another read kept as it is let go of, whatever the topic,
+/// asked again with its version as it shows) off in all 81 as it came.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 80,
   "MBUI_DEVICES": 81,
@@ -39,6 +41,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_OUTLINE": 81,
   "MBUI_CONNECT_ROWS": 81,
   "MBUI_KEEP_CHAT": 81,
+  "MBUI_KEEP_COVERED": 81,
 }
 
 ///|

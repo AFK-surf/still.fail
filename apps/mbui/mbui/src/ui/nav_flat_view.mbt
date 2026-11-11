@@ -210,6 +210,9 @@ pub fn[P] nav_flat_view(
         None => @signals.untracked(fn() { nav.flat_kept_entry() })
       }
       let shows = fn() { seen.get().shown.contains(k) }
+      // (whether it shows, for what reads while it does: Nav::page_shows, as its old view is held by it)
+      nav.shows_of[k] = shows
+      pv.owns(fn() { nav.shows_of.remove(k) }) |> ignore
       pv
         .over(Is(true))
         .shift(By(fn() { if seen.get().stacked { nav.shift_of(k, fn() { pv.drawn_at() }) } else { (0.0, 0.0) } }))
