@@ -4224,7 +4224,7 @@ fn cornered_card(
 ) -> (@ui.Tester, Source) {
   new_run()
   let a = flight_photo()
-  @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
+  @sfbase.sent_picture_kept(@sfbase.sent_key("ws1/st1", a.path), "sent-key")
   let src = fixture("chat")
   let t = @ui.Tester::new(
     // (the old views the tree hosts built where the frame builds them, as the app's view has it)

@@ -90,7 +90,7 @@ pub fn writing_stills(c : @ui.Ctx) -> Unit {
       still => {
         writing_unseen.remove(id)
         writing_pictures[id] = still
-        sent_pictures["upload\u{1}" + id] = still
+        sent_picture_kept("upload\u{1}" + id, still)
       }
     }
   }
@@ -263,7 +263,7 @@ fn writing_adopt(w : WritingState, v : Json?, version : Int, generation : Int, f
     let o = Some(f)
     match (writing_pictures.get(text(o, "id")), writing_stations.get(text(o, "id")), field(o, "done")) {
       (Some(picture), Some(station), Some(done)) if text(Some(done), "path") != "" =>
-        sent_pictures[sent_key(station, text(Some(done), "path"))] = picture
+        sent_picture_kept(sent_key(station, text(Some(done), "path")), picture)
       _ => ()
     }
   }
@@ -400,7 +400,7 @@ pub fn writing_add(
         @ui.add_image(key, bytes)
         writing_pictures[id] = key
         // its message drawn from it, as picked, sent before it is up (it names its upload: sent.mbt)
-        sent_pictures["upload\u{1}" + id] = key
+        sent_picture_kept("upload\u{1}" + id, key)
       }
       None =>
         match host_picture(name, still) {
@@ -408,7 +408,7 @@ pub fn writing_add(
           "" => ()
           picture => {
             writing_pictures[id] = picture
-            sent_pictures["upload\u{1}" + id] = picture
+            sent_picture_kept("upload\u{1}" + id, picture)
           }
         }
     }
@@ -484,7 +484,7 @@ pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostap
     "" => ()
     picture => {
       writing_pictures[id] = picture
-      sent_pictures["upload\u{1}" + id] = picture
+      sent_picture_kept("upload\u{1}" + id, picture)
     }
   }
   writing_stations[id] = station

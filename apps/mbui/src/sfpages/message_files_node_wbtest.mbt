@@ -308,3 +308,23 @@ test "a file in the place of another, its key another: what is drawn there is th
   assert_eq(files_capsules(t).length(), 2)
   assert_eq(t.audit(), [])
 }
+
+///|
+test "a long name in a card at its widest: its stem cut short, its extension whole right after it, all of it in the card" {
+  for w in [760.0, 390.0] {
+    let long = "a-very-long-file-name-that-is-certainly-cut-short-in-its-middle-somewhere.tar.gz"
+    let t = files_new(w, files_src(), [files_one(long), files_one("a-longer-design-document.docx")], false)
+    let caps = files_capsules(t)
+    assert_eq(caps.length(), 2, msg="\{w}")
+    for i, pair in [("a-very-long-file-name-that-is-certainly-cut-short-in-its-middle-somewhere.tar", ".gz"), ("a-longer-design-document", ".docx")] {
+      let (stem, ext) = pair
+      let (cx, _, cw) = caps[i]
+      assert_eq(cw, @sf.file_card_w, msg="\{w} \{ext}")
+      let (sx, _, sw, _) = t.rect_of(stem).unwrap()
+      let (ex, _, ew, _) = t.rect_of(ext).unwrap()
+      assert_eq(ex, sx + sw, msg="\{w} \{ext}: right after the stem")
+      assert_true(sx > cx && ex + ew <= cx + cw, msg="\{w} \{ext}: \{sx}..\{ex + ew} in \{cx}..\{cx + cw}")
+    }
+    assert_eq(t.audit(), [], msg="\{w}")
+  }
+}

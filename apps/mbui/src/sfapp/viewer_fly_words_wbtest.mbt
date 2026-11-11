@@ -19,7 +19,7 @@ test "a picture too big to show, in its chat with its picture there and words un
     frames: 0,
     held: false,
   }
-  @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", photo.path)] = "sent-key"
+  @sfbase.sent_picture_kept(@sfbase.sent_key("ws1/st1", photo.path), "sent-key")
   let src = fixture("chat")
   // (the chat an old view the window's tree hosts, the viewer beside it as the shells have it)
   let t = @ui.Tester::new(

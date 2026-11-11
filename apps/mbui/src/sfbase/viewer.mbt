@@ -3479,7 +3479,7 @@ fn video_still_known(src : Source, station : String, owner : String, a : Attachm
   match pv_frames.get(thumb) {
     Some((k, _)) => k
     None =>
-      match sent_picture(station, a) {
+      match (if told { sent_picture_told(station, a) } else { sent_picture(station, a) }) {
         Some(k) => k
         None => if told { src.poster_told(station, owner, base_name(a.path)) } else { (src.poster)(station, owner, base_name(a.path)) }
       }
