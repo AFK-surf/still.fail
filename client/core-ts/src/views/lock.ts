@@ -68,11 +68,13 @@ export const TAKEN_MS = 15_000;
 /// device taken out or renewed, the lock turned off, the page read; a device approved face to face, views/pair.ts
 /// `approve`, its person made a member first where the lock has not heard of them) and the writes to the cloud the lock
 /// has a part in (a member added, taken out or given a role, a station taken out or enrolled: `roster`, `added`,
-/// `enrolled`). Past it the lock is signed as held here (the stations' events keep that level, and no read brings more
-/// of ones that do not answer), what is signed goes to the cloud as where no station took it, and the reads go on
-/// behind. 2026-11-11 a member added in a locked workspace whose stations were not reached turned its button for
-/// minutes; 2026-11-12, with a workspace's one station asleep, 移除设备, turning safe mode off and approving a device each
-/// took 45 s, three waits of TAKEN_MS, and with the cloud's reads unanswered too never answered.
+/// `enrolled`); and a person's own lock's, each of their phases (personal-lock.ts `asked`: a device taken off it or let
+/// in, the lock opened, joined or begun anew, a grant or a rig's call signed). Past it the lock is signed as held here
+/// (the stations' events keep that level, and no read brings more of ones that do not answer), what is signed goes to
+/// the cloud as where no station took it, and the reads go on behind. 2026-11-11 a member added in a locked workspace
+/// whose stations were not reached turned its button for minutes; 2026-11-12, with a workspace's one station asleep,
+/// 移除设备, turning safe mode off and approving a device each took 45 s, three waits of TAKEN_MS, and with the cloud's
+/// reads unanswered too never answered.
 export const ASKED_MS = 3_000;
 /// A device of the person's own added this recently is pointed out on their other devices.
 const RECENT_SECS = 7 * 86400;
@@ -1417,11 +1419,13 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
       });
     },
     answered,
-    bring: (sub, chain) => {
+    bring: (sub, chain, within) => {
       const asked = personStations(inner, sub);
+      // (done once one took it: the others are brought it all the same, and keep each other level)
+      const answering = answersOf(inner, asked.map((at) => inner.stations.requests.call(at, "POST", "/lock/person", { chain }, { quiet: true })), tookOrRefused, asked.map(String));
       return Effect.flatMap(
-        // (done once one took it: the others are brought it all the same, and keep each other level)
-        answersOf(inner, asked.map((at) => inner.stations.requests.call(at, "POST", "/lock/person", { chain }, { quiet: true })), tookOrRefused, asked.map(String)),
+        // (a call a person waits on: none answered within its wait is as none could be asked)
+        within === undefined ? answering : Effect.map(within.wait(answering), (a) => a ?? []),
         (answers) => {
           const took = answers.filter((r) => r._tag === "Success").length;
           if (took > 0) return Effect.succeed(took);

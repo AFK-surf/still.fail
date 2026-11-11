@@ -65,7 +65,7 @@ import { Rigs } from "./rigs.ts";
 import { Devices } from "./devices.ts";
 import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
+import { answersOf, asked, bindPerson, enrolled, keepToPerson, lockSeen, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -322,6 +322,7 @@ export class Core {
           },
           told: (sub, chain) => tellStations(inner, sub, chain),
           stations: personalStations(inner),
+          asked: () => asked(inner),
         }),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),

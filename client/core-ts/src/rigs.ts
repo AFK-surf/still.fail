@@ -344,7 +344,7 @@ export class Rigs {
       const env = this.#env;
       if (env.host.appKeys !== true) return yield* Effect.fail(new CoreError("rig_app_only", t("core-misc.rig.appOnly")));
       const personal = env.personal();
-      const read = yield* Effect.result(personal.refresh(sub));
+      const read = yield* Effect.result(personal.refresh(sub, undefined, personal.asked()));
       const standing = personal.standing(sub);
       // Not heard from the cloud, no lock known here is not no lock: one begun now would take its place.
       if (read._tag === "Failure" && standing === "none") return yield* Effect.fail(read.failure);
