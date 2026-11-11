@@ -60,7 +60,7 @@ pub fn ask_buttons_node(parent : @view.View, body : (@view.View) -> Unit, loc~ :
 ///|
 /// A choice at a card's foot (chooser's there, as nodes) in `parent`: chooser_node's, round as a capsule, its words as
 /// far in as the card's foot corner leaves them, in a line as high as a button where its capsule meets that corner as
-/// the buttons' do. The choice's node.
+/// the buttons' do. `press`, `disabled`: chooser_node's. The choice's node.
 #callsite(autofill(loc))
 pub fn foot_chooser_node(
   parent : @view.View,
@@ -68,6 +68,8 @@ pub fn foot_chooser_node(
   choices : () -> Array[(String, String)],
   chosen : () -> String,
   choose : (String) -> Unit,
+  press? : () -> Unit,
+  disabled? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> @view.View {
   let made : Ref[@view.View?] = Ref(None)
@@ -78,11 +80,24 @@ pub fn foot_chooser_node(
     .padding(By(fn() { (card_foot_in(chooser_h) - card_foot_in(button_height()), 0.0, 0.0, 0.0) }))
     .lines_up(Is(Some(Middle)))
     |> ignore
-    made.val = Some(chooser_by(loc~, h, words, choices, chosen, choose, true))
+    made.val = Some(chooser_by(loc~, h, words, choices, chosen, choose, true, press, disabled))
   })
   |> ignore
   made.val.unwrap()
 }
+
+///|
+/// Its answer's buttons with a choice across from them on one line, at a card's foot (ask_foot's, its buttons then
+/// foot_chooser_node's choice): across the card, the buttons in its start corner (foot_reach), the choice at its end,
+/// its capsule in the end corner as far from the card's side as from its foot (concentric with it), what room is left
+/// between them. Said of a line in a row (style_node's `in_row`: what holds it, as wide as the card's words).
+pub fn ask_foot_chosen_end() -> @ui.Style {
+  ask_foot.then(foot_reach(button_height(), end=chooser_h)).then(ask_foot_across)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_foot_across : @ui.Style = @ui.css("w=Full justify=JBetween")
 
 ///|
 /// What is on an ask's card, apart (card's gap).

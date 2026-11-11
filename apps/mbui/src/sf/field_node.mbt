@@ -15,8 +15,10 @@
 /// `disabled()`, faded, taking no press nor the focus (losing it then). `solid`: on a card's ground (input's
 /// `solid`, field_solid): on the canvas's ground, its line the canvas's too, the field's hover grey while it is pointed
 /// at or written in. `end`: what stands in the capsule after what is typed (a search's count), made in a box at its
-/// end; `lead`: what stands in it before what is typed (a search's mark), made in a box at its start. The field's node
-/// (what the focus is given to).
+/// end; `lead`: what stands in it before what is typed (a search's mark), made in a box at its start. `card_words`:
+/// in a card's foot corners (over its buttons there), its words where the card's begin (button_node's,
+/// card_foot_words's: as far in at its sides as that corner leaves a button's). The field's node (what the focus is
+/// given to).
 pub fn input_node(
   parent : @view.View,
   field : @ui.Field,
@@ -33,11 +35,13 @@ pub fn input_node(
   edited? : (String) -> Unit,
   end? : (@view.View) -> Unit,
   lead? : (@view.View) -> Unit,
+  card_words? : Bool = false,
 ) -> @view.View {
   let line = @signals.untracked(fn() { theme().t.body_line })
+  let x = if card_words { card_foot_words_in(button_height()) } else { @ui.Space::px(S4) }
   field_frame(parent, disabled, row=true, solid~, fn(f) {
     f
-    .padding(Is((@ui.Space::px(S4), @ui.Space::px(S1_5), @ui.Space::px(S4), @ui.Space::px(S1_5))))
+    .padding(Is((x, @ui.Space::px(S1_5), x, @ui.Space::px(S1_5))))
     |> ignore
     if small {
       // (input_box_small: a small panel's row's height, a mouse's (menu_row_min), its ends round)
@@ -89,7 +93,7 @@ pub fn input_node(
 /// them), editing `field`: at least `rows` lines high, growing to `most`, its words scrolling in it past them;
 /// `placeholder` while empty (`placeholder_by`: as it is now, followed; `label`: as input_node's); Enter a new line;
 /// `edited`: as input_node's.
-/// While `disabled()`, as input_node's. The field's node.
+/// While `disabled()`, as input_node's. `solid`, `card_words`: as input_node's. The field's node.
 pub fn textarea_node(
   parent : @view.View,
   field : @ui.Field,
@@ -101,10 +105,13 @@ pub fn textarea_node(
   placeholder_by? : () -> String,
   disabled? : () -> Bool = fn() { false },
   edited? : (String) -> Unit,
+  solid? : Bool = false,
+  card_words? : Bool = false,
 ) -> @view.View {
-  field_frame(parent, disabled, row=false, fn(f) {
+  let x = if card_words { card_foot_words_in(button_height()) } else { @ui.Space::px(S4) }
+  field_frame(parent, disabled, row=false, solid~, fn(f) {
     f
-    .padding(Is((@ui.Space::px(S4), @ui.Space::px(S2), @ui.Space::px(S4), @ui.Space::px(S2))))
+    .padding(Is((x, @ui.Space::px(S2), x, @ui.Space::px(S2))))
     .min_height(Is(Some(rows.to_double() * textarea_line + textarea_in)))
     |> ignore
     match corner {

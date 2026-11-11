@@ -10,7 +10,9 @@
 /// the focus on it, its menu of `choices()` (each its value and its words) under it, 6 off, lined up with its start,
 /// 220 wide at least, the one `chosen()` is checked; opened by a key, the focus on its first row. A choice chosen closes
 /// it, then `choose` is given its value; Escape, back and a press outside close it alone, the focus back on the chooser.
-/// Read out a button named by its words, expanded while its menu is open.
+/// Read out a button named by its words, expanded while its menu is open. `press`: what it does as it is pressed (or
+/// Down given it), in place of opening a menu (a panel of its own it opens: chooser's `set_open(true)` with no entries).
+/// While `disabled()`: no press nor the focus, never lit, read out so (the old one's look kept: not faded).
 #callsite(autofill(loc))
 pub fn chooser_node(
   parent : @view.View,
@@ -18,14 +20,16 @@ pub fn chooser_node(
   choices : () -> Array[(String, String)],
   chosen : () -> String,
   choose : (String) -> Unit,
+  press? : () -> Unit,
+  disabled? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> @view.View {
-  chooser_by(loc~, parent, words, choices, chosen, choose, false)
+  chooser_by(loc~, parent, words, choices, chosen, choose, false, press, disabled)
 }
 
 ///|
 /// chooser_node's choice; `capsule`: round as a capsule, its words as far in as a card's foot corner leaves them
-/// (foot_chooser_node's: at a card's foot, as the old one is there).
+/// (foot_chooser_node's: at a card's foot, as the old one is there); `press`, `disabled`: chooser_node's.
 #callsite(autofill(loc))
 fn chooser_by(
   parent : @view.View,
@@ -34,6 +38,8 @@ fn chooser_by(
   chosen : () -> String,
   choose : (String) -> Unit,
   capsule : Bool,
+  press : (() -> Unit)?,
+  disabled : () -> Bool,
   loc~ : SourceLoc,
 ) -> @view.View {
   // (over all of the panel it is in, as what a field offers is: offers_layer_lent, a sheet's, a dialog's, a small
@@ -48,21 +54,33 @@ fn chooser_by(
   let made : Ref[@view.View?] = Ref(None)
   parent.box(made_for=loc, fn(b) {
     made.val = Some(b)
-    let lit = fn() { lit_node(b) || open.get() || b.focus_shown() }
-    presses_node(b, fn() {
-      by_key.val = b.focus_shown()
-      open.set(!open.untracked())
-    })
+    let live = fn() { !disabled() }
+    let lit = fn() { live() && (lit_node(b) || open.get() || b.focus_shown()) }
+    // (pressed: its menu opened, or what it does in its place)
+    let opens = fn(down : Bool) {
+      if !@signals.untracked(live) {
+        return
+      }
+      match press {
+        Some(f) => f()
+        None => {
+          by_key.val = down || b.focus_shown()
+          open.set(down || !open.untracked())
+        }
+      }
+    }
+    presses_node(b, fn() { opens(false) }, on=live)
     b.on_key(fn(k) {
-      if k.mods == 0 && k.code == @ui.key_code_down && b.focused() && !open.untracked() {
-        by_key.val = true
-        open.set(true)
+      if k.mods == 0 && k.code == @ui.key_code_down && b.focused() && !open.untracked() && @signals.untracked(live) {
+        opens(true)
         true
       } else {
         false
       }
     })
     |> ignore
+    // (disabled while its menu is open: closed, as the old one's)
+    b.reacts(disabled, fn(off) { if off { open.set(false) } })
     b
     .row(Is(true))
     .height(Is(Some(chooser_h)))

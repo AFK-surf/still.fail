@@ -369,15 +369,25 @@ pub fn vault_act(Core, String, String, Array[(String, @json.Json)], String, done
 
 pub fn vault_actions(@ui.Ctx, Core, String, String, Bool, who? : String?) -> Unit
 
+pub fn vault_actions_node(@view.View, Core, () -> String, () -> String, () -> Bool, who? : () -> String?) -> Unit
+
 pub fn vault_ask(@ui.Ctx, Core, String, String, Asked, Bool, who? : String?, extra? : (() -> Unit)?) -> Unit
 
 pub fn vault_ask_details(@ui.Ctx, Asked) -> Unit
 
+pub fn vault_ask_details_node(@view.View, () -> Asked) -> Unit
+
 pub fn vault_ask_words(@ui.Ctx, Asked) -> Unit
+
+pub fn vault_ask_words_node(@view.View, () -> Asked) -> Unit
 
 pub fn vault_card(@ui.Ctx, Core, String, String, Asked, Answer, ended? : (String, String)?) -> Unit
 
+pub fn vault_card_node(@view.View, Core, () -> String, () -> String, () -> Asked, () -> Answer, () -> (String, String)?) -> Unit
+
 pub fn vault_foot(@ui.Ctx, Core, String, String, Answer, Bool, typed? : Typed?, timeout_kind? : String, timeout_seconds? : Int32, extra? : (() -> Unit)?, foot? : Bool) -> Unit
+
+pub fn vault_foot_node(@view.View, Core, () -> String, () -> String, () -> Answer?, () -> Bool, () -> Typed?, () -> (String, Int32), foot~ : Bool) -> Unit
 
 pub fn vault_hosts(Map[String, String]) -> Array[String]
 
@@ -390,6 +400,8 @@ pub let vault_lasts : Array[String]
 pub fn vault_menu_open() -> String
 
 pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+
+pub fn vault_outcome_node(@view.View, () -> Asked, () -> String, () -> String, () -> Bool, history? : ((@view.View) -> Unit)?) -> Unit
 
 pub fn vault_outcome_words(Asked, String, String) -> Array[@text.Run]
 
