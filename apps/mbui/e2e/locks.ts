@@ -155,6 +155,7 @@ try {
     const shown = a.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await c.call("lock.pair", { workspace });
     const p = await shown;
+    await c.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
     await c.call("lock.pairCode", { workspace, code: p.code });
     await c.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
     await c.stationState(workspace, (s) => s.state === "online", 90_000);
@@ -173,10 +174,15 @@ try {
     await c.stationState(workspace, (s) => s.state === "online", 30_000);
     await opens(c);
   });
+  /// The device that asked to be let onto its person's own lock has the field for the code: a device of theirs shows it
+  /// and this one has heard that it does (adbShare's `personal.pair`). A person types only then; typed the moment the
+  /// other device showed it, a run under a load of 47 was told "no trusted device shows a code" (2026-11-11).
+  const codeAsked = (d: Device) => d.personal((p) => p.pair?.state === "code", 60_000);
   const join = async (d: Device) => {
     const shown = a.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await d.call("adb.personalJoin", { sub });
     const p = await shown;
+    await codeAsked(d);
     await d.call("adb.personalCode", { code: p.code });
     const mine = await d.personal((p) => p.standing === "member", 90_000);
     return mine.devices.find((x: J) => x.me)?.key as string;
@@ -243,6 +249,7 @@ try {
     await d.call("adb.personalJoin", { sub });
     const p = await shown;
     log(`  B shows ${p.code}`);
+    await codeAsked(d);
     await d.call("adb.personalCode", { code: p.code });
     dKey = (await d.personal((p) => p.standing === "member", 90_000)).devices.find((x: J) => x.me)?.key;
   });
@@ -317,6 +324,7 @@ try {
     await d.call("adb.personalJoin", { sub: approver.sub });
     const p = await shown;
     log(`  ${approver.name} shows ${JSON.stringify(p).slice(0, 300)} after ${Date.now() - t1} ms`);
+    await codeAsked(d);
     await d.call("adb.personalCode", { code: p.code });
     return (await d.personal((p) => p.standing === "member", 90_000)).devices.find((x: J) => x.me)?.key as string;
   };
@@ -596,6 +604,7 @@ try {
     const shown = b.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await h.call("lock.pair", { workspace });
     const p = await shown;
+    await h.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
     await h.call("lock.pairCode", { workspace, code: p.code });
     await h.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
     await h.stationState(workspace, (s) => s.state === "online", 90_000);

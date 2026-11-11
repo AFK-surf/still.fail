@@ -4,9 +4,9 @@
 // Each signed-in account's database is `databases/<name>.db` there; what the former `core.db` kept is brought into them
 // once (db/import.ts) and left as it was. `start` is the API the Rust core's Node addon had: connect /
 // receive(json) / disconnect, the listener given `(client, json)`.
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { open, readFile, rename, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { webcrypto } from "node:crypto";
 import { Effect, Queue, Scope } from "effect";
@@ -69,11 +69,26 @@ export class NodeHost implements Host {
   readonly secureSet?: Host["secureSet"];
   readonly secureDelete?: Host["secureDelete"];
   readonly secureAsk?: Host["secureAsk"];
+  readonly recorder?: Host["recorder"];
 
   /// `sealer`: what seals values, where the app has one; without, the host has no `secure*` (tests, the side runs).
   /// `page`: it stands as a web page's host does for the lock (hosts/web.ts): no keys of an app, nothing sealed.
-  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener, sealer?: Sealer, page = false) {
+  /// `record`: a file the record of the connections (record.ts) is appended to, always on, a line as it comes
+  /// (`<ISO time> <text>`), written at once so that a process killed leaves what it had said; without, no record.
+  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener, sealer?: Sealer, page = false, record?: string) {
     mkdirSync(dataDir, { recursive: true });
+    if (record !== undefined) {
+      mkdirSync(dirname(record), { recursive: true });
+      // A line that cannot be written is lost, never the core's failure: the record changes nothing it does.
+      this.recorder = {
+        on: () => true,
+        line: (text) => {
+          try {
+            appendFileSync(record, `${new Date().toISOString()} ${text}\n`);
+          } catch {}
+        },
+      };
+    }
     this.#dir = dataDir;
     this.#origin = cloudOrigin.replace(/\/+$/, "");
     this.#beta = beta;
@@ -345,11 +360,12 @@ export class NodeHost implements Host {
 /// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
 /// `commaAccountProvider({origin, bearer})`, "Account providers and embedding"). `sealer`: what seals
 /// values for it (an Electron app's main process). `page`: a web page's host for the end-to-end runs (e2e/device.ts),
-/// keeping no app's keys and sealing nothing, a `sealer` given or not.
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; page?: boolean } = {}) {
+/// keeping no app's keys and sealing nothing, a `sealer` given or not. `record`: a file the core's record of what its
+/// connections do is kept in (e2e/device.ts: each device's, read after a run that failed); without, it keeps none.
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; page?: boolean; record?: string } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
-  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer, options.page === true);
+  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer, options.page === true, options.record);
   const clients = new Set<number>();
   let dead = false;
   let running: Core | null = null;

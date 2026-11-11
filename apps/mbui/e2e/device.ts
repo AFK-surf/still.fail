@@ -7,9 +7,14 @@
 // browser (`{ page: true }`: hosts/node.ts `page`, keeping no keys of an app and sealing nothing, as hosts/web.ts; it
 // signs nothing, keeps no vault, approves no one). This file run as `device NAME` is that process; imported, it gives
 // the run its devices and its checks (PASS or FAIL each, counted).
+// Each device keeps the core's record of what its connections do (record.ts: dials, waits, what woke a link) in its
+// data, `record.log`, across its restarts; a failed run keeps it (scripts/e2e-local.sh `kept`). What a device prints
+// to stderr (its core's, its mesh addon's) comes out with its name before each line, `E| …`: the native mesh does not
+// say whose its lines are, and the stations' say the same words.
 // E2E_SF_SRC, E2E_ORIGIN, E2E_PEER_DATA as peer.ts.
 import { type ChildProcess, execFileSync, fork } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import type { Socket } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -23,12 +28,12 @@ export type J = any;
 /// What `p` gives, or nothing once `ms` have gone by (a deadline: a core or a process that would not end).
 export const within = <T>(p: Promise<T>, ms: number): Promise<T | undefined> => Promise.race([p, new Promise<undefined>((r) => setTimeout(r, ms))]);
 
-/// The watch of a directory waited on, kept for the rest of the run and shared by its waits. A watch begun as a wait
-/// begins sees nothing for a moment after `watch` returns (libuv starts the FSEvents stream on a thread of its own, from
-/// when that thread gets to it), so what is written in that moment is lost to the wait, which ends by the next thing
-/// written there or not at all. A run on a Mac with a load of 20 (2026-11-11) failed with what it waited for there
-/// ("alice's own lock 16 long, not 16", its minute gone by): taken to be that moment, which was not shown. Kept, only
-/// a directory's first wait has it.
+/// The watch of a directory waited on, kept for the rest of the run and shared by its waits: one stream of the file
+/// system's events for the run, not one begun and ended by each wait. It is only as good as the Mac's file events. On
+/// one whose fseventsd had been at 100% of a CPU and 15 GB for days (Studio, 2026-11-11) a watch was told of none of
+/// eight writes in 12 s, and this run's waits ended by whatever else was told later, or not at all: round 7 failed with
+/// what it waited for there, "alice's own lock 16 long, not 16". So a wait looks once more as its time ends
+/// (`whenChanged`), and says when that was what saw it.
 const watches = new Map<string, Set<() => void>>();
 function watching(d: string, changed: () => void): () => void {
   let told = watches.get(d);
@@ -68,7 +73,7 @@ export function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | 
       return !!got;
     };
     const deadline = setTimeout(() => {
-      if (look()) log(`  (seen only as its ${ms} ms ended: no change of ${dirs.join(", ")} was seen for it)`);
+      if (look()) log(`  (seen only as its ${ms} ms ended: no change of ${dirs.join(", ")} was told for it; are this Mac's file events late or lost?)`);
       else if (!done) (end(), reject(new Error(what())));
     }, ms);
     const stops = dirs.map((d) => watching(d, () => void look()));
@@ -105,7 +110,9 @@ if (process.argv[2] === "device") {
   };
   // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`; `page`: a web page's
   // host, no app's keys and nothing sealed)
-  const options = process.argv[5] === "page" ? { page: true } : process.argv[5] === "plain" ? {} : { sealer };
+  // (its record goes on in the same file when started `again`, as its data does)
+  const record = join(data, "record.log");
+  const options = process.argv[5] === "page" ? { page: true, record } : process.argv[5] === "plain" ? { record } : { sealer, record };
   const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, options);
   const client = core.connect();
   process.on("message", (m: J) => {
@@ -159,8 +166,23 @@ export class Device {
   }
   #fork(again: boolean): ChildProcess {
     const kind = this.page ? "page" : this.sealed ? "sealed" : "plain";
-    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", kind], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
+    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", kind], { stdio: ["ignore", "inherit", "pipe", "ipc"] });
     child.on("message", (json: J) => this.#got(JSON.parse(json)));
+    // Its stderr a line at a time, named; a line not yet ended waits for its end, or for the stream's. The pipe never
+    // keeps the driver up (`close` waits for it to end instead).
+    const err = child.stderr!;
+    (err as Socket).unref();
+    err.setEncoding("utf8");
+    let partial = "";
+    err.on("data", (chunk: string) => {
+      const lines = (partial + chunk).split("\n");
+      partial = lines.pop()!;
+      for (const line of lines) process.stderr.write(`${this.name}| ${line}\n`);
+    });
+    err.on("end", () => {
+      if (partial !== "") process.stderr.write(`${this.name}| ${partial}\n`);
+      partial = "";
+    });
     return child;
   }
   /// What it says it is (`client.device`, prefs.ts `device`): a desktop app, or a web page in a desktop browser.
@@ -279,7 +301,8 @@ export class Device {
   close(): Promise<void> {
     if (this.child.exitCode !== null || this.child.signalCode !== null) return Promise.resolve();
     const child = this.child;
-    const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+    // (`close`, not `exit`: its stderr read to the end, so what it said last is written before the run goes on)
+    const exited = new Promise<void>((resolve) => child.once("close", () => resolve()));
     child.send("close");
     return within(exited, 5000).then(() => {
       if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
