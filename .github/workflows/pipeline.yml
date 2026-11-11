@@ -15,8 +15,10 @@
 # Stable: the manual Publish stable workflow. Relay remains manual (deploying it drops every connection).
 name: pipeline
 on:
+  # (not the merge queue's branches: what would merge is merge-queue.yml's; this run again on each was a branch's whole
+  # check once more, pr-5453's 682 s beside the queue's own, 2026-11-11)
   push:
-    branches: ["**"]
+    branches: ["**", "!gh-readonly-queue/**"]
   workflow_dispatch:
 # A branch: only its newest commit matters, a push stops the run before it. main: a run going on finishes (stopped
 # halfway, with a merge every few minutes, nothing went out for an hour on 2026-10-02); pushes meanwhile wait as one
