@@ -897,18 +897,63 @@ function signsBound(inner: Inner, ws: string): { sub: string; base: string; h: H
 
 /// A device just put on its person's own lock here (face to face, views/pair.ts `approve`): put in each workspace's
 /// lock where the person bound it and this device signs for them, with the key it signs with, so it signs there and its
-/// vault's box is taken as theirs.
+/// vault's box is taken as theirs. The person who typed the code waits on it: what it waits on of the workspaces'
+/// stations, all of them, ends with one ASKED_MS (2026-11-12: with the one station asleep, 45 s more, three waits of
+/// TAKEN_MS; with the cloud's reads unanswered too, no answer).
 export function putOnBound(inner: Inner, sub: string, device: { id: string; label: string; signKey: string | null }): Effect.Effect<void> {
   return Effect.gen(function* () {
     if (device.signKey === null) return;
+    const within = asked(inner);
     for (const [ws, owner] of inner.workspaces.owned()) {
       const at = owner === sub ? signsBound(inner, ws) : null;
       // (one there already that signs with this key: nothing; one there that does not, put in as the lock was turned
       // on, before it signed: put in again with it)
       if (at === null || live(fold(at.h.entries).devices.get(device.id), now(inner))?.sign_key === device.signKey) continue;
-      yield* Effect.ignore(new Lock(inner, ws, sub, null).append("device", { id: device.id, sub, kind: "app", label: device.label, sign_key: device.signKey }), { log: "Unhandled", message: "put on a bound lock" });
-      yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "bound lock read" });
+      yield* Effect.ignore(new Lock(inner, ws, sub, null, { within }).append("device", { id: device.id, sub, kind: "app", label: device.label, sign_key: device.signKey }), { log: "Unhandled", message: "put on a bound lock" });
+      yield* within.wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "bound lock read" }));
     }
+  });
+}
+
+/// A device this one just took off its person's own lock (`run`'s removeDevice, adb.ts `personalRemove`, within
+/// `withBound`): taken out of each workspace's lock where the person bound it and this device signs for them, so it is
+/// let in there no more and no longer listed. `keepToPerson` would get there too, but only once it has read their lock,
+/// which it must not decide on unread; what this device itself signed off it needs no reading to know, and the person
+/// waits on it: one ASKED_MS for all of it (2026-11-12: with the one station asleep, 设置 › 安全 listed the device for
+/// 75 s after it was taken off, and for good with the cloud's reads unanswered). An entry refused (another device's got
+/// there first, or what is held here is behind) is let be: the read after says how the lock stands, and `keepToPerson`,
+/// run once `withBound` is over, catches up by reading.
+export function takeOffBound(inner: Inner, sub: string, id: string): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const within = asked(inner);
+    for (const [ws, owner] of inner.workspaces.owned()) {
+      const at = owner === sub ? signsBound(inner, ws) : null;
+      const d = at === null ? undefined : live(fold(at.h.entries).devices.get(id), now(inner));
+      if (at === null || d === undefined || d.sub !== sub || d.kind !== "app" || id === at.base) continue;
+      yield* Effect.ignore(new Lock(inner, ws, sub, null, { within }).append("device.remove", { id }), { log: "Unhandled", message: "taken off a bound lock" });
+      yield* within.wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "bound lock read" }));
+    }
+  });
+}
+
+/// This device doing the workspaces' half of a change to its person's lock itself (`takeOffBound`, `putOnBound`), by
+/// person: `keepToPerson` does nothing for them meanwhile, and runs once for each of their workspaces after the last
+/// such ends, to catch up what came meanwhile by reading. Both would sign the same entry at one place of the
+/// workspace's lock: the one the stations refused then goes to the cloud's POST (`Lock.append`), which is waited on
+/// with no limit, and which takes it where the cloud is a place behind.
+const boundBy = new WeakMap<Inner, Map<string, number>>();
+export function withBound<A, E>(inner: Inner, sub: string, work: Effect.Effect<A, E>): Effect.Effect<A, E> {
+  return Effect.suspend(() => {
+    let counts = boundBy.get(inner);
+    if (counts === undefined) boundBy.set(inner, (counts = new Map()));
+    const by = counts;
+    by.set(sub, (by.get(sub) ?? 0) + 1);
+    return Effect.ensuring(work, Effect.sync(() => {
+      const left = (by.get(sub) ?? 1) - 1;
+      if (left > 0) return void by.set(sub, left);
+      by.delete(sub);
+      for (const [ws, owner] of inner.workspaces.owned()) if (owner === sub) inner.runner.fork(keepToPerson(inner, ws));
+    }));
   });
 }
 
@@ -920,10 +965,15 @@ export function putOnBound(inner: Inner, sub: string, device: { id: string; labe
 /// says it there as it is put on, and says it again when it signs there next: `PersonalLock.signKeys`), so it signs
 /// here too: one no workspace's lock ever held with its key (approved where the person had bound none, or before this
 /// workspace bound it) is not left signing nothing. Their lock is read first, so a device just put on it is not taken
-/// for gone. Done by a device on it that signs for them; tried as bindPerson is, no timer of its own.
+/// for gone. Done by a device on it that signs for them; tried as bindPerson is, no timer of its own. It is for what
+/// this device learns by reading; a device it takes off their lock itself is `takeOffBound`'s, done at once, and while
+/// it does (`withBound`) this waits.
 const keeping = new WeakMap<Inner, Set<string>>();
 export function keepToPerson(inner: Inner, ws: string): Effect.Effect<void> {
   return Effect.gen(function* () {
+    // (this device doing it itself: run again once it is done, `withBound`)
+    const sub = inner.workspaces.owner(ws);
+    if (sub !== null && (boundBy.get(inner)?.get(sub) ?? 0) > 0) return;
     const before = signsBound(inner, ws);
     if (before === null) return;
     let tried = keeping.get(inner);
@@ -1850,14 +1900,13 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         break;
       case "removeDevice": {
         // Their own app device, where they bound a lock of their own: that lock is what lets it in, so it is taken off
-        // that one, and out of this one after it (keepToPerson). Taken out of this lock alone it was let in still, and
-        // put back from another workspace's (2026-11-10: 移除 on 设置 › 安全 did nothing that lasted).
+        // that one, and out of this one after it (`takeOffBound`, which reads this lock after: not read again here).
+        // Taken out of this lock alone it was let in still, and put back from another workspace's (2026-11-10: 移除 on
+        // 设置 › 安全 did nothing that lasted).
         const own = onOwnLock(inner, c.workspace, param("device"));
         if (own !== null) {
-          yield* inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove"));
-          yield* keepToPerson(inner, c.workspace);
-          result = null;
-          break;
+          yield* withBound(inner, own.sub, Effect.andThen(inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove")), takeOffBound(inner, own.sub, param("device"))));
+          return null;
         }
         result = yield* lock.append("device.remove", { id: param("device") });
         break;

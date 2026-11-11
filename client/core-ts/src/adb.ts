@@ -73,6 +73,9 @@ export type AdbEnv = {
   /// The person's own lock (personal-lock.ts): whose a workspace's grants are, who this device speaks for, and how it
   /// joins (views/pair.ts).
   personal: PersonalLock;
+  /// A device taken off the person's lock here (`removal`, by its id there), then out of the workspaces' locks where
+  /// they bound it (views/lock.ts `takeOffBound`, `withBound`): the removal's own answer. None, the removal alone.
+  tookOff?: <E>(sub: string, id: string, removal: Effect.Effect<null, E>) => Effect.Effect<null, E>;
   subOf: (workspace: string) => string | null;
   /// The accounts signed in here: each has a lock of its own.
   subs: () => { sub: string; email: string }[];
@@ -649,7 +652,15 @@ export class Adb {
       case "personalCancel":
         return Effect.sync(() => (this.#env.pair.cancel(), null));
       case "personalRemove":
-        return this.#of(call.sub, (sub) => this.#env.personal.removeDevice(sub, call.key, t("core-misc.personal.reason.remove")));
+        return this.#of(call.sub, (sub) => Effect.suspend(() => {
+          const personal = this.#env.personal;
+          const removal = personal.removeDevice(sub, call.key, t("core-misc.personal.reason.remove"));
+          // (by the id the person's lock says for that key before it is taken off; not where this device takes itself
+          // off: it signs for them in no workspace's lock after)
+          const id = personal.chain(sub)?.devices.get(call.key)?.id;
+          const itself = personal.view(sub).devices.some((d: { key: string; me: boolean }) => d.key === call.key && d.me);
+          return id === undefined || itself || this.#env.tookOff === undefined ? removal : this.#env.tookOff(sub, id, removal);
+        }));
       case "personalForget":
         return this.#of(call.sub, (sub) => this.#env.personal.forget(sub, t("core-misc.personal.reason.forget")));
       case "personalRestart":
