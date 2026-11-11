@@ -21,7 +21,14 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // subscriptions at 1159 here, 1033-1050 in the strict pass; the tap at 1150))
   "agent-reply": [7],
   "answer-option": [7],
-  "bar-going-down": [7],
+  // at 120 (#5613: notify.permission told as notify is answered, between frames, not in a frame): the chat's top bar's
+  // faces ask their picture of the core as their binding is worked out, in a frame (src/sfapp/chat_bar_node.mbt:405,
+  // @sf.avatar_node's picture closure calling (src.picture)(p.picture, stint()), src/sfbase/source.mbt:118), so where
+  // it falls beside a message said at its cause goes by the frames' rate: step 2 (tapxy 200 -38): message #22: call
+  // picture {"url":"https://example.test/p.png"} | strict call notify.permission {"state":"unknown"}. Gone once a
+  // face's picture is asked as the face is made or its picture changes, not as its binding is worked out (the
+  // coordinator of the migration, 2026-11-12)
+  "bar-going-down": [7, 120],
   "card-motion": [7],
   "close-option": [7],
   "delete-failed": [7],
@@ -62,7 +69,13 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "station-rename": [7],
   "settings-decisions": [7],
   // 4: - | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  "bar-archive": [7],
+  // at 120 (#5613: notify.permission told as notify is answered, between frames, not in a frame): the chat's top bar's
+  // faces ask their picture of the core as their binding is worked out, in a frame (src/sfapp/chat_bar_node.mbt:405,
+  // @sf.avatar_node's picture closure calling (src.picture)(p.picture, stint()), src/sfbase/source.mbt:118), so where
+  // it falls beside a message said at its cause goes by the frames' rate: step 5 (until icon:archive): message #22:
+  // call picture {"url":"https://example.test/p.png"} | strict call notify.permission {"state":"unknown"}. Gone as
+  // bar-going-down's
+  "bar-archive": [7, 120],
   "notice-looking": [7],
   // wide-answer-reply at 120 (#5519): the new chat page sends its composer, machineSessions.list and status's
   // release in the frame at 1050 ms, notify.permission (sent once notify's values are in, which came after that
@@ -135,15 +148,17 @@ let pace_splits_known : Map[String, Array[Int]] = {
 /// again over one).
 // kept across runs: a value
 let strict_diverged_known : Map[String, Array[(Double, String)]] = {
-  // lock-wait (#5519; anew with what the first screen reads declared, #5589): at 22133.3 the lock's delta (safe
-  // mode off) takes the waiting page away and with it what it had taken over of what was declared as the workspace
-  // came in view, doing and driveTransfers (taken over, then its reader gone, the next not come yet: a gap a
-  // declaration does not mend); Home's frame at 22150 asks doing again. The run's device took it in the frame that
-  // built the next page, behind a message before it, so nothing was let go. Gone with #5135 (what is read kept by its
-  // topic while a page is covered), whose merge takes this out.
+  // lock-wait (#5519; anew with what the first screen reads declared, #5589; anew with notify.permission told as
+  // notify is answered, between frames, #5613: it takes the id before doing's and driveTransfers', and what the
+  // replay held for it comes a frame sooner): at 22116.7 the lock's delta (safe mode off) takes the waiting page away
+  // and with it what it had taken over of what was declared as the workspace came in view, doing and driveTransfers
+  // (taken over, then its reader gone, the next not come yet: a gap a declaration does not mend); Home's frame at
+  // 22133.3 asks doing again. The run's device took it in the frame that built the next page, behind a message before
+  // it, so nothing was let go. Gone with #5135 (what is read kept by its topic while a page is covered), whose merge
+  // takes this out.
   "lock-wait": [
-    (22133.333333333336, "{\"id\":12,\"unsubscribe\":true}"),
-    (22133.333333333336, "{\"id\":13,\"unsubscribe\":true}"),
-    (22150.000000000004, "{\"id\":24,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
+    (22116.666666666668, "{\"id\":13,\"unsubscribe\":true}"),
+    (22116.666666666668, "{\"id\":14,\"unsubscribe\":true}"),
+    (22133.333333333336, "{\"id\":24,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
   ],
 }
