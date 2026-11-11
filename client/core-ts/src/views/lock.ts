@@ -2108,6 +2108,19 @@ export function takeInJoined(inner: Inner, sub: string, ws: string, station: str
   return new Lock(inner, ws, sub, null).addStation(station, shortCode(station));
 }
 
+/// A station that refused an entry on the lock it keeps, read again in a fiber of the core's: once for each head held
+/// here, so a refusal the read brings nothing for (the lock's rules, not another entry) is not read again and again by
+/// what tries again as the lock is held (`bindPerson`, `keepToPerson`, `ownLockFor`, each forked by `hold`).
+const refusingRead = new WeakMap<Inner, Set<string>>();
+function readRefusing(inner: Inner, ws: string, station: string): void {
+  let once = refusingRead.get(inner);
+  if (once === undefined) refusingRead.set(inner, (once = new Set()));
+  const at = `${ws}/${station}/${held(inner, ws)?.head?.hash ?? ""}`;
+  if (once.has(at)) return;
+  once.add(at);
+  inner.runner.fork(Effect.ignore(readLockOf(inner, ws, [station]), { log: "Unhandled", message: "lock read of a station that refused an entry" }));
+}
+
 export class Lock {
   readonly #inner: Inner;
   readonly ws: string;
@@ -2336,7 +2349,15 @@ export class Lock {
       const others = stations.filter((s) => !waitFor.includes(s));
       const later = others.filter((s) => !serving.has(s));
       if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later), { log: "Unhandled", message: "lock chain brought" }));
-      const took = Object.values(pinned).some(taken) || (yield* self.#firstTaken(chain, others.filter((s) => serving.has(s)), taken));
+      const first = Object.values(pinned).some(taken) ? { took: true, refused: null } : yield* self.#firstTaken(chain, others.filter((s) => serving.has(s)), taken, head.genesis);
+      const took = first.took;
+      // Refused by a station that keeps this lock (another entry at its place, or the lock's rules) and taken by none:
+      // the entry does not go on, and the cloud is not sent it. Sent there, the cloud took it where its chain was a
+      // place behind the stations' and the call answered well, the cloud's chain forked from the stations'; or, its
+      // POST unanswered, the call never answered (2026-11-12, found reading). The station's lock is read again
+      // (`#refusedBy`), so the next press signs after what it keeps. (The stations named in `waitFor` say theirs in
+      // `pinned`, which their calls report, as before.)
+      if (first.refused !== null) return yield* Effect.fail(first.refused);
       // Not taken as far as this device heard: the cloud may have kept it all the same, its answer lost on the way
       // back (a gateway's 502, the line gone). Then it is done: asked again, it would say it failed while it went.
       // (a call a person waits on waits ASKED_MS on that read, a wait of its own: the cloud is what takes the entry
@@ -2364,24 +2385,46 @@ export class Lock {
   }
 
   /// Entries brought to each of `stations`, each on its own (one offline hears of them later): whether one of them
-  /// took them (`taken`, as its answer says), as soon as one did; false once none did, there are none, or none
+  /// took them (`taken`, as its answer says), as soon as one did; not once none did, there are none, or none
   /// answered by TAKEN_MS, or by the end of its ASKED_MS for a call a person waits on (the cloud then is what takes
-  /// them, as before).
-  #firstTaken(entries: Entry[], stations: string[], taken: (head: unknown) => boolean): Effect.Effect<boolean> {
+  /// them, as before). `refused`, where none took them: the refusal of one that keeps this lock (`#refusedBy`), seen
+  /// once all answered or the wait ended. One refusal does not end the wait: another station may take the entry a
+  /// moment after, and a taking wins.
+  #firstTaken(entries: Entry[], stations: string[], taken: (head: unknown) => boolean, genesis: string): Effect.Effect<{ took: boolean; refused: CoreError | null }> {
     const self = this;
     return Effect.gen(function* () {
-      if (stations.length === 0) return false;
+      if (stations.length === 0) return { took: false, refused: null };
       const done = Deferred.makeUnsafe<boolean>();
       let left = stations.length;
+      let refused: CoreError | null = null;
       for (const id of stations)
         self.#inner.runner.fork(Effect.flatMap(Effect.result(self.#station(id, "POST", "/lock", { entries })), (r) => Effect.sync(() => {
-          if (r._tag === "Success" && taken(get(r.success, "head"))) Deferred.doneUnsafe(done, Effect.succeed(true));
-          else if (--left === 0) Deferred.doneUnsafe(done, Effect.succeed(false));
+          if (r._tag === "Success" && taken(get(r.success, "head"))) return void Deferred.doneUnsafe(done, Effect.succeed(true));
+          refused ??= self.#refusedBy(id, r, genesis);
+          if (--left === 0) Deferred.doneUnsafe(done, Effect.succeed(false));
         })));
       // (the stations are brought it still, each in a fiber of its own)
-      if (self.#within !== null) return yield* Effect.map(self.#within.wait(Deferred.await(done)), (took) => took === true);
-      return yield* Effect.map(Effect.timeoutOption(Deferred.await(done), TAKEN_MS), (o) => o._tag === "Some" && o.value); // timer: a deadline
+      const took = self.#within !== null
+        ? yield* Effect.map(self.#within.wait(Deferred.await(done)), (t) => t === true)
+        : yield* Effect.map(Effect.timeoutOption(Deferred.await(done), TAKEN_MS), (o) => o._tag === "Some" && o.value); // timer: a deadline
+      return { took, refused: took ? null : refused };
     });
+  }
+
+  /// A station's answer to entries brought to it, where it refused them on this lock (`genesis`, the chain signed on):
+  /// its 409 (another entry at their place, or the lock's rules: station/src/mesh/serve.ts), as `lock_refused` with
+  /// its words, as the person's own lock says it (`personalStations.bring`); null for anything else: one keeping
+  /// another lock or none, one refusing this device (`lock_unconfirmed`) or the station (`lock_station`), one from
+  /// before (404), the network. Which lock it keeps is as it last said this run (`part.heads`, its GET /lock): its 409
+  /// carries its head, but a station's refusal reaches the core as its code, words and status alone
+  /// (station/requests.ts `httpError`). Its lock is read again behind (once for each head held here): what is held
+  /// catches up, and what is signed next follows what it keeps.
+  #refusedBy(id: string, r: Result.Result<unknown, CoreError>, genesis: string): CoreError | null {
+    if (r._tag !== "Failure" || r.failure.status !== 409) return null;
+    const theirs = part(this.#inner, this.ws).heads.get(id);
+    if (theirs == null || theirs.genesis !== genesis) return null;
+    readRefusing(this.#inner, this.ws, id);
+    return new CoreError("lock_refused", r.failure.message, 409);
   }
 
   /// Entries brought to stations (each one's answer, or why not: one offline hears of them later).
