@@ -73,7 +73,8 @@ final class Tombstone {
     }
 
     /** The crashing thread's frames, top first, as {@code file (function)} without addresses or offsets: what stays
-     *  the same from one build or run to the next. */
+     *  the same from one build or run to the next. Past the first 64 they stop at the first line that folds a cycle or
+     *  says frames were left out (more's): the report's fingerprint takes the first six. */
     static List<String> frames(String text) {
         List<String> out = new ArrayList<>();
         String[] lines = text.split("\n", -1);
@@ -129,6 +130,7 @@ final class Tombstone {
         if (crashed != null) {
             b.append("\nbacktrace:\n");
             frames(b, crashed, 64);
+            more(b, crashed.frames, 64);
         }
         // Warnings and errors only: the app's own lines that say what went wrong, not whatever else it logged.
         List<Log> worth = new ArrayList<>();
@@ -152,15 +154,84 @@ final class Tombstone {
     }
 
     private static void frames(StringBuilder b, Thread t, int most) {
-        for (int i = 0; i < t.frames.size() && i < most; i++) {
-            Frame f = t.frames.get(i);
-            String pc = Long.toHexString(f.pc);
-            b.append("  #").append(i < 10 ? "0" : "").append(i).append(" pc ");
-            for (int k = pc.length(); k < 16; k++) b.append('0');
-            b.append(pc).append("  ").append(f.file);
-            if (!f.function.isEmpty()) b.append(" (").append(f.function).append('+').append(f.offset).append(')');
-            b.append('\n');
+        for (int i = 0; i < t.frames.size() && i < most; i++) frame(b, i, t.frames.get(i));
+    }
+
+    private static void frame(StringBuilder b, int i, Frame f) {
+        String pc = Long.toHexString(f.pc);
+        b.append("  #").append(i < 10 ? "0" : "").append(i).append(" pc ");
+        for (int k = pc.length(); k < 16; k++) b.append('0');
+        b.append(pc).append("  ").append(f.file);
+        if (!f.function.isEmpty()) b.append(" (").append(f.function).append('+').append(f.offset).append(')');
+        b.append('\n');
+    }
+
+    /** What the crashing thread's frames past the first 64 may take of the text. The text is cut at Crashes.LOGS (60 KB)
+     *  and the log and the other threads come after the backtrace: its first 64 frames take some 6-13 KB, the log's 50
+     *  lines about as much, so 12 KB here (some 90 frames of ~130 bytes) still leaves half of it for the rest. */
+    private static final int MORE = 12 * 1024;
+
+    /** The longest cycle of frames folded, and how many times it must come in a row to be. */
+    private static final int CYCLE = 16, TIMES = 3;
+
+    /**
+     * The crashing thread's frames from {@code from} on, in the same lines as the first ones and with their own
+     * numbers. A stack overflow is deep recursion, a short cycle of frames over and over; a cycle that comes at least
+     * TIMES times in a row is printed once and a line after it says how far it repeats. Past MORE, the frames nearest
+     * the top and the outermost (where the recursion started) are kept, and a line says how many in between were left out.
+     * These lines start with {@code "  ..."}, not {@code "  #"}, so {@link #frames(String)} stops at the first of them.
+     */
+    private static void more(StringBuilder b, List<Frame> fs, int from) {
+        // Each part is a frame, or a cycle with its line, never split; spans holds the first and last frame of each.
+        List<String> parts = new ArrayList<>();
+        List<int[]> spans = new ArrayList<>();
+        int total = 0;
+        for (int i = from; i < fs.size(); ) {
+            // The cycle that folds the most frames here; of two that fold as many, the shorter.
+            int length = 0, times = 0;
+            for (int n = 1; n <= CYCLE && i + TIMES * n <= fs.size(); n++) {
+                int r = 1;
+                while (i + (r + 1) * n <= fs.size() && again(fs, i, n, r)) r++;
+                if (r >= TIMES && r * n > length * times) {
+                    length = n;
+                    times = r;
+                }
+            }
+            StringBuilder p = new StringBuilder();
+            int last = length == 0 ? i : i + length * times - 1;
+            for (int k = i; k < i + Math.max(length, 1); k++) frame(p, k, fs.get(k));
+            if (length > 0) {
+                p.append(length == 1 ? "  ... the frame above repeats " : "  ... the " + length + " frames above repeat ")
+                        .append(times - 1).append(" more times, to #").append(last).append('\n');
+            }
+            parts.add(p.toString());
+            spans.add(new int[] {i, last});
+            total += p.length();
+            i = last + 1;
         }
+        int tail = parts.size() - 1;
+        if (total <= MORE || tail <= 0) {
+            for (String p : parts) b.append(p);
+            return;
+        }
+        // The outermost frames up to half of MORE (at least the last part), then the top's up to the rest of it.
+        int size = parts.get(tail).length();
+        while (tail > 1 && size + parts.get(tail - 1).length() <= MORE / 2) size += parts.get(--tail).length();
+        int head = 0;
+        while (head < tail && size + parts.get(head).length() <= MORE) size += parts.get(head++).length();
+        for (int k = 0; k < head; k++) b.append(parts.get(k));
+        int a = spans.get(head)[0], z = spans.get(tail - 1)[1];
+        b.append("  ... ").append(z - a + 1).append(" frames left out, #").append(a).append(" to #").append(z).append('\n');
+        for (int k = tail; k < parts.size(); k++) b.append(parts.get(k));
+    }
+
+    /** Whether the {@code n} frames from {@code i} come again as the {@code r}th repeat after them (the same pc and file). */
+    private static boolean again(List<Frame> fs, int i, int n, int r) {
+        for (int k = 0; k < n; k++) {
+            Frame x = fs.get(i + k), y = fs.get(i + r * n + k);
+            if (x.pc != y.pc || !x.file.equals(y.file)) return false;
+        }
+        return true;
     }
 
     private static String signal(Proto m) {
