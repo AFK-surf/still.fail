@@ -67,7 +67,8 @@ fn View::same(self : View, other : View) -> Bool {
 /// of these parts alone (an old view hosted in it, a field, a native view: none counted). Read where its cause asks it
 /// (as a sidebar is shown a while), not each frame.
 pub fn View::shown_across(self : View, but? : View) -> (Double, Double)? {
-  guard self.alive() else { return None }
+  // (held by no node from the root (put by: View::park): nothing of it shows)
+  guard self.alive() && self.tree.held_from_root(self.at) else { return None }
   // (laid out as of the moment it is read, what changed since the last frame with it: where an event finds things)
   self.tree.laid_now()
   let (left, top, w0, h0) = self.rect()
@@ -175,7 +176,8 @@ pub fn Scroll::shown_by(self : Scroll) -> View? {
 
 ///|
 /// Whether it is laid out nowhere, or what holds it is (View::laid_nowhere, left out of its row: View::drops; a page
-/// of a stack not shown): nothing of it shows, its place none.
+/// of a stack not shown), or it is held by no node from the root (put by: View::park): nothing of it shows, its place
+/// none.
 pub fn View::shown_nowhere(self : View) -> Bool {
-  !self.alive() || self.tree.out_at(self.at)
+  !self.alive() || !self.tree.held_from_root(self.at) || self.tree.out_at(self.at)
 }
