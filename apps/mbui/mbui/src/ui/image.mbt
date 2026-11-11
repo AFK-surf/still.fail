@@ -602,9 +602,10 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
 
 ///|
 /// What a picture node shows now: a GIF that moves the frame of its loop at this frame's time (Ctx::loop_at: as long as
-/// its frames' lengths summed, a frame of the window as its next frame comes), unless held still; any other its source. Every frame of it is asked for at the size
-/// it is shown, so each is decoded before its turn; one not yet is stood in for by the last one before it that is
-/// (never a frame of nothing between them).
+/// its frames' lengths summed, a frame of the window as its next frame comes), unless held still; any other its source.
+/// Every frame of it made is asked for at the size it is shown, the next made a turn ahead of its own, so each is
+/// decoded before its turn; one not yet is stood in for by the last one before it that is (never a frame of nothing
+/// between them).
 fn Ctx::moving_src(self : Ctx, n : Node) -> String {
   if n.still {
     return n.text
@@ -615,17 +616,22 @@ fn Ctx::moving_src(self : Ctx, n : Node) -> String {
 ///|
 /// What picture `src` shows now drawn `bw` by `bh` as `fit` fits it (Ctx::moving_src's, an old view's or a node's): a
 /// GIF that moves the frame of its loop at this frame's time, the frame woken for as its turn comes (Ctx::loop_at),
-/// each frame asked for at the size it is shown and one not decoded yet stood in for by the last before it that is;
-/// any other `src`.
+/// made as it is first wanted and the one after it with it (GifCycle::make: so the host has that one decoded by its
+/// turn), each frame made asked for at the size it is shown (one with no bytes yet never: its key is no picture the host
+/// could find) and one not decoded yet stood in for by the last before it that is; any other `src`.
 fn Ctx::moving_key(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> String {
   match moving_images.get(src) {
     Some(m) => {
       let px = self.image_px(m.keys[0], bw, bh, fit)
       let px = if px <= 0.0 { 256.0 } else { px }
-      let ready = m.keys.map(fn(k) { self.image_ready(k, px) })
       let length = m.ends[m.ends.length() - 1]
       let want = moving_frame(m, self.loop_at(length, m.ends) / length)
-      let mut k = m.keys.search(want).unwrap_or(0)
+      // (made as it is painted: what it makes is bytes in image_data, read by nothing built; their being here said as
+      // a decode's being done is, image_done, while a frame is painted)
+      m.make(want)
+      m.make((want + 1) % m.keys.length())
+      let ready = Array::makei(m.keys.length(), fn(i) { m.made[i] && self.image_ready(m.keys[i], px) })
+      let mut k = want
       while k > 0 && !ready[k] {
         k = k - 1
       }

@@ -82,6 +82,27 @@ test "a GIF in a part kept moves with nothing else changing: built again as its 
 }
 
 ///|
+test "a GIF handed over and never shown, or shown held still, has its first frame made alone" {
+  let still = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) { if still.val { c.image("mem:held", w=Px(20.0), h=Px(10.0), fade=false, still=true) |> ignore } },
+    w=100.0,
+    h=100.0,
+  )
+  @ui.add_image("mem:unseen", two_frames())
+  @ui.add_image("mem:held", two_frames())
+  t.draw()
+  still.val = true
+  t.draw()
+  t.run_for(gif_frame * 3.0)
+  for key in ["mem:unseen", "mem:held"] {
+    assert_eq([@ui.has_image(key), @ui.has_image(key + "#0"), @ui.has_image(key + "#1")], [true, true, false])
+  }
+  // (the host asked for the one shown alone: its first frame, as a still)
+  assert_eq(t.image_loads().length(), 1)
+}
+
+///|
 /// How long each frame of the GIF above stays, and a moment into one.
 let gif_frame : Double = 100.0
 
