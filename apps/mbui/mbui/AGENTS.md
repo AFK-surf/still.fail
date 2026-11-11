@@ -32,7 +32,10 @@ yet and you can add one, add it.
   whole.
 - What a structure makes or lets go down a column makes its way in or closes it on a Move, what is under it going with
   it (`View::comes`, flex's `come_*`): the framework's, not each page's (the user, 2026-11-09: 方案 A). A show in its
-  opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. Say `at_once=true`
+  opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. A pick said `leave`
+  keeps what it showed over its place, fading out that long, and shows what it shows now once that is gone and its
+  place holds it whole, its place's way to a smaller one waiting for it: never both seen, no words cut by the way
+  (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11). Say `at_once=true`
   only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another);
   `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls,
   what a block holds makes its way as anywhere, but what it makes or lets go because it was given another key (a block
