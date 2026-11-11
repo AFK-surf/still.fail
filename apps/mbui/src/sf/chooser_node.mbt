@@ -20,6 +20,22 @@ pub fn chooser_node(
   choose : (String) -> Unit,
   loc~ : SourceLoc,
 ) -> @view.View {
+  chooser_by(loc~, parent, words, choices, chosen, choose, false)
+}
+
+///|
+/// chooser_node's choice; `capsule`: round as a capsule, its words as far in as a card's foot corner leaves them
+/// (foot_chooser_node's: at a card's foot, as the old one is there).
+#callsite(autofill(loc))
+fn chooser_by(
+  parent : @view.View,
+  words : () -> String,
+  choices : () -> Array[(String, String)],
+  chosen : () -> String,
+  choose : (String) -> Unit,
+  capsule : Bool,
+  loc~ : SourceLoc,
+) -> @view.View {
   // (over all of the panel it is in, as what a field offers is: offers_layer_lent, a sheet's, a dialog's, a small
   // panel's; else over the window)
   let layer = match parent.lent(offers_layer_lent) {
@@ -50,9 +66,12 @@ pub fn chooser_node(
     b
     .row(Is(true))
     .height(Is(Some(chooser_h)))
-    .padding(Is((chooser_x, 0.0, chooser_x, 0.0)))
+    .padding(By(fn() {
+      let x = if capsule { card_foot_words_in(chooser_h) } else { chooser_x }
+      (x, 0.0, x, 0.0)
+    }))
     .gap(Is(chooser_gap_in))
-    .radius(By(fn() { @ui.tree_theme().corner(Lg) }))
+    .radius(By(fn() { if capsule { chooser_h / 2.0 } else { @ui.tree_theme().corner(Lg) } }))
     .lines_up(Is(Some(Middle)))
     .ground(By(fn() { if lit() { @ui.tree_theme().color(Hover) } else { 0L } }))
     .says(By(fn() { Some(@view.said(Button, label=words(), expanded=open.get())) }))
