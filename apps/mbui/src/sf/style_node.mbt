@@ -40,7 +40,7 @@ priv struct StyleSet {
   padding : (Double, Double, Double, Double)
   gap : Double
   lines_up : @view.Along?
-  lies_along : @view.Along
+  lies_along : @view.Lies
   margin : (Double, Double, Double, Double)
   corner : Double
   ground : Int64

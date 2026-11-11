@@ -626,15 +626,30 @@ pub fn View::lines_up(self : View, along : Live[Along?], loc~ : SourceLoc) -> Vi
 }
 
 ///|
-/// Where what it holds lies along it, as it changes (its start, by default; their middle; its end): what is left of its
-/// room on its main way before it, round it or after it. Layout's.
+/// Where what a node holds lies along the way it lays them out (View::lies_along; flex's justify): at its start, in its
+/// middle, at its end, or `Between`, the first at its start and the last at its end, what is left of its room shared
+/// out between them (each line's, where it wraps; one alone at its start). Along is the other thing: which end of
+/// another thing (an anchor, the node across) something lines up with, where being spread between makes no sense, so
+/// the two are types of their own and neither is made of the other.
+pub(all) enum Lies {
+  Start
+  Middle
+  End
+  Between
+} derive(Eq, Show, Debug)
+
+///|
+/// Where what it holds lies along it, as it changes (its start, by default; their middle; its end; spread from its
+/// start to its end, Lies's Between): what is left of its room on its main way before it, round it, after it or between
+/// them. Layout's.
 #callsite(autofill(loc))
-pub fn View::lies_along(self : View, along : Live[Along], loc~ : SourceLoc) -> View {
+pub fn View::lies_along(self : View, along : Live[Lies], loc~ : SourceLoc) -> View {
   self.bind(loc~, LiesAlong, along, Layout, fn(a) {
     self.tree.nodes[self.at].flex.style.justify = match a {
       Start => FlexStart
       Middle => Center
       End => FlexEnd
+      Between => SpaceBetween
     }
   })
   self
