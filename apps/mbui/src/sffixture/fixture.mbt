@@ -1426,6 +1426,7 @@ pub fn round_trip_again(base : Source, ms : Double, heard? : (String) -> Unit = 
       @core.leave_topic(name, params=wire(name, params))
     },
     refresh: fn(name, params) { @core.refresh_topic(name, params=wire(name, params)) },
+    keep_left: fn(name, params) { @core.keep_left(name, params=wire(name, params), most=@sfbase.covered_kept) },
   }
 }
 
@@ -1969,6 +1970,7 @@ pub fn fixture(mode : String) -> Source {
       },
     release: fn(_, _) {  },
     refresh: fn(_, _) {  },
+    keep_left: fn(_, _) {  },
     read_only: false,
     // (a made-up core's lists are set up as each test's page asks for them: asked ahead where a test says so)
     reads_ahead: fn() { false },

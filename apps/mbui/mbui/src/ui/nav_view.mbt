@@ -217,6 +217,9 @@ pub fn[P] nav_view(
       fn(pv, serial) {
         let k = serial.untracked()
         let entry = nav.entry(k)
+        // (whether it shows, for what reads while it does: Nav::page_shows, as its old view is held by it)
+        nav.shows_of[k] = fn() { nav.shows(k) }
+        pv.owns(fn() { nav.shows_of.remove(k) }) |> ignore
         pv
           .over(Is(true))
           .shift(By(fn() { nav.shift_of(k, fn() { pv.drawn_at() }) }))
@@ -755,4 +758,15 @@ fn[P] Nav::backs_over(
   m.show(at_once=true, fn() { backs(false) }, back_node)
   build()
   m.show(at_once=true, fn() { backs(true) }, back_node)
+}
+
+///|
+/// Whether page `serial` shows, as the view holding the stack says it at its causes' moments (Nav::shows for a stack
+/// nav_view holds; nav_flat_view's for one drawn flat): what its old view is held by (`page_for`'s `visible`), the
+/// same for a page made once as nodes (`made`), read as it changes. A page no view holds, not.
+pub fn[P] Nav::page_shows(self : Nav[P], serial : Int) -> Bool {
+  match self.shows_of.get(serial) {
+    Some(f) => f()
+    None => false
+  }
 }

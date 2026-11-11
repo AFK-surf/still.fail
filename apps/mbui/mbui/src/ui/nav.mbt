@@ -169,6 +169,10 @@ struct Nav[P] {
   // it (which pages, and how they move) as a signal, told as that changes
   mut hosted : NavHosted?
   shown : @signals.Signal[Int]
+  // whether each page shows, by its entry's number, as the view that holds it says (nav_view's, nav_flat_view's: what
+  // a page of its old view is held by, its `visible`), for what a page made once as nodes reads while it shows
+  // (Nav::page_shows)
+  shows_of : Map[Int, () -> Bool]
 }
 
 ///|
@@ -219,6 +223,7 @@ pub fn[P] Nav::new(
     waits_late: false,
     late_at: -1.0,
     flat_shown: None,
+    shows_of: {},
     flat_frame: -1,
     flat_ready: fn() { true },
     flat_most: 0.0,

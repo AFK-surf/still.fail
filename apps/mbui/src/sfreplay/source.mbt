@@ -508,6 +508,12 @@ pub fn source() -> @sfapp.Source {
         @core.refresh_topic(name, params=replay_topic_params(name, params))
       }
     },
+    // (as the run's app did, where its trace's head says so: sfcore's MBUI_KEEP_COVERED)
+    keep_left: fn(name, params) {
+      if @sfcore.trace_switch("MBUI_KEEP_COVERED") {
+        @core.keep_left(name, params=replay_topic_params(name, params), most=@sfbase.covered_kept)
+      }
+    },
     read_only: false,
     // (a run's core is asked what the run asked: as its app did, which says so in its trace's head since it does)
     reads_ahead: fn() { @sfcore.trace_switch("MBUI_PLACES_BAR") },
