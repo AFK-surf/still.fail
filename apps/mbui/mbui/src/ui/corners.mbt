@@ -218,8 +218,15 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 /// the old view is the whole window (old_whole), none: the tree draws nothing else. `laid`: each where it is laid out instead, as
 /// big, the old views where they are laid out (Tree::laid_held): what is worked out of them before they are drawn
 /// (Ctx::corners_after_layout). `facts`: each besides as it is said to be laid out and its words as drawn (Ctx::tree_facts,
-/// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else.
-fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false, facts? : Bool = false) -> T {
+/// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else. `steady`: which scroll what they
+/// hold (tree_scroller_at), for sizes steady.
+fn[T] Ctx::with_tree_nodes(
+  self : Ctx,
+  f : () -> T,
+  laid? : Bool = false,
+  facts? : Bool = false,
+  steady? : Bool = false,
+) -> T {
   let tree = match view_app.val {
     Some(t) if !old_whole.val => t
     _ => return f()
@@ -306,6 +313,9 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false, facts?
       n.id = -(k + 1)
     }
     let i = add(n)
+    if steady && tree.is_scroller(d.id) {
+      tree_scroller_at.add(i)
+    }
     if facts {
       self.tree_facts(i, n, d, if holder >= 0 { Some(held[holder].0) } else { None }, contents, tree)
     }
@@ -357,6 +367,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false, facts?
   tree_scaled_at.clear()
   tree_draws_at.clear()
   tree_moved_at.clear()
+  tree_scroller_at.clear()
   tree_nodes_from.val = -1
   for r in reparented {
     self.nodes[r.0].parent = r.1

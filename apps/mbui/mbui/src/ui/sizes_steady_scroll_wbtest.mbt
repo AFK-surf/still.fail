@@ -132,3 +132,63 @@ test "sizes steady in an old list put elsewhere at once: its rows' stuck heads s
   assert_eq(after_put, [])
   assert_true(later.length() > 0, msg="a step a few frames after a put: no jolt found")
 }
+
+///|
+/// A column 300 tall in a window 400 by 300: a box 150 tall over what scrolls (`open` showing it, making its way in),
+/// and what scrolls taking the rest, holding six rows of words 40 tall on grounds of their own (the first while `first`
+/// says so, gone at once): 240 in all, as much as it shows at first, more once the box over it has opened past 60. Its
+/// Tester's sizes steady said but not held (steady_faults).
+fn steady_squeezed_case(open : @signals.Signal[Bool], first : @signals.Signal[Bool]) -> Tester {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, words_over_held=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(400.0))).height(Is(Some(300.0))) |> ignore
+      col.show(fn() { open.get() }, fn(s) {
+        s.box(fn(b) { b.height(Is(Some(150.0))).ground(Is(0x663399FFL)) |> ignore }) |> ignore
+      })
+      col.box(fn(v) {
+        v.scrolls(@view.Scroll::new(), fn(held) {
+          for i in 0..<6 {
+            let row = fn(r : @view.View) {
+              r.width(Is(Some(160.0))).height(Is(Some(40.0))).ground(Is(0x336699FFL)).words(Is("第\{i}行")) |> ignore
+            }
+            if i == 0 {
+              held.show(at_once=true, fn() { first.get() }, fn(o) { o.box(row) |> ignore })
+            } else {
+              held.box(row) |> ignore
+            }
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t
+}
+
+///|
+test "sizes steady in what a node of the tree's scrolls: what it holds measured from its top all along, as what it holds comes to be taller than it; a row gone at once then still a jolt" {
+  // (the box over it opening: what scrolls squeezed under it, its rows going down in the window with its top, what it
+  // holds coming to be more than it shows half way; nothing of its rows' own)
+  let open = @signals.signal(false, same=fn(a, b) { a == b })
+  let first = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = steady_squeezed_case(open, first)
+  let rest = steady_faults(t, 4)
+  open.set(true)
+  let squeezed = steady_faults(t, 40).filter(fn(f) { f.contains("行") })
+  // (the same, and its first row gone at once as the box over it is half way open: the rows under it up 40 in one frame)
+  let open = @signals.signal(false, same=fn(a, b) { a == b })
+  let first = @signals.signal(true, same=fn(a, b) { a == b })
+  let w = steady_squeezed_case(open, first)
+  steady_faults(w, 4) |> ignore
+  open.set(true)
+  steady_faults(w, 10) |> ignore
+  first.set(false)
+  let jolted = steady_faults(w, 30).filter(fn(f) { f.contains("行") })
+  assert_eq((rest, squeezed), ([], []))
+  assert_true(jolted.length() > 0, msg="a row gone at once half way: no jolt found")
+}
