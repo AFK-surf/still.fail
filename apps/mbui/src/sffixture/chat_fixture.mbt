@@ -1559,6 +1559,13 @@ pub let fix_replied : Map[Int, String] = {}
 pub let fix_card_replies : Array[Json] = []
 
 ///|
+/// When each of those was said (an answer's "r:SEQ", the agent's "c:INDEX"): in which order, and how many of its chat's
+/// own messages since (fix_chat's `sent`) stood then, so a message sent after it stays after it, as a chat's time
+/// order has it (with_cards). One said without (a test's own) goes last, as before.
+// kept across runs: put back as a fixture is made (made.mbt)
+let fix_reply_at : Map[String, (Int, Int)] = {}
+
+///|
 /// How chat-vault's request to keep a password, at the chat's end, went once decided here ("": waiting).
 pub let fix_vault : Ref[String] = Ref("")
 
@@ -1814,14 +1821,37 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
         let at = all.search_by(fn(x) { number(Some(x), "seq") > number(Some(card), "seq") }).unwrap_or(all.length())
         all.insert(at, card)
       }
-      // each answer's message, after the rest
+      // each answer's message and the agent's answer to it, where they were said: before what the chat had sent
+      // since, after what it had then (put after everything, a message sent after the answer came to stand over it
+      // once the station had it, its row up and the answer's down in one frame)
+      let said : Array[(Int, Int, Json)] = []
+      let last = 1000000
       for seq, label in fix_replied {
-        all.push(
-          msg(100 + seq, "person", by_person("林"), label, "刚刚", { "mine": true, "said": true, "createdAt": Json::number(1.0e9) }),
+        let (order, before) = fix_reply_at.get("r:\{seq}").unwrap_or((last + said.length(), last))
+        said.push(
+          (order, before, msg(100 + seq, "person", by_person("林"), label, "刚刚", { "mine": true, "said": true, "createdAt": Json::number(1.0e9) })),
         )
       }
-      for x in fix_card_replies {
-        all.push(x)
+      for i, x in fix_card_replies {
+        let (order, before) = fix_reply_at.get("c:\{i}").unwrap_or((last + said.length(), last))
+        said.push((order, before, x))
+      }
+      said.sort_by_key(fn(s) { s.0 })
+      let since = match fix_chats.get(session) {
+        Some(fc) => fc.sent
+        None => []
+      }
+      for s in said {
+        let at = if s.1 < since.length() {
+          let ts = text(Some(since[s.1]), "ts")
+          all.search_by(fn(x) { text(Some(x), "ts") == ts })
+        } else {
+          None
+        }
+        match at {
+          Some(i) => all.insert(i, s.2)
+          None => all.push(s.2)
+        }
       }
       o["messages"] = Json::array(all)
       // what waits to be decided: the cards still not answered
@@ -1859,12 +1889,14 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       }
       fix_decided[seq] = decided_json(label)
       fix_replied[seq] = label
+      fix_reply_at["r:\{seq}"] = (fix_reply_at.length(), fix_chat("s-c1").sent.length())
       // its agent takes the answer up as it takes words sent (fix_deliver): at work at once, its answer a moment
       // later out of its avatar, its turn over a moment after that
       fix_chat("s-c1").working = 0.0
       fix_later(fix_answer_ms, fn() {
         fix_serial.val += 1
         fix_later(fix_turn_end_ms, fn() { fix_chat("s-c1").working = -1.0 })
+        fix_reply_at["c:\{fix_card_replies.length()}"] = (fix_reply_at.length(), fix_chat("s-c1").sent.length())
         fix_card_replies.push(
           msg(300 + fix_serial.val, "agent", by_agent("anthropic", "claude", "s-c1"), "好，按「" + label + "」来。", "刚刚", {
             "ts": Json::string("card-reply\{fix_serial.val}"),
