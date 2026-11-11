@@ -196,6 +196,10 @@ pub(all) struct Style {
   mut come_k : Double
   mut come_v : Double
   mut come_goal : Double
+  // Not CSS's: how tall what it holds comes to, as its column measured it for its way in this layout (NaN none yet):
+  // written only where the way is worked out (come_height), read only by what lays it out whole in that in the same
+  // layout (size_uncached), its way's end the same; flex's alone, never read across layouts or by anything else.
+  mut come_whole : Double
   // Not CSS's: what an item's come way is to the box holding it (come_*), where that box takes no room holding nothing
   // (`gone_empty`): whether this way is it going from holding nothing or to it (set out from none, going to none, or
   // turned back on such a way), not one in another's place (a pick's, from as tall as that one was).
@@ -303,6 +307,7 @@ pub fn Style::new() -> Style {
     come_k: 1.0,
     come_v: 0.0,
     come_goal: 0.0 / 0.0,
+    come_whole: 0.0 / 0.0,
     come_fill: false,
     gone_empty: false,
     structural: false,

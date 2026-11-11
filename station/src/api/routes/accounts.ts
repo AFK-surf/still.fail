@@ -149,7 +149,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         return ok(await a.resetQuota(segment(id!), key, r.lang, kind));
       }),
     ),
-    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.refreshQuota(segment(id!))))),
+    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.askedQuota(segment(id!))))),
     route("GET", /^\/*profiles\/+([^/]+)\/+login(?:\/.*)?$/, (r, [id]) =>
       answer((a) => {
         const profile = known(a, segment(id!));

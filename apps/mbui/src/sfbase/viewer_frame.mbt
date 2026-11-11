@@ -191,18 +191,28 @@ let vf_tabs_item : Double = 58.0
 
 ///|
 /// A chat's text or Markdown open in its preview, read in the desktop's reader (FilePreview.tsx hands it to the same
-/// Reader): what the preview read of it given to the reader (its place not kept: a chat's file is no drive's).
+/// Reader): what the preview read of it given to the reader (its place not kept: a chat's file is no drive's). In a tab
+/// beside a chat, the tab's reader (@sf.reader's `beside`: its tools the tab's, viewer_tab.mbt).
 pub fn vf_read(vw : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
   let v = vw
   let file = @sf.blob_file(b, v.file.name, v.file.size, mime=v.mime, save=fn() { v.ask_save(c) })
   @sf.reader(
     c,
-    "chat\n" + v.id(),
+    v.read_key(),
     file,
     markdown=v.shown_kind() == Some(KMarkdown),
     back_label=v.desk_back(src),
     on_back=fn() { v.shut(c) },
+    beside=v.beside,
+    move_beside=if !v.beside && beside_offered(v.file.path, v.file.name) { Some(fn() { v.move_beside() }) } else { None },
   )
+}
+
+///|
+/// What its reader reads it as (@sf.reader's key): the whole window's, or a tab's beside a chat, each its own place in
+/// it and its own panels, the two open at once (全屏 from the tab).
+pub fn Viewer::read_key(self : Viewer) -> String {
+  (if self.beside { "beside\n" } else { "chat\n" }) + self.id()
 }
 
 ///|

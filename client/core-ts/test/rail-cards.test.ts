@@ -15,6 +15,8 @@ test("对话's card: how many chats are at work, then those waiting for the view
   const card = chatsCard(rows, { wait: 2, alert: 1, unread: 3 }, [on(26, 1), on(26, 9), on(25, 20)], on(26, 12), 0);
   assert.equal(card.head, "2 个对话正在运行");
   assert.deepEqual(figures(card), [["2", "等你处理", "amber"], ["1", "出错", "red"], ["3", "未读", ""], ["2", "今天归档", ""]]);
+  // each opens the chats it counts: 待处理 lists the first three, the archive those archived
+  assert.deepEqual(card.stats.map((s: J) => s.go), ["attention", "attention", "attention", "archive"]);
   // none at work, none wanting anything: said so, nothing coloured
   const quiet = chatsCard([{ agents: [agent(false)] }], null, [], on(26, 12), 0);
   assert.equal(quiet.head, "暂无对话在运行");

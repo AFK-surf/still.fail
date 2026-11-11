@@ -35,7 +35,10 @@ yet and you can add one, add it.
   opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. Say `at_once=true`
   only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another);
   `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls,
-  what a block holds makes its way as anywhere; what holds a scroller (a page, a pane) comes and goes at once.
+  what a block holds makes its way as anywhere. What holds a scroller makes its way as anything does, what it holds
+  laid out once at the size it comes to (a panel's capped list in a pick); a page or a pane comes and goes at once by
+  being grown to what its column leaves it, not by holding a scroller (the coordinator of the migration, 2026-11-11:
+  the rule that made all of them come at once was for those, and pages in a stack say at_once).
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What

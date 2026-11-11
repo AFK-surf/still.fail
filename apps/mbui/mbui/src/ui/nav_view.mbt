@@ -20,6 +20,11 @@ priv struct NavHosted {
   now : () -> Double
   room : () -> (Double, Double)
   went : () -> Unit
+  /// whether what the old frame's focus names (an old widget's, a node's: Ctx::focus) is in the stack (Nav::focus_follows)
+  holds : (Int) -> Bool
+  /// whether what it names may take the focus still (a node of the tree's not let go of; an old widget's, built as its
+  /// page is again)
+  still : (Int) -> Bool
 }
 
 ///|
@@ -337,6 +342,22 @@ fn[P] Nav::held_by(
   let hosted : NavHosted = {
     now: fn() { s.logic_at() },
     room,
+    holds: fn(id) {
+      match (view_app.val, focus_node_of(id)) {
+        (Some(t), Some(n)) => t.holds(s.id(), n)
+        _ => false
+      }
+    },
+    still: fn(id) {
+      match tree_said_ids.get(id) {
+        Some(n) =>
+          match view_app.val {
+            Some(t) => t.holds(n, n)
+            None => false
+          }
+        None => true
+      }
+    },
     went: fn() {
       (due.val)()
       due.val = fn() {  }

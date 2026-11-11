@@ -278,6 +278,16 @@ pub fn open_entry(
 }
 
 ///|
+/// A drive's row's 在侧边打开 (`e` in `in_`): a file the preview shows, where it is offered (beside_offered: a side panel
+/// for the page in view, a kind that opens there), opened in a tab beside it; None for anything else.
+fn entry_beside(in_ : DriveAt, e : DvEntry) -> (() -> Unit)? {
+  guard !e.dir && opener_of(e.kind) == "preview" else { return None }
+  let file = dv_file(in_.station, in_.root.unwrap_or(""), in_.path, e)
+  guard @sfbase.beside_offered(file.path, e.name) else { return None }
+  Some(fn() { open_drive_file(file, [], beside=true) })
+}
+
+///|
 /// Deleted (FolderView remove): to the machine's trash, as Finder does, nothing asked (said once done); where none takes
 /// them, asked first (the library's confirm), then for good.
 pub fn remove_entries(c : @ui.Ctx, src : Source, st : DvStation, items : Array[(DriveAt, DvEntry)]) -> Unit {
@@ -672,6 +682,10 @@ fn row_items(
   item(@sf.t("web-pages.drive.open"), "eye", fn() {
     open_entry(c, src, "page", in_, e, [e], fn(to) { (f.go)(to, false) })
   })
+  match entry_beside(in_, e) {
+    Some(open) => item(@sf.t("web-main.preview.openBeside"), "panel-open", open)
+    None => ()
+  }
   if !e.dir {
     item(@sf.t("web-pages.drive.download"), "download", fn() { save_entry(c, src, in_, e) })
     item(@sf.t("android-misc.drive.share"), "external", fn() { share_entry(c, src, in_, e) })

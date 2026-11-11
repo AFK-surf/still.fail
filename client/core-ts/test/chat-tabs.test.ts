@@ -105,6 +105,29 @@ test("a_chats_view_says_its_tabs_as_the_calls_change_them", async () => {
   core.close();
 });
 
+test("a_file_in_the_viewer_is_kept_while_the_agents_are_known_opened_last_and_closed", () => {
+  const md = `view:${JSON.stringify(["chat", "ws/st", "a1", "uploads/a/说明.md", "说明.md", 500])}`;
+  const named = `view:${JSON.stringify(["named", "ws/st", "a1", "src/a.ts", "a.ts", 0])}`;
+  const drive = `view:${JSON.stringify(["drive", "ws/st", "/home/me", "docs/x.png", "x.png", 1200, 1731000000000])}`;
+  const bad = [
+    'view:["chat","ws/st","a1","p.md","p.md"]',
+    'view:["drive","ws/st","/r","p.png","p.png",1]',
+    'view:["other","ws/st","a1","p.md","p.md",1]',
+    'view:["chat","","a1","p.md","p.md",1]',
+    'view:["chat","ws/st","a1","","p.md",1]',
+    'view:["chat","ws/st","a1","p.md","p.md","1"]',
+    "view:[",
+  ];
+  // Kept while the agents are known; a key that does not read is not.
+  const kept = { tabs: ["a1", md, named, drive, ...bad], active: named };
+  assert.deepEqual(tabsOf(kept, AGENTS, false, null), { open: ["a1", md, named, drive], shown: named });
+  // Opened: last, in front; again: brought to the front where it is, never twice.
+  assert.deepEqual(changed({ tabs: ["a1", "jobs"], active: "a1" }, AGENTS, false, null, open(md)), { tabs: ["a1", "jobs", md], active: md });
+  assert.deepEqual(changed({ tabs: ["a1", md, "jobs"], active: "jobs" }, AGENTS, false, null, open(md)), { tabs: ["a1", md, "jobs"], active: md });
+  // Closed in front: the last left comes to the front.
+  assert.deepEqual(changed({ tabs: ["a1", md, "jobs"], active: md }, AGENTS, false, null, close(md)), { tabs: ["a1", "jobs"], active: "jobs" });
+});
+
 test("station_destinations_survive_reload_and_reopening_focuses_the_existing_tab", () => {
   const drive = 'drive:["ws/st1"]';
   const other = 'drive:["ws/st2"]';

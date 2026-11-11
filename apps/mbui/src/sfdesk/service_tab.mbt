@@ -49,6 +49,8 @@ fn tab_job(tab : String) -> String? {
 /// drawn (the panel shows what it showed as it slides out: sv_sweep); opened again before, kept.
 fn tab_let_go(r : ChatRef, tab : String) -> Unit {
   panel_screen_pages.remove(tabs_key(r) + "/" + tab)
+  // (a file in the viewer: what it read)
+  @sfbase.tab_viewer_let_go(tabs_key(r), tab)
   match tab_job(tab) {
     Some(job) => sv_closing[service_key(r.station, job)] = (r.station, job)
     None => ()
@@ -57,6 +59,7 @@ fn tab_let_go(r : ChatRef, tab : String) -> Unit {
 
 ///|
 fn tab_kept(r : ChatRef, tab : String) -> Unit {
+  @sfbase.tab_viewer_kept(tabs_key(r), tab)
   match tab_job(tab) {
     Some(job) => sv_closing.remove(service_key(r.station, job))
     None => ()

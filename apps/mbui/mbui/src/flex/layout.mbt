@@ -716,13 +716,22 @@ fn size_uncached(
   } else if known(s.come_now) && perform && s.come_k < 1.0 {
     // (given the height its way has got by what lays it out (a column's item at its basis): what it holds laid out
     // whole all the same, in as much room as it comes to, as above)
-    let now = s.come_now
-    s.come_now = undef
-    let fw = size_uncached(node, kw, undef, aw, ah, cb_w, cb_h, false)
-    s.come_now = now
-    let natural = out_h.val
+    // (how tall what it holds comes to as its column measured it for this way in this layout (come_height), not measured
+    // again here. Measured again so, given no room and only measured, what holds a scroller (View::scrolls) comes to
+    // what it was laid out last, not what it comes to: its scroller's room is told only as it is laid out or measured
+    // within a room. Across, as wide as it is measured to where it is not given that)
+    let natural = s.come_whole
+    let fw = if known(kw) {
+      kw
+    } else {
+      let now = s.come_now
+      s.come_now = undef
+      let w = size_uncached(node, kw, undef, aw, ah, cb_w, cb_h, false)
+      s.come_now = now
+      w
+    }
     if natural > kh {
-      let w = size_uncached(node, if known(kw) { kw } else { fw }, natural, aw, ah, cb_w, cb_h, perform)
+      let w = size_uncached(node, fw, natural, aw, ah, cb_w, cb_h, perform)
       out_h.val = kh
       return w
     }

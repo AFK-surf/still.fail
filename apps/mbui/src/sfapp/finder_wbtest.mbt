@@ -268,6 +268,14 @@ test "small with a mouse, ⌘K in a chat: the search's page over it; Esc back to
   t.run_for(@ui.move_most_ms)
   assert_false(@sfpages.search_opened())
   assert_true(app.nav.top() is Chat({ title: "签名证书续期", .. }))
+  // (the search's field gone with it at that press: the chat come's field with the focus as it comes, as any chat
+  // opened with a keyboard; what is typed goes into it, none into the search no longer shown)
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("发消息"), msg=t.focus_said())
+  t.type_text("新")
+  assert_true(
+    t.semantics().iter().any(fn(s) { s.role == TextField && s.label == "发消息" && s.value == "新" && s.focused }),
+    msg=t.focus_said(),
+  )
 }
 
 ///|

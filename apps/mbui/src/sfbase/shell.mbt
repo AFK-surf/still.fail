@@ -20,6 +20,12 @@ pub(all) struct Shell {
   /// a detail of a chat opened where the layout has it (an agent's history by its key, jobs, letters, files, a
   /// service: the side panel's tabs on the wide frame, toggled): what a page asks of its chat (open_detail)
   detail : (Source, ChatRef, String) -> Unit
+  /// a file asked to be opened beside the page (its `view:` tab: viewer_tab.mbt) put there where the layout has a side
+  /// panel for the page in view (the wide frame's chat), in front; whether it was (not: what asked opens it over the
+  /// whole window). What open_preview calls, never a page itself
+  beside : (String) -> Bool
+  /// whether the layout has such a side panel for the page in view now: what offers to open a file there asks
+  beside_room : () -> Bool
   /// what back does where the layout has it (the tiers' table), none where back is the
   /// system's: what the keys, the frames and the pages' back call (back_step, go_back), never the stack themselves
   back : () -> (() -> Unit)?
@@ -33,7 +39,7 @@ pub(all) struct Shell {
 
 ///|
 /// The stack's own, until the pages say theirs (as they are first drawn): a page pushed, a new chat risen from the
-/// foot; a detail nowhere.
+/// foot; a detail nowhere, nothing beside.
 pub fn bare_shell() -> Shell {
   {
     home: nav_home,
@@ -43,6 +49,8 @@ pub fn bare_shell() -> Shell {
     open: stack_open,
     open_over: stack_open,
     detail: fn(_, _, _) {  },
+    beside: fn(_) { false },
+    beside_room: fn() { false },
     back: stack_back,
     show: fn() {  },
     edit_rail: fn() {  },
@@ -165,6 +173,24 @@ pub fn open_detail(src : Source, r : ChatRef, tab : String) -> Unit {
 ///|
 /// The pages' last drawn.
 pub let shell : Ref[Shell] = Ref(bare_shell())
+
+///|
+/// Whether the layout has a side panel for the page in view (`beside_room` of the shell as it was last set:
+/// shell_set), told only as that changes: what offers to open a file there follows it (beside_offered), a node made
+/// once as well as an old view built each frame.
+// kept across runs: put back by pages.mbt's reset, as the shell is
+let beside_room_now : @signals.Signal[Bool] = @signals.signal(false)
+
+///|
+/// The pages' shell `s` said (each frame they are drawn, or as the app begins again): beside_room_now told where
+/// what it says of the side panel changed.
+pub fn shell_set(s : Shell) -> Unit {
+  shell.val = s
+  let room = @signals.untracked(s.beside_room)
+  if room != beside_room_now.untracked() {
+    beside_room_now.set(room)
+  }
+}
 
 ///|
 /// A place's page at the stack's root: 对话 Home, 文件 Files, another its own.

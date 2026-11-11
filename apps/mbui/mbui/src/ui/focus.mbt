@@ -498,12 +498,28 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
 }
 
 ///|
+/// The old views built in the frame being built (view_host.mbt's held build): what had the focus in one of them and was
+/// not built in it again has it no more (Ctx::focus_frame_end).
+// kept across runs: cleared as each frame is built
+let islands_built : Array[@view.NodeId] = []
+
+///|
 /// As the frame ends: what can take the focus now is what Tab goes among next frame.
 fn Ctx::focus_frame_end(self : Ctx) -> Unit {
   // A one-time code is entered only while its boxes are shown. Its state can outlive those boxes on the same page,
-  // but it must not keep the keyboard once they are gone. Other editors keep their focus when a page covers them.
+  // but it must not keep the keyboard once they are gone.
   if code_fields.contains(self.focus) && !self.focusables.iter().any(fn(f) { f.id == self.focus }) {
     self.focus_moved(0)
+  }
+  // A field with the focus its old view built again without it (an `if` around it now false): the focus is only in
+  // what shows (Ctx::focus_taken_under's one rule), so none has it; one under a page put over its page (one that view is
+  // not built in now) is the stack's to put aside and give back (Nav::told_focus).
+  if self.focus != 0 && self.editors.contains(self.focus) {
+    match self.last_focusables.iter().find_first(fn(f) { f.id == self.focus }) {
+      Some({ island: Some(i), .. }) if islands_built.contains(i) &&
+        !self.focusables.iter().any(fn(f) { f.id == self.focus }) => self.focus_moved(0)
+      _ => ()
+    }
   }
   // what has it now is what the next frame's keys and presses move it from (Ctx::focus_gained)
   self.focus_before = self.focus

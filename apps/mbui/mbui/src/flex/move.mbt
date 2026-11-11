@@ -244,6 +244,7 @@ pub fn come_way(from : Double, v : Double, goal : Double, t : Double, along? : C
 fn come_height(s : Style, natural : Double) -> Double {
   let goal = s.come_to * natural
   s.come_goal = goal
+  s.come_whole = natural
   if !known(s.come_ends) {
     s.come_ends = s.come_at + come_way_ms(s.come_from, s.come_v, goal)
   }
