@@ -215,7 +215,10 @@ fn sizes_steady_fault(
       let toward = if v1 > 0.0 { 1.0 } else { -1.0 }
       let d1 = (v0 - v1) * toward
       let d2 = (v1 - v2) * toward
-      // (the frame before those, where it was seen moving then too)
+      // (the frame before those too, where it was seen moving then: one stopped dead at a moment between two frames is
+      // sampled as at speed, a piece, still (10, 10, 5, 0), the piece as long as where that moment fell makes it, the
+      // same numbers as a slowing set in at once and over in two frames; both are said, or one falling between frames
+      // would go unsaid)
       let back = all.length() > 4 && all[all.length() - 5].1 < seen[0].1
       let d0 = if back {
         let vb = (seen[0].2 - all[all.length() - 5].2) / (seen[0].1 - all[all.length() - 5].1) * period
