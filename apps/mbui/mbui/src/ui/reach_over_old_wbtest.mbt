@@ -15,7 +15,8 @@ let ro_lit : Int64 = 0xCC3333FFL
 
 ///|
 /// What the old view draws where the key is: nothing (0), a button of its own 37 by 24 ending 3 before the key's left,
-/// 110 down (1), words to pick across the key's left, 106 down (2).
+/// 110 down (1), words to pick across the key's left, 106 down (2), a list of 40 rows 50 high a finger scrolls, nothing in it
+/// pressed (3).
 fn ro_old(c : Ctx, what : Int) -> Unit {
   c.mouse_drags_lists(false)
   c.column(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -42,6 +43,11 @@ fn ro_old(c : Ctx, what : Int) -> Unit {
         })
         |> ignore
       }
+      3 =>
+        c.list("rows", 40, 50.0, fn(i) {
+          c.box(w=Fill(1.0), h=Px(50.0), bg=if i % 2 == 0 { 0xF4F4F4FFL } else { 0xFFFFFFFFL }, fn() {  }) |> ignore
+        })
+        |> ignore
       _ => c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
     }
   })
@@ -185,4 +191,26 @@ test "a key of the tree over an old view with nothing there: every point of its 
       y = y + 0.25
     }
   }
+}
+
+///|
+/// A finger's drag from (x, y) up 100 over the key on an old view's list (ro_old's 3), let go there: how far the list
+/// scrolled, how many times the key was pressed, and whether (x, y) is the key's as the hit test says.
+fn ro_drag_from(x : Double, y : Double) -> (Double, Int, Bool) {
+  let (t, tree, key) = ro_tester(2, 3)
+  let on = tree.target_at(x, y) == Pressed(key)
+  t.drag(x, y, x, y - 100.0, steps=10)
+  (t.list_state().offset(), ro_key_presses[0], on)
+}
+
+///|
+test "a key of the tree over an old view's list: a finger's drag begun in its room past its edge does what one begun in it does" {
+  // (the key's room is the key (the coordinator of the migration, 2026-11-11): what a press, a drag or a hold does
+  // begun in the ring round it is what it does begun where it is drawn)
+  let inside = ro_drag_from(117.0, 117.0)
+  let ring = ro_drag_from(96.0, 117.0)
+  assert_true(inside.2 && ring.2, msg="the key's where each began: inside \{inside.2}, in its room \{ring.2}")
+  assert_eq((ring.0, ring.1), (inside.0, inside.1), msg="(scrolled, pressed) begun in its room against begun in it")
+  // (what that is: the key's hold, moved off it, presses nothing, and the old view's list under it is not dragged)
+  assert_eq((inside.0, inside.1), (0.0, 0))
 }
