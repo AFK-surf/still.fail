@@ -55,3 +55,25 @@ test "what the first screen opens on, declared as its workspace comes in view: o
   }
   assert_eq(faults, [])
 }
+
+///|
+test "what a run declared and no reader took is let go of as the next run begins: the core told, not left followed by nothing into it" {
+  fresh_app()
+  let base = fixture("home")
+  let let_go : Array[String] = []
+  let src : Source = {
+    ..base,
+    release: fn(name, params) {
+      let_go.push(name + " " + Json::object(params).stringify())
+      (base.release)(name, params)
+    },
+  }
+  let params : Map[String, Json] = { "scope": Json::string("ws1") }
+  @sfbase.declare_topic(src, "longJobs", params) |> ignore
+  assert_eq(@sfbase.declared_unread().length(), 1)
+  assert_eq(let_go, [])
+  // the next run begins
+  fresh_app()
+  assert_eq(let_go, ["longJobs " + Json::object(params).stringify()])
+  assert_eq(@sfbase.declared_unread(), [])
+}

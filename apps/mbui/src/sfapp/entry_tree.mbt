@@ -11,7 +11,7 @@
 fn entry_said() -> Unit {
   first_waiting.val = false
   frame_bare.val = false
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
 }
 
 ///|

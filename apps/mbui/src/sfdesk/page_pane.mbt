@@ -51,7 +51,7 @@ fn pane_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   // (the page shown in the pane, whether the one on top or the one kept while that waits: the one page built here)
   let page_id = c.id("main-page")
   // (said by this build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
   fold_goes.page_id = page_id
   // (what the page shows across as it is laid out, its bars left out: where the page moves aside to as the folded
   // sidebar is shown a while, taken as that starts: fold_peek_shift)

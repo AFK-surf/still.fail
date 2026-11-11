@@ -212,7 +212,7 @@ fn narrow_island_key(src : Source) -> String {
 /// Page `page` of the narrow shell's stack as its island builds it: picked words with a mouse (a finger holds to pick:
 /// pick.mbt), the pictures it waits for said afresh (image_item, video_item).
 fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page, barred? : Bool = false) -> Unit {
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
   // (the page is its island, kept as its nodes by what it reads and its key (narrow_page_key): no part of its own)
   let built = fn() {
     let whole = c.box(style=page_whole, fn() {

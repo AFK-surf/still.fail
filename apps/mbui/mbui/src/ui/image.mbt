@@ -385,6 +385,18 @@ fn image_entry_for(src : String, px : Double, used : Int, at : Double) -> ImageE
 }
 
 ///|
+/// Whether a decode of the image at `src` is ready, of any size (what Ctx::image_ready finds once one is asked: that
+/// size's, or one standing in for it), followed as the host's word on its decodes comes (image_decoded), asking for
+/// none: what waits for a picture a build asked for reads it so, between frames.
+pub fn image_any_ready(src : String) -> Bool {
+  image_decodes_read(src)
+  match image_cache.get(src) {
+    Some(list) => list.iter().any(fn(e) { e.state == 1 })
+    None => false
+  }
+}
+
+///|
 /// Whether the image at `src` is still coming at `px` on its long side (its bytes on their way, or a decode of it that
 /// large not ready yet and not failed): a shot waits for it (shot.mbt).
 fn image_awaited(src : String, px : Double) -> Bool {
