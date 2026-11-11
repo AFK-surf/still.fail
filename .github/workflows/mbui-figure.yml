@@ -2,7 +2,7 @@
 name: mbui-media-runtime
 on:
   push:
-    branches: ["**"]
+    branches: ["**", "!gh-readonly-queue/**"]
     paths:
       - "apps/mbui/src/**"
       - "apps/mbui/mbui/src/**"

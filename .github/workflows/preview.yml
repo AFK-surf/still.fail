@@ -18,7 +18,7 @@
 name: preview
 on:
   push:
-    branches: ["**"]
+    branches: ["**", "!gh-readonly-queue/**"]
     paths:
       - "apps/mbui/**"
       - "client/**"
