@@ -154,17 +154,20 @@ for t in $targets; do
   # its cores, the seconds its other runs take of them, and how many times it runs each page, two where it runs two
   # rates in turn): a line "k FILE" each, the longest first, onto the k that, with it, would end the soonest (its pages
   # over its programs, or with its other runs over its cores, whichever is longer; the lowest k among equals). A file's
-  # time is its line's in scripts/page-seconds.txt at the rate (MBUI_TEST_FPS: the default, 60, 120, 24 or 7), or that
-  # column's median where it has none: every runner at one rate deals the same.
+  # time is its line's in scripts/page-seconds.txt at the rate (MBUI_TEST_FPS: the default, 60, 120, 24 or 7), 1 where
+  # it is 0, and a file not there yet counts as one of the longest (the column's ninetieth percentile), so it is dealt
+  # early to whichever runner has room: as the median, chat_find_wbtest (116 s at 120 a second, new in #5283) went with
+  # app 1/4 at 120 fps's own and made it 280 s of its 5 minutes (42936333352, 2026-11-11). Every runner at one rate
+  # deals the same.
   page_deal() {
     local specs=$1
     shift
     [ $# = 0 ] && return
     printf '%s\n' "$@" | awk -v col=$(case "${MBUI_TEST_FPS:-}" in "") echo 2 ;; 60) echo 3 ;; 120) echo 4 ;; *) echo 5 ;; esac) '
-      FNR == NR { if ($1 !~ /^#/ && $col > 0) { w[$1] = $col; v[++m] = $col }; next }
+      FNR == NR { if ($1 !~ /^#/) { w[$1] = $col > 0 ? $col : 1; if ($col > 0) v[++m] = $col }; next }
       FNR == 1 { for (i = 2; i <= m; i++) for (j = i; j > 1 && v[j - 1] > v[j]; j--) { t = v[j]; v[j] = v[j - 1]; v[j - 1] = t }
-        mid = m ? v[int((m + 1) / 2)] : 1 }
-      { b = $0; sub(/.*\//, "", b); print ((b in w) ? w[b] : mid), $0 }' "$D/page-seconds.txt" - |
+        new = m ? v[int(m * 9 / 10) + 1] : 1 }
+      { b = $0; sub(/.*\//, "", b); print ((b in w) ? w[b] : new), $0 }' "$D/page-seconds.txt" - |
       LC_ALL=C sort -k1,1nr -k2,2 | awk -v specs="$specs" '
         function end(g, l) { l *= x[g]; return (l / p[g] > (o[g] + l) / c[g]) ? l / p[g] : (o[g] + l) / c[g] }
         BEGIN { k = split(specs, s, " ")
