@@ -2701,6 +2701,13 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     // (let go or called off: nothing held anywhere)
     tree.went_up(at)
   }
+  // (a hold waited for on a gesture answering a hold alone (hold_in.mbt): moved within its slop, still its; let go,
+  // called off, or a second finger, not)
+  if kind == 1 {
+    tree.hold_in_moved(x, y)
+  } else if kind >= 2 {
+    tree.hold_in_let_go()
+  }
   // (a press on nothing a tap no more: another press, a second finger, moved past a gesture's slop from where it went
   // down, come back or not)
   match view_nothing_down.val {
@@ -2791,6 +2798,8 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       }
       if button != 2 {
         tree_finger_down(tree, x, y, at)
+        // (a gesture answering a hold alone over what takes it: its hold waited for, Tree::hold_in_found)
+        tree.hold_in_found(x, y, at)
       }
       match tree.target_at(x, y) {
         // (held by a node of the tree's: the finger its, each event at its moment)
@@ -4099,6 +4108,10 @@ fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double, why
   match to {
     Dragged(u) => {
       view_held.val = Some(Dragging(u))
+      // (one finger, the first: Tree::hand_on's)
+      view_fingers[0] = 0
+      view_fingers[1] = -1
+      view_fingers[2] = 1
       h_frame_owed()
     }
     Hosted(island) => {
