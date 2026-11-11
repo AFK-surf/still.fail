@@ -100,6 +100,37 @@ pub fn Ctx::held(
     w.build = g().build_no
   })
   self.sweep_helds()
+  // (no `since` said: since the moment of what the build was told by, its cause's, not this frame's clock (the
+  // coordinator of the migration, 2026-11-11); told by more than one, the latest, so no wait is cut short; said where
+  // it came from more than one, MOTION held_causes)
+  let since = if since >= 0.0 {
+    since
+  } else if build_causes.is_empty() {
+    // (told by nothing: turned by the clock alone (another wait falling due, the clock compared as it is built), this
+    // frame's clock and so the rate's: said, a place to say its `since` or to be a node's)
+    if on && w.last < 0.0 {
+      println("MOTION held_no_cause \{sizes_steady.file}: \{loc}")
+    }
+    since
+  } else {
+    let mut m = build_causes[0]
+    for x in build_causes {
+      if x.0 > m.0 {
+        m = x
+      }
+    }
+    if on && w.last < 0.0 {
+      if build_causes.length() > 1 {
+        println("MOTION held_causes \{sizes_steady.file}: \{loc} \{build_causes}")
+      }
+      // (told as a frame began (a message a Tester's host posted, handed over then): the frame's moment, the rate's,
+      // till each message is handed over as it comes)
+      if m.1 == "frame" {
+        println("MOTION held_frame \{sizes_steady.file}: \{loc} at=\{m.0}")
+      }
+    }
+    m.0
+  }
   if !on {
     w.last = -1.0
     w.off = self.clock

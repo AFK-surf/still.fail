@@ -30,8 +30,43 @@
 let frame_told_at : Ref[String] = Ref("")
 
 ///|
+/// When what the frames' watch was told of since the frame before was told (each moment once, as told): the moment of
+/// its cause (the window's tree's, an event's or a moment's falling due as it tells it), else the frame's being drawn,
+/// else the host's now between frames.
+// kept across runs: put back as each frame is decided
+let frame_told_moments : Array[(Double, String)] = []
+
+///|
+/// The moments the build under way was told by (frame_told_moments, as the frame was decided): what a wait asked in it
+/// without its own `since` counts from (Ctx::held), the latest of them.
+// kept across runs: set as each frame is decided
+let build_causes : Array[(Double, String)] = []
+
+///|
+/// The moment of what is told now (frame_told_moments').
+/// Said with where it came from: `tree` (an event, a moment falling due, a structure's change), `frame` (told as a frame
+/// was drawn: under a Tester, what its fake host tells as each frame is about to begin, a posted message among it, at
+/// the frame's moment), `between` (the host's now between frames).
+fn told_moment() -> (Double, String) {
+  match tree_cause() {
+    Some(m) => (m, "tree")
+    None => if frame_moment.val >= 0.0 { (frame_moment.val, "frame") } else { (h_now(), "between") }
+  }
+}
+
+///|
+/// What the frames' watch is told now: its moment kept, once.
+fn watch_told_moment() -> Unit {
+  let m = told_moment()
+  if !frame_told_moments.iter().any(fn(x) { x.0 == m.0 }) {
+    frame_told_moments.push(m)
+  }
+}
+
+///|
 /// The frames' watch told between frames or as one begins: where, the first time since the frame before.
 fn watch_told_at() -> Unit {
+  watch_told_moment()
   if frame_told_at.val == "" {
     frame_told_at.val = @signals.last_set_at()
   }
@@ -520,6 +555,8 @@ fn looks_reset() -> Unit {
   list_hand_forget()
   layout_said.val = ""
   frame_told_at.val = ""
+  frame_told_moments.clear()
+  build_causes.clear()
   layout_clock_at.val = ""
   frame_watches_let_go()
   looks_base.n = 0
@@ -1006,6 +1043,11 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   }
   built_why.val = if why != "" { why } else { laid_why }
   frame_told_at.val = ""
+  build_causes.clear()
+  for m in frame_told_moments {
+    build_causes.push(m)
+  }
+  frame_told_moments.clear()
   frame_built.val = true
   if why != "" || laid_why != "" {
     looks_drawn.val = false
@@ -1134,6 +1176,7 @@ fn frame_read_told(set_as_read : () -> Array[String]) -> Unit {
     watch_told_at()
   } else if frame_running.val {
     g().wants_frame = true
+    watch_told_moment()
     let by = set_as_read()
     watch_said.val = if by.is_empty() {
       "a value it read changed as the frame ended, set at \{@signals.last_set_at()}"
