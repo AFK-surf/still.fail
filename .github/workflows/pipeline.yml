@@ -356,6 +356,8 @@ jobs:
     needs: plan
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.mbui == 'true' }}
     uses: ./.github/workflows/mbui-check.yml
+    # (at the default rate alone: the rates run once before the merge, in the merge queue, merge-queue.yml)
+    with: { rates: "no" }
 
   # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);
   # nothing sent, no secrets.
