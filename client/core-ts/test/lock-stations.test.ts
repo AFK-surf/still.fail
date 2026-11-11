@@ -236,13 +236,10 @@ test("a device holding no lock where the cloud's view says there is one reads it
   assert.notEqual(h.head, null);
   inner.data.put("lock", "ws", { head: null, entries: [] });
   assert.equal(held(inner, "ws")?.head, null);
-  // S's link opens again: it keeps none, and none is held still.
-  await run(Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${S}`))), { discard: true }));
-  await r.host.time.pass(100);
-  assert.equal(held(inner, "ws")?.head, null);
-  // A's does: the lock it keeps is held again.
+  // S's link opens again: it keeps none, but with none held every station is read (views/lock.ts readLockOf: which
+  // lock to take is chosen among all their answers), so A is asked too and the lock it keeps is held again at once.
   atA.length = 0;
-  await run(Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${A}`))), { discard: true }));
+  await run(Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${S}`))), { discard: true }));
   assert.ok(atA.some((a) => a.startsWith("GET /lock")), atA.join());
   await r.host.time.pass(100);
   assert.equal(held(inner, "ws")?.head?.hash, st.head().hash);
