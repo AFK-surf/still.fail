@@ -1048,17 +1048,56 @@ fn land(src : Source, w : Workspace) -> Unit {
     app.nav.push(NewChat)
     return
   }
-  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
-  guard marks.value is Some(_) else { return }
+  guard land_page(w.id, @sfbase.read_now(src)) is Some(page) else { return }
   wide.landed.set(w.id)
-  let chat = field(field(field(marks.value, "workspaces"), w.id), "chat")
+  app.nav.push(page)
+}
+
+///|
+/// The page the chats' place of workspace `ws` lands on with nothing open, the first time it does (land's): the chat
+/// the core's marks say was open last there, else a new chat; None till the marks, asked of `ask`, are read.
+fn land_page(ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Page? {
+  let marks = ask("workspaceMarks", @sfbase.marks_asked(ws))
+  guard marks.value is Some(_) else { return None }
+  let chat = field(field(field(marks.value, "workspaces"), ws), "chat")
   let station = text(chat, "station")
   let key = text(chat, "key")
   if station != "" && key != "" {
-    app.nav.push(Chat({ station, session: key, title: "", station_name: "" }))
+    Some(Chat({ station, session: key, title: "", station_name: "" }))
   } else {
-    app.nav.push(NewChat)
+    Some(NewChat)
   }
+}
+
+///|
+/// What page `p` of workspace `ws` in the wide frame's pane opens on, asked of `ask` (sfbase's opens_answered): a chat
+/// its view (sfbase's chat_opens), a new chat its stations as read (sfpages' new_chat_opens); any other page nothing
+/// waited for. The pane shows a page come on top once it is answered (sfapp's pane_ready), a workspace switched waits
+/// for the page its pane lands on (frame_opens).
+pub fn pane_opens(ws : String, p : Page, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  match p {
+    Chat(r) => @sfbase.chat_opens(r, ask)
+    NewChat => @sfpages.new_chat_opens(ws, ask)
+    _ => true
+  }
+}
+
+///|
+/// What the wide frame (on the tape, 中屏, and off it, 大屏: both make the same panes) shows of workspace `ws` as it
+/// opens with nothing open, asked of `ask`: the rail's (rail_opens), the chats' sidebar's (side_opens), and the page the
+/// pane lands on (land_page) with what that opens on (pane_opens). Whether all of it is answered. A workspace switched
+/// waits for it (sfapp's tape_shell.mbt: sfbase's workspace_switch_node).
+pub fn frame_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  let rail = rail_opens(ws, ask)
+  let side = side_opens(src, ws, ask)
+  // (come back to a workspace landed on last: a new chat, as land has it)
+  let landed : Page? = if wide.landed.get() == ws { Some(NewChat) } else { land_page(ws, ask) }
+  let pane = match landed {
+    Some(p) => pane_opens(ws, p, ask)
+    // (the marks could not be read: nothing it lands on to wait for)
+    None => ask("workspaceMarks", @sfbase.marks_asked(ws)).error is Some(_)
+  }
+  rail && side && pane
 }
 
 ///|

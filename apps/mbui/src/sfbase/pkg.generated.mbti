@@ -146,6 +146,8 @@ pub fn chat_link(String, String) -> String
 
 pub fn chat_open_is_pending(Int32) -> Bool
 
+pub fn chat_opens(ChatRef, (String, Map[String, @json.Json]) -> TopicState) -> Bool
+
 pub fn chat_page_is(Page) -> Bool
 
 pub fn chat_page_made(@view.View, Source, Int32, (@ui.Ctx, Source, Page) -> Unit, key? : () -> String, over? : (@view.View, Source, () -> Page?, () -> Int32) -> Unit, stint? : () -> Int32) -> Source
@@ -171,6 +173,8 @@ pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside, along? 
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
 pub fn chat_view_made(@json.Json) -> ChatView
+
+pub fn chats_all_opens(Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool
 
 pub fn chats_ask_more(Source, String, String, Int) -> Unit
 
@@ -728,8 +732,6 @@ pub let held_pictures_waiting : @ref.Ref[Bool]
 
 pub fn held_seed(String, @hostapi.Picked) -> String
 
-pub fn held_unanswered(String, Map[String, @json.Json]) -> Bool
-
 pub let highlight_limit : Int32
 
 pub fn history_act(() -> Unit) -> Unit
@@ -868,6 +870,8 @@ pub fn list_frame(@ui.Ctx, ChatRef, ChatView, Array[Entry], key~ : String, draft
 
 pub fn list_made(@ui.ListInfo?, Int32, Array[Int32]) -> ListMade
 
+pub fn list_opens(Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool
+
 pub fn local_machine_name() -> String
 
 pub fn local_sent(Outgoing) -> Bool
@@ -879,6 +883,8 @@ pub let login_card_of : @ref.Ref[(@ui.Ctx, @settings.Core, String, String, Bool)
 pub let lone_page : @ref.Ref[Page?]
 
 pub fn long_jobs(Source, Workspace) -> Int32
+
+pub fn long_jobs_asked(String) -> Map[String, @json.Json]
 
 pub fn long_jobs_lit(Source, Workspace) -> Bool
 
@@ -925,6 +931,8 @@ pub let marking : Marking
 pub fn marks_actions(@ui.Ctx, Bool, (Bool) -> Unit, ink? : Int64) -> Unit
 
 pub fn marks_any() -> Bool
+
+pub fn marks_asked(String) -> Map[String, @json.Json]
 
 pub fn marks_back(@ui.Ctx) -> Unit
 
@@ -1103,6 +1111,8 @@ pub fn open_window(Page) -> Bool
 pub fn opened_of(@json.Json?) -> Array[OpenedChat]
 
 pub fn opener_of(@json.Json?) -> Opener?
+
+pub fn opens_answered(TopicState) -> Bool
 
 pub fn opt_number(@json.Json?, String) -> Double?
 
@@ -1355,6 +1365,8 @@ pub fn quote_of(@json.Json) -> Quote
 pub fn quote_picture_key(Int32) -> String
 
 pub let quoted_into : Map[String, Array[(String, String, String, @json.Json)]]
+
+pub fn read_now(Source) -> (String, Map[String, @json.Json]) -> TopicState
 
 pub let read_only_words : String
 
@@ -1636,6 +1648,10 @@ pub let svc_presets : Array[(String, Int32, Int32)]
 
 pub let svc_viewports : Map[String, Viewport?]
 
+pub let switch_wait_ms : Double
+
+pub fn switch_workspace_to(Source, String) -> Unit
+
 pub let table_rows : Int32
 
 pub fn tag_end(Array[Int32], String) -> Int32?
@@ -1910,6 +1926,8 @@ pub fn with_lingering(Reading, Array[Entry]) -> Array[Entry]
 pub fn words_runs(Array[@json.Json], Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
 
 pub fn workspace_in_view(Source) -> (Workspace?, Array[Workspace], Bool, Bool)
+
+pub fn workspace_switch_node(@view.View, Source, (Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool) -> Unit
 
 pub fn workspaces_of(@json.Json?) -> (Array[Workspace], Bool, Bool)
 

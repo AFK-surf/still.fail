@@ -33,7 +33,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     // what is left up a long while on the stations: nothing while there is none
     after: fn(_, _) {
       match workspace() {
-        Some(w) if items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").length() > 0 =>
+        Some(w) if items(src.topic("longJobs", @sfbase.long_jobs_asked(w.id)).get().value, "groups").length() > 0 =>
           [{ key: "open-jobs", make: fn(p) { open_jobs_node(p, src, w) } }]
         _ => []
       }
@@ -49,8 +49,8 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     // (in view while it is the page on top: what changes under another page is as it is as it is come back to)
     watched: fn() { app.nav.top() is Home },
   }
-  // (what is left up long asked with the lists from the start, not once they have come: the first page waits for
-  // both, app.mbt's page_ready)
+  // (what is left up long asked with the lists from the start, not once they have come: Home opens on both,
+  // home_opens)
   @sfbase.long_jobs_read(v, src, workspace)
   // (a search the app starts with open: sfpages' search.mbt)
   @sfpages.search_start_now()
@@ -73,6 +73,20 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
   v.show(@sfpages.search_on_lists, fn(s) {
     @sfpages.search_page_node(s, src, workspace, fn() { status_top_now(s.window().0) }, Whole)
   })
+}
+
+///|
+/// What Home of workspace `ws` (home_node) opens on, asked of `ask` (sfbase's opens_answered): its chats' list as it is
+/// filtered (sfbase's list_opens), what the last update brought over it, and what is left up long after its rows.
+/// Whether all of it is answered: Home opening waits for it (app.mbt's page_ready), a workspace switched on 小屏 too
+/// (narrow_shell: sfbase's workspace_switch_node). Not the core's marks its bar's 待处理 dot shows: the app's first
+/// page would wait for every workspace's marks, made after the list (40 ms after it in Hermes on a Mac Studio at a
+/// workspace of real size, 2026-11-11), for a dot.
+fn home_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  let list = @sfbase.list_opens(src, ws, ask)
+  let news = @sfbase.opens_answered(ask("changelog", @sfpages.news_params()))
+  let long = @sfbase.opens_answered(ask("longJobs", @sfbase.long_jobs_asked(ws)))
+  list && news && long
 }
 
 ///|

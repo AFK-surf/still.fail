@@ -21,6 +21,9 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
   @sfdesk.tape_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   wide_viewer(v, src)
+  // a workspace switched shows once all its rail, sidebar and the page its pane lands on open on is answered (sfdesk's
+  // frame_opens), the screen as it was till then (sfbase's workspace_switch_node)
+  @sfbase.workspace_switch_node(v, src, @sfdesk.frame_opens)
 }
 
 ///|
@@ -34,6 +37,8 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   wide_viewer(v, src)
+  // (a workspace switched: as taped_shell's)
+  @sfbase.workspace_switch_node(v, src, @sfdesk.frame_opens)
 }
 
 ///|

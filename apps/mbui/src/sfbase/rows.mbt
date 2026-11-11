@@ -105,6 +105,20 @@ pub fn chats_topic(src : Source, scope : String) -> Topic {
 }
 
 ///|
+/// What workspace `ws`'s chats' list opens on as it is filtered (Home's, the wide frame's sidebar's: chats_of's), asked
+/// of `ask` (opens_answered's): answered once the core gave it or said why not.
+pub fn list_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
+  opens_answered(ask("chats", chats_shown(src, ws, filter_of(src, ws))))
+}
+
+///|
+/// What is read of workspace `ws`'s chats beside the rows of a list (chats_topic's: all of its chats, its stations'
+/// trouble, its glyph), asked of `ask` as list_opens.
+pub fn chats_all_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
+  opens_answered(ask("chats", chats_shown(src, ws, "all")))
+}
+
+///|
 /// As at the start: each list asked a page of at first.
 pub fn chat_limits_reset() -> Unit {
   chat_limits.clear()
@@ -454,22 +468,28 @@ pub fn seq_key(station : String, thread : Double, seq : Double) -> String {
 }
 
 ///|
+/// What is left up long in workspace `ws` as it is asked (the `longJobs` topic): one ask wherever it is read.
+pub fn long_jobs_asked(ws : String) -> Map[String, Json] {
+  { "scope": Json::string(ws) }
+}
+
+///|
 /// How many services are left up long in the workspace (the `longJobs` topic).
 pub fn long_jobs(src : Source, w : Workspace) -> Int {
-  items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").fold(init=0, fn(n, g) {
+  items(src.topic("longJobs", long_jobs_asked(w.id)).get().value, "groups").fold(init=0, fn(n, g) {
     n + items(Some(g), "jobs").length()
   })
 }
 
 ///|
 /// What is left up long in the workspace in view (the `longJobs` topic) held by node `v` from when it is made, asked
-/// with the chats' list it shows under (Home's) rather than once that list has come: Home's first page waits for both
-/// (held_unanswered).
+/// with the chats' list it shows under (Home's) rather than once that list has come: Home opens on both (sfapp's
+/// home_opens).
 pub fn long_jobs_read(v : @view.View, src : Source, workspace : () -> Workspace?) -> Unit {
   v.reacts(
     fn() {
       match workspace() {
-        Some(w) => src.topic("longJobs", { "scope": Json::string(w.id) }).get().value is Some(_)
+        Some(w) => src.topic("longJobs", long_jobs_asked(w.id)).get().value is Some(_)
         None => false
       }
     },

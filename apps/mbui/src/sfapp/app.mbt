@@ -1039,28 +1039,23 @@ let first_page_ms : Double = splash_label_ms
 
 ///|
 /// Whether the core has answered (a value or why not) for what page `p` of workspace `w` shows as it opens (App.kt
-/// opening): a chat (or said its messages wait on a station: its page shows them to come), an agent's history, Home's
-/// list and what the last update brought over it (home.mbt); any other page is not waited for.
+/// opening): a chat (or said its messages wait on a station: its page shows them to come), an agent's history, Home
+/// (all it opens on: home_opens, what a workspace switched waits for too); any other page is not waited for.
 fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
   let answered = fn(t : Topic) { t.value is Some(_) || t.error is Some(_) }
   match p {
     Chat(r) => chat_answered(src, r)
     History(r, key, _) => chat_answered(src, r) && answered(src.topic("history", history_params(r, key)).get().snapshot())
-    // (and what is left up long under the list, as Home's own read has it: not waited for, it slid in under a list
-    // already shown)
-    Home =>
-      list_ready(src, w) &&
-      answered(src.topic("changelog", @sfpages.news_params()).get().snapshot()) &&
-      !@sfbase.held_unanswered("longJobs", { "scope": Json::string(w.id) })
+    Home => home_opens(src, w.id, @sfbase.read_now(src))
     _ => true
   }
 }
 
 ///|
-/// Whether the core has answered for workspace `w`'s chats' list as it is filtered (Home's, the wide frame's sidebar's).
+/// Whether the core has answered for workspace `w`'s chats' list as it is filtered (Home's, the wide frame's sidebar's:
+/// sfbase's list_opens).
 fn list_ready(src : Source, w : Workspace) -> Bool {
-  let (list, error) = chats_of(src, w.id, filter_of(src, w.id))
-  list is Some(_) || error is Some(_)
+  @sfbase.list_opens(src, w.id, @sfbase.read_now(src))
 }
 
 ///|
@@ -1120,23 +1115,22 @@ let frame_bare : Ref[Bool] = Ref(false)
 let window_shown : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether the core has answered for what the wide frame's pane shows of page `p`: a chat; an agent's history, a
-/// service and a file asked as pages are their chat's with them beside it (sfdesk's frame.mbt main_page), the chat
-/// shown already, what is beside it waited for in its tab; any other page is not waited for.
+/// Whether the core has answered for what the wide frame's pane shows of page `p` (sfdesk's pane_opens, what a
+/// workspace switched waits for the page its pane lands on too): a chat; a new chat; an agent's history, a service and
+/// a file asked as pages are their chat's with them beside it (sfdesk's frame.mbt main_page), the chat shown already,
+/// what is beside it waited for in its tab; any other page is not waited for.
 fn pane_ready(src : Source, p : Page) -> Bool {
-  match p {
-    Chat(r) => chat_answered(src, r)
-    _ => true
+  match workspace_in_view(src).0 {
+    Some(w) => @sfdesk.pane_opens(w.id, p, @sfbase.read_now(src))
+    None => true
   }
 }
 
 ///|
-/// Whether the core has answered for chat `r`: its view, why it has none, or that its messages wait on a station (none
-/// of them on the device: Source.waits).
+/// Whether the core has answered for chat `r` (sfbase's chat_opens): its view, why it has none, or that its messages
+/// wait on a station (none of them on the device: Source.waits).
 fn chat_answered(src : Source, r : ChatRef) -> Bool {
-  let params = chat_params(r)
-  let t = src.topic("chat", params).get()
-  t.value is Some(_) || t.error is Some(_) || t.waiting
+  @sfbase.chat_opens(r, @sfbase.read_now(src))
 }
 
 ///|

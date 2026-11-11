@@ -57,11 +57,25 @@ pub fn new_chat_ask(what : String) -> Unit {
 }
 
 ///|
+/// Workspace `ws`'s new chat as the core is asked it (`newChat`: where it starts, what it runs on, the stations it
+/// can): one ask wherever it is read.
+pub fn new_chat_asked(ws : String) -> Map[String, Json] {
+  { "scope": Json::string(ws) }
+}
+
+///|
+/// What workspace `ws`'s new chat opens on, asked of `ask` (sfbase's opens_answered): its view, or why it has none.
+/// While it is not, the page shows its stations as read (in their bones).
+pub fn new_chat_opens(ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  @sfbase.opens_answered(ask("newChat", new_chat_asked(ws)))
+}
+
+///|
 /// A new chat in workspace `w` (NewChat, NewChatScreen): while its stations are read, the page as it will be on the
 /// station it last started on, its composer taking words but sending nothing; with none at all, the first to add;
 /// with none up, said so; nothing to run a chat with yet, its first step; else the page on the station it starts on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFrame) -> Unit {
-  let topic = src.topic("newChat", { "scope": Json::string(w.id) }).get().snapshot()
+  let topic = src.topic("newChat", new_chat_asked(w.id)).get().snapshot()
   let v = topic.value
   c.box(style=new_ground, fn() {
     c.box(style=new_bar_room, fn() { (frame.bar)(c) }) |> ignore

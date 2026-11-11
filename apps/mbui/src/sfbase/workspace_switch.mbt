@@ -1,0 +1,260 @@
+// A workspace switched (the workspaces' list's row, the rail's key, a shortcut): nothing looks like loading within
+// switch_wait_ms of the press (the user, 2026-11-11: 「在三百 ms 内都不应该让用户感觉到加载」). The screen stays as it was
+// till all the new workspace's first screen reads is answered, that long at most; where it is answered already, the
+// press's own handler switches, drawn in its frame (「按理说一帧就能处理完」).
+//
+// What that screen reads is what its panes say they open on, never a list kept here: each shell gives its node
+// (workspace_switch_node) the function its panes open by (`opens`: 小屏's Home, sfapp's home_opens; 中屏's and 大屏's
+// rail, sidebar and the page the pane lands on, sfdesk's frame_opens), which the pages wait by too, asking each topic
+// of the `ask` they are given: a page `read_now`, the switch what it holds under a name of its own (`hold`). What one
+// answer says may lead to another ask (the chat the pane lands on, once the marks say it): asked as it comes. What is
+// held is the same subscription the panes then read, let go of once they hold it: never let go of and asked again
+// between.
+
+///|
+/// How long a switch waits for what the new workspace's first screen opens on, at most, the screen as it was meanwhile.
+pub let switch_wait_ms : Double = 300.0
+
+///|
+/// Whether what a page reads is answered: a value, or why it has none.
+pub fn opens_answered(s : TopicState) -> Bool {
+  s.value is Some(_) || s.error is Some(_)
+}
+
+///|
+/// The ask a page opens by (what its `opens` says it reads): each topic as `src` has it now, read where it is read.
+pub fn read_now(src : Source) -> (String, Map[String, Json]) -> TopicState {
+  fn(name, params) { src.topic(name, params).get() }
+}
+
+///|
+/// The workspace a switch waits to show ("" none) and the moment it was asked for.
+// kept across runs: put back as a run begins (switch_reset)
+let switch_asked : @signals.Signal[(String, Double)] = @signals.signal(("", -1.0), same=fn(a, b) { a == b })
+
+///|
+/// What the switch waiting holds: the source it holds with, under what name, and what its screen opens on (the shell's
+/// `opens`).
+priv struct SwitchWait {
+  ws : String
+  src : Source
+  scope : String
+  opens : (Source, String, (String, Map[String, Json]) -> TopicState) -> Bool
+}
+
+///|
+// kept across runs: put back as a run begins (switch_reset)
+let switch_wait : Ref[SwitchWait?] = Ref(None)
+
+///|
+/// The shell's node that waits (workspace_switch_node), the source it was made with, what its screen opens on and its
+/// token: the last made.
+// kept across runs: put back as a run begins (switch_reset)
+let switch_shell : Ref[(@view.View, Source, (Source, String, (String, Map[String, Json]) -> TopicState) -> Bool, Int)?] = Ref(
+  None,
+)
+
+///|
+/// Told each time the switch waiting has held more than it held before (an answer led its panes to another ask), so
+/// what waits reads that too.
+// kept across runs: put back as a run begins (switch_reset)
+let switch_held_more : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
+
+///|
+/// What switches done held, to let go of once the new screen reads it (its source, its name).
+// kept across runs: put back as a run begins (switch_reset)
+let switch_handing : Ref[Array[(Source, String)]] = Ref([])
+
+///|
+/// When what is handed over is let go of (-1: nothing to).
+// kept across runs: put back as a run begins (switch_reset)
+let switch_hand_at : @signals.Signal[Double] = @signals.signal(-1.0, same=fn(a, b) { a == b })
+
+///|
+// kept across runs: only counted on
+let switch_count : Ref[Int] = Ref(0)
+
+///|
+/// What the screen opens on, each ask held under the switch's name (owned by none of what asked: held till let go of),
+/// as far as what is answered leads: whether all of it is answered.
+fn SwitchWait::hold_all(self : SwitchWait) -> Bool {
+  let owner = @signals.set_owner(None)
+  let done = @signals.untracked(fn() {
+    (self.opens)(self.src, self.ws, fn(name, params) { hold(self.src, self.scope, name, params).get() })
+  })
+  @signals.set_owner(owner) |> ignore
+  done
+}
+
+///|
+/// What the screen opens on as the switch holds it now, read where it is read (the shell's reaction), holding nothing:
+/// whether all of it is answered, and whether its panes ask what it does not hold yet.
+fn SwitchWait::answered_now(self : SwitchWait) -> (Bool, Bool) {
+  let more = Ref(false)
+  let done = (self.opens)(self.src, self.ws, fn(name, params) {
+    match held_state(self.src, self.scope, name, params) {
+      Some(s) => s.get()
+      None => {
+        more.val = true
+        { value: None, error: None, version: -1, waiting: false }
+      }
+    }
+  })
+  (done && !more.val, more.val)
+}
+
+///|
+/// The workspace `ws` the one in view, at its top (the prefs' `workspace`), once what its first screen opens on is
+/// answered or switch_wait_ms after now, whichever comes first; at once where it is answered already. Another asked
+/// meanwhile takes its place; the one in view asked, the one waiting is called off.
+pub fn switch_workspace_to(src : Source, ws : String) -> Unit {
+  if ws == "" {
+    return
+  }
+  let here = @signals.untracked(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) })
+  if here == Some(ws) {
+    switch_called_off()
+    return
+  }
+  if switch_wait.val is Some(w) && w.ws == ws {
+    return
+  }
+  // (no shell to wait in: at once, as before there was one)
+  guard switch_shell.val is Some((v, base, opens, _)) else {
+    switch_picked(src, ws)
+    return
+  }
+  switch_count.val += 1
+  // (the shell's source, not a page's that may go first)
+  let wait = { ws, src: base, scope: "switch/" + switch_count.val.to_string(), opens }
+  let done = wait.hold_all()
+  // (the one waiting before let go of once this one is held)
+  switch_called_off()
+  switch_wait.val = Some(wait)
+  if done {
+    switch_pick(v)
+  } else {
+    switch_asked.set((ws, v.cause_at()))
+  }
+}
+
+///|
+/// The switch waiting called off, what it held let go of.
+fn switch_called_off() -> Unit {
+  match switch_wait.val {
+    Some(w) => {
+      switch_wait.val = None
+      let_go(w.src, w.scope)
+    }
+    None => ()
+  }
+  switch_asked.set(("", -1.0))
+}
+
+///|
+/// The switch waiting done, by shell node `v`: what it held handed over to the screen it shows, let go of once that is
+/// in (the longest a page takes to come: the panes' own readers hold it by then).
+fn switch_pick(v : @view.View) -> Unit {
+  guard switch_wait.val is Some(w) else { return }
+  switch_wait.val = None
+  switch_asked.set(("", -1.0))
+  switch_picked(w.src, w.ws)
+  switch_handing.val.push((w.src, w.scope))
+  switch_hand_at.set(v.cause_at() + @ui.move_most_ms)
+}
+
+///|
+/// What a switch does once done, as one act (history_act: an entry for where it left from, whenever it is done).
+fn switch_picked(src : Source, ws : String) -> Unit {
+  history_act(fn() {
+    app.picked.set(ws)
+    (src.call)("prefs.set", Json::object({ "workspace": Json::string(ws) }), answer_unread)
+    nav_home()
+  })
+}
+
+///|
+/// What a workspace switch waits by, in the shell's node `v` (each shell makes it once, giving what its panes open on:
+/// `opens`): the switch done as all its screen opens on is answered (what an answer leads to asked as it comes) or
+/// switch_wait_ms after it was asked, whichever comes first; what it held let go of at the moment switch_pick said.
+/// Both at their causes' moments, whatever frames are drawn.
+pub fn workspace_switch_node(
+  v : @view.View,
+  src : Source,
+  opens : (Source, String, (String, Map[String, Json]) -> TopicState) -> Bool,
+) -> Unit {
+  switch_count.val += 1
+  let token = switch_count.val
+  switch_shell.val = Some((v, src, opens, token))
+  v.owns(fn() {
+    if switch_shell.val is Some((_, _, _, t)) && t == token {
+      switch_shell.val = None
+    }
+  })
+  |> ignore
+  let cap : Ref[() -> Unit] = Ref(fn() {  })
+  v.reacts(
+    fn() {
+      let (ws, at) = switch_asked.get()
+      switch_held_more.get() |> ignore
+      match switch_wait.val {
+        Some(w) if ws != "" && w.ws == ws => {
+          let (done, more) = w.answered_now()
+          Some((ws, at, done, more))
+        }
+        _ => None
+      }
+    },
+    fn(asked) {
+      (cap.val)()
+      cap.val = fn() {  }
+      match asked {
+        Some((_, at, done, more)) => {
+          // (an answer led to another ask: held now, and read where it waits from then)
+          let done = if more {
+            match switch_wait.val {
+              Some(w) => w.hold_all()
+              None => false
+            }
+          } else {
+            done
+          }
+          if done {
+            switch_pick(v)
+          } else {
+            cap.val = v.at_moment(at + switch_wait_ms, fn() { switch_pick(v) })
+            if more {
+              switch_held_more.set(switch_held_more.untracked() + 1)
+            }
+          }
+        }
+        None => ()
+      }
+    },
+  )
+  let hand : Ref[() -> Unit] = Ref(fn() {  })
+  v.reacts(fn() { switch_hand_at.get() }, fn(at) {
+    (hand.val)()
+    hand.val = fn() {  }
+    if at >= 0.0 {
+      hand.val = v.at_moment(at, fn() {
+        let handing = switch_handing.val
+        switch_handing.val = []
+        for h in handing {
+          let_go(h.0, h.1)
+        }
+        switch_hand_at.set(-1.0)
+      })
+    }
+  })
+}
+
+///|
+fn switch_reset() -> Unit {
+  switch_shell.val = None
+  switch_wait.val = None
+  switch_asked.set(("", -1.0))
+  switch_held_more.set(0)
+  switch_handing.val = []
+  switch_hand_at.set(-1.0)
+}

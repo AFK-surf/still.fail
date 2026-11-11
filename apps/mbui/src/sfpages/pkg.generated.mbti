@@ -355,7 +355,11 @@ pub let narrow_row_title : @ui.TextStyle
 
 pub fn new_chat_ask(String) -> Unit
 
+pub fn new_chat_asked(String) -> Map[String, @json.Json]
+
 pub fn new_chat_left(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, NewChatFrame, @json.Json?, @motion.Anim, @motion.Anim) -> Unit
+
+pub fn new_chat_opens(String, (String, Map[String, @json.Json]) -> @sfbase.TopicState) -> Bool
 
 pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, NewChatFrame) -> Unit
 

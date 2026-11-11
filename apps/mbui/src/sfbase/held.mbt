@@ -98,6 +98,21 @@ pub fn hold(src : Source, scope : String, name : String, params : Map[String, Js
 }
 
 ///|
+/// The topic `name` with `params` as `scope` holds it of `src`, where it does (hold's); None where it holds none such.
+/// It asks nothing and holds nothing.
+fn held_state(src : Source, scope : String, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState]? {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  match held_topics.get(scope) {
+    Some(m) =>
+      match m.get(key) {
+        Some(t) if physical_equal(t.source, src) => Some(t.state)
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
 /// What `scope` read, let go of (it ended: its page left, its chat closed).
 pub fn let_go(src : Source, scope : String) -> Unit {
   match held_topics.get(scope) {

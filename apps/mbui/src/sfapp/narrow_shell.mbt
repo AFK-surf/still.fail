@@ -125,6 +125,9 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
       _ => None
     }
   })
+  // a workspace switched shows once all its Home opens on is answered (home_opens), the screen as it was till then
+  // (sfbase's workspace_switch_node)
+  @sfbase.workspace_switch_node(v, src, home_opens)
   // the bottom bar told what the app's state and the window say of it as that changes, at the moment of what changed it
   // (a page put on the stack, a place come in, the bars' order, the window's width), whatever frames are drawn: the
   // frames only read where it is then (bar_tell)
