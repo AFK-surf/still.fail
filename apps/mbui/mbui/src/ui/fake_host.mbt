@@ -680,13 +680,64 @@ impl @hostapi.Host for FakeHost with image_load(self, src, max_px) {
 impl @hostapi.Host for FakeHost with image_load_bytes(self, data, max_px) {
   self.image_loads.push(("bytes:\{data.length()}", max_px))
   let head = image_bytes_head(data, max_px)
-  match self.live {
+  let id = match self.live {
     Some(l) => live_image(self, l, l.host.image_load_bytes(data, max_px), { "ib": head })
     None =>
       match (text_table.val, kept_sizes(kept_answer("ib", head))) {
         (Some(_), Some((w, h, ow, oh))) => fake_image_sized(self, w, h, ow, oh)
         _ => fake_image(self, 400, 300, max_px)
       }
+  }
+  self.image_bytes[id] = data.length()
+  self.image_bytes_now += data.length()
+  if self.image_bytes_now > self.image_bytes_most {
+    self.image_bytes_most = self.image_bytes_now
+    host_image_bytes_held(self)
+  }
+  id
+}
+
+// What the host holds of the bytes handed over for decodes, at once (FakeHost.image_bytes): a phone's Java side kept a
+// GIF's every frame's, 140 MB of a 256 MB heap, and the app was killed (#5301); the tests' every image was small and
+// nothing counted what they came to. Held a file at a time, as gaps_steady.mbt's faults: the most a Tester made in a
+// file has its host hold at once is at most its file's bar (`host_image_bytes_known`, given by a test package as it
+// starts) and a tenth, or `host_image_bytes_free` where the file has none. The bars are what each file's Testers held
+// at most when they were set (the user, 2026-11-11: 三条都加), and only fall: one brought down by a change to what is
+// handed over is written down in the same change.
+
+///|
+/// What a Tester made in a file with no bar may have its host hold at once: an icon's, a few small pictures'.
+let host_image_bytes_free : Int = 4096
+
+///|
+/// Each file's bar: the most bytes handed over for decodes a Tester made there may have its host hold at once.
+// kept across runs: said once as a test program starts (its packages' `init`)
+let host_image_bytes_bars : Map[String, Int] = Map([])
+
+///|
+/// The bars of the files `bars` names, each the most bytes handed over for decodes (image_load_bytes) a Tester made
+/// there may have its host hold at once, a tenth over it let by. Said by a test package as it starts (`fn init`);
+/// only falls.
+pub fn host_image_bytes_known(bars : Array[(String, Int)]) -> Unit {
+  for b in bars {
+    host_image_bytes_bars.set(b.0, b.1)
+  }
+}
+
+///|
+/// Stops the test where what the host holds of the bytes handed over goes over its file's bar by more than a tenth.
+fn host_image_bytes_held(f : FakeHost) -> Unit {
+  let file = match f.made_at.find(":") {
+    Some(i) => f.made_at.unsafe_substring(start=0, end=i)
+    None => f.made_at
+  }
+  let bar = host_image_bytes_bars.get(file).unwrap_or(host_image_bytes_free)
+  if f.image_bytes_now * 10 > bar * 11 {
+    @halt.saying(
+      "the host holds \{f.image_bytes_now} bytes handed over for decodes at once (fake_host.mbt: host_image_bytes_known), " +
+      "the Tester made at \{f.made_at}; \{file}'s bar is \{bar}" +
+      (if host_image_bytes_bars.contains(file) { "" } else { " (none said: host_image_bytes_free)" }),
+    )
   }
 }
 
@@ -782,6 +833,13 @@ impl @hostapi.Host for FakeHost with drawn_pixels_of(self, inst, count, r, gg, b
 ///|
 impl @hostapi.Host for FakeHost with image_free(self, id) {
   self.images.remove(id)
+  match self.image_bytes.get(id) {
+    Some(n) => {
+      self.image_bytes.remove(id)
+      self.image_bytes_now -= n
+    }
+    None => ()
+  }
   match (self.live, self.live_images.get(id)) {
     (Some(l), Some(mine)) => {
       self.live_images.remove(id)

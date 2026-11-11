@@ -79,6 +79,14 @@ struct FakeHost {
   decode_after : Map[String, Double]
   /// the decodes so said, by their id: the moment each is done (on the timeline: asked for, and that long after)
   decode_due : Map[Int, Double]
+  /// the bytes handed over for each decode of bytes still kept (image_load_bytes, till image_free): what the host holds
+  /// of them, as a phone's Java side kept a GIF's every frame's (#5301: 140 MB of a 256 MB heap); their sum now, and the
+  /// most it came to in this Tester's run (Tester::host_image_bytes_most)
+  image_bytes : Map[Int, Int]
+  mut image_bytes_now : Int
+  mut image_bytes_most : Int
+  /// where the Tester was made (Tester::new's `loc`), said with what it held
+  made_at : String
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double
