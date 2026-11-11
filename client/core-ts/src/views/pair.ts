@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, asked, baseOf, deviceText, fold, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
+import { Lock, asked, baseOf, deviceText, fold, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view, withBound } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -353,11 +353,11 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const chains: Record<string, Entry[]> = {};
       const failed: { ws: string; error: string }[] = [];
       for (const sub of subs) {
-        const added = yield* Effect.result(inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label, ...(a.signKey !== null ? { sign_key: a.signKey } : {}) }, t("core-misc.personal.reason.add"), seed));
-        if (added._tag === "Success") {
-          chains[sub] = added.success;
-          yield* putOnBound(inner, sub, { id: a.device, label: a.label, signKey: a.signKey });
-        } else failed.push({ ws: personOf(sub), error: added.failure.message });
+        // (put on the person's lock, then in the workspaces' where they bound it, as one: `withBound`)
+        const add = inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label, ...(a.signKey !== null ? { sign_key: a.signKey } : {}) }, t("core-misc.personal.reason.add"), seed);
+        const added = yield* Effect.result(withBound(inner, sub, Effect.tap(add, () => putOnBound(inner, sub, { id: a.device, label: a.label, signKey: a.signKey }))));
+        if (added._tag === "Success") chains[sub] = added.success;
+        else failed.push({ ws: personOf(sub), error: added.failure.message });
       }
       return { t: "approved", workspaces: Object.keys(chains).map(personOf), failed, chains };
     }

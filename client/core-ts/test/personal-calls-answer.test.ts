@@ -3,22 +3,25 @@
 // the cloud's read no longer (2026-11-12: with the person's one station asleep, each took 15 s, joining 30 s; with the
 // cloud's reads unanswered too, those that read never answered). Their station served the locks and then went silent
 // (its machine asleep: asked, it neither answers nor closes), the cloud (a) answering everything, (b) leaving its reads
-// unanswered: each answers within ASKED_MS, what it signed on the person's chain as the cloud keeps it and pinned here.
-// Stations that answer still take what is signed, the cloud not waited on; a read that lands past the wait is taken.
+// unanswered: each answers within ASKED_MS a phase, what it signed on the person's chain as the cloud keeps it and
+// pinned here. What this device takes off or puts on their lock is taken out of or put in the workspace's lock where
+// they bound it within one phase more, before the call answers (views/lock.ts `takeOffBound`, `putOnBound`). Stations
+// that answer still take what is signed, the cloud not waited on; a read that lands past the wait is taken.
 //
 // Each case in a workspace of its own, locked, this device (ME) signing for its owner s1 and on s1's own lock with
 // their laptop, that lock bound in the workspace's.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, entryHash, signedBytes } from "../src/lock.ts";
 import { personOf } from "../src/personal-lock.ts";
 import { hex } from "../src/util.ts";
-import { ASKED_MS, bindPerson, fold, held, keepToPerson, onBoundPerson, read, signerKnown } from "../src/views/lock.ts";
+import { ASKED_MS, bindPerson, fold, held, keepToPerson, onBoundPerson, read, signerKnown, withBound } from "../src/views/lock.ts";
+import { serveTrusted, tryOne } from "../src/views/pair.ts";
 import { call } from "./helpers.ts";
-import { ME, genesis, grant, rig } from "./lock-rig.ts";
+import { ME, genesis, grant, pipe, rig } from "./lock-rig.ts";
 import { stationLater, stationReplies } from "./station-fixture.ts";
 
 /// The workspace's one station, which keeps the person's own lock too.
@@ -27,6 +30,14 @@ const A = "aa".repeat(32);
 const LAPTOP = "77".repeat(32);
 const LAPTOP_KEY = `ed25519:${"55".repeat(32)}`;
 const LAPTOP_SIGNS = `ed25519:${"22".repeat(32)}`;
+/// A new device of theirs, approved face to face into their own lock.
+const NEW = "88".repeat(32);
+const NEW_KEY = `ed25519:${"44".repeat(32)}`;
+const NEW_SIGNS = `ed25519:${"33".repeat(32)}`;
+/// A second device of the owner's, on both locks where `setUp` is asked for it.
+const TABLET = "66".repeat(32);
+const TABLET_KEY = `ed25519:${"67".repeat(32)}`;
+const TABLET_SIGNS = `ed25519:${"68".repeat(32)}`;
 /// How long a call is given before it is said to have no answer.
 const LIMIT_MS = 120_000;
 /// Past a wait, what a call may take on this clock: it is stepped 10 ms at a time and an answer is seen at the end of
@@ -38,11 +49,12 @@ type Rig = Awaited<ReturnType<typeof rig>>;
 
 /// A station of the locks as station/src/mesh/serve.ts answers it (as lock-calls-answer.test.ts's), keeping the
 /// person's own lock too (GET/POST /lock/person); `silent`: asked, it never answers; `personLate`: its reads of the
-/// person's lock answered that many ms late.
+/// person's lock answered that many ms late; `refused`: how many entries it refused (409), one at a place it holds
+/// another at, as `takeLock` does.
 function station(first: Entry) {
   const chain: Entry[] = [first];
   const kept = { person: [] as Entry[] };
-  const say = { silent: false, personLate: 0 };
+  const say = { silent: false, personLate: 0, refused: 0 };
   const head = (): Head => ({ seq: chain.length - 1, hash: entryHash(chain.at(-1)!), genesis: entryHash(chain[0]!) });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (say.silent) return Effect.never;
@@ -52,7 +64,13 @@ function station(first: Entry) {
       return Effect.succeed({ head: head(), entries: chain.filter((e) => e.seq > after), ...serves });
     }
     if (method === "POST" && path === "/lock") {
-      for (const e of (body as { entries?: Entry[] }).entries ?? []) if (e.seq === chain.length) chain.push(e);
+      for (const e of (body as { entries?: Entry[] }).entries ?? []) {
+        if (e.seq === chain.length && e.prev === entryHash(chain.at(-1)!)) chain.push(e);
+        else if (chain[e.seq] === undefined || entryHash(chain[e.seq]!) !== entryHash(e)) {
+          say.refused++;
+          return Effect.fail(new CoreError("lock_refused", "another entry at that place", 409));
+        }
+      }
       return Effect.succeed({ taken: 1, head: head() });
     }
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
@@ -70,10 +88,12 @@ function station(first: Entry) {
 }
 
 /// A locked workspace `ws` (s1 the owner, this device its app, LAPTOP theirs too), its one station A serving it; this
-/// device's person's own lock begun here with LAPTOP put on it, and bound in the workspace's lock.
-async function setUp() {
+/// device's person's own lock begun here with LAPTOP put on it, and bound in the workspace's lock. `tablet`: TABLET too,
+/// in the workspace's lock and on the person's.
+async function setUp({ tablet = false } = {}) {
   const g = grant();
-  const r = await rig((signer) => ({ ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME, [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: LAPTOP_SIGNS }]) }), undefined, A);
+  const more = [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: LAPTOP_SIGNS }, ...(tablet ? [{ id: TABLET, sub: "s1", kind: "app", label: "tablet", sign_key: TABLET_SIGNS }] : [])];
+  const r = await rig((signer) => ({ ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME, more) }), undefined, A);
   const inner = r.core.inner;
   const st = station(r.cloud.chains.get("ws")![0]!);
   // What the station was asked of the person's lock, by method.
@@ -113,6 +133,7 @@ async function setUp() {
   await run(read(inner, "ws"));
   await run(personal.begin("s1", "why"));
   await run(personal.addDevice("s1", { key: LAPTOP_KEY, id: LAPTOP, label: "laptop", sign_key: LAPTOP_SIGNS }, "why"));
+  if (tablet) await run(personal.addDevice("s1", { key: TABLET_KEY, id: TABLET, label: "tablet", sign_key: TABLET_SIGNS }, "why"));
   await run(read(inner, "ws"));
   await run(bindPerson(inner, "ws"));
   await run(read(inner, "ws"));
@@ -120,7 +141,7 @@ async function setUp() {
   await r.host.time.pass(1000);
   assert.equal(personal.standing("s1"), "member");
   assert.equal(onBoundPerson(inner, "ws"), true, "bound");
-  assert.deepEqual(st.kept.person.map((e) => e.kind), ["genesis", "device"], "the station keeps the person's lock");
+  assert.deepEqual(st.kept.person.map((e) => e.kind), ["genesis", "device", ...(tablet ? ["device"] : [])], "the station keeps the person's lock");
   assert.deepEqual(personCloud.entries.map(entryHash), personal.entries("s1").map(entryHash), "and the cloud");
   asked.length = 0;
   return { r, inner, st, run, personal, personCloud, asked };
@@ -183,6 +204,14 @@ function onChain(what: string, s: Setup, length: number, is: (e: Entry) => boole
 }
 
 const isRemove = (key: string) => (e: Entry) => e.kind === "device.remove" && (e.body as { key?: string }).key === key;
+const isOut = (id: string) => (e: Entry) => e.kind === "device.remove" && (e.body as { id?: string }).id === id;
+
+/// The laptop out of the workspace's lock as held here, and its `device.remove` on the cloud's chain of it (`before`
+/// that chain's length before the call).
+function outOfWorkspace(what: string, s: Setup, before: number) {
+  assert.equal(fold(held(s.inner, "ws")!.entries).devices.has(LAPTOP), false, `${what}: out of the workspace's lock held here`);
+  assert.ok(s.r.cloud.chains.get("ws")!.slice(before).some(isOut(LAPTOP)), `${what}: its device.remove on the cloud's chain for the workspace`);
+}
 
 const CONDITIONS = [
   { name: "(a) the cloud answering all", mode: "all" as const },
@@ -196,11 +225,17 @@ const CONDITIONS = [
 /// asked, what is signed after): here only the first waits, there being nothing for `#restate` or `#addApproved` to sign
 /// (nothing is brought to the station, asserted), so its bound is one ASKED_MS; the second phase is the test
 /// below with a prompt of 10 s.
-const CALLS: { name: string; made: (s: Setup) => Promise<{ ms: number | null; ok: boolean; said: unknown }>; signs?: (s: Setup, before: Entry[]) => void; reads?: true }[] = [
+/// `adb.personalRemove` takes the device out of the workspace's lock too (views/lock.ts `takeOffBound`, a phase of its
+/// own after the person's lock's): two ASKED_MS, and the device out of the workspace's lock at the answer.
+const CALLS: { name: string; made: (s: Setup) => Promise<{ ms: number | null; ok: boolean; said: unknown }>; signs?: (s: Setup, before: Entry[], ws: number) => void; reads?: true; phases?: number }[] = [
   {
     name: "adb.personalRemove",
     made: (s) => timedCall(s.r, "adb.personalRemove", { sub: "s1", key: LAPTOP_KEY }),
-    signs: (s, before) => onChain("adb.personalRemove", s, before.length + 1, isRemove(LAPTOP_KEY)),
+    signs: (s, before, ws) => {
+      onChain("adb.personalRemove", s, before.length + 1, isRemove(LAPTOP_KEY));
+      outOfWorkspace("adb.personalRemove", s, ws);
+    },
+    phases: 2,
   },
   {
     name: "adb.personalRestart",
@@ -219,33 +254,58 @@ const CALLS: { name: string; made: (s: Setup) => Promise<{ ms: number | null; ok
 
 for (const cond of CONDITIONS) {
   for (const c of CALLS) {
-    test(`${c.name} answers within ASKED_MS, the person's station silent, ${cond.name}`, async (t) => {
+    test(`${c.name} answers within ASKED_MS a phase, the person's station silent, ${cond.name}`, async (t) => {
       const s = await setUp();
       cloudAs(s.r, cond.mode);
       s.st.say.silent = true;
       const before = s.personal.entries("s1");
+      const ws = s.r.cloud.chains.get("ws")!.length;
       const out = await c.made(s);
       t.diagnostic(`${c.name}, ${cond.name}: ${out.ms} ms`);
-      answeredWithin(`${c.name}, ${cond.name}`, out, ASKED_MS + SLACK_MS);
+      answeredWithin(`${c.name}, ${cond.name}`, out, (c.phases ?? 1) * ASKED_MS + SLACK_MS);
       if (c.reads) assert.ok(!s.asked.includes("POST"), `nothing signed after the read: the station was asked ${s.asked.join()}`);
-      if (c.signs) c.signs(s, before);
+      if (c.signs) c.signs(s, before, ws);
     });
   }
 
-  test(`lock.removeDevice of an own device: its half on the person's lock within ASKED_MS, the person's station silent, ${cond.name}`, async (t) => {
-    // `run`'s removeDevice: the device taken off the person's lock (one ASKED_MS of its own, PersonalLock.removeDevice),
-    // then `keepToPerson`, then the workspace's lock read again within `run`'s ASKED_MS, begun there: two waits in all.
-    // Left for the next change: the call's `keepToPerson` finds the one the person's lock's change began already there
-    // and does nothing, so the device leaves the workspace's lock behind the call (75 s with the cloud answering, never
-    // with its reads unanswered, measured 2026-11-12): not asserted here.
+  test(`lock.removeDevice of an own device answers within two ASKED_MS, out of the workspace's lock at the answer, the person's station silent, ${cond.name}`, async (t) => {
+    // `run`'s removeDevice: the device taken off the person's lock (PersonalLock.removeDevice, one ASKED_MS), then out of
+    // the workspace's (views/lock.ts `takeOffBound`, one more, its read after the call's last): two waits in all
+    // (2026-11-12: 18 s, the device listed in the workspace's lock 57 s more with the cloud answering, for good with its
+    // reads unanswered).
     const s = await setUp();
     cloudAs(s.r, cond.mode);
     s.st.say.silent = true;
     const before = s.personal.entries("s1");
+    const ws = s.r.cloud.chains.get("ws")!.length;
     const out = await timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: LAPTOP });
     t.diagnostic(`lock.removeDevice, ${cond.name}: ${out.ms} ms`);
     answeredWithin(`lock.removeDevice, ${cond.name}`, out, 2 * ASKED_MS + SLACK_MS);
     onChain(`lock.removeDevice, ${cond.name}`, s, before.length + 1, isRemove(LAPTOP_KEY));
+    outOfWorkspace(`lock.removeDevice, ${cond.name}`, s, ws);
+  });
+
+  test(`a device approved face to face into the person's lock answers within two ASKED_MS, on their lock and in the workspace's, the person's station silent, ${cond.name}`, async (t) => {
+    // views/pair.ts `approve`, its person's branch: put on the person's lock (PersonalLock.addDevice, one ASKED_MS),
+    // then in the workspace's where they bound it (views/lock.ts `putOnBound`, one more): two waits (2026-11-12: 60 s,
+    // and no answer with the cloud's reads unanswered).
+    const s = await setUp();
+    const prompts = await s.r.watch({ topic: "lockPrompts" });
+    const [trusted, phone] = await pipe();
+    s.inner.runner.fork(serveTrusted(s.inner, NEW, ME, trusted));
+    const hello = await s.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 9", sign_key: NEW_SIGNS, personal: { subs: ["s1"], key: NEW_KEY } }), phone.next()));
+    assert.deepEqual(hello, { t: "code", workspaces: ["person:s1"] });
+    const code = (await prompts()).pairing.find((p: { device: string }) => p.device === NEW).code as string;
+    cloudAs(s.r, cond.mode);
+    s.st.say.silent = true;
+    const before = s.personal.entries("s1");
+    const ws = s.r.cloud.chains.get("ws")!.length;
+    const out = await timedEffect(s, tryOne(s.inner, { id: ME, d: phone, workspaces: ["person:s1"] }, NEW, code));
+    t.diagnostic(`approved face to face, ${cond.name}: ${out.ms} ms`);
+    answeredWithin(`approved face to face, ${cond.name}`, out, 2 * ASKED_MS + SLACK_MS);
+    onChain(`approved face to face, ${cond.name}`, s, before.length + 1, (e) => e.kind === "device" && (e.body as { key?: string }).key === NEW_KEY);
+    assert.equal(fold(held(s.inner, "ws")!.entries).devices.get(NEW)?.sign_key, NEW_SIGNS, "in the workspace's lock held here");
+    assert.ok(s.r.cloud.chains.get("ws")!.slice(ws).some((e) => e.kind === "device" && (e.body as { id?: string }).id === NEW), "and on the cloud's chain for it");
   });
 }
 
@@ -258,6 +318,115 @@ test("stations that answer take what is signed, the cloud down entirely not wait
   answeredWithin("adb.personalRemove, the cloud down", out, ASKED_MS / 2);
   assert.ok(isRemove(LAPTOP_KEY)(s.st.kept.person.at(-1)!), "the station took it");
   assert.equal(entryHash(s.personal.entries("s1").at(-1)!), entryHash(s.st.kept.person.at(-1)!), "and it is pinned here");
+});
+
+test("an own device taken off with the cloud down entirely: the station takes both entries, the cloud not waited on, nothing left failing", async (t) => {
+  const s = await setUp();
+  const defects: unknown[] = [];
+  s.inner.runner.onDefect = (error) => { defects.push(error); };
+  cloudAs(s.r, "down");
+  const out = await timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: LAPTOP });
+  t.diagnostic(`lock.removeDevice, the cloud down: ${out.ms} ms`);
+  answeredWithin("lock.removeDevice, the cloud down", out, ASKED_MS / 2);
+  assert.ok(isRemove(LAPTOP_KEY)(s.st.kept.person.at(-1)!), "the station took the person's entry");
+  assert.ok(s.st.chain.some(isOut(LAPTOP)), "and the workspace's");
+  assert.equal(fold(held(s.inner, "ws")!.entries).devices.has(LAPTOP), false, "out of the workspace's lock held here");
+  // (the person's lock's change began `keepToPerson` too, which may sign the same: one of the two is taken)
+  await s.r.host.time.pass(30_000);
+  assert.equal(s.st.chain.filter(isOut(LAPTOP)).length, 1, "one device.remove of it at the station");
+  assert.deepEqual(defects, []);
+});
+
+test("a device taking itself off its person's lock signs nothing in the workspace's", async (t) => {
+  const s = await setUp();
+  cloudAs(s.r, "all");
+  const mine = [...s.personal.chain("s1")!.devices.values()].find((d) => d.id === ME)!;
+  const station = s.st.chain.length;
+  const cloud = s.r.cloud.chains.get("ws")!.length;
+  const out = await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: mine.key });
+  t.diagnostic(`adb.personalRemove of itself: ${out.ms} ms`);
+  answeredWithin("adb.personalRemove of itself", out, ASKED_MS + SLACK_MS);
+  assert.ok(isRemove(mine.key)(s.st.kept.person.at(-1)!), "taken off the person's lock");
+  assert.equal(s.personal.standing("s1"), "outside");
+  await s.r.host.time.pass(1000);
+  assert.equal(s.st.chain.length, station, "nothing signed in the workspace's lock at the station");
+  assert.equal(s.r.cloud.chains.get("ws")!.length, cloud, "nor at the cloud");
+});
+
+/// The cloud answering all, its POSTs of the workspace's lock counted.
+function cloudCounting(r: Rig) {
+  const posts = { lock: 0 };
+  stationLater(r.host, (req) => {
+    if (req.method === "POST" && new URL(req.url).pathname === "/v1/workspaces/ws/lock") posts.lock++;
+    return undefined;
+  });
+  return posts;
+}
+
+test("an own device taken off, stations and the cloud answering: one device.remove of it in the workspace's lock, at the station and the cloud, nothing refused, nothing left failing", async (t) => {
+  // This device signs it once (`takeOffBound`); `keepToPerson`, started as the person's lock changed, does nothing
+  // until that is done (`withBound`) and then finds it done. Two of them signing at one place, the one the station
+  // refused would go to the cloud's POST.
+  const s = await setUp();
+  const defects: unknown[] = [];
+  s.inner.runner.onDefect = (error) => { defects.push(error); };
+  const posts = cloudCounting(s.r);
+  const cloud = s.r.cloud.chains.get("ws")!.length;
+  const out = await timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: LAPTOP });
+  t.diagnostic(`lock.removeDevice, all answering: ${out.ms} ms`);
+  answeredWithin("lock.removeDevice, all answering", out, ASKED_MS / 2);
+  await s.r.host.time.pass(30_000);
+  assert.equal(s.st.chain.filter(isOut(LAPTOP)).length, 1, "one device.remove of it at the station");
+  assert.equal(s.r.cloud.chains.get("ws")!.filter(isOut(LAPTOP)).length, 1, "and at the cloud");
+  assert.equal(s.st.say.refused, 0, "nothing refused at the station");
+  assert.equal(posts.lock, 1, "the cloud sent the one entry, as the station took it");
+  assert.equal(s.r.cloud.chains.get("ws")!.length, cloud + 1);
+  assert.deepEqual(defects, []);
+});
+
+test("a device approved face to face, stations and the cloud answering: one device entry of it in the workspace's lock, at the station and the cloud, nothing refused, nothing left failing", async (t) => {
+  const s = await setUp();
+  const defects: unknown[] = [];
+  s.inner.runner.onDefect = (error) => { defects.push(error); };
+  const prompts = await s.r.watch({ topic: "lockPrompts" });
+  const [trusted, phone] = await pipe();
+  s.inner.runner.fork(serveTrusted(s.inner, NEW, ME, trusted));
+  const hello = await s.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 9", sign_key: NEW_SIGNS, personal: { subs: ["s1"], key: NEW_KEY } }), phone.next()));
+  assert.deepEqual(hello, { t: "code", workspaces: ["person:s1"] });
+  const code = (await prompts()).pairing.find((p: { device: string }) => p.device === NEW).code as string;
+  const posts = cloudCounting(s.r);
+  const isIn = (e: Entry) => e.kind === "device" && (e.body as { id?: string }).id === NEW;
+  const out = await timedEffect(s, tryOne(s.inner, { id: ME, d: phone, workspaces: ["person:s1"] }, NEW, code));
+  t.diagnostic(`approved face to face, all answering: ${out.ms} ms`);
+  answeredWithin("approved face to face, all answering", out, ASKED_MS / 2);
+  await s.r.host.time.pass(30_000);
+  assert.equal(s.st.chain.filter(isIn).length, 1, "one device entry of it at the station");
+  assert.equal(s.r.cloud.chains.get("ws")!.filter(isIn).length, 1, "and at the cloud");
+  assert.equal(s.st.say.refused, 0, "nothing refused at the station");
+  assert.equal(posts.lock, 1, "the cloud sent the one entry, as the station took it");
+  assert.deepEqual(defects, []);
+});
+
+test("keepToPerson while this device does the workspaces' half itself does nothing and takes no key, and runs once that is over", async () => {
+  // The tablet taken off the person's lock with the marker up (as `run` and adb.ts take a device off, here without the
+  // explicit act): nothing takes it out of the workspace's lock until the marker comes down, `keepToPerson` asked
+  // directly meanwhile too; then the one run as it comes down does, for the same heads (no key was taken).
+  const s = await setUp({ tablet: true });
+  cloudAs(s.r, "all");
+  const gate = Deferred.makeUnsafe<void>();
+  let over = false;
+  s.inner.runner.fork(Effect.ensuring(withBound(s.inner, "s1", Effect.andThen(s.personal.removeDevice("s1", TABLET_KEY, "why"), Deferred.await(gate))), Effect.sync(() => void (over = true))));
+  await s.r.host.time.pass(1000);
+  assert.ok(isRemove(TABLET_KEY)(s.personal.entries("s1").at(-1)!), "off the person's lock");
+  await s.run(keepToPerson(s.inner, "ws"));
+  await s.r.host.time.pass(1000);
+  assert.equal(fold(held(s.inner, "ws")!.entries).devices.has(TABLET), true, "still in the workspace's lock while the marker is up");
+  assert.equal(s.st.chain.filter(isOut(TABLET)).length, 0);
+  Deferred.doneUnsafe(gate, Effect.void);
+  await s.r.host.time.pass(1000);
+  assert.ok(over);
+  assert.equal(fold(held(s.inner, "ws")!.entries).devices.has(TABLET), false, "out of the workspace's lock once it came down");
+  assert.equal(s.st.chain.filter(isOut(TABLET)).length, 1, "taken out at the station, once");
 });
 
 test("a grant signed after the person took 10 s over its prompt: what is signed then is waited for at the stations, the cloud down, the station takes it", async (t) => {

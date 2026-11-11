@@ -65,7 +65,7 @@ import { Rigs } from "./rigs.ts";
 import { Devices } from "./devices.ts";
 import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { answersOf, asked, bindPerson, enrolled, keepToPerson, lockSeen, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
+import { answersOf, asked, bindPerson, enrolled, keepToPerson, lockSeen, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, takeOffBound, tellStations, tookOrRefused, withBound } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -325,6 +325,7 @@ export class Core {
           stations: personalStations(inner),
           asked: () => asked(inner),
         }),
+        tookOff: (sub, id, removal) => withBound(inner, sub, Effect.tap(removal, () => takeOffBound(inner, sub, id))),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
         pair: {
