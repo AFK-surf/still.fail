@@ -637,7 +637,7 @@ pub let fill_chip_corner : Double
 
 pub let fill_chip_h : Double
 
-pub fn fill_chip_node(@view.View, () -> Int32, () -> String, () -> String, () -> String, small? : Bool, said? : () -> String, tips? : TipLayer) -> @view.View
+pub fn fill_chip_node(@view.View, () -> Int32, () -> String, () -> String, () -> String, small? : Bool, said? : () -> String, tips? : TipLayer, squeezes? : Bool) -> @view.View
 
 pub let fill_chip_small_h : Double
 
@@ -1180,6 +1180,8 @@ pub fn meter_chip(@ui.Ctx, @json.Json?, brief? : Bool, figure? : Bool, drop? : I
 
 pub fn meter_chips(@ui.Ctx, Array[@json.Json], brief? : Bool, key? : String) -> Unit
 
+pub fn meter_chips_brief_node(@view.View, () -> Array[@json.Json]) -> Unit
+
 pub fn meter_line(@ui.Ctx, Array[@json.Json], key? : String) -> Unit
 
 pub fn meter_line_node(@view.View, () -> Array[@json.Json], in_row? : Bool) -> Unit
@@ -1493,6 +1495,8 @@ pub let panel_pad : Double
 pub let panel_pill : Double
 
 pub fn panel_row_in() -> @ui.Style
+
+pub fn panel_row_in_node(@view.View) -> @ui.Style
 
 pub fn panel_row_reach() -> @ui.Style
 

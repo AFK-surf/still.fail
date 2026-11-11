@@ -305,7 +305,7 @@ test "a new chat: its station picked in the sheet, its model in the model's pane
   let (sx, sy) = t.find_last("Willow").unwrap()
   t.tap(sx, sy)
   assert_true(t.find("选择运行的 station") is Some(_))
-  run_to_sheet_rest(t)
+  presented_rested(t)
   let (mx, my) = t.find_last("Maple").unwrap()
   t.tap(mx, my)
   assert_true(!@sf.presented_open_of(@sf.last_presented()))
@@ -527,4 +527,105 @@ test "the bar held: more room above the finger in a taller window, bounded by th
   let (limited, top) = measure(180.0, true)
   assert_true(limited > 0.0 && limited < short)
   assert_true(top >= 7.5, msg="panel top: \{top}")
+}
+
+///|
+/// The three screens a new chat's stations open on: a phone's window with touch (a sheet from its foot), with keyboard
+/// and mouse, and a wide window with keyboard and mouse (a panel beside its station's control).
+// kept across runs: a value (no field of it changes)
+let ns_screens : Array[(Int, Bool)] = [(2, false), (0, false), (0, true)]
+
+///|
+/// A new chat over the fixture's workspace on a phone's window (390 by 844) started as `platform`, `wide` 1200 by 800;
+/// its station's control (Willow) pressed, its stations open and at rest. The calls made go in
+/// `calls`.
+fn ns_open(calls : Array[String], platform~ : Int, wide~ : Bool) -> @ui.Tester {
+  new_run()
+  @sf.presenters_reset()
+  let base = fixture("newchat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push(name + " " + params.stringify())
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  if wide {
+    t.resize(1200.0, 800.0)
+  }
+  open_mode("newchat")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  guard t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "Willow" && !s.hidden }).last() is Some(b) else {
+    abort("no Willow to press")
+  }
+  t.tap(b.rect.0 + b.rect.2 / 2.0, b.rect.1 + b.rect.3 / 2.0)
+  presented_rested(t)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// Whether `words` are drawn (seen at all), the last of them where they are.
+fn ns_seen(t : @ui.Tester, words : String) -> (Double, Double, Double, Double)? {
+  t.words().filter(fn(w) { w.0 == words && w.5 > 0.0 }).last().map(fn(w) { (w.1, w.2, w.3, w.4) })
+}
+
+///|
+test "a new chat's stations on every screen: a row each under its title, Willow checked, each's state on its name's line and what is left of it and how it is reached under it; nothing of it has the focus as it opens, no input method" {
+  for s in ns_screens {
+    let (platform, wide) = s
+    let at = "platform \{platform} wide \{wide}"
+    let t = ns_open([], platform~, wide~)
+    let rows = t.semantics().filter(fn(n) { n.role == @ui.Role::Button && (n.label == "Willow" || n.label == "Maple") && !n.hidden }).filter(fn(n) { n.check is Some(_) })
+    assert_eq(rows.map(fn(n) { (n.label, n.check) }), [("Willow", Some(@ui.Check::On)), ("Maple", Some(@ui.Check::Off))], msg=at)
+    assert_false(t.focused() is Some(f) && rows.iter().any(fn(r) { r.label == f.label && r.rect == f.rect }), msg="\{at}: \{t.focused()}")
+    assert_false(t.ime().0, msg="\{at}: the input method up")
+    guard ns_seen(t, "选择运行的 station") is Some(title) else { fail("\{at}: no title") }
+    assert_true(rows[0].rect.1 > title.1 && rows[1].rect.1 > rows[0].rect.1 + rows[0].rect.3 - 0.5, msg="\{at}: \{rows.map(fn(r) { r.rect })}")
+    // (Willow: 2 at work on its name's line, its figures and 直连 · 38 ms under it; Maple: 未连接)
+    for w in ["2 个运行中", "直连 · 38 ms", "未连接", "CPU", "内存", "磁盘"] {
+      assert_true(ns_seen(t, w) is Some(_), msg="\{at}: \{w}")
+    }
+    guard (ns_seen(t, "2 个运行中"), ns_seen(t, "直连 · 38 ms")) is (Some(busy), Some(net)) else { fail(at) }
+    assert_true(busy.1 < rows[0].rect.1 + 30.0 && net.1 > busy.1 && net.1 < rows[1].rect.1, msg="\{at}: \{busy} \{net}")
+  }
+}
+
+///|
+test "a new chat's stations on every screen, Maple pressed: picked (newChat.pick, once), closed, on its way out as high as it was, its rows and Willow's check shown all the way" {
+  for s in ns_screens {
+    let (platform, wide) = s
+    let at = "platform \{platform} wide \{wide}"
+    let calls : Array[String] = []
+    let t = ns_open(calls, platform~, wide~)
+    let size = fn() {
+      t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Dialog }).map(fn(s) { (s.rect.2, s.rect.3) })
+    }
+    guard size() is Some((was_w, was)) else { fail("\{at}: no panel") }
+    let drawn = fn(w : String) { t.words().iter().any(fn(x) { x.0 == w && x.5 > 0.0 }) }
+    guard t.semantics().filter(fn(n) { n.role == @ui.Role::Button && n.label == "Maple" && n.check is Some(_) && !n.hidden }).last() is Some(m) else {
+      fail("\{at}: no Maple")
+    }
+    let before = calls.length()
+    t.tap(m.rect.0 + m.rect.2 / 2.0, m.rect.1 + m.rect.3 / 2.0)
+    let mut n = 0
+    while @sf.presenter_visible() && n < 120 {
+      match size() {
+        Some(s) => {
+          let h = s.1 * was_w / s.0
+          assert_true((h - was).abs() <= 0.01, msg="\{at}: frame \{n} on its way out: \{h} high, \{was} before")
+        }
+        None => ()
+      }
+      for w in ["2 个运行中", "未连接", "直连 · 38 ms"] {
+        assert_true(drawn(w) || !drawn("选择运行的 station"), msg="\{at}: frame \{n} on its way out: \{w} not drawn")
+      }
+      t.frame()
+      n += 1
+    }
+    assert_false(@sf.presenter_visible(), msg="\{at}: gone")
+    assert_eq(calls[before:].to_array().filter(fn(c) { c.has_prefix("newChat.pick") }), ["newChat.pick {\"station\":\"st2\",\"scope\":\"ws1\"}"], msg=at)
+  }
 }
