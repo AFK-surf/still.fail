@@ -1429,6 +1429,46 @@ test("a_part_of_a_stations_overview_is_its_pages_and_changes_only_with_it", asyn
   assert.equal(other.value, null);
 });
 
+test("a_profiles_resets_say_when_they_end_wherever_its_overview_goes_out_and_as_it_is_read_again", async () => {
+  // A profile's page showed when its resets end as it opened, and no longer a few seconds on, once its station's
+  // overview was read again (the user, 2026-11-11): the page's value then shares with the one before, goes out as a
+  // new value and has its times put again, and a row put again had lost what said when it ends. A part of the
+  // overview and the accounts' list never said it.
+  const t = setup({ all: true });
+  const [page, part, list] = [ui(), ui(), ui()];
+  const day = 86_400_000;
+  const now = t.host.nowMs();
+  // (half a day and half an hour past the day: the same words for the minutes this takes)
+  const [soon, late] = [now + 30.5 * day + 1_800_000, now + 118.5 * day + 1_800_000];
+  const withResets = (checkedAt: number) => overviewOf([], [profile("p", {
+    email: "a@x.com",
+    quota: {
+      state: "ok", detail: null, checkedAt, windows: [{ label: "每周", usedPercent: 100, resetsAt: now + day }], resetCount: 2, resetExpiries: [soon, late],
+      resets: [
+        { id: "weekly", kind: "weekly", left: 1, usable: true, expiries: [soon] },
+        { id: "model", kind: "model", model: "Fable", left: 1, usable: true, expiries: [late] },
+      ],
+    },
+  })]);
+  t.set(workspace(), { id: "ws", stations: [{ id: "a", name: "alpha", last_seen: null, version: null }] });
+  t.set(link("ws/a"), { state: "online" });
+  t.set(overview("ws/a"), withResets(now - 60_000));
+  t.subscribe(1, { topic: "station", scope: "ws", station: "ws/a" });
+  t.subscribe(2, { topic: "stationPart", scope: "ws", station: "ws/a", part: "profiles" });
+  t.subscribe(3, { topic: "profiles", scope: "ws" });
+  const said = async () => {
+    await t.readAll([[page, 1], [part, 2], [list, 3]]);
+    return [page.value.overview.profiles[0].quota, part.value[0].quota, list.value.items[0].profile.quota].map((q: J) => (q.resets as J[]).map((r) => `${r.title} ${r.leftText} ${r.text}`));
+  };
+  const rows = ["每周重置 剩 1 次 30 天 12 小时后到期", "Fable 重置 剩 1 次 118 天 12 小时后到期"];
+  assert.deepEqual(await said(), [rows, rows, rows], "as it is first read");
+  t.set(overview("ws/a"), withResets(now));
+  assert.deepEqual(await said(), [rows, rows, rows], "its allowance read again");
+  t.set(hostOf("ws/a"), hostInfo("a"));
+  await t.host.time.pass(61_000);
+  assert.deepEqual(await said(), [rows, rows, rows], "a minute on, its machine read");
+});
+
 test("a_new_chats_stations_are_their_rows_without_models_or_profiles", async () => {
   // Its stations were the whole list's items (50-95 ms a value on a phone, 2026-11-10).
   // (its page made by choose.ts, as a core plugs it in)

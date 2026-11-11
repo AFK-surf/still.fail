@@ -101,6 +101,10 @@ const RESET_KINDS: Record<string, [string, string | null]> = {
 
 /// A kind of reset as it is offered: its name, what one gives back, how many are left (`leftText`) and till when, and whether one
 /// can be used now (else only once at a limit it refills). `id`, what the station is asked for (none: any).
+/// What its words are made from (`model`, `expiries`) stays in it, as a window keeps its `resetsAt`: an overview is put
+/// again where it goes out as another value than the one it was put in (a part of it, an account's row, one that shares
+/// with the one before: store.ts), and a row put again says what it said. Without them a row lost when it ends the
+/// second time it went out (2026-11-11).
 function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unknown> {
   const kind = Object.prototype.hasOwnProperty.call(RESET_KINDS, str(r.kind) ?? "") ? str(r.kind)! : "credit";
   const [name, gives] = RESET_KINDS[kind]!;
@@ -111,7 +115,9 @@ function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unkn
   return {
     ...(typeof r.id === "string" ? { id: r.id } : {}),
     kind,
+    ...(typeof r.model === "string" ? { model: r.model } : {}),
     left,
+    ...(Array.isArray(r.expiries) ? { expiries: r.expiries.filter((at: unknown) => typeof at === "number" && Number.isSafeInteger(at)) } : {}),
     usable,
     title: t(name, { model }),
     // (how many on their own, where they are seen at once: the user, 2026-11-10)
