@@ -13,6 +13,7 @@ import { EVICT_AFTER_MS } from "../src/store.ts";
 import { attention, choices, models, runnableOn } from "../src/views/models.ts";
 import { answeredAt, betaOffered, blockedUnder, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
+import { work } from "../src/work.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
 import { hostOf, link, overview, prefs, rows, sessions, setup, sorted, threads, ui, workspace, type Ui } from "./views-rig.ts";
@@ -722,6 +723,129 @@ test("chats_asked_with_a_limit_have_their_first_rows_and_say_how_many_more", asy
   await t.read(all, 2);
   assert.deepEqual(ids(all.value), ["4", "1", "2", "3"]);
   assert.equal(all.value.more ?? null, null);
+});
+
+/// Whether a value holds an object as only a row not made yet is (views.ts `unmade`): none goes out.
+function holdsStandIn(v: J): boolean {
+  if (Array.isArray(v)) return v.some(holdsStandIn);
+  if (v === null || typeof v !== "object") return false;
+  if (Object.keys(v).sort().join() === "lastActiveAt,state,station") return true;
+  return Object.values(v).some(holdsStandIn);
+}
+/// The list's items, each one a made row.
+const madeItems = (v: J): J[] => {
+  const items = v.days.flatMap((d: J) => d.items);
+  for (const i of items) assert.ok(typeof i.id === "string" && typeof i.title === "string", `a made row: ${JSON.stringify(i)}`);
+  return items;
+};
+/// What a list's page of `limit` rows is of the whole list (views.ts firstRows as it was).
+function firstOf(whole: J, limit: number): J {
+  let left = limit;
+  let more = 0;
+  const days: J[] = [];
+  for (const d of whole.days) {
+    if (left <= 0) more += d.items.length;
+    else if (d.items.length <= left) days.push(d);
+    else {
+      days.push({ ...d, items: d.items.slice(0, left) });
+      more += d.items.length - left;
+    }
+    left -= Math.min(left, d.items.length);
+  }
+  return more === 0 ? whole : { ...whole, days, more };
+}
+
+test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
+  // A list of 420 chats on 5 stations made all its rows, 55 ms in one block on Hermes, to send a page of 50 (2026-11-11).
+  const t = setup({ all: true });
+  const now = t.host.nowMs();
+  const names = ["a", "b", "c", "d", "e"];
+  t.set(workspace(), { id: "ws", stations: names.map((id) => ({ id, name: id, last_seen: null, version: null })) });
+  // 84 a station, an hour apart across the stations, over 17 days; a few pinned, some at work.
+  const records = (st: number, changed: J = {}) =>
+    Array.from({ length: 84 }, (_, i) => {
+      const id = `${names[st]}${i}`;
+      const r = { ...row(id, now - (i * 5 + st) * 3_600_000), agents: [{ ...session(id), ...(i % 7 === 0 ? { process: "running" } : {}) }] };
+      return { ...r, ...(i === 3 ? { pinned: 1000 + st } : {}), ...changed[id] };
+    });
+  for (const [st, id] of names.entries()) {
+    t.set(link(`ws/${id}`), { state: "online" });
+    t.set(rows(`ws/${id}`), records(st));
+  }
+  // As on opening: the rows on the device, none of them loaded yet (views.ts #head reads the first of them alone).
+  for (const id of names) t.data.release(rows(`ws/${id}`));
+  assert.ok(names.every((id) => !t.data.loaded(rows(`ws/${id}`))));
+  const page = ui();
+  let from = work.rows;
+  t.subscribe(1, { topic: "chats", scope: "ws", limit: 50 });
+  await t.read(page, 1);
+  await t.read(page, 1);
+  assert.ok(names.every((id) => t.data.loaded(rows(`ws/${id}`))), "its stations' rows loaded behind it");
+  assert.equal(madeItems(page.value).length, 50);
+  assert.equal(page.value.more, 370);
+  assert.ok(work.rows - from <= 50, `the first page made ${work.rows - from} rows`);
+  // scrolled: 50 more
+  from = work.rows;
+  const longer = ui();
+  t.subscribe(2, { topic: "chats", scope: "ws", limit: 100 });
+  await t.read(longer, 2);
+  assert.equal(madeItems(longer.value).length, 100);
+  assert.ok(work.rows - from <= 50, `scrolling made ${work.rows - from} rows`);
+  // One far down the list changes: no row made; one in the page: its row alone.
+  from = work.rows;
+  t.set(rows("ws/e"), records(4, { e80: { title: "改了" } }));
+  await t.readAll([[page, 1], [longer, 2]]);
+  assert.equal(work.rows - from, 0, "a chat outside the page");
+  from = work.rows;
+  t.set(rows("ws/e"), records(4, { e80: { title: "改了" }, e1: { title: "也改了" } }));
+  await t.readAll([[page, 1], [longer, 2]]);
+  assert.equal(work.rows - from, 1, "a chat in the page");
+  assert.ok(madeItems(page.value).some((i: J) => i.title === "也改了"));
+  // The page is the whole list's first rows, its days and `more`; the whole list, a search, the `@` menu and the rail's
+  // card have made rows.
+  const topics: Topic[] = [
+    { topic: "chats", scope: "ws", limit: 50 },
+    { topic: "chats", scope: "ws", limit: 100 },
+    { topic: "chats", scope: "ws" },
+    { topic: "search", scope: "ws", query: "" },
+    { topic: "chatSearch", scope: "ws", query: "标题", limit: 500 },
+    { topic: "railCard", scope: "ws", place: "chats" },
+  ];
+  for (let i = 2; i < topics.length; i++) t.subscribe(1 + i, topics[i]);
+  const shown = topics.slice(2).map(() => ui());
+  await t.readAll(shown.map((u, i) => [u, 3 + i] as [Ui, number]));
+  const whole = t.store.value(topics[2]) as J;
+  assert.equal(madeItems(whole.ok).length, 420);
+  for (const limit of [50, 100]) assert.deepEqual(t.store.value({ topic: "chats", scope: "ws", limit }), { ok: firstOf(whole.ok, limit) });
+  assert.equal(madeItems(shown[0].value).length, 420);
+  assert.ok(shown[2].value.items.length > 100, "the `@` menu lists past the page");
+  for (const i of shown[2].value.items) assert.ok(typeof i.title === "string");
+  for (const topic of topics) {
+    const v = t.store.value(topic);
+    assert.ok(v !== undefined && "ok" in v, `${topicKey(topic)} has a value`);
+    assert.ok(!holdsStandIn(v.ok), `${topicKey(topic)} holds no row not made`);
+  }
+  assert.ok(![page, longer, ...shown].some((u) => holdsStandIn(u.value)), "none went out");
+});
+
+test("writing_another_pref_does_not_make_a_chat_list_again", async () => {
+  const t = setup();
+  const u = ui();
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  t.set(rows("ws/st"), [row("1", t.host.nowMs() - 1000), row("2", t.host.nowMs() - 2000)]);
+  t.set(prefs(), { archiveHint: "done" });
+  t.subscribe(1, { topic: "chats", scope: "ws", limit: 50 });
+  await t.read(u, 1);
+  assert.deepEqual(ids(u.value), ["1", "2"]);
+  const before = t.router.computed;
+  // the app writes the workspace shown at each switch
+  t.set(prefs(), { archiveHint: "done", workspace: "other" });
+  await t.read(u, 1);
+  assert.equal(t.router.computed, before, "the list was not made again");
+  t.set(prefs(), { archiveHint: "off", workspace: "other" });
+  await t.read(u, 1);
+  assert.equal(t.router.computed, before + 1, "its archive hint makes it again");
 });
 
 test("chats_puts_together_the_online_stations", async () => {

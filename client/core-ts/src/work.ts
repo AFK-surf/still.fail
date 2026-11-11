@@ -27,6 +27,9 @@ export const work = {
   marked: 0,
   /// Workspaces' marks made (views/marks.ts `workspaceMark`): each made again only as what it is made of changed.
   workspaceMarks: 0,
+  /// Rows a chat list made of its records (views.ts #chatRow): those something shows, each once while its record is as
+  /// it was.
+  rows: 0,
 };
 
 export type Work = typeof work;

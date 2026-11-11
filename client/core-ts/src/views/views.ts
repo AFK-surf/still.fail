@@ -112,6 +112,9 @@ function linkValue(v: Value | undefined): J {
 }
 
 const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
+/// The viewer's `archiveHint` of the prefs (an error: none): what the chat list reads of them, made again only as it
+/// changes, not as the app writes another pref (`workspace`, at every switch of workspace).
+const archiveHintIn = (v: Value | undefined): ArchiveHint => archiveHintOf(v !== undefined && "ok" in v ? (v.ok ?? null) : null);
 const profileOverview = (v: Value | undefined): J => v && "ok" in v ? v.ok : undefined;
 const sameProfileOverview = (a: J, b: J): boolean => {
   if (!isObject(a) || !isObject(b)) return equal(a, b);
@@ -210,28 +213,53 @@ function keptBetween(was: J[], made: (J | null)[], listed: J[], make: (raw: J) =
   return { made: out, gone, come };
 }
 
+/// A list's rows not made yet (`#chats`), each a frozen stand-in for its record carrying only what the list reads of a
+/// row before it goes out (`lastActiveAt` for its order and days, its pinned moment in `pinnedAt`, `station` and `state`
+/// for its glyph), to what makes its row once and keeps it. A row is made as something shows it (`firstRows`): a list
+/// of 420 chats made all of them, 55 ms in one block, to send a page of 50 (Hermes, 2026-11-11). None goes out.
+const unmade = new WeakMap<object, () => J>();
+/// A list's item as it goes out: its row, made now if it was not yet.
+const madeRow = (item: J): J => (isObject(item) ? unmade.get(item)?.() : undefined) ?? item;
+/// A list's day with its first `n` rows made (`madeRow`), kept by the day while it is asked the same `n`: a day all of
+/// whose rows were made is itself, as it was before rows were made late.
+const madeDays = new WeakMap<object, { n: number; day: J }>();
+function madeDay(d: J, n: number): J {
+  const kept = madeDays.get(d);
+  if (kept !== undefined && kept.n === n) return kept.day;
+  const items = arr(get(d, "items"));
+  const rows = items.slice(0, n).map(madeRow);
+  const day = n === items.length && rows.every((r, i) => r === items[i]) ? d : { ...d, items: rows };
+  madeDays.set(d, { n, day });
+  return day;
+}
+
 /// The list with its first `limit` rows, in their days, and how many more it has (`more`): what a page shows of it
 /// first, the rest asked for as it is scrolled to (a list of 1400 chats went whole as the app opened, 2026-11-08). What
-/// the core works out of the list (its marks, its search, its cards) is of the whole of it.
+/// the core works out of the list (its marks, its search, its cards) is of the whole of it (`wholeRows`). Only the rows
+/// it gives are made (`madeRow`).
 function firstRows(chats: J, limit: number): J {
   let left = limit;
   let more = 0;
+  const was = arr(get(chats, "days"));
   const days: J[] = [];
-  for (const d of arr(get(chats, "days"))) {
+  for (const d of was) {
     const items = arr(get(d, "items"));
     if (left <= 0) {
       more += items.length;
       continue;
     }
-    if (items.length <= left) days.push(d);
-    else {
-      days.push({ ...d, items: items.slice(0, left) });
-      more += items.length - left;
-    }
-    left -= Math.min(left, items.length);
+    const n = Math.min(left, items.length);
+    days.push(madeDay(d, n));
+    more += items.length - n;
+    left -= n;
   }
-  return more === 0 ? chats : { ...chats, days, more };
+  if (more > 0) return { ...chats, days, more };
+  return days.every((d, i) => d === was[i]) ? chats : { ...chats, days };
 }
+
+/// The whole list with every row made: what reads the list besides a page (the list asked without a limit, a search,
+/// the `@` menu). The chats' rail card reads the list as it is: it counts by each row's `state` alone.
+const wholeRows = (chats: J): J => firstRows(chats, Infinity);
 
 /// What a station's row reads of its overview (OverviewRow), picked from what it says (`undefined`: not read): its
 /// row is made again only as these change, not with each of its profiles' quota or its decisions.
@@ -1345,17 +1373,18 @@ export class Views implements Owner {
     switch (view.topic) {
       case "chats": {
         const chats = this.#chats(view.scope as string, view.mine === true, view.watching === true, view.hidden === true ? "hidden" : "visible");
-        return typeof view.limit === "number" && chats !== undefined && "ok" in chats ? { ok: firstRows(chats.ok, view.limit) } : chats;
+        if (chats === undefined || !("ok" in chats)) return chats;
+        return { ok: typeof view.limit === "number" ? firstRows(chats.ok, view.limit) : wholeRows(chats.ok) };
       }
       case "search": {
         const chats = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
         if (chats === undefined || !("ok" in chats)) return chats;
-        return searchView(this.#searchSource, stationsOn(chats.ok), view);
+        return searchView(this.#searchSource, stationsOn(wholeRows(chats.ok)), view);
       }
       case "chatSearch": {
         const listed = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
         if (listed === undefined || !("ok" in listed)) return listed;
-        const chats = { ok: stationsOn(listed.ok) };
+        const chats = { ok: stationsOn(wholeRows(listed.ok)) };
         const elsewhere = view.elsewhere === true && String(view.query ?? "").trim() !== "";
         // The chats opened on this device first, the latest first, then the rest by when they were last active (refs.ts).
         const opened = refs.openedIn(this.#core.data, view.scope as string);
@@ -1368,7 +1397,7 @@ export class Views implements Owner {
             if (place.id === view.scope) continue;
             const theirs = this.#chats(place.id, false, false, "all");
             if (theirs === undefined || !("ok" in theirs)) continue;
-            for (const item of arr(refs.search(stationsOn(theirs.ok), view.query as string, undefined, undefined, undefined, refs.openedIn(this.#core.data, place.id)).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
+            for (const item of arr(refs.search(stationsOn(wholeRows(theirs.ok)), view.query as string, undefined, undefined, undefined, refs.openedIn(this.#core.data, place.id)).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
           }
           found.items = refs.withOutside(arr(found.items), others, view.query as string, view.scope as string, view.limit as number | undefined);
         }
@@ -1542,6 +1571,7 @@ export class Views implements Owner {
         const online = (this.stations(scope) ?? []).filter((s) => s.online);
         switch (view.place) {
           case "chats": {
+            // (the list as it is, its rows made or not: the card reads only each one's `state`, which both say)
             const rows = arr(get(chats.ok, "days")).flatMap((d) => arr(get(d, "items")));
             const mark = marks.workspaceIds(this.ok({ topic: "workspaces" })).includes(scope) ? this.markOf(scope) : undefined;
             // when each archived chat was, as the archive has it (views/archive.ts)
@@ -1625,7 +1655,7 @@ export class Views implements Owner {
     // What a row's menu offers besides the list's own (#rowMenu): the viewer's role here, their workspaces (with their role
     // in each, as sharing reads it: xshare.ts shown).
     const menu = { role: str(get(workspace, "role")), places: (this.#core.places?.() ?? []).map((p) => [p.id, p.role] as const) };
-    const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
+    const hint = this.#core.store.select({ topic: "prefs" }, archiveHintIn);
     const states: J[] = [];
     // Each station in trouble: its state, its line, the words said once when every one says the same (the device's
     // network; this app or page too old for them), and its address.
@@ -1681,16 +1711,38 @@ export class Views implements Owner {
           // Only a frozen row (db/account.ts) is surely as it was when its row was made.
           const keepable = isObject(shown) && Object.isFrozen(shown);
           const kept = keepable ? this.#rowsMade.get(shown) : undefined;
-          let row: J;
-          if (kept && kept.sig === sig) row = kept.row;
-          else {
-            row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
-            if (row !== null) Object.assign(row, this.#rowMenu(s.address, shown, me, menu, connects));
+          if (kept && kept.sig === sig) return kept.row === null ? null : this.#unsentRow(s.address, kept.row, failed);
+          const row = (): J => {
+            const made = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
+            if (made !== null) Object.assign(made, this.#rowMenu(s.address, shown, me, menu, connects));
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
-            if (row !== null) deepFreeze(row);
-            if (keepable) this.#rowsMade.set(shown, { sig, row });
+            if (made !== null) deepFreeze(made);
+            if (keepable) this.#rowsMade.set(shown, { sig, row: made });
+            return made;
+          };
+          if (!keepable || get(shown, "pending") === true) {
+            const made = row();
+            return made === null ? null : this.#unsentRow(s.address, made, failed);
           }
-          return row === null ? null : this.#unsentRow(s.address, row, failed);
+          // Kept, its row is made as something shows it (`unmade`): until then a stand-in, the list not showing it
+          // decided as its row would (#chatRow: watching, one nobody watches).
+          const agents = arr(get(shown, "agents"));
+          if (watching && present.rowWatch(agents) === null) {
+            this.#rowsMade.set(shown, { sig, row: null });
+            return null;
+          }
+          const standIn: J = { lastActiveAt: shown.lastActiveAt, station: s.address, state: present.rowState(agents) };
+          if (typeof shown.pinned === "number") pinnedAt.set(standIn, shown.pinned);
+          Object.freeze(standIn);
+          let shownRow: J;
+          unmade.set(standIn, () => {
+            if (shownRow === undefined) {
+              const again = this.#rowsMade.get(shown);
+              shownRow = this.#unsentRow(s.address, again !== undefined && again.sig === sig && again.row !== null ? again.row : row(), failed);
+            }
+            return shownRow;
+          });
+          return standIn;
         };
         // What the station's rows were made into last time, kept while nothing here changes how a row is made (no row
         // asked for, archived or changed from here; its failed messages and what rows are made with as they were): then
@@ -1853,6 +1905,7 @@ export class Views implements Owner {
 
   /// A station's row as the list shows it (null: not in this list).
   #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint): J {
+    work.rows++;
     let row = structuredClone(raw);
     // Pinned rows are pinned (true) in the list, in the order they were pinned in (pinnedAt, below); one unpinned says
     // false.
