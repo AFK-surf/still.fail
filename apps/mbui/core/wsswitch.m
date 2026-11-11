@@ -58,7 +58,8 @@ static NSArray<NSString *> *home(NSString *ws) {
   return @[
     [NSString stringWithFormat:@"{\"topic\":\"lock\",\"workspace\":\"%@\"}", ws],
     [NSString stringWithFormat:@"{\"topic\":\"longJobs\",\"scope\":\"%@\"}", ws],
-    [NSString stringWithFormat:@"{\"topic\":\"chats\",\"scope\":\"%@\",\"mine\":false,\"limit\":50}", ws],
+    // (LIMIT: how many rows the list is asked, 50 as the app asks at first)
+    [NSString stringWithFormat:@"{\"topic\":\"chats\",\"scope\":\"%@\",\"mine\":false,\"limit\":%d}", ws, getenv("LIMIT") ? atoi(getenv("LIMIT")) : 50],
     [NSString stringWithFormat:@"{\"topic\":\"workspaceMarks\",\"workspace\":\"%@\"}", ws],
     [NSString stringWithFormat:@"{\"topic\":\"workspace\",\"workspace\":\"%@\"}", ws],
     [NSString stringWithFormat:@"{\"topic\":\"stations\",\"scope\":\"%@\"}", ws],
