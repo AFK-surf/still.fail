@@ -28,8 +28,8 @@ fn page_one(
         if top {
           top_drawn.val = true
         }
-        let (now, all, _, invited) = @sfbase.workspace_in_view(src)
-        main_page(c, src, now.unwrap_or(w), all, invited, page)
+        let (now, _, _, _) = @sfbase.workspace_in_view(src)
+        main_page(c, src, now.unwrap_or(w), page)
         drawn_page.val = None
       })
       @motion.scope(c, moved, bottom=true)
@@ -45,7 +45,7 @@ fn page_one(
 fn pane_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
-  let (r, target) = fold_target(src, w, c.window_size().0)
+  let (_, target) = fold_target(src, w, c.window_size().0)
   let f = fold_built(c, target)
   fold_bars(c, f)
   // (the page shown in the pane, whether the one on top or the one kept while that waits: the one page built here)

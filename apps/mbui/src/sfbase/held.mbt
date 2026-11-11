@@ -114,7 +114,7 @@ fn held_state(src : Source, scope : String, name : String, params : Map[String, 
 
 ///|
 /// What `scope` read, let go of (it ended: its page left, its chat closed).
-pub fn let_go(src : Source, scope : String) -> Unit {
+pub fn let_go(_src : Source, scope : String) -> Unit {
   match held_topics.get(scope) {
     Some(m) => {
       held_topics.remove(scope)

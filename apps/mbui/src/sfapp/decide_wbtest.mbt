@@ -13,7 +13,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       // a chat's answered, nothing more (and a call's parts as the core makes them, kept: history.tool)
       if name == "history.tool" {
         (base.call)(name, params, done)
@@ -329,7 +329,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "chat.relayPlaces" => done(Ok(places))
         "chat.relay" => done(Ok({ "place": "#dev" }))

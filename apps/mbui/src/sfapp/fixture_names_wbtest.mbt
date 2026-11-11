@@ -1,10 +1,7 @@
 // The made-up core's names (src/sffixture) the app's own tests read: its data and what it said, by name.
 
 using @sffixture {
-  agent,
-  ago,
   by_person,
-  file,
   file_links_answer,
   fix_answer_ms,
   fix_browse,
@@ -40,14 +37,10 @@ using @sffixture {
   fixture_keymap,
   fixture_link_parse,
   fixture_markdown,
-  fixture_updates,
-  last,
   long_reply,
-  me,
   msg,
   new_fix,
   novel_text,
-  person,
   preview_files,
   round_trip,
   round_trip_by,

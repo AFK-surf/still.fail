@@ -387,7 +387,7 @@ fn tree_field_down(id : @view.NodeId, x : Double, y : Double, at : Double) -> Bo
   tf.track.reset()
   tf.track.add(at, y)
   // (its words flung on: stopped where they are, as an old view's field's are as a finger goes down, sideways_down)
-  sideways_down(g(), tree_said_id(id), x, y)
+  sideways_down(tree_said_id(id))
   let st = tf.st
   if h_feel() == 2 {
     // (held still long_press_ms where it went down: at that moment, on the tree's timeline, whatever frames come)

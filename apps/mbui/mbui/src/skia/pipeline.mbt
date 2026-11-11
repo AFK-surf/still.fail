@@ -4,7 +4,6 @@
 
 ///|
 priv enum Stage {
-  MoveSourceToDestination
   MoveDestinationToSource
   Clamp0
   ClampA
@@ -83,7 +82,7 @@ priv enum Stage {
   GammaExpandSrgb
   GammaExpandDestinationSrgb
   GammaCompressSrgb
-} derive(Eq)
+}
 
 ///|
 /// Whether lowp has the stage (lowp::STAGES' entries that are not null_fn).

@@ -25,7 +25,7 @@ priv enum PfInk {
   NoCore
   Asked
   Said
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 /// What each piece of the fixture's code is, as the test's core says it: all of each line of it a function's colour.

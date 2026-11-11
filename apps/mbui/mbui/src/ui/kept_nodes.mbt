@@ -18,6 +18,8 @@
 ///|
 /// A list's row kept as its nodes: what its build made and said, where it is in the frame's nodes, what it was built
 /// from (its list's room and what built the list), and whether it may be kept at all (`ok`; `why` not).
+// built_frame is read by its tests alone
+#warnings("-unused_field")
 priv struct RowNodes {
   /// its list's id, its item
   list : Int
@@ -114,10 +116,9 @@ priv struct RowNodes {
   holder : Ref[RowNodes?]
   /// the parts kept as their nodes among its own, where among them (from its first): their nodes theirs, out of its
   /// own as it is taken out of the frame's and put back with them as it is put back; and those put among them by the
-  /// build going on, and where it began
+  /// build going on
   mut inner : Array[(RowNodes, Int)]
   inner_now : Array[RowNodes]
-  mut building_at : Int
 }
 
 ///|
@@ -665,7 +666,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     holder,
     inner: [],
     inner_now: [],
-    building_at: 0,
     named: "",
     made_at: None,
   }
@@ -874,7 +874,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.again.clear()
   rn.laid.clear()
   rn.inner_now.clear()
-  rn.building_at = self.count
   {
     census,
     info: self.info_reads.length(),

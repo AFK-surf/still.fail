@@ -1,5 +1,32 @@
 // tiny-skia's tests/integration/dash.rs (tiny-skia 5d475477), against its reference images.
 
+// What the tests here (every *_wbtest.mbt of mbui/skiatest) read of mbui/skia, by name.
+using @skia {
+  type Paint,
+  type PathBuilder,
+  type Pixmap,
+  type Rect,
+  type Transform,
+  type FillRule,
+  type Stroke,
+  type LineCap,
+  type LineJoin,
+  type StrokeDash,
+  type Color,
+  type ColorU8,
+  type Point,
+  type Mask,
+  type MaskType,
+  type BlendMode,
+  type LinearGradient,
+  type RadialGradient,
+  type SweepGradient,
+  type GradientStop,
+  type SpreadMode,
+  type Pattern,
+  type FilterQuality,
+  type PixmapPaint,
+}
 
 ///|
 test "dash line" {

@@ -857,7 +857,7 @@ pub fn Ctx::place(
 ///|
 /// What takes back as one of the old views said it (Ctx's `back_next` and what goes with it), and the layer's opening it
 /// is of (Ctx::overlay; 0: none's).
-struct BackEntry {
+priv struct BackEntry {
   f : (Int, Double, Double, Double, Double) -> Unit
   node : Int
   edge : Double

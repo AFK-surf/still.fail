@@ -129,7 +129,7 @@ fn trouble_loading_tester(calls : Array[Made], loaded : @signals.Signal[Bool], p
     },
     call: fn(name, params, done) {
       if name == "prefs.set" && field(Some(params), "trouble") is Some(_) {
-        calls.push({ name, params, bytes: None, done, heard: None })
+        calls.push({ name, params, bytes: None, done })
       } else {
         (base.call)(name, params, done)
       }

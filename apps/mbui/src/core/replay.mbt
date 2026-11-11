@@ -43,6 +43,8 @@ priv struct KeptStations {
 }
 
 ///|
+// strict is never read: the strict and the lax passes give what came alike
+#warnings("-unused_field")
 pub struct Replay {
   priv evs : Array[Ev]
   /// a recorded ask's id: the id the app gave the same ask now; and the other way

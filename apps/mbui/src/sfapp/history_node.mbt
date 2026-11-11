@@ -9,7 +9,7 @@ let history_tab : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// The history of agent `key` of chat `r` made once in node `v`, its steps opened at `entry` (a transcript entry),
-/// else at its newest; under the status bar and over the navigation bar as `frame` says; `serial` the stack's page it is.
+/// else at its newest; under the status bar and over the navigation bar as `frame` says.
 fn history_node(
   v : @view.View,
   src : Source,
@@ -17,7 +17,7 @@ fn history_node(
   key : String,
   entry : Int?,
   frame : () -> PageFrame,
-  serial : Int,
+  _serial : Int,
 ) -> Unit {
   let src = src.owned_by(v)
   let chat = fn() { src.topic("chat", chat_params(r)).get() }

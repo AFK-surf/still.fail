@@ -4885,7 +4885,6 @@ fn view_pointed_again() -> Unit {
   if pointing() is Finger {
     view_point.val = None
   }
-  let c = g()
   match view_point.val {
     None =>
       if tree.pointed_now() is Some(_) {

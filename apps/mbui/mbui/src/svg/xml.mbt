@@ -41,11 +41,6 @@ priv struct XDoc {
 }
 
 ///|
-fn XDoc::root(self : XDoc) -> XNode {
-  self.nodes[0]
-}
-
-///|
 fn XDoc::attr(self : XDoc, id : Int, name : String) -> String? {
   for a in self.nodes[id].attrs {
     if a.ns == "" && a.name == name {

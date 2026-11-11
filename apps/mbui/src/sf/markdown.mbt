@@ -300,7 +300,6 @@ fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
   let parts = xs.filter(fn(x) {
     match x {
       Text(t) => t.trim(chars=" \n\t").to_string() != ""
-      SoftBreak => false
       _ => true
     }
   })
@@ -729,7 +728,6 @@ fn Md::placed(
   let parts = xs.filter(fn(x) {
     match x {
       Text(t) => t.trim(chars=" \n\t").to_string() != ""
-      SoftBreak => false
       _ => true
     }
   })
@@ -763,7 +761,7 @@ fn Md::placed(
     if nodes.iter().any(fn(x) {
         match x {
           Text(t) => t.trim(chars=" ").to_string() != ""
-          SoftBreak | HardBreak => false
+          HardBreak => false
           _ => true
         }
       }) {
@@ -1136,7 +1134,6 @@ fn runs_of(
         let words = if alt != "" { alt } else { file_name_of(src) }
         out.push(@ui.span(words, bold~, italic~, strike~, link=src))
       }
-      SoftBreak => out.push(@ui.span(" ", bold~, italic~, strike~, link~))
       HardBreak => out.push(@ui.span("\n", bold~, italic~, strike~, link~))
     }
   }
@@ -1571,7 +1568,7 @@ fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double)
   for x in cell {
     match x {
       Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
-      SoftBreak | HardBreak => ()
+      HardBreak => ()
       Image(src, _) =>
         match (self.files)(file_name_of(src)) {
           Some({ image: Some((r, draw)), .. }) => out.push((dmax(dmin(r, 4.0), 0.25), draw))

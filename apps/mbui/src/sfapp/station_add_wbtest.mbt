@@ -22,7 +22,7 @@ fn sa_open(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match answer(name, params) {
         Some(r) => done(r)
         None => (base.call)(name, params, done)

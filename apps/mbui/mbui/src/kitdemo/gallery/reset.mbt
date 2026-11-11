@@ -3,6 +3,8 @@
 // detlint's `globals` (src/kitdemo is among its roots) fails a global this does not put back.
 
 ///|
+// called by the gallery's tests alone; here so detlint's `globals` finds it
+#warnings("-unused_value")
 fn reset() -> Unit {
   sw_on.val = true
   view_check_view.val = None

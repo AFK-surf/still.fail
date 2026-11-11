@@ -143,7 +143,7 @@ priv struct PresetClone {
   id : String
   repo : String
   name : String
-} derive(Eq)
+}
 
 ///|
 /// A preset being made or changed: its folders (each its path, its repository, the station it is on where that is not

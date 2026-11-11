@@ -22,17 +22,6 @@ let chat_bar_h : Double = bar_h
 let chat_title_line : Double = 16.0 * 1.4
 
 ///|
-let composer_room : Double = 110.0
-
-///|
-/// The list's gap between messages (web mobile --list-gap), and under the viewer's message sent soon after the one
-/// before it (`joined`).
-let gap : Double = 20.0
-
-///|
-let joined_gap : Double = 4.0
-
-///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
 /// row: 14 under the bar.
 fn bar_foot() -> Double {
@@ -165,11 +154,6 @@ fn list_key(r : ChatRef) -> String {
 }
 
 ///|
-/// How far a row new to the list comes up as it fades in (Chat.kt rise: 14, over its turn's 320 ms, the standard
-/// curve).
-let rise_dy : Double = 14.0
-
-///|
 /// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at
 /// its peak (screenshots of it).
 pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
@@ -222,10 +206,6 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
 ///|
 /// Which of the chat's asks the bell went to last, by chat (it goes to the next one each time, round again).
 let ask_turns : Map[String, Int] = {}
-
-///|
-/// How long the bell rises over the way to the end as that comes, and goes back down.
-let ask_lift_ms : Double = 200.0
 
 ///|
 let bar_drop_people : Int = 1
@@ -507,13 +487,6 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 }
 
 ///|
-/// At work, as a row says it: yellow spokes 10 across stepping round in 12, no disc round them (it showed as
-/// a dark rim).
-fn at_work_mark(c : @ui.Ctx) -> Unit {
-  @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
-}
-
-///|
 /// An agent's mark (small, as a list's): its maker's mark on a soft tile, its state on the corner.
 fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
   let t = @sf.theme()
@@ -609,7 +582,7 @@ fn mark_ground() -> (Int64, Double) {
 
 ///|
 /// Its corner: 6.
-fn mark_corner(side : Double) -> Double {
+fn mark_corner(_side : Double) -> Double {
   6.0
 }
 

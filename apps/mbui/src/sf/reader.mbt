@@ -949,9 +949,9 @@ pub fn reader(
   if beside {
     beside_reader_chrome(c, r, p)
   } else if narrow {
-    narrow_reader_chrome(c, r, file, style, p, back_label, on_back, room_top, room_foot)
+    narrow_reader_chrome(c, r, file, p, back_label, on_back, room_top, room_foot)
   } else {
-    desk_reader_chrome(c, r, file, style, p, back_label, on_back, move_beside~)
+    desk_reader_chrome(c, r, file, p, back_label, on_back, move_beside~)
   }
 }
 
@@ -993,7 +993,6 @@ fn desk_reader_chrome(
   c : @ui.Ctx,
   r : Reading,
   file : ViewerFile,
-  style : ReaderStyle,
   p : ReaderPaper,
   back_label : String,
   on_back : () -> Unit,
@@ -1444,7 +1443,6 @@ fn narrow_reader_chrome(
   c : @ui.Ctx,
   r : Reading,
   file : ViewerFile,
-  style : ReaderStyle,
   p : ReaderPaper,
   back_label : String,
   on_back : () -> Unit,
@@ -1496,7 +1494,7 @@ fn narrow_reader_chrome(
     c.look_by(n, fn() { @ui.look(alpha=desk_whole - k.get(c)) })
   }
   let title = match book {
-    Some(b) =>
+    Some(_) =>
       joined([if chapter >= 0 && chapters.length() >= 2 { chapters[chapter].0 } else { "" }, pct], " · ")
     None => ""
   }

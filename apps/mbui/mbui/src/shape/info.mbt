@@ -51,11 +51,6 @@ fn GlyphInfo::space_fallback_type(self : GlyphInfo) -> Int {
 }
 
 ///|
-fn GlyphInfo::is_variation_selector(self : GlyphInfo) -> Bool {
-  self.general_category() == GC_FORMAT && (self.unicode_props() & UPROPS_CF_VS) != 0
-}
-
-///|
 fn GlyphInfo::set_variation_selector(self : GlyphInfo, customize : Bool) -> Unit {
   if customize {
     self.set_general_category(GC_FORMAT)
@@ -68,11 +63,6 @@ fn GlyphInfo::set_variation_selector(self : GlyphInfo, customize : Bool) -> Unit
 ///|
 fn GlyphInfo::is_default_ignorable(self : GlyphInfo) -> Bool {
   (self.unicode_props() & UPROPS_IGNORABLE) != 0 && !self.substituted()
-}
-
-///|
-fn GlyphInfo::clear_default_ignorable(self : GlyphInfo) -> Unit {
-  self.set_unicode_props(self.unicode_props() & (UPROPS_IGNORABLE ^ 0xFFFF))
 }
 
 ///|
@@ -201,11 +191,6 @@ fn GlyphInfo::ligated_and_didnt_multiply(self : GlyphInfo) -> Bool {
 ///|
 fn GlyphInfo::clear_ligated_and_multiplied(self : GlyphInfo) -> Unit {
   self.set_glyph_props(self.glyph_props() & ((GPROPS_LIGATED | GPROPS_MULTIPLIED) ^ 0xFFFF))
-}
-
-///|
-fn GlyphInfo::clear_substituted(self : GlyphInfo) -> Unit {
-  self.set_glyph_props(self.glyph_props() & (GPROPS_SUBSTITUTED ^ 0xFFFF))
 }
 
 ///|

@@ -17,7 +17,7 @@ fn keyed_chat(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       if name.has_prefix("composer.") {
         (base.call)(name, params, done)
       } else {

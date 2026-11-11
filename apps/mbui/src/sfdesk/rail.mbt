@@ -438,7 +438,7 @@ pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       _ => (0.0, 0.0, 0.0, 0.0)
     }
     @sfpages.workspace_menu(c, src, at)
-    rail_transfers_list(c, src, w)
+    rail_transfers_list(src, w)
   }
 }
 
@@ -722,11 +722,6 @@ let rail_dash_r : Double = 11.75
 
 ///|
 let rail_dash_at : Double = -0.5
-
-///|
-/// A place while the rail is changed: outlined, its corner the editing frame's.
-// kept across runs: a value (no field of it changes)
-let rail_editing : @ui.Style = @ui.css("radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)

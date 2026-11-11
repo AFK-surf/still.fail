@@ -99,3 +99,37 @@ test "narrow_empty_node: nothing here, with what can be done about it and withou
     }
   }
 }
+
+///|
+/// What could not be read, and 重试.
+fn narrow_retry(c : @ui.Ctx, words : String, look : @ui.TextStyle, retry : () -> Unit) -> Unit {
+  c.box(style=narrow_problem, fn() {
+    c.box(style=narrow_problem_words, fn() { c.text(words, style=look) |> ignore }) |> ignore
+    let id = c.id("files/narrow/retry")
+    c.on_press(id, fn() {
+      retry()
+    })
+    c.box(style=narrow_link, id~, fn() { c.text(@sf.t("web-pages.drive.retry"), style=narrow_link_words) |> ignore }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Nothing here (Empty): a folder's mark (40), why, and what can be done about it (`action`: its words, what it does).
+fn narrow_empty(c : @ui.Ctx, words : String, action : (String, () -> Unit)?) -> Unit {
+  let t = @sf.theme()
+  c.box(style=narrow_empty_box, fn() {
+    @sf.icon(c, "folder", size=narrow_empty_icon, color=t.p.subtle) |> ignore
+    c.text(words, style=narrow_empty_words) |> ignore
+    match action {
+      Some((label, go)) => @sf.button(c, label, key="files/narrow/empty", tone=Ghost, on_press=go) |> ignore
+      None => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Nothing here (mEmpty): in the middle, 56 by 32 in, 12 apart.
+// kept across runs: a value (no field of it changes)
+let narrow_empty_box : @ui.Style = @ui.css("w=Full px=S8 py=S14 gap=S3 align=ACenter")

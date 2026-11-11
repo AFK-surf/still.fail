@@ -41,21 +41,6 @@ fn one_page_tester(
 }
 
 ///|
-/// `words` pressed where the page shows them: the furthest right of those drawn (the settings' list beside it, left of
-/// it, may say the same).
-fn tap_in_page(t : @ui.Tester, words : String) -> Unit raise {
-  let shown = t.words().filter(fn(w) { w.0 == words && w.5 > 0.5 })
-  guard shown.length() > 0 else { fail("no \{words} drawn") }
-  let mut at = shown[0]
-  for w in shown {
-    if w.1 > at.1 {
-      at = w
-    }
-  }
-  t.tap(at.1 + at.3 / 2.0, at.2 + at.4 / 2.0)
-}
-
-///|
 /// Each width and hand the pages are drawn at: a phone with a finger, a narrow window with a mouse, a window between,
 /// a tablet with a finger, a desktop's window with a mouse; and whether the page is as wide as the web's narrow app.
 let one_page_cases : Array[(Double, Int, Bool, Bool)] = [

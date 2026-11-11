@@ -90,7 +90,7 @@ fn context_up(calls : Array[Made], platform? : Int = 2, wide? : Bool = false, re
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(Json::object({})))
     },
   }

@@ -45,7 +45,7 @@ fn preset_calls(mode : String, calls : Array[Made]) -> Source {
   {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -211,7 +211,7 @@ test "editing another station's preset still starts browsing on the composer's s
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

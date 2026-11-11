@@ -25,12 +25,14 @@ let mod_shift : Int = 8
 
 ///|
 /// A rect on the stage: left, top, width, height (px).
+// Eq and Debug for its tests
+#warnings("-unused_value")
 priv struct SRect {
   x : Double
   y : Double
   w : Double
   h : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -291,13 +293,10 @@ fn pad_gain(dp_per_ms : Double) -> Double {
 }
 
 ///|
-/// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; where the
-/// station says it is once the finger has been still a moment (something else moved it, or the screen's edge held it).
+/// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so.
 priv struct PadPointer {
   mut x : Double
   mut y : Double
-  /// how many times the finger has moved it: the wait for the station's word starts again from each
-  mut moves : Int
 }
 
 ///|
@@ -309,17 +308,4 @@ fn PadPointer::at(self : PadPointer) -> (Double, Double) {
 fn PadPointer::by(self : PadPointer, dx : Double, dy : Double) -> Unit {
   self.x = clamp01(self.x + dx)
   self.y = clamp01(self.y + dy)
-  self.moves += 1
-}
-
-///|
-/// The station's word on where the pointer is, taken (once the finger has let it be: the caller says).
-fn PadPointer::follow(self : PadPointer, cursor : (Double, Double)?) -> Unit {
-  match cursor {
-    Some((x, y)) => {
-      self.x = clamp01(x)
-      self.y = clamp01(y)
-    }
-    None => ()
-  }
 }

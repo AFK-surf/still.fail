@@ -78,7 +78,7 @@ fn convert_image_inner(
   }
   let g = Group::empty()
   g.id = id
-  g.children.push(NImage({ id: "", visible, size: actual, rendering, kind, abs_transform, abs_bbox }))
+  g.children.push(NImage({ id: "", visible, size: actual, rendering, kind, abs_bbox }))
   g.transform = image_ts
   g.abs_transform = abs_transform
   if aspect.slice {
@@ -86,8 +86,8 @@ fn convert_image_inner(
     path.fill = Some(Fill::default())
     let root = Group::empty()
     root.children.push(NPath(path))
+    cache.gen_clip_path_id() |> ignore
     let clip : ClipPath = {
-      id: cache.gen_clip_path_id(),
       transform: @skia.Transform::default(),
       clip_path: None,
       root,

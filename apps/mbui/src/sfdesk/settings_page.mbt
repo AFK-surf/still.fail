@@ -1,49 +1,12 @@
 // What the desktop's settings pages not moved to sfpages yet share beside the library's page (src/sf page.mbt): a
 // place's page across the pane, a list's filter, a dialog, a page still laid out wide alone (desk_page). The pieces of
-// one arrangement they still draw themselves (desk_card, desk_list, narrow_row, …: the library's, named here, and
+// one arrangement they still draw themselves (desk_card, desk_list, narrow_row, …: the library's, and
 // sfpages' settings_page.mbt) are counted by detlint's page-look in the pages, each file's only falling.
-
-using @sf {
-  type Look,
-  desk_lanes,
-  desk_lane,
-  desk_lane_column,
-  desk_lane_most,
-  desk_lane_in,
-  desk_column_most,
-  desk_column_in,
-  desk_own_head,
-  desk_hint_box,
-  desk_hint_words,
-  desk_card,
-  desk_card_row,
-  desk_card_text,
-  desk_strong,
-  desk_words,
-  desk_muted,
-  desk_row_least,
-  desk_chevron,
-  desk_mark,
-  desk_list,
-  desk_list_out,
-  desk_list_text,
-  desk_named,
-  desk_list_title,
-  desk_note_line,
-  desk_note_bad,
-}
 
 ///|
 /// The pieces the settings' pages moved to sfpages draw with (sfpages settings_page.mbt), these pages' too.
 using @sfpages {
-  desk_note,
-  desk_column,
-  desk_said_line,
   look_of,
-  narrow_note,
-  finger_ripple,
-  narrow_row,
-  narrow_row_title,
 }
 
 ///|

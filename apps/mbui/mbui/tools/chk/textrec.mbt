@@ -249,7 +249,8 @@ fn textrec(args : Array[String]) -> Int {
   let how = "\{name}: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=\{page} MBUI_WIN=\{size}, platform \{platform}"
   let data = [
     "// Kept from a real host's run (\{how}),", "// made by scripts/chk textrec: not edited by hand.",
-    "", "///|", "let run_\{name} : String =",
+    "", "///|", "// (read by its test alone, unless it is a run kept: textrec_runs.mbt names those)",
+    "#warnings(\"-unused_value\")", "let run_\{name} : String =",
   ]
   for l in keep {
     data.push("  #|" + l)

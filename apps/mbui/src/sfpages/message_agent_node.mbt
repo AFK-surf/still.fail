@@ -36,6 +36,8 @@ fn agent_card_kind(m : Message) -> String {
 /// prose_node_of draws them, its other files under them, what it asks under them (message_decision_node); where it
 /// offers itself (`share`), its ⋯ and a right click's offer. `code`, `screens` (a station's screens' cards by default:
 /// screen_links_node) and `shown` as agent_prose_node takes them.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn agent_said_node(
   v : @view.View,
   src : Source,

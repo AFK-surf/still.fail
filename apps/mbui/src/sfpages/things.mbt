@@ -226,7 +226,7 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
   } else {
     for t in shown {
       let tv = Some(t)
-      rows.push(fn() { c.box(style=things_line.then(side), fn() { thing_row(c, src, r, thread, kind, tv, away) }) |> ignore })
+      rows.push(fn() { c.box(style=things_line.then(side), fn() { thing_row(c, src, r, kind, tv, away) }) |> ignore })
     }
   }
   // not all of the chat is here yet: more may come, older ones
@@ -471,7 +471,7 @@ fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?
 /// under it of what else is known of it, 在对话中查看 at its end; a link's card at its left while it is pointed at, its
 /// copy and 在对话中查看 under it. Pressed, a file opens in the preview, a link and a pull
 /// request in the browser.
-fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : String, t : Json?, away : (Double) -> Unit) -> Unit {
+fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, kind : String, t : Json?, away : (Double) -> Unit) -> Unit {
   let p = @sf.theme().p
   let id = c.id("things/row/" + kind + "/" + text(t, "key"))
   let seq = number(t, "seq")

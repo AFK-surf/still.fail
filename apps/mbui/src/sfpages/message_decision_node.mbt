@@ -389,6 +389,8 @@ fn let_go(src : Source, here : MessageNodeHere, seq : Double) -> Unit {
 /// `rest`; the chat's view's `stateAsk`): what it needs of the viewer and can be let go as one card (need_card_node);
 /// else its line (chat_state_line_node), 忽略 under it while the core says something there can be let go. One in the
 /// other's place as the core changes it (let go: the line saying so in the card's).
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn chat_state_node(
   v : @view.View,
   src : Source,

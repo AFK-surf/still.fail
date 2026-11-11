@@ -89,6 +89,8 @@ fn mine_bubble_node(
 /// bubble; under it, unless their next message soon after says it under that one (`followed`), the runtime it waits
 /// for where its station lacks it (blocked_line_node), else that its agents have yet to take it (agent_waiting_node),
 /// else its time: one in the other's place as that changes.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn mine_said_node(
   v : @view.View,
   src : Source,
@@ -166,6 +168,8 @@ let mine_installed : Install = {
 /// picture out in the margin (inline: over the head's start), their name (one of the chat's agents' opens its history,
 /// another chat's that chat), its time, their words under them; where it offers itself (`share`: in a chat's list), its
 /// ⋯ and a right click's offer (message_others_node's), the row saying whether its ⋯'s menu is open.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn person_said_node(
   v : @view.View,
   src : Source,
@@ -208,6 +212,8 @@ fn person_said_node(
 ///|
 /// What a message in a chat's list offers of itself (others_message's `share` as message_row gives it): its key
 /// (`m:<ts>`), its link, its words, its turn's picture shared from the chat's thread.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn message_share_of(src : Source, here : MessageNodeHere, m : () -> Message) -> MessageShare? {
   match (here.view)().thread {
     Some(thread) =>

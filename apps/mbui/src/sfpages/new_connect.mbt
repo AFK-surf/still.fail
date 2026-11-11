@@ -13,7 +13,6 @@
 priv struct NcFlow {
   station : String
   form : String
-  resume : String
   app_id : @ui.Field
   app_secret : @ui.Field
   /// the line Comma's still.fail plugin shows, as typed
@@ -55,7 +54,6 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
   let f : NcFlow = {
     station,
     form: "desk-connect-" + nc_made.val.to_string(),
-    resume,
     app_id: @ui.Field::new(),
     app_secret: @ui.Field::new(),
     comma_line: @ui.Field::new(),
@@ -163,7 +161,7 @@ fn nc_step(
     nc_follow(src, core, here, f, view, v, back)
   }
   let own = if own == "" { f.pages.get(0).unwrap_or(text(v, "step")) } else { own }
-  nc_body(c, src, core, here, f, v, fn() { nc_close(core, f, shut) }, step=own)
+  nc_body(c, src, core, f, v, fn() { nc_close(core, f, shut) }, step=own)
 }
 
 ///|
@@ -284,7 +282,6 @@ fn nc_body(
   c : @ui.Ctx,
   src : Source,
   core : Core,
-  here : Here,
   f : NcFlow,
   v : Json?,
   close : () -> Unit,

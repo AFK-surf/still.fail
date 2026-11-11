@@ -2,7 +2,6 @@ import {
   "moonbitlang/core/cmp",
   "mbui/codec",
   "mbui/ui",
-  "mbui/hostapi",
   "mbui/kit",
   "mbui/motion",
   "mbui/pixels",

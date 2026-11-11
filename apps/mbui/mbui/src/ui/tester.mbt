@@ -765,6 +765,8 @@ fn Tester::motion_period(self : Tester) -> Double {
 ///|
 /// What a run at a frame rate holds of a motion (test_motion_judged): only results, the default's; how it goes frame to
 /// frame on run_for's way too, a fault failing its test; or that, each fault said and none failing.
+// Judge is made by tester_fps.mbt, a file of every target but wasm
+#warnings("-unused_constructor")
 pub enum MotionJudged {
   Results
   Judge
@@ -1487,7 +1489,7 @@ fn r(x : Double) -> Int {
 ///|
 /// The laid-out tree as text: one node per line, indented by depth, with its
 /// rectangle; text nodes with their text and line count.
-pub fn Tester::dump(self : Tester) -> String {
+pub fn Tester::dump(_self : Tester) -> String {
   let sb = StringBuilder()
   dump_node(sb, 0, 0)
   sb.to_string()

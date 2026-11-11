@@ -1036,7 +1036,7 @@ let gap_align_step : Double = 16.0
 /// Whether node `i` is the box of an old view hosted in a node of the window's tree held by one that scrolls what it
 /// holds (Tree::in_scroller): what it holds moves with that, as what a box of the old frame's that scrolls holds does
 /// (a sideways one, shown_whole's).
-fn Ctx::island_scrolls(self : Ctx, i : Int) -> Bool {
+fn Ctx::island_scrolls(_self : Ctx, i : Int) -> Bool {
   match (old_box_owners.get(i), view_app.val) {
     (Some((_, id)), Some(tree)) => tree.in_scroller(id)
     _ => false

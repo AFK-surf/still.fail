@@ -665,7 +665,7 @@ fn sheet_node(
             drawn.val = (w, own, own - off)
             (0.0, below.shown(own, t) + off)
           },
-          fn(w, h) {
+          fn(_, h) {
             let own = h - reach.get()
             match placed.get() {
               Some((stood, at, least, v)) => dmax(below.ends(h=own), at + placed_end(own, stood, v, least))
@@ -1219,7 +1219,7 @@ let sheet_give : Double = 0.55
 /// from as fast as its top went, slowing first where that was up (the coordinator of the migration, 2026-11-11: as one
 /// node turned back does, PR 2's whole). Where it is drawn is worked out as it is, by how tall it is laid out then
 /// (View::moved_by): `h - u` below its place.
-struct SheetRise {
+priv struct SheetRise {
   /// where it stood before its first way: risen (in another's place) or below
   mut risen : Bool
   /// its way: the cause's moment, whether up, where its top stood and how fast it went (points a ms, up), and how tall

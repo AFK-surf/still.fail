@@ -209,7 +209,6 @@ fn face_words(c : @ui.Ctx, key : String, name : String, face : Int, status : Str
 /// pressed, a list of the families installed here under it, a field to find one, each pointed at tried in the chat,
 /// one chosen as the place's face (`local:<family>`).
 fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit {
-  let t = @sf.theme()
   let picked = if chosen.has_prefix(local_prefix) {
     chosen.unsafe_substring(start=local_prefix.length(), end=chosen.length())
   } else {

@@ -167,7 +167,7 @@ test "yield_thumbs: the pointer and the thumb still, the old view's box rounded 
   let round = @signals.signal(0.0, same=fn(a, b) { a == b })
   let seen : Array[Bool] = []
   let rects : Array[Array[(Double, Double, Double, Double)]] = []
-  let (said, _) = yield_run(round~, fn(t, p, _) {
+  let (said, _) = yield_run(round~, fn(t, _, _) {
     let tree = view_tree().unwrap()
     let thumb = fn() {
       t.drawn_rects().filter(fn(r) { r.2 == scroll_bar_size && r.0 > 280.0 }).map(fn(r) { (r.0, r.1, r.2, r.3) })

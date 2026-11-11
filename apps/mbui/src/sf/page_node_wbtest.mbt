@@ -143,7 +143,7 @@ test "a row with words under it as a node: its title and what it says in a line,
         link_row(c, "a", "判断是否完成", note="标记完成后判断是否推荐归档", value="1 台 station 已启用") |> ignore
         link_row(c, "b", "Willow", value="全局记忆 · 项目记忆") |> ignore
       })
-    }, fn(room) { () })
+    }, fn(_) { () })
     let made = page_part_drawn(true, scale, fn(_) { () }, fn(room) {
       group_node(room, fn(g) {
         link_row_node(g, fn() { "判断是否完成" }, fn() {  }, note=fn() { "标记完成后判断是否推荐归档" }, value=fn() { "1 台 station 已启用" })

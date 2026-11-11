@@ -185,7 +185,7 @@ fn Ctx::finger_handle_down(self : Ctx, x : Double, y : Double) -> Bool {
 ///|
 /// A finger's tap lifted at (x, y), on nothing that keeps what is picked (Ctx::keeps_selection): what a finger picked
 /// let go.
-fn Ctx::finger_tapped(self : Ctx, target : Int) -> Unit {
+fn Ctx::finger_tapped(_self : Ctx, target : Int) -> Unit {
   if pointing() is Finger && picked.finger && !picked.dragging && !keeps_selection_on(target) {
     select_none()
   }

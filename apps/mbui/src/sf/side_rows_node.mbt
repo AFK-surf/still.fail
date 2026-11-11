@@ -4,15 +4,6 @@
 // old views' are), as they are now.
 
 ///|
-/// `a` where it says one, else `b` (a side's room said for it alone, else for its axis, else for all).
-fn[T] either(a : T?, b : T?) -> T? {
-  match a {
-    Some(_) => a
-    None => b
-  }
-}
-
-///|
 /// Node `v`'s ground as nav_ground_by has it: the pointer's ground in and out (lit_node), the selected one's (`lit`, the
 /// selected grey by default) while `on()`, each over nav_fade from the moment it changes.
 pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {

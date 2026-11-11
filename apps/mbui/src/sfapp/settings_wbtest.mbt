@@ -983,7 +983,7 @@ test "a run can choose another runtime for a model available on both" {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -1066,7 +1066,7 @@ test "an API key can be disabled and enabled again from its page" {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -1136,14 +1136,6 @@ test "a connect's page says what another runtime reaches where its station lets 
   assert_true(t.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is Some(_))
   let before = settings_tester("connect:ws1/st1#k1")
   assert_true(before.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is None)
-}
-
-///|
-/// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
-/// a dialog (with a pointer) past its coming.
-fn presented_in(t : @ui.Tester) -> Unit {
-  let rest = @sf.presented_rest()
-  t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
 }
 
 ///|

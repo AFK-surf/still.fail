@@ -3,7 +3,6 @@
 ///|
 pub(all) struct StrokeDash {
   priv array : Array[Float]
-  priv offset : Float
   priv interval_len : Float
   priv first_len : Float
   priv first_index : Int
@@ -31,7 +30,7 @@ pub fn StrokeDash::new(dash_array : Array[Float], dash_offset : Float) -> Stroke
   }
   let dash_offset = adjust_dash_offset(dash_offset, interval_len)
   let (first_len, first_index) = find_first_interval(dash_array, dash_offset)
-  Some({ array: dash_array, offset: dash_offset, interval_len, first_len, first_index })
+  Some({ array: dash_array, interval_len, first_len, first_index })
 }
 
 ///|
@@ -213,7 +212,7 @@ priv enum SegmentType {
   SLine
   SQuad
   SCubic
-} derive(Eq)
+}
 
 ///|
 priv struct Segment {

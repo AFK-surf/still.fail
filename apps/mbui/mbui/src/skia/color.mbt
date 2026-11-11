@@ -205,19 +205,6 @@ fn ColorSpace::expand_color(self : ColorSpace, c : Color) -> Color {
 }
 
 ///|
-fn ColorSpace::compress_channel(self : ColorSpace, x : Float) -> Float {
-  match self {
-    Linear => x
-    Gamma2 => norm_clamped(x.sqrt())
-    SimpleSRGB => norm_clamped(approx_powf(x, 0.45454545))
-    FullSRGBGamma => {
-      let x = if x <= 0.0031308 { x * 12.92 } else { approx_powf(x, 0.416666666) * 1.055 - 0.055 }
-      norm_clamped(x)
-    }
-  }
-}
-
-///|
 fn ColorSpace::expand_stage(self : ColorSpace) -> Stage? {
   match self {
     Linear => None

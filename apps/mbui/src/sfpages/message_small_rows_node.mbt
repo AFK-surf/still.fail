@@ -5,6 +5,8 @@
 
 ///|
 /// Over the first message unread when the chat opened (unread_line's): its words in the accent, a rule each side.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn unread_line_node(parent : @view.View) -> @view.View {
   parent.box(fn(r) {
     @sf.style_node(r, fn() { unread_row })
@@ -16,6 +18,8 @@ fn unread_line_node(parent : @view.View) -> @view.View {
 
 ///|
 /// The page before (`older`, as it is now) or after being brought in (pages_coming's): a spinner in the middle.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn pages_coming_node(parent : @view.View, older : () -> Bool) -> @view.View {
   parent.box(fn(r) {
     @sf.style_node(r, fn() { if older() { older_row } else { newer_row } })
@@ -25,6 +29,8 @@ fn pages_coming_node(parent : @view.View, older : () -> Bool) -> @view.View {
 
 ///|
 /// The page before that could not be read, in its place (older_failed's): why, as the core says it.
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn older_failed_node(parent : @view.View, why : () -> String) -> @view.View {
   parent.box(fn(r) {
     @sf.style_node(r, fn() { older_row })
@@ -35,6 +41,8 @@ fn older_failed_node(parent : @view.View, why : () -> String) -> @view.View {
 
 ///|
 /// A chat with nothing in it yet (chat_empty's).
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn chat_empty_node(parent : @view.View) -> @view.View {
   parent.box(fn(r) {
     @sf.style_node(r, fn() { empty_row })
@@ -118,6 +126,8 @@ fn agent_waiting_node(parent : @view.View) -> @view.View {
 /// once it has been on its way sending_shows_ms from when it was sent (`since`, a moment of the frames' clock: what
 /// the row is made of, so a row made again later, scrolled back to, shows it at once; that moment declared, View::
 /// at_moment, said again as `since` changes), not while its words fly here (`flying`: the list's).
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn sending_line_node(
   parent : @view.View,
   words : () -> String,

@@ -66,7 +66,7 @@ priv struct LoginSaid {
   red : Bool
   busy : Bool
   last : Bool
-} derive(Eq)
+}
 
 ///|
 fn said_line(words : String, red? : Bool = false, busy? : Bool = false, last? : Bool = false) -> LoginSaid {

@@ -331,7 +331,6 @@ test "a column's edge's words stay away after it is dragged by many moves, the p
 
 ///|
 test "a list's row in a side column: what stands at its first line's end in one column with what stands in its foot's end corner" {
-  let l = theme().chat_list
   let t = @ui.Tester::new(
     wide_view(fn(c) {
       c.box(w=Px(280.0), fn() {

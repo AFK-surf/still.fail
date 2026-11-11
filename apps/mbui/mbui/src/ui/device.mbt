@@ -123,8 +123,7 @@ pub struct ClipboardRead {
 
 ///|
 priv struct FakeClipRead {
-  /// the frame it was asked in, and its answer with the frame it was given in: taken from the frame after both
-  frame : Int
+  /// its answer with the frame it was given in: taken from the frame after it
   mut answer : (Clipboard, Int)?
 }
 
@@ -511,7 +510,7 @@ fn DeviceState::new() -> DeviceState {
 ///|
 /// A key catcher's state: what the input method composes (not sent until committed), what came since the frame that
 /// last read it, what this frame reads, and which frame that is.
-struct Catcher {
+priv struct Catcher {
   mut composing : String
   came : Array[KeyIn]
   mut keys : Array[KeyIn]

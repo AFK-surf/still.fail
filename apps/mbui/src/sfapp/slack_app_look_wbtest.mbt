@@ -14,7 +14,7 @@ fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "s
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

@@ -347,6 +347,8 @@ pub(all) struct Work {
 
 ///|
 /// A node of the pool.
+// state_rev is never read: Tree::said_pass does not go through a node again for its state
+#warnings("-unused_field")
 struct Node {
   /// which making of this index it is (a handle on an earlier one finds it let go)
   mut gen : Int
@@ -2892,17 +2894,6 @@ fn[T : Eq] Tree::structured(
 }
 
 ///|
-/// A structure's change `f` committed now, as of the moment of the change that caused it (the one being committed, else
-/// the host's now): what had left by then let go first, `f` done with that moment as its cause's, nothing it reads
-/// followed by what is reading.
-fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
-  self.at_cause(fn() {
-    @signals.untracked(f)
-    true
-  })
-}
-
-///|
 /// `f` done as of the moment of the change being committed (the one being committed, else the host's now): the tree
 /// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
 /// marked taken where `f` says it changed something.
@@ -3038,7 +3029,7 @@ priv enum Prop {
   FillsAcross
   WordsBreaks
   GlyphsBy
-} derive(Eq, Show)
+} derive(Show)
 
 ///|
 /// Whether what it sets (at `phase`) may change what a point lands on (Tree::target_in's walk of what takes input:
@@ -5346,25 +5337,6 @@ pub fn Tree::modal_top(self : Tree) -> NodeId? {
   } else {
     Some({ at: top, gen: self.nodes[top].gen })
   }
-}
-
-///|
-/// Where node `at` is in the tree: each node's index among what holds it, from the root's down to it; none where it is
-/// held by nothing the root holds (made, not yet put in what holds it).
-fn Tree::path_of(self : Tree, at : Int) -> Array[Int]? {
-  let path : Array[Int] = []
-  let mut i = at
-  while self.nodes[i].parent >= 0 {
-    let p = self.nodes[i].parent
-    guard self.nodes[p].kids.search(i) is Some(k) else { return None }
-    path.push(k)
-    i = p
-  }
-  if i != 0 {
-    return None
-  }
-  path.rev_in_place()
-  Some(path)
 }
 
 ///|
@@ -8678,7 +8650,7 @@ enum Due {
 /// What holds from each event till `ms` after it (View::holds_for): whether it holds now (`on`, told as it starts and
 /// as it ends), the moment it ends (`until`, set again in place by each event: its one due on the timeline, there exactly
 /// while it is not -1); `live` while its node is.
-struct Hold {
+priv struct Hold {
   ms : Double
   on : @signals.Signal[Bool]
   mut until : Double
@@ -8689,7 +8661,7 @@ struct Hold {
 
 ///|
 /// Something to be done once at a moment (View::at_moment): `f`, at `at`, if still `live`.
-struct Once {
+priv struct Once {
   at : Double
   f : () -> Unit
   live : Ref[Bool]
@@ -8702,7 +8674,7 @@ struct Once {
 ///|
 /// What goes by steps (View::steps): `step` run with each step's number and moment, at the one clock's ticks at
 /// `per_second` from tick `first`, `count` of them, `k` taken; stopped (`live`), no more.
-struct Stepper {
+priv struct Stepper {
   /// the tick of the one clock its first step is at (its rate's ticks from the clock's 0, which a host's monotonic
   /// clock puts hours back: Int64; the first after its cause)
   first : Int64

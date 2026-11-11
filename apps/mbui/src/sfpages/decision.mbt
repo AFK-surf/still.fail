@@ -161,7 +161,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                 c.box(style=settled_room, fn() {
                   let line = c.sp(c.theme().leading(settled_leading).unwrap_or(c.text_size(settled_size).1))
                   let id = @sf.ask_history_trigger(c, "options/" + key, [@ui.span(w)], settled_line, line)
-                  card_history(c, "options/" + key, id, padded=false, fn(p) {
+                  card_history(c, id, padded=false, fn(p) {
                     @sf.options_card(
                       p,
                       "history-options/" + key,
@@ -189,7 +189,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 /// A result's read-only history: a press on the line opens it in a panel (a sheet on a small screen), the original
 /// card's content rather than its now-inactive actions. Only a press: no hover card as well, two boxes of the same
 /// (the user, 2026-11-03: 「改成只允许点击吧」).
-fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
+fn card_history(c : @ui.Ctx, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
   c.on_press(id, fn() {
     @sf.panel(
       @sf.t("web-main.history.details"),
@@ -284,7 +284,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         close=@motion.Snap(0.0),
         fn() {
           ended(Some(("vault/" + key, fn(id) {
-            card_history(c, "vault/" + key, id, fn(p) {
+            card_history(c, id, fn(p) {
               @settings.vault_ask_details(p, asked)
             })
           })))
@@ -359,7 +359,7 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         close=@motion.Snap(0.0),
         fn() {
           ended(Some(("phone/" + key, fn(id) {
-            card_history(c, "phone/" + key, id, fn(p) {
+            card_history(c, id, fn(p) {
               @sf.ask_words(p, @sf.t("android-misc.adb.ask.chat.title"), ask.reason)
             })
           })))
@@ -439,7 +439,7 @@ fn rig_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask :
         close=@motion.Snap(0.0),
         fn() {
           ended(Some(("rig/" + key, fn(id) {
-            card_history(c, "rig/" + key, id, fn(p) {
+            card_history(c, id, fn(p) {
               @sf.ask_words(p, @sf.t("web-pages.rigs.ask.title", args=[("name", ask.name)]), ask.reason)
             })
           })))
@@ -524,7 +524,7 @@ pub fn decision_options(
 
 ///|
 /// 忽略 under what asks what no one has decided, post `seq` of the chat (`asked`: the core's, on the post or the chat's
-/// `stateAsk`; `state`: shown where the chat stands, not under the post): the viewer lets it go (`decision.dismiss`),
+/// `stateAsk`): the viewer lets it go (`decision.dismiss`),
 /// let go at once and back if that fails. Let go, on screen or not, it goes from that moment (Turns::in_turn,
 /// `own_at`), fading and shrinking to 85% as its room closes (the archive buttons' 280 ms, ArchiveEase); the card
 /// answered, it goes so with the options (`asking` false, from `asked_at`).
@@ -538,7 +538,6 @@ fn ask_dismiss(
   asking? : Bool = true,
   asked_at? : Double? = None,
   at_end? : Bool = false,
-  state? : Bool = false,
   lead? : Bool = false,
 ) -> Unit {
   guard here.view.thread is Some(thread) && !here.view.offline && !here.view.archived else { return }

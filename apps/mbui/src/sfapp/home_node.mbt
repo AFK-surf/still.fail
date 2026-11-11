@@ -90,7 +90,7 @@ fn home_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @s
 }
 
 ///|
-/// Home's top bar (top_bar's) in `v`, on its glass, under the status bar: the filter at the left (with stations to
+/// Home's top bar in `v`, on its glass, under the status bar: the filter at the left (with stations to
 /// narrow), what is catching up and going up beside it, the workspace's switcher and settings at the right; 待处理
 /// first unless not `bell` (over the page of a device waiting in the lock: nothing of the workspace's to attend to).
 /// Its tips in `tips`.

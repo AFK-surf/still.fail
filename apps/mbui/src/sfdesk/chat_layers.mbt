@@ -7,7 +7,7 @@
 ///|
 /// Over chat `r`'s pane `pane` (its draft `draft`; `room`, what the composer keeps at its foot), after its composer:
 /// what is picked in its messages, what is carried over it.
-fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
+fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, room : Double) -> Unit {
   @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
     c.tell("pick/quote", fn() {
       writing_quote(src, writing(src, draft), {

@@ -15,7 +15,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -145,23 +145,6 @@ fn scroll_to_words(t : @ui.Tester, words : String) -> Unit {
     }
     t.wheel(195.0, 400.0, -300.0)
   }
-}
-
-///|
-/// Whether the words `what` are drawn faded out (there, their room kept, nothing of them seen).
-fn faded(t : @ui.Tester, what : String) -> Bool {
-  match t.look_of(what) {
-    Some((_, _, alpha)) => alpha < 0.01
-    None => false
-  }
-}
-
-///|
-/// How tall the card's options are, from the first's top to the last's foot.
-fn options_tall(t : @ui.Tester) -> Double {
-  let (_, top, _, _) = t.rect_of("把首页和聊天页的截图都更新").unwrap()
-  let (_, y, _, h) = t.rect_of("这次只改列表，截图下次再说").unwrap()
-  y + h - top
 }
 
 ///|

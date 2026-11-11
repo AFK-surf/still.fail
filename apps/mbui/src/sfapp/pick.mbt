@@ -5,7 +5,6 @@
 /// As at the start (tests): nothing picked, no press remembered, no link's menu.
 fn pick_reset() -> Unit {
   @sfbase.pick_reset()
-  link_menu.href = ""
   link_menu.items = []
   link_menu.pick = fn(_, _) {  }
   link_menu.x = 0.0
@@ -26,10 +25,6 @@ fn pick_back(c : @ui.Ctx) -> Unit {
     c.take_back(fn() { pick_clear() })
   }
 }
-
-///|
-/// How long a finger is held still for a long press (ViewConfiguration's long press timeout, as Compose has it).
-let long_press_ms : Double = @ui.long_press_ms
 
 ///|
 /// Whether words are picked as a desktop's (a mouse's selection over the page, its pill) rather than as a phone's: by the

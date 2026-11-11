@@ -3170,11 +3170,6 @@ fn st_layers() -> Int { current.val.st_layers() }
 impl Host with st_pointer(_, _, _, _, _, _, _) { () }
 
 ///|
-fn st_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit {
-  current.val.st_pointer(id, png, w, h, hx, hy)
-}
-
-///|
 /// The pointer's picture told with the name the app gives it (`key`), made (`png`) only by a host that draws it.
 impl Host with st_pointer_named(self, id, _, png, w, h, hx, hy) { self.st_pointer(id, png(), w, h, hx, hy) }
 

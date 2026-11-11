@@ -191,7 +191,7 @@ test "a video plays in the one player (@sf.player_view), its bytes read through 
   assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
   t.draw()
   assert_true(t.find(" / 3 帧") is Some(_))
-  let v = viewer.get().unwrap()
+  viewer.get().unwrap() |> ignore
   t.back()
   assert_true(viewer.get() is None)
   // faded out (pv_fade_ms from when it set out), its view closed

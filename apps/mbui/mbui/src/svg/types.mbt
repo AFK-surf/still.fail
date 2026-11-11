@@ -36,11 +36,6 @@ fn Stream::next_byte(self : Stream) -> Int {
 }
 
 ///|
-fn Stream::advance(self : Stream, n : Int) -> Unit {
-  self.pos += n
-}
-
-///|
 fn is_space_b(c : Int) -> Bool {
   c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D
 }

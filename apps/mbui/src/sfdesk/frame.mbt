@@ -1106,8 +1106,6 @@ fn main_page(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  all : Array[Workspace],
-  invited : Bool,
   page : Page,
 ) -> Unit {
   match page {

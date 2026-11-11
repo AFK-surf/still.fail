@@ -9,7 +9,7 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(Json::object({})))
     },
     topic_read: fn(name, params) {
@@ -146,7 +146,7 @@ fn xshare_up(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(Json::object({})))
     },
     topic_read: fn(name, params) {

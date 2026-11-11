@@ -146,7 +146,7 @@ test "a key of the tree over an old view's own key beside it: on the old key and
 
 ///|
 test "a key of the tree over words of an old view to pick: past its edge on them, the old view's, the key not pressed nor lit" {
-  let (t, tree, key) = ro_tester(2, 2)
+  let (t, tree, _) = ro_tester(2, 2)
   let island = match tree.target_at(50.0, 117.0) {
     Hosted(h) => h
     _ => @halt.saying("the old view not found on its words")

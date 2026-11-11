@@ -90,7 +90,7 @@ fn links_core(
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
         "invitation.preview" => done(invitation)
@@ -163,7 +163,7 @@ test "a chat's link followed on the wide frame: that chat over this one, back co
 ///|
 test "a link to this chat's own item with ?service=: only its web service over this chat" {
   let calls : Array[Made] = []
-  let t = links_core(calls, "chat")
+  let _ = links_core(calls, "chat")
   open_link("https://app.still.fail/o/ws1/st1/s-c1?service=j-web")
   let pages = app.nav.pages()
   assert_eq(pages.length(), 3)
@@ -191,7 +191,7 @@ test "a web service's own page's link (/w/…/s/…/services/<job>): the service
 ///|
 test "a chat's link of another workspace: that workspace in view, the chat over its Home (openItem)" {
   let calls : Array[Made] = []
-  let t = links_core(calls, "chat")
+  let _ = links_core(calls, "chat")
   open_link("https://app.still.fail/w/ws2/s/st9/chats/s-x")
   assert_eq(app.picked.get(), "ws2")
   let set = named(calls, "prefs.set")
@@ -406,7 +406,7 @@ test "a login's page on this device: the notice that holds the app up says which
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "machineLogin.open" => done(Ok({ "url": "https://accounts.example.com/o/oauth2/auth?x=1" }))
         _ => (base.call)(name, params, done)

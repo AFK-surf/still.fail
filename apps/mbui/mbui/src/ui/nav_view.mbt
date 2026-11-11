@@ -462,7 +462,7 @@ fn[P] Nav::page_built(
   let before_edge = c.back_edge_next
   let before_island = c.back_island_next
   let before_chain = c.back_chain_next
-  let i = c.box(style=nav_page_whole.then(style(bg=Data(bg))), fn() {
+  let _ = c.box(style=nav_page_whole.then(style(bg=Data(bg))), fn() {
     let stack_back = fn() {
       c.back_next = Some(fn(kind, x, w, t, progress) { self.gesture(kind, x, w, t, progress~) })
       c.back_node_next = c.cur

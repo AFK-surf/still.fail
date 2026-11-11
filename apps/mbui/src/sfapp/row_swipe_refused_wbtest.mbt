@@ -9,7 +9,7 @@ test "a row swiped off and archived, the core refusing it: the row comes back to
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       if name == "chat.archive" {
         done(Err({ "message": "Willow 不在线" }))
       } else {

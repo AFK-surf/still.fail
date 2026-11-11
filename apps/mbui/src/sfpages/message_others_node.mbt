@@ -130,6 +130,8 @@ let msg_share_side : Double = 24.0
 /// was given (sent_elsewhere's), as `s` says as it changes, in `v`: drawn as a message of theirs, that place's mark on
 /// the picture's corner and, after the name, where it went or came from, red where sending it failed; its words as
 /// Markdown. In its row's room (message_row_frame_node: `key`, its list's Entry::id `s:<key>`; `side`, `top`; `over`).
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_value")
 fn sent_elsewhere_node(
   v : @view.View,
   src : Source,

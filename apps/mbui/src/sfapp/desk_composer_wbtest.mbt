@@ -18,11 +18,11 @@ fn desk_composer_tester(
     draft_picture: kept.unwrap_or(base.draft_picture),
     topic_read: fn(name, params) { over(name, base.topic(name, params).get().snapshot()) },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
     call_bytes: fn(name, params, bytes, done) {
-      calls.push({ name, params, bytes: Some(bytes), done, heard: None })
+      calls.push({ name, params, bytes: Some(bytes), done })
       (base.call_bytes)(name, params, bytes, done)
     },
   }
@@ -883,7 +883,7 @@ test "the composer growing a line as it is typed in draws none of its words over
     t.type_text("先看第三项")
     t.run_for(2.0 * @ui.move_most_ms)
     t.draw()
-    let (cx, cy) = t.locate("icon:arrow-up")[0]
+    let (_, cy) = t.locate("icon:arrow-up")[0]
     let half = @sf.theme().round.side / 2.0
     let over = fn() {
       t
@@ -1043,7 +1043,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

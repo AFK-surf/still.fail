@@ -289,9 +289,9 @@ fn looks_nodes_kept(c : Ctx) -> Unit {
 /// in it having told what follows it) and the two compared, the test failing where they differ.
 fn looks_looked(
   c : Ctx,
-  w : Double,
-  h : Double,
-  scale : Double,
+  _w : Double,
+  _h : Double,
+  _scale : Double,
   t : Double,
   kind : Int,
   scrolled : Bool,

@@ -58,7 +58,7 @@ pub struct TextLayout {
 }
 
 ///|
-struct Glyph {
+priv struct Glyph {
   u : Double
   v : Double
   gw : Double
@@ -75,7 +75,7 @@ struct Glyph {
 
 ///|
 /// The strings shaped in one font (size, weight, style) with one letter spacing.
-struct FontShapes {
+priv struct FontShapes {
   size : Double
   weight : Int
   style : Int
@@ -84,7 +84,7 @@ struct FontShapes {
 }
 
 ///|
-struct TextCache {
+priv struct TextCache {
   fonts : Array[FontShapes]
   // strings shaped, in all fonts
   mut shaped : Int

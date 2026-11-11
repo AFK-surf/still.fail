@@ -145,7 +145,6 @@ fn info_row(
   dot? : Bool = false,
   on_press? : () -> Unit,
 ) -> Unit {
-  let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
   let look = if tile {
     info_row_style.then(info_row_tile)
@@ -616,7 +615,6 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   let stations = station_marks(src, @sfbase.workspace_of(r.station))
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let s = field(a, "session")
-  let status = text(a, "status")
   let entry = context_entry(c, src, r, key, s, close)
   c.box(w=Fill(1.0), fn() {
     // (its head: the panel's title row in the middle of the window (agent_title_row), else its own here, clear of an

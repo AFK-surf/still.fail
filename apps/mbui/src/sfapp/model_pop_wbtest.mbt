@@ -11,18 +11,6 @@ fn model_pop(mode : String) -> @ui.Tester {
 }
 
 ///|
-/// The words `name` as drawn last in the panel (over what the page has under it there): how wide they are, the room
-/// they have, their weight.
-fn pop_words(t : @ui.Tester, name : String) -> @ui.Laid? raise {
-  let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
-  t
-  .boxes()
-  .rev()
-  .iter()
-  .find_first(fn(b) { b.kind == "text" && b.text == name && b.x >= px && b.x < px + pw && b.y >= py && b.y < py + ph })
-}
-
-///|
 test "wide, short names: the model's panel as wide as what it holds, not as wide as it may be" {
   let t = model_pop("newchat-model")
   let (px, _, pw, _) = t.get(@ui.Role::Dialog).rect
@@ -134,12 +122,6 @@ test "a new chat's model panel opens where it stays: what the page has shown unt
     }),
     msg="\{rects}",
   )
-}
-
-///|
-/// Whether `a`, `b`, `c` lie in that order along the panel, one way or the other.
-fn in_line(a : Double, b : Double, c : Double) -> Bool {
-  (a < b && b < c) || (a > b && b > c)
 }
 
 ///|

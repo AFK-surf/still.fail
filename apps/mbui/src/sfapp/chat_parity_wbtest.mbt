@@ -66,7 +66,7 @@ fn edited_core(
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(answer(name)))
     },
   }

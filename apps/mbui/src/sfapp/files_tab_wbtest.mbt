@@ -7,7 +7,7 @@ fn tab_tester(calls : Array[Made], platform? : Int = 0) -> @ui.Tester {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

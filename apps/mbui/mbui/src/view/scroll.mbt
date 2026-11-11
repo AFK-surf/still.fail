@@ -59,11 +59,9 @@ pub struct Scroll {
   priv mut whole : (() -> Double)?
   /// what ends the fling's settling at its end (View::at_moment's), as it is called off
   priv mut settle_off : () -> Unit
-  /// where the hand held on it was last (the window's, down) and when, and how fast it went (points a ms, down the
-  /// column)
+  /// where the hand held on it was last (the window's, down), and how fast it went (points a ms, down the column)
   priv mut hand_y : Double
   priv mut hand_wy : Double
-  priv mut hand_t : Double
   priv mut hand_v : Double
   /// taken over from what it went down on (View::claims): its first move from where it went down counted past the slop
   priv mut claimed : Bool
@@ -142,7 +140,6 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     settle_off: fn() {  },
     hand_y: 0.0,
     hand_wy: 0.0,
-    hand_t: 0.0,
     hand_v: 0.0,
     claimed: false,
     on_scrolled: fn(_) {  },
@@ -1119,7 +1116,6 @@ pub fn View::scrolls(
         s.stopped(d.at) |> ignore
         s.hand_y = hy
         s.hand_wy = hwy
-        s.hand_t = d.at
         s.hand_v = 0.0
       }
       Moved => {
@@ -1139,7 +1135,6 @@ pub fn View::scrolls(
         }
         s.hand_y = hy
         s.hand_wy = hwy
-        s.hand_t = d.at
       }
       // (let go: flung at the finger's speed as of then, by its own events (Drag's `vy`: a pause before it let go, none),
       // no faster than a fling goes in the window's points, then in its own terms)

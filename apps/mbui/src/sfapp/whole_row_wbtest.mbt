@@ -13,7 +13,7 @@ fn late_rows_tester(calls : Array[Made], mode : String, w : Double, h : Double, 
   let made : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

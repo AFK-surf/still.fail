@@ -267,7 +267,7 @@ pub struct TipHand {
 /// one before had it at the moment it was turned (`from`, worked out of that one as of then: the same however far it had
 /// got), to `to` over `ms` from `start` as `ease` has it; while it goes (`moving`, till the moment it ends: the clock
 /// read no longer than that), the moment it ends its own, let go as another way is set out.
-struct TipFade {
+priv struct TipFade {
   mut from : Double
   mut to : Double
   mut start : Double

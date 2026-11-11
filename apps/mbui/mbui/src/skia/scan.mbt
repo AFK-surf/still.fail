@@ -5,7 +5,7 @@
 ///|
 /// What scan conversion draws with (Blitter): spans, runs of alpha, columns, pairs, rects and masks. A blitter
 /// implements what its callers use.
-trait Blitter {
+priv trait Blitter {
   blit_h(Self, x : Int, y : Int, width : Int) -> Unit
   blit_anti_h(Self, x : Int, y : Int, alpha : FixedArray[Int], runs : FixedArray[Int]) -> Unit
   blit_v(Self, x : Int, y : Int, height : Int, alpha : Int) -> Unit

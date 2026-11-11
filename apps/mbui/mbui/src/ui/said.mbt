@@ -49,12 +49,6 @@ let unmoved : Moved = {
 }
 
 ///|
-/// What a build said said again of node `node` (a part's or a row's box drawn again).
-fn moved_to(node : Int) -> Moved {
-  { ..unmoved, node: node }
-}
-
-///|
 /// Rect (x0 y0 x1 y1) moved, in the clip it is put in.
 fn Moved::rect(
   self : Moved,
@@ -172,13 +166,6 @@ fn Ctx::build_take(self : Ctx, marks : Array[Int], into : Array[&SaidAgain], cut
     }
   }
 }
-
-///|
-/// The targets' place among the paint lists, and what scrolls' (a part's marks: what the hand is found on).
-let said_hits : Int = 0
-
-///|
-let said_scrolls : Int = 1
 
 ///|
 /// Where each of the frame's paint lists stands now (`marks`, filled).

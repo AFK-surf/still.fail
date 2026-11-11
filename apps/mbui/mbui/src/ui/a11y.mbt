@@ -61,7 +61,7 @@ struct A11yNode {
 /// What a host keeps of what it was told (each node by its number, what holds each, which has the focus), as an update
 /// leaves it: what the app keeps of what it told (A11yTold) and a test's fake host of what it was told, made the same
 /// way a host makes it.
-struct A11yMirror {
+priv struct A11yMirror {
   nodes : Map[Int, A11yNode]
   holder : Map[Int, Int]
   mut focus : Int
@@ -786,7 +786,7 @@ fn Ctx::a11y_tree_pass(self : Ctx, tree : @view.Tree, full : Bool, out : Array[A
   // what of the tree's the pass found, each after what holds it
   for e in pass.entries {
     let n = a11y_tree_num(e.id)
-    let (holder, holder_at, holder_named) = match e.parent {
+    let (_, holder_at, holder_named) = match e.parent {
       Some(p) => {
         let k = a11y_tree_num(p)
         (k, place_of(p), told.named.get(k).unwrap_or(k))

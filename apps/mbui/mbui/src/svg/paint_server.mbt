@@ -37,10 +37,7 @@ fn non_empty_id(s : String) -> String? {
 
 ///|
 fn convert_linear(doc : SDoc, node : Int, state : State) -> ServerOrColor? {
-  let id = match non_empty_id(doc.element_id(node)) {
-    Some(i) => i
-    None => return None
-  }
+  guard non_empty_id(doc.element_id(node)) is Some(_) else { return None }
   let stops = match find_gradient_with_stops(doc, node) {
     Some(g) => convert_stops(doc, g)
     None => return None
@@ -57,7 +54,7 @@ fn convert_linear(doc : SDoc, node : Int, state : State) -> ServerOrColor? {
         y1: resolve_number(doc, node, "y1", units, state, Length::zero()),
         x2: resolve_number(doc, node, "x2", units, state, { number: 100.0, unit: Percent }),
         y2: resolve_number(doc, node, "y2", units, state, Length::zero()),
-        base: { id, units, transform, spread: convert_spread_method(doc, node), stops },
+        base: { units, transform, spread: convert_spread_method(doc, node), stops },
       }),
     ),
   )
@@ -65,10 +62,7 @@ fn convert_linear(doc : SDoc, node : Int, state : State) -> ServerOrColor? {
 
 ///|
 fn convert_radial(doc : SDoc, node : Int, state : State) -> ServerOrColor? {
-  let id = match non_empty_id(doc.element_id(node)) {
-    Some(i) => i
-    None => return None
-  }
+  guard non_empty_id(doc.element_id(node)) is Some(_) else { return None }
   let stops = match find_gradient_with_stops(doc, node) {
     Some(g) => convert_stops(doc, g)
     None => return None
@@ -99,7 +93,7 @@ fn convert_radial(doc : SDoc, node : Int, state : State) -> ServerOrColor? {
         fy,
         // PositiveF32::new(fr).unwrap_or(ZERO): a negative, NaN or infinite fr is 0
         fr: if fr >= 0.0 && ffin(fr) { fr } else { 0.0 },
-        base: { id, units, transform, spread, stops },
+        base: { units, transform, spread, stops },
       }),
     ),
   )
@@ -111,10 +105,7 @@ fn convert_pattern(doc : SDoc, node : Int, state : State, cache : Cache) -> Serv
     Some(n) => n
     None => return None
   }
-  let id = match non_empty_id(doc.element_id(node)) {
-    Some(i) => i
-    None => return None
-  }
+  guard non_empty_id(doc.element_id(node)) is Some(_) else { return None }
   let view_box = {
     let n1 = resolve_attr(doc, node, "viewBox")
     let n2 = resolve_attr(doc, node, "preserveAspectRatio")
@@ -162,7 +153,7 @@ fn convert_pattern(doc : SDoc, node : Int, state : State, cache : Cache) -> Serv
     }
   }
   update_paint_servers(root, @skia.Transform::default(), None, None, cache)
-  Some(Server(PPattern({ id, units, content_units, transform, rect, view_box, root })))
+  Some(Server(PPattern({ units, content_units, transform, rect, view_box, root })))
 }
 
 ///|
@@ -474,18 +465,18 @@ fn process_context_paint(paint : Paint, cts : @skia.Transform, path_transform : 
   }
   match paint {
     PColor(_) => paint
-    PLinear(lg) =>
-      PLinear({
-        ..lg,
-        base: { ..lg.base, id: cache.gen_linear_gradient_id(), transform: lg.base.transform.post_concat(rev) },
-      })
-    PRadial(rg) =>
-      PRadial({
-        ..rg,
-        base: { ..rg.base, id: cache.gen_radial_gradient_id(), transform: rg.base.transform.post_concat(rev) },
-      })
-    PPattern(p) =>
-      PPattern({ ..p, id: cache.gen_pattern_id(), transform: p.transform.post_concat(rev), root: p.root.deep_copy() })
+    PLinear(lg) => {
+      cache.gen_linear_gradient_id() |> ignore
+      PLinear({ ..lg, base: { ..lg.base, transform: lg.base.transform.post_concat(rev) } })
+    }
+    PRadial(rg) => {
+      cache.gen_radial_gradient_id() |> ignore
+      PRadial({ ..rg, base: { ..rg.base, transform: rg.base.transform.post_concat(rev) } })
+    }
+    PPattern(p) => {
+      cache.gen_pattern_id() |> ignore
+      PPattern({ ..p, transform: p.transform.post_concat(rev), root: p.root.deep_copy() })
+    }
   }
 }
 
@@ -507,7 +498,7 @@ fn process_paint(
       Some(b) => b
       None => return None
     }
-    match paint.to_user_coordinates(b, cache) {
+    match paint.to_user_coordinates(b) {
       Some(p) => paint = p
       None => return None
     }
@@ -524,7 +515,7 @@ fn uses_object_bounding_box(paint : Paint) -> Bool {
 }
 
 ///|
-fn Paint::to_user_coordinates(self : Paint, bbox : @skia.Rect, cache : Cache) -> Paint? {
+fn Paint::to_user_coordinates(self : Paint, bbox : @skia.Rect) -> Paint? {
   let bbox = match bbox.to_non_zero_rect() {
     Some(b) => b
     None => return None

@@ -148,3 +148,14 @@ test "a list's keys changed, kept up to the first that is another: after appends
     assert_eq(wrong, [], msg="on \{g}")
   }
 }
+
+///|
+/// All of it again: `keys`, each with its height as laid out on the grid of `g` pixels a point and whether it was laid
+/// out.
+fn[K : Eq] Column::fill(self : Column[K], keys : Array[K], hs : Array[(Double, Bool)], g : Double) -> Unit {
+  self.refill(keys, g, whole=true) |> ignore
+  for i, h in hs {
+    self.put(i, h.0, h.1)
+  }
+  self.summed()
+}

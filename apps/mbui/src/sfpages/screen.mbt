@@ -18,7 +18,7 @@ priv struct DropTo {
   reveal : Bool
   /// the file is an app to install on the device once it is there (`screen.install`)
   install : Bool
-} derive(Eq)
+}
 
 ///|
 /// A part of the screen (0..1 of its width and height): its left, top, width, height.

@@ -24,7 +24,6 @@ fn message_video_node(
 ) -> Unit {
   let station = fn() { (place.station)() }
   let owner = fn() { owner_of(place.here(), a()) }
-  let name = fn() { stored_name(a().path) }
   let going_up = fn() { a().upload != "" && a().path == @sfbase.upload_path(a().upload) }
   let letterbox = fn() { image_box(a(), video_least).2 }
   let thumb = fn() {

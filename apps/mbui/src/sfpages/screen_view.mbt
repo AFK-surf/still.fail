@@ -101,7 +101,7 @@ fn screen_ui(key : String) -> ScreenUi {
     None => {
       let u : ScreenUi = {
         zoom: screen_zoom(),
-        pad: { x: 0.5, y: 0.5, moves: 0 },
+        pad: { x: 0.5, y: 0.5 },
         held: { mods: 0 },
         full: @signals.signal(false),
         fulled: false,

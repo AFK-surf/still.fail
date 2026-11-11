@@ -849,7 +849,7 @@ fn Ctx::drawn_z(self : Ctx, i : Int) -> Int {
 ///|
 /// Whether something in node `i` is drawn moved this frame: then `i` is painted even where it is laid out outside
 /// what cuts it.
-fn Ctx::draw_carries(self : Ctx, i : Int) -> Bool {
+fn Ctx::draw_carries(_self : Ctx, i : Int) -> Bool {
   i < dr.carry.length() && dr.carry[i] == dr.build
 }
 

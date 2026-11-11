@@ -51,6 +51,8 @@ fn new_run() -> Unit {
 /// left set by a test that made none, the next test's Tester (in the same process, whichever test that is) took the app
 /// as that test had left it, not as at the start (2026-11-11). detlint's `reset-by-hand` holds new_run() to a Tester
 /// after it.
+// called by tests alone; here, as detlint's `reset-by-hand` wants it
+#warnings("-unused_value")
 fn fresh_app() -> Unit {
   new_run()
   reset_by_hand.val = false
@@ -69,7 +71,6 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
-  steadies.clear()
   sheet_host.kind = NoSheet
   sheet_host.serial = 0
   bar_reset()
@@ -102,15 +103,7 @@ fn reset() -> Unit {
   frame_bare.val = false
   window_shown.val = false
   @sfbase.held_pictures_waiting.val = false
-  drafts.clear()
-  cui.attach = false
-  cui.picking = None
-  cui.picking_for = ""
-  cui.outside = false
   cui.restore_error.clear()
-  cui.room_for = ("", None)
-  cui.cap_id = 0
-  cui.content_id = 0
   cui.doing.clear()
   pick_reset()
   dv_reset()
@@ -134,9 +127,7 @@ fn reset() -> Unit {
   flashing.val = ("", 0.0)
   bench_on.val = -1
   boxed_n.val = 0
-  // the composer: its ids counted from the start, what waits for it
-  next_pending.val = 1
-  quote_fields.clear()
+  // the composer: what waits for it
   share_files_made.val = 0
   // the made-up core's own, where one is linked (a test's, a tool's: sffixture's, as its wire says)
   (@sfbase.made_reset.val)()
@@ -699,8 +690,6 @@ fn page_view(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  all : Array[Workspace],
-  invited : Bool,
   page : Page,
   barred? : Bool = false,
 ) -> Unit {

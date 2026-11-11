@@ -11,6 +11,8 @@
 ///|
 /// What of a chosen face is here: being asked for, being fetched, its files whole (each with the weight it is for),
 /// or why not.
+// Asking and Fetching are states matched only by `_`: a face neither whole nor failed
+#warnings("-unused_constructor")
 priv enum FaceHad {
   Asking
   Fetching

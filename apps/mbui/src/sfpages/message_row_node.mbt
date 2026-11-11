@@ -9,7 +9,9 @@
 /// A row of a chat's list as made: its key (Entry::id) and its outermost node, what is anchored on it (a menu, the bar
 /// over picked words, where words sent land) anchored there; whether its own ⋯'s menu is open (as that changes; never,
 /// for a row with none: what is laid over it lit meanwhile, by what draws that).
-struct MessageRowNode {
+// the chat's page as nodes: held by its tests, not used by the app yet
+#warnings("-unused_field")
+priv struct MessageRowNode {
   key : String
   node : @view.View
   menu_on : () -> Bool

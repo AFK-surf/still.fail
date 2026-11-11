@@ -13,7 +13,7 @@ fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : Strin
     ..base,
     call: fn(name, params, done) {
       match calls {
-        Some(all) => all.push({ name, params, bytes: None, done, heard: None })
+        Some(all) => all.push({ name, params, bytes: None, done })
         None => ()
       }
       (base.call)(name, params, done)

@@ -79,7 +79,7 @@ pub fn connect_node(
           back,
           fn() { ["sample"] },
           fn(b, _) {
-            @sf.waiting_node(b, fn(s) { cd_blocks(s, @sfbase.sample_source, quiet, here, fn() { sample }, tips, stint, page_w) }, note~)
+            @sf.waiting_node(b, fn(s) { cd_blocks(s, @sfbase.sample_source, quiet, here, fn() { sample }, tips, page_w) }, note~)
           },
           on_back~,
           frame~,
@@ -102,7 +102,7 @@ pub fn connect_node(
           p,
           fn() { @sf.t("android-misc.bar.place.connects") },
           fn() { cd_keys(cv()) },
-          fn(b, key) { cd_block(b, src, core, here, station, item, key, tips, stint, page_w) },
+          fn(b, key) { cd_block(b, src, core, here, station, item, key, tips, page_w) },
           on_back~,
           frame~,
           said?,
@@ -179,11 +179,10 @@ fn cd_blocks(
   here : () -> Here,
   item : () -> Json?,
   tips : @sf.TipLayer,
-  stint : () -> Int,
   page_w : () -> Double,
 ) -> Unit {
   for key in cd_keys(field(@signals.untracked(item), "connect")) {
-    cd_block(v, src, core, here, text(@signals.untracked(item), "station"), item, key, tips, stint, page_w)
+    cd_block(v, src, core, here, text(@signals.untracked(item), "station"), item, key, tips, page_w)
   }
 }
 
@@ -198,7 +197,6 @@ fn cd_block(
   item : () -> Json?,
   key : String,
   tips : @sf.TipLayer,
-  stint : () -> Int,
   page_w : () -> Double,
 ) -> Unit {
   let cv = fn() { field(item(), "connect") }

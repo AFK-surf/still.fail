@@ -130,7 +130,6 @@ pub fn station_peek_part_node(v : @view.View, address : String, stint : () -> In
 /// What a station's card in a hover card reads, each followed (station_peek_card's): its name as the workspace's
 /// stations say it (peek_name's), the station as its own page has it (peek_station's), its screens.
 priv struct PeekTopics {
-  address : String
   name : () -> String
   s : () -> Json?
   screens : () -> Json?
@@ -142,7 +141,6 @@ fn peek_station_topics(core : Core, address : String) -> PeekTopics {
   let station = (core.topic)("station", { "scope": str(workspace_of(address)), "station": str(address) })
   let screens = (core.topic)("screens", { "station": str(address) })
   {
-    address,
     name: fn() { peek_name_of(stations.get().value, address) },
     s: fn() {
       match station.get().value {

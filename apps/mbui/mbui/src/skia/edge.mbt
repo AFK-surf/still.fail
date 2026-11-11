@@ -52,12 +52,6 @@ fn fdot6_div(a : Int, b : Int) -> Int {
 }
 
 ///|
-fn fdot6_can_convert_to_fdot16(n : Int) -> Bool {
-  let max_dot6 = 2147483647 >> (16 - 6)
-  n.abs() <= max_dot6
-}
-
-///|
 fn fdot6_small_scale(value : Int, dot6 : Int) -> Int {
   ((value * dot6) >> 6) & 0xFF
 }

@@ -15,7 +15,6 @@ priv enum MdInline {
   /// its address, its words, and what it is to as the core says (refLinks.ts linkTo: the tree's `to`)
   Link(String, Array[MdInline], LinkTo)
   Image(String, String)
-  SoftBreak
   HardBreak
 }
 ///|
@@ -24,9 +23,13 @@ priv struct MdItem { task : Bool?; blocks : Array[MdBlock] }
 priv struct MdList { ordered : Bool; start : Int; tight : Bool; items : Array[MdItem] }
 ///|
 /// How a table's column is aligned (GFM's `:--`, `:-:`, `--:`; none said).
+// never drawn: a table's columns are not aligned as said
+#warnings("-unused_constructor")
 priv enum MdAlign { Plain; Left; Center; Right }
 ///|
 /// `md`, `csv`: the table to copy, as Markdown and as CSV, as the core wrote it (markdown.ts tableMarkdown, tableCsv).
+// align is never drawn: a table's columns are not aligned as said
+#warnings("-unused_field")
 priv struct MdTable { align : Array[MdAlign]; head : Array[Array[MdInline]]; rows : Array[Array[Array[MdInline]]]; md : String; csv : String }
 ///|
 priv enum MdBlock {
@@ -46,7 +49,7 @@ fn md_plain(xs : Array[MdInline]) -> String {
     match x {
       Text(s) | Code(s) | FileRef(s, _, _, _) | Formula(s, _) | Image(_, s) => out.write_string(s)
       Emph(c) | Strong(c) | Strike(c) | Link(_, c, _) => out.write_string(md_plain(c))
-      SoftBreak | HardBreak => out.write_string(" ")
+      HardBreak => out.write_string(" ")
     }
   }
   out.to_string()

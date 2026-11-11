@@ -1,14 +1,11 @@
 // The small parts the phone's sheets are made of, as the Android app draws them (shared ui/Parts.kt NavBar, NavButton,
-// SectionHeader; ui/Controls.kt Button, PickRow; ui/Sheet.kt SheetHost, SheetGrab, SheetHead): a station file's sheet and
-// the reader's panels (station_files.mbt, viewer_host.mbt) until they are the library's presenters, and 文件's bar.
+// SectionHeader; ui/Controls.kt Button, PickRow; ui/Sheet.kt SheetHost, SheetGrab, SheetHead): the reader's panels
+// (viewer_host.mbt) until they are the library's presenters, and 文件's bar.
 
 ///|
 /// As at the start (tests).
 fn dv_reset() -> Unit {
   reader_set.clear()
-  draft_refs.clear()
-  sfs.ref = None
-  sfs.ref_closing = false
 }
 
 // ── the bar ──────────────────────────────────────────────────────────────

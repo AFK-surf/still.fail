@@ -528,6 +528,8 @@ let seg_least : Double = @ui.Space::px(S1)
 /// How a choice's options fit the room option_widths gives them: their words at their size; their words made smaller
 /// alike, by this much (down to the system's own size of words, as the systems' own segmented controls make theirs);
 /// or not side by side at all, the chosen one alone and the others offered in a pick (choice_pick).
+// Eq, Show and Debug for its tests
+#warnings("-unused_value")
 priv enum Fit {
   Whole
   Smaller(Double)

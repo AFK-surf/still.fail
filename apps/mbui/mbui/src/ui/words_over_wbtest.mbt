@@ -135,3 +135,9 @@ test "words over words past the window, seen by no one, are not found; seen in p
     ([], [], [("under these", "over those", true)]),
   )
 }
+
+///|
+/// All visible overlaps, including intentional closing fades (for diagnostics).
+fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)] {
+  self.words_over_details().map(fn(f) { (f.0, f.1, f.2, f.3) })
+}

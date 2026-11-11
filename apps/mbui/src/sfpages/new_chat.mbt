@@ -217,7 +217,7 @@ fn new_narrow(
   c.box(style=new_scene_room, fn() {
     c.list("new/scene", 1, new_scene_guess, fn(_) {
       c.box(style=new_scene_column, fn() {
-        let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
+        let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, frame, v, station, state) })
         // fading where it is (as it is drawn); back, the chat not made
         match state {
           Going(up, _) => c.look_by(scene, fn() { @ui.look(alpha=1.0 - up.get(c)) })
@@ -255,7 +255,7 @@ fn new_narrow(
             if !going {
               new_notices(c, v, station, width)
             }
-            c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, frame, v, station, state) }) |> ignore
+            c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, v, station, state) }) |> ignore
           })
           if !going {
             c.box(style=@ui.style(w=Fixed(width)), fn() {
@@ -300,7 +300,6 @@ fn new_narrow(
 fn new_scene_narrow_body(
   c : @ui.Ctx,
   src : Source,
-  w : Workspace,
   frame : NewChatFrame,
   v : Json?,
   station : Json?,
@@ -328,7 +327,6 @@ fn new_choosers(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  frame : NewChatFrame,
   v : Json?,
   station : Json?,
   state : NewState,
@@ -391,7 +389,7 @@ fn new_controls(
   if flag(v, "waiting") {
     // (its profiles read: a made-up model's, in its bones)
     @sf.bones(c, fn() {
-      model_triple(c, @sfbase.sample_source, "sample", "new", up=true, page=field(Some(new_sample_view()), "pick"), small=true, floating~)
+      model_triple(c, @sfbase.sample_source, "sample", "new", page=field(Some(new_sample_view()), "pick"), small=true, floating~)
     })
   } else if p is None ||
     items(p, "options").length() == 0 ||
@@ -410,7 +408,7 @@ fn new_controls(
     if !c.in_bones() && take_asked("model") {
       open_triple(address, "new")
     }
-    model_triple(c, src, address, "new", up=true, page=p, small=true, floating~)
+    model_triple(c, src, address, "new", page=p, small=true, floating~)
   }
 }
 

@@ -253,7 +253,7 @@ fn tab_row(
         })
         c.semantics(close, Button, id=cid, label=@sf.t("web-pages.files.closeTab"))
         c.box(style=tab_parts, fn() {
-          for i, p in panes {
+          for _, p in panes {
             let tone = stations.search_by(fn(s) { s.station == p.station }).unwrap_or(0) % station_dots.length()
             c.box(style=station_dots[tone], fn() {  }) |> ignore
             let (folder, station) = pane_parts(p, stations)

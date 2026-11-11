@@ -104,7 +104,7 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
     _ => c.text(words, style=said) |> ignore
   }
   match here.view.state_ask {
-    Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false, state=true) }) |> ignore
+    Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false) }) |> ignore
     None => ()
   }
 }

@@ -695,8 +695,8 @@ fn screen_gestures(
   }
   u.stage_x = ox
   u.stage_y = oy
-  let bw = u.box_w.get()
-  let bh = u.box_h.get()
+  u.box_w.get() |> ignore
+  u.box_h.get() |> ignore
   let frame_px = s.frame_size()
   // the double tap's wait closes after its time (what is shown does not wait for it)
   if g.tap_open && @kit.after(c, "screen-tap/\{g.taps}", true, screen_double_tap_ms, later=true) {

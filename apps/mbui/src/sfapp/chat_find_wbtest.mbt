@@ -12,7 +12,7 @@ fn find_chat_tester(calls : Array[Made], found? : Json? = None) -> @ui.Tester {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match (name, found) {
         ("chat.find", Some(f)) => done(Ok(f))
         _ => (base.call)(name, params, done)
@@ -142,7 +142,7 @@ fn outline_tester(
     ..base,
     asks_outline: fn() { asks },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       // (`held`: the outline's rows answered only as the test lets them go)
       // (`heard`: what the core answered, each by its call's name)
       let done = fn(res : Result[Json, Json]) {

@@ -116,12 +116,6 @@ fn pol_words_drawn(t : @ui.Tester) -> Array[(String, Double, Double, Double, Dou
 }
 
 ///|
-/// The boxes drawn now of `ink`.
-fn pol_boxes(t : @ui.Tester, ink : Int64) -> Array[(Double, Double, Double, Double)] {
-  t.drawn_rects().filter(fn(r) { r.4 == ink }).map(fn(r) { (r.0, r.1, r.2, r.3) })
-}
-
-///|
 /// How long a dialog takes to come in and go at most here (a sheet's way as far as the window, its scrim's fade).
 fn pol_way_ms() -> Double {
   @ui.move_most_ms * 2.0

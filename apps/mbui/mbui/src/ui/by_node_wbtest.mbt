@@ -75,3 +75,8 @@ test "window tree: one part let go and another made in its place, again and agai
   view_forget()
   assert_eq(view_blocks.length(), 0)
 }
+
+///|
+fn[V] ByNode::length(self : ByNode[V]) -> Int {
+  self.count
+}
