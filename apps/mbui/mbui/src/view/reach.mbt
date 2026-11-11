@@ -112,13 +112,26 @@ fn Tree::least_now(self : Tree) -> Double {
 }
 
 ///|
+/// Whether node `n` is pressed only where it is drawn, no room grown round it: a column's edge, its pointer's shape a
+/// resize (the user, 2026-10-28: 左右各 6px, 同 web; the old view's the same, ui's as_drawn).
+fn Node::as_drawn(self : Node) -> Bool {
+  self.cursor is Some(ResizeX) || self.cursor is Some(ResizeY)
+}
+
+///|
+/// Whether node `id` of the tree is pressed only where it is drawn (a column's edge: Node::as_drawn): what the hit test
+/// reaches from round it (Tree::near_said) and the room rules measure (ui's tree_room_faults) ask it alike.
+pub fn Tree::pressed_as_drawn(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].as_drawn()
+}
+
+///|
 /// Node `n` (content `c`, drawn at (cx, cy), `s` as big) passed by a walk finding what takes a finger at (x, y), not
 /// there: kept in `out` (its place `order` in the walk) where it may be reached from round it, a press's room (`least`
 /// across) away at most. One that does something pressed or held as its own (View::on_press; View::on_drag, not one
 /// taking over holds), drawn smaller than its room, taking presses now; not one only pointed at (View::points), nor
-/// one pressed only where it is drawn: a column's edge, its pointer's shape a resize (the user, 2026-10-28: 左右各
-/// 6px, 同 web), one saying where it takes a finger (View::takes), one hosting an old view (whose own are its).
-/// Only arithmetic on what the walk gives it, but for one that near.
+/// one pressed only where it is drawn: a column's edge (Node::as_drawn), one saying where it takes a finger
+/// (View::takes), one hosting an old view (whose own are its). Only arithmetic on what the walk gives it, but for one that near.
 fn Tree::near_said(
   self : Tree,
   n : Node,
@@ -143,12 +156,8 @@ fn Tree::near_said(
   if x < x0 - least || x >= x1 + least || y < y0 - least || y >= y1 + least || !press_small(x0, y0, x1, y1, least) {
     return
   }
-  if n.points || n.hosted || n.takes is Some(_) {
+  if n.points || n.hosted || n.takes is Some(_) || n.as_drawn() {
     return
-  }
-  match n.cursor {
-    Some(ResizeX) | Some(ResizeY) => return
-    _ => ()
   }
   if self.pressless_at(c.id.at) {
     return

@@ -266,3 +266,36 @@ test "rooms: every point of the room the rule measures is the hit test's for it,
     }
   }
 }
+
+///|
+test "rooms: a column's edge is pressed only where it is drawn, its room as wide as it, and the rule says nothing of it" {
+  // (the user, 2026-10-28: 左右各 6px, 同 web: a pane's edge 12 across, a panel's 7)
+  for platform in [0, 2] {
+    for w in [12.0, 7.0] {
+      let (t, tree) = rr_tester(platform, fn(b) {
+        b.box(fn(e) {
+          e
+          .width(Is(Some(w)))
+          .height(Is(Some(300.0)))
+          .presses(Is(true))
+          .cursor(Is(Some(@view.Cursor::ResizeX)))
+          .says(Is(Some(@view.said(Separator, label="边"))))
+          .on_drag(fn(_) {  })
+          |> ignore
+        })
+        |> ignore
+      })
+      let at = "platform \{platform}, \{w} across"
+      let (edge, (x0, y0, x1, y1)) = rr_box(tree, "边")
+      assert_true(tree.pressed_as_drawn(edge), msg=at)
+      assert_eq(tree.press_room_found(edge, (x0, y0, x1, y1)), (x0, y0, x1, y1), msg=at)
+      assert_eq(x1 - x0, w, msg=at)
+      let my = (y0 + y1) / 2.0
+      assert_true(rr_on(tree, edge, x0 + 0.25, my), msg="\{at}: in its left edge")
+      assert_true(rr_on(tree, edge, x1 - 0.25, my), msg="\{at}: in its right edge")
+      assert_true(!rr_on(tree, edge, x0 - 0.25, my), msg="\{at}: before it")
+      assert_true(!rr_on(tree, edge, x1 + 0.25, my), msg="\{at}: past it")
+      assert_eq(rr_faults(t), [], msg=at)
+    }
+  }
+}

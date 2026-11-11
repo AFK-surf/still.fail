@@ -252,7 +252,8 @@ fn rooms_parted(
 /// another and within it (a code block's 复制 on what scrolls its code) is pressed there first and as far round it as
 /// its room reaches, no neighbour the two parting the room between them, nor drawn over each other; where two rooms
 /// meet the nearer has it; what a press lands in cuts what reaches past it, whatever holds what in the tree (the
-/// coordinator of the migration, 2026-11-11: a check measures what a device does).
+/// coordinator of the migration, 2026-11-11: a check measures what a device does). A column's edge has no room to
+/// measure, pressed only where it is drawn (Tree::pressed_as_drawn), as the old view's (as_drawn).
 pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
   self.reads_own()
   ignore(self)
@@ -307,6 +308,10 @@ pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
   }
   let least = room_least()
   for j, t in targets {
+    // (a column's edge: pressed only where it is drawn, the user, 2026-10-28: 左右各 6px, 同 web)
+    if tree.pressed_as_drawn(t.0) {
+      continue
+    }
     let r = tree.press_room_found(t.0, t.1)
     let (w, h) = (r.2 - r.0, r.3 - r.1)
     if w < least - gap_slack || h < least - gap_slack {
