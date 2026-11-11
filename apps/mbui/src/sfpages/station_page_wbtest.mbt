@@ -1117,3 +1117,402 @@ test "on this machine's own page its display says so and opens nothing; its brow
   t.draw()
   assert_true(@sfbase.app.nav.top() is Screen(_))
 }
+
+///|
+/// The made-up core, its station Willow's Claude 订阅 holding `n` more accounts of its own after the fixture's while
+/// `n` says any (账号 0, 账号 1, …: the fixture's first account's copies; 账号 0's check failed, in amber), none of its
+/// accounts while `emptied` says so (the kind still there), and no Claude 订阅 at all while `gone` says so.
+fn sp_source(base : Source, n : @signals.Signal[Int]?, gone : @signals.Signal[Bool], emptied : @signals.Signal[Bool]) -> Source {
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      let read = base.topic(name, params).get().snapshot()
+      guard name == "station" && read.value is Some(Object(s)) && text(read.value, "station") == "ws1/st1" else {
+        return read
+      }
+      let copy = s.copy()
+      let groups = items(read.value, "profileGroups")
+      let more = match n {
+        Some(n) => n.get()
+        None => 0
+      }
+      if more > 0 {
+        let ov = match field(read.value, "overview") {
+          Some(Object(o)) => o.copy()
+          _ => {}
+        }
+        let profiles = items(Some(Json::object(ov)), "profiles")
+        let ids : Array[Json] = []
+        let all = profiles.copy()
+        match profiles.get(0) {
+          Some(Object(first)) =>
+            for i in 0..<more {
+              let p = first.copy()
+              p["id"] = Json::string("extra-\{i}")
+              p["name"] = Json::string("账号 \{i}")
+              p["email"] = Json::string("a\{i}@example.com")
+              all.push(Json::object(p))
+              ids.push(Json::string("extra-\{i}"))
+            }
+          _ => ()
+        }
+        ov["profiles"] = Json::array(all)
+        copy["overview"] = Json::object(ov)
+        let states = match field(read.value, "profileStates") {
+          Some(Object(m)) => m.copy()
+          _ => {}
+        }
+        states["extra-0"] = { "text": "额度查询失败", "tone": "amber" }
+        copy["profileStates"] = Json::object(states)
+        copy["profileGroups"] = Json::array(groups.map(fn(g) {
+          match g {
+            Object(gm) if text(Some(g), "group") == "claude" => {
+              let gc = gm.copy()
+              gc["profiles"] = Json::array(strings(Some(g), "profiles").map(Json::string) + ids)
+              Json::object(gc)
+            }
+            _ => g
+          }
+        }))
+      }
+      if emptied.get() {
+        copy["profileGroups"] = Json::array(
+          items(Some(Json::object(copy)), "profileGroups").map(fn(g) {
+            match g {
+              Object(gm) if text(Some(g), "group") == "claude" => {
+                let gc = gm.copy()
+                gc["profiles"] = Json::array([])
+                Json::object(gc)
+              }
+              _ => g
+            }
+          }),
+        )
+      }
+      if gone.get() {
+        copy["profileGroups"] = Json::array(
+          items(Some(Json::object(copy)), "profileGroups").filter(fn(g) { text(Some(g), "group") != "claude" }),
+        )
+      }
+      { ..read, value: Some(Json::object(copy)) }
+    },
+  }
+}
+
+///|
+/// Station Willow's page on a phone's window (390 × 844) pointed at as `platform` says, or on a wide one (1200 × 800,
+/// a mouse's), the core as sp_source has it (`n`, `gone`, `emptied`), words at `scale`, scrolled until its Claude 订阅 row is in view, at rest.
+fn sp_tester(
+  platform~ : Int,
+  wide~ : Bool,
+  n? : @signals.Signal[Int],
+  gone? : @signals.Signal[Bool] = @signals.signal(false),
+  emptied? : @signals.Signal[Bool] = @signals.signal(false),
+  scale? : Double = 1.0,
+) -> @ui.Tester {
+  let (w, h) = if wide { (1200.0, 800.0) } else { (390.0, 844.0) }
+  let t = setting_tester(Station("ws1/st1"), w, platform~, h~, over=fn(b) { sp_source(b, n, gone, emptied) })
+  if scale != 1.0 {
+    t.set_font_scale(scale)
+  }
+  t.run_for(@ui.move_most_ms)
+  t.move(w / 2.0, h / 2.0)
+  for _ in 0..<16 {
+    match sp_row(t) {
+      Some(r) if r.2 < 120.0 => t.wheel(w / 2.0, h / 2.0, -200.0)
+      Some(r) if r.2 + r.4 < h - 160.0 => break
+      _ => t.wheel(w / 2.0, h / 2.0, 200.0)
+    }
+    t.run_for(@ui.move_most_ms)
+  }
+  t
+}
+
+///|
+/// The page's Claude 订阅 row's words, drawn and seen (the topmost: the panel's title, where it is open, is over them).
+fn sp_row(t : @ui.Tester) -> (String, Double, Double, Double, Double, Double)? {
+  t.words().filter(fn(w) { w.0 == "Claude 订阅" && w.5 > 0.5 }).iter().fold(init=None, fn(acc, w) {
+    match acc {
+      Some(a) if a.2 >= w.2 => acc
+      _ => Some(w)
+    }
+  })
+}
+
+///|
+/// Its Claude 订阅 row pressed by the pointer (a finger, a mouse); its panel at rest where `rest`.
+fn sp_opened(t : @ui.Tester, rest? : Bool = true) -> Unit raise {
+  guard sp_row(t) is Some(r) else { fail("no Claude 订阅 row") }
+  t.tap(r.1 + r.3 / 2.0, r.2 + r.4 / 2.0)
+  if rest {
+    t.run_for(@ui.move_most_ms)
+  }
+}
+
+///|
+/// The screens it is opened on: (platform, wide): a phone's window with touch, with keyboard and mouse, a wide one.
+let sp_screens : Array[(Int, Bool)] = [(2, false), (0, false), (0, true)]
+
+///|
+/// Words `s` drawn and seen, within the window `h` high.
+fn sp_seen(t : @ui.Tester, s : String, h? : Double = 844.0) -> Array[(String, Double, Double, Double, Double, Double)] {
+  t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 && w.2 < h })
+}
+
+///|
+/// The one `s` drawn and seen, at `at`.
+fn sp_one(t : @ui.Tester, s : String, at : String) -> (String, Double, Double, Double, Double, Double) raise {
+  let w = sp_seen(t, s)
+  guard w.length() == 1 else { fail("\{at}: \{s}: \{w}") }
+  w[0]
+}
+
+///|
+/// What the audit finds that it did not before (`before`, as the page was before the panel opened).
+fn sp_added(t : @ui.Tester, before : Array[String]) -> Array[String] {
+  t.audit().filter(fn(f) { !before.contains(f) })
+}
+
+///|
+/// Its panel closed by Escape, at `at`: gone, the focus on its row, what opened it (the presenters', #5181).
+fn sp_escaped(t : @ui.Tester, at : String) -> Unit raise {
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_false(@sf.presenter_visible(), msg="\{at}: Escape closed it")
+  assert_eq(t.focused().map(fn(s) { (s.role, s.label) }), Some((@ui.Role::Link, "Claude 订阅")), msg="\{at}: \{t.focus_said()}")
+}
+
+///|
+test "a station's account kind in its panel on each screen: its account, its models, its allowance's chips in a line under them; nothing more for the audit; Escape closes it, the focus on its row" {
+  for screen in sp_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let t = sp_tester(platform~, wide~)
+    let before = t.audit()
+    guard sp_row(t) is Some(row) else { fail("\{at}: no row") }
+    sp_opened(t)
+    assert_true(@sf.presenter_visible(), msg=at)
+    let name = sp_one(t, "Claude 主账号", at)
+    let note = sp_one(t, "3 个模型 · 1 个连接正在使用", at)
+    assert_true(note.1 == name.1 && note.2 > name.2, msg="\{at}: its models under its name")
+    // (its allowance's chips under them, in a line, in order)
+    let mut x = name.1
+    for s in ["5H", "62%", "W", "19%"] {
+      let c = sp_one(t, s, at)
+      assert_true(c.2 > note.2 && c.1 > x, msg="\{at}: \{s} under its models, after what is before it")
+      x = c.1
+    }
+    assert_eq(sp_seen(t, "搜索").length(), 0, msg="\{at}: no search for two")
+    assert_eq(sp_seen(t, "ChatGPT 团队").length(), 0, msg="\{at}: another kind's")
+    // (beside its row on a wide window: under it; from the foot on a phone's)
+    if wide {
+      assert_true(name.2 > row.2 + row.4, msg="\{at}: under its row")
+    } else {
+      assert_true(name.2 > 422.0, msg="\{at}: from the foot")
+    }
+    assert_eq(sp_added(t, before), [], msg=at)
+    sp_escaped(t, at)
+    assert_eq(sp_added(t, before), [], msg=at)
+  }
+}
+
+///|
+test "a station's account kind's panel: an account pressed closes it for its page" {
+  for screen in sp_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let t = sp_tester(platform~, wide~)
+    sp_opened(t)
+    let name = sp_one(t, "Claude 主账号", at)
+    t.tap(name.1 + name.3 / 2.0, name.2 + name.4 / 2.0)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg=at)
+    assert_true(app.nav.top() is Setting(Profile("ws1/st1", "cc")), msg=at)
+  }
+}
+
+///|
+test "a long account kind's panel on each screen: its search over a list that scrolls, the search staying; on a wide window the keys in it as it opens, on a sheet not; what is typed finds, none found said so" {
+  for screen in sp_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let t = sp_tester(platform~, wide~, n=@signals.signal(12))
+    let before = t.audit()
+    sp_opened(t)
+    let search = sp_one(t, "搜索", at)
+    let first = sp_one(t, "Claude 主账号", at)
+    let next = sp_one(t, "账号 0", at)
+    assert_true(first.2 > search.2 && next.2 > first.2, msg="\{at}: the search over the accounts, in order")
+    let failed = sp_one(t, "额度查询失败", at)
+    assert_true((failed.2 - next.2).abs() < 4.0 && failed.1 > next.1 + next.3, msg="\{at}: its check's pill at its row's end")
+    let typing = t.focused().map(fn(s) { s.role == @ui.Role::TextField }).unwrap_or(false)
+    assert_eq(typing, wide, msg="\{at}: \{t.focus_said()}")
+    assert_eq(sp_added(t, before), [], msg=at)
+    // (scrolled to its last: the search where it was)
+    let x = next.1 + 40.0
+    let y = next.2 + 40.0
+    t.move(x, y)
+    for _ in 0..<12 {
+      if sp_seen(t, "账号 11", h=if wide { 680.0 } else { 844.0 }).length() > 0 {
+        break
+      }
+      t.wheel(x, y, 300.0)
+      t.run_for(@ui.move_most_ms)
+    }
+    assert_eq(sp_seen(t, "账号 11").length(), 1, msg="\{at}: scrolled to its last")
+    assert_true((sp_one(t, "搜索", at).2 - search.2).abs() < 0.01, msg="\{at}: the search stays")
+    if !wide {
+      t.tap(search.1 + 10.0, search.2 + search.4 / 2.0)
+      t.draw()
+    }
+    t.type_text("账号 11")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(sp_seen(t, "账号 11").length(), 1, msg="\{at}: found")
+    for s in ["Claude 主账号", "账号 0", "账号 1"] {
+      assert_eq(sp_seen(t, s).length(), 0, msg="\{at}: \{s} not found")
+    }
+    t.type_text("x")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(sp_seen(t, "没有匹配的结果").length(), 1, msg="\{at}: none found said so")
+    assert_eq(sp_seen(t, "账号 11").length(), 0, msg=at)
+    assert_true(@sf.presenter_visible(), msg="\{at}: open")
+    assert_eq(sp_added(t, before), [], msg=at)
+    sp_escaped(t, at)
+  }
+}
+
+///|
+test "an account kind's panel as the station lists more and fewer: an account comes and goes; the search comes as there come to be as many as a pick searches, and goes with them" {
+  for screen in sp_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    // (the fixture's one and 6 more: one under as many as a pick searches)
+    let n = @signals.signal(@sf.pick_search_from - 2)
+    let t = sp_tester(platform~, wide~, n~)
+    let before = t.audit()
+    sp_opened(t)
+    let last = "账号 \{@sf.pick_search_from - 2}"
+    assert_eq(sp_seen(t, "搜索").length(), 0, msg=at)
+    assert_eq(sp_seen(t, last).length(), 0, msg=at)
+    n.set(@sf.pick_search_from - 1)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(sp_seen(t, "搜索").length(), 1, msg="\{at}: the search come")
+    // (anywhere in it: a phone's sheet as tall as what it holds, its last under the window's foot)
+    assert_eq(sp_seen(t, last, h=1.0e9).length(), 1, msg="\{at}: the account come")
+    assert_true(sp_one(t, "Claude 主账号", at).2 > sp_one(t, "搜索", at).2, msg="\{at}: the search over them")
+    n.set(@sf.pick_search_from - 2)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(sp_seen(t, "搜索").length(), 0, msg="\{at}: the search gone")
+    assert_eq(sp_seen(t, last, h=1.0e9).length(), 0, msg="\{at}: the account gone")
+    assert_eq(sp_seen(t, "Claude 主账号").length(), 1, msg=at)
+    assert_true(@sf.presenter_visible(), msg="\{at}: open")
+    assert_eq(sp_added(t, before), [], msg=at)
+    sp_escaped(t, at)
+  }
+}
+
+///|
+test "an account kind's panel closes as the station comes to list no such kind, showing what it showed till it is gone; on a phone's window its sheet and scrim go with it" {
+  for screen in sp_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let gone = @signals.signal(false)
+    let t = sp_tester(platform~, wide~, gone~)
+    let before = t.audit()
+    sp_opened(t)
+    let seen = ["Claude 主账号", "3 个模型 · 1 个连接正在使用", "5H", "19%"]
+    let places = fn() { seen.map(fn(s) { t.words().iter().find_first(fn(w) { w.0 == s && w.5 > 0.0 }).map(fn(w) { w.2 }) }) }
+    let was = places()
+    gone.set(true)
+    let mut n = 0
+    while @sf.presenter_visible() && n < 120 {
+      t.frame()
+      // (on each frame of its way out all of it, each where it was from the first, or none; never 没有匹配的结果)
+      let now = places()
+      let drawn = now.filter(fn(p) { p is Some(_) }).length()
+      assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n}: \{drawn} of \{seen}")
+      assert_eq(t.words().filter(fn(w) { w.0 == "没有匹配的结果" && w.5 > 0.0 }).length(), 0, msg="\{at}: frame \{n}")
+      // (a sheet goes down whole; beside its row, it shrinks as it goes)
+      if drawn > 0 && !wide {
+        for i in 1..<now.length() {
+          let d = now[i].unwrap() - now[0].unwrap()
+          let d0 = was[i].unwrap() - was[0].unwrap()
+          assert_true((d - d0).abs() <= 0.01, msg="\{at}: frame \{n}: \{seen[i]} \{d} under \{seen[0]}, \{d0} before")
+        }
+      }
+      n += 1
+    }
+    assert_false(@sf.presenter_visible(), msg="\{at}: gone")
+    t.run_for(@ui.move_most_ms)
+    for s in seen {
+      assert_eq(t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }).length(), 0, msg="\{at}: \{s}")
+    }
+    if !wide {
+      assert_eq(t.drawn_glass().filter(fn(g) { g.3 > 100.0 }), [], msg="\{at}: its sheet")
+      assert_eq(t.drawn_rects().filter(fn(r) { r.4 == @sf.sheet_scrim && r.2 >= 390.0 && r.3 >= 844.0 }), [], msg="\{at}: its scrim")
+    }
+    assert_eq(sp_added(t, before), [], msg=at)
+  }
+}
+
+///|
+test "an account kind's panel while its kind lists no account (the kind still there): open, saying none is found, as before; listed again, its account" {
+  for screen in sp_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let emptied = @signals.signal(false)
+    let t = sp_tester(platform~, wide~, emptied~)
+    let before = t.audit()
+    sp_opened(t)
+    emptied.set(true)
+    t.run_for(@ui.move_most_ms)
+    assert_true(@sf.presenter_visible(), msg="\{at}: open")
+    assert_eq(sp_seen(t, "没有匹配的结果").length(), 1, msg=at)
+    assert_eq(sp_seen(t, "Claude 主账号").length(), 0, msg=at)
+    emptied.set(false)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(sp_seen(t, "没有匹配的结果").length(), 0, msg=at)
+    assert_eq(sp_seen(t, "Claude 主账号").length(), 1, msg=at)
+    assert_eq(sp_added(t, before), [], msg=at)
+    sp_escaped(t, at)
+  }
+}
+
+///|
+test "an account kind's panel at the system's words set to 1.3, on each screen: its allowance's chips as high as their words (the old panel's words 20.2 high in chips 16 high), nothing more for the audit" {
+  for screen in sp_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let t = sp_tester(platform~, wide~, scale=1.3)
+    let before = t.audit()
+    sp_opened(t)
+    let name = sp_one(t, "Claude 主账号", at)
+    for s in ["5H", "62%", "W", "19%"] {
+      assert_true(sp_one(t, s, at).2 > name.2, msg="\{at}: \{s}")
+    }
+    // (the old one's, base m3-1: 「5H」 … 20.2 high, out of 「5H 62%」 … its height said, by 2.1; and 「62%」 so)
+    assert_eq(sp_added(t, before), [], msg=at)
+    sp_escaped(t, at)
+  }
+}
+
+///|
+test "an account kind's panel on a wide window by the keyboard: the row with the focus, Enter opens it, Escape closes it, the focus still on the row, Enter opens it again" {
+  let t = sp_tester(platform=0, wide=true)
+  let before = t.audit()
+  let mut n = 0
+  let on_row = fn() { t.focused().map(fn(s) { (s.role, s.label) }) == Some((@ui.Role::Link, "Claude 订阅")) }
+  while !on_row() && n < 80 {
+    t.key(@ui.key_tab)
+    n += 1
+  }
+  assert_true(on_row(), msg=t.focus_said())
+  for round in 0..<2 {
+    t.key(@ui.key_code_enter)
+    t.run_for(@ui.move_most_ms)
+    assert_true(@sf.presenter_visible(), msg="round \{round}")
+    assert_eq(sp_seen(t, "Claude 主账号").length(), 1, msg="round \{round}")
+    sp_escaped(t, "round \{round}")
+  }
+  assert_eq(sp_added(t, before), [])
+}

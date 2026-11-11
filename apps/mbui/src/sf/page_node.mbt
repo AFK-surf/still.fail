@@ -770,6 +770,163 @@ pub fn link_row_node(
   chevron_room? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
+  link_row_made(
+    loc~,
+    parent,
+    title,
+    fn(_) { press },
+    value~,
+    value_bad~,
+    value_dot~,
+    value_lit~,
+    note~,
+    wide_note?,
+    trouble~,
+    strong~,
+    danger~,
+    lacks~,
+    lead~,
+    face~,
+    goes~,
+    chevron~,
+    out~,
+    acts~,
+    below?,
+    below_open~,
+    note_cut~,
+    title_after?,
+    title_after_shown~,
+    folds?,
+    tail?,
+    tail_shown~,
+    control?,
+    adds~,
+    wide_title?,
+    title_cut~,
+    value_cut~,
+    chevron_room~,
+  )
+}
+
+///|
+/// A row on a card that opens a panel, a menu or a choice (link_row_node's, all it says as there), `opens` given the
+/// row itself (the node that is pressed and takes the focus) as it is pressed: what it opens stands by the row
+/// (`Node(row)`) and follows it, and as it closes the focus goes back to the row (#5181), not a rectangle read off the
+/// row as it is pressed, which follows nothing and gives the focus back to nothing.
+#callsite(autofill(loc))
+pub fn link_row_opens_node(
+  parent : @view.View,
+  title : () -> String,
+  opens : (@view.View) -> Unit,
+  value? : () -> String = fn() { "" },
+  value_bad? : () -> Bool = fn() { false },
+  value_dot? : () -> Bool = fn() { false },
+  value_lit? : Bool = false,
+  note? : () -> String = fn() { "" },
+  wide_note? : () -> String,
+  trouble? : () -> String = fn() { "" },
+  strong? : Bool = false,
+  danger? : Bool = false,
+  lacks? : Bool = false,
+  lead? : RowLead = NoLead,
+  face? : Bool = false,
+  goes? : Bool = true,
+  chevron? : Bool = true,
+  out? : Bool = false,
+  acts? : Bool = false,
+  below? : (@view.View) -> Unit,
+  below_open? : () -> Double = fn() { 0.0 },
+  note_cut? : Bool = false,
+  title_after? : (@view.View) -> Unit,
+  title_after_shown? : () -> Bool = fn() { true },
+  folds? : () -> Bool,
+  tail? : (@view.View) -> Unit,
+  tail_shown? : () -> Bool = fn() { true },
+  control? : (@view.View) -> Unit,
+  adds? : Bool = false,
+  wide_title? : () -> @ui.TextStyle,
+  title_cut? : Bool = false,
+  value_cut? : Bool = false,
+  chevron_room? : Bool = false,
+  loc~ : SourceLoc,
+) -> Unit {
+  link_row_made(
+    loc~,
+    parent,
+    title,
+    fn(row) { fn() { opens(row) } },
+    value~,
+    value_bad~,
+    value_dot~,
+    value_lit~,
+    note~,
+    wide_note?,
+    trouble~,
+    strong~,
+    danger~,
+    lacks~,
+    lead~,
+    face~,
+    goes~,
+    chevron~,
+    out~,
+    acts~,
+    below?,
+    below_open~,
+    note_cut~,
+    title_after?,
+    title_after_shown~,
+    folds?,
+    tail?,
+    tail_shown~,
+    control?,
+    adds~,
+    wide_title?,
+    title_cut~,
+    value_cut~,
+    chevron_room~,
+  )
+}
+
+///|
+/// link_row_node's and link_row_opens_node's one making: `pressed_by`, what is done as the row (given it) is pressed.
+#callsite(autofill(loc))
+fn link_row_made(
+  parent : @view.View,
+  title : () -> String,
+  pressed_by : (@view.View) -> () -> Unit,
+  value? : () -> String = fn() { "" },
+  value_bad? : () -> Bool = fn() { false },
+  value_dot? : () -> Bool = fn() { false },
+  value_lit? : Bool = false,
+  note? : () -> String = fn() { "" },
+  wide_note? : () -> String,
+  trouble? : () -> String = fn() { "" },
+  strong? : Bool = false,
+  danger? : Bool = false,
+  lacks? : Bool = false,
+  lead? : RowLead = NoLead,
+  face? : Bool = false,
+  goes? : Bool = true,
+  chevron? : Bool = true,
+  out? : Bool = false,
+  acts? : Bool = false,
+  below? : (@view.View) -> Unit,
+  below_open? : () -> Double = fn() { 0.0 },
+  note_cut? : Bool = false,
+  title_after? : (@view.View) -> Unit,
+  title_after_shown? : () -> Bool = fn() { true },
+  folds? : () -> Bool,
+  tail? : (@view.View) -> Unit,
+  tail_shown? : () -> Bool = fn() { true },
+  control? : (@view.View) -> Unit,
+  adds? : Bool = false,
+  wide_title? : () -> @ui.TextStyle,
+  title_cut? : Bool = false,
+  value_cut? : Bool = false,
+  chevron_room? : Bool = false,
+  loc~ : SourceLoc,
+) -> Unit {
   // (one that adds: one that acts, after a ＋ in the link's ink, link_row's `adds`)
   let acts = acts || adds
   let lead = if adds { LeadIcon("plus") } else { lead }
@@ -804,7 +961,7 @@ pub fn link_row_node(
     // first line is too low for a finger's least room, and the row is wide enough for its lines beside it)
     let face = face || (control is Some(_) && native_input() is Finger)
     wide_link_row_node(
-      parent, title, press, value, value_bad, value_dot, note, trouble, strong, danger, value_look, note_look, lead, face,
+      parent, title, pressed_by, value, value_bad, value_dot, note, trouble, strong, danger, value_look, note_look, lead, face,
       lead_ink, goes, ends, mark, acts, below, below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown,
       control, wide_title, title_cut, value_cut, chevron_room,
     )
@@ -840,7 +997,7 @@ pub fn link_row_node(
     |> ignore
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-      pressed_node(r, press, Is(if in_panel is Some(_) { corner } else { row_corner }), Link, title)
+      pressed_node(r, pressed_by(r), Is(if in_panel is Some(_) { corner } else { row_corner }), Link, title)
       row_folds_said(r, title, folds)
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as that line at least, across its
