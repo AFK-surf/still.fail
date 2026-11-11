@@ -47,6 +47,35 @@ test("taking back a chat takes back every grant behind its one row", async () =>
   }
 });
 
+test("a station's refusal keeps the code it gives (the app goes by it), its words the message; none, invalid_params", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const store = new Store(host, runner);
+  let body: unknown = null;
+  const link = {
+    adb: () => Effect.sync(() => {
+      let sent = false;
+      const bytes = new TextEncoder().encode(JSON.stringify(body));
+      return { status: 422, body: { take: Effect.sync(() => { if (sent) return null; sent = true; return bytes; }) } };
+    }),
+  };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => false });
+  takeAll(adb);
+  try {
+    const failed = () => runner.run(Effect.flip(adb.run({ kind: "revoke", station: "ws/st", request: "p1" })));
+    body = { message: "手机不允许 adb 授权", code: "adb_grant_refused" };
+    const refused = await failed();
+    assert.deepEqual([refused.code, refused.message], ["adb_grant_refused", "手机不允许 adb 授权"]);
+    // (a station from before codes, or another failure: no code of its own)
+    body = { message: "授权失败：Error: Unknown permission" };
+    const other = await failed();
+    assert.deepEqual([other.code, other.message], ["invalid_params", "授权失败：Error: Unknown permission"]);
+  } finally {
+    runner.shutdown();
+  }
+});
+
 test("a late whole read does not bring back a grant already taken back", async () => {
   const host = new FakeHost();
   const runner = new Runner(host.time.clock);

@@ -220,7 +220,7 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
         }
       }
     }
-    // a station's 共享调试, as its agent asks for it (adb_devices): the page, sharing only once its person taps; a login
+    // a station's 共享调试, as its agent links it: 共享调试's one page, that station's step first; a login
     // an agent started on a station: its card on the station's page, marked, brought into view
     "adbShare" | "login" => {
       if t.station == "" || (t.opens == "login" && t.login == "") {

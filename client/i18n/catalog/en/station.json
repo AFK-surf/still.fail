@@ -14,6 +14,7 @@
   "station.adb.grantRefused": "The phone doesn't let adb grant permissions: in Developer options, turn on “Disable permission monitoring” (ColorOS) or “USB debugging (Security settings)” (MIUI), then try again",
   "station.adb.granted": "The app can now turn on wireless debugging itself",
   "station.adb.install": "No adb on this station: install Android platform-tools (macOS: brew install android-platform-tools), then share again",
+  "station.adb.serverDown": "adb did not start on the station",
   "station.adb.noAdb": "No adb on this station",
   "station.adb.noPackage": "The phone didn't send the app's package name",
   "station.adb.notSharing": "This device isn't sharing debugging",

@@ -23,11 +23,15 @@ final class AdbCore {
     /** To the core (android_core.c registers it once the core's classes are found); nothing before the core runs. */
     static native void send(String json);
 
-    /** A call's answer: its `ok`, or the core's error's message. */
+    /** A call's answer: its `ok`, or the core's error's message (and its code, for one that goes by which it was). */
     interface Answer {
         void ok(Object value);
 
         void error(String why);
+
+        default void error(String why, String code) {
+            error(why);
+        }
     }
 
     /** A topic's whole value as it changes (its deltas applied), or its error. */
@@ -177,7 +181,7 @@ final class AdbCore {
         Answer a = calls.get(id);
         if (a != null) {
             calls.remove(id);
-            if (m.has("error")) a.error(why(m.opt("error")));
+            if (m.has("error")) a.error(why(m.opt("error")), code(m.opt("error")));
             else a.ok(m.opt("ok"));
             return;
         }
@@ -202,6 +206,11 @@ final class AdbCore {
             if (!s.isEmpty()) return s;
         }
         return String.valueOf(error);
+    }
+
+    /** The core's error's `code` (error.ts), "" for none. */
+    private static String code(Object error) {
+        return error instanceof JSONObject ? ((JSONObject) error).optString("code", "") : "";
     }
 
     /** One of the core's delta ops (client/core-ts delta.ts: set, append, remove at a path) applied to `value`. */

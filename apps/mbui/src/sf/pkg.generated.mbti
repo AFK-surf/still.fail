@@ -1254,7 +1254,7 @@ pub fn nav_apart(@ui.Ctx, Bool, () -> Unit) -> Unit
 
 pub fn nav_back(@ui.Ctx, String, String, max_w? : Double) -> Bool
 
-pub fn nav_bar(@ui.Ctx, String, String, String, sub? : () -> Unit, trailing? : () -> Unit, back_max? : Double, bg? : Int64, top? : Double) -> Bool
+pub fn nav_bar(@ui.Ctx, String, String, String, sub? : () -> Unit, title_after? : () -> Unit, trailing? : () -> Unit, back_max? : Double, bg? : Int64, top? : Double) -> Bool
 
 pub let nav_fade : @motion.Spec
 

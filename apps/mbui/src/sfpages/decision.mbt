@@ -303,29 +303,31 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   let decided = ask.status != ""
   let asking = fn() {
     c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
-      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.phone_steps(here.core, here.station, request=ask.request))) })
+      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.Route::AdbShare(""))) })
     })
     |> ignore
   }
-  // (granted: how its station holds the phone, and on the phone, its pairing a tap away)
+  // (granted: how its station holds the phone, and on the phone, what is left to do for it a press away)
   let ended = fn(history : (String, (Int) -> Unit)?) {
     let mine = mine_to(here, card.assignee)
     let link = @settings.phone_link(here.core, here.station, ask.link)
-    @settings.phone_outcome(
-      c,
-      ask.status,
-      ask.scope,
-      ask.why,
-      inline=here.inline,
-      link~,
-      paired_here=mine && @settings.phone_lends(c),
-      history~,
-    )
-    // (on the phone, its pairing a tap away, as a login's card is under its message)
-    if link == "unpaired" && ask.status == "granted" && mine && @settings.phone_lends(c) {
-      step_card(c, "phone-pair/" + m.ts, @sf.t("android-misc.adb.ask.pair.title"), @sf.t("android-misc.adb.ask.pair.about"), fn() {
-        open_page(Setting(@settings.Route::AdbShare(here.station)))
-      })
+    let step = match here.core {
+      Some(core) if ask.status == "granted" && mine && @settings.phone_lends(c) => @settings.adb_step_at(c, core, here.station).map(fn(s) { (core, s) })
+      _ => None
+    }
+    @settings.phone_outcome(c, ask.status, ask.scope, ask.why, inline=here.inline, link~, step_here=step is Some(_), history~)
+    // (on the phone, the first thing left, as a login's card is under its message: the card does it, never a page about
+    // it, and changes to the next as each is done, going once the station holds the phone; one the phone cannot do,
+    // its own prompt's or the station's, said with nothing to press)
+    match step {
+      Some((core, s)) =>
+        // (its line how, or why it is not done by itself; never the page's button's words: the card is the press)
+        step_card(c, "phone-step/" + m.ts, s.title, s.sub, go=if s.act == "" {
+          None
+        } else {
+          Some(fn() { @settings.adb_do(core, s.act, station=here.station) })
+        })
+      None => ()
     }
   }
   match here.list {

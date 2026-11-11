@@ -45,7 +45,7 @@ pub fn station_page_beside(src : Source, r : ChatRef, p : Page) -> Bool {
       station_tab_key("drive", at.station)
     }
     Setting(Station(station)) => station_tab_key("station", station)
-    // this device's adb lent to its agents (a chat's card of it, its row on the station's page): beside the chat too,
+    // 共享调试 with a station's step first (a chat's link to it, a request's 查看步骤): beside the chat too,
     // not the settings' place in its place (the sidebar and the page swapped, and swapped back after)
     Setting(AdbShare(station)) => station_tab_key("adb", station)
     _ => return false

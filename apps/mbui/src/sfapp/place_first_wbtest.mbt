@@ -182,12 +182,12 @@ test "shared debugging: its first read shows its sections in place" {
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.frame()
-  assert_true(t.find("等你允许") is None)
+  assert_true(t.find("打开配对窗口") is None)
   ready.set(true)
   t.frame()
-  let first = t.drawn_of("等你允许").unwrap()
+  let first = t.drawn_of("打开配对窗口").unwrap()
   t.run_for(@ui.row_size_ms)
-  let after = t.drawn_of("等你允许").unwrap()
+  let after = t.drawn_of("打开配对窗口").unwrap()
   assert_eq(first, after)
 }
 

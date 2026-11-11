@@ -56,8 +56,10 @@
 /// chat's three chips beside its composer, old views, the page behind counted again, 6 more, 297.
 /// A file beside a chat in the viewer a screen of its own (chat-view-side, chat-view-side-image, 2026-11-10), what
 /// chat-things-side has: its tab's close key, in the three wide windows each, 6 more, 303. A film and a song beside a
-/// chat (chat-view-side-video, chat-view-side-audio, 2026-11-11), the same: its tab's close key, 6 more, 309.)
-let rooms_known : Map[String, Int] = { "room": 309, "apart": 0, "hover": 0 }
+/// chat (chat-view-side-video, chat-view-side-audio, 2026-11-11), the same: its tab's close key, 6 more, 309.
+/// An agent's request for the phone swept (chat-phone-lacks, and granted with each step left and connected, 2026-11-11),
+/// what every chat has: its last message's author and time, and a decided card's line opening its history, 112 more, 421.)
+let rooms_known : Map[String, Int] = { "room": 421, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

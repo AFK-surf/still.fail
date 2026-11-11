@@ -306,7 +306,9 @@ fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
   })
   guard parts.length() == 1 else { return None }
   match parts[0] {
-    Link(href, c, to) if to.is_card() => {
+    // (a station's 共享调试 no card even alone: a link to its page, 2026-11-11, the card that lent the phone from the
+    // chat gone)
+    Link(href, c, to) if to.is_card() && to.card != "adb" => {
       let words = md_plain(c)
       Some((href, to, if to.bare { None } else { Some(words) }))
     }

@@ -1042,15 +1042,18 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       }
     // a chat's files downloaded (downloads_fixture.mbt)
     "downloads" => Some(fixture_downloads_topic())
-    // the phone's 共享调试 as a request's card for it goes by: its switch on (chat-phone-off: off); this device off the
-    // person's own lock, its request to be approved first (chat-phone-outside), or no lock of theirs yet, the request
-    // as the core says it then: nothing first (chat-phone-none)
+    // the phone's 共享调试 as a request's card for it goes by: its switch on (chat-phone-off, chat-phone-step-off: off);
+    // this device off the person's own lock, its request to be approved first (chat-phone-outside), or no lock of
+    // theirs yet, the request as the core says it then: nothing first (chat-phone-none). Granted on the phone (-linked-,
+    // -step-): lent to the chat's station as the card says it holds the phone (fixture_phone_lend)
     "adbShare" if f.mode.has_prefix("chat-phone") =>
       Some({
         "sharing": false,
         "phase": "off",
         "tunnels": 0,
-        "on": f.mode != "chat-phone-off",
+        "on": f.mode != "chat-phone-off" && f.mode != "chat-phone-step-off",
+        "lends": fixture_phone_lend(f.mode),
+        "pairPort": if f.mode == "chat-phone-step-code" { Json::number(37115.0) } else { Json::null() },
         "personal": [
           {
             "sub": "s",
@@ -1585,20 +1588,35 @@ pub fn fixture(mode : String) -> Source {
   // takes, the card lending from where it is
   if f.mode == "chat-screens" || f.mode == "chat-screens-cold" {
     @settings.adb_phone_said(
-      "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
+      "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false}",
     )
   }
-  // (chat-phone-linked-…: a phone with all it takes, its approved request's pairing card opening its station's page; -desk: a
-  // computer, no adb of its own)
+  // (chat-phone-linked-…: a phone with all it takes, its approved request's card under it saying what its station waits
+  // on; -desk: a computer, no adb of its own. chat-phone-step-<what>: approved, on a phone that lacks <what> first:
+  // developer (Developer options), wifi, wireless (Wireless debugging the app may not turn on), refused (the same, the
+  // phone having refused the app's grant))
   if f.mode.has_prefix("chat-phone-linked-") && !f.mode.has_suffix("-desk") {
     @settings.adb_phone_said(
-      "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
+      "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false}",
+    )
+  }
+  if f.mode.has_prefix("chat-phone-step-") {
+    let what = f.mode.unsafe_substring(start="chat-phone-step-".length(), end=f.mode.length())
+    @settings.adb_phone_said(
+      Json::object({
+        "supported": Json::boolean(true),
+        "developer": Json::boolean(what != "developer"),
+        "wireless": Json::boolean(what != "wireless" && what != "refused"),
+        "wifi": Json::boolean(what != "wifi"),
+        "canSwitch": Json::boolean(false),
+        "switchRefused": Json::boolean(what == "refused"),
+      }).stringify(),
     )
   }
   // (chat-phone-lacks: a phone without Developer options yet, its request's card saying so)
   if f.mode == "chat-phone-lacks" {
     @settings.adb_phone_said(
-      "{\"supported\":true,\"developer\":false,\"wireless\":false,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
+      "{\"supported\":true,\"developer\":false,\"wireless\":false,\"wifi\":true,\"canSwitch\":false}",
     )
   }
   let images = @sfbase.ChatImages::new()
@@ -2168,4 +2186,22 @@ pub fn fixture_fleet(f : Fixture) -> Json {
       ),
     },
   }
+}
+
+///|
+/// The phone's lendings in the `adbShare` of a chat-phone `mode`: granted on the phone, lent to the chat's station
+/// (Willow) and held as the card says (chat_fixture with_cards' fix_phone_link; Wireless debugging off for the steps
+/// that lack it); none where it is not lent there (its switch off, Developer options or Wi-Fi missing: `gone`).
+fn fixture_phone_lend(mode : String) -> Json {
+  let adb = match mode {
+    "chat-phone-step-wireless" | "chat-phone-step-refused" => "off"
+    "chat-phone-step-code" => "unpaired"
+    _ if mode.has_prefix("chat-phone-linked-") && !mode.has_suffix("-desk") && mode != "chat-phone-linked-gone" =>
+      mode.unsafe_substring(start="chat-phone-linked-".length(), end=mode.length())
+    _ => ""
+  }
+  if adb == "" {
+    return []
+  }
+  [{ "station": "ws1/st1", "phase": "offered", "adb": adb, "serial": "127.0.0.1:37762", "tunnels": 0 }]
 }

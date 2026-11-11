@@ -21,9 +21,9 @@ import java.util.concurrent.Executors;
 /**
  * Holds the app up while the phone is lent (a foreground service; still.fail's AdbShareService): finds
  * Wireless debugging's ports and tells the core each time they change, says in its notification how it stands, takes
- * the pairing code typed there (or read off the dialog, AdbCodeReader), and ends when the core's `adbShare` says the
- * phone is lent no longer (stopped, its hour up, the station too old). The core asked through AdbCore, which goes on
- * while the app is behind.
+ * the pairing code typed there, has a station that newly holds the phone let the app turn Wireless debugging on itself
+ * (`adb.grant`), and ends when the core's `adbShare` says the phone is lent no longer (stopped, its hour up, the station
+ * too old). The core asked through AdbCore, which goes on while the app is behind.
  */
 public final class AdbShareService extends Service {
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -41,8 +41,8 @@ public final class AdbShareService extends Service {
     private String pairNote;
     /** The pairing port its notification popped up for: a dialog opened again pops it up again. */
     private int pairShown = -1;
-    /** The pairing port whose code was read off its dialog and tried: not again for that dialog, whatever came of it. */
-    private int read = -1;
+    /** The stations whose adb held the phone as the core last said (`adbShare`): one newly holding it asked once. */
+    private final java.util.Set<String> held = new java.util.HashSet<>();
     /** Lent to this station: its end said by the core ends the service. */
     private boolean lent;
     /** The offer last made (connect and pair ports): made again only as they change. */
@@ -116,19 +116,11 @@ public final class AdbShareService extends Service {
             Bundle got = RemoteInput.getResultsFromIntent(intent);
             CharSequence code = got == null ? null : got.getCharSequence(AdbShare.CODE);
             pair(code == null ? "" : code.toString());
-        } else if (AdbShare.READ.equals(action)) {
-            // only for the dialog open now, once
-            int port = intent.getIntExtra(AdbShare.PORT, -1);
-            String code = intent.getStringExtra(AdbShare.CODE);
-            if (code != null && port >= 0 && AdbShare.pairing(view) && view.optInt("pairPort", -2) == port && read != port) {
-                read = port;
-                pair(code);
-            }
         }
         return START_NOT_STICKY;
     }
 
-    /** Pairs with the code typed in the notification or read off the dialog, saying how it goes in the notification. */
+    /** Pairs with the code typed in the notification, saying how it goes in the notification. */
     private void pair(String code) {
         // said back at once: the notification's field waits (spinning) until it is posted again
         pairNote = AdbShare.t("android-misc.adb.pairing");
@@ -164,7 +156,6 @@ public final class AdbShareService extends Service {
                 : AdbShare.notification(this, view, name, note));
         boolean pairing = AdbShare.pairing(view);
         int port = view == null ? -1 : view.optInt("pairPort", -1);
-        AdbShare.setPairingPort(pairing ? port : -1);
         if (pairing) {
             // another dialog: popped up afresh (only once per dialog, not as the minutes go)
             if (pairShown != port) {
@@ -243,6 +234,7 @@ public final class AdbShareService extends Service {
             if (!(value instanceof JSONObject)) return;
             JSONObject v = (JSONObject) value;
             view = v;
+            grantNewlyHeld(v);
             if ("connected".equals(v.optString("adb"))) {
                 note = null;
                 pairNote = null;
@@ -284,7 +276,6 @@ public final class AdbShareService extends Service {
             if (here) lent = true;
             if (here && v.has("until") && !v.isNull("until")) AdbShare.keepUntil(this, v.optLong("until"));
             if (lent && !here) {
-                AdbShare.setPairingPort(-1);
                 if (AdbShare.GRANTS.equals(station) || !v.has("station") || v.isNull("station")) stopSelf();
                 return;
             }
@@ -324,6 +315,61 @@ public final class AdbShareService extends Service {
         });
     }
 
+    /**
+     * Each station whose adb holds the phone now and did not as the core last said (`adbShare`'s own and its `lends`:
+     * offered, adb connected) asked once to let the app turn Wireless debugging on itself, while it may not yet: everyone
+     * lending needs it (2026-11-11, so it is not asked of the person). No timer and no retry: the next time a station
+     * comes to hold the phone asks again. The phone refusing it (MIUI, ColorOS: the core's `adb_grant_refused`) kept and
+     * said in `adb.phone` (`switchRefused`): 开启无线调试 says which switch of Developer options lets the app; anything
+     * else logged.
+     */
+    private void grantNewlyHeld(JSONObject v) {
+        java.util.Set<String> now = new java.util.HashSet<>();
+        if (v.optBoolean("sharing") && holds(v)) now.add(v.optString("station"));
+        org.json.JSONArray lends = v.optJSONArray("lends");
+        if (lends != null) for (int i = 0; i < lends.length(); i++) {
+            JSONObject l = lends.optJSONObject(i);
+            if (l != null && holds(l)) now.add(l.optString("station"));
+        }
+        now.remove("");
+        for (String to : now) if (!held.contains(to) && !AdbShare.canSwitch(this)) grant(to);
+        held.clear();
+        held.addAll(now);
+    }
+
+    private static boolean holds(JSONObject lend) {
+        return "offered".equals(lend.optString("phase")) && "connected".equals(lend.optString("adb"));
+    }
+
+    private void grant(String to) {
+        JSONObject p = new JSONObject();
+        try {
+            p.put("station", to);
+        } catch (Exception ignored) {
+        }
+        android.content.Context c = getApplicationContext();
+        AdbCore.call("adb.grant", p, new AdbCore.Answer() {
+            @Override
+            public void ok(Object value) {
+                AdbShare.switchRefused = false;
+                AdbShare.tellPhone(c);
+            }
+
+            @Override
+            public void error(String why) {
+                error(why, "");
+            }
+
+            @Override
+            public void error(String why, String code) {
+                Host.log("adb share: the app not let turn Wireless debugging on: " + why);
+                if (!"adb_grant_refused".equals(code) || AdbShare.switchRefused) return;
+                AdbShare.switchRefused = true;
+                AdbShare.tellPhone(c);
+            }
+        });
+    }
+
     /** Wireless debugging on, where it is off, the phone on Wi-Fi and the app may turn it on. */
     private void keepWireless() {
         if (!AdbShare.wirelessOn(this) && AdbShare.onWifi(this)) AdbShare.switchOn(this);
@@ -344,12 +390,12 @@ public final class AdbShareService extends Service {
         ports = null;
         if (observer != null) getContentResolver().unregisterContentObserver(observer);
         observer = null;
+        held.clear();
     }
 
     @Override
     public void onDestroy() {
         getSystemService(NotificationManager.class).cancel(AdbShare.PAIR_ID);
-        AdbShare.setPairingPort(-1);
         end();
         probes.shutdownNow();
         // gone with the service, whatever ended it; not lent again as the app next starts. Ended for the grants while

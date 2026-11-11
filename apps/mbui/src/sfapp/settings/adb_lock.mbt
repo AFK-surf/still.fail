@@ -1,58 +1,7 @@
-// What settings' 共享调试 shows of the person's own lock (`adbShare`'s `personal`): the devices that approve phone
-// debugging, each other one removed here (asked first); the grants from before signatures to confirm; and how this
-// device is approved by one of them (a code it shows, typed in here). To people it is no lock of its own: 安全模式,
-// 受信任设备 and 批准 (the user, 2026-11-10); its own page of before, under 安全, is gone and its link opens 共享调试.
-
-///|
-/// The devices that approve phone debugging, of each account whose lock this device is on (`personal`'s `member`):
-/// a header (its email where there are several), a row each with its name, 这台设备 on this one's, 移除 on every
-/// other's, which asks first (as 安全's removing a device does: remove_dialog).
-fn adb_devices(c : @ui.Ctx, core : Core, view : Json?, blocks : Array[() -> Unit], keys : Array[String]) -> Unit {
-  let mine = items(view, "personal").filter(fn(l) { text(Some(l), "standing") == "member" })
-  for lock in mine {
-    let p = Some(lock)
-    let sub = text(p, "sub")
-    keys.push("devices-heading/" + sub)
-    blocks.push(fn() {
-      section_header(c, if mine.length() > 1 { text(p, "email") } else { tr("android-misc.adb.devices") }, start=S6)
-    })
-    keys.push("devices/" + sub)
-    blocks.push(fn() { adb_devices_card(c, core, p) })
-  }
-}
-
-///|
-/// The devices on the lock `p` this device is on, a row each.
-fn adb_devices_card(c : @ui.Ctx, core : Core, p : Json?) -> Unit {
-  let said = str(text(p, "sub"))
-  let doing = is_doing(core, ["adb.personalRemove"], [])
-  list_card(c, fn() {
-    for d in items(p, "devices") {
-      let d = Some(d)
-      let key = text(d, "key")
-      let me = flag(d, "me")
-      let name = if text(d, "label") == "" { tr("android-misc.personal.me") } else { text(d, "label") }
-      list_row(c, key="personal/" + key, fn() {
-        c.box(style=fill_words, fn() {
-          row_lines(c, name, if me { tr("android-misc.personal.me") } else { "" }, wrap_sub=true)
-        })
-        |> ignore
-        if !me {
-          @sf.button(c, tr("android-misc.personal.remove"), key="personal-remove/" + key, tone=Ghost, busy=doing, disabled=doing, on_press=fn() {
-            @sf.confirm(
-              fill("web-pages.security.removeTitle", [("name", name)]),
-              tr("android-misc.adb.devices.removeBody"),
-              tr("web-pages.security.remove"),
-              danger=true,
-              fn() { act(core, tr("android-misc.personal.remove"), "adb.personalRemove", obj([("sub", said), ("key", str(key))])) },
-            )
-          })
-        }
-      })
-      |> ignore
-    }
-  })
-}
+// What settings' 共享调试 shows of the person's own lock (`adbShare`'s `personal`): the grants from before signatures to
+// confirm, and how this device is approved by a device on it (a code it shows, typed in here). To people it is no lock
+// of its own: 安全模式, 受信任设备 and 批准 (the user, 2026-11-10); its own page of before, under 安全, is gone and its
+// link opens 共享调试. Its devices are 安全's, which takes one off (2026-11-11: 共享调试's list of them went).
 
 ///|
 /// The grants from before signatures, one tap (and the person asked once) from lending again: where there are any.
@@ -63,7 +12,7 @@ fn confirm_row(c : @ui.Ctx, core : Core, view : Json?, blocks : Array[() -> Unit
   }
   keys.push("confirm")
   blocks.push(fn() {
-    // (what it is for under its title as wide as the card, 确认 at its foot as 本机设置's step has it: not beside them,
+    // (what it is for under its title as wide as the card, 确认 at its foot as the page's step has it: not beside them,
     // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压)
     let doing = is_doing(core, ["adb.personalConfirm"], [])
     card(c, foot=UiCapsule, fn() {

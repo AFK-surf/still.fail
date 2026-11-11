@@ -2094,7 +2094,6 @@ export const SHAPES: Record<string, Shape> = {
     ["grants", vec("AdbGrant"), { default: true, doc: "This person's chats' grants of their phone live now, and their requests waiting, every station's." }],
     ["wanted", vec("String"), { default: true, doc: "The stations a live grant lends this phone to now." }],
     ["known", "bool", { default: true, doc: "Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started)." }],
-    ["lasts", opt("String"), { doc: "This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`)." }],
     ["lends", vec("AdbLend"), { default: true, doc: "This phone lent to each station a grant wants it on (`adb.ports` given): how each stands." }],
     ["screens", vec("String"), { default: true, doc: "The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them." }],
     ["personal", vec("AdbPersonal"), { default: true, doc: "Each account's own lock as this device has it." }],

@@ -442,18 +442,13 @@ test("a granted card says how its station's adb holds the phone, and its agent i
   assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "ended", scope: "chat", why: "已收回" });
 });
 
-test("its owner's 默认最长授权: the card offers no longer, and a longer grant is refused", async () => {
+test("every card offers every length (默认最长授权 went), and any is granted", async () => {
   const w = world();
-  assert.equal(w.grants.lastsOf("pat@example.com"), "chat");
-  assert.equal(w.grants.setLasts("Pat@example.com", "hour", 10), null);
-  // an older setting (another device's, said late) does not take its place
-  assert.equal(w.grants.setLasts("pat@example.com", "chat", 5), null);
-  assert.equal(w.grants.lastsOf("pat@example.com"), "hour");
   await w.grants.ask("s1", "x");
-  assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "拒绝"]);
-  assert.equal(w.cards[0]!.card.adb.lasts, "hour");
-  assert.match(w.grants.decide("pat@example.com", "p1", "chat", "work-a")!, /默认最长授权/);
-  assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
+  assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "闲置 1 小时后失效", "本对话 8 小时内", "本对话直到归档", "拒绝"]);
+  assert.equal(w.cards[0]!.card.options.find((o: any) => o.recommended)?.label, "闲置 1 小时后失效");
+  assert.equal(w.cards[0]!.card.adb.lasts, "chat");
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat", "work-a"), null);
 });
 
 test("refused, the agent is told, and a request of an archived chat is not granted", async () => {

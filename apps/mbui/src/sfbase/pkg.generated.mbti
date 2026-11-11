@@ -31,7 +31,6 @@ pub fn acting_reset() -> Unit
 
 pub fn adb_card_of(Source, @sf.LinkTo) -> @json.Json?
 
-pub fn adb_link_card(@ui.Ctx, Source, String, @sf.LinkTo, String?) -> Unit
 
 pub fn adb_title(Source, @sf.LinkTo) -> String
 

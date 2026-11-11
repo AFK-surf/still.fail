@@ -635,7 +635,7 @@ pub fn station_state(@ui.Ctx, @json.Json?) -> Unit
 
 pub fn station_waiting(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
-pub fn step_card(@ui.Ctx, String, String, String, () -> Unit) -> Unit
+pub fn step_card(@ui.Ctx, String, String, String, go? : (() -> Unit)?) -> Unit
 
 pub let steps_marked_ms : Double
 
