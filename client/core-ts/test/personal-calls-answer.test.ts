@@ -21,7 +21,8 @@ import { hex } from "../src/util.ts";
 import { ASKED_MS, bindPerson, fold, held, keepToPerson, onBoundPerson, read, signerKnown, withBound } from "../src/views/lock.ts";
 import { serveTrusted, tryOne } from "../src/views/pair.ts";
 import { call } from "./helpers.ts";
-import { ME, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { jsonResponse } from "../src/testing.ts";
 import { stationLater, stationReplies } from "./station-fixture.ts";
 
 /// The workspace's one station, which keeps the person's own lock too.
@@ -50,14 +51,16 @@ type Rig = Awaited<ReturnType<typeof rig>>;
 /// A station of the locks as station/src/mesh/serve.ts answers it (as lock-calls-answer.test.ts's), keeping the
 /// person's own lock too (GET/POST /lock/person); `silent`: asked, it never answers; `personLate`: its reads of the
 /// person's lock answered that many ms late; `refused`: how many entries it refused (409), one at a place it holds
-/// another at, as `takeLock` does.
-function station(first: Entry) {
+/// another at, as `takeLock` does; `lateUntil`: till then (the clock's ms, `now`) what it is asked is held, and
+/// answered then (its link coming back, as a station just started anew: the tests of stations late, at the end).
+function station(first: Entry, now: () => number) {
   const chain: Entry[] = [first];
   const kept = { person: [] as Entry[] };
-  const say = { silent: false, personLate: 0, refused: 0 };
+  const say = { silent: false, personLate: 0, refused: 0, lateUntil: 0 };
   const head = (): Head => ({ seq: chain.length - 1, hash: entryHash(chain.at(-1)!), genesis: entryHash(chain[0]!) });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (say.silent) return Effect.never;
+    if (now() < say.lateUntil) return Effect.andThen(Effect.sleep(say.lateUntil - now()), Effect.suspend(() => answer(method, path, body)));
     const serves = { takes: ["person"], serves: ["person", "devices", "told"] };
     if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) {
       const after = path === "/lock" ? -1 : Number(path.split("=")[1]);
@@ -89,13 +92,17 @@ function station(first: Entry) {
 
 /// A locked workspace `ws` (s1 the owner, this device its app, LAPTOP theirs too), its one station A serving it; this
 /// device's person's own lock begun here with LAPTOP put on it, and bound in the workspace's lock. `tablet`: TABLET too,
-/// in the workspace's lock and on the person's.
-async function setUp({ tablet = false } = {}) {
+/// in the workspace's lock and on the person's. `phone`: PHONE, the member s2's, in the workspace's lock.
+async function setUp({ tablet = false, phone = false } = {}) {
   const g = grant();
-  const more = [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: LAPTOP_SIGNS }, ...(tablet ? [{ id: TABLET, sub: "s1", kind: "app", label: "tablet", sign_key: TABLET_SIGNS }] : [])];
+  const more = [
+    { id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: LAPTOP_SIGNS },
+    ...(tablet ? [{ id: TABLET, sub: "s1", kind: "app", label: "tablet", sign_key: TABLET_SIGNS }] : []),
+    ...(phone ? [{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8" }] : []),
+  ];
   const r = await rig((signer) => ({ ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME, more) }), undefined, A);
   const inner = r.core.inner;
-  const st = station(r.cloud.chains.get("ws")![0]!);
+  const st = station(r.cloud.chains.get("ws")![0]!, () => r.host.nowMs());
   // What the station was asked of the person's lock, by method.
   const asked: string[] = [];
   const original = inner.stations.requests.call.bind(inner.stations.requests);
@@ -473,4 +480,88 @@ test("a read that lands past the call's wait is taken all the same: the call goe
   t.diagnostic(`the longer chain pinned at ${ms} ms`);
   assert.ok(ms >= 5_000 && ms <= 5_000 + SLACK_MS, `pinned at ${ms} ms`);
   assert.equal(entryHash(s.personal.entries("s1").at(-1)!), entryHash(later));
+});
+
+// ── stations late ──
+// Past a call's wait the cloud is asked too, and the stations still listened to (views/lock.ts ASKED_MS): an entry is
+// done as either takes it. 2026-11-12: the cloud frozen and the station just started anew, its link back 10 s later, a
+// device let in face to face was never answered: the call had stopped listening to the stations at 3 s. The station
+// here holds what it is asked for 10 s and answers it then; the cloud is down (nothing answered) or refuses at once
+// (503): each call is done as the station takes what it signed, at about 10 s.
+
+/// How long past the station's answer at 10 s a call may take: its answer is seen at the end of a 10 ms step, and the
+/// calls in two phases (the person's lock, then the workspace's) read and sign the second at once, the station
+/// answering then.
+const LATE_SLACK_MS = 100;
+
+/// The cloud answering nothing, or 503 to everything at once.
+function cloudFailing(r: Rig, how: "down" | "503") {
+  stationLater(r.host, () => (how === "down" ? new Promise(() => {}) : Promise.resolve(jsonResponse(503, { error: "down" }))));
+}
+
+/// What each call is, what it leaves at the station; `approve`: the face-to-face approval, its code shown before.
+const LATE: { name: string; made: (s: Setup, approve: (() => Promise<{ ms: number | null; ok: boolean; said: unknown }>) | null) => Promise<{ ms: number | null; ok: boolean; said: unknown }>; took: (s: Setup) => boolean; approve?: true }[] = [
+  {
+    name: "lock.removeDevice of another's device (the workspace's lock)",
+    made: (s) => timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: PHONE }),
+    took: (s) => s.st.chain.some(isOut(PHONE)),
+  },
+  {
+    name: "adb.personalRemove",
+    made: (s) => timedCall(s.r, "adb.personalRemove", { sub: "s1", key: LAPTOP_KEY }),
+    took: (s) => isRemove(LAPTOP_KEY)(s.st.kept.person.at(-1)!) && s.st.chain.some(isOut(LAPTOP)),
+  },
+  {
+    name: "lock.removeDevice of an own device",
+    made: (s) => timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: LAPTOP }),
+    took: (s) => isRemove(LAPTOP_KEY)(s.st.kept.person.at(-1)!) && s.st.chain.some(isOut(LAPTOP)),
+  },
+  {
+    name: "a device approved face to face into the person's lock",
+    made: (_s, approve) => approve!(),
+    took: (s) => s.st.kept.person.some((e) => e.kind === "device" && (e.body as { key?: string }).key === NEW_KEY) && s.st.chain.some((e) => e.kind === "device" && (e.body as { id?: string }).id === NEW),
+    approve: true,
+  },
+];
+
+for (const how of ["down", "503"] as const) {
+  for (const c of LATE) {
+    test(`${c.name}: the station answering from 10 s, the cloud ${how === "down" ? "down entirely" : "answering 503"}, done as the station takes it`, async (t) => {
+      const s = await setUp({ phone: true });
+      let approve: (() => Promise<{ ms: number | null; ok: boolean; said: unknown }>) | null = null;
+      if (c.approve) {
+        const prompts = await s.r.watch({ topic: "lockPrompts" });
+        const [trusted, phone] = await pipe();
+        s.inner.runner.fork(serveTrusted(s.inner, NEW, ME, trusted));
+        const hello = await s.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 9", sign_key: NEW_SIGNS, personal: { subs: ["s1"], key: NEW_KEY } }), phone.next()));
+        assert.deepEqual(hello, { t: "code", workspaces: ["person:s1"] });
+        const code = (await prompts()).pairing.find((p: { device: string }) => p.device === NEW).code as string;
+        approve = () => timedEffect(s, tryOne(s.inner, { id: ME, d: phone, workspaces: ["person:s1"] }, NEW, code));
+      }
+      cloudFailing(s.r, how);
+      s.st.say.lateUntil = s.r.host.nowMs() + 10_000;
+      const out = await c.made(s, approve);
+      t.diagnostic(`${c.name}, the cloud ${how}: ${out.ms} ms`);
+      answeredWithin(`${c.name}, the cloud ${how}`, out, 10_000 + LATE_SLACK_MS);
+      assert.ok(out.ms! >= 10_000, `answered after ${out.ms} ms, before the station did`);
+      assert.ok(c.took(s), `${c.name}: the station holds what was signed`);
+    });
+  }
+}
+
+test("the cloud's POST slow (5 s), the station answering from 4 s: done at 4 s by the station, the cloud's answer not waited for", async (t) => {
+  const s = await setUp({ phone: true });
+  const inner = s.inner;
+  stationLater(s.r.host, (req) => (req.method === "POST" && new URL(req.url).pathname === "/v1/workspaces/ws/lock"
+    ? new Promise((done) => void inner.runner.fork(Effect.andThen(Effect.sleep(5_000), Effect.sync(() => done(jsonResponse(200, s.r.cloud.reply(req)))))))
+    : undefined));
+  s.st.say.lateUntil = s.r.host.nowMs() + 4_000;
+  const out = await timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: PHONE });
+  t.diagnostic(`lock.removeDevice, station at 4 s, the cloud at 5 s: ${out.ms} ms`);
+  answeredWithin("lock.removeDevice, station at 4 s", out, 4_000 + SLACK_MS);
+  assert.ok(out.ms! >= 4_000, `answered after ${out.ms} ms`);
+  assert.ok(s.st.chain.some(isOut(PHONE)), "the station took it");
+  // (the cloud sent it too, at the wait's end, and keeps it as its slow answer comes)
+  await s.r.host.time.pass(6_000);
+  assert.ok(s.r.cloud.chains.get("ws")!.some(isOut(PHONE)), "and the cloud, behind");
 });

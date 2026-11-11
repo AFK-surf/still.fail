@@ -236,3 +236,24 @@ test("within a call's wait, one station refusing at 1 s and the other silent: th
   await r.host.time.pass(500);
   assert.equal(cloud.posted, 0);
 });
+
+test("the same refusal coming at 5 s, past the call's wait: the cloud was sent the entry at its end and took it, the call answers well (the known gap)", async (t) => {
+  // Past the wait the cloud is asked too, the stations still listened to (views/lock.ts ASKED_MS): at 3 s no station had
+  // taken the entry nor refused it, so it went to the cloud, which took it at once. A's refusal at 5 s cannot unsend
+  // it: the cloud's chain has this device's entry where A keeps another's. The one case of a station that keeps this
+  // lock refusing that cannot be told in time (`Lock.append`); asserted here so that a change to it is seen.
+  const { r, stations, cloud, another } = await setUp([A, B]);
+  const a = stations.get(A)!;
+  a.say.pending = another();
+  a.say.delay = 5_000;
+  stations.get(B)!.say.silent = true;
+  const { ms, answer } = await removePhone(r);
+  t.diagnostic(`answered after ${ms} ms`);
+  assert.ok(answer !== undefined && "ok" in answer, said("refused at 5 s", ms, answer));
+  assert.ok(ms! >= ASKED_MS && ms! <= ASKED_MS + 50, `answered after ${ms} ms`);
+  assert.equal(cloud.posted, 1, "the cloud sent it at the wait's end");
+  await r.host.time.pass(3_000);
+  const kept = r.cloud.chains.get("ws")!;
+  assert.ok(removedLast(kept) && kept.at(-1)!.seq === 1, "the cloud keeps this device's entry at 1");
+  assert.equal(a.chain[1]!.kind, "member", "where A keeps another device's: the fork");
+});
