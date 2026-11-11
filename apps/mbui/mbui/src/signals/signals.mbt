@@ -661,6 +661,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
     }
     // (where, for what it tells to say: Signal::set_at)
     set_at.val = Some(loc)
+    sets_count.val += 1
     let node = self.0
     node.flags = MUTABLE | DIRTY
     match node.subs {
@@ -1136,6 +1137,17 @@ let setting : Ref[SourceLoc?] = Ref(None)
 /// is not the place of some earlier set.
 pub fn setting_at() -> SourceLoc? {
   setting.val
+}
+
+///|
+/// How many sets changed a value so far: what reads it before and after says whether any came between (ui's
+/// Ctx::held, whether more came after what told a build).
+// kept across runs: a count read only as a difference
+let sets_count : Ref[Int] = Ref(0)
+
+///|
+pub fn sets_said() -> Int {
+  sets_count.val
 }
 
 ///|

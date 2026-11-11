@@ -74,6 +74,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
       shot_watch.val = None
       pass_look.val = None
       corners_look.val = None
+      wait_look.val = None
       frame_look.val = None
       @hostapi.set_host(restore)
     }
@@ -496,6 +497,7 @@ pub fn Tester::new(
   pass_look.val = Some(rows_pass_looked)
   // (each frame's corners worked out with what is kept worked out anew as well and the two compared: tester_corners.mbt)
   corners_look.val = if test_corners_looked() { Some(corners_looked) } else { None }
+  wait_look.val = Some(wait_looked)
   // (each frame painted alone or of its looks alone built whole after it and the two compared: tester_looks.mbt)
   frame_look.val = Some(looks_looked)
   // (each shot taken kept, what it says, how big a picture it makes and what it drew: Tester::shot_drawn)
@@ -895,6 +897,13 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
   if times.length() > 0 {
     self.origin = times[times.length() - 1]
   }
+}
+
+///|
+/// The waits asked without their own `since` that count from no cause, from the frame's moment as it began, or from
+/// the latest of several (Ctx::held, wait_look): said as MOTION lines, each a place to give its `since` or to make a node.
+fn wait_looked(kind : String, loc : SourceLoc, causes : Array[(Double, String)]) -> Unit {
+  println("MOTION \{kind} \{sizes_steady.file}: \{loc} \{causes}")
 }
 
 ///|

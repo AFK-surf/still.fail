@@ -117,6 +117,8 @@ fn frame_afters_run() -> Unit {
 
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
+  // (how many sets there had been as the frame began: what the frame itself sets is no cause told before it)
+  frame_start_sets.val = @signals.sets_said()
   // (what the host gives the frame, as it gives it: kept on a core trace as it changes, envrec.mbt)
   settings_at_frame(w, h, scale)
   let z = window_zoom_wanted.get()

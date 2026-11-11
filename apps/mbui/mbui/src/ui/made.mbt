@@ -53,6 +53,7 @@ fn made_watch(held : Ref[RowNodes?]) -> @signals.Watch {
       None => ()
     }
     nodes_run.told = true
+    watch_told_moment()
     if !frame_running.val {
       h_frame_owed()
     }
