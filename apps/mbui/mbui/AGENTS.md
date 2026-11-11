@@ -83,6 +83,14 @@ yet and you can add one, add it.
   along the rows passing under it). A drag is inputs, each found once; a wheel's every notch is one; the glide after a
   fling is let go is a way: found at its end. What the clock, a frame's laying out or the hand itself tells is no
   change of it (`Tree::hits_bump`).
+- A row that leaves out what has not the room (`View::fits`) leaves before it cuts: what may leave goes first, then
+  words cut short come down to their least, four of their size (flex's `cut_kept_ems`: a node's `View::cuts` as an old
+  view's `w=Cut`; a box sized by what it holds keeps what its words keep), and only then does what is beside it give
+  way. Such a row said `View::keeps_held` is never narrower than that (flex's `fit_least_held`), not than all it holds
+  (the coordinator of the migration, 2026-11-12). Only what the row holds itself leaves: what may leave in a box it
+  holds stays, unless that box says `fits` too. Known gap: where it and what is beside it are both at their least and
+  still have not the room, an old view comes down further as a last resort (`soft_least`), a node's row does not
+  (`src/ui/fits_row_least_wbtest.mbt`).
 - `Ctx` is going: no new code is built on it. What is left is counted by detlint (`old-island`, `old-list`,
   `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only
   fall; an API goes from mbui once its count is none.

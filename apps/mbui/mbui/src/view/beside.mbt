@@ -589,6 +589,8 @@ pub fn Tree::words_again(self : Tree) -> Unit {
     if n.live && (n.look.words != "" || n.flex.measure is Some(_)) {
       self.layout_marked_at(at)
       self.look_marked_at(at)
+      // (cut short: what of them is kept, at their size now)
+      self.cut_applied(at)
     }
   }
   self.words_redone.set(self.words_redone.untracked() + 1)

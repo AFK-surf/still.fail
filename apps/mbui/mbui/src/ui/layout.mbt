@@ -13,8 +13,8 @@ fn Ctx::editor_display(self : Ctx, n : Node) -> String {
 
 ///|
 /// How much of words cut short (`w=Cut`) their row keeps before a part of it leaves (Ctx::box `drop`): four of their
-/// size, or all of them where they are fewer.
-let cut_kept_ems : Double = 4.0
+/// size, or all of them where they are fewer (a node's the same: flex's).
+let cut_kept_ems : Double = @flex.cut_kept_ems
 
 ///|
 /// The text laid out in `max_w`. The engine asks for a few widths per frame;
