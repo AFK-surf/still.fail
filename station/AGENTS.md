@@ -104,6 +104,15 @@
   behind a grant unless `UNGATED` (`src/rig/module.ts`) lists it, which is for reading back and stopping what a chat
   already ran there; a new method is not added to it to make something work.
 
+## A lock kept here
+
+- A lock this station pinned, its home's or a joined workspace's, is let go or replaced only by the lock's own entry
+  (its owner's `disable`) or on this machine (`stillfail lock reset [--workspace ID]`, `enroll --join --lock` naming
+  another): never by what the control plane says (a workspace left out of a frame and named again unlocked, or made
+  the home one: `src/cloud/state.ts` `leftJoined`, `src/cloud/presence.ts` `took`), nor by an ask over the mesh, where
+  who manages the station may be the plane's word (`src/cli.ts` `nameJoinedLock`). Each of these let a device the lock
+  never named in until 2026-11-12.
+
 ## Devices (设备)
 
 - A device is what agents use that runs no station (the user, 2026-11-10): attached to a station (on its USB, in its

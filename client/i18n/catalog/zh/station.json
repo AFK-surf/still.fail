@@ -169,6 +169,8 @@
   "station.cli.lock.none": "安全模式：未开启（由 still.fail 服务器管理访问）",
   "station.cli.lock.pending": "收到 workspace 的受信任清单后，此 station 将进入安全模式。请在 still.fail 中验证此 station，安全码为 {code}",
   "station.cli.lock.reset": "已让此 station 退出安全模式，现由 still.fail 服务器管理访问。如需重新开启，请在受信任设备上操作",
+  "station.cli.lock.resetWorkspace": "此 station 已不再保存 workspace {workspace} 的安全模式记录。如果该 workspace 开启了安全模式，在受信任设备上重新保护此 station 之前，它不接受该 workspace 的任何成员",
+  "station.cli.lock.noneWorkspace": "此 station 没有保存 workspace {workspace} 的安全模式记录",
   "station.cli.lock.status": "安全模式：已开启，第 {seq} 条记录（{hash}…），{members} 个成员、{devices} 台设备、{stations} 台 station",
   "station.cli.noAnswer": "运行中的 station 无响应（可能仍在启动），请稍后重试",
   "station.cli.rig.isRig": "这台机器是 workspace「{workspace}」里只执行任务的 station，不能再作为完整 station 加入。要改，在 still.fail 里把它改为完整，或先把它移出 workspace",

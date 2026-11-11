@@ -169,6 +169,8 @@
   "station.cli.lock.none": "Security mode: off (still.fail's servers manage access)",
   "station.cli.lock.pending": "This station enters security mode once it receives the workspace's trusted list. Verify the station in still.fail with security code {code}",
   "station.cli.lock.reset": "This station has left security mode; still.fail's servers manage access again. To turn it back on, use a trusted device",
+  "station.cli.lock.resetWorkspace": "This station no longer keeps a security mode record for workspace {workspace}. If that workspace is in security mode, the station takes none of its members until it is protected there again from a trusted device",
+  "station.cli.lock.noneWorkspace": "This station keeps no security mode record for workspace {workspace}",
   "station.cli.lock.status": "Security mode: on, record {seq} ({hash}…), {members} members, {devices} devices, {stations} stations",
   "station.cli.noAnswer": "The running station didn't answer (it may still be starting); try again in a moment",
   "station.cli.rig.isRig": "This machine is a tasks-only station of workspace “{workspace}” and cannot join as a full station too. To change that, make it a full station in still.fail, or remove it from the workspace first",

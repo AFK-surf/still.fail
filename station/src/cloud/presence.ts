@@ -267,9 +267,14 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
 function applyFrame(s: CloudState, body: any, send: (frame: unknown) => unknown) {
   if (body?.type === "state") {
     // A workspace it joined taking over from a home it was taken out of: its lock goes along (cloud/state.ts `succeed`).
+    // So too, its home not locked (which the plane moves at its word), any workspace this station keeps a lock for, or
+    // one joining named, listed now or not, its old home gone or not: else that lock, joined workspaces' only, would
+    // be left behind and the workspace taken as the plane says.
     const was = s.state;
-    const took = was !== null && typeof body.workspace === "string" && body.workspace !== was.workspace
-      && (was.joined ?? []).some((j) => j.workspace === body.workspace) && !joinedOf(body.workspaces).some((j) => j.workspace === was.workspace)
+    const moved = was !== null && typeof body.workspace === "string" && body.workspace !== was.workspace;
+    const keptThere = moved && s.locked() === null && (s.locked(body.workspace) !== null || s.pendingLock(body.workspace) !== null);
+    const took = moved
+      && (keptThere || ((was.joined ?? []).some((j) => j.workspace === body.workspace) && !joinedOf(body.workspaces).some((j) => j.workspace === was.workspace)))
       && s.succeed(body.workspace);
     const locked = s.locked() !== null;
     if (locked && s.state && ((typeof body.workspace === "string" && body.workspace !== s.state.workspace && !took) || (typeof body.origin === "string" && body.origin !== s.state.origin))) {
@@ -293,10 +298,10 @@ function applyFrame(s: CloudState, body: any, send: (frame: unknown) => unknown)
       // Kept as said; once locked, credentials are checked with the lock's keys instead (cloud/state.ts `grantKeys`).
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
-      // The workspaces it joined besides its home one: none from planes of before them. One it is no longer in: its
-      // lock forgotten.
+      // The workspaces it joined besides its home one: none from planes of before them. One it is no longer in: not
+      // served, its lock kept (the plane's word alone undoes no lock: cloud/state.ts `leftJoined`).
       const joined = joinedOf(body.workspaces);
-      for (const was of st.joined ?? []) if (!joined.some((j) => j.workspace === was.workspace)) s.forgetJoined(was.workspace);
+      for (const was of st.joined ?? []) if (!joined.some((j) => j.workspace === was.workspace)) s.leftJoined(was.workspace);
       if (joined.length > 0) st.joined = joined;
       else delete st.joined;
       // Missing roster means an old cloud: never keep peers from another binding. Who may call the device tools
