@@ -330,6 +330,9 @@ jobs:
   # Offer compatible apps before making the station update available.
   station:
     needs: [plan, web]
+    # web needs mbui-web, skipped when web=artifact; without this, the default success() over a skipped ancestor skips
+    # this job and everything after it (0.1.8278, 2026-11-12).
+    if: ${{ !cancelled() && needs.web.result == 'success' }}
     runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
@@ -354,6 +357,7 @@ jobs:
   # stable release that left it out kept still.fail at 2026-10-01's for two weeks (no Windows download on it).
   site:
     needs: [plan, web]
+    if: ${{ !cancelled() && needs.web.result == 'success' }}
     runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
@@ -376,6 +380,7 @@ jobs:
 
   done:
     needs: [plan, android, desktop, desktop-win, desktop-win-feeds, web, station, site]
+    if: ${{ !cancelled() && needs.web.result == 'success' && needs.station.result == 'success' && needs.site.result == 'success' && needs.desktop-win-feeds.result == 'success' }}
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     permissions:
