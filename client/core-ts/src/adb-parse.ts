@@ -24,8 +24,6 @@ export type AdbCall =
   /// refuses it), or a grant taken back.
   | { kind: "decide"; station: string; request: string; scope: PhoneScope | null }
   | { kind: "revoke"; station: string; request: string }
-  /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
-  | { kind: "lasts"; lasts: "hour" | "chat" }
   /// The person's own lock: this device asks to join it, types the code shown on one on it, stops
   /// asking; a device taken off; the lock pinned here left, and one begun anew.
   /// (`sub`: whose: a device may be signed in to several accounts, each with a lock of its own.)
@@ -68,11 +66,6 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       return { kind: "pair", code: text("code"), ...(text("station") !== "" ? { station: text("station") } : {}) };
     case "adb.grant":
       return { kind: "grant", ...(text("station") !== "" ? { station: text("station") } : {}) };
-    case "adb.setLasts": {
-      const l = get(params, "lasts");
-      if (l !== "hour" && l !== "chat") throw CoreError.invalid(t("core-misc.params.missing", { field: "lasts" }));
-      return { kind: "lasts", lasts: l };
-    }
     case "adb.on": {
       const on = get(params, "on");
       if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));

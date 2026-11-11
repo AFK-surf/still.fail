@@ -477,19 +477,23 @@ pub fn fixture_page(mode : String) -> String {
     fixture_open.block = block
     fixture_open.frames = 0
   }
-  // 共享调试 as it stands with the phone (fx_adb_share), its host's word on the phone said already
+  // 共享调试 as it stands with the phone (fx_adb_share), its host's word on the phone said already (settings-adb-desk: a
+  // computer's host, no adb of its own)
   fx_adb.val = ""
   if m.has_prefix("settings-adb-") {
     fx_adb.val = m.unsafe_substring(start=13, end=m.length())
     adb_host.phone.set(Some(
-      obj([
-        ("supported", Json::boolean(true)),
-        ("developer", Json::boolean(true)),
-        ("wireless", Json::boolean(fx_adb.val != "off" && fx_adb.val != "chats-off")),
-        ("wifi", Json::boolean(true)),
-        ("canSwitch", Json::boolean(false)),
-        ("reads", Json::boolean(false)),
-      ]),
+      if fx_adb.val == "desk" {
+        obj([("supported", Json::boolean(false)), ("none", Json::boolean(true))])
+      } else {
+        obj([
+          ("supported", Json::boolean(true)),
+          ("developer", Json::boolean(true)),
+          ("wireless", Json::boolean(fx_adb.val != "off" && fx_adb.val != "chats-off")),
+          ("wifi", Json::boolean(true)),
+          ("canSwitch", Json::boolean(false)),
+        ])
+      },
     ))
   }
   match m {
@@ -664,7 +668,7 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" | "settings-adb-lock-member" | "settings-adb-lock-outside" =>
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-desk" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" | "settings-adb-lock-member" | "settings-adb-lock-two" | "settings-adb-lock-outside" =>
       "adb:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
@@ -3581,8 +3585,8 @@ fn fx_resources() -> Json {
 }
 
 ///|
-/// 共享调试 as a fixture's mode has it (MBUI_FIXTURE=settings-adb-<off|unpaired|pairing|connected|failed|chats|idle>; ""
-/// not lent).
+/// 共享调试 as a fixture's mode has it (MBUI_FIXTURE=settings-adb-<off|unpaired|pairing|connected|failed|chats|idle|desk>;
+/// "" not lent).
 let fx_adb : Ref[String] = Ref("")
 
 ///|
@@ -3601,15 +3605,42 @@ fn fx_adb_share() -> Json {
       ]..append(fields),
     )
   }
+  // lent for a chat's grant (the station's adb as `adb` holds the phone), as a core of grants says it: the first lending
+  // at its top, each in `lends`
+  let granted = fn(adb : String, fields : Array[(String, Json)]) {
+    lent(adb, [
+      ("on", Json::boolean(true)),
+      ("lends", Json::array([obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str(adb)), ("serial", str("127.0.0.1:37762")), ("tunnels", Json::number(0.0))])])),
+      ("grants", Json::array([obj([("station", str("ws1/st1")), ("id", str("p-1")), ("session", str("s-c1")), ("chatTitle", str("通知权限检查")), ("reason", str("装上刚编好的测试包，看首屏在折叠屏展开时排得对不对")), ("status", str("granted")), ("scope", str("chat"))])])),
+      ..fields,
+    ])
+  }
+  // a device on the person's own lock
+  let device = fn(key : String, label : String, me : Bool) { obj([("key", str(key)), ("label", str(label)), ("me", Json::boolean(me))]) }
   match fx_adb.val {
     // the person's own lock on 共享调试: this device on it (its devices listed, two), or to be approved by one
     "lock-member" =>
       lent("connected", [
         ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("devices", Json::array([
-          obj([("key", str("ed25519:aa")), ("label", str("OPPO PLP110")), ("me", Json::boolean(true))]),
-          obj([("key", str("ed25519:bb")), ("label", str("MacBook Pro")), ("me", Json::boolean(false))]),
+          device("ed25519:aa", "OPPO PLP110", true),
+          device("ed25519:bb", "MacBook Pro", false),
         ]))])])),
         ("toConfirm", Json::number(2.0)),
+      ])
+    // on the locks of two accounts (a phone signed in to both), the second's email long; a chat's grant held
+    "lock-two" =>
+      granted("connected", [
+        ("personal", Json::array([
+          obj([("sub", str("s-zuo")), ("email", str("zuozijian1994@gmail.com")), ("standing", str("member")), ("devices", Json::array([
+            device("ed25519:z1", "youdid.wtf 桌面版 · 左子健的 MacBook Air", false),
+            device("ed25519:z2", "youdid.wtf Android · OPPO Find N6", true),
+            device("ed25519:z3", "still.fail Android · OPPO Find N6", false),
+          ]))]),
+          obj([("sub", str("s-work")), ("email", str("zijian.zuo.engineering@example-company.com")), ("standing", str("member")), ("devices", Json::array([
+            device("ed25519:w1", "youdid.wtf Android · OPPO Find N6", true),
+            device("ed25519:w2", "still.fail 桌面版 · Mac Studio", false),
+          ]))]),
+        ])),
       ])
     // 共享调试 with no lock of the person's own yet (the page as it is: allowing a request begins it), or this device
     // typing the code a trusted device of theirs shows (the page is that step alone)
@@ -3619,12 +3650,15 @@ fn fx_adb_share() -> Json {
         ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效")), ("showing", Json::array([str("MacBook Pro")]))]))])])),
       ])
     "lock-outside" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([]))])]))])
-    "unpaired" => lent("unpaired", [])
-    "pairing" => lent("unpaired", [("pairPort", Json::number(37115.0))])
-    "connected" => lent("connected", [("tunnels", Json::number(1.0))])
+    // lent for a chat's grant to Willow: its adb waiting to be paired (the pairing dialog not open yet, then open),
+    // holding the phone, failing
+    "unpaired" => granted("unpaired", [])
+    "pairing" => granted("unpaired", [("pairPort", Json::number(37115.0))])
+    "connected" => granted("connected", [("tunnels", Json::number(1.0))])
     "failed" =>
-      lent("failed", [
-        ("message", str("the phone did not reach adb: 无法连接手机上的 adb：Connection refused (os error 111)")),
+      granted("failed", [
+        // (the phone's own words, as a station says them: station/src/adb/link.ts Refused)
+        ("message", str("无法连接手机上的 adb：Connection refused (os error 111)")),
         ("refusedPort", Json::number(41239.0)),
       ])
     // settings' 共享调试, its switch off: nothing granted
@@ -3633,6 +3667,7 @@ fn fx_adb_share() -> Json {
     // a core from before it said the one it names at its top: the first)
     "second" =>
       lent("connected", [
+        ("on", Json::boolean(true)),
         ("pairPort", Json::number(37115.0)),
         (
           "lends",
@@ -3641,9 +3676,17 @@ fn fx_adb_share() -> Json {
             obj([("station", str("ws1/st2")), ("phase", str("offered")), ("adb", str("unpaired")), ("serial", str("127.0.0.1:37715")), ("tunnels", Json::number(0.0))]),
           ]),
         ),
+        (
+          "grants",
+          Json::array([
+            obj([("station", str("ws1/st1")), ("id", str("p-1")), ("reason", str("装上刚编好的测试包，看首屏在折叠屏展开时排得对不对")), ("status", str("granted")), ("scope", str("chat"))]),
+            obj([("station", str("ws1/st2")), ("id", str("p-2")), ("reason", str("录一段登录流程的视频")), ("status", str("granted")), ("scope", str("hour"))]),
+          ]),
+        ),
       ])
-    // The length and mix of reasons people see in the grants list, including one from before use times were recorded.
-    "chats-long" =>
+    // The length and mix of reasons people see in the grants list, including one from before use times were recorded
+    // (desk: the same seen on a computer, which lends no adb of its own)
+    "chats-long" | "desk" =>
       obj([
         ("sharing", Json::boolean(true)),
         ("station", str("ws1/st1")),

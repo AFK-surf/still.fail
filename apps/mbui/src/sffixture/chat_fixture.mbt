@@ -1745,12 +1745,21 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   if fix_rig.val == "" && (f.mode == "chat-rig-granted" || f.mode == "chat-rig-away" || f.mode == "chat-rig-ended") {
     fix_rig.val = f.mode.unsafe_substring(start="chat-rig-".length(), end=f.mode.length())
   }
-  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-outside" || f.mode == "chat-phone-none" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
+  let stepped = f.mode.has_prefix("chat-phone-step-")
+  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-outside" || f.mode == "chat-phone-none" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked || stepped
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options;
   // chat-phone-linked-<link>[-desk]: approved, its station holding the phone as <link> says, on the phone or (-desk)
-  // on a computer)
-  if (f.mode == "chat-phone-granted" || linked) && fix_phone.val == "" {
+  // on a computer; chat-phone-step-<what>: approved, on a phone that lacks <what> first, its station holding it as
+  // that leaves it)
+  if (f.mode == "chat-phone-granted" || linked || stepped) && fix_phone.val == "" {
     fix_phone.val = "granted"
+  }
+  if stepped && fix_phone_link.val == "" {
+    fix_phone_link.val = match f.mode {
+      "chat-phone-step-wireless" | "chat-phone-step-refused" => "off"
+      "chat-phone-step-code" => "unpaired"
+      _ => "gone"
+    }
   }
   if f.mode == "chat-vault-use" && fix_vault.val == "" {
     fix_vault.val = "granted"

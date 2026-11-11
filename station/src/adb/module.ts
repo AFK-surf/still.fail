@@ -138,11 +138,10 @@ export const AdbLive = Layer.effectDiscard(
           await stream.finish();
         };
         const email = viewer.email.toLowerCase();
-        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email, viewer.workspace), lasts: grants.lastsOf(email), signs: true });
-        if (ask.op === "lasts") {
-          const why = grants.setLasts(email, ask.lasts, ask.at);
-          return why === null ? reply(200, { lasts: grants.lastsOf(email) }) : reply(422, { message: why });
-        }
+        // (`lasts`, and the `lasts` op answered with it: for cores from before, whose 默认最长授权 capped a card's
+        // lengths; nothing caps them now. Goes 7 days after this ships.)
+        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email, viewer.workspace), lasts: "chat", signs: true });
+        if (ask.op === "lasts") return reply(200, { lasts: "chat" });
         const id = typeof ask.request === "string" ? ask.request : "";
         const scope = isScope(ask.scope) ? (ask.scope as Scope) : null;
         const why = ask.op === "sign" ? grants.sign(email, id, ask.signed, viewer.workspace) : ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace, ask.signed) : grants.revoke(email, id, viewer.workspace);

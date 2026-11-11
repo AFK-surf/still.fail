@@ -1,6 +1,6 @@
 // Links to a station's screens and to its 共享调试 in an agent's words (still.fail apps/android chat/screens/ScreenLinks.kt,
-// AdbLinks.kt), as the web draws them: one alone in a paragraph is its card
-// (@sf.markdown's `screens`), a bare one within a sentence reads as its title. What a card says is the core's (the
+// AdbLinks.kt), as the web draws them: one alone in a paragraph is its card (a screen's; 共享调试's is a link to its page
+// alone too) (@sf.markdown's `screens`), a bare one within a sentence reads as its title. What a card says is the core's (the
 // `screenCard` and `adbCard` topics). A screen its station previews is live in its card while the card is built (the
 // messages' list builds only the rows in view) and the app is shown: `screen.view` with `peek`, small, each frame
 // acknowledged peek_ms after the one before (the station sends the next once the last is acknowledged); stopped (the
@@ -174,13 +174,12 @@ pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
 
 ///|
 /// The links to screens in an agent's words as a chat draws them: their cards, and a bare
-/// one's title (屏幕 until it is known); a station's 共享调试 as its own. `message` names the message
+/// one's title (屏幕 until it is known); a station's 共享调试 a link alone too, its title its own. `message` names the message
 /// (a screen's preview is its card's own).
 pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
   {
     card: fn(href, to, words) {
       match to.card {
-        "adb" => adb_link_card(c, src, href, to, words)
         "service" => service_link_card(c, src, href, to, words)
         _ => screen_link_card(c, src, message + "\n" + href, href, to, words)
       }
@@ -334,102 +333,6 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
     link_card_words(c, title, line, gone, link_words)
   })
   |> ignore
-}
-
-///|
-/// A station's 共享调试 asked for (an agent's link to it alone in a paragraph), as a card that asks
-/// (vault_ask.mbt's look: the question for its title, the line the answer turns on, a solid button and a text one):
-/// whether its agents may debug this device. Where the phone has all it takes (as its host says:
-/// @settings.adb_ready), 共享 lends it from here; where it lacks something first, what, and 查看步骤 opens the page that
-/// says how; while it is lent there, how that stands (the core's line) with 详情 and 停止共享. A device with no adb to
-/// lend (the core's `lendable`; an Android before 11, as its host says) says so, with nothing to press. `words`, the
-/// link's own, are not its title: the card asks its own question.
-pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, words : String?) -> Unit {
-  ignore(words)
-  let card = adb_card_of(src, to)
-  let station = to.station
-  let sharing = flag(card, "sharing")
-  let ready = if card is Some(_) && flag(card, "lendable") {
-    @settings.adb_ready(c)
-  } else if card is Some(_) {
-    @settings.AdbCannot(text(card, "line"))
-  } else {
-    @settings.AdbUnknown
-  }
-  let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
-    None => station
-  }
-  let name = match dv_stations(src, ws).0 {
-    Some(list) =>
-      match list.iter().find_first(fn(s) { s.station == station }) {
-        Some(s) => s.name
-        None => @settings.station_name(station)
-      }
-    None => @settings.station_name(station)
-  }
-  let key = "adb-ask/" + href
-  let stopping = "adb-stop/" + station
-  c.box(style=@sf.ask_card_room, fn() {
-    @sf.card(c, fn() {
-      if sharing {
-        @sf.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
-        @sf.ask_buttons(c, fn() {
-          @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary, on_press=fn() {
-            open_adb(src, station)
-          }) |> ignore
-          @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping), on_press=fn() {
-            act(src, @sf.t("android-misc.adb.stopWhat"), stopping, "adb.stop", Json::object({}))
-          }) |> ignore
-        })
-        return
-      }
-      let title = @sf.t("android-misc.adb.ask.title", args=[("name", name)])
-      match ready {
-        @settings.AdbCannot(why) => @sf.ask_words(c, title, why)
-        @settings.AdbLacks(step) => {
-          @sf.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
-          @sf.ask_buttons(c, fn() {
-            @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary, on_press=fn() {
-              open_adb(src, station)
-            }) |> ignore
-          })
-        }
-        @settings.AdbLends => {
-          // lent to another station now: lending it here moves it
-          let now = src.topic("adbShare", {}).get().value
-          let elsewhere = flag(now, "sharing") && text(now, "station") != station
-          @sf.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
-          @sf.ask_buttons(c, fn() {
-            @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking(), on_press=fn() {
-              @settings.adb_lend(station, name)
-            }) |> ignore
-            @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost, on_press=fn() {
-              open_adb(src, station)
-            }) |> ignore
-          })
-        }
-        // (not known yet what the phone has: the question alone, its answer as it comes)
-        @settings.AdbUnknown => @sf.ask_words(c, title, "")
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The 共享调试 of the station (`<workspace>/<station>`) a link's card names, opened as its link opens it (open_target),
-/// whatever host the link was written with: the card is drawn for any (adb_of_link), and its 详情 opens what it shows
-/// (2026-10-30: a link under another host than the cloud's was drawn as the card, and 详情 handed it to the browser).
-fn open_adb(src : Source, station : String) -> Unit {
-  guard station.find("/") is Some(i) else { return }
-  let target = link_target({
-    "opens": "adbShare",
-    "workspace": Json::string(station.view(end_offset=i).to_owned()),
-    "station": Json::string(station.view(start_offset=i + 1).to_owned()),
-  })
-  open_target(src, target, false, None) |> ignore
 }
 
 // ── a screen live in its card ──

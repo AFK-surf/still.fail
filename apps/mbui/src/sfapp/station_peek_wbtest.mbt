@@ -364,7 +364,8 @@ test "共享调试 opened from a wide chat: beside it in a tab, the chats' sideb
   assert_true(app.nav.top() is Chat(_))
   assert_eq(@sfdesk.lit_place(), "chats")
   assert_eq(side_now(r), (["adb:[\"ws1/st1\"]"], "adb:[\"ws1/st1\"]"))
-  assert_true(t.find("一小时后自动停止") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // (共享调试's one page)
+  assert_true(t.find("已授权的对话") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   // asked again (the card again, the station page's row): the same tab, in front
   @sfbase.open_page(Setting(@settings.Route::AdbShare("ws1/st1")))
   t.frame()

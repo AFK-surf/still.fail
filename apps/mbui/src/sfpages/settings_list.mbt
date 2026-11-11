@@ -277,8 +277,8 @@ pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
     Fonts => Appearance
     SecurityOpen => Security
     VaultItems | VaultItem(_, _) => Vault
-    AdbShare("") => AdbShare("")
-    Station(_) | AdbShare(_) => Stations
+    AdbShare(_) => AdbShare("")
+    Station(_) => Stations
     Profile(_, _) | NewProfile(_) | ProfileAccount(_) => Profiles("")
     Connects(_) | Connect(_, _) | RunSettings(_, _) => Connects("")
     Memory(_) | MemoryDoc(_, _, _) => Memories

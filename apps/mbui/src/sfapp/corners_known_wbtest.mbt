@@ -25,6 +25,17 @@ let corners_everywhere_known : Map[String, Int] = {
   // words' and the window's, no place it is stood at: the rule holds what does not scroll to the corner, and nothing
   // here stands it elsewhere. Gone as the page's height is any other (English's has none).
   known["touch-zh lock-security"] = 3
+  // A request for the phone waiting (chat-phone-lacks, swept since 2026-11-11; the same card as chat-phone's, on main
+  // unswept): its length's chooser, the last of its answer's row, stands in the card's foot end corner off concentric
+  // with it where its words are long (闲置 1 小时后失效 on a phone; Until idle for 1 hour wherever English is), as the
+  // request cards' rows of answers are laid (ask_buttons). The rail's one besides it where the window has a tape.
+  known["phone-zh chat-phone-lacks"] = 1
+  known["touch-en chat-phone-lacks"] = 2
+  known["desk-en chat-phone-lacks"] = 2
+  known["desk-win-en chat-phone-lacks"] = 3
+  known["tablet-en chat-phone-lacks"] = 1
+  known["wide-en chat-phone-lacks"] = 2
+  known["wide-win-en chat-phone-lacks"] = 2
   known
 }
 
@@ -71,7 +82,10 @@ let corners_tape_rail : Array[String] = [
   "settings-station-network", "settings-station-copies", "settings-station-copies-alone", "settings-station-restore", "settings-station-restore-offer",
   "settings-station-restore-confirm", "settings-station-restore-confirm-long", "settings-station-restored", "settings-stations-add", "settings-stations-existing", "settings-stations-command",
   "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing",
-  "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
+  "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long", "settings-adb-lock-two",
+  "settings-adb-idle", "settings-adb-desk", "chat-phone-lacks", "chat-phone-step-off", "chat-phone-step-developer",
+  "chat-phone-step-wifi", "chat-phone-step-wireless", "chat-phone-step-refused", "chat-phone-step-code",
+  "chat-phone-linked-unpaired", "chat-phone-linked-unauthorized", "chat-phone-linked-connected",
   "settings-profiles", "settings-profiles-monthly", "settings-profiles-fable", "settings-profiles-own3",
   "settings-profiles-week-fable", "settings-profiles-several", "settings-profile", "settings-profile-fable", "settings-profile-own3",
   "settings-profile-week-fable", "settings-profile-quota", "settings-profile-quota-kinds",

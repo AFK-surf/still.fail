@@ -360,25 +360,33 @@ pub fn login_card(
 }
 
 ///|
-/// A step left of something under an agent's message, as a login's card looks (its ground, its title, a line under it),
-/// the whole card the way to it (`go`), a › in its corner where a login's × is: an approved phone's pairing with its
-/// station (decision.mbt phone_ask_card). Quiet as the cards beside it are, no button of its own (2026-10-30, user: a
-/// card with a solid button was 「明显有点过大了，而且好像不是很搭风格」).
-pub fn step_card(c : @ui.Ctx, key : String, title : String, line : String, go : () -> Unit) -> Unit {
-  let x = c.id(key)
-  c.on_press(x, fn() {
-    go()
-  })
+/// A step left of something under an agent's message, as a login's card looks (its ground, its title, a line under it
+/// where there is one), the whole card the way to it (`go`), a › in its corner where a login's × is: what is left on
+/// the phone for an approved request of it (decision.mbt phone_ask_card). Quiet as the cards beside it are, no button
+/// of its own (2026-10-30, user: a card with a solid button was 「明显有点过大了，而且好像不是很搭风格」). A step with
+/// nothing to press (`go` None) is the card alone: no ›, no answer to a press.
+pub fn step_card(c : @ui.Ctx, key : String, title : String, line : String, go? : (() -> Unit)? = None) -> Unit {
+  let x = if go is Some(_) { c.id(key) } else { 0 }
+  match go {
+    Some(go) => c.on_press(x, fn() { go() })
+    None => ()
+  }
   c.box(style=lc_room, fn() {
-    let b = c.box(style=lc_card_step, id=x, fn() {
+    let b = c.box(style=if go is Some(_) { lc_card_step } else { lc_card }, id=x, fn() {
       c.box(style=lc_head, fn() {
-        c.box(style=lc_title_room, fn() { c.text(title, style=lc_title) |> ignore }) |> ignore
-        c.box(style=lc_cancel, fn() { @sf.icon(c, "chevron-right", size=lc_icon, color=@sf.theme().p.muted) |> ignore }) |> ignore
+        c.box(style=if line == "" { lc_title_alone } else { lc_title_room }, fn() { c.text(title, style=lc_title) |> ignore }) |> ignore
+        if go is Some(_) {
+          c.box(style=lc_cancel, fn() { @sf.icon(c, "chevron-right", size=lc_icon, color=@sf.theme().p.muted) |> ignore }) |> ignore
+        }
       })
       |> ignore
-      login_said(c, said_line(line, last=true))
+      if line != "" {
+        login_said(c, said_line(line, last=true))
+      }
     })
-    c.semantics(b, Button, id=x, label=title)
+    if go is Some(_) {
+      c.semantics(b, Button, id=x, label=title)
+    }
   })
   |> ignore
 }
@@ -986,6 +994,11 @@ let lc_head : @ui.Style = @ui.css("row w=Full gap=S1 align=AStart")
 /// Its title (cardTitle): 13 on 20, medium, 10 in and 10 down (a small panel's row).
 // kept across runs: a value (no field of it changes)
 let lc_title_room : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2_5")
+
+///|
+/// Its title with no line under it (step_card's): as far from the card's foot as from its top, as a last line is.
+// kept across runs: a value (no field of it changes)
+let lc_title_alone : @ui.Style = lc_title_room.then(@ui.css("pb=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)

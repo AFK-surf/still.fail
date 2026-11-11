@@ -189,7 +189,7 @@ pub fn md_node_depth(node : Json) -> Int? {
 ///|
 /// What a link is to, as the core says (refLinks.ts linkTo, with each link of its Markdown and of a person's words):
 /// a chat's (`chat`: drawn as a reference to it), a screen's, a station's 共享调试 or a chat's web service's (`card`:
-/// "screen", "adb", "service"; a card alone in a paragraph, its title bare in a sentence), and what names it (`station`,
+/// "screen", "adb", "service"; a card alone in a paragraph, but 共享调试's, its title bare in a sentence), and what names it (`station`,
 /// `screen`, `job`); a pull request's or an issue's (`peek`: "pull", "issue": its card over it that one's, bars while it
 /// is read). `bare`: its words are its address (a Markdown link's: it may read as what it names). Nothing here reads a
 /// link's address for it.

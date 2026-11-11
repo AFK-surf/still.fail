@@ -12,7 +12,7 @@ import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 
 /// How long a grant lasts (2026-11-10: a device's timeouts, idle or fixed, as a vault's): `hour` fixed an hour, `idle`
 /// until the chat has used the phone for nothing for an hour, `eight` fixed eight hours, `chat` until the chat is
-/// archived. In that order, each allowed up to its owner's 默认最长授权 (`hour`: that alone; `chat`: all).
+/// archived. Every card offers all four (its owner's 默认最长授权, which capped them, went: 2026-11-11).
 export type Scope = "hour" | "idle" | "eight" | "chat";
 export const SCOPES: Scope[] = ["hour", "idle", "eight", "chat"];
 /// How long a scope lasts at most (seconds): `chat` and `idle` 30 days at the latest.
@@ -70,6 +70,7 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS adb_requests (
 );
 CREATE INDEX IF NOT EXISTS adb_requests_by_owner ON adb_requests (owner, status);
 CREATE INDEX IF NOT EXISTS adb_requests_by_session ON adb_requests (session, status);
+-- (each owner's 默认最长授权 of before, read no longer: kept, as the schema only goes forward)
 CREATE TABLE IF NOT EXISTS adb_lasts (
   owner TEXT PRIMARY KEY,
   lasts TEXT NOT NULL,
@@ -268,22 +269,6 @@ export class PhoneGrants {
     return this.#load("SELECT body FROM adb_requests WHERE status = 'granted'").filter((r) => this.#live(r));
   }
 
-  /// The longest `owner` lets a grant last (their 默认最长授权, as their app last said it): `chat` until they say.
-  lastsOf(owner: string): Scope {
-    const row = this.#d.db.prepare("SELECT lasts FROM adb_lasts WHERE owner = ?").get(owner.toLowerCase()) as { lasts: string } | undefined;
-    return row?.lasts === "hour" ? "hour" : "chat";
-  }
-
-  /// `owner`'s 默认最长授权 set (`at`: when, on their device: the latest wins across their devices and stations).
-  setLasts(owner: string, lasts: unknown, at: unknown): string | null {
-    if (lasts !== "hour" && lasts !== "chat") return "lasts: hour or chat";
-    const when = typeof at === "number" && Number.isFinite(at) ? Math.floor(at) : this.#d.now();
-    this.#d.db
-      .prepare("INSERT INTO adb_lasts (owner, lasts, at) VALUES (?, ?, ?) ON CONFLICT (owner) DO UPDATE SET lasts = excluded.lasts, at = excluded.at WHERE excluded.at >= adb_lasts.at")
-      .run(owner.toLowerCase(), lasts, when);
-    return null;
-  }
-
   /// The person a session works for: whoever started its chat.
   starter(session: string): string | null {
     return this.#d.hub.store.starter(session);
@@ -387,11 +372,10 @@ export class PhoneGrants {
     const starter = this.#d.hub.store.starter(session)?.toLowerCase() ?? null;
     const whose = starter === r.owner ? "你的手机" : `${r.owner} 的手机`;
     const text = [`申请调试${whose}：${r.reason}`, ...(stillfail ? [] : ["请在 still.fail 安卓 app 中批准。"])].join("\n\n");
-    // The scopes its owner allows (their 默认最长授权): idle an hour recommended where it is one of them, else the
-    // longest.
-    const lasts = this.lastsOf(r.owner);
-    const scopes = SCOPES.slice(0, SCOPES.indexOf(lasts) + 1);
-    const best = scopes.includes("idle") ? "idle" : scopes[scopes.length - 1];
+    // Every scope, idle an hour recommended (`lasts`: `chat`, all of them, as an app from before reads it).
+    const scopes = SCOPES;
+    const best = "idle";
+    const lasts = "chat";
     const card = stillfail
       ? {
           type: "options",
@@ -456,7 +440,6 @@ export class PhoneGrants {
     if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for decides its requests";
     if (r.status !== "pending") return `the request is ${r.status} already`;
     if (scope !== null && !SCOPES.includes(scope)) return "scope: hour, idle, eight or chat";
-    if (scope !== null && SCOPES.indexOf(scope) > SCOPES.indexOf(this.lastsOf(email))) return "longer than your 默认最长授权 allows";
     if (scope !== null && this.#ended(r.session)) return "the chat is archived";
     if (scope === null) this.#settle(r, "denied");
     else {

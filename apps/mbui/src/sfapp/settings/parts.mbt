@@ -374,7 +374,13 @@ fn nav_bar(
     wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back, about~)
     return
   }
-  @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val, on_press=fn() {
+  // (what it is, an ⓘ after the title, as the wide head has it)
+  let title_after = if about == "" {
+    None
+  } else {
+    Some(fn() { @sf.about(c, "settings-about", about, label=tr("web-main.about")) })
+  }
+  @sf.nav_bar(c, "settings-back", back, title, sub?=sub, title_after?, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val, on_press=fn() {
     match on_back {
       Some(f) => f()
       None => (core.pop)()

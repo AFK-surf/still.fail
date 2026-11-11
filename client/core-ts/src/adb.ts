@@ -514,7 +514,10 @@ class Lend {
       const body = fromUtf8(new Uint8Array(parts.flatMap((p) => [...p])));
       const said = message(body) ?? "";
       if (reply.status === 200) return { message: said, ...((parseJson(utf8(body)) as J) ?? {}) };
-      return yield* Effect.fail(CoreError.invalid(said === "" ? t("core-misc.adb.failed", { status: reply.status }) : said));
+      // (the station's code where it gives one, which an app goes by: `adb_grant_refused`, station/src/adb/link.ts)
+      const code = (parseJson(utf8(body)) as J)?.code;
+      const words = said === "" ? t("core-misc.adb.failed", { status: reply.status }) : said;
+      return yield* Effect.fail(typeof code === "string" && code !== "" ? new CoreError(code, words) : CoreError.invalid(words));
     });
   }
 }
@@ -532,8 +535,6 @@ export class Adb {
   /// This person's chats' grants of their phone (and requests waiting), by station address and id.
   readonly #grants = new Map<string, Map<string, J>>();
   readonly #retold = new Retold();
-  /// Their 默认最长授权 as last set here or said by a station.
-  #lasts: "hour" | "chat" = "chat";
   /// Whether the grants kept on the device were read (`adbShare` `known`): before, none known is not none granted.
   #known = false;
   /// This phone's 共享调试 switch (ON_KEY): it lends only while on.
@@ -667,16 +668,6 @@ export class Adb {
         return Effect.as(Effect.forEach(ids, (request) => Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request }), (r) => {
           this.heard(call.station, (r as J)?.request);
         }), { discard: true }), null);
-      }
-      case "lasts": {
-        // at once here, then told to every station this person's grants are read from (the latest `at` wins there)
-        this.#lasts = call.lasts;
-        seenOf(this.#env.store).touch();
-        const at = Math.floor(this.#env.host.nowMs());
-        return Effect.as(
-          Effect.forEach([...this.#grants.keys()], (station) => Effect.ignore(this.#legacy.askAt(station, { op: "lasts", lasts: call.lasts, at }), { log: "Unhandled", message: "debugging lasts told" }), { concurrency: "unbounded", discard: true }),
-          null,
-        );
       }
     }
   }
@@ -812,7 +803,6 @@ export class Adb {
       return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
         const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
         if (list === null) return;
-        if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
         // (one from before signatures drops them: said on its cards, nothing allowed there would lend)
         if ((r as J)?.signs === true) this.#old.delete(station);
         else this.#old.add(station);
@@ -897,7 +887,7 @@ export class Adb {
 
   /// The lending a person has something to do for, of those grants made: one whose station's adb waits to be paired
   /// with this phone, else the first. What the topic's own fields say, the pairing dialog's code goes to (its
-  /// notification, AdbCodeReader: they name no station) and an ask naming none is of (2026-10-30: a phone lent to a
+  /// notification: it names no station) and an ask naming none is of (2026-10-30: a phone lent to a
   /// second station was paired with the first, already paired, and the second never).
   #focus(): Lend | undefined {
     const lends = [...this.#lends.values()];
@@ -920,7 +910,7 @@ export class Adb {
     const screens = [...new Set([this.#legacy, ...this.#lends.values()].flatMap((l) => l.value().screens as string[]))];
     const personal = this.#env.subs().map(({ sub, email }) => ({ ...this.#env.personal.view(sub), email, pair: this.#env.pair.state(sub) }));
     const toConfirm = this.#allGrants().filter((g) => this.#toConfirm(g)).length;
-    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts, screens, personal, toConfirm };
+    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, screens, personal, toConfirm };
   }
 
   card(station: string): J {

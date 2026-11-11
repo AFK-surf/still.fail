@@ -58,7 +58,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Stations => stations_page(c, core, here)
     Profiles(only) => profiles_page(c, core, here, only)
     Archive => archive_page(c, core, here)
-    AdbShare(a) => adb_page(c, core, here, a)
+    AdbShare(a) => adb_settings(c, core, here, focus=a)
     ProfileAccount(k) => profile_account_page(c, core, here, k)
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
