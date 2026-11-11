@@ -434,7 +434,13 @@ fn Tree::pairs_now(self : Tree) -> Unit {
     let come = made.filter(fn(a) { self.nodes[a.at].share == Some(id) })
     let living = self.shared_live.get(id).unwrap_or(0) - gone.length()
     if gone.length() > 1 || come.length() > 1 {
-      self.fault(come.get(0).unwrap_or(gone[0].node), "shared: \{id} let go of or made more than once in one change")
+      // (the node it is told under: one made, else one let go of; never both looked up, as `unwrap_or(gone[0]…)`
+      // did, which with none let go stopped the run on an index out of bounds before the fault was told)
+      let under = match come.get(0) {
+        Some(c) => c
+        None => gone[0].node
+      }
+      self.fault(under, "shared: \{id} let go of or made more than once in one change")
     } else if come.length() == 1 && living > 1 {
       self.fault(come[0], "shared: \{id} made while another of it lives")
     } else if gone.length() == 1 && come.length() == 1 {

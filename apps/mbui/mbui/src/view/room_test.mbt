@@ -129,21 +129,29 @@ test "Room::tall: how tall what it holds comes to at its width, read in the same
 }
 
 ///|
-test "panic by_room: what it makes saying its own box by its room is a fault" {
-  let t = @view.Tree::new(
-    fn(root) {
-      root.box(fn(col) {
-        col.by_room(fn(held, room) {
-          match held.parent() {
-            Some(own) => own.height(By(fn() { Some(room.width() / 2.0) })) |> ignore
-            None => ()
-          }
+test "by_room: what it makes saying its own box by its room is a fault, told, the layout ended whole" {
+  // (told, not stopped (boundary_test's faults_kept): a test stopped in the middle of a layout leaves what the process
+  // runs next to begin from there)
+  let told = faults_kept(fn() {
+    let t = @view.Tree::new(
+      fn(root) {
+        root.box(fn(col) {
+          col.by_room(fn(held, room) {
+            match held.parent() {
+              Some(own) => own.height(By(fn() { Some(room.width() / 2.0) })) |> ignore
+              None => ()
+            }
+          })
+          |> ignore
         })
         |> ignore
-      })
-      |> ignore
-    },
-    time=fn() { 0.0 },
-  )
-  t.frame(400.0, 300.0) |> ignore
+      },
+      time=fn() { 0.0 },
+    )
+    t.frame(400.0, 300.0) |> ignore
+  })
+  assert_eq(told, [
+    "View::by_room: its own box said by the room it is given, as it is laid out by it: say it of what it holds",
+  ])
+  assert_eq(@signals.batch_depth(), 0)
 }

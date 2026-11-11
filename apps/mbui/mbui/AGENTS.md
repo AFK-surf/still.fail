@@ -171,6 +171,12 @@ yet and you can add one, add it.
 - A failure says why. Nothing in mbui or an app calls `abort` itself: on wasm-gc, where the tests run off CI, it prints
   none of its words. Stop with `@halt.saying(msg)` (`src/halt`), which prints them and the line that said them first;
   detlint's `abort-unsaid` holds it, in the app as in mbui (the coordinator of the migration, 2026-11-11).
+- A test's result does not depend on what ran before it in its process. No test passes by stopping its program
+  (moon's `test "panic …"`): stopped in the middle of a change it leaves the process there, and on wasm-gc the tests
+  after it run on from it (view's `shared_test` left the signals' batch open: 185 of view's 435 failed after it). What
+  must fail is asked as an app's run on a host asks it, its fault told (`@view.faults_stop`, `@view.fault_told`) and
+  its words asserted. detlint's `panic-test` counts those left, only falling (the coordinator of the migration,
+  2026-11-11).
 
 ## Tools are MoonBit, not Python
 

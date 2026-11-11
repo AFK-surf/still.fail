@@ -2432,3 +2432,18 @@ test "empty-on-done" {
   )
   |> ignore
 }
+
+///|
+test "the rule panic-test (named so: a test named panic… is one moon expects to stop)" {
+  // a test named `panic …` (one that passes by stopping its program), in a black-box or a white-box file alike: counted;
+  // a test whose name only says the word later, a function so named, the words in a string, not
+  let fs = lint_of(
+    [
+      ("src/view/shared_test.mbt", "test \"panic two of an id\" {\n  ignore(1)\n}\n\ntest \"no panic here\" {\n  ignore(2)\n}\n"),
+      ("src/ui/css_wbtest.mbt", "///|\ntest \"panic css: a block in a block\" {\n  ignore(1)\n}\n"),
+      ("src/ui/said.mbt", "fn panic_said() -> String {\n  \"test \\\"panic x\\\"\"\n}\n"),
+    ],
+    rule="panic-test",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/view/shared_test.mbt:1", "src/ui/css_wbtest.mbt:2"])
+}

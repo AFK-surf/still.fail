@@ -525,7 +525,8 @@
     "part-place": {},
     "layout-told": {},
     "abort-unsaid": {},
-    "empty-on-done": {}
+    "empty-on-done": {},
+    "panic-test": {}
   },
   "excused": {
     "frame-request": {},

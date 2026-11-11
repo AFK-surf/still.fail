@@ -348,6 +348,13 @@ fn lint_mbt(
       }
     }
   }
+  // a test that passes by stopping its program (`test "panic …"`, moon's own way): what runs after it in the process
+  // begins where it stopped
+  for it in f.items {
+    if it.kind == "test" && it.name.has_prefix("panic") {
+      add("panic-test", it.start, f.line_text(it.start))
+    }
+  }
   // a page putting a sheet up in an older host of its own (not in its tests; the host's own `fn` not counted)
   if under(f.rel, cfg.pages) && cfg.old_sheets.length() > 0 {
     for k, tk in toks {
