@@ -54,7 +54,7 @@ fn one_of_tester(
 /// The old radio (left) and the node's (right) read out as `label`.
 fn one_of_pair(t : @ui.Tester, label : String) -> (@ui.SemNode, @ui.SemNode) {
   let all = t.all(Radio, label~)
-  guard all.length() == 2 else { abort("\{label}: \{all.length()} radios") }
+  guard all.length() == 2 else { @halt.saying("\{label}: \{all.length()} radios") }
   if all[0].rect.0 < all[1].rect.0 { (all[0], all[1]) } else { (all[1], all[0]) }
 }
 

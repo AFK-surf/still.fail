@@ -69,7 +69,7 @@ fn sub_at(t : @ui.Tester, words : Array[String]) -> Array[String] {
 fn sub_mid(t : @ui.Tester, words : String) -> (Double, Double) {
   match t.words().filter(fn(w) { w.0 == words && w.5 > 0.5 }).last() {
     Some(w) => (w.1 + w.3 / 2.0, w.2 + w.4 / 2.0)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 

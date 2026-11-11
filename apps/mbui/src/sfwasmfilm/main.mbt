@@ -182,7 +182,7 @@ fn scene_arg(name : String) -> String {
     "MBUI_UPDATES_MS" => option(17)
     // (1Password's answers in a scene: the native film's only)
     "MBUI_FILM_OP" => ""
-    _ => abort("picture: unsupported scene option \{name}")
+    _ => @halt.saying("picture: unsupported scene option \{name}")
   }
 }
 ///|

@@ -409,7 +409,7 @@ test "desk composer: a file up after the page last heard of it goes once as Ente
     g["sent"] = Json::number(0.0)
     Json::object(g)
   })
-  guard now.value is Some(Object(v)) else { abort("no draft") }
+  guard now.value is Some(Object(v)) else { @halt.saying("no draft") }
   let before = v.copy()
   before["files"] = Json::array(going)
   before["uploading"] = Json::boolean(true)
@@ -480,7 +480,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
     g["sent"] = Json::number(1.0)
     Json::object(g)
   })
-  guard now.value is Some(Object(v)) else { abort("no draft") }
+  guard now.value is Some(Object(v)) else { @halt.saying("no draft") }
   let before = v.copy()
   before["files"] = Json::array(going)
   before["uploading"] = Json::boolean(true)
@@ -554,7 +554,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
     as_(g)
     Json::object(g)
   })
-  guard now.value is Some(Object(v)) else { abort("no draft") }
+  guard now.value is Some(Object(v)) else { @halt.saying("no draft") }
   let before = v.copy()
   before["files"] = Json::array(files)
   heard.set(Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 }))

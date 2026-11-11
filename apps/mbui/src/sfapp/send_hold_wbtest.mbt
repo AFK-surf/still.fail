@@ -109,7 +109,7 @@ fn hold_timed(
       let (go, down) = hold_said(t)
       (@sfbase.flight_ms_of(f), go - f.set_out, down - f.set_out)
     }
-    None => abort("no flight")
+    None => @halt.saying("no flight")
   }
 }
 
@@ -221,7 +221,7 @@ fn hold_quoted(frames : Int, step? : Double = 0.0) -> (Double, Bool, Bool) {
   t.frame()
   match flight_of(hold_draft) {
     Some(f) => (f.held_extras, !f.files.is_empty(), drawn)
-    None => abort("no flight")
+    None => @halt.saying("no flight")
   }
 }
 

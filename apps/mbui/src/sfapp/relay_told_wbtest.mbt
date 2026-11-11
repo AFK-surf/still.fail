@@ -66,7 +66,7 @@ fn relay_mentions_kept(note : String) -> Json {
     "看下 @peter " => { "query": "peter ", "at": 3, "rows": [] }
     "@" => { "query": "", "at": 0, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "@pengxiao " }, { "id": "U2", "name": "peter", "note": "@peter " }] }
     "@p" => { "query": "p", "at": 0, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "@pengxiao " }, { "id": "U2", "name": "peter", "note": "@peter " }] }
-    _ => abort("chat.relayMentions: no answer kept for the note \"\{note}\" (relay_mentions_kept)")
+    _ => @halt.saying("chat.relayMentions: no answer kept for the note \"\{note}\" (relay_mentions_kept)")
   }
 }
 

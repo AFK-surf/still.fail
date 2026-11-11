@@ -495,7 +495,7 @@ pub let trace_switches : Array[String] = [
 /// `trace_switches`.
 pub fn trace_switch(name : String) -> Bool {
   if !trace_switches.contains(name) {
-    abort(
+    @halt.saying(
       "trace_switch: \{name} is not one of sfcore's trace_switches: say it there, and its bar in src/sfreplay/flows/trace_switches_test.mbt",
     )
   }

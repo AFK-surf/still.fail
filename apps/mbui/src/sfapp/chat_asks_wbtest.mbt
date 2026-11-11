@@ -100,7 +100,7 @@ fn context_up(calls : Array[Made], platform? : Int = 2, wide? : Bool = false, re
 fn context_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().filter(fn(w) { w.0 == words }).last() {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 

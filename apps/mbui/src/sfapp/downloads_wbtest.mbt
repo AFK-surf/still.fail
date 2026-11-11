@@ -279,7 +279,7 @@ test "downloads: a file sent up is saved under its original name" {
       m["title"] = "report.pdf"
       Json::object(m)
     }
-    _ => abort("not a download")
+    _ => @halt.saying("not a download")
   }
   let src = downloads_src("home", [d], calls)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=0)

@@ -58,7 +58,7 @@ fn tab_named_at(t : @ui.Tester, label : String) -> (Double, Double, Double, Doub
       return s.rect
     }
   }
-  abort("nothing named \{label}")
+  @halt.saying("nothing named \{label}")
 }
 
 ///|

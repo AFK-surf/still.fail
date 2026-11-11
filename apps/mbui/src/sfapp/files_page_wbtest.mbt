@@ -564,7 +564,7 @@ test "前往文件夹 with keyboard and mouse: Escape and a press outside it clo
 fn go_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().filter(fn(w) { w.0 == words }).last() {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 
@@ -704,7 +704,7 @@ fn which_word(t : @ui.Tester, words : String, below? : Double = 0.0) -> (Double,
       at = Some((w.1, w.2, w.3, w.4))
     }
   }
-  guard at is Some(r) else { abort("\{words} is not drawn under \{below}") }
+  guard at is Some(r) else { @halt.saying("\{words} is not drawn under \{below}") }
   r
 }
 

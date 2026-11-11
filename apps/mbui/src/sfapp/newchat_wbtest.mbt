@@ -558,7 +558,7 @@ fn ns_open(calls : Array[String], platform~ : Int, wide~ : Bool) -> @ui.Tester {
   t.draw()
   t.run_for(@ui.move_most_ms)
   guard t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "Willow" && !s.hidden }).last() is Some(b) else {
-    abort("no Willow to press")
+    @halt.saying("no Willow to press")
   }
   t.tap(b.rect.0 + b.rect.2 / 2.0, b.rect.1 + b.rect.3 / 2.0)
   presented_rested(t)

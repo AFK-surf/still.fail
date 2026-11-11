@@ -185,10 +185,10 @@ fn xshare_up(
 /// The workspaces 完成 told the core, in order, and whether their agents may send.
 fn xshare_told(calls : Array[Made]) -> (Array[String], Bool) {
   let made = named(calls, "chat.xshare")
-  guard made.length() == 1 else { abort("chat.xshare told \{made.length()} times") }
+  guard made.length() == 1 else { @halt.saying("chat.xshare told \{made.length()} times") }
   let to = match field(Some(made[0].params), "to") {
     Some(Array(to)) => to.map(fn(j) { j.as_string().unwrap_or("?") })
-    _ => abort("no workspaces said")
+    _ => @halt.saying("no workspaces said")
   }
   (to, flag(Some(made[0].params), "write"))
 }
@@ -340,7 +340,7 @@ test "分享给其他 workspace before what it is shared with now is read: 完�
 fn xshare_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 

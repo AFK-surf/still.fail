@@ -111,7 +111,7 @@ fn top_bar(
 /// The name in a top bar: 24 bold, its letters 0.4 closer, on one line.
 fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_title_look, cut? : Bool = false) -> Int {
   // (said as it is: Ctx::text makes it larger at the system's size of words, as view_spacing does a ScaledPoints)
-  guard look.tracking is ScaledPoints(tracking) else { abort("top_bar_title_look's tracking: ScaledPoints") }
+  guard look.tracking is ScaledPoints(tracking) else { @halt.saying("top_bar_title_look's tracking: ScaledPoints") }
   c.text(s, size=look.size, weight=look.weight, color=@sf.theme().p.text, wrap=look.wrap, line=look.line, tracking~, w=if cut {
     Cut
   } else {

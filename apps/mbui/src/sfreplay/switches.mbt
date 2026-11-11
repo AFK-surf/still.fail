@@ -24,7 +24,7 @@ pub fn switches_off(trace : String) -> Array[String] {
 /// (@sfcore.trace_switch reads the Tester's).
 fn switch_was_on(r : @core.Replay, env : Array[(String, String)], name : String) -> Bool {
   if !@sfcore.trace_switches.contains(name) {
-    abort("switch_was_on: \{name} is not one of sfcore's trace_switches")
+    @halt.saying("switch_was_on: \{name} is not one of sfcore's trace_switches")
   }
   let mut on = false
   for kv in r.env() + env {

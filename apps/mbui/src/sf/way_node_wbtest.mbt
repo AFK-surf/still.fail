@@ -121,14 +121,14 @@ test "way_line_node: its … offers the steps left out, in their order, where th
     let offered = fn(x0 : Double) {
       let in_col = fn(x : Double) { x >= x0 - 0.5 && x < x0 + 399.5 }
       let more = t.words().filter(fn(w) { w.0 == way_more && in_col(w.1) && w.5 > 0.0 })
-      guard more.length() == 1 else { abort("\{w} wide, from \{x0}: no … (\{more.length()})") }
+      guard more.length() == 1 else { @halt.saying("\{w} wide, from \{x0}: no … (\{more.length()})") }
       let (mx, my) = (more[0].1, more[0].2)
       let before = t.words().filter(fn(w) { w.5 > 0.0 }).map(fn(w) { "\{w.0}@\{w.1},\{w.2}" })
       t.tap(mx + more[0].3 / 2.0, my + more[0].4 / 2.0)
       t.run_for(@ui.move_most_ms)
       let items = t.words().filter(fn(w) { w.5 > 0.0 && !before.contains("\{w.0}@\{w.1},\{w.2}") })
       let said = items.map(fn(w) { "\{w.0}@\{w.1 - mx},\{w.2 - my} \{w.3}x\{w.4}" })
-      guard items.length() > 0 else { abort("\{w} wide, from \{x0}: nothing offered") }
+      guard items.length() > 0 else { @halt.saying("\{w} wide, from \{x0}: nothing offered") }
       let last = items.iter().fold(init=items[0], fn(a, b) { if b.2 > a.2 { b } else { a } })
       t.tap(last.1 + last.3 / 2.0, last.2 + last.4 / 2.0)
       t.run_for(@ui.move_most_ms)
@@ -192,7 +192,7 @@ test "way_line_node: its …'s menu, open while the window narrows, stays beside
   let t = way_menu_tester([])
   let more_at = fn() {
     let m = t.words().filter(fn(w) { w.0 == way_more && w.5 > 0.0 })
-    guard m.length() == 1 else { abort("no … (\{m.length()})") }
+    guard m.length() == 1 else { @halt.saying("no … (\{m.length()})") }
     (m[0].1, m[0].2, m[0].3, m[0].4)
   }
   let (mx, my, mw, mh) = more_at()
@@ -200,7 +200,7 @@ test "way_line_node: its …'s menu, open while the window narrows, stays beside
   t.tap(mx + mw / 2.0, my + mh / 2.0)
   t.run_for(@ui.move_most_ms)
   let items = t.words().filter(fn(w) { w.5 > 0.0 && !before.contains(w.0) }).map(fn(w) { w.0 })
-  guard items.length() > 0 else { abort("nothing offered") }
+  guard items.length() > 0 else { @halt.saying("nothing offered") }
   // (each item where it stands from the …)
   let from_more = fn() {
     let (x, y, _, _) = more_at()

@@ -186,7 +186,7 @@ fn ScreenRig::sess(self : ScreenRig) -> ScreenSess {
   for _, sess in screens_open {
     return sess
   }
-  abort("no screen open")
+  @halt.saying("no screen open")
 }
 
 ///|
@@ -195,7 +195,7 @@ fn ScreenRig::ui(self : ScreenRig) -> ScreenUi {
   for _, ui in screen_uis {
     return ui
   }
-  abort("no screen open")
+  @halt.saying("no screen open")
 }
 
 ///|
@@ -334,7 +334,7 @@ fn ScreenRig::labelled(self : ScreenRig, label : String) -> (Double, Double)? {
 fn ScreenRig::tap_label(self : ScreenRig, label : String) -> Unit {
   match self.labelled(label) {
     Some((x, y)) => self.t.tap(x, y)
-    None => abort("nothing labelled " + label)
+    None => @halt.saying("nothing labelled " + label)
   }
 }
 
@@ -1283,7 +1283,7 @@ test "files go onto the machine one after another, the first beside the one of i
     }
     let path = text(Some(p), "path")
     if text(Some(p), "root") != "/Users/alice/Downloads" {
-      abort("the upload's root: " + text(Some(p), "root"))
+      @halt.saying("the upload's root: " + text(Some(p), "root"))
     }
     if path == "季度报告.pdf" {
       return Some(Err({ "code": "exists", "message": "there is already a file by that name", "status": 409.0 }))

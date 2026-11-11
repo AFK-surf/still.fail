@@ -2479,7 +2479,7 @@ fn working_agent_card(stands? : String) -> @ui.Tester {
         _ => Some(w)
       }
     })
-  guard last is Some(name) else { abort("no agent's message") }
+  guard last is Some(name) else { @halt.saying("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t

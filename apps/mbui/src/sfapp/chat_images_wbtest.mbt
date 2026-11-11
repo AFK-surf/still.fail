@@ -206,7 +206,7 @@ test "a chat's picture slow to come: the whole of what stands in for it breathin
   t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
   let shade = match @sf.video_shade {
     Data(v) => v
-    _ => abort("video_shade is a colour")
+    _ => @halt.saying("video_shade is a colour")
   }
   let breathing = fn() { t.cycles().filter(fn(s) { s.has_prefix("\{@sf.breath_ms.to_int()} ms") }).length() }
   // (nothing heard of it: no spinner over it in a pill of its own, which looked like a switch; it breathes)

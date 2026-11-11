@@ -43,7 +43,7 @@ let tape_settle_ms : Double = 1500.0
 
 ///|
 fn tape_read(json : String) -> Tape {
-  let v = @json.parse(json) catch { _ => abort("the tape's JSON does not parse") }
+  let v = @json.parse(json) catch { _ => @halt.saying("the tape's JSON does not parse") }
   let topics : Array[(Json, Json)] = []
   for x in items(Some(v), "topics") {
     match (field(Some(x), "topic"), field(Some(x), "value")) {

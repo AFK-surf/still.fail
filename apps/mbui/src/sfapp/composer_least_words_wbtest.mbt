@@ -128,7 +128,7 @@ test "小屏, a finger's: words of three lines sent hold the composer as tall as
     let press = t.time()
     let go = match @sfbase.flight_lets_go(draft) {
       Some((go, _)) => go
-      None => abort("words \{scale}: what holds the composer not said at the press")
+      None => @halt.saying("words \{scale}: what holds the composer not said at the press")
     }
     assert_true(go > press, msg="words \{scale}: let go of at \{go}, pressed at \{press}")
     // (at the press, and half way from it to their letting go of it)

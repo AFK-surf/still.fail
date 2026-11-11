@@ -59,7 +59,7 @@ fn pair_asked(platform? : Int = 2, wide? : Bool = false, rest? : Bool = true) ->
 fn pair_word(t : @ui.Tester, words : String, under? : Double = -1.0) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words && w.2 > under }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn under \{under}")
+    None => @halt.saying("\{words} is not drawn under \{under}")
   }
 }
 

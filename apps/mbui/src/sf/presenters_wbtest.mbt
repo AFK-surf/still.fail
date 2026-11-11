@@ -62,7 +62,7 @@ fn beside_of(from : Anchor) -> Beside {
   match from {
     Anchor::Of(id) => Of(id)
     Anchor::At(x, y, w, h) => At(x, y, w, h)
-    Unanchored | Node(_) => abort("a menu or a pick is opened beside what opened it")
+    Unanchored | Node(_) => @halt.saying("a menu or a pick is opened beside what opened it")
   }
 }
 

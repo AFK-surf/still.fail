@@ -74,7 +74,7 @@ let mark_screens : Array[(Int, Bool)] = [(2, false), (0, false), (0, true)]
 fn mark_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
   match t.words().iter().find_first(fn(w) { w.0 == words && w.5 > 0.0 }) {
     Some(w) => (w.1, w.2, w.3, w.4)
-    None => abort("\{words} is not drawn")
+    None => @halt.saying("\{words} is not drawn")
   }
 }
 
@@ -98,7 +98,7 @@ fn mark_buttons(t : @ui.Tester, label : String) -> Array[@ui.SemNode] {
 fn mark_button(t : @ui.Tester, label : String) -> (Double, Double, Double, Double) {
   match mark_buttons(t, label) {
     [b] => b.rect
-    l => abort("\{l.length()} buttons \{label}")
+    l => @halt.saying("\{l.length()} buttons \{label}")
   }
 }
 

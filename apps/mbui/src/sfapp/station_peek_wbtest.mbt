@@ -182,7 +182,7 @@ fn peek_row(t : @ui.Tester, words : String) -> (Double, Double) {
   let (dx, _) = t.find("机器详情").unwrap()
   match t.locate(words).iter().find_first(fn(p) { (p.0 - dx).abs() < 1.0 }) {
     Some(p) => p
-    None => abort("no \{words} on the card's rows' line: \{t.locate(words)}")
+    None => @halt.saying("no \{words} on the card's rows' line: \{t.locate(words)}")
   }
 }
 
