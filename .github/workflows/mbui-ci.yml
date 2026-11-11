@@ -90,11 +90,13 @@ jobs:
     name: native${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}
     # (and the same tests again with frames drawn on run_for's way while the app asks for them (scripts/fps_check.sh),
     # at 120, at 60, and at 24 then 7, a runner each beside it: what a test asserts at a moment the same however many
-    # frames came before it)
+    # frames came before it. On a pull request, the day's run and one by hand; main's push after a merge at the default
+    # rate alone, as mbui-check's own run on main (its head says why): the rates ran on the pull request's head; the
+    # user, 2026-11-11: each part of the tests is run for what it is for)
     strategy:
       fail-fast: false
       matrix:
-        fps: ["", "120", "60", "24 7"]
+        fps: ${{ fromJSON(github.event_name == 'push' && '[""]' || '["", "120", "60", "24 7"]') }}
     # (what it builds kept between runs, as mbui-check's native job keeps the app's: moon's own build (moonc's C) and the
     # units each test's C is split into, by content (MBC_STORE: main's newest and a branch's own together). Without,
     # every run compiled all of mbui's C again: a change to ui 154 units of ui's blackbox tests and 230 of its whitebox

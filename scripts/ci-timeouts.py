@@ -26,6 +26,7 @@ LONGER = {
     ("preview.yml", "windows"): 10,
     ("mbui-check.yml", "native"): 10,
     ("mbui-check.yml", "app"): 10,
+    ("mbui-check.yml", "app-rates"): 10,
     ("prebuild.yml", "build"): 10,
     ("rules.yml", "tools"): 10,
     ("prebuild.yml", "again"): 10,
