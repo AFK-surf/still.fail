@@ -103,6 +103,26 @@ test("writing_the_workspace_shown_makes_no_workspaces_mark_again", async () => {
   assert.equal(after.ok.workspaces.wb, value.ok.workspaces.wb);
 });
 
+test("a_stations_link_coming_and_going_makes_no_workspaces_mark_again", async () => {
+  const { t, a } = await twoWorkspaces();
+  const value = t.store.value(marksOf("ws")) as J;
+  const before = { ...work };
+  // As a workspace switched to has its stations tried anew: offline, connecting from offline, online again.
+  for (const state of [{ state: "offline" }, { state: "connecting", last: "offline" }, { state: "connecting" }, { state: "online" }]) {
+    t.set(link("ws/st"), state);
+    await t.readAll([[a, 1]]);
+  }
+  assert.deepEqual([workSince(before).workspaceMarks, workSince(before).marked], [0, 0]);
+  const after = t.store.value(marksOf("ws")) as J;
+  assert.equal(after.ok.workspaces.ws, value.ok.workspaces.ws);
+  assert.equal(after.ok.workspaces.wb, value.ok.workspaces.wb);
+  // (a station renamed is its mark's: made again)
+  t.set({ topic: "workspace", workspace: "ws" }, { id: "ws", stations: [{ id: "st", name: "studio 2", last_seen: null, version: null }] });
+  await t.readAll([[a, 1]]);
+  assert.equal(workSince(before).workspaceMarks, 1);
+  assert.equal((t.store.value(marksOf("ws")) as J).ok.workspaces.ws.items[0].stationName, "studio 2");
+});
+
 test("a_row_that_changed_makes_its_own_part_again_and_no_other", async () => {
   const { t, a, home, now } = await twoWorkspaces();
   const value = t.store.value(marksOf("ws")) as J;

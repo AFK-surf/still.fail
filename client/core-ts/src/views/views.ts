@@ -1163,6 +1163,31 @@ export class Views implements Owner {
     });
   }
 
+  /// The scope's stations by their address and name alone, the same array while those are the same: what reads no more
+  /// of them (a workspace's mark, views/marks.ts) is not made again as a station's link comes and goes, which
+  /// `stations` says of each (`online`). A workspace switched to has its stations' links tried anew: each going from
+  /// offline to connecting made both workspaces' marks again, 4-7 ms in Hermes on a Mac Studio at a workspace of real
+  /// size (2026-11-11).
+  readonly #stationsNamed = new Map<string, Derived<{ address: string; name: string }[]>>();
+  stationsNamed(scope: string): { address: string; name: string }[] {
+    let kept = this.#stationsNamed.get(scope);
+    if (kept === undefined) {
+      let last: { address: string; name: string }[] | undefined;
+      kept = computed(() => {
+        const v = this.value({ topic: "workspace", workspace: scope });
+        const next = v !== undefined && "ok" in v
+          ? arr(get(v.ok, "stations")).flatMap((s) => {
+            const id = str(get(s, "id"));
+            return id === null ? [] : [{ address: `${scope}/${id}`, name: str(get(s, "name")) ?? id }];
+          })
+          : [];
+        return last !== undefined && equal(last, next) ? last : (last = next);
+      });
+      this.#stationsNamed.set(scope, kept);
+    }
+    return kept.get();
+  }
+
   /// The station a link names now (`<workspace>/<station>`): one that took a lost one's place, where that is the one
   /// named (its overview's `copies.formerly`); the one named otherwise.
   stationNow(address: string): string {
