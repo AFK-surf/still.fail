@@ -976,7 +976,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                   Some((v, key, wake, was_in)) if v.alive() && physical_equal(was_in, slot) => {
                     showing[k] = true
                     // (a block given another key: what that makes or lets go in it so at once, key_taken.mbt)
-                    key_taking_set(slot.tree)
+                    key_taking_set(slot.tree, v.id())
                     key.set(k)
                     wake()
                     mine.val = Some((v, key))
@@ -987,7 +987,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     slot.take_in(v)
                     showing[k] = true
                     // (a block given another key: what that makes or lets go in it so at once, key_taken.mbt)
-                    key_taking_set(slot.tree)
+                    key_taking_set(slot.tree, v.id())
                     key.set(k)
                     wake()
                     mine.val = Some((v, key))

@@ -240,7 +240,9 @@ test "another item pressed: the thumb on its way between the two, and another ch
   t.draw()
   let after = thumb_of(t)
   assert_true((after.0 - going_on.0).abs() < 0.000001 && (after.2 - going_on.2).abs() < 0.000001)
-  assert_true(after != before)
+  // (the frame that takes it is drawn at the moment the one before was: where it was, to the hair; it differed only by
+  // the way's time cut to whole ms, no more)
+  assert_true((after.0 - before.0).abs() < 0.000001 && (after.2 - before.2).abs() < 0.000001)
   t.run_for(@ui.cover_slide_ms)
   assert_true(thumb_on(t, "Middle"))
   t.assert_idle()

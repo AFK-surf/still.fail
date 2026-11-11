@@ -1260,18 +1260,22 @@ fn[P] Nav::slide_end(self : Nav[P], c : Ctx) -> Double {
 }
 
 ///|
+/// Where its slide has the top page at `now`, the one way it is read (Nav::at as a frame is laid out, Nav::p_at as it
+/// is painted alone: the two read alike to the bit): its time gone on the moments' grid (gone_ms).
+fn[P] Nav::slid_at(self : Nav[P], now : Double) -> Double {
+  let gone = @flex.time_gone(now, self.t0)
+  let t = if self.dur <= 0.0 || gone >= self.dur { self.dur } else { dmax(gone, 0.0) }
+  let (x, _) = move_path(self.p0 - self.p1, self.v0, t, self.dur)
+  self.p1 + x
+}
+
+///|
 /// Where the top page is, in its widths off to its side (0 in place: Nav's `p`), as its slide has it at `now` (the
 /// frame's time as it is laid out and painted: Nav::slide_end says till when that is followed), from where it set out,
 /// by when and how; followed by a finger, where the finger has it.
 fn[P] Nav::at(self : Nav[P], now : Double) -> Double {
   if (self.mode == 1 || self.mode == 2 || self.mode == 4) && self.t0 >= 0.0 {
-    let t = if self.dur <= 0.0 || now >= self.t0 + self.dur {
-      1.0
-    } else {
-      dmax((now - self.t0) / self.dur, 0.0)
-    }
-    let (x, _) = move_path(self.p0 - self.p1, self.v0, dmin(t, 1.0) * self.dur, self.dur)
-    self.p = self.p1 + x
+    self.p = self.slid_at(now)
   }
   // (following a finger: where it has it, read so)
   if self.mode == 3 {

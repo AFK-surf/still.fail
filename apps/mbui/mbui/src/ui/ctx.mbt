@@ -2516,10 +2516,20 @@ pub fn Ctx::moment(self : Ctx) -> Double {
 }
 
 ///|
-/// `t` (ms) in whole ms, as a motion's and the runtime's time go: rounded down, a moment summed one way or another
-/// (1316.9999999999998 for 1317) the same.
+/// `t` (ms) in whole ms, as the runtime's time goes (its timers, fx.mbt): rounded down, a moment summed one way or
+/// another (1316.9999999999998 for 1317) the same. Not a motion's: gone_ms.
 pub fn whole_ms(t : Double) -> Double {
   (t + same_moment_ms).floor()
+}
+
+///|
+/// The time gone `t` (ms) as a motion reads it: as it is, put on a grid far finer than any frame (same_moment_ms) so
+/// that a moment summed one way or another (1316.9999999999998 for 1317) reads the same, and nothing coarser. A motion
+/// sampled at whole ms stepped 8, 8, 9 ms at 120 frames a second, a step longer every third frame on the straight of a
+/// way (the coordinator of the migration, 2026-11-11). Taken where the time gone is: a difference of two moments, each
+/// on the grid, is not on it.
+pub fn gone_ms(t : Double) -> Double {
+  @flex.time_gone(t, 0.0)
 }
 
 ///|

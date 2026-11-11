@@ -59,15 +59,17 @@ let odd_ms : Double = 200.5
 let odd_delay : Double = 10.25
 
 ///|
-test "a way set out a fraction into a ms: its time counted from that moment in whole ms, as an Anim's (way_anim_test): its end its length after it" {
-  // (set out at 1000.7: from there, ending its length after; read at a moment a fraction into a ms of its own time, where
-  // it is at that ms's start, as an Anim told at 1000.7 is)
+test "a way set out a fraction into a ms: its time counted from that moment as it is, not in whole ms: its end its length after it" {
+  // (set out at 1000.7: from there, ending its length after; read at any moment, where it is then, a fraction of a ms
+  // into its own time as well (@ui.gone_ms: no whole ms, 8, 8 and 9 at 120 a second))
   let w = @motion.Way::new(0.0)
   w.go(1.0, @motion.tween(way_ms, ease=Linear), at=1000.7)
-  assert_eq(
-    (w.starts_at(), w.ends_at(), [w.value_at(1050.7), w.value_at(1051.3), w.value_at(1050.6), w.value_at(w.ends_at() - 0.4)]),
-    (1000.7, 1000.7 + way_ms, [0.25, 0.25, 49.0 / way_ms, (way_ms - 1.0) / way_ms]),
-  )
+  let read = [w.value_at(1050.7), w.value_at(1051.3), w.value_at(1050.6), w.value_at(w.ends_at() - 0.4)]
+  let want = [50.0 / way_ms, 50.6 / way_ms, 49.9 / way_ms, (way_ms - 0.4) / way_ms]
+  assert_eq((w.starts_at(), w.ends_at()), (1000.7, 1000.7 + way_ms))
+  for i, x in read {
+    assert_true((x - want[i]).abs() < 1.0e-9, msg="\{i}: \{read} against \{want}")
+  }
 }
 
 ///|

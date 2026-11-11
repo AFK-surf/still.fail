@@ -66,7 +66,7 @@ fn way_share(t : Double, start : Double, end : Double, k : Double) -> (Double, D
   if t <= start {
     (1.0, k)
   } else {
-    move_path(1.0, k, t - start, end - start)
+    move_path(1.0, k, @flex.time_gone(t, start), end - start)
   }
 }
 

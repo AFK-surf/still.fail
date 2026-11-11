@@ -13,12 +13,14 @@ let key_taking : Ref[Bool] = Ref(false)
 let key_taken : Ref[Bool] = Ref(false)
 
 ///|
-/// A block given another key, marked so (key_taking): only inside a change (Tree::at_cause, a structure's first
-/// making), which puts the mark back as it is told whole; one outside any would leave it set, every structure after it
-/// in the run at once, unsaid.
-fn key_taking_set(tree : Tree) -> Unit {
+/// A block given another key (`at`, the block), marked so (key_taking): only inside a change (Tree::at_cause, a
+/// structure's first making), which puts the mark back as it is told whole. One outside any is a fault told, the mark not
+/// set (what it makes or lets go then comes its way, as before the rule: wrong by a motion, and said, never the app gone
+/// for the framework's own slip); a Tester stops on it.
+fn key_taking_set(tree : Tree, at : NodeId) -> Unit {
   if tree.committing == 0 {
-    @halt.saying("a list's block given another key outside any change: nothing would put key_taking back")
+    tree.fault(at, "a list's block given another key outside any change: nothing would put key_taking back")
+    return
   }
   key_taking.val = true
 }

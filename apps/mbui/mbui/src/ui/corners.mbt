@@ -1370,6 +1370,12 @@ fn Ctx::layer_grounds(self : Ctx) -> Map[Int, Int] {
 let inner_even : Double = 0.5
 
 ///|
+/// How far inside a corner's radius a laid distance must be to be inside it (points): a distance at the radius, or a
+/// float's breadth short of it (a size laid by a sum, a way's share at an exact moment: 23.999999999999886 for 24), is at
+/// the radius, as `same_moment_ms` is the same moment for time. Anything a ruler could tell inside is inside as before.
+let radius_hair : Double = 1.0e-6
+
+///|
 /// The corners said `Inner` (style.mbt), from where their boxes lie as laid out (the covers moved: after
 /// covers_after_layout, before anything is painted or its clip and hit target recorded): the corner of the container
 /// the corner rule measures against (corner_container: through boxes with no corner, a ground laid beside as a layer)
@@ -1448,7 +1454,7 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     n,
     sides.filter(fn(s) {
       s.1 >= -inner_even &&
-      s.1 < ra &&
+      s.1 < ra - radius_hair &&
       !(up_down && (s.0 == "top" || s.0 == "bottom")) &&
       !(across && (s.0 == "left" || s.0 == "right"))
     }),
@@ -1466,9 +1472,9 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     let side = sides[if corner_left(k) { 0 } else { 2 }].1
     let end = sides[if k < 2 { 1 } else { 3 }].1
     cut[k] = side >= -inner_even &&
-      side < rk &&
+      side < rk - radius_hair &&
       end >= -inner_even &&
-      end < rk &&
+      end < rk - radius_hair &&
       (side - end).abs() > inner_even &&
       self.cut_round_at(i, p, k)
   }
@@ -1485,7 +1491,7 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     let rk = self.container_r(ct, k)
     let side = sides[if corner_left(k) { 0 } else { 2 }].1
     let end = sides[if k < 2 { 1 } else { 3 }].1
-    side >= -inner_even && side < rk && end >= -inner_even && end < rk
+    side >= -inner_even && side < rk - radius_hair && end >= -inner_even && end < rk - radius_hair
   }
   let nearest = near.fold(init=1.0e30, fn(m, s) { dmin(m, s.1) })
   let dropped = FixedArray::make(4, false)
@@ -1541,8 +1547,8 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     let side = sides[if corner_left(k) { 0 } else { 2 }].1
     let end = sides[if k < 2 { 1 } else { 3 }].1
     // (a corner cut off by the container's, its edge no edge it is near: in no corner of its own)
-    let lies = (across || (side >= -inner_even && side < rk)) &&
-      (up_down || (end >= -inner_even && end < rk)) &&
+    let lies = (across || (side >= -inner_even && side < rk - radius_hair)) &&
+      (up_down || (end >= -inner_even && end < rk - radius_hair)) &&
       !dropped[k]
     all_lie = all_lie && lies
     rs[k] = match own {
