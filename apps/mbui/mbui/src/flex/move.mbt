@@ -676,3 +676,8 @@ pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
   }
   Some((fmax(tall, 0.0), v))
 }
+
+///|
+/// NUMBERS ONLY (a draft): the test file a Tester was made in, for view's fill_told lines (set by ui as a Tester is made).
+// kept across runs: set by each Tester (ui's sizes_steady_begin)
+pub let fill_file : Ref[String] = Ref("")

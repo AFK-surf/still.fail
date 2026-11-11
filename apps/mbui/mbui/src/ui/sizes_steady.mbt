@@ -66,6 +66,7 @@ fn sizes_steady_begin(loc : String, held : Bool) -> Unit {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
   }
+  @flex.fill_file.val = sizes_steady.file
 }
 
 ///|

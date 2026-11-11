@@ -119,6 +119,7 @@ pub fn Way::go(
   self.spec = spec
   self.start = at
   ways_said_count.val += 1
+  @view.fill_way_said("Way", @view.source_place(loc))
   // (motion reduced: there at once, the setting's, whoever tells it)
   self.dur = if @ui.reduced_motion() { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
