@@ -324,6 +324,7 @@
   "core-logic.looks.offline.fill.none": "你的其他设备上也没有更新的内容。",
   "core-logic.looks.offline.fill.unreached": "暂时也连不上你的其他设备。",
   "core-logic.looks.offline.fill.another": "另一台设备",
+  "core-logic.looks.offline.fill.with": "{note}。{fill}",
   "core-logic.looks.offline.lock": "安全模式未放行「{name}」：{reason}",
   "core-logic.looks.offline.updating": "「{name}」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达",
   "core-logic.looks.outbox.held": "连上后发出",

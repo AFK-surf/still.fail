@@ -411,6 +411,7 @@
   "core-logic.looks.offline.fill.none": "Your other devices have nothing newer.",
   "core-logic.looks.offline.fill.unreached": "Your other devices can't be reached right now either.",
   "core-logic.looks.offline.fill.another": "another device",
+  "core-logic.looks.offline.fill.with": "{note} {fill}",
   "core-logic.looks.offline.lock": "Security mode is blocking “{name}”: {reason}",
   "core-logic.looks.offline.updating": "“{name}” is updating. Showing previously loaded content; it reconnects when the update finishes, and messages you send are delivered then.",
   "core-logic.looks.outbox.held": "Sends once connected",

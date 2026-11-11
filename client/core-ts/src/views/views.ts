@@ -1303,7 +1303,7 @@ export class Views implements Owner {
       v.offlineNote = looks.offlineNote(v.link, this.stationName(station));
       const { now, offsetMin } = this.#clock();
       const filled = fillNote(this.#core.data, station, now, offsetMin);
-      if (filled !== null) v.offlineNote = `${v.offlineNote} ${filled}`;
+      if (filled !== null) v.offlineNote = t("core-logic.looks.offline.fill.with", { note: v.offlineNote, fill: filled });
       if (get(v.link, "cause") === "updating") v.updating = true;
       if (Array.isArray(v.outbox)) v.outbox = looks.outboxHeld(v.outbox);
     }

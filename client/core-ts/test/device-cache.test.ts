@@ -360,6 +360,10 @@ sim("a station down, the phone asks its person's other device, and its chat show
   // What came, from which device, as far as when: kept with what came.
   assert.deepEqual(inner.data.record("deviceFill", ST), { state: "filled", from: "Mac", upTo: 120 });
   assert.ok(String(shown.offlineNote).includes(t("core-logic.looks.offline.fill.upTo", { device: "Mac", time: format.relativeTime(120, phone.host.nowMs(), phone.host.utcOffsetMin(phone.host.nowMs())) })), String(shown.offlineNote));
+  // Two sentences, joined as the language joins them (a full stop in Chinese), not by a space.
+  const upToSaid = t("core-logic.looks.offline.fill.upTo", { device: "Mac", time: format.relativeTime(120, phone.host.nowMs(), phone.host.utcOffsetMin(phone.host.nowMs())) });
+  assert.equal(shown.offlineNote, t("core-logic.looks.offline.fill.with", { note: t("core-logic.looks.offline.unreached", { name: "studio" }), fill: upToSaid }));
+  assert.equal(shown.offlineNote, `暂时连不上「studio」：当前显示的是之前读取的内容，发出的消息会在连上后送达。${upToSaid}`);
   // More there now: not asked on a timer, however long (the link's own tries at the station included).
   holding.core.inner.data.putThread(ST, threadView(7, 130));
   holding.core.inner.data.putItems("entry", ST, "7", entries(121, 130).map((e) => [e.n, e] as [number, unknown]));
