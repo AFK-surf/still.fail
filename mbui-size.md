@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a16ed7802](https://github.com/AFK-surf/still.fail/commit/a16ed780226e292b3a0f79f10ffcd877d1dc3daf) mbui: what a test runs to once a motion is over is | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.41 | 133.17 |
 | [c41e22428](https://github.com/AFK-surf/still.fail/commit/c41e224283adc5681cff8fdbe4b9df1790f50070) sfpages: a chat row's ground put at once when anot | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.21 | 173.03 |
 | [f611394ac](https://github.com/AFK-surf/still.fail/commit/f611394ac0491da422ee79658b1df51a42a839f1) app, core, mbui: a job's log goes out as its lines | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.09 | 142.66 |
 | [40341920a](https://github.com/AFK-surf/still.fail/commit/40341920a397ce7dbfaf62436840f8a22b33fd51) core: a workspace switched to answers what is aske | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.67 | 171.26 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d4072dad1](https://github.com/AFK-surf/still.fail/commit/d4072dad1eac9fe7c85ac4e74733728623bd8554) sf: a style on a node lies between its ends where  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.41 | 184.61 |
 | [4c8329652](https://github.com/AFK-surf/still.fail/commit/4c8329652908f02745d2faaad2b0a9377d6130d2) app: 分享给其他 workspace copies the chat's link as 完成  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.47 | 148.37 |
 | [9dcbee8c7](https://github.com/AFK-surf/still.fail/commit/9dcbee8c7e4c39c596d3618103997a50a0cf9d8e) sf: a dialog of nodes in the window's middle opens | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.19 | 170.58 |
-| [4cb54577a](https://github.com/AFK-surf/still.fail/commit/4cb54577a45e3ff3cff6a8f736f96c31c8566635) ci: at a frame rate only what a rate is for; the p | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94 | 171.98 |
