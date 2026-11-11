@@ -611,6 +611,8 @@ pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, n
 
 pub fn file_card_across(@ui.Ctx, String, Double, meta? : String, ends? : Int32) -> Double
 
+pub fn file_card_node(@view.View, TipLayer, () -> String, () -> String, () -> Bool, () -> Bool, () -> Bool, () -> String, () -> String, (FileCardPress) -> Unit, menu? : (Double, Double) -> Unit) -> @view.View
+
 pub let file_card_w : Double
 
 pub fn file_mark(String) -> String
