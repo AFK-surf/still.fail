@@ -128,9 +128,10 @@ let work_mark_form : @ui.Style = @ui.css("row align=ACenter")
 let work_mark_press : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
-/// All of it in a panel beside what opened it (`from`): its card's tasks and checklist as they are now.
+/// All of it in a panel beside what opened it (`from`): its card's tasks and checklist as they are now
+/// (agent_work_node).
 fn open_work(src : Source, params : Map[String, Json], from : @sf.Anchor) -> Unit {
-  @sf.panel("", fn(c, _) { agent_work(c, src, src.topic("agentCard", params).get().value) }, from~, w=work_panel_w, along=End)
+  @sf.panel_nodes("", fn(v, close) { agent_work_node(v, src, params, close) }, from~, w=work_panel_w, along=End)
 }
 
 ///|
@@ -138,54 +139,114 @@ fn open_work(src : Source, params : Map[String, Json], from : @sf.Anchor) -> Uni
 let work_panel_w : Double = 288.0
 
 ///|
+/// Whether agent card `card` says something in the background or a checklist.
+fn work_has(card : Json?) -> Bool {
+  items(card, "tasks").length() > 0 || items(card, "plan").length() > 0
+}
+
+///|
 /// What it has going in the background (后台进行中, how many) and its checklist as it wrote it last (清单, how much of
-/// it is done), all of them, `card` its `agentCard` view, as a small panel's groups (the library's panel_group: each
-/// under its small head, a line between them, menu_rule): a task a row, its kind's chip in a column of its own, what
-/// it is cut at its end, for how long it has run at the row's end; the checklist drawn as a plan call is in its
-/// history (plan_list), on the same line. In the panel its history's mark opens (work_mark). Nothing when it has
-/// neither.
-pub fn agent_work(c : @ui.Ctx, src : Source, card : Json?) -> Unit {
-  let tasks = items(card, "tasks")
-  let plan = items(card, "plan")
-  if tasks.is_empty() && plan.is_empty() {
-    return
+/// it is done), all of them, as the agent's `agentCard` view (`params`) says them now, made once in node `v` (its
+/// panel's body) as a small panel's groups (the library's panel_group_node: each under its small head, a line between
+/// them, panel_rule_node): a task a row by its id, its kind's chip in a column of its own (as wide as the chip where the
+/// words are larger than it holds), what it is cut at its end, for how long it has run at the row's end, a second at a
+/// time; the checklist drawn as a plan call is in its history (plan_node), on the same line. A task or an item of the
+/// checklist comes and goes as the card lists it; a group as it has any. The card read while the panel is up and let go
+/// with it. Nothing while there is no card or it has said neither yet; once it had either and says neither any more, the
+/// panel closes (`close`, as that is said), showing what it showed last till it is gone. In the panel its history's mark opens
+/// (work_mark_node).
+fn agent_work_node(v : @view.View, src : Source, params : Map[String, Json], close : () -> Unit) -> Unit {
+  let src = src.owned_by(v)
+  let now = fn() { src.topic("agentCard", params).get().value }
+  // (none left: the panel closes, what it showed last kept as it goes, not closed group by group under it; while the
+  // core has said no card (not yet, or none any more), nothing, as ever)
+  let last : Ref[Json?] = Ref(None)
+  let card = fn() {
+    let now = now()
+    match now {
+      Some(_) if !work_has(now) && last.val is Some(_) => last.val
+      _ => {
+        if work_has(now) {
+          last.val = now
+        }
+        now
+      }
+    }
   }
-  let now = (src.now)()
-  c.box(style=work_box, fn() {
-    if tasks.length() > 0 {
-      @sf.panel_group(
-        c,
-        fn() {
-          for task in tasks {
-            let tv = Some(task)
-            let ran = now - number(tv, "since")
-            each_second(c, ran)
-            c.box(style=@sf.panel_words_in().then(work_task), fn() {
-              c.box(style=work_kind_column, fn() {
-                c.box(style=work_kind_chip, fn() { c.text(text(tv, "kindText"), style=work_kind) |> ignore }) |> ignore
-              })
-              |> ignore
-              c.text(text(tv, "text"), style=work_task_words) |> ignore
-              c.text(elapsed(ran), style=work_elapsed) |> ignore
-            })
-            |> ignore
-          }
+  // (closed as a card that had either comes to have neither: said once, as it does)
+  let had = Ref(false)
+  v.reacts(fn() {
+    match now() {
+      None => 0
+      Some(_) as c if work_has(c) => 1
+      Some(_) => 2
+    }
+  }, fn(says) {
+    if says == 1 {
+      had.val = true
+    } else if says == 2 && had.val {
+      close()
+    }
+  })
+  let tasks = fn() { items(card(), "tasks") }
+  let plan = fn() { items(card(), "plan") }
+  v.show(fn() { work_has(card()) }, fn(b) {
+    @sf.style_node(b, fn() { work_box })
+    b.show(fn() { tasks().length() > 0 }, fn(g) {
+      @sf.panel_group_node(
+        g,
+        fn() { tasks().length().to_string() },
+        fn(rows) { rows.each(tasks, fn(t) { text(Some(t), "id") }, fn(row, task) { work_task_node(row, src, task) }) },
+        lead=fn(l) { @sf.words_node(l, fn() { @sf.t("web-main.chat.agentCard.background") }, fn() { work_head_words }) |> ignore },
+      )
+    })
+    b.show(fn() { tasks().length() > 0 && plan().length() > 0 }, fn(r) { @sf.panel_rule_node(r) })
+    b.show(fn() { plan().length() > 0 }, fn(g) {
+      @sf.panel_group_node(
+        g,
+        fn() { text(card(), "planText") },
+        fn(p) {
+          p.box(fn(l) {
+            @sf.style_node(l, fn() { @sf.panel_words_in_node(l).then(work_plan) })
+            plan_node(l, plan)
+          })
+          |> ignore
         },
-        label=tasks.length().to_string(),
-        lead=fn(c) { c.text(@sf.t("web-main.chat.agentCard.background"), style=work_head_words) |> ignore },
+        lead=fn(l) { @sf.words_node(l, fn() { @sf.t("web-main.chat.agentCard.plan") }, fn() { work_head_words }) |> ignore },
       )
-    }
-    if tasks.length() > 0 && plan.length() > 0 {
-      @sf.menu_rule(c)
-    }
-    if plan.length() > 0 {
-      @sf.panel_group(
-        c,
-        fn() { c.box(style=@sf.panel_words_in().then(work_plan), fn() { plan_list(c, plan) }) |> ignore },
-        label=text(card, "planText"),
-        lead=fn(c) { c.text(@sf.t("web-main.chat.agentCard.plan"), style=work_head_words) |> ignore },
-      )
-    }
+    })
+  })
+}
+
+///|
+/// A task of the background's in `row` (each's: a box of no padding of its own, so its way in and out is all of it),
+/// as `task` says it now: its kind's chip, what it is, for how long it has run, read again each whole second.
+fn work_task_node(row : @view.View, src : Source, task : @signals.Signal[Json]) -> Unit {
+  let tv = fn() { Some(task.get()) }
+  row.box(fn(r) {
+    @sf.style_node(r, fn() { @sf.panel_words_in_node(r).then(work_task) })
+    let tick = steps_seconds(r, src, @signals.untracked(fn() { number(tv(), "since") }))
+    r.box(fn(k) {
+      @sf.style_node(k, fn() { work_kind_column }, in_row=true)
+      k.shrink(Is(0.0)) |> ignore
+      k.box(fn(chip) {
+        @sf.style_node(chip, fn() { work_kind_chip }, in_row=true)
+        @sf.words_node(chip, fn() { text(tv(), "kindText") }, fn() { work_kind }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    @sf.words_node(r, fn() { text(tv(), "text") }, fn() { work_task_words })
+    .grow(Is(1.0))
+    .shrink(Is(1.0))
+    .min_width(Is(Some(0.0)))
+    |> ignore
+    @sf.words_node(r, fn() {
+      tick() |> ignore
+      elapsed((src.now)() - number(tv(), "since"))
+    }, fn() { work_elapsed })
+    .shrink(Is(0.0))
+    |> ignore
   })
   |> ignore
 }
@@ -207,8 +268,9 @@ let work_head_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, c
 let work_task : @ui.Style = @ui.css("row w=Full h=S7 gap=S2 align=ACenter")
 
 ///|
+/// Its kind's column: 48, or as wide as its chip where the words are larger than that holds (never the chip cut).
 // kept across runs: a value (no field of it changes)
-let work_kind_column : @ui.Style = @ui.css("w=S12 row align=ACenter")
+let work_kind_column : @ui.Style = @ui.css("min_w=S12 row align=ACenter")
 
 ///|
 /// Its kind: on the hover ground, round, 6 in.
@@ -251,30 +313,6 @@ let work_line_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 let work_line_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// A list of things to do, each `{text, status}`: done ✓ struck and muted, under way › in 600,
-/// the rest ·. A plan call's in the history, and an agent's checklist in its card and its history's details
-/// (agent_work).
-pub fn plan_list(c : @ui.Ctx, list : Array[Json]) -> Unit {
-  c.box(style=tool_plan, fn() {
-    for it in list {
-      let iv = Some(it)
-      let status = text(iv, "status")
-      let (mark, mark_ink, words) = match status {
-        "completed" => ("✓", @sf.theme().p.green, tool_plan_done)
-        "in_progress" => ("›", @sf.theme().p.accent, tool_plan_now)
-        _ => ("·", @sf.theme().p.subtle, tool_plan_words)
-      }
-      c.box(style=tool_plan_row, fn() {
-        c.box(style=tool_plan_mark, fn() { c.rich([@ui.span(mark, color=mark_ink)], style=tool_plan_words) |> ignore }) |> ignore
-        c.rich([@ui.span(text(iv, "text"), strike=status == "completed")], style=words) |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// work_mark as nodes in `parent`, a row that leaves it out (View::fits) before its own words are cut (they are kept
 /// whole first: View::fit_whole), as agent `key`'s card on `station` says it now: 后台 4 · 2/6, said 4 · 2/6 where it
 /// has not the room (View::shorter), then in place of it a mark with how many (there only while the whole is left out:
@@ -313,10 +351,7 @@ pub fn work_mark_node(
       }
       f.box(fn(p) {
         @sf.style_node(p, fn() { work_mark_press }, in_row=true)
-        @sf.presses_node(p, fn() {
-          let (x, y, w, h) = p.placed_window_now()
-          open_work(src, params, At(x, y, w, h))
-        })
+        @sf.presses_node(p, fn() { open_work(src, params, Node(p)) })
         p.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
         body(p)
       })

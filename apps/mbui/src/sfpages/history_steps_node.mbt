@@ -1217,42 +1217,62 @@ fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Un
 }
 
 ///|
-/// A list of things to do in `v`: done ✓ struck and muted, under way › in 600, the rest ·.
-fn plan_node(v : @view.View, list : Array[Json]) -> Unit {
+/// A list of things to do in `v`, each `{text, status}`, as `list` says it now: done ✓ struck and muted, under way › in
+/// 600, the rest ·. A plan call's in the history, and an agent's checklist in the panel of its work (agent_work_node):
+/// a row each by its place in the list, its mark and words as its item says them now, one more or less coming and
+/// going as the list changes (View::each).
+fn plan_node(v : @view.View, list : () -> Array[Json]) -> Unit {
   steps_box_node(v, tool_plan, fn(p) {
-    for it in list {
-      let iv = Some(it)
-      let status = text(iv, "status")
-      let (mark, words) = match status {
-        "completed" => ("✓", tool_plan_done)
-        "in_progress" => ("›", tool_plan_now)
-        _ => ("·", tool_plan_words)
+    p.each(fn() { list().mapi(fn(i, it) { (i, it) }) }, fn(x) { x.0 }, fn(row, item) {
+      let status = fn() { text(Some(item.get().1), "status") }
+      let words = fn() {
+        match status() {
+          "completed" => tool_plan_done
+          "in_progress" => tool_plan_now
+          _ => tool_plan_words
+        }
       }
       let mark_ink = fn() {
-        match status {
+        match status() {
           "completed" => @sf.theme().p.green
           "in_progress" => @sf.theme().p.accent
           _ => @sf.theme().p.subtle
         }
       }
-      steps_box_node(p, tool_plan_row, fn(r) {
+      steps_box_node(row, tool_plan_row, fn(r) {
         steps_box_node(r, tool_plan_mark, fn(m) {
           m.box(fn(w) {
             w
-            .words(Is(mark))
+            .words(By(fn() {
+              match status() {
+                "completed" => "✓"
+                "in_progress" => "›"
+                _ => "·"
+              }
+            }))
             .words_look(By(fn() { @ui.style_words(tool_plan_words) }))
             .ink(By(mark_ink))
             |> ignore
           })
           |> ignore
         })
+        // (the room its mark leaves, from none: its words wrapped at that width, not at the row's)
         r.box(fn(w) {
-          w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-          steps_run(w, fn() { text(iv, "text") }, words, strike=status == "completed")
+          w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+          w.box(fn(x) {
+            x
+            .words_runs(By(fn() { [@ui.span(text(Some(item.get().1), "text"), strike=status() == "completed")] }))
+            .words_look(By(fn() { @ui.style_words(words()) }))
+            .ink(By(fn() { @ui.style_ink(words()) }))
+            .shrink(Is(1.0))
+            .min_width(Is(Some(0.0)))
+            |> ignore
+          })
+          |> ignore
         })
         |> ignore
       })
-    }
+    })
   })
 }
 
@@ -1343,7 +1363,7 @@ fn tool_part_node(v : @view.View, part : Json?) -> Unit {
         }
       })
     "markdown" => steps_box_node(v, tool_box, fn(b) { md_node(b, text(part, "text"), field(part, "md"), small=true) })
-    "plan" => plan_node(v, items(part, "items"))
+    "plan" => plan_node(v, fn() { items(part, "items") })
     "fields" =>
       steps_box_node(v, tool_fields, fn(fs) {
         for r in items(part, "rows") {

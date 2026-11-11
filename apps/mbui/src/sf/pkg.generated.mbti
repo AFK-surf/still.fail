@@ -1462,7 +1462,7 @@ pub fn panel_ground() -> Int64
 
 pub fn panel_group(@ui.Ctx, () -> Unit, label? : String, lead? : (@ui.Ctx) -> Unit) -> Unit
 
-pub fn panel_group_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
+pub fn panel_group_node(@view.View, () -> String, (@view.View) -> Unit, lead? : (@view.View) -> Unit) -> Unit
 
 pub fn panel_head(@ui.Ctx, String, note? : String, end? : (@ui.Ctx) -> Unit) -> Unit
 
@@ -1511,6 +1511,8 @@ pub fn panel_row_reach() -> @ui.Style
 pub fn panel_row_node(@view.View, () -> String, () -> Unit, icon? : () -> String, note? : () -> String, end? : String, danger? : Bool, plain? : Bool) -> Unit
 
 pub fn panel_row_opens_node(@view.View, () -> String, (Anchor) -> Unit, icon? : () -> String, note? : () -> String) -> Unit
+
+pub fn panel_rule_node(@view.View) -> Unit
 
 pub fn panel_rule_over() -> Double
 
