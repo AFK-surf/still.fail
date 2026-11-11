@@ -1,7 +1,6 @@
 ///|
 test "Duo remote screen fits clear of its system column with native controls; full screen puts the column away" {
   let r = screen_rig(w=951.0, h=669.0, platform=1)
-  defer { @sf.native_bars_reset() }
   r.live()
   @sf.native_bars.on.set(true)
   @sf.native_bars.side.set(84.0)
@@ -53,7 +52,6 @@ test "Duo remote screen fits clear of its system column with native controls; fu
 ///|
 test "Duo native screen control mode action still asks the core and close leaves the view" {
   let r = screen_rig(w=951.0, h=669.0, platform=1)
-  defer { @sf.native_bars_reset() }
   r.live()
   @sf.native_bars.on.set(true)
   @sf.native_bars.side.set(84.0)
@@ -78,7 +76,6 @@ let late_column_ms : Double = @ui.move_ms(951.0)
 ///|
 test "a late system column refits the whole picture and its control panel opens clear of the column" {
   let r = screen_rig(w=951.0, h=669.0, platform=1)
-  defer { @sf.native_bars_reset() }
   r.live()
   r.t.run_for(late_column_ms)
   @sf.native_bars.on.set(true)

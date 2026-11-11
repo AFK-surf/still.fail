@@ -1427,22 +1427,23 @@ pub fn menu_item_of(
 ///|
 /// The menu open now (one at a time, as Radix's are), by its key ("" none), and where a right click opened it: what
 /// reads the key whole (menu_open_key) told as it changes.
-// kept across runs: put back by parts_reset
+// kept across runs: put back by parts_reset, as a run begins (run_begin)
 let menu_open : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// The menu open now, by member: what asks whether its own menu is open (menu_is) told as that one opens or closes, not
 /// as another does.
-// kept across runs: put back by parts_reset
+// kept across runs: put back by parts_reset, as a run begins (run_begin)
 let menu_open_by : @signals.Keyed[String] = @signals.keyed()
 
 ///|
+// kept across runs: put back by parts_reset, as a run begins (run_begin)
 let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 
 ///|
 /// The menus closed and still going out (their exit playing), by their keys, by member: what opened one keeps it built
 /// till gone (menu_shown), told as its own comes or goes.
-// kept across runs: put back by parts_reset
+// kept across runs: put back by parts_reset, as a run begins (run_begin)
 let menu_going : @signals.Keyed[String] = @signals.keyed()
 
 ///|
@@ -1485,7 +1486,7 @@ fn menu_going_set(key : String, going : Bool) -> Unit {
 }
 
 ///|
-/// No menu open, no mark's words (the app begun again).
+/// No menu open, no mark's words (as a run begins: run_begin).
 pub fn parts_reset() -> Unit {
   submenu_hover.val = ""
   held_felt.clear()
@@ -1734,6 +1735,7 @@ pub fn about(c : @ui.Ctx, key : String, words : String, label~ : String, side? :
 
 ///|
 /// The mark a finger tapped open (`about`'s key), "" none.
+// kept across runs: put back by parts_reset, as a run begins (run_begin)
 let about_open : Ref[String] = Ref("")
 
 ///|

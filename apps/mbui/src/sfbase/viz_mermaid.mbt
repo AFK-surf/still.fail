@@ -23,8 +23,22 @@ let mermaid_made : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 // kept across runs: whether the core was given mermaid (`mermaid.load`), as the core keeps it while it runs; false
-// again where it says it has none (a core started anew)
+// again where it says it has none (a core started anew), and as a run begins (mermaid_begin: a run's core is a new one)
 let mermaid_given : Ref[Bool] = Ref(false)
+
+///|
+/// A run begins with its core given no mermaid yet: a run's core is a core started anew, which has none till it is
+/// given it, whatever the run before gave the one it had. As a Tester begins a run (mbui's on_reset), unless what runs
+/// the app began it already (sf's run_begun_by_app: then as it did, its reset's).
+fn init {
+  @ui.on_reset(fn() { if !(@sf.run_begun_by_app.val)() { mermaid_begin() } })
+}
+
+///|
+/// No mermaid given to the core (a run begun).
+fn mermaid_begin() -> Unit {
+  mermaid_given.val = false
+}
 
 ///|
 /// How wide a chart that fills its width (a gantt) is made: drawn as the others are, the column's where that is less.

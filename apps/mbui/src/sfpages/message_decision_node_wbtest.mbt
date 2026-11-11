@@ -126,7 +126,13 @@ fn dec_src(
 
 ///|
 /// What the old view draws by `draw` (its Ctx, where it is: out of a list, inline where `w` is narrow), `w` wide.
-fn dec_old(w : Double, view : ChatView, draw : (@ui.Ctx, MessageHere) -> Unit, platform? : Int = 0) -> @ui.Tester {
+fn dec_old(
+  w : Double,
+  view : ChatView,
+  draw : (@ui.Ctx, MessageHere) -> Unit,
+  platform? : Int = 0,
+  begun? : () -> Unit = fn() {  },
+) -> @ui.Tester {
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
   let here : MessageHere = {
@@ -147,6 +153,7 @@ fn dec_old(w : Double, view : ChatView, draw : (@ui.Ctx, MessageHere) -> Unit, p
     w~,
     h=420.0,
     platform~,
+    begun~,
   )
 }
 
@@ -158,6 +165,7 @@ fn dec_new(
   view : () -> ChatView,
   draw : (@view.View, MessageNodeHere) -> Unit,
   platform? : Int = 0,
+  begun? : () -> Unit = fn() {  },
 ) -> @ui.Tester {
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
@@ -187,6 +195,7 @@ fn dec_new(
     w~,
     h=420.0,
     platform~,
+    begun~,
   )
 }
 
@@ -266,17 +275,29 @@ fn dec_states() -> Array[(String, (String, String, String), Double?)] {
 
 ///|
 /// Where the chat stands as the old view draws it in its row (chat_state, out of a list).
-fn dec_old_state(w : Double, src : Source, s : (String, (String, String, String), Double?), platform? : Int = 0) -> @ui.Tester {
+fn dec_old_state(
+  w : Double,
+  src : Source,
+  s : (String, (String, String, String), Double?),
+  platform? : Int = 0,
+  begun? : () -> Unit = fn() {  },
+) -> @ui.Tester {
   let (words, lead, rest) = s.1
-  dec_old(w, dec_view(state=Some(s.1), ask=s.2), platform~, fn(c, here) {
+  dec_old(w, dec_view(state=Some(s.1), ask=s.2), platform~, begun~, fn(c, here) {
     row_box(c, row_side(w), 0.0, fn() { chat_state(c, src, here, words, lead, rest) }) |> ignore
   })
 }
 
 ///|
 /// The same as the nodes draw it in its row (chat_state_node), the view as `view` says as it changes.
-fn dec_new_state(w : Double, src : Source, view : () -> ChatView, platform? : Int = 0) -> @ui.Tester {
-  dec_new(w, view, platform~, fn(f, here) {
+fn dec_new_state(
+  w : Double,
+  src : Source,
+  view : () -> ChatView,
+  platform? : Int = 0,
+  begun? : () -> Unit = fn() {  },
+) -> @ui.Tester {
+  dec_new(w, view, platform~, begun~, fn(f, here) {
     let st = fn() { (here.view)().state.unwrap_or(("", "", "")) }
     message_row_frame_node(f, "state", fn() { row_side(w) }, fn() { 0.0 }, fn(r) {
       chat_state_node(r, src, here, fn() { st().0 }, fn() { st().1 }, fn() { st().2 })
@@ -326,15 +347,15 @@ test "where the chat stands, made once as nodes, is drawn as the old view drew i
     for wp in [(760.0, 0), (390.0, 0), (390.0, 2)] {
       let (w, platform) = wp
       let at = "\{s.0} at \{w}, platform \{platform}"
-      @sf.native_bars.on.set(platform == 2)
-      let old = dec_old_state(w, dec_src(@signals.signal(None), []), s, platform~)
+      // (the system's bars this run's own, there from its first frame)
+      let bars = fn() { @sf.native_bars.on.set(platform == 2) }
+      let old = dec_old_state(w, dec_src(@signals.signal(None), []), s, platform~, begun=bars)
       old.run_for(@ui.move_most_ms)
       let was = head_drawn(old)
-      let t = dec_new_state(w, dec_src(@signals.signal(None), []), fn() { dec_view(state=Some(s.1), ask=s.2) }, platform~)
+      let t = dec_new_state(w, dec_src(@signals.signal(None), []), fn() { dec_view(state=Some(s.1), ask=s.2) }, platform~, begun=bars)
       t.run_for(@ui.move_most_ms)
       assert_eq(head_drawn(t), was, msg=at)
       dec_audit(t, at)
-      @sf.native_bars_reset()
     }
   }
   let s = dec_states()[0]
@@ -489,16 +510,16 @@ test "the chat's need let go from its card: decision.dismiss for the post it ask
 
 ///|
 test "the chat's need with a finger's native bars, the list narrow: 忽略 under its words at the card's end" {
-  @sf.native_bars.on.set(true)
   let s = dec_states()[0]
-  let t = dec_new_state(390.0, dec_src(@signals.signal(None), []), fn() { dec_view(state=Some(s.1), ask=s.2) }, platform=2)
+  let t = dec_new_state(390.0, dec_src(@signals.signal(None), []), fn() { dec_view(state=Some(s.1), ask=s.2) }, platform=2, begun=fn() {
+    @sf.native_bars.on.set(true)
+  })
   t.run_for(@ui.move_most_ms)
   let (wx, wy, _, wh) = t.rect_of(@sffixture.need_state.2).unwrap()
   let (dx, dy, _, _) = t.rect_of("忽略").unwrap()
   assert_true(dy >= wy + wh, msg="\{dy} \{wy + wh}")
   assert_true(dx > wx)
   dec_audit(t, "stacked")
-  @sf.native_bars_reset()
 }
 
 ///|

@@ -89,6 +89,7 @@ pub(all) struct Playing {
 
 ///|
 /// The files played, by their key (let go of as their page goes: player_let_go).
+// kept across runs: put back by players_reset (viewer_reset), as a run begins (run_begin)
 let playings : Map[String, Playing] = Map([])
 
 ///|
@@ -399,6 +400,7 @@ priv enum PlayerDrag {
 
 ///|
 /// The views open, by their player's key.
+// kept across runs: put back by players_reset (viewer_reset), as a run begins (run_begin)
 let player_views : Map[String, PlayerView] = Map([])
 
 ///|

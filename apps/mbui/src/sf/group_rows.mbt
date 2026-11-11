@@ -11,7 +11,7 @@ priv struct GroupRows {
 
 ///|
 /// Each group's rows as last drawn, by the group's key.
-// kept across runs: put back by group_rows_reset (the app's reset)
+// kept across runs: put back by group_rows_reset, as a run begins (run_begin)
 let group_rows_of : Map[String, GroupRows] = {}
 
 ///|
