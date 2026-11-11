@@ -28,7 +28,6 @@ let words_large_known : Map[String, Int] = {
     ("phone-zh chat-agent", 3),
     ("phone-zh chat-preview-csv", 6),
     ("phone-zh chat-screens", 4),
-    ("phone-zh history-details", 3),  // was 0, +3 (f) sfapp/history.mbt:268 定高不随字号，待修
     ("phone-zh place-stations", 1),
     ("phone-zh share-card", 11),  // was 3, +8 (f) list_row_node.mbt:55 定高不随字号，待修
     ("phone-zh share-card-dark", 11),  // was 3, +8 (f) list_row_node.mbt:55 定高不随字号，待修
@@ -126,7 +125,7 @@ let words_large_known : Map[String, Int] = {
     // (its switch's title 「Send as file in this chat」 on two lines beside the switch, 40,642 224×50: the old panel's, told
     // of its nodes again as the tree's squeeze came to say what shares their row; it was 1 before its panel became nodes)
     ("phone-en chat-station-sheet", 1),
-    ("phone-en history-details", 4),  // was 1, +3 (f) sfapp/history.mbt:268 定高不随字号，待修
+    ("phone-en history-details", 1),
     ("phone-en drive-upload", 1),
     ("phone-en place-stations", 1),
     ("phone-en share-card", 11),  // was 3, +8 (f) list_row_node.mbt:55 定高不随字号，待修

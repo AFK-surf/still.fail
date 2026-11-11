@@ -273,7 +273,15 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
           .says(By(fn() { Some(@view.said(Text, label=name() + " " + figure())) }))
           |> ignore
           t.box(fn(f) {
-            f.height(Is(Some(26.0))).lies_along(Is(Middle)) |> ignore
+            // (no lower than a heading's line at the system's size of words, a figure on a smaller one in its middle:
+            // the tiles of a row as high as each other, their names level)
+            f
+            .min_height(By(fn() {
+              f.words_redone() |> ignore
+              Some(@sf.node_sp(f, @ui.tree_theme().text_size(Heading).1))
+            }))
+            .lies_along(Is(Middle))
+            |> ignore
             @sf.words_node(f, figure, fn() {
               let big = if figure().length() > 6 { tile_figure_small } else { tile_figure }
               match level() {
@@ -323,7 +331,8 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
 }
 
 ///|
-/// A tile's figure: the heading's size (22), 600, on a line; 16 where it is longer than six characters.
+/// A tile's figure: the heading's size (22), 600, on its line (30); 16 where it is longer than six characters, in the
+/// middle of a box as high as the heading's line.
 // kept across runs: a value (no field of it changes)
 let tile_figure : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
 

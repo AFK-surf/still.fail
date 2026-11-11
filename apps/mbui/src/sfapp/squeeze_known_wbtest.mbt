@@ -7,10 +7,6 @@
 let squeeze_known : Map[String, Int] = {
   let known = Map::new()
   for k in [
-    // 定高不随字号，待修: (f) a tile's figure in a box 26 high, its line taller, over its name by 2:
-    // sfapp/history.mbt:268, three tiles
-    ("phone-zh history-details", 3),
-    ("phone-en history-details", 3),
     // 真问题，待修: (g) a member's note broken onto 2 lines beside what is at the row's end, one line alone:
     // sf/page_node.mbt:935, asked for at sfpages/workspace_page.mbt:397
     ("phone-en settings-workspace", 1),

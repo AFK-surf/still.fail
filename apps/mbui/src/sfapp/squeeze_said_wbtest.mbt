@@ -81,9 +81,8 @@ let said_known : Map[String, Int] = {
   let known = Map::new()
   for k in [
     // 真问题，待修: (e) the model's name at its longest never gives way (shrink 0), run 1500 wide out of its row, cut
-    // by the page: sfapp/history.mbt:445; (f) so over the row's mark at its end: history.mbt:423. 定高不随字号，待修:
-    // (f) a tile's figure in a box 26 high, its line taller, over its name by 2: history.mbt:268, three tiles
-    ("phone-zh history-details", 5),
+    // by the page: sfapp/history.mbt:445; (f) so over the row's mark at its end: history.mbt:423
+    ("phone-zh history-details", 2),
     // 真问题，待修: (e) the station's name at its longest never gives way (min_width 0, no shrink said), cut by what
     // holds it: sfdesk/history.mbt:221
     ("touch-zh chat-model-pop", 1),
