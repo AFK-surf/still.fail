@@ -380,7 +380,13 @@ pub fn declare_topic(src : Source, name : String, params : Map[String, Json]) ->
 pub fn declared_let_go() -> Unit {
   let was = declared_topics.val
   declared_topics.val = []
-  for d in was {
+  let_go_unread(was)
+}
+
+///|
+/// Each of `declared` that no reader took over let go of now (declared_let_go's, page_declared_let_go's).
+fn let_go_unread(declared : Array[(Source, String, Map[String, Json])]) -> Unit {
+  for d in declared {
     let (src, name, params) = d
     let key = name + "\u{1}" + Json::object(params).stringify()
     match followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key && !t.independent }) {
@@ -394,14 +400,40 @@ pub fn declared_let_go() -> Unit {
 }
 
 ///|
+/// What the page on top declared as it came on top (declare_page_topic) and no reader took yet.
+// kept across runs: put back as a run begins (declared_reset)
+let page_declared : Ref[Array[(Source, String, Map[String, Json])]] = Ref([])
+
+///|
+/// Topic `name` with `params` of `src` declared as a page comes on top (page_opens_node: page_opens), as declare_topic
+/// declares what a workspace's first screen reads: asked of the core at that moment, not as the frame that builds the
+/// page runs, and taken over by the page's reader as it reads, the same subscription all along. One no reader comes
+/// to is let go of as another page comes on top (page_declared_let_go), or another workspace comes in view.
+pub fn declare_page_topic(src : Source, name : String, params : Map[String, Json]) -> Unit {
+  page_declared.val.push((src, name, params.copy()))
+  let owner = @signals.set_owner(None)
+  @signals.untracked(fn() { followed_topic(src, name, params).get() }) |> ignore
+  @signals.set_owner(owner) |> ignore
+}
+
+///|
+/// What the page on top before declared and no reader took, let go of now (another page on top).
+pub fn page_declared_let_go() -> Unit {
+  let was = page_declared.val
+  page_declared.val = []
+  let_go_unread(was)
+}
+
+///|
 /// What is declared and read by no reader now (`name` and parameters, as JSON): at the moment what declared it is
 /// shown whole, none; one here is declared and not read, a fault of the declaration (sfapp's declared_read_wbtest).
 pub fn declared_unread() -> Array[String] {
-  declared_topics.val.filter_map(fn(d) {
+  [..declared_topics.val, ..page_declared.val].filter_map(fn(d) {
     let (src, name, params) = d
+    // (one no longer followed was taken by its reader and let go of as that left: read, not a fault)
     match existing_followed_topic(src, name, params) {
-      Some(h) if h.watched() => None
-      _ => Some(name + " " + Json::object(params).stringify())
+      Some(h) if !h.watched() => Some(name + " " + Json::object(params).stringify())
+      _ => None
     }
   })
 }
@@ -412,6 +444,7 @@ pub fn declared_unread() -> Array[String] {
 /// subscription never sent again: a replay's pace pass after one ended before the reader came).
 fn declared_reset() -> Unit {
   declared_let_go()
+  page_declared_let_go()
 }
 
 ///|

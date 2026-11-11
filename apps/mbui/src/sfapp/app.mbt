@@ -598,6 +598,8 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         )
         // the first page's wait, at the moments its causes come (first_page_node)
         first_page_node(v, src)
+        // what the page on top reads as it is first built, asked as it comes on top (sfbase's page_opens_node)
+        @sfbase.page_opens_node(v, src)
         // what the workspace in view opens on, asked as it comes to be in view, the splash or the shell before it
         // still shown (sfbase's opens_ahead_node): its shell's panes' (小屏's Home, home_opens; the wide frame's,
         // sfdesk's frame_opens)

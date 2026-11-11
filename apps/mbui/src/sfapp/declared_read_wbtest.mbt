@@ -77,3 +77,51 @@ test "what a run declared and no reader took is let go of as the next run begins
   assert_eq(let_go, ["longJobs " + Json::object(params).stringify()])
   assert_eq(@sfbase.declared_unread(), [])
 }
+
+///|
+test "a chat's page's reads declared as it comes on top: asked at that moment, the frames that build it asking nothing more till its view is answered (what that leads to its readers'), and all of them read once it is at rest, on 小屏 and 大屏" {
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  let faults : Array[String] = []
+  for w in [390.0, 1280.0] {
+    new_run()
+    let base = fixture("home")
+    // (each topic the app comes to follow, as it is first read of the made-up core; after the chat came on top, those
+    // first read then; the chat's view not answered till `answered`)
+    let seen : Map[String, Bool] = Map([])
+    let after : Array[String] = []
+    let opened = Ref(false)
+    let answered = @signals.signal(true)
+    let src : Source = {
+      ..base,
+      topic_read: fn(name, params) {
+        let key = name + " " + Json::object(params).stringify()
+        if !seen.contains(key) {
+          seen[key] = true
+          if opened.val {
+            after.push(key)
+          }
+        }
+        if name == "chat" && !answered.get() {
+          return { value: None, error: None, version: 0 }
+        }
+        base.topic(name, params).get().snapshot()
+      },
+    }
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform=0)
+    t.run_for(@sf.local_ms)
+    answered.set(false)
+    @sfbase.open_chat(r)
+    opened.val = true
+    t.run_for(@sf.local_ms)
+    if after.length() > 0 {
+      faults.push("\{w}: asked as a frame built it, not declared: " + after.join(", "))
+    }
+    answered.set(true)
+    t.run_for(@sf.local_ms)
+    let unread = @sfbase.declared_unread()
+    if unread.length() > 0 {
+      faults.push("\{w}: declared and read by none at rest: " + unread.join(", "))
+    }
+  }
+  assert_eq(faults, [])
+}
