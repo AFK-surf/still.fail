@@ -348,6 +348,10 @@ pub(all) struct Work {
   mut found_walked : Int
   /// of them, those drawn smaller than a press's room near the point, kept to ask whether it reaches them (reach.mbt)
   mut near_kept : Int
+  /// nodes told whether they take input, as what takes input is told anew (Tree::inputs_down, inputs_each)
+  mut inputs_walked : Int
+  /// entries of the drawing order put in it again as a run of it is made again, kept or worked out (Tree::order_from)
+  mut order_copied : Int
 }
 
 ///|
@@ -759,6 +763,9 @@ pub struct Tree {
   /// where what is held changed since the order was last worked out (Tree::order_marked_in): the order made again from
   /// what holds each there, the rest of it as it was; none, or `order_whole`, all of it (Tree::order_again)
   order_in : Array[Int]
+  /// what the checks of what is kept against what is worked out whole (kept_checks.mbt) last saw of the work: the
+  /// order made again, the structure changed, what takes input told
+  mut kept_seen : (Int, Int, Int)
   mut order_whole : Bool
   mut due : Bool
   /// the host is being told that a frame is due (Tree::marked)
@@ -1235,6 +1242,7 @@ pub fn Tree::new(
     layout_due: true,
     order_due: true,
     order_in: [],
+    kept_seen: (0, 0, 0),
     order_whole: true,
     due: true,
     telling_due: false,
@@ -1413,6 +1421,8 @@ pub fn Tree::new(
       settles: 0,
       found_walked: 0,
       near_kept: 0,
+      inputs_walked: 0,
+      order_copied: 0,
     },
   }
   let root = t.made(-1)
@@ -9841,6 +9851,7 @@ fn Tree::ordered(self : Tree, at : Int, holder : Int, top : Int) -> Unit {
   self.order_holder.push(holder)
   self.order_end.push(-1)
   let me = self.order.length() - 1
+  self.work.order_copied += 1
   self.order_of[at] = me
   self.order_gen[at] = n.gen
   // (the node of the root's it is in: itself where the root holds it, through its slots alone; Tree::top_of)
@@ -9872,6 +9883,7 @@ fn Tree::ordered_keeping(self : Tree, at : Int, holder : Int, top : Int, p : Int
   }
   let me = p + self.order_new.length()
   self.order_new.push(at)
+  self.work.order_copied += 1
   self.order_new_holder.push(holder)
   self.order_new_end.push(-1)
   self.order_of[at] = me
@@ -9900,6 +9912,7 @@ fn Tree::order_kept_or_made(self : Tree, k : Int, holder : Int, top : Int, p : I
     let base = p + self.order_new.length()
     let d = base - w
     let end = self.order_end.unsafe_get(w)
+    self.work.order_copied += end - w
     for i in w..<end {
       let at = self.order.unsafe_get(i)
       self.order_of[at] = i + d
