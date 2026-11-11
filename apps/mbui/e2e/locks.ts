@@ -35,7 +35,9 @@
 //     it by itself and it is bound;
 //   16 alice's web page in the first workspace, her own lock bound there: refused, it asks from its waiting page, B
 //     shows the code; it is in the workspace's lock as a web page's for 30 days at most, let in, signing nothing, no
-//     vault, her own lock untouched; started again, let in with nobody asked; B takes it out on 设置 › 安全: refused.
+//     vault, her own lock untouched; started again, let in with nobody asked; B takes it out on 设置 › 安全: refused;
+//   17 a station enrolled in the first workspace with its token alone, not in its lock (#5540): B reads it alone and
+//     still holds the lock the first keeps, started again too; B's 「保护」 takes it in and it keeps the lock; out again.
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { readFileSync, writeFileSync } from "node:fs";
@@ -1228,6 +1230,141 @@ try {
   });
   // (done with: closed, as C, D, F and G are before round 8, for the account's requests)
   await within(wDev.close(), 5000);
+
+  // ── round 17: a station in the workspace that its lock does not name (#5540). Enrolled with the token alone, the
+  // lock's hash dropped, as the app's 添加这台 Mac enrolled one before #5545, it goes by the cloud's word: lets the
+  // members in and answers GET /lock that it keeps none. A device that read it alone (its link opened, or it told
+  // `lock`) took that for every station's answer and let go of the lock the others keep: safe mode off on it till its
+  // app started again (views/lock.ts `readLockOf`). Then 设置 › 安全's 「保护」 beside it (`lock.joinStation`) takes it
+  // into the lock, which it then keeps. Last, as it adds a station to the lock and takes it out: the rounds before count
+  // the first station's lock's stations. The devices of alice's still open: B alone (A installed anew and W closed). ──
+  const firstId = station.split("/")[1]!;
+  const fourthData = `${process.env.E2E_STATION}-fourth/data`;
+  /// The entries of the lock a station keeps for its home workspace (its mesh/lock.json, as lock-state reads it), null
+  /// with none pinned (or the file mid-write: looked at again as it changes).
+  const keptAt = (data: string): J[] | null => {
+    try {
+      const j = JSON.parse(readFileSync(`${data}/mesh/lock.json`, "utf8"));
+      const es = (j.entries ?? j) as J[];
+      return Array.isArray(es) && es.length > 0 ? es : null;
+    } catch {
+      return null;
+    }
+  };
+  /// Its head, as the signed entry it ends in: the same seq and signature is the same lock as far.
+  const headOf = (es: J[] | null) => (es === null ? null : `${es[es.length - 1].seq}:${es[es.length - 1].sig?.sig}`);
+  /// Whether the entries name station `id` (its last word on it a `station` entry, not `station.remove`).
+  const namesStation = (es: J[] | null, id: string) => (es ?? []).filter((x) => (x.kind === "station" || x.kind === "station.remove") && x.body?.key === id).pop()?.kind === "station";
+  const stationRow = (l: J, id: string) => (l.stations ?? []).find((s: J) => s.id === id);
+  let fourthId = "";
+  // (when the fourth was enrolled: what B asks of it is answered after that, as it came online then)
+  let enrolledAt = 0;
+  await must("B holds Dev's lock, signing", async () => {
+    const l = await b.lock(workspace, (l) => l.locked && l.signs, 30_000);
+    log(`  B's lock: ${(l.stations ?? []).map((s: J) => `${s.id.slice(0, 8)}${s.protected ? " protected" : ""}`).join(", ")}`);
+  });
+  // What B's 设置 › 安全 shows of Dev's lock, every value of it, from before the fourth exists to the end of the check
+  // below: one subscription all along (device.ts `watch`). A look of its own would not do: showing the lock, or asking
+  // it (`lock.state`), reads it again of all its stations (views/lock.ts, "Shown: read again now"), which without the
+  // fix took the lock back of the first station a moment after B let it go (run r42-e2e-7, B's record: the fourth's
+  // `GET /lock/devices`, then `GET /lock?after=-1` of both), and the check saw it held. Its own read is of the first
+  // station alone, the fourth not there yet.
+  const bShown = b.watch({ topic: "lock", workspace });
+  await must("B enrolls a fourth station in Dev with the token alone, the lock's hash dropped (as 添加这台 Mac did before #5545)", async () => {
+    enrolledAt = Date.now();
+    const made = await b.call("workspace.enroll", { account: sub, workspace, name: "fourth" });
+    const hash = String(made?.command ?? "").match(/--lock ([0-9a-f]+)/)?.[1];
+    if (!hash) throw new Error(`the command names no lock's hash: ${JSON.stringify(made)?.slice(0, 200)}`);
+    log(`  the command names the lock's hash ${hash.slice(0, 12)}…, not given the station`);
+    const at = `${dir}/enroll-fourth.log`;
+    writeFileSync(at, `ANSWER workspace.enroll ok ${JSON.stringify(made)}\n`);
+    stationDo("second-station", at, "fourth", "bare");
+    const w = await b.until({ topic: "workspace", workspace }, (v) => (v?.stations ?? []).find((s: J) => s.id !== firstId && s.id !== secondId), 60_000);
+    fourthId = w.id;
+    log(`  the fourth station ${fourthId.slice(0, 12)}`);
+  });
+  await check("the fourth station unprotected: it keeps no lock for Dev, the first station's lock does not name it, B's security page lists it not protected", async () => {
+    const said = stationSays("lock-state", "fourth").trim();
+    log(`  the fourth's lock-state: ${said.split("\n").join("; ")}`);
+    if (!/^LOCK off$/m.test(said) || keptAt(fourthData) !== null) throw new Error(`the fourth station keeps a lock: ${said}`);
+    if (namesStation(keptAt(stationData), fourthId)) throw new Error("the first station's lock names the fourth");
+    const l = await b.lock(workspace, (l) => stationRow(l, fourthId) !== undefined, 60_000);
+    if (stationRow(l, fourthId).protected !== false || stationRow(l, firstId)?.protected !== true) throw new Error(`B's security page: ${JSON.stringify(l.stations)}`);
+  });
+  /// How B holds Dev's lock now: safe mode shown on, signing, the first station shown protected (its head on the chain
+  /// B holds: views/lock.ts `keeps`) and the fourth not, the same devices as the first station's lock, the item opened.
+  const bHolds = async (l: J) => {
+    log(`  B's lock: locked ${l.locked}, signs ${l.signs}, stations ${(l.stations ?? []).map((s: J) => `${s.id.slice(0, 8)}${s.protected ? " protected" : ""}`).join(", ")}`);
+    if (!l.locked) throw new Error("B shows safe mode off: it let go of the lock the first station keeps (#5540)");
+    if (!l.signs) throw new Error("B does not sign in Dev's lock");
+    if (stationRow(l, firstId)?.protected !== true) throw new Error(`the first station not shown protected: ${JSON.stringify(l.stations)}`);
+    const theirs = stationSays("lock-state").split("\n").filter((x) => x.startsWith("DEVICE ")).map((x) => x.split(" ")[1]).sort().join(" ");
+    const mine = lockDevices(l).map((x) => x.id.slice(0, 12)).sort().join(" ");
+    if (mine !== theirs) throw new Error(`B's lock's devices ${mine}, the first station's ${theirs}`);
+    await opens(b);
+  };
+  // The read itself, seen where it goes (device.ts `answered`): a read of a station's lock asks it `GET /lock?after=…`
+  // and then `GET /lock/devices` (views/lock.ts `readLockOf`), the second's answer the end of that station's part. B's
+  // first read of the fourth is of it alone, as its link opened (station/sync.ts `snapshot`, the lock's `also.read`).
+  // Then a round trip to B's process that asks nothing of the lock (`lockPrompt.state`, the prompts as they are), and
+  // what B's `lock` showed since the watch began is looked at: never off. That alone does not hold #5540: a core that
+  // let go of the lock had not told the watch so by then (run with views/lock.ts as it was before the fix: `on on`).
+  // What holds it is the item: the vault reads the lock B holds, and one that let go of it answers `vault_needs_lock`,
+  // 请先开启 workspace 的安全模式, which is what #5540's phone said. Nothing here asks B's `lock` anew before that:
+  // asking it is a read of every station, which gives a device that let go of the lock its lock back.
+  await check("B reached the fourth station and read its lock alone: it holds Dev's lock as the first station keeps it, safe mode never shown off, the item opened (not asked to turn safe mode on)", async () => {
+    try {
+      log(`  B sees the fourth: ${short(await stationIn(b, fourthId, (s) => s.state === "online", 90_000))}`);
+      const a = await b.answered(fourthId, "/lock/devices", enrolledAt, 90_000);
+      log(`  B's ${a.method} ${a.path} of the fourth answered ${a.at - enrolledAt} ms after it was enrolled`);
+      await b.call("lockPrompt.state", {});
+      const since = bShown.values.filter((v) => v.at >= enrolledAt);
+      log(`  B's lock shown ${bShown.values.length} times since the watch began, ${since.length} since the fourth was enrolled: ${bShown.values.map((v) => (v.value?.locked ? "on" : "off")).join(" ")}`);
+      if (bShown.values.length === 0) throw new Error("B's lock was never shown");
+      if (bShown.values.some((v) => v.value?.locked === false)) throw new Error("B shows safe mode off: it let go of the lock the first station keeps (#5540)");
+      await bHolds(bShown.values[bShown.values.length - 1]!.value).catch((e) => {
+        if (/vault_needs_lock/.test(String(e?.message ?? e))) throw new Error(`B is asked to turn safe mode on to open the item: it let go of the lock the first station keeps (#5540): ${String(e?.message ?? e).slice(0, 200)}`);
+        throw e;
+      });
+    } finally {
+      bShown.stop();
+    }
+  });
+  // (started again, B reads every station's lock as its 设置 › 安全 is shown and asked (`lock.state`): this holds with
+  // the fix or without it, and says only that B is let in by both and holds the lock once started again)
+  await b.restart();
+  await check("B started again: let in by both stations, it holds Dev's lock (read of all its stations as it is shown), the item opened", async () => {
+    for (const id of [firstId, fourthId]) await stationIn(b, id, (s) => s.state === "online", 90_000);
+    await bHolds(await b.call("lock.state", { workspace }));
+  });
+  // ── 设置 › 安全's 「保护」 beside the fourth station, on B (an owner's device signing in the lock) ──
+  await must("B protects the fourth station (「保护」, lock.joinStation)", async () => {
+    const r = await b.call("lock.joinStation", { workspace, station: fourthId });
+    log(`  joinStation: ${JSON.stringify(r)?.slice(0, 300)}`);
+  });
+  await check("the first station's lock names the fourth; the fourth keeps Dev's lock, as far as the first", async () => {
+    await whenChanged([stationData, fourthData], () => {
+      const ours = keptAt(stationData);
+      return namesStation(ours, fourthId) && headOf(keptAt(fourthData)) === headOf(ours);
+    }, 60_000, () => `the first's head ${headOf(keptAt(stationData))} (names the fourth: ${namesStation(keptAt(stationData), fourthId)}), the fourth's ${headOf(keptAt(fourthData))}`);
+    log(`  both at ${headOf(keptAt(stationData))?.slice(0, 20)}; the fourth's lock-state: ${stationSays("lock-state", "fourth").trim().split("\n").filter((x) => !x.startsWith("DEVICE")).join("; ")}`);
+  });
+  await check("B's security page lists the fourth station protected; B still holds the lock and opens the item", async () => {
+    const l = await b.lock(workspace, (l) => stationRow(l, fourthId)?.protected === true, 60_000);
+    if (!l.locked || !l.signs) throw new Error(`B's lock: locked ${l.locked}, signs ${l.signs}`);
+    await opens(b);
+  });
+  // (as round 11 takes the second out, and the rigs' run its rig: out of the workspace, then down)
+  await must("B takes the fourth station out of Dev: the first station's lock names it no more; it goes down", async () => {
+    await b.call("workspace.removeStation", { account: sub, workspace, station: fourthId });
+    await whenChanged([stationData], () => !namesStation(keptAt(stationData), fourthId), 60_000, () => "the first station's lock still names the fourth");
+    stationDo("second-down", "fourth");
+  });
+  await check("B goes on in Dev, safe mode on, alice's item opened", async () => {
+    await b.stationState(workspace, (s) => s.state === "online", 60_000);
+    await b.lock(workspace, (l) => l.locked && l.signs, 30_000);
+    await opens(b);
+  });
 } catch (e) {
   fail("the run", e);
 }

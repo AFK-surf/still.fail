@@ -8,7 +8,8 @@
 // signs nothing, keeps no vault, approves no one). This file run as `device NAME` is that process; imported, it gives
 // the run its devices and its checks (PASS or FAIL each, counted).
 // Each device keeps the core's record of what its connections do (record.ts: dials, waits, what woke a link) in its
-// data, `record.log`, across its restarts; a failed run keeps it (scripts/e2e-local.sh `kept`). What a device prints
+// data, `record.log`, across its restarts, with a line for each request of a station answered (`asked: …`, this file's:
+// `watchRequests`); a failed run keeps it (scripts/e2e-local.sh `kept`). What a device prints
 // to stderr (its core's, its mesh addon's) comes out with its name before each line, `E| …`: the native mesh does not
 // say whose its lines are, and the stations' say the same words.
 // E2E_SF_SRC, E2E_ORIGIN, E2E_PEER_DATA as peer.ts.
@@ -84,11 +85,70 @@ export function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | 
 /// Where a device notes each time its sealer was asked with the person present (`Device.asked`), in its data.
 const askedFile = (data: string) => join(data, "asked.log");
 
+/// The mesh addon the core is given, its requests watched (`Device.answered`). hosts/node-iroh.ts loads it with
+/// process.dlopen; wrapped as it is loaded, every request the core makes of a station is seen where it goes: on a stream
+/// of its own, its first write the head line (client/core-ts/src/mesh.ts `#open`: `{"method","path",…}`), its answer
+/// read to its end as that stream reads null, the station the connection's (`remoteId`, a station's id). `told` hears
+/// each such answer; nothing the core sends or reads is changed.
+function watchRequests(told: (station: string, method: string, path: string) => void): void {
+  // (the object as it is, but for `own`: the native one's methods called on it)
+  const over = <T extends object>(target: T, own: Record<string, unknown>): T =>
+    new Proxy(target, {
+      get: (t, k) => {
+        if (typeof k === "string" && k in own) return own[k];
+        const v = Reflect.get(t, k);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+  const stream = (s: J, station: string): J => {
+    let first = true;
+    let head: { method: string; path: string } | null = null;
+    return over(s, {
+      write: (b: Buffer) => {
+        if (first) {
+          first = false;
+          const end = b.indexOf(10);
+          try {
+            const h = end > 0 ? JSON.parse(b.subarray(0, end).toString("utf8")) : null;
+            if (typeof h?.method === "string" && typeof h.path === "string") head = { method: h.method, path: h.path };
+          } catch {}
+        }
+        return s.write(b);
+      },
+      read: async () => {
+        const b = await s.read();
+        if ((b === null || b === undefined) && head !== null) {
+          const h = head;
+          head = null;
+          told(station, h.method, h.path);
+        }
+        return b;
+      },
+    });
+  };
+  const connection = (c: J): J => over(c, { openBi: async () => stream(await c.openBi(), c.remoteId()) });
+  const endpoint = (e: J): J => over(e, { connect: async (...a: J[]) => connection(await e.connect(...a)) });
+  const dlopen = process.dlopen.bind(process);
+  process.dlopen = ((module: { exports: J }, filename: string, ...rest: J[]) => {
+    (dlopen as (...x: J[]) => void)(module, filename, ...rest);
+    const addon = module.exports;
+    if (typeof addon?.bind !== "function") return;
+    module.exports = over(addon, { bind: async (o: J) => endpoint(await addon.bind(o)) });
+  }) as typeof process.dlopen;
+}
+
 // A device: this file run as `device NAME again|new sealed|plain|page`, its core's messages passed to and from the
 // parent as they are.
 if (process.argv[2] === "device") {
-  const { start } = await import(pathToFileURL(join(src, "client/core-ts/src/hosts/node.ts")).href);
   const data = join(dir, process.argv[3]);
+  // (its record: what its links do, the core's lines; and each request of a station answered, this file's)
+  const record = join(data, "record.log");
+  // (before the core is loaded: it loads the addon as its host is made)
+  watchRequests((station, method, path) => {
+    appendFileSync(record, `asked: ${station.slice(0, 8)} ${method} ${path} -> answered\n`);
+    if (process.connected) process.send!({ answered: { station, method, path } });
+  });
+  const { start } = await import(pathToFileURL(join(src, "client/core-ts/src/hosts/node.ts")).href);
   // (`again`: the same device started anew, its data and what it sealed kept)
   if (process.argv[4] !== "again") rmSync(data, { recursive: true, force: true });
   mkdirSync(data, { recursive: true });
@@ -111,7 +171,6 @@ if (process.argv[2] === "device") {
   // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`; `page`: a web page's
   // host, no app's keys and nothing sealed)
   // (its record goes on in the same file when started `again`, as its data does)
-  const record = join(data, "record.log");
   const options = process.argv[5] === "page" ? { page: true, record } : process.argv[5] === "plain" ? { record } : { sealer, record };
   const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, options);
   const client = core.connect();
@@ -157,6 +216,10 @@ export class Device {
   sealed: boolean;
   /// A web page's, not an app's (no keys of an app, nothing sealed).
   page: boolean;
+  /// Each request of its core's to a station whose answer it read to its end (`watchRequests`), across its restarts,
+  /// as this driver heard of it (`at`: its clock then); and the waits for one (`answered`).
+  answers: { station: string; method: string; path: string; at: number }[] = [];
+  #heard = new Set<() => void>();
   constructor(name: string, user = "alice", opts: { sealed?: boolean; page?: boolean } = {}) {
     this.name = name;
     this.user = user;
@@ -167,7 +230,14 @@ export class Device {
   #fork(again: boolean): ChildProcess {
     const kind = this.page ? "page" : this.sealed ? "sealed" : "plain";
     const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", kind], { stdio: ["ignore", "inherit", "pipe", "ipc"] });
-    child.on("message", (json: J) => this.#got(JSON.parse(json)));
+    // (its core's messages are its JSON; what watchRequests tells, an object)
+    child.on("message", (m: J) => {
+      if (typeof m === "string") return this.#got(JSON.parse(m));
+      if (m?.answered) {
+        this.answers.push({ ...m.answered, at: Date.now() });
+        for (const f of [...this.#heard]) f();
+      }
+    });
     // Its stderr a line at a time, named; a line not yet ended waits for its end, or for the stream's. The pipe never
     // keeps the driver up (`close` waits for it to end instead).
     const err = child.stderr!;
@@ -262,6 +332,26 @@ export class Device {
       this.#send({ id, subscribe: topic });
     });
   }
+  /// A standing subscription to `topic`: every value it is given, kept with this driver's clock (`values`), until
+  /// `stop`. One subscription all along, so what it shows between two looks is not missed, and no look of the driver's
+  /// asks the core anything more (subscribing to a topic may read again what it shows: the `lock` topic does).
+  watch(topic: J): { values: { at: number; value: J }[]; stop: () => void } {
+    const id = this.next++;
+    const values: { at: number; value: J }[] = [];
+    const entry = { value: undefined as J, error: undefined as J, changed: () => {} };
+    entry.changed = () => {
+      if (entry.value !== undefined) values.push({ at: Date.now(), value: structuredClone(entry.value) });
+    };
+    this.topics.set(id, entry);
+    this.#send({ id, subscribe: topic });
+    return {
+      values,
+      stop: () => {
+        if (!this.topics.delete(id)) return;
+        this.#send({ id, unsubscribe: true });
+      },
+    };
+  }
   async signIn(): Promise<{ workspace: string; station: string }> {
     await this.call("client.device", this.#about());
     // (the dev cloud's sign-in: one over the account's requests a minute is a finding, not tried again)
@@ -295,6 +385,28 @@ export class Device {
       const s: J = { station, state: v.link.state, message: v.link.message, ...(v.blocked ? { cause: "lock", blocked: v.blocked } : {}) };
       return ok(s) ? s : undefined;
     }, ms);
+  }
+  /// The first request of its core's to station `station` whose path (less `/admin/api`) begins with `path`, answered
+  /// and read to its end since `since` (this driver's clock), as soon as it is (or an error by `ms` saying those there
+  /// were): what a read of the station that ends in it has been given, its core's own handling of it to follow.
+  answered(station: string, path: string, since: number, ms = 60_000): Promise<{ station: string; method: string; path: string; at: number }> {
+    const find = () => this.answers.find((a) => a.at >= since && a.station === station && a.path.replace(/^\/admin\/api/, "").startsWith(path));
+    return new Promise((resolve, reject) => {
+      const look = () => {
+        const a = find();
+        if (!a) return;
+        clearTimeout(timer);
+        this.#heard.delete(look);
+        resolve(a);
+      };
+      const timer = setTimeout(() => {
+        this.#heard.delete(look);
+        const seen = this.answers.filter((a) => a.at >= since).map((a) => `${a.station.slice(0, 8)} ${a.method} ${a.path}`);
+        reject(new Error(`${this.name}: no ${path} of ${station.slice(0, 8)} answered in ${ms} ms; answered since: ${seen.join(", ").slice(0, 2000) || "none"}`));
+      }, ms);
+      this.#heard.add(look);
+      look();
+    });
   }
   personal(ok: (p: J) => boolean, ms = 60_000): Promise<J> {
     return this.until({ topic: "adbShare" }, (v) => {
