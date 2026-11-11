@@ -43,16 +43,17 @@ test("a_compact_chat_sends_its_page_without_the_agents_jobs", () => {
 
 test("a_new_minute_makes_again_only_the_items_whose_times_it_may_say_otherwise", () => {
   // Each minute every chat of a list of 1400 was decorated and shaped again, those from weeks ago too, to send nothing
-  // (2026-11-08): one a day or more past says its day until local midnight.
+  // (2026-11-08): one a day or more past says its day until local midnight. (The list says no times now, ListedChat: a
+  // search's chats do.)
   const now = Date.UTC(2026, 10, 8, 4, 30, 10);
-  const topic = { topic: "chats", scope: "w" };
+  const topic = { topic: "search", scope: "w", query: "" };
   const row = (id: string, at: number) => Object.freeze({ id, station: "w/s", lastActiveAt: at });
   const old = row("old", now - 3 * 86_400_000);
   const recent = row("recent", now - 2 * 60_000);
-  const value = { days: [{ daysAgo: 0, items: [old, recent] }] };
+  const value = { items: [old, recent] };
   const out = new Output();
   const items = (c: { now: number; offsetMin: number }) =>
-    (out.shape(topic, value, c, false) as { ok: { days: { items: { id: string; time: { lastActiveAt: { ago: string } } }[] }[] } }).ok.days[0]!.items;
+    (out.shape(topic, value, c, false) as { ok: { items: { id: string; time: { lastActiveAt: { ago: string } } }[] } }).ok.items;
   const first = items({ now, offsetMin: 480 });
   const next = items({ now: now + 60_000, offsetMin: 480 });
   assert.equal(next[0], first[0], "a chat of days ago: as it went out");

@@ -52,11 +52,11 @@ const OVER: Record<string, number> = {
   "vaultUses": 128,
   "usage": 112,
   "jobLog 400": 96,
-  "chats mine": 80,
   "jobLog 300": 72,
-  "chats": 72,
   "drive": 72,
   "profiles": 64,
+  "chats mine": 56,
+  "chats": 56,
   "history": 56,
   "chat": 56,
   "chat compact": 56,
@@ -154,9 +154,10 @@ const EMPTY: Record<string, Record<string, string>> = {
   "stationPart profiles": { "[].modelsSaving": SAVING, "[].quota.windows[].time": NEVER, "[].decisionModels": NONE, "[].workspaces": NONE },
   // (a sign-in under way: Willow's)
   "stationPart logins": { "(whole)": STATE },
-  // (foundMarks: a search's alone, views/search.ts foundChat)
-  "chats": { "days[].items[].foundMarks": NEVER, "note.failing": ERROR },
-  "chats mine": { "days[].items[].foundMarks": NEVER, "note.failing": ERROR },
+  "chats": { "note.failing": ERROR },
+  "chats mine": { "note.failing": ERROR },
+  // (foundMarks: a search's alone, views/search.ts foundChat; the chat weighed is shared with no other workspace)
+  "chatRow": { foundMarks: NEVER, "xshare.to": STATE },
   // (profiles.ts gives its note no failing)
   "profiles": { "wait.failing": NEVER },
   "connects": { "wait.failing": ERROR },

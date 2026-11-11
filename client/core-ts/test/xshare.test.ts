@@ -338,20 +338,21 @@ test("what_a_message_refers_to_is_shared_by_the_core_those_the_viewer_may_and_no
 
 test("a_row_offers_in_its_menu_what_its_page_does_sharing_it_and_a_picture_of_it", async () => {
   // The viewer (a@x.com) as a member, its starter, an admin, a read-only member: a row's mayShare and mayPublish as its
-  // page's xshare.may and publish.may.
+  // page's xshare.may and publish.may (its whole row's, `chatRow`, as its menu reads it; the list's rows say none).
   const cases = [["member", "b@x.com", false, true], ["member", "a@x.com", true, true], ["admin", "b@x.com", true, true], ["viewer", "b@x.com", false, false]] as const;
   for (const [role, starter, share, publish] of cases) {
     const thread = { ...threadView(7, 3), creator: { id: starter, name: "s", via: "cloud" }, createdBy: starter };
     const { host, core } = await setUp(role, thread, [row({ creator: { id: starter, name: "s", via: "cloud" } })]);
     const ui = core.connect();
     const values = new Map<number, unknown>();
-    subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+    subscribe(core, ui, 1, { topic: "chatRow", station: "ws/st", session: "k1" });
     subscribe(core, ui, 2, { topic: "chat", station: "ws/st", thread: 7 });
     await host.settle();
     await host.time.pass(500);
     await host.settle();
     apply(host, values);
-    const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.thread === 7);
+    const item = v(values, 1);
+    assert.equal(item.thread, 7);
     const page = v(values, 2);
     assert.equal(item.mayShare === true, share, `${role} ${starter}: mayShare`);
     assert.equal(item.mayShare === true, page.xshare.may, `${role} ${starter}: as its page's`);

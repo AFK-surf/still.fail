@@ -112,6 +112,17 @@ const whole = (t: ReturnType<typeof setup>, topic: Topic): J => {
   const v = t.store.value(topic);
   return v !== undefined && "ok" in v ? v.ok : undefined;
 };
+/// Each row of a list as its whole row (`chatRow`) gives it, as a press, a hold, a swipe or a pointer reads it, by its
+/// id: asked by its id where rows of the fixture share a session (`row`: every numbered one's is "s").
+async function wholeOf(t: ReturnType<typeof setup>, list: J, from = 900): Promise<Record<string, J>> {
+  const items: J[] = list.days.flatMap((d: J) => d.items);
+  const asked: [Ui, number][] = items.map((i, n) => {
+    t.subscribe(from + n, { topic: "chatRow", station: i.station, session: items.filter((j) => j.session === i.session).length > 1 ? i.id : i.session });
+    return [ui(), from + n];
+  });
+  await t.readAll(asked);
+  return Object.fromEntries(items.map((i, n) => [i.id, asked[n][0].value]));
+}
 const shownRows = (v: J): J[] => v.days.flatMap((d: J) => d.items).map((i: J) => stationOn(i, v.stations.find((s: J) => s.station === i.station)));
 
 test("usage_keeps_its_spending_and_account_allowance_current", async () => {
@@ -426,8 +437,10 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   const v = chats.value;
   const all = v.days.flatMap((d: J) => d.items);
   const of = (id: string) => all.find((r: J) => r.id === id);
-  assert.deepEqual([of("k1").tone, of("k1").decision.text], ["wait", "待处理 · k1 要合吗？"]);
-  assert.deepEqual([of("k2").tone, of("k2").decision.dismissed, of("k2").decision.text], [undefined, true, undefined]);
+  // (its card: its row's line in the list, its whole row's own)
+  const whole = await wholeOf(t, v);
+  assert.deepEqual([of("k1").tone, of("k1").stateText, of("k1").decision, whole.k1.decision.text], ["wait", "待处理 · k1 要合吗？", undefined, "待处理 · k1 要合吗？"]);
+  assert.deepEqual([of("k2").tone, whole.k2.decision.dismissed, whole.k2.decision.text], [undefined, true, undefined]);
   const m = marks.value;
   assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个待你处理"]);
   // Of the lists the rail leads to: 我参与的 has the one of theirs waiting, 监控中 nothing.
@@ -647,7 +660,7 @@ test("a_text_card_is_on_its_row_whatever_its_agent_does", async () => {
   const k1 = of("k1");
   // A line that asks for a decision only says so: the chat leads to its post, not the row.
   assert.deepEqual([k1.stateText, k1.stateAbout, k1.tone], ["待处理 · Stripe 的测试 key 是多少？", undefined, "wait"]);
-  assert.deepEqual([k1.decision.card.type, k1.card], ["text", undefined]);
+  assert.deepEqual([(await wholeOf(t, v)).k1.decision.card.type, k1.decision, k1.card], ["text", undefined, undefined]);
   const k2 = of("k2");
   assert.deepEqual([k2.stateText, k2.stateAbout, k2.tone], ["需要你处理：要 key", undefined, "wait"]);
 });
@@ -1068,8 +1081,8 @@ test("a_chat_the_viewer_kept_out_of_the_archive_has_the_rows_color_and_order", a
     assert.equal(shown.settled, dismissed ? undefined : true);
     // (whether it could go with one tap whatever the hint is the core's)
     assert.equal(whole(t, { topic: "chats", scope: "ws" }).days[0].items.find((r: J) => r.id === "done").archivable, dismissed ? undefined : true);
-    // Kept by the viewer: the row says so (its menu lets it go).
-    assert.equal(shown.kept, dismissed ? true : undefined);
+    // Kept by the viewer: its whole row says so (its menu lets it go), not the list's.
+    assert.deepEqual([shown.kept, (await wholeOf(t, v, dismissed ? 950 : 900)).done.kept], [undefined, dismissed ? true : undefined]);
     assert.equal(shown.stateText, "已完成");
   }
 });
@@ -1139,7 +1152,8 @@ test("any_made_chat_is_swiped_away_regardless_of_its_state_its_station_there", a
     running: [true, false], failed: [true, false], watching: [true, false], decision: [true, false], pending: [false, false], empty: [true, false],
   });
   // Only one at work or keeping watch is asked about before its swipe archives it.
-  const asks = Object.fromEntries(u.value.days.flatMap((d: J) => d.items).filter((i: J) => i.swipeAsk !== undefined).map((i: J) => [i.id, i.swipeAsk]));
+  // (its whole row's, `chatRow`: a list's row says none, as a swipe asks it as it begins)
+  const asks = Object.fromEntries(Object.entries(await wholeOf(t, u.value)).filter(([, w]) => w?.swipeAsk !== undefined).map(([id, w]) => [id, w.swipeAsk]));
   assert.deepEqual(asks, {
     running: "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。",
     watching: "「CI」仍在监控。归档会停止监控。",
@@ -1176,7 +1190,8 @@ test("a_chat_someone_else_started_asks_before_its_swipe_archives_it_for_the_whol
     mineRunning,
   ]);
   await t.read(u, 1);
-  const asks = Object.fromEntries(u.value.days.flatMap((d: J) => d.items).filter((i: J) => i.swipeAsk !== undefined).map((i: J) => [i.id, i.swipeAsk]));
+  // (its whole row's, `chatRow`: a list's row says none, as a swipe asks it as it begins)
+  const asks = Object.fromEntries(Object.entries(await wholeOf(t, u.value)).filter(([, w]) => w?.swipeAsk !== undefined).map(([id, w]) => [id, w.swipeAsk]));
   // Archived, a chat is off the lists of everyone in the workspace, not the viewer's alone: one someone else started is
   // asked about first, the viewer's own way to take it off only their list said where it has one (its 隐藏).
   assert.deepEqual(asks, {
@@ -1306,8 +1321,9 @@ test("watching_keeps_the_rows_one_of_whose_agents_keeps_watch_marked_so", async 
   t.subscribe(2, { topic: "chats", scope: "ws", watching: true });
   await t.read(watching, 2);
   assert.deepEqual(ids(all.value), ["ci", "plain"]);
-  assert.equal(all.value.days[0].items[0].watch.text, "监控中：盯 CI");
-  assert.equal(all.value.days[0].items[1].watch, undefined);
+  // (what it watches in words: its whole row's, what its archiving asks; the list's rows say none)
+  const whole = await wholeOf(t, all.value);
+  assert.deepEqual([whole.ci.watch.text, whole.plain.watch, all.value.days[0].items[0].watch], ["监控中：盯 CI", undefined, undefined]);
   assert.deepEqual(ids(watching.value), ["ci"]);
 });
 
@@ -3537,11 +3553,14 @@ test("a_slack_threads_row_has_its_link_there_as_its_page_does_for_its_menu", asy
   const connected = { state: "connected", workspace: { team: "AFK", teamId: "T1", url: "https://afk.slack.com/", botUserId: "U0BOT", botName: "bot" } };
   t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: { state: "disabled" } }], []));
   await t.read(chats, 1);
-  const of = (id: string) => chats.value.days.flatMap((d: J) => d.items).find((r: J) => r.id === id);
-  assert.deepEqual([of("k").slackUrl, of("k").feishuUrl, of("7").slackUrl], [undefined, undefined, undefined], "not signed in: none");
+  // (its whole row's, `chatRow`, as its menu reads it: the list's rows say none)
+  let of = await wholeOf(t, chats.value);
+  assert.deepEqual([of.k.slackUrl, of.k.feishuUrl, of["7"].slackUrl], [undefined, undefined, undefined], "not signed in: none");
   t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: connected }], []));
   await t.read(chats, 1);
-  assert.deepEqual([of("k").slackUrl, of("k").slackApp, of("7").slackUrl], ["https://afk.slack.com/archives/C1/p12", "slack://channel?team=T1&id=C1&message=1.2", undefined]);
+  of = await wholeOf(t, chats.value, 950);
+  assert.deepEqual([of.k.slackUrl, of.k.slackApp, of["7"].slackUrl], ["https://afk.slack.com/archives/C1/p12", "slack://channel?team=T1&id=C1&message=1.2", undefined]);
+  assert.equal(chats.value.days.flatMap((d: J) => d.items).find((r: J) => r.id === "k").slackUrl, undefined);
 });
 
 /// Three stations' chats, each with a Slack thread's row and a Feishu chat's, and overviews of some size: Slack users,
@@ -3590,9 +3609,8 @@ test("a_chat_list_reads_what_it_shows_of_each_stations_overview_not_the_whole_of
   // The list read every station's whole overview, the largest record there is, for its Slack users and its connects:
   // 3.25 ms of its 21.8 ms in Hermes, five stations of 150 KB each read and parsed on a workspace's first open in a run.
   const first = await busyList();
-  const items = first.u.value.days.flatMap((d: J) => d.items);
-  const of = (id: string) => items.find((r: J) => r.id === id);
-  assert.deepEqual([of("a-slack").slackUrl, of("a-feishu").feishuUrl === undefined, first.u.value.glyph.running], ["https://afk.slack.com/archives/C1/p12", false, 6]);
+  const of = await wholeOf(first.t, first.u.value);
+  assert.deepEqual([of["a-slack"].slackUrl, of["a-feishu"].feishuUrl === undefined, first.u.value.glyph.running], ["https://afk.slack.com/archives/C1/p12", false, 6]);
   // A core started anew on that database: nothing read yet.
   const before = { ...work };
   const again = await busyList({ host: first.t.host }, false);
@@ -3619,12 +3637,16 @@ test("a_chat_list_is_made_again_only_as_what_it_reads_of_an_overview_changes", a
   await t.read(u, 1);
   assert.equal(t.router.computed, computed + 1);
   assert.ok(workSince(before).listed > 0, "its rows made again");
-  // A connect's state: its rows' links there go.
+  // A connect's state: no row made again; their links there go, their whole rows' (`chatRow`, as its menu reads them).
+  assert.equal((await wholeOf(t, u.value))["a-slack"].slackUrl, "https://afk.slack.com/archives/C1/p12");
+  const rowsWere = listed();
   before = { ...work };
   t.set(overview("ws/a"), busyStation(0, { slackUsers: ["U1"], connects: [{ ...connect("c1", "Slack"), connection: slackSignedIn("disabled") }] }));
   await t.read(u, 1);
-  assert.ok(workSince(before).listed > 0);
-  assert.equal(listed().find((r: J) => r.id === "a-slack").slackUrl, undefined);
+  // (the whole rows held meanwhile are made again, each with its menu: none of the list's)
+  assert.deepEqual([workSince(before).listed, workSince(before).rows - workSince(before).rowMenus], [0, 0]);
+  assert.ok(listed().every((r: J, i: number) => r === rowsWere[i]));
+  assert.equal((await wholeOf(t, u.value, 950))["a-slack"].slackUrl, undefined);
   // How many agents it runs: the glyph's count.
   t.set(overview("ws/a"), busyStation(5, { slackUsers: ["U1"], connects: [{ ...connect("c1", "Slack"), connection: slackSignedIn("disabled") }] }));
   await t.read(u, 1);
@@ -3653,9 +3675,9 @@ test("an_overview_written_by_a_core_that_knows_nothing_of_its_part_is_what_the_c
   const changed = busyStation(0, { slackUsers: ["U9"], counts: { sessions: 9, running: 7, warm: 0 }, connects: [{ ...connect("c1", "Slack"), connection: slackSignedIn("disabled") }] });
   sql.run("INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", ["ws/a", "overview", JSON.stringify(changed), 2]);
   const again = await busyList({ host: first.t.host }, false);
-  const item = (id: string) => again.u.value.days.flatMap((d: J) => d.items).find((r: J) => r.id === id);
-  assert.equal(item("a-slack").slackUrl, undefined, "its connect's state as written");
-  assert.equal(item("b-slack").slackUrl, "https://afk.slack.com/archives/C1/p12");
+  const item = await wholeOf(again.t, again.u.value);
+  assert.equal(item["a-slack"].slackUrl, undefined, "its connect's state as written");
+  assert.equal(item["b-slack"].slackUrl, "https://afk.slack.com/archives/C1/p12");
   assert.equal(again.u.value.glyph.running, 7 + 2 + 3);
   // and as the core that knows of it writes it again: the same
   const fresh = await busyList();

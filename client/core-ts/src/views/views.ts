@@ -76,7 +76,7 @@ export const HEAD = 80;
 /// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
 /// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
 /// does not offer it.)
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them.
@@ -219,6 +219,9 @@ function keptBetween(was: J[], made: (J | null)[], listed: J[], make: (raw: J) =
 /// for its glyph), to what makes its row once and keeps it. A row is made as something shows it (`firstRows`): a list
 /// of 420 chats made all of them, 55 ms in one block, to send a page of 50 (Hermes, 2026-11-11). None goes out.
 const unmade = new WeakMap<object, () => J>();
+/// What a chat's whole row (`chatRow`, views.ts #chatRow `whole` and #rowMenu) says that its list's row is made without:
+/// what is read only as the row is pressed, held, swiped or pointed at (the rest of the two is one: views.test.ts).
+const WHOLE_ONLY = ["watch", "swipeAsk", "decision", "mayShare", "mayPublish", "slackUrl", "slackApp", "feishuUrl"];
 /// A list's item as it goes out: its row, made now if it was not yet.
 const madeRow = (item: J): J => (isObject(item) ? unmade.get(item)?.() : undefined) ?? item;
 /// A list's day with its first `n` rows made (`madeRow`), kept by the day while it is asked the same `n`: a day all of
@@ -710,6 +713,10 @@ export class Views implements Owner {
   /// The list rows made from each record (with what else they were made with), so a row whose record did not change
   /// is not made again (rule 7). Kept as long as the record is.
   readonly #rowsMade = new WeakMap<object, { sig: string; row: J }>();
+  /// Each record's whole row (`chatRow`, #wholeOf) as #rowsMade keeps its list's row; and a list's row given what only
+  /// the whole one says (#wholeFor), by the list's row, while that whole row is the same.
+  readonly #wholeMade = new WeakMap<object, { sig: string; row: J }>();
+  readonly #wholeGiven = new WeakMap<object, { whole: J; out: J }>();
   /// A chat's messages as shown (`#shown`), by the message each was made of, and what else it was made with.
   readonly #shownMade = new WeakMap<object, { by: unknown; waiting: boolean; out: J }>();
   /// Each list's rows as its stations' records made them last time, by the list (`#chats`).
@@ -920,6 +927,13 @@ export class Views implements Owner {
       case "chatSearch":
         scope = (view.scope ?? view.workspace) as string;
         perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }];
+        break;
+      case "chatRow":
+        // (one chat's row whole: its record is read alone, by its key, not the station's rows; the viewer's workspaces
+        // its menu names, the prefs its archive hint is of)
+        scope = ofAddress(station);
+        perStation = () => [];
+        topics.push({ topic: "prefs" }, { topic: "workspaces" });
         break;
       case "search": {
         scope = view.scope as string;
@@ -1407,6 +1421,8 @@ export class Views implements Owner {
         if (chats === undefined || !("ok" in chats)) return chats;
         return { ok: typeof view.limit === "number" ? firstRows(chats.ok, view.limit) : wholeRows(chats.ok) };
       }
+      case "chatRow":
+        return this.#wholeRow(view.station as string, view.session as string);
       case "search": {
         const chats = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
         if (chats === undefined || !("ok" in chats)) return chats;
@@ -1432,6 +1448,8 @@ export class Views implements Owner {
           }
           found.items = refs.withOutside(arr(found.items), others, view.query as string, view.scope as string, view.limit as number | undefined);
         }
+        // (what it lists whole, as its rows were before the list's were what a row draws: wholeFor)
+        found.items = arr(found.items).map((i) => this.wholeFor(i));
         if (typeof view.messages === "number" && view.messages > 0) {
           found.messages = this.#foundMessages(chats.ok, view);
           found.words = refs.terms(view.query as string);
@@ -1683,9 +1701,6 @@ export class Views implements Owner {
     const me = this.me(scope);
     const workspace = this.ok({ topic: "workspace", workspace: scope });
     const members_ = arr(get(workspace, "members"));
-    // What a row's menu offers besides the list's own (#rowMenu): the viewer's role here, their workspaces (with their role
-    // in each, as sharing reads it: xshare.ts shown).
-    const menu = { role: str(get(workspace, "role")), places: (this.#core.places?.() ?? []).map((p) => [p.id, p.role] as const) };
     const hint = this.#core.store.select({ topic: "prefs" }, archiveHintIn);
     const states: J[] = [];
     // Each station in trouble: its state, its line, the words said once when every one says the same (the device's
@@ -1729,12 +1744,15 @@ export class Views implements Owner {
         const failed = this.local.failedOutboxes(s.address);
         // What a row is made with besides its record: a row whose record and these are as they were is the one made
         // before (rule 7: the list redoes only the rows that changed). Not its station's link: what that makes of a row
-        // goes once for the station (`stations`, stationOn), not on each of its rows.
+        // goes once for the station (`stations`, stationOn), not on each of its rows. Nor what only its whole row
+        // reads (#wholeOf: the menu's connects and the viewer's role and workspaces, the clock its time is said by).
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
-        // (its connects: a Slack or Feishu row's link there, #rowMenu)
-        const connects = arr(get(part, "connects"));
-        const sig = JSON.stringify([s.address, s.name, mark, me, slackUsers, members_, watching, hint, menu, connects.map((c) => [c.id, c.kind, get(get(c, "connection"), "state"), get(get(c, "connection"), "workspace"), get(get(c, "feishu"), "domain")])]);
+        // (the members: those of them it names, its own, `rowSig`; all of them for the list's kept rows, `sig`, which
+        // each row then looks at again)
+        const base = JSON.stringify([s.address, s.name, mark, me, slackUsers, watching, hint]);
+        const sig = JSON.stringify([base, members_]);
+        const rowSig = (shown: J) => JSON.stringify([base, present.rowMembers(shown, members_)]);
         // One record's row, or null where the list does not show it.
         const make = (raw: J): J | null => {
           work.listed++;
@@ -1746,13 +1764,13 @@ export class Views implements Owner {
           // Only a frozen row (db/account.ts) is surely as it was when its row was made.
           const keepable = isObject(shown) && Object.isFrozen(shown);
           const kept = keepable ? this.#rowsMade.get(shown) : undefined;
-          if (kept && kept.sig === sig) return kept.row === null ? null : this.#unsentRow(s.address, kept.row, failed);
+          const own = rowSig(shown);
+          if (kept && kept.sig === own) return kept.row === null ? null : this.#unsentRow(s.address, kept.row, failed);
           const row = (): J => {
             const made = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
-            if (made !== null) Object.assign(made, this.#rowMenu(s.address, shown, me, menu, connects));
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
             if (made !== null) deepFreeze(made);
-            if (keepable) this.#rowsMade.set(shown, { sig, row: made });
+            if (keepable) this.#rowsMade.set(shown, { sig: own, row: made });
             return made;
           };
           if (!keepable || get(shown, "pending") === true) {
@@ -1762,8 +1780,8 @@ export class Views implements Owner {
           // Kept, its row is made as something shows it (`unmade`): until then a stand-in, the list not showing it
           // decided as its row would (#chatRow: watching, one nobody watches).
           const agents = arr(get(shown, "agents"));
-          if (watching && present.rowWatch(agents) === null) {
-            this.#rowsMade.set(shown, { sig, row: null });
+          if (watching && !present.watches(agents)) {
+            this.#rowsMade.set(shown, { sig: own, row: null });
             return null;
           }
           const standIn: J = { lastActiveAt: shown.lastActiveAt, station: s.address, state: present.rowState(agents) };
@@ -1773,7 +1791,7 @@ export class Views implements Owner {
           unmade.set(standIn, () => {
             if (shownRow === undefined) {
               const again = this.#rowsMade.get(shown);
-              shownRow = this.#unsentRow(s.address, again !== undefined && again.sig === sig && again.row !== null ? again.row : row(), failed);
+              shownRow = this.#unsentRow(s.address, again !== undefined && again.sig === own && again.row !== null ? again.row : row(), failed);
             }
             return shownRow;
           });
@@ -1878,6 +1896,7 @@ export class Views implements Owner {
     ok: (topic) => this.ok(topic),
     stations: (scope) => this.stations(scope),
     foundMessages: (chats, view) => this.#foundMessages(chats, view),
+    whole: (row) => this.wholeFor(row),
     me: (scope) => this.me(scope),
     clock: () => this.#clock(),
   };
@@ -1909,8 +1928,8 @@ export class Views implements Owner {
       const by = isObject(entry) ? present.lastBy({ last: entry, agents: chat.agents }, me, slackUsers, members_) : null;
       const message: J = { station: hit.station, thread: hit.thread, seq: hit.seq, by: str(get(by, "name")) ?? "", ...refs.excerpt(hit.text, words) };
       if (hit.at !== null) message.createdAt = hit.at;
-      // Its chat's row as the list made it (frozen, its times in words already).
-      out.push({ chat, ...(present.times(message, clock) as J) });
+      // Its chat's row as the list made it (frozen), whole (wholeFor).
+      out.push({ chat: this.wholeFor(chat), ...(present.times(message, clock) as J) });
       if (out.length >= wanted) break;
     }
     return out;
@@ -1938,8 +1957,10 @@ export class Views implements Owner {
     return out;
   }
 
-  /// A station's row as the list shows it (null: not in this list).
-  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint): J {
+  /// A station's row as the list shows it (null: not in this list); `whole`, as its own `chatRow` gives it, with what a
+  /// press, a hold, a swipe or a pointer reads of it besides (its watch, its swipe's question, its card: the menu's are
+  /// #rowMenu's), which the list's rows are made without.
+  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint, whole = false): J {
     work.rows++;
     let row = structuredClone(raw);
     // Pinned rows are pinned (true) in the list, in the order they were pinned in (pinnedAt, below); one unpinned says
@@ -1956,9 +1977,13 @@ export class Views implements Owner {
     if (mark?.emoji) row.stationEmoji = mark.emoji;
     if (mark?.icon) row.stationIcon = mark.icon;
     const agents = arr(row.agents);
-    const watch = present.rowWatch(agents);
-    if (watch !== null) row.watch = watch;
-    else if (watching) return null;
+    if (whole) {
+      const watch = present.rowWatch(agents);
+      if (watch !== null) {
+        work.watches++;
+        row.watch = watch;
+      } else if (watching) return null;
+    } else if (watching && !present.watches(agents)) return null;
     row.state = present.rowState(agents);
     if (Array.isArray(row.agents)) row.agents = row.agents.map((agent: J) => present.session(agent));
     if (row.connect !== undefined && row.connect !== null) {
@@ -1998,10 +2023,13 @@ export class Views implements Owner {
     if (row.pending !== true) {
       row.swipeArchive = true;
       // (one someone else started: archiving it archives it for everyone in the workspace)
-      const shown = get(row.creator, "shown");
-      const starter = isObject(shown) && get(shown, "mine") !== true ? str(get(shown, "name")) : null;
-      const ask = present.swipeAsk(agents, starter, typeof row.hidden === "boolean");
-      if (ask !== null) row.swipeAsk = ask;
+      if (whole) {
+        work.swipeAsks++;
+        const shown = get(row.creator, "shown");
+        const starter = isObject(shown) && get(shown, "mine") !== true ? str(get(shown, "name")) : null;
+        const ask = present.swipeAsk(agents, starter, typeof row.hidden === "boolean");
+        if (ask !== null) row.swipeAsk = ask;
+      }
     }
     const line = present.rowStateLine(row);
     if (line !== null) {
@@ -2014,6 +2042,9 @@ export class Views implements Owner {
         row.stateRest = lead.rest;
       }
     }
+    // (its card: its line said, the rest of it is what its chat opens on, and its whole row's; a row of a decision's line
+    // and no `stateText` there is none: rowStateLine says one wherever its card waits for the viewer)
+    if (!whole) delete row.decision;
     const opener = this.#opener(s.address, raw);
     if (opener !== null) row.opener = opener;
     else delete row.opener;
@@ -2021,11 +2052,81 @@ export class Views implements Owner {
     return row;
   }
 
+  /// A chat's row whole, as its own topic gives it (`chatRow {station, session}`; `session` its agent's session, else its
+  /// row's id as a link names it): its record made by the maker the list's rows were made by before they were what a row
+  /// draws (#chatRow `whole`, #rowMenu: #wholeOf), with what failed to go in it (#unsentRow), as its station's list has
+  /// it now. A chat asked for here and not made yet as the list has it. Null where its station lists no such chat (in its
+  /// archive, being archived from here, gone); none yet while the station's chats were never listed. Read of the device
+  /// alone: one record by its key, not the station's list.
+  #wholeRow(station: string, session: string): Value | undefined {
+    const stations = this.#stationsOr(ofAddress(station));
+    if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+    const s = stations.find((x) => x.address === station);
+    if (s === undefined) return { ok: null };
+    const data = this.#core.data;
+    if (!data.listed(station, "chats")) return undefined;
+    this.local.settle(station, data.rowsRev(station));
+    const raw: J = data.chatOfSession(station, session) ?? data.chat(station, session)
+      ?? this.local.pendingRows(station).find((r) => get(r, "session") === session || get(r, "clientKey") === session);
+    if (raw === undefined || this.local.beingArchived(station, raw)) return { ok: null };
+    const row = this.#wholeOf(s, stations.length > 1, this.local.asChanging(station, raw));
+    return { ok: row === null ? null : this.#unsentRow(station, row) };
+  }
+
+  /// A record's row whole (#wholeRow), made with what the list's are (#chats) and what only it reads besides: the menu's
+  /// (the viewer's role here, their workspaces, its station's connects, #rowMenu). Kept with its record while those are
+  /// as they were.
+  #wholeOf(s: StationInfo, several: boolean, shown: J): J | null {
+    const scope = ofAddress(s.address);
+    const me = this.me(scope);
+    const workspace = this.ok({ topic: "workspace", workspace: scope });
+    const members_ = arr(get(workspace, "members"));
+    // What a row's menu offers besides the list's own (#rowMenu): the viewer's role here, their workspaces (with their role
+    // in each, as sharing reads it: xshare.ts shown).
+    const menu = { role: str(get(workspace, "role")), places: (this.#core.places?.() ?? []).map((p) => [p.id, p.role] as const) };
+    const hint = this.#core.store.select({ topic: "prefs" }, archiveHintIn);
+    const part = this.#core.data.overviewPart(s.address);
+    const slackUsers = arr(get(part, "slackUsers")).filter((u): u is string => typeof u === "string");
+    // (its connects: a Slack or Feishu row's link there, #rowMenu)
+    const connects = arr(get(part, "connects"));
+    const mark = several ? { emoji: s.emoji, icon: s.icon } : null;
+    const sig = JSON.stringify([s.address, s.name, mark, me, slackUsers, members_, hint, menu, connects.map((c) => [c.id, c.kind, get(get(c, "connection"), "state"), get(get(c, "connection"), "workspace"), get(get(c, "feishu"), "domain")])]);
+    const keepable = isObject(shown) && Object.isFrozen(shown);
+    const kept = keepable ? this.#wholeMade.get(shown) : undefined;
+    if (kept !== undefined && kept.sig === sig) return kept.row;
+    const made = this.#chatRow(s, shown, me, slackUsers, members_, false, mark, hint, true);
+    if (made !== null) {
+      Object.assign(made, this.#rowMenu(s.address, shown, me, menu, connects));
+      deepFreeze(made);
+    }
+    if (keepable) this.#wholeMade.set(shown, { sig, row: made });
+    return made;
+  }
+
+  /// A list's row (as a list or a search has it, what they put on it kept) with what only its whole row says besides
+  /// (WHOLE_ONLY: its menu's, its swipe's question while it is swiped, its watch, its card), made for that chat alone as
+  /// `chatRow` makes it: for what sends a list's rows as ChatItem (search, chatSearch, share-in.ts), for the rows they
+  /// show. As it is where its station lists no such chat (one a station's search found in its archive).
+  wholeFor(item: J): J {
+    if (!isObject(item) || item.pending === true || typeof item.station !== "string" || typeof item.session !== "string") return item;
+    const value = this.#wholeRow(item.station, item.session);
+    const whole = value !== undefined && "ok" in value ? value.ok : null;
+    if (!isObject(whole) || whole.id !== item.id) return item;
+    const given = this.#wholeGiven.get(item);
+    if (given !== undefined && given.whole === whole) return given.out;
+    const extra: J = {};
+    for (const k of WHOLE_ONLY) if (whole[k] !== undefined && !(k === "swipeAsk" && item.swipeArchive !== true)) extra[k] = whole[k];
+    const out = Object.keys(extra).length === 0 ? item : Object.freeze({ ...item, ...extra });
+    this.#wholeGiven.set(item, { whole, out });
+    return out;
+  }
+
   /// What a row's menu offers besides the list's own, as its page's "…" does from its `ChatView` (`xshare`, `publish`,
   /// `slackUrl`, `feishuUrl`): a row's menu and the page's are one. Shared with the viewer's other workspaces by its
   /// starter or an owner or admin (xshare.ts shown); a picture of it published by any but a read-only member (publish.ts
   /// shown); a Slack or Feishu thread's link there, by its connect (#whereIn).
   #rowMenu(station: string, raw: J, me: J, menu: { role: string | null; places: (readonly [string, string | null])[] }, connects: J[]): J {
+    work.rowMenus++;
     const out: J = {};
     if (get(raw, "pending") === true) return out;
     const scope = ofAddress(station);
