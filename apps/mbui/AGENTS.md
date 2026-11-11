@@ -261,10 +261,11 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   `mbui/moon.mod`, the same line. Why: moon keeps no diagnostics, so a package that printed a warning is type-checked
   again on every `moon check` (8 s with nothing changed; 0.1 s when none is printed), and the tree's ~5800 were read by
   nobody.
-- Off for good: 33, a line past 65535 columns (the fonts' bytes and kept data are written on one line on purpose), and
+- Off for good: 33, a line past 65535 columns (the fonts' bytes and kept data are written on one line on purpose);
   79, said at every `derive` of a public type and stopped only by an `extend` declaration for each trait of each type
-  (~600 lines of boilerplate). The rest of the off list is what is not mended yet: it only shrinks, each kind going to
-  an error in the change that mends the last of it.
+  (~600 lines of boilerplate); and 29, an unused package, since an import kept for its effect (every main's of
+  `mbui/host`) or for one target's files cannot be told from an unused one in a `moon.pkg`. The rest of the off list
+  is what is not mended yet: it only shrinks, each kind going to an error in the change that mends the last of it.
 - The modules with a `moon.mod` of their own (`mbui/tools`, `tools`, `mbui/bench/signals`) carry the same kind of line.
 - CI's MoonBit is the latest release, taken each hour (`.github/workflows/mbui-moonbit.yml`), so a release that
   deprecates something, or warns of something new, fails every pull request with no commit of ours, till its places are
