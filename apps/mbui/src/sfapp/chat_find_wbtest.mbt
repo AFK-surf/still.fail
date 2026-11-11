@@ -426,6 +426,32 @@ test "对话目录: ↓ ↑ from its field move the row the keys are at, one lit
 }
 
 ///|
+test "对话目录: the pointer moved onto a row takes the keys there, one ground, never the keys' and the pointer's both; Enter goes to it" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  let hover = @sf.theme().p.hover
+  let grounds = fn() {
+    let (px, py, pw, ph) = outline_panel(t).unwrap()
+    t.drawn_rects().filter(fn(r) { r.4 == hover && r.0 >= px && r.0 + r.2 <= px + pw + 0.5 && r.1 >= py && r.1 + r.3 <= py + ph + 0.5 })
+  }
+  let at_first = grounds()
+  assert_eq(at_first.length(), 1, msg="\{at_first}")
+  // (onto the row under the reader's: 林's 10:35, seq 23)
+  let (gx, gy, gw, gh, _) = at_first[0]
+  t.move(gx + gw / 2.0, gy + gh * 1.5)
+  t.run_for(@ui.move_most_ms)
+  let after = grounds()
+  assert_eq(after.length(), 1, msg="\{after}")
+  assert_eq(after[0].1, gy + gh)
+  t.key(@ui.key_code_enter)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(outline_reading().flash, "ts23")
+}
+
+///|
 test "对话目录: ⌥⇧↑ and ⌥⇧↓ go to the message a person said before and after the reader's, flashing" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)

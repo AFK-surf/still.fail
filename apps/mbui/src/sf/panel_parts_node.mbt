@@ -297,6 +297,7 @@ fn panel_row_by(
   lit? : () -> Bool = fn() { false },
   titled? : Bool = true,
   face? : (Double, (@view.View) -> Unit),
+  point? : () -> Unit,
   loc~ : SourceLoc,
 ) -> Unit {
   let at = panel_in_of(parent)
@@ -364,14 +365,22 @@ fn panel_row_by(
     .gap(Is(if plain { menu_row_gap } else { panel_row_gap }))
     .lines_up(Is(Some(Middle)))
     // (the hand's ground, and the one the keys are at only where the hand rests (a pointer and keys): a finger moves no
-    // keys' row, and on it that ground stood under the reader's row at rest, a second beside the one pressed)
-    .ground(By(fn() { if lit_node(r) || (lit() && pointer_rests()) { t().p.hover } else { 0L } }))
+    // keys' row, and on it that ground stood under the reader's row at rest, a second beside the one pressed. Where the
+    // pointer moving onto a row takes the keys there (`point`), the pointer's own is that one: one ground, never two)
+    .ground(By(fn() {
+      let hand = if point is Some(_) { lit_node(r) && !hovered_node(r) } else { lit_node(r) }
+      if hand || (lit() && pointer_rests()) { t().p.hover } else { 0L }
+    }))
     .says(By(fn() {
       let n = note()
       Some(@view.said(Button, label=if n == "" { label() } else { label() + " " + n }))
     }))
     |> ignore
     presses_node(r, fn() { press(r) })
+    // (the pointer's own moving onto it, never a list scrolled under a pointer at rest: what the keys move stays theirs)
+    if point is Some(p) {
+      r.on_pointer_moved(p) |> ignore
+    }
     match face {
       Some((face_size, fill)) =>
         r.box(fn(col) {
@@ -439,7 +448,7 @@ let panel_row_line : Double = 20.0
 /// of rows with and without one start together; `who`, a quiet line over the words (those words), its face in that column
 /// before both lines; each given how large a face is there (a row's icon's). `chosen`: the one the reader is at, in the accent's ink
 /// as a pick's chosen choice is (pick_row_node's). `lit`: the one the keys are at (a list's ↑ ↓ from its field), where the hand rests on
-/// the ground the hand's is. Read out a button named `label`; `press` as it is pressed (a press, Enter or Space with the focus on it).
+/// the ground the hand's is; `point`, the pointer moving onto it, to take the keys there. Read out a button named `label`; `press` as it is pressed (a press, Enter or Space with the focus on it).
 #callsite(autofill(loc))
 pub fn panel_said_row_node(
   parent : @view.View,
@@ -451,6 +460,7 @@ pub fn panel_said_row_node(
   who? : (() -> String, (@view.View, Double) -> Unit),
   chosen? : () -> Bool = fn() { false },
   lit? : () -> Bool = fn() { false },
+  point? : () -> Unit,
   made? : (@view.View) -> Unit = fn(_) {  },
   loc~ : SourceLoc,
 ) -> Unit {
@@ -483,7 +493,7 @@ pub fn panel_said_row_node(
     (Some((_, f)), _) | (None, Some(f)) => Some((panel_icon, fn(col : @view.View) { f(col, panel_icon) }))
     _ => None
   }
-  panel_row_by(loc~, parent, label, fn(_) { press() }, fn() { "" }, fn() { "" }, "", false, lit~, titled=false, face?, made=fn(r) {
+  panel_row_by(loc~, parent, label, fn(_) { press() }, fn() { "" }, fn() { "" }, "", false, lit~, titled=false, face?, point?, made=fn(r) {
     match who {
       Some((name, _)) =>
         // (who over what they said, both as far in as the row's words)
