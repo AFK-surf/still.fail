@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [3b0992b92](https://github.com/AFK-surf/still.fail/commit/3b0992b9224fffd8941e54b864a5ccf487960453) core: people added to a locked workspace are in it | 1.84 | 2.46 | 10.31 | 29.04 | 36.43 | 25.86 | 48.2 | 93.83 | 177.06 |
 | [aabd99d7e](https://github.com/AFK-surf/still.fail/commit/aabd99d7e79520301ed9d20bb5860622710aed16) mbui: a small key of the window's tree over an old | 1.84 | 2.45 | 10.24 | 29 | 36.21 | 25.82 | 48 | 94.29 | 180.59 |
 | [e7fa757d4](https://github.com/AFK-surf/still.fail/commit/e7fa757d4a6c9acfbd3413912199351792addbb6) mbui: whether the app is shown, in front and going | 1.83 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.54 | 155.91 |
 | [4b231d061](https://github.com/AFK-surf/still.fail/commit/4b231d0618e72bab4c12dc8d748fef3c4621cdda) mbui: a page's list held stretched at an end told  | 1.84 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.57 | 170.18 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [704829c69](https://github.com/AFK-surf/still.fail/commit/704829c6912df0d8d968971712f6750ede3a7b02) mbui: a motion's end said as it was once it is ove | 1.82 | 2.43 | 10.12 | 28.86 | 35.75 | 25.7 | 47.62 | 94.65 | 183.12 |
 | [ebbb3bd62](https://github.com/AFK-surf/still.fail/commit/ebbb3bd62f4fd46751b2549c9f5707285a1c00b4) Leave batch-only models out of a provider's model  | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.82 | 173.08 |
 | [a0a38cd76](https://github.com/AFK-surf/still.fail/commit/a0a38cd76cac16c75a2fd16651e86a28d2d1ab34) app, core: 更新日志 is asked the tab in view a page at | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.08 | 173.84 |
-| [e4ae7785a](https://github.com/AFK-surf/still.fail/commit/e4ae7785aedbee58bbb68aa136bcf196592a55fd) mbui: a chat's picture or file shared from its pre | 1.82 | 2.43 | 10.11 | 28.85 | 35.71 | 25.69 | 47.6 | 94.24 | 179.2 |
