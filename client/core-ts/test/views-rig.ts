@@ -9,7 +9,7 @@ import { topicKey, type Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
-import { Views, chatDerive } from "../src/views/views.ts";
+import { Views, chatDerive, type ViewsEnv } from "../src/views/views.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -63,8 +63,13 @@ export class Router implements Source {
 export type Ui = { value: J; error: J; messages: number };
 export const ui = (): Ui => ({ value: undefined, error: undefined, messages: 0 });
 
-/// What a rig is made with beyond the views: every view routed (`all`), and owners of other topics made of its parts.
-export type RigOptions = { all?: boolean; owners?: (parts: { host: FakeHost; store: Store; data: Data; views: Views }) => Owner[] };
+/// What a rig is made with beyond the views: every view routed (`all`), owners of other topics made of its parts, and
+/// what else the views are given as a core gives it them (`env`: the accounts' workspaces, their ways).
+export type RigOptions = {
+  all?: boolean;
+  owners?: (parts: { host: FakeHost; store: Store; data: Data; views: Views }) => Owner[];
+  env?: (parts: { host: FakeHost; store: Store; data: Data; runner: Runner }) => Partial<ViewsEnv>;
+};
 
 export function setup(options: RigOptions = {}) {
   const host = new FakeHost();
@@ -94,6 +99,7 @@ export function setup(options: RigOptions = {}) {
       const of = Math.max(typeof last === "number" ? last : 0, span?.max ?? 0);
       return { held: span?.count ?? 0, of, whole: (span?.count ?? 0) === of };
     },
+    ...options.env?.({ host, store, data, runner }),
   });
   router.views = views;
   router.store = store;

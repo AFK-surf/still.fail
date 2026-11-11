@@ -36,7 +36,10 @@ whole value (`store.value`): a field the core reads and no UI does stays out of 
 which `src/choose.ts` reads of `views.agent`). A part a view shapes once for every topic that holds it (views.ts
 `asShaped`) goes out as each topic's own shape says there (a station's overview to its page as `StationOverview`,
 conform.ts `reshaped`); where one shape is sent by several topics and only some pages read a field, the others get a
-shape of their own (`ListedProfile`, `StationProfile` beside `Profile`).
+shape of their own (`ListedProfile`, `StationProfile` beside `Profile`). The fixture fills every list and map a
+weighed topic's shape declares: one left empty is listed in the test's `EMPTY` with why (an error or a state the
+workspace is not in, a thing it has none of), and `EMPTY` only falls; a topic is left unweighed (`NOT_MEASURED`) only
+with the bound that keeps it small named (a cap's constant, a fixed set of fields).
 
 ## What is shared is never written
 

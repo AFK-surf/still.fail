@@ -7,7 +7,9 @@
 // OpenRouter, an Anthropic key, OpenCode Go, SuperGrok, Cursor. With them connects, Slack apps, automatic decisions
 // with a policy, the machine's own logins and a host reading; some 400 chats across the stations with their titles,
 // last lines and people; one chat of 300 messages of every length (six pages: it opens on the last, `PAGE`), another
-// of four weeks held whole on the device (`OUTLINED`); a week of usage, the jobs at work, the archive. Every family of
+// of four weeks held whole on the device (`OUTLINED`); a week of usage, the jobs at work, the archive; and what the
+// pages of one thing read (`more`, `records`): the account's workspaces, the lock and the vault, a drive's folder, a
+// job's log, the chat's letters, screens, the cards of what messages name. Every family of
 // fields is filled as a station fills it, none made larger than a station makes it. Made of the test's clock and
 // indexes alone: the same every run.
 import type { Topic } from "../src/protocol.ts";
@@ -235,6 +237,10 @@ function claudeQuota(now: number, i: number): J {
     plan: i % 2 === 0 ? "max_20x" : "max_5x",
     windows: [window("5 小时", (i * 17) % 90, now + (2 + (i % 3)) * HOUR + 14 * MIN), window("每周", (i * 23) % 80 + 10, now + (3 + (i % 4)) * DAY + 5 * HOUR)],
     scoped: [window("每周 · Opus", (i * 29) % 70 + 20, now + (3 + (i % 4)) * DAY + 5 * HOUR, "opus"), window("每周 · Fable", (i * 31) % 60, now + (3 + (i % 4)) * DAY + 5 * HOUR, "fable")],
+    // (every other one holds resets, a kind each as the station tells them: accounts/claude-reset.ts claudeResets, quota.ts withResets)
+    ...(i % 2 === 0
+      ? { resets: [{ id: "session", kind: "session", left: 1, usable: true }, { id: "weekly", kind: "weekly", left: 2, expiries: [now + 3 * DAY, now + 9 * DAY], usable: false }], resetCount: 3, resetExpiries: [now + 3 * DAY, now + 9 * DAY] }
+      : {}),
     detail: null,
     checkedAt: now - 4 * MIN,
   };
@@ -245,10 +251,11 @@ function codexQuota(now: number, i: number): J {
     state: "ok",
     plan: i % 3 === 0 ? "pro" : "plus",
     credits: { hasCredits: i % 2 === 0, unlimited: false, balance: i % 2 === 0 ? String(120 - i * 7) : "0" },
-    windows: [window("5 小时", i === 3 ? 100 : (i * 19) % 95, now + (1 + (i % 4)) * HOUR + 33 * MIN), window("每周", (i * 13) % 85 + 5, now + (2 + (i % 5)) * DAY + 11 * HOUR)],
+    // (the chat's second agent's account, codex-maple-1, near the end of its five hours: what its card warns of)
+    windows: [window("5 小时", i === 1 ? 86 : (i * 19) % 95, now + (1 + (i % 4)) * HOUR + 33 * MIN), window("每周", (i * 13) % 85 + 5, now + (2 + (i % 5)) * DAY + 11 * HOUR)],
+    // (a count and when each ends, no kinds: what a station tells of Codex, accounts/quota.ts withCodexCredits)
     resetCount: i % 3,
-    resetExpiries: Array.from({ length: i % 3 }, (_, k) => now + (5 + k) * DAY),
-    resets: i % 3 === 0 ? [] : [{ id: `r-${i}-s`, kind: "session", left: 1, usable: true }, { id: `r-${i}-w`, kind: "weekly", left: (i % 3) - 1, usable: false }],
+    ...(i % 3 === 0 ? {} : { resetExpiries: Array.from({ length: i % 3 }, (_, k) => now + (5 + k) * DAY) }),
     detail: null,
     checkedAt: now - 6 * MIN,
   };
@@ -266,7 +273,11 @@ function profileOf(now: number, station: number, n: number, kind: string, k: num
   };
   // (one Claude subscription of the workspace's signed out: its check says so, it has no allowance)
   const expired = kind === "claude" && station === 1 && k === 2;
-  const shared = (users: number): J => ({ share: { id: `share-${id}`, role: "host", host: STATIONS[station]!.id, users: Array.from({ length: users }, (_, j) => pick(STATIONS, station + j + 1).id) } });
+  // (each lent to the next stations; the first of each station's kept to those it is lent to, as a manager narrows it: share/index.ts `allow`)
+  const shared = (users: number): J => {
+    const to = Array.from({ length: users }, (_, j) => pick(STATIONS, station + j + 1).id);
+    return { share: { id: `share-${id}`, role: "host", host: STATIONS[station]!.id, users: to, ...(k === 0 ? { allow: [STATIONS[station]!.id, ...to] } : {}) } };
+  };
   switch (kind) {
     case "claude":
       return {
@@ -308,7 +319,8 @@ function profileOf(now: number, station: number, n: number, kind: string, k: num
     case "openrouter":
       return {
         ...base, name: k === 0 ? "OpenRouter" : "OpenRouter · 实验", runtime: "claude", runtimes: ["claude", "codex"], access: { kind: "api-provider", key: "sk-or-v1-…9e1c", provider: "openrouter" },
-        model: "anthropic/claude-sonnet-5", models: ROUTER_MODELS, named: ROUTER_MODELS.slice(0, 4), loginCommand: "",
+        // (one named by hand that OpenRouter does not list: what can be taken off)
+        model: "anthropic/claude-sonnet-5", models: [...ROUTER_MODELS, "deepseek/deepseek-v4-1"], named: [...ROUTER_MODELS.slice(0, 4), "deepseek/deepseek-v4-1"], loginCommand: "",
         check: check(now, ROUTER_MODELS, "可用 · 列出了 312 个模型", { decision: { state: "ok", detail: "可用于自动决策：google/gemini-4-flash", model: "google/gemini-4-flash", provider: "openrouter" } }),
         quota: { state: "ok", credits: { hasCredits: true, unlimited: false, balance: "$41.18" }, windows: [], checkedAt: now - 15 * MIN },
       };
@@ -355,7 +367,8 @@ function connectsOf(station: number): J[] {
     kind: "slack", mode: n === 2 ? "single-session" : "multi-session", requireMention: n !== 3, bind: { runtime: n === 2 ? "codex" : "claude", model: n === 2 ? "gpt-6-astra" : "claude-opus-5-5", effort: "high", profile: null },
     slack: { appToken: "xapp-1-…f3e9", botToken: "xoxb-…71ac" },
     connection: { state: "connected", botUserId: `U0BOT${n}${station}`, workspace: { team: "Acme", teamId: "T04ACME0001", url: "https://acme-dev.slack.com/", botUserId: `U0BOT${n}${station}`, botName: n === 1 ? "still.fail" : `${s.name.toLowerCase()}-bot-${n}`, botImage: `https://avatars.slack-edge.com/2026-02-0${n}/bot${n}_192.png` } },
-    createdBy: { id: pick(PEOPLE, station + n).email, name: pick(PEOPLE, station + n).name }, sessions: 30 + station * 7 + n * 3, session: n === 2 ? `k-${s.id}-3` : null,
+    // (the first of each station's made by the viewer, the workspace's owner, who set up its Slack: `connects mine`)
+    createdBy: n === 1 ? { id: PEOPLE[0].email, name: PEOPLE[0].name } : { id: pick(PEOPLE, station + n).email, name: pick(PEOPLE, station + n).name }, sessions: 30 + station * 7 + n * 3, session: n === 2 ? `k-${s.id}-3` : null,
   });
   const feishu: J = {
     id: "c-feishu-1", name: "飞书助手", team: null, enabled: true, kind: "feishu", mode: "multi-session", requireMention: true, bind: { runtime: "claude", model: null, effort: null, profile: null },
@@ -462,7 +475,15 @@ export function overviewOf(now: number, station: number): J {
     network: { congestion: "cubic" },
     context: { afreshWhenCold: true, afreshAbove: 0.5 },
     diagnostics: { logs: true },
-    ...(mac ? { permissions: { grants: [["capture", "屏幕录制"], ["control", "辅助功能"], ["documents", "文稿"], ["desktop", "桌面"], ["downloads", "下载"], ["localNetwork", "本地网络"]].map(([id, name], j) => ({ id, name, line: `允许 still.fail Helper 使用${name}`, granted: j !== 3, asking: false })), canRequest: true } } : {}),
+    // (as a station says them, station/src/helper/grants.ts GrantsView and api/routes/permissions.ts: the core words them)
+    ...(mac ? { permissions: { grants: ["capture", "control", "documents", "desktop", "downloads", "localNetwork"].map((grant, j) => ({ grant, state: j === 3 ? "unknown" : "granted" })), asking: [], screen: true, request: true, localNetworkName: "still.fail" } } : {}),
+    // Its chats copied off it to two others (station/src/replica/copies.ts): the next two up.
+    copies: {
+      to: 412 + station, chats: 160 + station * 13, stopped: null, restored: null, empty: false, restoring: null, restorable: null, manage: true, formerly: [],
+      keepers: [1, 2].map((d) => ({ station: pick(STATIONS, station + d).id, name: pick(STATIONS, station + d).name, to: 412 + station, at: now - (3 + d) * MIN, error: null, reason: null })),
+    },
+    // What a chat can be kept to less context on (station/src/api/overview.ts, sessions/context-cap.ts): each model's window.
+    contextCaps: { runtimes: ["claude", "codex"], least: 100_000, windows: Object.fromEntries([...new Set(profiles.flatMap((p: J) => p.models as string[]))].map((m) => [m, /haiku|4-5|mini|flash|v3/.test(m) ? 200_000 : /gpt|codex|grok/.test(m) ? 400_000 : 1_000_000])) },
     archiving: { days: 7, slackDays: 14, reviewed: true, canEdit: true },
     automaticDecisions: decisionsOf(now, station, profiles),
   };
@@ -478,6 +499,10 @@ export function hostReading(now: number, station: number, load = 0.21 + station 
     cpus: s.cpus, cpuModel: s.cpu, load, cpuBusy: load * 0.8, uptimeSec: 86400 * (3 + station) + 4211,
     memory: { totalBytes: s.memGb * gb, usedBytes: Math.round(s.memGb * gb * (0.42 + station * 0.05)), swapUsedBytes: 512 * 1024 ** 2 },
     disk: { path: "/", totalBytes: 1000e9, freeBytes: (180 + station * 40) * 1e9 }, stationRssBytes: 212 * 1024 ** 2 + station * 1e6, checkedAt: now,
+    // (as station/src/jobs/gpu.ts reads them: a Mac's its chip's, the PC's its card's)
+    gpus: s.cpu.startsWith("Apple")
+      ? [{ name: s.cpu, cores: [40, 20, 80, 0, 16][station], busy: 0.12 + station * 0.05 }]
+      : [{ name: "NVIDIA GeForce RTX 4090", memoryTotalBytes: 24_564 * 1024 ** 2, memoryUsedBytes: 3_100 * 1024 ** 2, busy: 0.07 }],
   };
 }
 
@@ -497,6 +522,20 @@ function agentOf(now: number, key: string, i: number): J {
 }
 
 const keyOf = (station: number, i: number) => `k-${STATIONS[station]!.id}-${i}`;
+
+/// An agent's options card, as `chat_post` posts one.
+const optionsCard = (): J => ({ type: "options", options: [{ label: "可以，周六 9 点", detail: "按计划停写 4 分钟", recommended: true }, { label: "改到周日上午" }, { label: "先不做" }], assignee: PEOPLE[0].email });
+/// An agent's request for a vault item, as the station posts it (station/src/vault/secrets.ts: its scopes, then 拒绝).
+const vaultCard = (i: number): J => ({
+  type: "options", options: [{ label: "允许这一次" }, { label: "允许一小时", recommended: true }, { label: "拒绝", detail: "通知 agent 已拒绝" }], assignee: PEOPLE[0].email,
+  vault: { request: `vr-${i}`, name: "GitHub token", reason: "推送 PR #5244 并打开 review", command: "gh pr create --fill", mode: "proxy", hosts: ["api.github.com", "github.com"], timeout: { kind: "idle", seconds: 3600 } },
+});
+/// What a chat's row says of the card it waits on (station/src/read/views.ts cardView): the card, its post, an options
+/// card its `decision` too.
+function waiting(seq: number, author: string, text: string, at: number, card: J): J {
+  const message = { seq, authorKind: "agent", author, authorName: null, text, attachments: [], quotes: [], declared: "block", createdAt: at, options: card.options, card };
+  return { card: { seq, card, message, before: [] }, decision: { seq, message, before: [], options: card.options } };
+}
 const threadIdOf = (station: number, i: number) => (i === 0 && station === 0 ? CHAT.thread : 2000 + station * 1000 + i);
 
 /// A chat row as a station lists it (its `GET /chats`).
@@ -522,6 +561,16 @@ function rowOf(now: number, station: number, i: number, archived = false): J {
     mineOf: people.slice(0, 2), said: null, archiveReminderDismissed: false, archiveRecommended: i % 11 === 5, archiveReviewed: true, pinned: i % 37 === 3 ? now - i * HOUR : null,
   };
   if (archived) row.archived = { at: at + DAY, by: "auto", alone: true };
+  // (those whose agent asks a person wait on its card, every other one a vault item's request; the chat's its last)
+  else if (i % 5 === 3 || (station === 0 && i === 0)) {
+    const seq = station === 0 && i === 0 ? CHAT_MESSAGES : row.last.seq;
+    const text = i % 10 === 3 ? "需要你决定：周六上午 9 点做生产库迁移可以吗？" : "需要用 GitHub token 推送 PR，请批准。";
+    Object.assign(row, waiting(seq, key, text, at, i % 10 === 3 ? optionsCard() : vaultCard(i)));
+  }
+  // (some shared with the owner's other workspace, as its station says it: read/views.ts `xshare`)
+  if (!archived && i % 13 === 4) row.xshare = { to: [OTHER_WORKSPACE.id], write: false };
+  // (the chats the chat's agent opened, `chat_create`: read/views.ts `opened`)
+  if (!archived && station === 0 && i === 0) row.opened = [{ session: keyOf(0, 40), title: pick(TITLES, 40) }, { session: keyOf(0, 41), title: pick(TITLES, 41) }];
   return row;
 }
 
@@ -536,8 +585,19 @@ function threadOf(now: number, station: number, i: number): J {
     sessions: r.agents.map((a: J) => member(r.thread, a.key, r.connect ?? "ember", r.lastActiveAt - HOUR)), last: r.last.seq,
     lastMessage: { seq: r.last.seq, thread: r.thread, ts: `${r.thread}.${r.last.seq}`, authorKind: r.last.authorKind, author: r.last.author, authorName: r.last.authorName, text: r.last.text, attachments: [], quotes: [], declared: null, createdAt: r.last.createdAt, editedAt: null },
     read: i % 6 === 0 ? r.last.seq - 2 : r.last.seq, unread: i % 6 === 0 ? 2 : 0, people: r.people, firstText: r.named.firstText,
+    // (the chat's agent is in a Slack thread too, what is said here can be copied to: station/src/read/sessions.ts `cc`;
+    // and it is shared with the owner's other workspace)
+    ...(station === 0 && i === 0
+      ? {
+        cc: [{ thread: threadIdOf(0, 1), surface: "slack:T04ACME0001", channel: "C05ENG0001", threadTs: `${threadIdOf(0, 1)}.0`, channelName: "android" }],
+        xshare: { to: [{ workspace: OTHER_WORKSPACE.id, name: OTHER_WORKSPACE.name }], write: false },
+      }
+      : {}),
   };
 }
+
+/// The job a session watches, of `jobsOf`'s.
+const watched = (now: number, station: number, key: string): J | undefined => jobsOf(now, station).find((j) => j.watch && j.session === key);
 
 /// A session as a station lists it (its `GET /sessions`).
 function sessionOf(now: number, station: number, key: string, i: number): J {
@@ -547,6 +607,8 @@ function sessionOf(now: number, station: number, key: string, i: number): J {
     runtime: a.runtime, profile: a.runtime === "codex" ? `codex-${STATIONS[station]!.id}-${i % 3}` : `claude-${STATIONS[station]!.id}-${i % 3}`, profilePinned: false, model: a.model, effort: a.effort, fast: false,
     runtimeSessionId: `rs-${key}`, contextActions: ["compact", "clear"], workspace: `/Users/${STATIONS[station]!.host}/.stillfail/sessions/chat/${key}/workspace`, running: a.process === "running",
     createdAt: now - (i * 41 + 70) * MIN, lastActiveAt: now - (i * 41 + 1) * MIN, archivedAt: null, process: a.process, turns: 3 + (i % 17), pending: 0, firstText: pick(MEDIUM, i), lastTurn: a.lastTurn,
+    // (what it watches, as station/src/read/sessions.ts says it of its jobs `watch`ing: jobsOf's)
+    ...(watched(now, station, key) ? { watch: { names: [watched(now, station, key)!.name], since: watched(now, station, key)!.startedAt, at: now - 20 * MIN } } : {}),
   };
 }
 
@@ -560,14 +622,39 @@ export const CHAT_MESSAGES = 6 * PAGE;
 /// What the chat holds as it opens: its last page.
 export const OPENS = PAGE;
 
+/// Where in the chat its run changed (the station's notice, station/src/sessions/actor.ts).
+const RUN_CHANGED = 151;
+
+const tsOf = (n: number) => `${CHAT.thread}.${String(n).padStart(6, "0")}`;
+const keyAt = (n: number) => (n % 10 === 4 ? CHAT.keys[1] : CHAT.keys[0]);
+
 function entryOf(now: number, n: number): J {
   const agent = n % 2 === 0;
-  const key = n % 10 === 4 ? CHAT.keys[1] : CHAT.keys[0];
+  const key = keyAt(n);
   const by = pick(PEOPLE, n % 4 === 1 ? 1 : 0);
+  const at = now - (CHAT_MESSAGES - n + 1) * 7 * MIN;
+  // (the station's notice that the chat's second agent was moved to another account: run-change.ts words it)
+  if (n === RUN_CHANGED) {
+    const run = (runtime: string, model: string, effort: string, profile: string, account: string) => ({ runtime, model, effort, fast: false, profile, account, pinned: false, context: null });
+    return {
+      thread: CHAT.thread, n, kind: "message", ts: tsOf(n), authorKind: "ember", author: "ember", authorName: null, text: "已换成 Codex · GPT-6 Astra", at,
+      change: { was: run("claude", "claude-opus-5-5", "xhigh", "claude-maple-1", "团队 Max 2"), now: run("codex", "gpt-6-astra", "high", "codex-maple-1", "ChatGPT Plus 2") },
+    };
+  }
+  const attached = n % 23 === 0;
+  // (an agent's text places the picture it attached where it names it, placed.ts; now and then links an earlier chat)
+  const text = words(n) + (agent && attached ? `\n\n![](screenshot-${n}.png)` : "") + (agent && n % 50 === 10 ? `\n\n和[上次的讨论](https://still.fail/o/ws/maple/${keyOf(0, 12)})是同一个问题。` : "");
+  // (now and then an agent's options card, every third of them a vault item's request; the last message asks for one, waiting)
+  const card = agent && (n === CHAT_MESSAGES || n % 60 === 20) ? (n === CHAT_MESSAGES || n % 180 === 20 ? vaultCard(n) : optionsCard()) : undefined;
   return {
-    thread: CHAT.thread, n, kind: "message", ts: `${CHAT.thread}.${String(n).padStart(6, "0")}`, authorKind: agent ? "agent" : "person", author: agent ? key : by.email, authorName: agent ? null : by.name,
-    text: words(n), at: now - (CHAT_MESSAGES - n + 1) * 7 * MIN,
-    ...(n % 23 === 0 ? { attachments: [{ name: `screenshot-${n}.png`, path: `.stillfail/uploads/${n}-screenshot.png`, size: 248_113 + n, width: 1170, height: 2532, thumbhash: "3OcRJYB4d3h/iIeHeEh3eIhw+j3A" }] } : {}),
+    thread: CHAT.thread, n, kind: "message", ts: tsOf(n), authorKind: agent ? "agent" : "person", author: agent ? key : by.email, authorName: agent ? null : by.name,
+    text, at,
+    ...(attached ? { attachments: [{ name: `screenshot-${n}.png`, path: `.stillfail/uploads/${n}-screenshot.png`, size: 248_113 + n, width: 1170, height: 2532, thumbhash: "3OcRJYB4d3h/iIeHeEh3eIhw+j3A" }] } : {}),
+    // (now and then a file that is no picture: a trace, a report)
+    ...(!attached && n % 37 === 0 ? { attachments: [{ name: n % 74 === 0 ? `trace-${n}.json` : `report-${n}.pdf`, path: `.stillfail/uploads/${n}-${n % 74 === 0 ? "trace.json" : "report.pdf"}`, size: 1_204_331 + n }] } : {}),
+    // (a person replying to the agent's message before quotes some of it, as store/rows.ts Quote)
+    ...(!agent && n % 11 === 1 ? { quotes: [{ author: keyAt(n - 1), text: words(n - 1).slice(0, 120), comment: "", ts: tsOf(n - 1), role: "agent" }] } : {}),
+    ...(card ? { card, options: card.options } : {}),
   };
 }
 
@@ -630,6 +717,8 @@ function detailOf(now: number, key: string, i: number): J {
   return {
     session: sessionOf(now, 0, key, i),
     threads: [threadOf(now, 0, 0)],
+    // (its jobs, as station/src/read/sessions.ts gives them with the session)
+    jobs: jobsOf(now, 0).filter((j) => j.session === key),
     turns: Array.from({ length: 40 }, (_, t) => ({ id: `turn-${key}-${t}`, kind: "chat", outcome: "done", declared: "final", ending: "all_done", detail: null, startedAt: now - (40 - t) * 30 * MIN, endedAt: now - (40 - t) * 30 * MIN + 9 * MIN })),
   };
 }
@@ -639,15 +728,41 @@ function liveOf(now: number): J {
   const timeline: J[] = [];
   for (let i = 0; i < 160; i++) {
     const at = new Date(now - (160 - i) * MIN).toISOString();
-    if (i % 4 === 0) timeline.push({ at, kind: "user", text: words(i) });
+    // (what it was given: a person's message as still.fail hands it over, station/src/agents/instructions.ts, now and then
+    // a background command's end told it)
+    if (i % 4 === 0) {
+      const p = pick(PEOPLE, i % 8 === 0 ? 0 : 1);
+      timeline.push({
+        at, kind: "user", text: i % 16 === 8
+          ? `<task-notification>\n<task-id>bg-${i}</task-id>\n<status>completed</status>\n<summary>Background command "pnpm test --filter core" completed (exit code 0)</summary>\n</task-notification>`
+          : `<message via="web" connect="ember" thread="EMBER/${CHAT.thread}.0" from="${p.name} (${p.email})" ts="${tsOf(i + 100)}">\n${words(i)}\n</message>`,
+      });
+    }
     else if (i % 4 === 1) timeline.push({ at, kind: "thinking", text: pick(MEDIUM, i) });
     else if (i % 4 === 2) timeline.push({ at, kind: "tool_call", text: i % 8 === 2 ? "pnpm exec tsgo --noEmit && node --test test/views.test.ts" : `src/views/views.ts`, tool: pick(tools, i), callId: `call-${i}` });
     else timeline.push({ at, kind: "tool_result", text: i % 8 === 3 ? "✔ 311 tests passed (14.2s)" : pick(LINES, i).slice(0, 160), tool: pick(tools, i - 1), ok: true, callId: `call-${i - 1}` });
   }
   return {
-    loaded: true, first: 1, timeline, steps: [],
+    // (as it runs: thinking now, what it has going past its turn and its checklist, station/src/sessions/live.ts)
+    loaded: true, first: 1, timeline, steps: [{ id: "st-1", step: "thinking", input: "", startedAt: now - 20_000 }], phase: { phase: "working", since: now - 40_000 },
+    tasks: [
+      { id: "t1", kind: "command", description: "pnpm test --watch", elapsedMs: 600_000, since: now - 600_000 },
+      { id: "t2", kind: "agent", description: "Review the migration script", elapsedMs: 120_000, since: now - 120_000 },
+    ],
+    plan: [{ text: "复现掉帧", status: "completed" }, { text: "缓存行高", status: "completed" }, { text: "录前后对比", status: "in_progress" }, { text: "开 PR 等 CI", status: "pending" }],
     usage: { modelCalls: 412, inputTokens: 8_412_330, cachedTokens: 7_901_002, outputTokens: 211_430, model: "claude-opus-5-5", contextTokens: 143_211, contextWindow: 1_000_000, cost: 31.42, lastCallAt: now - 3 * MIN, cacheMs: 300_000, rereadCost: 2.7 },
   };
+}
+
+/// What the chat's agent's transcript holds that the sync reads of Slack (elsewhere.ts readItem): two posts to the Slack
+/// thread of the chat it is in too, and their answers; as `data.putItems("transcript", …)` takes them.
+export function transcriptOf(now: number): [number, J][] {
+  const to = `C05ENG0001/${rowOf(now, 0, 1).origin.threadTs}`;
+  const said = ["CI 绿了，PR #5244 可以合了。", "已经合进 main，beta 今晚出。Pixel 8 上的掉帧录屏在 PR 里。"];
+  return said.flatMap((text, k): [number, J][] => [
+    [k * 2 + 1, { at: new Date(now - (90 - k * 40) * MIN).toISOString(), kind: "tool_call", tool: "mcp__stillfail__chat_post", callId: `post-${k}`, text: JSON.stringify({ to, text }) }],
+    [k * 2 + 2, { at: new Date(now - (90 - k * 40) * MIN + 2000).toISOString(), kind: "tool_result", tool: "mcp__stillfail__chat_post", callId: `post-${k}`, ok: true, text: JSON.stringify({ ok: true, ts: `17941${k}00.0042` }) }],
+  ]);
 }
 
 // ── usage, jobs, resources ──
@@ -663,18 +778,37 @@ function usageOf(now: number, station: number): J {
         day, session: keyOf(station, i % ROWS_UP), thread: threadIdOf(station, i % ROWS_UP), person: pick(PEOPLE, i + station).email,
         profile: codex ? `codex-${STATIONS[station]!.id}-${r % 3}` : `claude-${STATIONS[station]!.id}-${r % 3}`, model: codex ? pick(CODEX_MODELS, r) : pick(CLAUDE_MODELS, r),
         calls: 12 + ((i * 37) % 300), cost: Math.round((0.4 + ((i * 53) % 900) / 37) * 100) / 100,
+        // (its tokens, as station/src/read/store.ts counts them)
+        runtime: codex ? "codex" : "claude", input: 20_000 + ((i * 911) % 90_000), cacheRead: 400_000 + ((i * 7717) % 2_000_000), cacheWrite: codex ? 0 : 30_000 + ((i * 313) % 60_000),
+        cacheWriteLong: 0, output: 4_000 + ((i * 131) % 30_000),
       });
     }
   }
-  return { rows, since: now - 30 * DAY, reading: false };
+  // Its history (station/src/read/usage.ts usageHistory): the tokens of each day it has been used, half a year of them;
+  // its chats by place, those archived, the decision cards and those picked, the tasks other stations' chats ran here.
+  const history = {
+    days: Array.from({ length: 180 }, (_, d) => ({ day: localDay(now - (179 - d) * DAY, 0), runtime: "", model: null, tokens: 40_000_000 + (((d * 7919 + station * 31) % 60) * 1_000_000), calls: 300 + ((d * 13) % 90) })),
+    cards: 48 + station, picked: 31 + station, places: { ember: 70 + station * 9, slack: 30 + station * 4 }, archived: 60 + station * 7, remoteRuns: 9 + station,
+  };
+  return { rows, since: now - 30 * DAY, reading: false, history };
 }
 
+/// A station's jobs (its `GET /jobs`): the chat's agent's dev server and its watch of the PR's CI, a Slack chat's agent's
+/// watch of a deploy, and the rest a chat each; a soak that has run a day telling how it goes (`stillfail-job notify`).
 function jobsOf(now: number, station: number): J[] {
-  return Array.from({ length: 6 }, (_, j) => ({
-    id: `job-${STATIONS[station]!.id}-${j}`, session: keyOf(station, j * 3), name: pick(["dev server", "watch CI #5244", "storybook", "e2e soak", "tail prod logs", "benchmark"], j),
+  const sessions = [0, 0, 6, 9, 12, 15, 1];
+  return Array.from({ length: 7 }, (_, j) => ({
+    id: `job-${STATIONS[station]!.id}-${j}`, session: keyOf(station, sessions[j]!), name: pick(["dev server", "watch CI #5244", "storybook", "e2e soak", "tail prod logs", "benchmark", "watch deploy #812"], j),
     state: j === 5 ? "exited" : "running", port: j === 0 ? 5173 : j === 2 ? 6006 : null, exitCode: j === 5 ? 0 : null, startedAt: now - (j + 1) * 5 * HOUR, endedAt: j === 5 ? now - HOUR : null,
-    command: pick(["pnpm dev --host 127.0.0.1", "gh run watch 11234567 --exit-status", "pnpm storybook -p 6006", "./e2e/run.sh mac --loop", "kubectl logs -f deploy/api", "node bench/scroll.ts"], j),
-    restarts: j === 2 ? 1 : 0, notices: j === 1 ? [{ at: now - 20 * MIN, text: "CI 绿了：check-mbui native 5 分 12 秒" }] : [], watch: j === 1, outputAt: now - (j + 1) * MIN,
+    command: pick(["pnpm dev --host 127.0.0.1", "gh run watch 11234567 --exit-status", "pnpm storybook -p 6006", "./e2e/run.sh mac --loop", "kubectl logs -f deploy/api", "node bench/scroll.ts", "gh run watch 11234590 --exit-status"], j),
+    restarts: j === 2 ? 1 : 0,
+    // (the soak tells each round, `stillfail-job notify`: as many as the station shows, station/src/jobs/jobs.ts NOTICES_SHOWN)
+    notices: j === 1
+      ? [{ at: now - 20 * MIN, text: "CI 绿了：check-mbui native 5 分 12 秒" }]
+      : j === 3
+      ? Array.from({ length: 20 }, (_, r) => ({ at: now - (20 - r) * 45 * MIN, text: r % 6 === 5 ? `第 ${393 + r} 轮：1 个失败，chat-scroll 第 3 次重试后通过` : `第 ${393 + r} 轮：全部通过（平均 3 分 ${String(8 + (r % 5)).padStart(2, "0")} 秒）` }))
+      : [],
+    watch: j === 1 || j === 6, outputAt: now - (j + 1) * MIN,
   }));
 }
 
@@ -787,4 +921,269 @@ export function messageAdded(base: number, at: number, chat = CHAT_MESSAGES): [T
     [threads(CHAT.station), [thread, ...Array.from({ length: ROWS_UP - 1 }, (_, i) => threadOf(base, 0, i + 1))]],
     [rows(CHAT.station), [{ ...r0, last, lastActiveAt: at }, ...Array.from({ length: ROWS_UP - 1 }, (_, i) => rowOf(base, 0, i + 1))]],
   ];
+}
+
+// ── the account's own, and what else the pages read ──
+
+/// The owner's other workspace, where some chats are shared and whose stations a station here could join.
+export const OTHER_WORKSPACE = { id: "ws-labs", name: "Acme Labs" } as const;
+const OTHER_STATIONS = [{ id: "lab-1", name: "Lab GPU", version: "0.1.7018" }, { id: "lab-2", name: "Lab Mini", version: "0.1.7018" }];
+/// The relays still.fail cloud offers (`/v1/me` relay_urls), and the workspace's own one (cloud/src/relays.ts).
+const RELAYS = ["https://relay.still.fail", "https://relay-bj.still.fail", "https://relay-sg.still.fail"];
+const OWN_RELAY = "https://relay.acme.dev";
+/// The workspaces the account is in, as its `/v1/me` lists them: this one, another of the owner's, a friend's.
+const ACCOUNT_WORKSPACES = [
+  { id: "ws", name: "Acme", role: "owner", relays: [OWN_RELAY], ways_off: ["tailnet"] },
+  { id: OTHER_WORKSPACE.id, name: OTHER_WORKSPACE.name, role: "owner", relays: [], ways_off: [] },
+  { id: "ws-friends", name: "周末项目", role: "member", relays: [], ways_off: [] },
+];
+
+/// The records of the account a core keeps as it is told (by table and key, as `data.put` takes them): its `/v1/me`
+/// (its workspaces, the relays), a new chat's picks as the device remembers them (choose.ts: the configurations it
+/// started on most, the preset picked), what each station said of the workspaces it is in (views/memberships.ts), the
+/// workspace's lock as its stations keep it (views/lock.ts), and its plain library of secrets with their uses
+/// (views/vault.ts).
+export function records(now: number): [string, string, unknown][] {
+  const me = {
+    user: { sub: "s1", email: PEOPLE[0].email, name: PEOPLE[0].name, beta: true }, workspaces: ACCOUNT_WORKSPACES,
+    relay_url: RELAYS[0], relay_urls: RELAYS, relay_names: { [RELAYS[1]!]: "北京", [RELAYS[2]!]: "新加坡" },
+  };
+  // (the configurations new chats here started on most, choose.ts recordCombo: four at most are shown)
+  const frequent = [
+    ["claude-opus-5-5", "claude", "xhigh", 41], ["gpt-6-astra", "codex", "high", 23], ["claude-sonnet-5", "claude", "high", 12], ["swe-1.6", "devin", "high", 6], ["deepseek-v4", "dsh", "high", 3],
+  ].map(([model, runtime, effort, count], i) => ({ model, runtime, effort, fast: null, context: null, count, last: now - (i + 1) * 3 * HOUR }));
+  return [
+    ["me", "s1", me],
+    ["choice", "ws:ws:frequent", frequent],
+    ["choice", "ws:ws:preset", { id: "p-app", station: "ws/maple" }],
+    ...UP.map((at, st): [string, string, unknown] => ["memberships", at, { workspaces: [{ workspace: "ws", workspaceName: "Acme", name: STATIONS[st]!.name, home: true }], canJoin: true }]),
+    ["lock", "ws", lockOf(now)],
+    ["vault", "ws", vaultOf(now)],
+  ];
+}
+
+/// What the workspace's stations say of its presets (their `presets` topic): two of the owner's, and the folders offered.
+function presetsOf(now: number, station: number): J {
+  const s = STATIONS[station]!;
+  const repos = ["app", "station", "website", "infra", "design-system", "mobile"];
+  return {
+    presets: station === 0
+      ? [
+        { id: "p-app", name: "still.fail App", dirs: [{ path: `/Users/${s.host}/src/app`, repo: "github.com/acme/app" }, { path: `/Users/${s.host}/src/design-system`, repo: "github.com/acme/design-system" }], instructions: "改 UI 前先在 Pixel 8 和 iPhone 16 上各录一段前后对比；提交前跑 `pnpm test` 和 `pnpm exec tsgo --noEmit`。", createdBy: PEOPLE[0].email, createdAt: now - 20 * DAY, updatedAt: now - 2 * DAY },
+        { id: "p-infra", name: "Infra", dirs: [{ path: `/Users/${s.host}/src/infra`, repo: "github.com/acme/infra" }], instructions: "生产环境的改动先在 staging 跑一遍，改动前在 #infra 说一声。", createdBy: PEOPLE[1].email, createdAt: now - 41 * DAY, updatedAt: now - 9 * DAY },
+      ]
+      : [],
+    candidates: repos.map((r, i) => ({ path: `/Users/${s.host}/src/${r}`, name: r, repo: `github.com/acme/${r}`, chats: 40 - i * 6, lastAt: now - (i + 1) * 5 * HOUR, where: `~/src/${r}` })),
+  };
+}
+
+/// The workspace's lock as its stations keep it (views/lock.ts `Held`): its genesis naming its members, their devices
+/// (each a phone and a computer or two, a web page for some) and its stations, and when each device was last seen. Its
+/// entries are not signed (the lock's view folds them as they are; views/vault.ts checks them, and keeps to its plain
+/// library, unchecked).
+function lockOf(now: number): J {
+  const secs = Math.floor(now / 1000);
+  const devices = PEOPLE.flatMap((p, i) => [
+    { id: `dev-${p.sub}-mac`, sub: p.sub, kind: "app", label: `macos still.fail 桌面版 · ${p.name} 的 MacBook Pro`, sign_key: `sk-${p.sub}-mac` },
+    { id: `dev-${p.sub}-phone`, sub: p.sub, kind: "app", label: `${i % 2 === 0 ? "ios" : "android"} still.fail · ${p.name} 的${i % 2 === 0 ? " iPhone 16" : " Pixel 8"}`, sign_key: `sk-${p.sub}-phone` },
+    ...(i % 3 === 0 ? [{ id: `dev-${p.sub}-web`, sub: p.sub, kind: "web", label: `web still.fail 网页版 · Chrome on ${p.name} 的台式机`, exp: secs + (i + 2) * 86400 }] : []),
+  ]);
+  const genesis = {
+    seq: 1, prev: null, at: secs - 30 * 86400, by: "dev-s1-mac", kind: "genesis",
+    body: {
+      owner: "s1", origins: ["https://still.fail"], rp_id: "still.fail", cloud_keys: [],
+      members: PEOPLE.map((p, i) => ({ sub: p.sub, email: p.email, role: i === 0 ? "owner" : i < 3 ? "admin" : "member" })),
+      devices, passkeys: [], stations: STATIONS.map((s) => ({ key: s.id, name: s.name })), gateways: [],
+    },
+    sig: "",
+  };
+  return {
+    head: { seq: 1, hash: "h-genesis", genesis: "h-genesis" }, entries: [genesis],
+    seen: devices.map((d, j) => ({ base: d.id, last_seen: secs - (j * 7919) % (9 * 86400), label: d.label })),
+  };
+}
+
+/// The workspace's plain library (views/vault.ts `Held`): some dozens of secrets on Maple, the agents' requests waiting,
+/// and the uses of each as the stations said them (station/src/vault/secrets.ts `uses`, 500 at most a vault a station).
+const SECRETS = ["GitHub token", "npm publish token", "Sentry auth token", "AWS staging", "AWS production (只读)", "Cloudflare API", "Slack bot token", "OpenAI key", "Apple App Store Connect", "Google Play 服务账号", "PostgreSQL staging", "PostgreSQL production", "Redis", "Stripe test key", "Feishu app secret", "Docker Hub", "1Password Connect", "Vercel", "Fastly purge", "Twilio"];
+export const VAULT_ITEMS = 36;
+export const VAULT_ITEM = "item-0";
+function vaultOf(now: number): J {
+  const secs = Math.floor(now / 1000);
+  const hostsOf = (i: number) => [["api.github.com", "github.com", "uploads.github.com"], ["registry.npmjs.org"], ["sentry.io"], ["*.amazonaws.com"], ["api.cloudflare.com"], ["slack.com"]][i % 6]!;
+  const plain = Object.fromEntries(Array.from({ length: VAULT_ITEMS }, (_, i) => {
+    const name = i < SECRETS.length ? SECRETS[i]! : `${pick(SECRETS, i)} · ${pick(["备用", "CI", "个人"], i)}`;
+    return [`item-${i}`, {
+      id: `item-${i}`, owner: "s1", version: 1 + (i % 4), kind: i % 7 === 3 ? "file" : i % 5 === 1 ? "login" : "token", name, notes: i % 3 === 0 ? "轮换周期 90 天，过期前在 #infra 提醒" : "",
+      listing: { name, kind: "token", modes: i % 4 === 0 ? ["proxy", "env"] : ["proxy"], hosts: hostsOf(i), env: i % 4 === 0 ? `${name.toUpperCase().replace(/[^A-Z]+/g, "_")}TOKEN` : null, lasts: pick(["once", "hour", "chat"], i) },
+      at: now - (i + 1) * 2 * DAY, station: "maple",
+    }];
+  }));
+  // (each of its most used items used by the agents many times, most of the rest now and then: 500 a station at most)
+  const uses = (st: number): J[] => Array.from({ length: st === 0 ? 500 : 120 }, (_, u) => {
+    const item = u % 3 === 0 ? 0 : u % 7;
+    return {
+      item: `item-${item}`, at: secs - u * 1800 - st * 600, session: `ember:${keyOf(st, u % ROWS_UP)}`, chatTitle: pick(TITLES, u + st),
+      mode: item % 4 === 0 && u % 5 === 0 ? "env" : "proxy", command: u % 4 === 0 ? pick(["gh pr create --fill", "gh run watch", "npm publish", "aws s3 ls"], u) : null,
+      hosts: u % 4 === 0 ? [] : hostsOf(item), denied: u % 41 === 7,
+    };
+  });
+  const request = (i: number): J => ({
+    id: `vr-${i}`, vault: "plain", item: `item-${i}`, session: keyOf(i % 4, i * 5 + 3), chat: pick(TITLES, i * 5 + 3), mode: "proxy", reason: "推送 PR 并打开 review", command: "gh pr create --fill",
+    hosts: ["api.github.com", "github.com"], at: now - (i + 1) * 9 * MIN, status: "pending", timeout: { kind: "idle", seconds: 3600 },
+  });
+  return {
+    vaults: {}, at: {}, boxes: {}, requests: Object.fromEntries([0, 1, 2].map((i) => [`vr-${i}`, request(i)])), asked: { "vr-0": "maple", "vr-1": "willow", "vr-2": "studio" }, refused: {},
+    on: {}, keeps: [], hidden: {}, plain, plainOn: ["maple"], plainLasts: { lasts: "chat", at: now - 5 * DAY },
+    uses: Object.fromEntries(UP.map((_, st) => [`${STATIONS[st]!.id}/plain`, uses(st)])),
+  };
+}
+
+/// What the chat's agents and three other chats wrote each other (its `letters`, station/src/sessions/messages.ts): forty
+/// letters, each way, as its own log keeps them.
+export const LETTERS_COUNT = 40;
+function lettersOf(now: number): J[] {
+  return Array.from({ length: LETTERS_COUNT }, (_, k) => {
+    const other = [12, 20, 33][k % 3]!;
+    const title = pick(TITLES, other);
+    const link = `https://still.fail/o/ws/maple/${keyOf(0, other)}`;
+    const way = k % 2 === 0 ? "in" : "out";
+    const body = words(k * 3 + 1);
+    // (now and then one coming with a file, which its words place)
+    const file = way === "in" && k % 8 === 0 ? `bench-${k}.png` : null;
+    return {
+      thread: CHAT.thread, n: k + 1, kind: "message", ts: `${CHAT.thread}.L${String(k + 1).padStart(5, "0")}`, authorKind: "agent", author: way === "in" ? keyOf(0, other) : CHAT.keys[0], authorName: null,
+      text: `${way === "in" ? "来自" : "写给"} [${title}](${link})：\n\n${body}${file ? `\n\n![](${file})` : ""}`, at: now - (LETTERS_COUNT - k) * 40 * MIN, letter: { way, title, link },
+      ...(file ? { attachments: [{ name: file, path: `.stillfail/uploads/L${k}-${file}`, size: 182_331 + k, width: 1600, height: 1000 }] } : {}),
+    };
+  });
+}
+
+/// The chat's station's connection as the device samples it (station/topics.ts `#sampleNet`): its last `NET_KEPT` samples.
+function netOf(now: number): J {
+  return {
+    path: "direct", relay: RELAYS[1], rttMs: 23.4, rxBytes: 412_331_004, txBytes: 38_120_551,
+    samples: Array.from({ length: 30 }, (_, i) => ({ at: now - (30 - i) * 2000, rttMs: 18 + ((i * 7) % 13) + 0.4, rxBps: 12_000 + ((i * 3331) % 90_000), txBps: 2_000 + ((i * 911) % 9_000), sent: 40, lost: i === 17 ? 1 : 0 })),
+    measured: { measuring: false, relays: [{ relay: "direct", rttMs: 23 }, { relay: RELAYS[0], rttMs: 61 }, { relay: RELAYS[1], rttMs: 38 }, { relay: RELAYS[2], rttMs: 84 }, { relay: OWN_RELAY, rttMs: 47 }], moved: null },
+    todayRxBytes: 1_204_331_004, todayTxBytes: 98_120_551, lan: ["192.168.1.20:52001", "10.8.0.3:52001", "[fe80::1c2a:3bff:fe4d:9a01]:52001"],
+  };
+}
+
+/// The longest a job's log comes: what the station reads of its end (station/src/read/jobs.ts LOG_BYTES).
+const LOG_BYTES = 64 * 1024;
+/// The last `lines` lines of the chat's dev server's log, as `GET /jobs/:id/log` gives them (its colours kept): a test
+/// runner's lines with their paths, so 400 of them reach the 64 KB the station reads.
+export function jobLogOf(now: number, lines: number): J {
+  const line = (k: number) => {
+    const ok = k % 17 !== 5;
+    const path = `src/${pick(["views", "station", "sync", "db", "shapes"], k)}/${pick(["views", "chat-tabs", "collections", "scheduler", "account", "conform"], k * 3)}.test.ts`;
+    return `\u001b[2m${new Date(now - (lines - k) * 900).toISOString()}\u001b[22m ${ok ? "\u001b[32m✔" : "\u001b[33m↻"}\u001b[39m ${path} › ${pick(TITLES, k)} \u001b[2m(${(k * 37) % 900} ms, ${(k * 13) % 40} assertions)\u001b[22m`;
+  };
+  let text = Array.from({ length: lines }, (_, k) => line(k)).join("\n");
+  while (new TextEncoder().encode(text).length > LOG_BYTES) text = text.slice(text.indexOf("\n") + 1);
+  return { text, outputAt: now - 2000 };
+}
+
+/// A folder of the station's drive (its `/drive/list`): the Downloads of a machine used a year, a few hundred files.
+export const DRIVE = { station: "ws/maple", root: "/Users/maple/Downloads", path: "" } as const;
+export const DRIVE_ENTRIES = 420;
+function driveOf(now: number): J {
+  const kinds = ["pdf", "png", "zip", "dmg", "mov", "csv", "md", "jpg", "xlsx", "json"];
+  const entries = Array.from({ length: DRIVE_ENTRIES }, (_, i) => {
+    const dir = i < 24;
+    const ext = pick(kinds, i * 7);
+    const name = dir ? `${pick(["2026 Q3 报告", "screenshots", "build-artifacts", "设计稿", "invoice"], i)} ${i}` : `${pick(["Screenshot 2026-11-0", "release-notes-0.1.70", "监控截图 ", "export-", "IMG_"], i)}${(i * 7919) % 10_000}.${ext}`;
+    return { name, dir, size: dir ? 0 : ((i * 104_729) % 80_000_000) + 1024, mtime: now - i * 37 * MIN, type: dir ? "dir" : "file" };
+  });
+  return { path: DRIVE.path, entries, truncated: false };
+}
+
+/// What the chat's station says of its screens (its `GET /screens`, station/src/screens/hub.ts `listed`): its display,
+/// a tab of its browser the chat's agent opened and one of another chat's, who is on them.
+export function screensOf(now: number): J {
+  const views = (who: [string, string, string][]) => who.map(([name, device, app], i) => ({ id: `v-${name}-${i}`, name, device, app, at: now - (i + 1) * 4 * MIN, control: i === 0, ...(app === "agent" ? { agent: true } : {}) }));
+  return {
+    screens: [
+      { id: "desktop", kind: "desktop", title: "Maple", width: 3456, height: 2234, viewers: ["左子健"], controlledBy: ["左子健"], views: views([["左子健", "still.fail 桌面版 · MacBook Pro", "desktop"]]), clipboard: ["text", "png"], drop: { folder: "/Users/maple/Downloads", reveal: true } },
+      { id: "browser:T1", kind: "browser", title: "Pull request #5244 · acme/app", width: 1280, height: 800, viewers: ["修复 Android 上聊天列表滚动掉帧", "Lina Park"], controlledBy: ["修复 Android 上聊天列表滚动掉帧"], views: views([["修复 Android 上聊天列表滚动掉帧", "agent", "agent"], ["Lina Park", "still.fail · Pixel 8", "android"]]), clipboard: ["text"], peek: true, closable: true, openedBy: CHAT.keys[0], drop: { folder: "/Users/maple/Downloads", reveal: false } },
+      { id: "browser:T2", kind: "browser", title: "Grafana · relay 1k 并发", width: 1440, height: 900, viewers: [], controlledBy: [], views: [], clipboard: ["text"], peek: true, closable: true, openedBy: keyOf(0, 30) },
+    ],
+    outdated: false,
+  };
+}
+
+/// What else of the stations the pages read, by topic, at `now`: their presets, the device's list of its accounts'
+/// workspaces, the chat's letters and its station's connection, its dev server's log as the app asks it, a folder of
+/// its drive, a search's answers of each up station, the chat's tabs kept on this device.
+export function more(now: number): [Topic, unknown][] {
+  const out: [Topic, unknown][] = [];
+  for (const [st, at] of UP.entries()) out.push([{ topic: "presets", station: at }, presetsOf(now, st)]);
+  out.push([{ topic: "workspaces" }, [{ account: { sub: "s1", email: PEOPLE[0].email }, workspaces: ACCOUNT_WORKSPACES, invitations: [], relay_url: RELAYS[0], loaded: true }]]);
+  out.push([{ topic: "workspace", workspace: OTHER_WORKSPACE.id }, { id: OTHER_WORKSPACE.id, name: OTHER_WORKSPACE.name, role: "owner", stations: OTHER_STATIONS.map((s) => ({ ...s, last_seen: Math.trunc(now / 1000) - 9 })), members: [{ sub: "s1", email: PEOPLE[0].email, name: PEOPLE[0].name, role: "owner" }] }]);
+  out.push([{ topic: "letters", station: CHAT.station, thread: CHAT.thread }, { entries: chatPage(now).entries, letters: lettersOf(now), whole: true, thread: { ...threadOf(now, 0, 0), lettersLast: LETTERS_COUNT } }]);
+  out.push([{ topic: "net", station: CHAT.station }, netOf(now)]);
+  for (const lines of JOB_LOG_LINES) out.push([{ topic: "jobLog", station: CHAT.station, job: JOB, lines }, jobLogOf(now, lines)]);
+  out.push([{ topic: "drive", ...DRIVE }, driveOf(now)]);
+  out.push([{ topic: "prefs" }, { chatTabs: { [`${CHAT.station}:${CHAT.keys[0]}`]: { tabs: [CHAT.keys[0], "files", "letters", `service:job-maple-0`], active: CHAT.keys[0] } } }]);
+  // (the pull request its agent's words link, as the station's preview of it says it)
+  out.push([{ topic: "linkPreview", station: CHAT.station, url: "https://github.com/acme/app/pull/5244" }, { kind: "github_pull_request", url: "https://github.com/acme/app/pull/5244", repository: "acme/app", number: 5244, title: "Android：列表行高首帧算好，滚动不再重新测量", state: "open", author: { login: "lina-park" }, additions: 412, deletions: 187, changedFiles: 14, comments: 6, labels: ["android", "performance", "needs-review"], updatedAt: now - HOUR, checks: { passed: 23, failed: 0, pending: 2 } }]);
+  for (const [st, at] of UP.entries()) out.push([{ topic: "stationSearch", station: at, q: SEARCH, limit: 6 }, searchOf(now, st)]);
+  for (const [topic, value] of peeks(now)) out.push([topic, value]);
+  return out;
+}
+
+/// Bytes made of `seed` alone, as base64: a picture's that is not one.
+const noise = (n: number, seed: number) => {
+  const b = new Uint8Array(n);
+  let x = seed;
+  for (let i = 0; i < n; i++) {
+    x = (x * 1103515245 + 12345) >>> 0;
+    b[i] = x >>> 24;
+  }
+  return Buffer.from(b).toString("base64");
+};
+
+/// The cards of what a message names, at the most their station sends: a page's preview with its icon and its picture
+/// inline (station/src/links/preview.ts ICON_BYTES 48 KB, PICTURE_INLINE 192 KB: a picture under it as itself, a
+/// plausible one of 160 KB), a picture a message names as the peek gives it (station/src/api/routes/sessions.ts
+/// PEEK_IMAGE: itself up to 256 KB, the most), a text file's lines (PEEK_LINES of PEEK_LINE characters), a message of
+/// another chat a link names (the core sends its words whole: a page of them).
+export const PEEKS = {
+  page: "https://www.anthropic.com/news/claude-opus-5-5",
+  pull: "https://github.com/acme/app/pull/5244",
+  picture: ".stillfail/uploads/bench-full.png",
+  text: "src/views/views.ts",
+  message: { thread: threadIdOf(0, 12), seq: 41 },
+} as const;
+function peeks(now: number): [Topic, unknown][] {
+  const at = CHAT.station;
+  const key = CHAT.keys[0];
+  return [
+    [{ topic: "linkPreview", station: at, url: PEEKS.page }, { kind: "page", url: PEEKS.page, title: "Introducing Claude Opus 5.5", description: "Our most capable model yet for coding, agents and long-running work, with a context window of a million tokens and better judgment about when to ask.", site: "Anthropic", icon: `data:image/png;base64,${noise(6 * 1024, 1)}`, image: `data:image/jpeg;base64,${noise(160 * 1024, 2)}` }],
+    [{ topic: "filePeek", station: at, key, path: PEEKS.picture }, { path: `/Users/maple/.stillfail/sessions/chat/${key}/workspace/${PEEKS.picture}`, name: "bench-full.png", size: 256 * 1024, mtime: now - HOUR, type: "image/png", kind: "image", image: { type: "image/png", data: noise(256 * 1024, 3) } }],
+    [{ topic: "filePeek", station: at, key, path: PEEKS.text }, { path: `/Users/maple/src/app/${PEEKS.text}`, name: "views.ts", size: 212_331, mtime: now - 2 * HOUR, type: "text/plain", kind: "text", lines: { start: 1, text: Array.from({ length: 12 }, (_, i) => `${"  ".repeat(i % 4)}${pick(LINES, i)}`.slice(0, 240) + (i % 3 === 0 ? "…" : "")) } }],
+    [{ topic: "messagePeek", station: at, thread: PEEKS.message.thread, seq: PEEKS.message.seq }, { entries: [{ thread: PEEKS.message.thread, n: PEEKS.message.seq, kind: "message", ts: `${PEEKS.message.thread}.${PEEKS.message.seq}`, authorKind: "agent", author: keyOf(0, 12), authorName: null, text: LONG.join("\n\n"), at: now - 5 * HOUR }], end: true }],
+  ];
+}
+
+/// The job whose log the app shows (the chat's dev server), and the ways it asks it: its last line (the job's row), the
+/// sheet's 300 (`job_output_most`), the desktop's 400 (`job_output_lines`).
+export const JOB = "job-maple-0";
+export const JOB_LOG_LINES = [1, 300, 400];
+/// What the search asks.
+export const SEARCH = "迁移";
+
+/// What up station `st` answers a search for `SEARCH` (its `GET /search`, station/src/search/sources.ts): a chat and a
+/// message that have the words, a job.
+function searchOf(now: number, st: number): J {
+  const chat = 10;
+  const message = 17;
+  return {
+    building: false,
+    groups: [
+      { kind: "chat", more: false, hits: [{ kind: "chat", key: `c:${threadIdOf(st, chat)}`, title: pick(TITLES, chat + st * 3), text: "…加了组合索引后从 2.3s 降到 18ms，迁移脚本在 PR 里。", at: now - HOUR, thread: threadIdOf(st, chat), chat: keyOf(st, chat), chatTitle: pick(TITLES, chat + st * 3), surface: "ember", archived: false }] },
+      { kind: "message", more: false, hits: [{ kind: "message", key: `m:${threadIdOf(st, message)}:57`, title: "", text: "需要人工确认：生产库迁移要停写大约 4 分钟，什么时候可以做？", at: now - 2 * HOUR, thread: threadIdOf(st, message), seq: 57, chat: keyOf(st, message), chatTitle: pick(TITLES, message + st * 3), surface: "ember", archived: false, authorKind: "agent", author: keyOf(st, message) }] },
+      { kind: "job", more: false, hits: [{ kind: "job", key: `j:job-${STATIONS[st]!.id}-mig`, title: "迁移演练 dry-run", text: "迁移演练：./scripts/migrate.sh --dry-run --from pg15", at: now - 3 * HOUR, job: `job-${STATIONS[st]!.id}-mig`, session: keyOf(st, 0), chat: keyOf(st, 0), state: "running" }] },
+    ],
+  };
 }
