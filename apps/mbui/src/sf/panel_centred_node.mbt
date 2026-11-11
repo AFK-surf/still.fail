@@ -28,7 +28,7 @@ fn panel_centred_node(
   // (one that goes in steps: Escape and back a step back first, its steps' own)
   // (a step further in from a panel: back to that one)
   let within = fn() { steps_escape(keyed) || back_under(keyed) }
-  dialog_layer_node(parent, open, cancel, outside=true, first_stop=keyed.steps is None, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
+  dialog_layer_node(parent, open, cancel, outside=true, first_stop=keyed.steps is None, first_takes?=if x.nodes is Some(_) { Some(fn(s : @view.Said) { opens_on_role(s.role) }) } else { None }, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
     // (one that goes in steps: each its own head and foot, sliding in whole; the dialog untitled round them)
     let steps = keyed.steps
@@ -113,11 +113,13 @@ fn panel_centred_node(
       // out last, drawn over them))
       // (its close button as nodes, where what it holds is nodes (panel_nodes): its field let go of first, as the old
       // frame has it: field_let_go)
+      // (no stop of Tab's, as the old frame's close button takes no focus: a press, Escape and back close it)
       let close_node = fn(v : @view.View) {
         icon_button_node(v, "close", fn() { t("common.close") }, fn() {
           field_let_go(keyed)
           cancel()
         }, size=dialog_close)
+        .tab_stop(Is(false))
         |> ignore
       }
       let corner = fn() {
@@ -503,10 +505,12 @@ fn panel_centred_node(
       d.box(fn(v) { v.over(Is(true)).radius(Is(dialog_r)).ground(By(veil)) |> ignore }) |> ignore
     })
     |> ignore
-    // (the focus on its own ground as it opens, the first of what it holds that takes it once that is built
-    // (first_stop; not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: back to what
-    // had it as it goes; on the field it opens to be typed in, or the one of what it holds that said so, where one did:
-    // panel_opens_in_node, panel_search_at_hand_node, panel_opens_on_node)
+    // (the focus on its own ground as it opens, back to what had it as it goes: on the field it opens to be typed in, or
+    // the one of what it holds that said so, where one did (panel_opens_in_node, panel_search_at_hand_node,
+    // panel_opens_on_node); else the first of what it holds that takes it once that is built and laid out (first_stop;
+    // not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: where what it holds is nodes,
+    // only what takes what is typed or the arrows (opens_on_role), none of it where nothing does (its own ground: the
+    // keys its, Escape; Enter nothing), as the old dialog's went to the first of its fields and choices it registered)
     match (field.val, opens_on.val) {
       (Some(f), _) => f.field
       (None, Some(first)) => first
@@ -547,4 +551,15 @@ fn titled_by_row(x : PanelOf, body : () -> Unit) -> Unit {
   title_row_given.val = x.title_row is Some(_)
   body()
   title_row_given.val = was
+}
+
+///|
+/// Whether what is read out as `role` is what a dialog of nodes opens on (its layer's focus_opens_first `takes`): what takes what is typed (a field, a
+/// box offering what to type) or the arrow keys (a choice of a few, its radios or its tabs; a slider). One place: a
+/// kind to add is added here.
+fn opens_on_role(role : @view.Role) -> Bool {
+  match role {
+    TextField | Combobox | Radio | Tab | Slider => true
+    _ => false
+  }
 }
