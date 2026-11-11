@@ -6,7 +6,7 @@
 // The key is sealed so that each use asks the person (`user: true`: biometrics or the screen lock). Web pages have none:
 // their code is the cloud's.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect, Schedule } from "effect";
+import { Deferred, Effect, Schedule } from "effect";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 import { CoreError, asCoreError } from "./error.ts";
@@ -141,16 +141,31 @@ export type PersonalEnv = {
   /// `bring` the chain as it is now, how many took it (null: none could be asked; a refusal fails), `answered` whether
   /// every station of theirs that may keep it answered a read of it this run (what alone lets a lock be begun with no
   /// one asked, `beginQuietly`: a lock not known here is no lock not yet). `bring`'s `within`: a call's wait, past
-  /// which none took it (null), the stations brought it still.
+  /// which, the stations not having answered for it, the way to hear them still (`later`), the cloud asked meanwhile.
   stations?: {
     read: (sub: string, at?: string) => Effect.Effect<Entry[][] | null>;
-    bring: (sub: string, chain: Entry[], within?: Asked) => Effect.Effect<number | null, CoreError>;
+    bring: (sub: string, chain: Entry[], within?: Asked) => Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError>;
     answered?: (sub: string) => boolean;
   };
   /// A wait of ASKED_MS for a call a person waits on (views/lock.ts `asked`); none, the calls wait as long as the
   /// stations and the cloud take.
   asked?: () => Asked;
 };
+
+/// The cloud's taking of an entry (`cloud`, waited on) or a station's (`stations`, whether one took it; failing, one
+/// refused it), whichever comes first, the other going on behind (views/lock.ts ASKED_MS: past a call's wait the cloud
+/// is asked too, and the stations still listened to). Only once the stations are over with none taking it is the
+/// cloud's failure the call's; their answers are not cut short by it.
+export function eitherTakes(runner: Runner, cloud: Effect.Effect<unknown, CoreError>, stations: Effect.Effect<boolean, CoreError>): Effect.Effect<void, CoreError> {
+  return Effect.gen(function* () {
+    const said = Deferred.makeUnsafe<CoreError | null>();
+    runner.fork(Effect.flatMap(Effect.result(cloud), (r) => Effect.sync(() => void Deferred.doneUnsafe(said, Effect.succeed(r._tag === "Success" ? null : r.failure)))));
+    const byStations = Effect.flatMap(stations, (took): Effect.Effect<CoreError | null> => (took ? Effect.succeed(null) : Deferred.await(said)));
+    const byCloud = Effect.flatMap(Deferred.await(said), (e): Effect.Effect<CoreError | null, CoreError> => (e === null ? Effect.succeed(null) : Effect.map(stations, (took) => (took ? null : e))));
+    const failed = yield* Effect.raceFirst(byStations, byCloud);
+    if (failed !== null) return yield* Effect.fail(failed);
+  });
+}
 
 /// What a read made within a call's wait brings past it (`refresh`): nothing yet.
 const LATE = Symbol("late");
@@ -464,7 +479,9 @@ export class PersonalLock {
 
   /// One entry more, signed here, brought to the person's stations and pinned once one took it; to the cloud too, for
   /// the stations and devices from before that read it there, not waited on. Only when no station could be asked
-  /// (older ones, offline), or none took it within the call's wait (`within`), the cloud is what takes it.
+  /// (older ones, offline), or none took it by TAKEN_MS, the cloud is what takes it; past a call's wait (`within`) with
+  /// none having taken it, the cloud is asked too and whichever takes it first is done (`eitherTakes`; views/lock.ts
+  /// ASKED_MS).
   /// `once`: the cloud, where it is what takes it, asked once and not again when it limits (an entry that rides on
   /// another act, which is not to wait a minute for it: `#restate`).
   #append(sub: string, seed: Uint8Array, kind: string, body: unknown, once = false, within?: Asked): Effect.Effect<void, CoreError> {
@@ -472,9 +489,10 @@ export class PersonalLock {
       const e = this.#entry(sub, seed, this.#myKey!, kind, body);
       const toCloud = this.#env.cloud(sub, "POST", PATH, { entries: [e] });
       const taken = this.#env.stations ? yield* this.#env.stations.bring(sub, [...(e.seq === 0 ? [] : (this.#pinned.get(sub) ?? [])), e], within) : null;
-      if (taken !== null && taken > 0) this.#env.runner.fork(Effect.ignore(toCloud));
-      else if (once) yield* toCloud;
-      else yield* Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
+      const cloudTakes = once ? toCloud : Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
+      if (typeof taken === "number" && taken > 0) this.#env.runner.fork(Effect.ignore(toCloud));
+      else if (taken !== null && typeof taken === "object") yield* eitherTakes(this.#env.runner, cloudTakes, Effect.map(taken.later, (n) => n !== null && n > 0));
+      else yield* cloudTakes;
       yield* this.#pin(sub, [...(this.#pinned.get(sub) ?? []), e]);
       this.#seen.delete(sub);
       this.#env.changed();
