@@ -47,6 +47,9 @@ fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.
 ///|
 fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, button_at? : @ui.Justify = JStart) -> @ui.Tester {
   presenters_reset()
+  // (the words their keys, as these tests press them (`common.cancel`): a file run before this one in the same
+  // program may have given the library its own, player_wbtest's table says 取消 for it, and they stay as given)
+  set_words(fn(key, _) { key })
   let (platform, w, h) = at
   let t = @ui.Tester::new(@ui.old_views_here, tree=presented_tree(presenting_view(open, at=button_at)), w~, h~, platform~)
   t.draw()
