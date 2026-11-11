@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a0a38cd76](https://github.com/AFK-surf/still.fail/commit/a0a38cd76cac16c75a2fd16651e86a28d2d1ab34) app, core: 更新日志 is asked the tab in view a page at | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.08 | 173.84 |
 | [e4ae7785a](https://github.com/AFK-surf/still.fail/commit/e4ae7785aedbee58bbb68aa136bcf196592a55fd) mbui: a chat's picture or file shared from its pre | 1.82 | 2.43 | 10.11 | 28.85 | 35.71 | 25.69 | 47.6 | 94.24 | 179.2 |
 | [dd5043929](https://github.com/AFK-surf/still.fail/commit/dd504392987e37f66165900fb79c8183f4f04d58) core test: the byte bar refuses a topic its fixtur | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.32 | 175.87 |
 | [abfaa469a](https://github.com/AFK-surf/still.fail/commit/abfaa469ad49121f8c8ea1e22e163714af21a6bf) mbui, app: words that are part of a mark are drawn | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.14 | 175.39 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [af3a678a1](https://github.com/AFK-surf/still.fail/commit/af3a678a11e4028dcf45e4dd277ca27fdd252cc1) core, app: 关于 shows this machine's station, its ne | 1.8 | 2.4 | 10.01 | 28.66 | 35.13 | 25.6 | 47.27 | 93.87 | 132.53 |
 | [a24c7b2fb](https://github.com/AFK-surf/still.fail/commit/a24c7b2fb484cfc8072637696e34eb0cbf444f66) mbui: one shown in another's place has the gap bef | 1.8 | 2.4 | 10.01 | 28.66 | 35.12 | 25.59 | 47.26 | 94.52 | 137.98 |
 | [5de26a9c8](https://github.com/AFK-surf/still.fail/commit/5de26a9c84b79b9880f5307606e3ba2b3e99408a) android: a native crash's report carries the crash | 1.8 | 2.4 | 10 | 28.64 | 35.08 | 25.58 | 47.22 | 94.32 | 130.52 |
-| [400a6b98e](https://github.com/AFK-surf/still.fail/commit/400a6b98e2567eaf732bea8251226ae78cc01517) mbui: what the app did while shown says its frames | 1.79 | 2.39 | 9.95 | 28.6 | 34.94 | 25.53 | 47.12 | 94.32 | 171.62 |
