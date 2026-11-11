@@ -222,3 +222,33 @@ test "an image the app cannot draw reads as its file's name, decoded" {
   t.draw()
   assert_true(t.find("web-folded-2.png") is Some(_))
 }
+
+///|
+let long_code : String = "let total = items.map(fn(x) { x.price * x.count }).fold(init=0, fn(a, b) { a + b }) // a line longer than the message"
+
+///|
+test "a code block's line longer than the message: on one line, scrolled across; its wrap key wraps it at the block's width, pressed again on one line again" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.column(w=Fill(1.0), pad=16.0, fn() { @sf.markdown(c, "```js\n" + long_code + "\n```\n\n之后的一段") |> ignore })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+    platform=2,
+  )
+  // (how far down what follows the block is: the block as tall as its lines)
+  let y0 = t.rect_of("之后的一段").unwrap().1
+  t.tap_text("换行")
+  t.draw()
+  let y1 = t.rect_of("之后的一段").unwrap().1
+  // (wrapped: on lines enough for its words, two more of its 18 at least)
+  assert_true(y1 >= y0 + 18.0 * 2.0, msg="wrapped: \{y0} -> \{y1}")
+  t.tap_text("不换行")
+  t.draw()
+  assert_eq(t.rect_of("之后的一段").unwrap().1, y0)
+  // (copied whole either way)
+  t.tap_text("复制")
+  assert_eq(t.clipboard(), long_code)
+}
