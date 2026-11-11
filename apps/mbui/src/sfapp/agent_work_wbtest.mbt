@@ -266,3 +266,393 @@ test "the history's tiles: a figure longer than six characters, on its smaller l
     assert_eq(t.squeeze_faults(), [], msg="at \{scale}: \{t.squeeze_faults()}")
   }
 }
+
+///|
+/// The screens its panel opens on: (platform, wide). A phone's window (390 by 844, its history's details) with touch
+/// and with keyboard and mouse, a sheet from the foot; a wide window (1200 by 800, the history beside the chat), a panel
+/// beside the mark.
+let aw_screens : Array[(Int, Bool)] = [(2, false), (0, false), (0, true)]
+
+///|
+/// A task of the made-up core's, begun `ago` before `now`.
+fn aw_task(id : String, kind_words : String, words : String, ago : Double) -> (String, String, String, Double) {
+  (id, kind_words, words, ago)
+}
+
+///|
+/// What agent s-c1's card says as the test sets it: its tasks (id, kind's words, what it is, how long before the
+/// core's now it began) and its checklist (what, status); its line and marks said of them as the core says them.
+struct AwCard {
+  tasks : @signals.Signal[Array[(String, String, String, Double)]]
+  plan : @signals.Signal[Array[(String, String)]]
+  /// whether the core has said the card (false: no card, as before it answers)
+  answered : @signals.Signal[Bool]
+}
+
+///|
+/// The four tasks and the checklist of six, two done, work_source's.
+fn aw_card() -> AwCard {
+  {
+    tasks: @signals.signal([
+      aw_task("a1", "子代理", "审阅 live.ts 的改动", 252_000.0),
+      aw_task("b1", "命令", "pnpm test --watch", 95_000.0),
+      aw_task("b2", "命令", "gh run watch 18820431", 31_000.0),
+      aw_task("b3", "命令", "vite --config web/vite.demo.config.ts", 720_000.0),
+    ]),
+    plan: @signals.signal([
+      ("读 claude.ts 里的 task 帧", "completed"),
+      ("station 推送 tasks 和 plan", "completed"),
+      ("core 的 agentCard 加上后台和清单", "in_progress"),
+      ("web 和 mbui 画出来", "pending"),
+      ("截图", "pending"),
+      ("跑检查并提交", "pending"),
+    ]),
+    answered: @signals.signal(true),
+  }
+}
+
+///|
+/// The made-up core of `mode` whose agents' cards say what `card` holds now (views/brief.ts workOf's words).
+fn aw_source(mode : String, card : AwCard) -> Source {
+  let base = fixture(mode)
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
+      guard name == "agentCard" && got.value is Some(Object(was)) else { got }
+      guard card.answered.get() else { { ..got, value: None } }
+      let now = (base.now)()
+      let tasks = card.tasks.get()
+      let plan = card.plan.get()
+      let done = plan.filter(fn(s) { s.1 == "completed" }).length()
+      let under_way = match plan.iter().find_first(fn(s) { s.1 == "in_progress" }) {
+        Some(s) => s.0
+        None => ""
+      }
+      let n = tasks.length()
+      let counts = [if n > 0 { "\{n}" } else { "" }, if plan.length() > 0 { "\{done}/\{plan.length()}" } else { "" }].filter(fn(s) { s != "" })
+      let out = was.copy()
+      out["tasks"] = Json::array(tasks.map(fn(t) {
+        let kind = if t.1 == "子代理" { "agent" } else { "command" }
+        { "id": Json::string(t.0), "kind": Json::string(kind), "text": Json::string(t.2), "kindText": Json::string(t.1), "since": Json::number(now - t.3) }
+      }))
+      out["plan"] = Json::array(plan.map(fn(s) { { "text": Json::string(s.0), "status": Json::string(s.1) } }))
+      out["planText"] = Json::string(if plan.length() > 0 { "已完成 \{done}/\{plan.length()}" } else { "" })
+      let line = [if n > 0 { "后台 \{n}" } else { "" }, if plan.length() > 0 { "清单 \{done}/\{plan.length()}" + (if under_way != "" { "：" + under_way } else { "" }) } else { "" }].filter(fn(s) { s != "" })
+      out["workLine"] = Json::string(line.join(" · "))
+      out["workMark"] = Json::string(if counts.is_empty() { "" } else if n > 0 { "后台 " + counts.join(" · ") } else { counts.join(" · ") })
+      out["workMarkShort"] = Json::string(counts.join(" · "))
+      out["workMarkCount"] = Json::string(if n > 0 { "\{n}" } else if plan.length() > 0 { "\{done}/\{plan.length()}" } else { "" })
+      { ..got, value: Some(Json::object(out)) }
+    },
+  }
+}
+
+///|
+/// The history (beside the chat on a wide window, its details on a phone's) of agent s-c1 on `platform`, its card as
+/// `card` says, words at `scale`; its mark at rest.
+fn aw_tester(card : AwCard, platform~ : Int, wide~ : Bool, scale? : Double = 1.0) -> @ui.Tester {
+  new_run()
+  @sf.presenters_reset()
+  let mode = if wide { "chat-history-side" } else { "history-details" }
+  let src = aw_source(mode, card)
+  decide_src.val = Some(src)
+  open_fixture_over(mode, src)
+  let (w, h) = if wide { (1200.0, 800.0) } else { (390.0, 844.0) }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  if scale != 1.0 {
+    t.set_font_scale(scale)
+  }
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// Words `s` drawn and seen.
+fn aw_word(t : @ui.Tester, s : String) -> Array[(String, Double, Double, Double, Double, Double)] {
+  t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 })
+}
+
+///|
+/// Its mark, whichever form shows: (x, y, w, h).
+fn aw_mark(t : @ui.Tester, at : String) -> (Double, Double, Double, Double) raise {
+  for s in ["后台 4 · 2/6", "4 · 2/6", "4"] {
+    match aw_word(t, s) {
+      [w, ..] => return (w.1, w.2, w.3, w.4)
+      _ => ()
+    }
+  }
+  fail("\{at}: no mark")
+}
+
+///|
+/// Its mark pressed; at the frame its panel opened in (`rest`: at rest).
+fn aw_opened(t : @ui.Tester, at : String, rest? : Bool = true) -> Unit raise {
+  let m = aw_mark(t, at)
+  t.tap(m.0 + 4.0, m.1 + m.3 / 2.0)
+  if rest {
+    t.run_for(@ui.move_most_ms)
+  }
+}
+
+///|
+/// A fault said as `t.audit()` says it, without which node of the old view's it names (that numbering moves as a
+/// panel opens over it).
+fn aw_plain(f : String) -> String {
+  let out = StringBuilder::new()
+  let cs = f.to_array()
+  let mut i = 0
+  while i < cs.length() {
+    // (「, node 12」 left out)
+    if i + 7 < cs.length() && cs[i] == ',' && cs[i + 1] == ' ' && cs[i + 2] == 'n' && cs[i + 3] == 'o' && cs[i + 4] == 'd' && cs[i + 5] == 'e' && cs[i + 6] == ' ' && cs[i + 7] >= '0' && cs[i + 7] <= '9' {
+      i += 7
+      while i < cs.length() && cs[i] >= '0' && cs[i] <= '9' {
+        i += 1
+      }
+      continue
+    }
+    out.write_char(cs[i])
+    i += 1
+  }
+  out.to_string()
+}
+
+///|
+/// What the audit finds now that it did not before (`before`, the window's as it was before the panel opened), at
+/// `at`: none but the old panel's own, which this left as they were, all three while its checklist shows (`open`), none
+/// once it is gone. Those, as the old panel (base, m2-11) said them:
+///   words "✓" 13/400 at 26,696 16×18 (in an old view made at mbui/src/view/view.mbt:10268) by "✓": #2f8f5b on #f7f7f7 3.78:1, under 4.5
+///   words "✓" 12/400 at 854,372 16×18 (…) by "✓": #2f8f5b on #ffffff 4.04:1, under 4.5 (a wide window's)
+///   words "›" 13/400 at 26,736 16×18 (…) by "›": #cc5a34 on #f7f7f7 3.87:1, under 4.5
+/// (its checklist's marks of what is done and what is under way, the green and the accent on its ground: their colours
+/// are the theme's, not this panel's to change). The old one's other, at the words set to 1.3, a task's kind cut short
+/// (「子代理」: its words cut to 1 characters), is not left: its chip is whole.
+fn aw_audited(t : @ui.Tester, before : Array[String], at : String, open? : Bool = true) -> Unit raise {
+  let was = before.map(aw_plain)
+  let added = t.audit().filter(fn(f) { !was.contains(aw_plain(f)) })
+  let old_own = fn(f : String) {
+    f.contains("under 4.5") &&
+    ((f.has_prefix("words \"✓\"") && f.contains("#2f8f5b on")) || (f.has_prefix("words \"›\"") && f.contains("#cc5a34 on")))
+  }
+  assert_eq(added.filter(fn(f) { !old_own(f) }), [], msg=at)
+  assert_eq(added.filter(old_own).length(), if open { 3 } else { 0 }, msg="\{at}: \{added}")
+}
+
+///|
+test "its panel on each screen, at the default size of words and at 1.3: what runs in the background under its head and how many, a task a row (its kind's chip whole, what it is, how long it has run), then the checklist in its order; nothing more for the audit than the old panel's own" {
+  for screen in aw_screens {
+    for scale in [1.0, words_large_scale] {
+      let (platform, wide) = screen
+      let at = "platform \{platform} wide \{wide} at \{scale}"
+      let t = aw_tester(aw_card(), platform~, wide~, scale~)
+      let before = t.audit()
+      let mark = aw_mark(t, at)
+      aw_opened(t, at)
+      let one = fn(s : String) raise {
+        let w = aw_word(t, s)
+        assert_eq(w.length(), 1, msg="\{at}: \{s} \{w}")
+        w[0]
+      }
+      let head = one("后台进行中")
+      // (its head's count on its line, after it)
+      assert_true(aw_word(t, "4").iter().any(fn(w) { (w.2 - head.2).abs() < 0.5 && w.1 > head.1 + head.3 }), msg=at)
+      // a task a row under the head, its kind's chip, what it is, its clock on its line; the chips whole
+      let rows = [
+        ("审阅 live.ts 的改动", "4m 12s"),
+        ("pnpm test --watch", "1m 35s"),
+        ("gh run watch 18820431", "31s"),
+        ("vite --config web/vite.demo.config.ts", "12m"),
+      ]
+      let mut y = head.2
+      for r in rows {
+        let w = one(r.0)
+        let c = one(r.1)
+        assert_true(w.2 > y, msg="\{at}: \{r.0} under what is before it")
+        assert_true((c.2 - w.2).abs() < 0.5 && c.1 >= w.1 + w.3, msg="\{at}: \{r.1} at \{r.0}'s end")
+        y = w.2
+      }
+      assert_eq(aw_word(t, "命令").length(), 3, msg=at)
+      let kind = one("子代理")
+      assert_true(one("审阅 live.ts 的改动").1 >= kind.1 + kind.3, msg="\{at}: the kind's chip before what it is")
+      assert_eq(t.squeeze_faults().filter(fn(f) { f.contains("子代理") || f.contains("命令") }), [], msg=at)
+      // its checklist under them, in its order
+      let plan = one("清单")
+      assert_true(plan.2 > y, msg="\{at}: the checklist under the tasks")
+      assert_true(aw_word(t, "已完成 2/6").length() == 1, msg=at)
+      for s in ["读 claude.ts 里的 task 帧", "station 推送 tasks 和 plan", "core 的 agentCard 加上后台和清单", "web 和 mbui 画出来", "截图", "跑检查并提交"] {
+        let w = one(s)
+        assert_true(w.2 > y, msg="\{at}: \{s} in its order")
+        y = w.2
+      }
+      assert_eq(aw_word(t, "✓").length(), 2, msg=at)
+      assert_eq(aw_word(t, "›").length(), 1, msg=at)
+      // beside its mark on a wide window (under it), from the foot on a phone's
+      if wide {
+        assert_true(head.2 > mark.1 + mark.3, msg="\{at}: under its mark")
+      } else {
+        assert_true(one("跑检查并提交").2 > 422.0, msg="\{at}: from the foot")
+      }
+      aw_audited(t, before, at)
+      t.key(@ui.key_escape)
+      t.run_for(@ui.move_most_ms)
+      assert_false(@sf.presenter_visible(), msg="\{at}: Escape closed it")
+      aw_audited(t, before, at, open=false)
+    }
+  }
+}
+
+///|
+test "its panel as the card changes while it is open: a task done goes, an item added comes under the last, its count with it; the tasks all done, the checklist alone, the panel open" {
+  for screen in aw_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let card = aw_card()
+    let t = aw_tester(card, platform~, wide~)
+    let before = t.audit()
+    aw_opened(t, at)
+    card.tasks.set(card.tasks.get().filter(fn(x) { x.0 != "b1" }))
+    card.plan.set(card.plan.get() + [("再截一次图", "pending")])
+    t.run_for(@ui.move_most_ms)
+    assert_eq(aw_word(t, "pnpm test --watch").length(), 0, msg=at)
+    assert_eq(aw_word(t, "1m 35s").length(), 0, msg=at)
+    for s in ["审阅 live.ts 的改动", "gh run watch 18820431", "vite --config web/vite.demo.config.ts", "跑检查并提交", "再截一次图"] {
+      assert_eq(aw_word(t, s).length(), 1, msg="\{at}: \{s}")
+    }
+    let head = aw_word(t, "后台进行中")[0]
+    assert_true(aw_word(t, "3").iter().any(fn(w) { (w.2 - head.2).abs() < 0.5 }), msg="\{at}: 3 on its head's line")
+    assert_eq(aw_word(t, "已完成 2/7").length(), 1, msg=at)
+    assert_true(aw_word(t, "再截一次图")[0].2 > aw_word(t, "跑检查并提交")[0].2, msg="\{at}: the new item last")
+    // the tasks all done: their group goes, the checklist stays, the panel too
+    card.tasks.set([])
+    t.run_for(@ui.move_most_ms)
+    assert_true(@sf.presenter_visible(), msg="\{at}: still open")
+    assert_eq(aw_word(t, "后台进行中").length(), 0, msg=at)
+    assert_eq(aw_word(t, "审阅 live.ts 的改动").length(), 0, msg=at)
+    assert_eq(aw_word(t, "清单").length(), 1, msg=at)
+    assert_eq(aw_word(t, "再截一次图").length(), 1, msg=at)
+    aw_audited(t, before, at)
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg=at)
+  }
+}
+
+///|
+test "its panel closes as the card comes to say neither (none left in the background, no checklist), showing what it showed till it is gone; on a phone's window its sheet and scrim go with it" {
+  for screen in aw_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let card = aw_card()
+    let t = aw_tester(card, platform~, wide~)
+    let before = t.audit()
+    aw_opened(t, at)
+    let seen = ["后台进行中", "审阅 live.ts 的改动", "清单", "跑检查并提交"]
+    let places = fn() { seen.map(fn(s) { t.words().iter().find_first(fn(w) { w.0 == s && w.5 > 0.0 }).map(fn(w) { w.2 }) }) }
+    let was = places()
+    // (both at once, as the core says the card)
+    @signals.start_batch()
+    card.tasks.set([])
+    card.plan.set([])
+    @signals.end_batch()
+    let mut n = 0
+    while @sf.presenter_visible() && n < 120 {
+      t.frame()
+      // (on each frame of its way out all of it, each where it was from the first, or none)
+      let now = places()
+      let drawn = now.filter(fn(p) { p is Some(_) }).length()
+      assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n}: \{drawn} of \{seen}")
+      if drawn > 0 && !wide {
+        // (a sheet goes down whole)
+        for i in 1..<now.length() {
+          let d = now[i].unwrap() - now[0].unwrap()
+          let d0 = was[i].unwrap() - was[0].unwrap()
+          assert_true((d - d0).abs() <= 0.01, msg="\{at}: frame \{n}: \{seen[i]} \{d} under \{seen[0]}, \{d0} before")
+        }
+      }
+      n += 1
+    }
+    assert_false(@sf.presenter_visible(), msg="\{at}: gone")
+    t.run_for(@ui.move_most_ms)
+    for s in seen {
+      assert_eq(t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }).length(), 0, msg="\{at}: \{s}")
+    }
+    if !wide {
+      assert_eq(t.drawn_glass().filter(fn(g) { g.3 > 100.0 }), [], msg="\{at}: its sheet")
+      assert_eq(scrim_drawn(t), [], msg="\{at}: its scrim")
+    }
+    aw_audited(t, before, at, open=false)
+  }
+}
+
+///|
+test "its panel while the core says no card, on a phone's window: open, nothing in it, as before; said again, all of it" {
+  // (on a phone's window alone: on a wide window, as the card comes to be none, the history beside the chat steps 3.77 in
+  // a frame at y 97 to 101 (3.768 at 60 a second, 3.896 at 120), however long after the panel opened (m2-30, m2-31), on
+  // the old panel's base the same (m2-26): the history's, not this panel's, and told to motion's line; the wide window
+  // comes back here with its mend. As the panel opens the card is always there: the mark is only while the card says
+  // work, and the panel reads what the mark does)
+  for screen in aw_screens.filter(fn(s) { !s.1 }) {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let card = aw_card()
+    let t = aw_tester(card, platform~, wide~)
+    let before = t.audit()
+    aw_opened(t, at)
+    card.answered.set(false)
+    t.run_for(@ui.move_most_ms)
+    assert_true(@sf.presenter_visible(), msg="\{at}: open")
+    assert_eq(aw_word(t, "后台进行中").length(), 0, msg=at)
+    assert_eq(aw_word(t, "清单").length(), 0, msg=at)
+    card.answered.set(true)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(aw_word(t, "后台进行中").length(), 1, msg=at)
+    assert_eq(aw_word(t, "跑检查并提交").length(), 1, msg=at)
+    aw_audited(t, before, at)
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg=at)
+  }
+}
+
+///|
+/// What a screen reader says of the mark with the focus: a button named by its line.
+let aw_mark_said : String = "Button \"" + work_line + "\""
+
+///|
+test "its panel opened by a pointer and closed by Escape: the focus on its mark, what opened it (the presenters', #5181), on each screen" {
+  for screen in aw_screens {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let t = aw_tester(aw_card(), platform~, wide~)
+    let before = t.audit()
+    aw_opened(t, at)
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg=at)
+    assert_true(t.focus_said().has_prefix(aw_mark_said), msg="\{at}: \{t.focus_said()}")
+    aw_audited(t, before, at, open=false)
+  }
+}
+
+///|
+test "its panel on a wide window by the keyboard: the mark with the focus, Enter opens it, Escape closes it, the focus still on the mark, Enter opens it again" {
+  let t = aw_tester(aw_card(), platform=0, wide=true)
+  let before = t.audit()
+  let mut n = 0
+  while !t.focus_said().has_prefix(aw_mark_said) && n < 80 {
+    t.key(@ui.key_tab)
+    n += 1
+  }
+  assert_true(t.focus_said().has_prefix(aw_mark_said), msg=t.focus_said())
+  for round in 0..<2 {
+    t.key(@ui.key_code_enter)
+    t.run_for(@ui.move_most_ms)
+    assert_true(@sf.presenter_visible(), msg="round \{round}: Enter opened it")
+    assert_eq(aw_word(t, "后台进行中").length(), 1, msg="round \{round}")
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg="round \{round}: Escape closed it")
+    assert_true(t.focus_said().has_prefix(aw_mark_said), msg="round \{round}: \{t.focus_said()}")
+  }
+  aw_audited(t, before, "keyboard", open=false)
+}

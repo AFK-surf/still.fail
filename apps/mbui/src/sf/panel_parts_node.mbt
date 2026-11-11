@@ -163,17 +163,19 @@ fn panel_in_of(v : @view.View) -> PanelIn {
 
 ///|
 /// A group of a panel's rows in `parent` (panel_group's): under a small `label` (12, muted, in by a row's padding, 2
-/// over its rows; none where it is ""), what `body` makes, 2 apart.
+/// over its rows; none where it is ""), what `body` makes, 2 apart. `lead`: what it makes before the label, on its line
+/// 6 apart (panel_group's `lead`: a head of the group's own before how many).
 #callsite(autofill(loc))
 pub fn panel_group_node(
   parent : @view.View,
   label : () -> String,
   body : (@view.View) -> Unit,
+  lead? : (@view.View) -> Unit,
   loc~ : SourceLoc,
 ) -> Unit {
   parent.box(made_for=loc, fn(g) {
     style_node(g, fn() { panel_group_box })
-    g.show(fn() { label() != "" }, fn(l) { panel_label_in(l, label) })
+    g.show(fn() { label() != "" }, fn(l) { panel_label_in(l, label, lead?=lead, loc~) })
     body(g)
   })
   |> ignore
@@ -184,12 +186,12 @@ pub fn panel_group_node(
 /// made as it shows, panel_list_node's): 12, muted, in by a row's padding, 2 over the rows under it.
 #callsite(autofill(loc))
 pub fn panel_heading_node(parent : @view.View, label : () -> String, loc~ : SourceLoc) -> Unit {
-  parent.box(made_for=loc, fn(l) { panel_label_in(l, label) }) |> ignore
+  parent.box(made_for=loc, fn(l) { panel_label_in(l, label, loc~) }) |> ignore
 }
 
 ///|
-/// What a group's label is (panel_group_node's, panel_heading_node's) in `l`.
-fn panel_label_in(l : @view.View, label : () -> String) -> Unit {
+/// What a group's label is (panel_group_node's, panel_heading_node's) in `l`, what `lead` makes before it.
+fn panel_label_in(l : @view.View, label : () -> String, lead? : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
   let at = panel_in_of(l)
   // (in a sheet's list, its words said where the sheet's are: on that line, as the rows' words and faces are)
   if at.listed && !at.small && at.words > 0.0 {
@@ -197,7 +199,16 @@ fn panel_label_in(l : @view.View, label : () -> String) -> Unit {
   } else {
     style_node(l, fn() { panel_label_at })
   }
-  words_node(l, label, fn() { panel_note_words }) |> ignore
+  match lead {
+    Some(draw) =>
+      l.box(made_for=loc, fn(r) {
+        style_node(r, fn() { panel_label_led })
+        draw(r)
+        words_node(r, label, fn() { panel_note_words }) |> ignore
+      })
+      |> ignore
+    None => words_node(l, label, fn() { panel_note_words }) |> ignore
+  }
 }
 
 ///|
