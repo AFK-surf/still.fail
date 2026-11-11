@@ -1616,6 +1616,8 @@ pub let show_limit : Int32
 
 pub let shown_days : Map[String, Array[ChatDay]]
 
+pub fn shown_kind(Shown) -> String
+
 pub fn signed_out_links(Source) -> Unit
 
 pub fn size_digits(String) -> String
@@ -3297,6 +3299,15 @@ pub(all) enum ShotWait {
   Place(Bool)
   Grab(Bool)
   Draw(@ui.MarkedImage)
+}
+
+#derive(Eq)
+pub(all) enum Shown {
+  Starting
+  SignIn
+  Landing
+  Share
+  Shows(Page)
 }
 
 pub(all) struct SignInAsk {

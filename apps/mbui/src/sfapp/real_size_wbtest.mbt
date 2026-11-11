@@ -222,6 +222,11 @@ fn real_size_sweep(win : (String, Double, Double, Int, String)) -> Unit raise {
     })
     let (made, laid, words) = opening
     let name = "\{win.0} \{mode}"
+    // (what the screen says it shows, which the hang reports send: a kind's name someone has read, shown_wbtest.mbt)
+    match shown_fault(name, @ui.journal_shown()) {
+      Some(f) => faults.push(f)
+      None => ()
+    }
     let line = "  \"\{name}\": (\{made}, \{laid}, \{words}),"
     match real_size_known.get(name) {
       None => {
