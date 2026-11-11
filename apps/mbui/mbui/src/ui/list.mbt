@@ -1137,8 +1137,8 @@ fn Ctx::rows_grid_of(self : Ctx, scale : Double) -> Double {
 
 ///|
 /// What the host said of setting a list's rows on its pixels (@hostapi.rows_on_pixels), asked once (-1 not yet).
-// kept across runs: the host's, the same for the program's life (each Tester's asked anew: reset_globals, and as its
-// test says otherwise: Tester::set_rows_on_pixels)
+// kept across runs: the host's, the same for the program's life (each Tester's, on unless its test says otherwise,
+// asked anew: reset_globals, and Tester::set_rows_on_pixels)
 let rows_on_pixels_said : Ref[Int] = Ref(-1)
 
 ///|

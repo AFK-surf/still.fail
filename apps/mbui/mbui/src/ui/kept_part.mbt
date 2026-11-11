@@ -40,7 +40,7 @@ pub fn came_from_outside() -> Unit {
 
 ///|
 /// A list's rows laid on the device's pixels as every platform's host lays them (Ctx::rows_on_grid), from now on, or
-/// not (a host that sets them anywhere, as a Tester's fake host does unless told).
+/// not (a host that sets them anywhere, as a Tester's fake host does only when told).
 pub fn Tester::set_rows_on_pixels(self : Tester, on : Bool) -> Unit {
   self.fake.rows_on_pixels = on
   // (how frames are built changed by the test, a list's rows set on the pixels with it: the next built whole)
