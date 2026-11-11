@@ -6,7 +6,9 @@ import {
 }
 
 // Values
-pub fn thumbhash_image(String) -> String?
+pub fn held_off(FixedArray[Byte], Int64, Int64) -> Unit
+
+pub fn thumbhash_image(String, ground? : Int64, under? : Int64) -> String?
 
 pub fn view(@ui.Ctx, Source) -> Unit
 

@@ -156,6 +156,38 @@ test("tells_how_far_a_file_has_come", async () => {
   core.close();
 });
 
+test("tells_how_far_a_small_file_has_come", async () => {
+  // A chat's thumbnail (13 KB, its size said) coming in pieces: told on its way, not only 0 until it is all here.
+  const whole = 13249;
+  class Pieces extends HostWire {
+    override request(...args: Parameters<HostWire["request"]>) {
+      if (!args[1].path.includes("/sessions/k/files?name=thumb")) return super.request(...args);
+      let at = 0;
+      return Effect.succeed({
+        status: 200,
+        headers: [["content-type", "image/png"], ["content-length", String(whole)]] as [string, string][],
+        via: null,
+        body: { take: Effect.sync(() => {
+          if (at >= whole) return null;
+          const n = Math.min(1400, whole - at);
+          at += n;
+          return new Uint8Array(n).fill(7);
+        }) },
+      });
+    }
+  }
+  const { core } = await started(base(), 0, (h) => new Pieces(h));
+  try {
+    const heard: [number, number | null][] = [];
+    const [, bytes] = await run(core.inner.stations.requests.file(remote(), "k", "thumb", true, (loaded, total) => heard.push([loaded, total]), null));
+    assert.equal(bytes.length, whole);
+    assert.deepEqual(heard[0], [0, whole]);
+    assert.ok(heard.some(([loaded, total]) => loaded > 0 && loaded < whole && total === whole), JSON.stringify(heard));
+    // (a twentieth at a time: never more than some twenty times)
+    assert.ok(heard.length <= 22, JSON.stringify(heard));
+  } finally { core.close(); }
+});
+
 test("tells_how_far_a_part_has_come", async () => {
   const big = "x".repeat(300 * 1024);
   const { core } = await started({ ...base(), "GET /sessions/k/parts?name=big&offset=0&length=4194304": big });

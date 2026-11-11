@@ -439,7 +439,8 @@ fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?
   } else {
     (src.file)(r.station, owner, stored_name(a.path))
   }
-  let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
+  // (held off the page as a message's: a light screenshot's is the page's colour)
+  let likeness = @gallery.thumbhash_image(a.thumbhash, ground=c.color(Neutral), under=c.color(Bg)).unwrap_or("")
   // (longer than its tile: as wide as it, its top showing)
   let tall = a.width > 0.0 && a.height > 0.0 && a.height / a.width > h / w + 0.01
   let shown = fn(img : String, fade : Bool) {
@@ -935,7 +936,10 @@ fn media_tile_node(
   let owner = if a.owner != "" { a.owner } else { r.session }
   let video = file_kind(a.name) == "video"
   let thumb = r.station + "/" + owner + "/" + a.path
-  let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
+  // (held off the page as a message's: a light screenshot's is the page's colour)
+  let likeness = fn() {
+    @gallery.thumbhash_image(a.thumbhash, ground=@sf.theme().p.neutral_bg, under=@sf.theme().p.bg).unwrap_or("")
+  }
   // (longer than its tile: as wide as it, its top showing)
   let tall = a.width > 0.0 && a.height > 0.0 && a.height / a.width > h / w + things_tall_by
   line.box(fn(b) {
@@ -967,8 +971,8 @@ fn media_tile_node(
       .height(Is(Some(if tall { w * a.height / a.width } else { h })))
       .image(By(fn() {
         match picture() {
-          "" | "!" => if likeness != "" { Some((likeness, "", things_tile_most)) } else { None }
-          k => Some((k, likeness, things_tile_most))
+          "" | "!" => if likeness() != "" { Some((likeness(), "", things_tile_most)) } else { None }
+          k => Some((k, likeness(), things_tile_most))
         }
       }))
       .image_covers(Is(!tall))
@@ -978,7 +982,7 @@ fn media_tile_node(
     })
     |> ignore
     // (none to show: its kind's mark in its middle)
-    b.show(fn() { picture() == "!" && likeness == "" }, fn(n) {
+    b.show(fn() { picture() == "!" && likeness() == "" }, fn(n) {
       n.over(Is(true)) |> ignore
       @sf.style_node(n, fn() { things_tile_none })
       @sf.icon_node(n, if video { "file-video" } else { "photo" }, things_tile_mark, By(fn() { @sf.theme().p.muted })) |> ignore
