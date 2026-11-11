@@ -197,6 +197,9 @@ pub let fix_outside : Array[(String, String, Bool)]
 pub fn fix_own(Array[Json]) -> Array[Json]
 
 pub let fix_pace : @ref.Ref[(Double, Double, Double)]
+
+pub fn fix_pace_said(String, String) -> Unit
+
 pub let fix_phone : @ref.Ref[String]
 
 pub let fix_phone_link : @ref.Ref[String]

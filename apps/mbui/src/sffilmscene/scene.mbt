@@ -25,6 +25,8 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
           _ => ()
         }
         let s = @sfapp.fixture_app(mode)
+        // MBUI_FIX_PACE, MBUI_FIX_CORE: the made-up station's pace (said in the film's record, scripts/media.sh)
+        @sffixture.fix_pace_said(arg("MBUI_FIX_PACE"), arg("MBUI_FIX_CORE"))
         if arg("MBUI_WINDOW") != "" { @sfbase.lone_page.val = @sfbase.window_page(arg("MBUI_WINDOW")) }
         if arg("MBUI_UPDATES_MS") != "" { @sffixture.fixture_updates(ms=whole_ms(arg("MBUI_UPDATES_MS"))) }
         if arg("MBUI_UPDATE") != "" { @sffixture.fixture_update(arg("MBUI_UPDATE")) }

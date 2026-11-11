@@ -18,6 +18,8 @@ fn main {
       Some(s) => s
       None => {
         let s = @sfapp.fixture_app(mode)
+        // MBUI_FIX_PACE, MBUI_FIX_CORE: the made-up station's pace (@sffixture.fix_pace_said), said in APPBENCH below
+        @sffixture.fix_pace_said(@film.arg("MBUI_FIX_PACE"), @film.arg("MBUI_FIX_CORE"))
         if dark {
           @sf.set_dark(Some(true))
         }
@@ -27,6 +29,16 @@ fn main {
       }
     }
   }
+  let pace = @film.arg("MBUI_FIX_PACE")
+  let core = @film.arg("MBUI_FIX_CORE")
   // (the window a tree made once, as src/stillfail's: its shell's nodes, the old views in them)
-  @film.run_bench(fn(c) { @sfapp.view(c, source()) }, tree=fn(root) { @sfapp.app_tree(source())(root) })
+  @film.run_bench(
+    fn(c) { @sfapp.view(c, source()) },
+    tree=fn(root) { @sfapp.app_tree(source())(root) },
+    settings?=if pace != "" || core != "" {
+      Some({ "fix_pace": Json::string(pace), "fix_core": Json::string(core) })
+    } else {
+      None
+    },
+  )
 }

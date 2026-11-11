@@ -6,6 +6,12 @@
 // same film, made as fast as the machine draws. Beside it, <film>.textrec: the run's text and pictures as this host
 // answered them (TEXTREC lines), for a test to see the run again over them (Tester::new(text=)).
 //
+// A film (and a picture) is what a device draws: its Tester builds and lays out as a host does (scene.mbt:
+// check_looks(false), a list's rows kept as their nodes and on the device's pixels), never as a test's Tester checks
+// itself. A Tester running its own checks builds a list's rows again each frame, which a device does not, and was
+// measured to draw other frames than a device (the line that keeps rows as nodes, 2026-11-11). Decided by the
+// coordinator of the migration, 2026-11-11.
+//
 // An app's film program gives its view to `run` (still.fail's src/sffilm, scripts/film.sh), which reads:
 //   MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]

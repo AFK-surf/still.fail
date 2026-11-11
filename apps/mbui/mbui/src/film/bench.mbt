@@ -26,6 +26,7 @@ priv struct Measured {
 
 ///|
 /// `script` run over `view` and measured (the head of this file): the APPBENCH line said, whether the script passed.
+/// `settings`: what the app's program ran its scene with besides mbui's own, said in the APPBENCH line as it is.
 pub fn bench(
   view : (@ui.Ctx) -> Unit,
   tree? : (@view.View) -> Unit,
@@ -38,6 +39,7 @@ pub fn bench(
   pointing? : @ui.Pointing,
   fps? : Double = 120.0,
   frames_out? : String = "",
+  settings? : Json,
 ) -> Bool {
   if !supported {
     say("bench: this host has no offscreen renderer")
@@ -192,6 +194,15 @@ pub fn bench(
     "passed": ToJson::to_json(passed),
     "why": ToJson::to_json(whys),
   }
+  // (what the app's program said its scene was run with, beside mbui's own: its made-up data's pace, say)
+  let out = match (out, settings) {
+    (Object(m), Some(s)) => {
+      let m = m.copy()
+      m["settings"] = s
+      Json::object(m)
+    }
+    _ => out
+  }
   say("APPBENCH " + out.stringify())
   // (and a row of the table scripts/appbench.sh prints)
   let ms = fn(xs : Array[Double]) { "\{round2(centile(xs, 50))} / \{round2(centile(xs, 95))}" }
@@ -334,10 +345,11 @@ fn total_ms(xs : Array[Double]) -> String {
 }
 
 ///|
-/// A bench run of the process's arguments (the head of this file says which), `view` the app's: the process ends with
+/// A bench run of the process's arguments (the head of this file says which), `view` the app's (`settings`, what its
+/// program ran the scene with, said in APPBENCH: bench): the process ends with
 /// 0 when the script passed, 1 when not, 2 when it was not asked for rightly. MBUI_BENCH_LOG=<file>: a phone's run
 /// read from its log instead (bench_log), no Tester.
-pub fn run_bench(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+pub fn run_bench(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, settings? : Json) -> Unit {
   let drive = arg("MBUI_BENCH_DRIVE")
   let name = arg("MBUI_BENCH_NAME")
   let log = arg("MBUI_BENCH_LOG")
@@ -376,6 +388,7 @@ pub fn run_bench(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
     },
     fps=number(arg("MBUI_BENCH_FPS")).unwrap_or(120.0),
     frames_out=arg("MBUI_BENCH_FRAMES"),
+    settings?,
   )
   exit(if ok { 0 } else { 1 })
 }
