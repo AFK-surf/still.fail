@@ -265,6 +265,11 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   79, said at every `derive` of a public type and stopped only by an `extend` declaration for each trait of each type
   (~600 lines of boilerplate). The rest of the off list is what is not mended yet: it only shrinks, each kind going to
   an error in the change that mends the last of it.
+- The modules with a `moon.mod` of their own (`mbui/tools`, `tools`, `mbui/bench/signals`) carry the same kind of line.
+- CI's MoonBit is the latest release, taken each hour (`.github/workflows/mbui-moonbit.yml`), so a release that
+  deprecates something, or warns of something new, fails every pull request with no commit of ours, till its places are
+  mended: taken as it is (the user, 2026-11-12: 继续跟最新), whoever meets it first mends it. Check with the MoonBit CI
+  has (its jobs say `moon version --all`): an older one says less.
 
 ## Before a PR
 
