@@ -44,18 +44,27 @@ pub impl Eq for Anchor with equal(self, other) {
 
 ///|
 /// What opened a menu or a pick, which stand beside it on Medium and Large (rule 3: the steps one
-/// after another near each other): the box pressed (its id) or a rectangle of the window (a right click's point). Never
-/// nothing: no page can open one beside nothing, as a dialog in the middle of the window.
+/// after another near each other): the box pressed (its id), a node of the window's tree pressed (`Node`: beside it
+/// where it is drawn, following it as it moves, the focus given back to it as it closes), or a rectangle of the window
+/// (a right click's point). Never nothing: no page can open one beside nothing, as a dialog in the middle of the window.
 pub(all) enum Beside {
   Of(Int)
+  Node(@view.View)
   At(Double, Double, Double, Double)
-} derive(Eq)
+}
+
+///|
+/// The same opener: the same box, the same node, the same rectangle (Anchor's).
+pub impl Eq for Beside with equal(self, other) {
+  self.anchor() == other.anchor()
+}
 
 ///|
 /// What opened it, as the presenters keep it.
 pub fn Beside::anchor(self : Beside) -> Anchor {
   match self {
     Of(id) => Anchor::Of(id)
+    Node(v) => Anchor::Node(v)
     At(x, y, w, h) => Anchor::At(x, y, w, h)
   }
 }

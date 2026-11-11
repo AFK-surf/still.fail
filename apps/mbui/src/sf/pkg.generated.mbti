@@ -1694,6 +1694,8 @@ pub fn presented_drawn() -> Bool
 
 pub fn presented_drawn_of(Int32) -> Bool
 
+pub fn presented_from(Anchor) -> Bool
+
 pub fn presented_nodes(@view.View) -> Unit
 
 pub fn presented_open_of(Int32) -> Bool
@@ -2618,12 +2620,13 @@ pub(all) struct Bars {
   field : Double
 }
 
-#derive(Eq)
 pub(all) enum Beside {
   Of(Int32)
+  Node(@view.View)
   At(Double, Double, Double, Double)
 }
 pub fn Beside::anchor(Self) -> Anchor
+pub impl Eq for Beside
 
 pub struct Book {
   title : String
