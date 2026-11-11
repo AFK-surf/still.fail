@@ -277,7 +277,8 @@ pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool =
 /// Whether node `id` can take the focus now (View::focusable, taking presses, under no modal layer that does not hold
 /// it): what a screen reader may give it.
 pub fn Tree::can_focus(self : Tree, id : NodeId) -> Bool {
-  self.alive_id(id) && self.nodes[id.at].focusable && !self.pressless_at(id.at)
+  // (held by no node from the root (put by: View::park): not to be focused, as it is in no focus order)
+  self.alive_id(id) && self.nodes[id.at].focusable && !self.pressless_at(id.at) && self.held_from_root(id.at)
 }
 
 ///|

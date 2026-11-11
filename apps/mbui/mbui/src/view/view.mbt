@@ -2257,9 +2257,10 @@ pub fn View::drawn_at(self : View) -> Double {
 
 ///|
 /// Where it is drawn, in the window (what holds it drawn off with it, its own offset with it), and how big (as big as
-/// it and what holds it are drawn: View::scale): where a press finds it as where it is drawn.
+/// it and what holds it are drawn: View::scale): where a press finds it as where it is drawn. Held by no node from the
+/// root (put by: View::park), nowhere, of no size.
 pub fn View::rect(self : View) -> (Double, Double, Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  guard self.live() is Some(n) && self.tree.held_from_root(self.at) else { return (0.0, 0.0, 0.0, 0.0) }
   let (x, y, s) = self.tree.placed(self.at)
   (x, y, n.flex.width * s, n.flex.height * s)
 }
@@ -8146,6 +8147,19 @@ fn Tree::pressless_own_at(self : Tree, at : Int) -> Bool {
 }
 
 ///|
+/// Whether node `at` is held from the root down: it and each that holds it held by another up to the root. A node put by
+/// (View::park) and what it holds are not, till it is taken in again (View::take_in): none of it is in the scene, laid
+/// out, placed, drawn, pressed, focused or read out, by nothing but its not being reached from the root.
+/// Nor is a shared node's old copy on its flight (Tree::paired takes it out of what held it): its flight draws it
+/// where the flight is, and of the tree's it has no place to answer with.
+fn Tree::held_from_root(self : Tree, at : Int) -> Bool {
+  let mut i = at
+  while i > 0 {
+    i = self.nodes[i].parent
+  }
+  i == 0
+}
+
 ///|
 /// Whether node `at` or what holds it is left out of its row as it was last laid out (View::drops): none of it in the
 /// scene, nothing of it drawn, pressed, read out or found where it is.
