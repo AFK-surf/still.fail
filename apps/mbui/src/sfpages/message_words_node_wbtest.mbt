@@ -560,11 +560,9 @@ test "right clicked, someone else's offers itself to the window's menu, at the c
 }
 
 ///|
-/// Waiting on mbui's Tree::asked_at (the coordinator, 2026-11-11): a right click is asked of the topmost node there that
-/// takes a press or says on_menu, and only it, not out along what holds it to the first that says on_menu; so on the
-/// name or the time (each pressed), the row's offer is not asked, where the old view's row offered it. Once that asks
-/// outward, both offer: turn these round (`is Some`).
-test "right clicked on its name or its time, nothing offered yet: the window's tree asks no further out than what is pressed there" {
+/// A right click on its name or its time (each pressed, neither with a menu of its own) asks outward to the first that
+/// holds it and says on_menu (mbui's Tree::asked_at): the row, as the old view's row offered it there.
+test "right clicked on its name or its time, the row's offer: the window's tree asks out to the first that holds it and has one" {
   for words in ["Ana", "2 分钟前"] {
     @sfbase.pick_reset()
     let m = said_msg(from=said_chat)
@@ -573,7 +571,7 @@ test "right clicked on its name or its time, nothing offered yet: the window's t
     let (x, y) = t.find(words).unwrap()
     t.right_click(x, y)
     t.draw()
-    assert_true(@sfbase.share_offered.get() is None, msg=words)
+    assert_true(@sfbase.share_offered.get() is Some(_), msg=words)
   }
   @sfbase.pick_reset()
 }
