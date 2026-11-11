@@ -337,11 +337,41 @@ fn receive_taken(text : String, bytes : Bytes?, t0 : Double, name : Ref[String])
   }
   let what = client.perf_name(msg)
   name.val = what
+  // (C811: what a frame took, by whether receive_said would have taken it as it came: only behind one it left, or not
+  // its to take, by what it is)
+  let would = match msg {
+    Object(m) => !m.contains("mbui_auth") && !m.contains("clocked") && (client.topic_said(m) || client.call_said(m))
+    _ => false
+  }
+  if would {
+    frame_taken_counts[0] += 1
+  } else {
+    let kind = match msg {
+      Object(m) if m.contains("mbui_auth") => "mbui_auth"
+      Object(m) if m.contains("clocked") => "clocked"
+      Object(m) if m.contains("rejoin") => "rejoin"
+      Object(m) if m.contains("fatal") => "fatal"
+      Object(m) if client.echo_waited(m) => "echo " + what
+      _ => what
+    }
+    frame_taken_counts[1] += 1
+    frame_taken_kinds[kind] = frame_taken_kinds.get(kind).unwrap_or(0) + 1
+  }
   take(msg, bytes)
   if t0 >= 0.0 {
     perf_in(what, text, bytes, ffi_now() - t0)
   }
 }
+
+///|
+/// C811: the messages a frame took (receive), those receive_said would have taken as they came (left only behind one
+/// it could not) and the rest; the rest by what they are.
+// kept across runs: counted as frames take messages
+pub let frame_taken_counts : Array[Int] = [0, 0]
+
+///|
+// kept across runs: counted as frames take messages
+pub let frame_taken_kinds : Map[String, Int] = {}
 
 ///|
 /// Whether what goes between the app and the core is counted: while the device's performance record is kept, or with

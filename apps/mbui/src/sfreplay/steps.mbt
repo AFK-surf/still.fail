@@ -42,9 +42,54 @@ fn pace_of(seed : UInt) -> @core.Pace {
     0 => @core.AsRun(1.0)
     1 => @core.AtOnce
     2 => @core.AsRun(0.5)
+    // (the strict pass again, its run_for's frames at a rate: pace_between)
+    10 | 11 => @core.AsRun(1.0)
     _ => @core.AsRun(2.0)
   }
 }
+
+///|
+/// The strict pass again (its run's pace: its steps and the core's messages each at its own moment, its asks held to
+/// the run's), its display's frames at 7 a second and at 120 in the run's frames' place (orders' pace passes): what the
+/// app tells the core is to be the same message by message wherever the frames fall.
+fn pace_between(seed : UInt) -> Double? {
+  match seed {
+    10 => Some(1000.0 / 7.0)
+    11 => Some(1000.0 / 120.0)
+    _ => None
+  }
+}
+
+///|
+/// Whether pass `seed` is the strict one or one of its pace passes (pace_between).
+fn strict_pass(seed : UInt) -> Bool {
+  seed == 0 || pace_between(seed) is Some(_)
+}
+
+///|
+/// What the app told the core in the pass that ended last (Flow::end: Replay::outs).
+// kept across runs: written as each pass ends
+let pass_outs : Ref[Array[String]] = Ref([])
+
+///|
+/// The trace the pass that began last replays (Flow::start).
+// kept across runs: written as each pass begins
+let pass_trace : Ref[String] = Ref("")
+
+///|
+/// C811: the core's frame-taken counts as the strict pass began (Flow::end's TAKEN line).
+// kept across runs: written as each strict pass begins
+let pass_taken_at : Ref[Array[Int]] = Ref([0, 0])
+
+///|
+/// Whether the pass that began last is one of orders' pace passes (pace_between), and whether it failed yet: a failure
+/// in it said (`PACE-FAIL`), not ended on, while what fails at a rate is counted.
+// kept across runs: written as each pass begins
+let pace_pass : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: written as each pass begins and as it first fails
+let pace_failed : Ref[Bool] = Ref(false)
 
 ///|
 /// The app over `trace`, drawn by what the run's host gave its frames (the trace's `{"settings":…}`: its window, its
@@ -89,7 +134,7 @@ pub fn Flow::start(
   r.shuffle(seed)
   // (a test's steps written as a scripted run (FLOW_EMIT) over a trace the app may have outgrown: at once, as the steps
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
-  r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=seed == 0)
+  r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=strict_pass(seed))
   r.attach()
   // (on the screen it was made on, as its host gave it: a phone's window's runs a phone's, Android's, pointed at by a
   // finger; a wider one's the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live
@@ -133,6 +178,14 @@ pub fn Flow::start(
   }
   // (and the rest of what its host gave its first frame: the system's settings, the minutes it was off UTC)
   ignore(t.settings_said(settings.stringify()))
+  // (a pace pass: its failures said, not ended on; a frame found not built whole too, LOOKS-FAIL, listed apart)
+  pace_pass.val = pace_between(seed) is Some(_)
+  pace_failed.val = false
+  t.looks_said_only(pace_pass.val)
+  // (what it says from here, MOTION lines too, the pace pass's till its PACE-END)
+  if pace_pass.val {
+    println("PACE-BEGIN \{pass_trace.val} at \{(1000.0 / pace_between(seed).unwrap_or(1000.0)).round()} a second")
+  }
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {
     t.set_local_station(r.local_station())
@@ -159,7 +212,33 @@ pub fn Flow::start(
   // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
+  // (C811 startup counts: the strict pass's first second from its first frame, what came and how it was taken)
+  let startup_from = t.time()
+  let startup_at : Array[Int] = @ui.messages_counted.copy()
+  let startup_core : Array[Int] = @core.frame_taken_counts.copy()
+  if seed == 0 {
+    @core.frame_taken_kinds.clear()
+    pass_taken_at.val = @core.frame_taken_counts.copy()
+  }
+  let startup_said = Ref(false)
+  let startup_frames = Ref(0)
+  let startup_most = Ref(0)
+  let startup_left = Ref(0)
   t.between_frames(fn() {
+    if seed == 0 && !startup_said.val {
+      startup_frames.val += 1
+      let left = @ui.messages_counted[1] - startup_at[1]
+      if left - startup_left.val > startup_most.val {
+        startup_most.val = left - startup_left.val
+      }
+      startup_left.val = left
+      if t.time() - startup_from >= 1000.0 {
+        startup_said.val = true
+        let c = @ui.messages_counted
+        let k = @core.frame_taken_counts
+        println("STARTUP \{pass_trace.val}: in \{(t.time() - startup_from).round()} ms, \{startup_frames.val} frames: \{c[0] - startup_at[0]} taken as they came, \{c[1] - startup_at[1]} left for a frame (\{k[0] - startup_core[0]} only behind one, \{k[1] - startup_core[1]} not its own), handed on in \{c[2] - startup_at[2]} frames (at most \{startup_most.val} in one)")
+      }
+    }
     if followed.val != "" {
       match t.find(followed.val) {
         Some((_, y)) => follow_ys.push((t.time(), y))
@@ -208,8 +287,8 @@ pub fn Flow::start(
   // (the run's own pace: its display's frames as far apart as its host's lines say they were; a trace whose host said
   // none, a display's 60 Hz: what came between two of its frames taken by the later together, as the run's display took
   // it, not each at its own moment)
-  if seed == 0 && emit_path() == "" {
-    t.set_frame_period(r.frame_period().unwrap_or(run_frame_ms))
+  if strict_pass(seed) && emit_path() == "" {
+    t.set_frame_period(pace_between(seed).unwrap_or(r.frame_period().unwrap_or(run_frame_ms)))
   }
   // what the system lets the app show as the run's host said it (its app's notify.permission): a Tester's own lets it
   match notice_permission_of(trace) {
@@ -219,7 +298,7 @@ pub fn Flow::start(
   let f = {
     r,
     t,
-    strict: seed == 0,
+    strict: strict_pass(seed),
     one_by_one,
     said,
     at_step: [],
@@ -357,6 +436,13 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
   let r = self.r
   let talk = "replay: \{r.left()} messages in not given, waiting for \{r.waiting().unwrap_or("-")}; diverged: \{r.diverged().join(", ")}; fuzzy: \{r.fuzzy().join(", ")}"
   let pass = if self.strict { "as the run had it" } else { "in another timing" }
+  if pace_pass.val {
+    if !pace_failed.val {
+      pace_failed.val = true
+      println("PACE-FAIL \{pass_trace.val}: " + why + " (at \{self.t.time()} ms)")
+    }
+    return
+  }
   let s = "flow: " + why + " (at \{self.t.time()} ms, \{pass})\n" + talk + "\n" + self.t.dump()
   println(s)
   // (writing the steps as a scripted run, FLOW_EMIT, over a trace the app has outgrown: said, and the steps after it
@@ -683,6 +769,17 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       why.push("did not ask what the run did: " + left.join(", "))
     }
   }
+  // (what it told the core, kept for orders' pace passes)
+  pass_outs.val = self.r.outs()
+  if self.strict && !pace_pass.val {
+    let k = @core.frame_taken_counts
+    let kinds = @core.frame_taken_kinds.to_array()
+    kinds.sort_by(fn(a, b) { b.1.compare(a.1) })
+    println("TAKEN \{pass_trace.val}: a frame took \{k[0] - pass_taken_at.val[0]} only behind one, \{k[1] - pass_taken_at.val[1]} not its own: " + kinds.map(fn(e) { "\{e.1} \{e.0}" }).join(", "))
+  }
+  if pace_pass.val {
+    println("PACE-END \{pass_trace.val}")
+  }
   let sum = screen_sum(self.t)
   @core.Replay::detach()
   // (what the app asked as the flow ended (a page gone at its slide's end, its player's place told): the script
@@ -714,12 +811,32 @@ pub let seeds : Array[UInt] = [1, 2, 3]
 /// other passes (`seeds`): the same end each time.
 pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
   let first = flow(0)
+  let strict_outs = pass_outs.val
   for seed in seeds {
     let again = flow(seed)
+    println("C811P pass \{seed} vs strict: " + (if pass_outs.val == strict_outs { "same" } else { "apart" }) + " \{pass_outs.val.length()}/\{strict_outs.length()}")
     if again != first {
       let s = "flow: in the pass \{seed} (\{pace_of(seed)}) the screen ends otherwise (\{again}, not \{first})"
       @halt.saying(s)
     }
+  }
+  // what the app tells the core the same however the frames fall: the strict pass again with run_for's frames at 7
+  // a second and at 120, each message alike and in its place (said, not failed, while what differs now is counted:
+  // PACE lines)
+  flow(10) |> ignore
+  let few = pass_outs.val
+  flow(11) |> ignore
+  let many = pass_outs.val
+  if few != many {
+    let n = if few.length() < many.length() { few.length() } else { many.length() }
+    let mut k = 0
+    while k < n && few[k] == many[k] {
+      k += 1
+    }
+    let at = fn(a : Array[String]) { if k < a.length() { a[k] } else { "-" } }
+    println("PACE \{pass_trace.val}: apart at #\{k} of \{few.length()}/\{many.length()}: at 7 a second " + at(few) + " | at 120 " + at(many))
+  } else {
+    println("PACE \{pass_trace.val}: the same (\{few.length()})")
   }
 }
 

@@ -25,7 +25,7 @@ pub struct Tester {
   /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
   mut on_way : Bool
   /// whether how what moves goes is judged on those frames too (MBUI_TEST_MOTION: test_motion_judged)
-  motion : MotionJudged
+  mut motion : MotionJudged
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
@@ -513,6 +513,7 @@ pub fn Tester::new(
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  looks_said_only.val = false
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)

@@ -143,7 +143,54 @@ let ambient : Array[String] = ["downloads", "driveTransfers", "chatFeedback"]
 ///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other
 /// lines are left out.
+///|
+/// What the app told the core in this replay, each message as a line (its kind, what it names, its params; an
+/// unsubscribe by what it subscribed, a subscription's id left out): what two passes of a flow at other paces are
+/// held to say alike (sfreplay's `orders`). Not the reports (`reports`: their number is the timing's by design).
+// kept across runs: begun anew by each replay (Replay::parse)
+let outs_said : Array[String] = []
+
+///|
+// kept across runs: begun anew by each replay (Replay::parse)
+let outs_subs : Map[Int, String] = {}
+
+///|
+/// What the app told the core in the replay last begun, in order (outs_said).
+pub fn Replay::outs(self : Replay) -> Array[String] {
+  ignore(self)
+  outs_said.copy()
+}
+
+///|
+fn outs_note(m : Map[String, Json], kind : String) -> Unit {
+  let id = match id_of(m) {
+    Some(i) => i
+    None => -1
+  }
+  match kind {
+    "subscribe" => {
+      let key = m.get("subscribe").map(fn(t) { canon(t) }).unwrap_or("")
+      outs_subs[id] = key
+      outs_said.push("sub " + key + (if m.contains("have") { " have" } else { "" }))
+    }
+    "unsubscribe" =>
+      outs_said.push(
+        "unsub " + outs_subs.get(id).unwrap_or("?") + (if m.get("keep") is Some(True) { " keep" } else { "" }),
+      )
+    "call" => {
+      let name = name_of(m)
+      if !reports.contains(name) {
+        outs_said.push("call " + name + " " + canon(m.get("params").unwrap_or(Json::null())))
+      }
+    }
+    other => outs_said.push(other + " " + name_of(m))
+  }
+}
+
+///|
 pub fn Replay::parse(log : String) -> Replay {
+  outs_said.clear()
+  outs_subs.clear()
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
@@ -1134,6 +1181,7 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     return
   }
   let kind = kind_of(m)
+  outs_note(m, kind)
   // The stations of a run whose own the replay keeps (Replay::keep_stations): asked, given the scope's value at the
   // next delivery and whole again as it changes; let go of, no more.
   if self.stations_own {
