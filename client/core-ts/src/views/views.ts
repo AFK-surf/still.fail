@@ -1067,7 +1067,11 @@ export class Views implements Owner {
           if (bound !== null) return this.#sources({ topic: "chat", station, thread: bound, session: null });
         }
         if (typeof view.thread !== "number") {
-          if (session !== null) topics.push({ topic: "session", station, key: session });
+          // (an agent with no chat of its own here, one that has only been in Slack: what it shows, what it heard and
+          // said there, is read from its history, `#sentElsewhere`; so its history is held as one shown is, its latest
+          // page first: left to the sync's sweep of every agent's, on a station of many it came long after the page
+          // opened, the page empty meanwhile)
+          if (session !== null) topics.push({ topic: "session", station, key: session }, { topic: "live", station, key: session });
           topics.push(
             { topic: "threads", station },
             { topic: "chatRows", station },
