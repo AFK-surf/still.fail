@@ -256,7 +256,8 @@ test "what moves says what it is and who told it; a test runs to it by its name"
   assert_true(rest > t.time() && rest < @double.infinity)
   t.run_for(rest - t.time())
   assert_eq(t.moving(), [])
-  assert_eq(t.rest_of("\"knob\""), -1.0)
+  // (at rest: when it came to rest, as it said it, not "none moves")
+  assert_eq(t.rest_of("\"knob\""), rest)
   t.assert_idle()
 }
 

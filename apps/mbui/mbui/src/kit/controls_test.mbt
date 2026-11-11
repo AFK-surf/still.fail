@@ -606,7 +606,8 @@ test "switch: its knob slides to the side it was turned to by a rest of its own 
   let rest = switch_rest("wifi")
   assert_true(rest > t.time())
   t.run_for(rest - t.time())
-  assert_eq(switch_rest("wifi"), -1.0)
+  // (there: when it came to rest, as it said it)
+  assert_eq(switch_rest("wifi"), rest)
   t.assert_idle()
 }
 

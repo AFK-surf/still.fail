@@ -283,13 +283,15 @@ pub fn toast_due(key : String) -> Double {
 
 ///|
 /// When the toasts of `key` (toaster) have done moving, those going away among them (their exit by `presence`): the
-/// frames' clock; -1 when none moves, +inf when one is told and has not started. What a test runs to after a toast
+/// frames' clock; once at rest, when the last of them came to rest (@ui.rest_of); -1 when none moved, +inf when one is
+/// told and has not started. What a test runs to after a toast
 /// goes (its time out, closed, swiped). Its time on screen is a timer, not a motion: toast_due, or `run_for` the
 /// toaster's duration.
 pub fn toast_rest(key : String) -> Double {
   // (a toaster_node's, where there is one by that key: toast_node_rest)
+  // (and once its rows are gone or still, when the last of them came to rest, as they said it: Tester::rest_of)
   match toast_node_rest(key) {
-    Some(r) => r
-    None => @ui.rest_of("\u{2}presence/" + key + "/")
+    Some(r) if r >= 0.0 => r
+    _ => @ui.rest_of("\u{2}presence/" + key + "/")
   }
 }

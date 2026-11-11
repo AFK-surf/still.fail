@@ -27,6 +27,8 @@ pub struct Anim {
   /// the moment it was last stepped to (where it is then is a function of its way and that moment, however many frames
   /// there are at it: stepped again there, it is where it was; -inf: not since it was told)
   priv mut stepped_at : Double
+  /// the moment it was put somewhere at once on its way (snap), its way cut short there; -1: not since it was told
+  priv mut cut_at : Double
   /// kept by its key (anim): whether what asks it is built (until it is not: anim_unbuilt)
   priv mut built : Bool
   /// what it is said to move by (Ctx::moving), and what it is said to be: its key, who told it to go
@@ -129,6 +131,7 @@ pub fn Anim::new(v : Double) -> Anim {
     dur: 0.0,
     running: false,
     stepped_at: @double.neg_infinity,
+    cut_at: -1.0,
     built: false,
     id: @ui.Mover::new(),
     name: "",
@@ -210,6 +213,27 @@ pub fn Anim::ends_at(self : Anim) -> Double {
     self.start + self.dur.ceil()
   } else {
     @double.infinity
+  }
+}
+
+///|
+/// When it is there, or was (whole ms, the frames' clock): ends_at while it goes; once at rest, the end its own start
+/// and length said (not "none moves"), whichever frames were drawn on its way, or the moment it was put somewhere at
+/// once before that (snap: its way cut short); -1 where it was never told to go.
+/// What a test asks of when a part stops (a viewer's fade, a flash, a room opening: their `*_rest`), so a test whose
+/// frames passed the end runs to now, not to "no motion".
+pub fn Anim::ended_at(self : Anim) -> Double {
+  if self.running {
+    self.ends_at()
+  } else if self.start >= 0.0 {
+    let end = self.start + self.dur.ceil()
+    if self.cut_at >= 0.0 && self.cut_at < end {
+      self.cut_at
+    } else {
+      end
+    }
+  } else {
+    -1.0
   }
 }
 
@@ -314,6 +338,7 @@ pub fn Anim::animate(
   }
   // (started earlier: stepped to where it is by now as get() asks; else at its start now, where it is)
   self.stepped_at = if start_at is Some(_) { @double.neg_infinity } else { c.moment() }
+  self.cut_at = -1.0
   // motion reduced: its length none, there at once, its end the moment it was told, so a chain goes on
   // from it in the same build, all of it there at once
   if c.still() {
@@ -445,6 +470,9 @@ pub fn Anim::follow(self : Anim, c : @ui.Ctx, target : Double, spec : Spec, loc~
 pub fn Anim::snap(self : Anim, c : @ui.Ctx, v : Double) -> Unit {
   if (self.value != v || self.target != v || self.running) && self.tells_now(c) {
     self.id.changed()
+  }
+  if self.running {
+    self.cut_at = c.moment()
   }
   self.value = v
   self.target = v

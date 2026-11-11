@@ -1324,7 +1324,7 @@ fn screen_done(t : @ui.Tester) -> Unit {
   // (只看/控制's thumb at rest, gone over where a state turned the view to only looking)
   t.run_for(@ui.cover_slide_ms)
   to_sheet_rest(t)
-  if @kit.toast_rest("toast") != -1.0 {
+  if @kit.toast_rest("toast") > t.time() {
     t.run_for(@sf.toast_ms)
     let rest = @kit.toast_rest("toast")
     if rest > t.time() {

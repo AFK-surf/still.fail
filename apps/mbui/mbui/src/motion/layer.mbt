@@ -991,13 +991,14 @@ fn carrier(c : @ui.Ctx, i : Int) -> (Moving, Rec)? {
 ///|
 /// When the node keyed `key` (layout, entering) is at its place and in (whole ms, the frames' clock): the latest of
 /// its move's ends and its entrance's (Anim::ends_at); a row gone from its list, when its copy has left (its fade's
-/// and its move's ends); before now (-1) when it is at rest or the key is not known; +inf when told to move in the
+/// and its move's ends); once at rest, the latest end each was given (Anim::ended_at, before now); -1 when the key is
+/// not known or none of it moved; +inf when told to move in the
 /// frame just drawn (it starts at the next: the frame owed, Tester::draw). Only read.
 pub fn layout_rest(key : String) -> Double {
   let k = motion_key(key)
   let mut e = -1.0
   let at = fn(a : Anim) {
-    let x = a.ends_at()
+    let x = a.ended_at()
     if x > e {
       e = x
     }

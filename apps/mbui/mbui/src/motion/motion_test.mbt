@@ -212,8 +212,12 @@ test "an animated value starts the frame it is asked in, and follows its target"
   // on its way still, to its own end
   let end = kept.val.unwrap().ends_at()
   assert_true(end > t.time())
+  assert_eq(kept.val.unwrap().ended_at(), end)
   t.run_for(end - t.time())
   assert_eq(seen[seen.length() - 1], 0.0)
+  // over: what a test asks of when it stopped is its end as it was told, not "none moves" (ends_at's -1)
+  assert_eq(kept.val.unwrap().ends_at(), -1.0)
+  assert_eq(kept.val.unwrap().ended_at(), end)
   t.assert_idle()
 }
 
@@ -403,7 +407,7 @@ test "a keyed node driven to its place, moved again on the way, goes on from whe
 }
 
 ///|
-test "layout_rest: a keyed node's move ends when its spring says, the same whenever asked; -1 at rest" {
+test "layout_rest: a keyed node's move ends when its spring says, the same whenever asked, and once at rest; -1 before it moved" {
   let before = Ref::new(true)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
@@ -426,7 +430,7 @@ test "layout_rest: a keyed node's move ends when its spring says, the same whene
   assert_eq(@motion.layout_rest("moved"), end)
   t.run_for(end - t.time())
   assert_eq(drawn_y(t, 0xFF0000FFL), 0.0)
-  assert_eq(@motion.layout_rest("moved"), -1.0)
+  assert_eq(@motion.layout_rest("moved"), end)
   t.assert_idle()
 }
 
@@ -516,7 +520,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   // c's own close over b, to its end (d's the same; b's copy gone before)
   t.run_for(@motion.layout_rest("row/c") - t.time())
   assert_eq(t.drawn_of("c").unwrap().1, 40.0)
-  assert_eq(@motion.layout_rest("row/d"), -1.0)
+  assert_true(@motion.layout_rest("row/d") <= t.time())
   // a row new to the list comes in
   keys.set(["e", "a", "c", "d"])
   t.frame()
@@ -639,8 +643,9 @@ test "a list's rows alike at its start and its end are none of its change: only 
   t.frame()
   assert_true(@motion.layout_rest("row/n") > t.time())
   assert_true(@motion.layout_rest("row/x") > t.time())
+  // (none of them moving: y's end, over, before now)
   for k in ["p", "q", "y", "r", "s"] {
-    assert_eq(@motion.layout_rest("row/" + k), -1.0, msg=k)
+    assert_true(@motion.layout_rest("row/" + k) <= t.time(), msg=k)
   }
 }
 
@@ -1045,7 +1050,7 @@ test "a list's row moved by something else just after its rows changed is in its
   tall_a.set(true)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
-  assert_eq(@motion.layout_rest("row/c"), -1.0)
+  assert_true(@motion.layout_rest("row/c") <= t.time())
 }
 
 ///|
@@ -1082,7 +1087,7 @@ test "layout_rest: a list's row gone, when its copy has left; its copy said to m
   let leaving = t.instances()
   // run to it: the copy gone, nothing of b left to wait for
   t.run_for(end - t.time())
-  assert_eq(@motion.layout_rest("row/b"), -1.0)
+  assert_true(@motion.layout_rest("row/b") <= t.time())
   assert_true(t.instances() < leaving, msg="\{t.instances()} \{leaving}")
 }
 

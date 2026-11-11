@@ -50,8 +50,12 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   // the picture is not taken out by the tap
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.get().length(), 1)
   t.back()
-  t.run_for(preview_rest() - t.time())
+  let shut = preview_rest()
+  t.run_for(shut - t.time())
   assert_true(viewer.get() is None)
+  // gone: still the end of its way out, whatever is asked after (its way out said to move, Tester::rest_of)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(preview_rest(), shut)
 }
 
 ///|

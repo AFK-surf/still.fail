@@ -383,7 +383,7 @@ pub fn sheet_rest(key : String) -> Double {
       match kit.val.sheets.get(id) {
         Some(s) => {
           let mut e = -1.0
-          for r in [s.h.end(), s.below.end(), s.lag.end(), fade_rest(s.fade)] {
+          for r in [s.h.end(), s.below.end(), s.lag.end(), s.fade.ended_at()] {
             if r > e {
               e = r
             }
@@ -393,22 +393,6 @@ pub fn sheet_rest(key : String) -> Double {
         None => -1.0
       }
     None => -1.0
-  }
-}
-
-///|
-/// When a sheet's scrim's fade is there (Anim::ends_at), or the last one was, its start and its length as it said them
-/// (Anim::ends); -1: none told.
-fn fade_rest(a : @motion.Anim) -> Double {
-  let r = a.ends_at()
-  if r >= 0.0 {
-    return r
-  }
-  let e = a.ends()
-  if e < @double.infinity {
-    e
-  } else {
-    -1.0
   }
 }
 

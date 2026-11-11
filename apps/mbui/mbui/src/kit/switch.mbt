@@ -179,7 +179,8 @@ pub fn switch_held(c : @ui.Ctx, key : String, pressed : Bool) -> Double {
 pub let switch_ms : Double = 140.0
 
 ///|
-/// When the switch `key`'s knob is at rest after a turn (the frames' clock; -1: it is, +inf: told, not started).
+/// When the switch `key`'s knob is at rest after a turn (the frames' clock; once there, when it came to rest,
+/// @ui.rest_of; -1: never turned; +inf: told, not started).
 pub fn switch_rest(key : String) -> Double {
   @ui.rest_of(knob_key(key))
 }

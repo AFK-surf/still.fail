@@ -44,7 +44,7 @@ test "70-card-motion" {
     if closing > f.t.time() {
       f.run_to(closing)
     }
-    f.check(f.t.rest_of("under/") < 0.0, "something under the post moves till \{f.t.rest_of("under/")}")
+    f.check(f.t.rest_of("under/") <= f.t.time(), "something under the post moves till \{f.t.rest_of("under/")}")
     f.end()
   })
 }

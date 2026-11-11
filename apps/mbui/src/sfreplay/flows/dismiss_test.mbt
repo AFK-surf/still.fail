@@ -31,7 +31,7 @@ test "23-dismiss" {
         break
       }
     }
-    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
+    f.check(@sfapp.under_rest() <= f.t.time(), "something under the post moves: \{@sfapp.under_rest()}")
     f.gone("=先合 B 083209")
     f.end()
   })

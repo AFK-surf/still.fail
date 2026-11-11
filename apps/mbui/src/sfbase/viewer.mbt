@@ -826,7 +826,8 @@ pub let pv_leaving : @signals.Signal[Viewer?] = @signals.signal(None)
 
 ///|
 /// When the preview's way in or out is over (the frames' clock): the latest end told its fade and its flight, the one
-/// open's or the one leaving's; -1 when neither moves. What a test runs to after it opens or closes one.
+/// open's or the one leaving's; once the one leaving is gone, the end of its way out (said to move: Viewer::shut,
+/// Tester::rest_of); -1 when none was opened. What a test runs to after it opens or closes one.
 pub fn preview_rest() -> Double {
   let mut at = -1.0
   for v in [viewer.get(), pv_leaving.get()] {
@@ -841,6 +842,9 @@ pub fn preview_rest() -> Double {
       }
       None => ()
     }
+  }
+  if viewer.get() is None && pv_leaving.get() is None {
+    at = @ui.rest_of("the preview's way out")
   }
   at
 }
@@ -1154,6 +1158,30 @@ pub fn near_left(src : Source, station : String) -> Unit {
   })
   for k in gone {
     near_asked.remove(k)
+  }
+}
+
+///|
+/// The way out of a viewer closed (Viewer::shut), said to move: at rest at the latest end of its fade's and its
+/// flight's.
+priv struct PreviewOut {
+  v : Viewer
+}
+
+///|
+/// Who tells the way out of a viewer closed (PreviewOut).
+// kept across runs: it only names the way out to the frame's context, which keeps its own list (Ctx::moving_as)
+let pv_out_mover : @ui.Mover = @ui.Mover::new()
+
+///|
+impl @ui.Moving for PreviewOut with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  let (fade, fly) = (self.v.fade.ends_at(), self.v.fly.ends_at())
+  if fade > fly {
+    fade
+  } else {
+    fly
   }
 }
 
@@ -1758,6 +1786,9 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // (closed: the one going from here, its way said: what follows its going reads where it goes)
     viewer.set(None)
     pv_leaving.set(Some(self))
+    // (said to move from its cause on, as what moves is: what waits on it, Tester::moving, and once it is gone a
+    // test's preview_rest)
+    c.moving(pv_out_mover, { v: self } as &@ui.Moving, what="the preview's way out")
     // the views under the canvas go at once (they cannot fade)
     match self.view() {
       // (once the frame's builds are over: closed as the back is taken or the marks are put, once)

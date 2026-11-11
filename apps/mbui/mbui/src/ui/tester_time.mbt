@@ -87,11 +87,44 @@ pub fn Tester::moving(self : Tester) -> Array[String] {
 
 ///|
 /// When what moves named `name` is at rest (the frames' clock): the latest of those whose line (Tester::moving)
-/// says `name` (`c.spring "seg"`, `Anim "fade"`, a key); +inf when one has not started; -1 when none moves. What a
-/// test runs to when the motion has no rest of its own to ask.
+/// says `name` (`c.spring "seg"`, `Anim "fade"`, a key); +inf when one has not started; where none so named moves
+/// now, when the latest of them came to rest (its own end, whichever frames were drawn on its way); -1 where none so
+/// named was ever said to move. What a test runs to when the motion has no rest of its own to ask.
 pub fn Tester::rest_of(self : Tester, name : String) -> Double {
   ignore(self)
   rest_of(name)
+}
+
+///|
+/// What was said to move under the Tester, by its line (Tester::moving's), and when it says it is at rest: seen before
+/// and after each frame the Tester draws (tester_rests_seen), kept once the motion is over and the app has let go of it, for
+/// rest_of. The Tester's own: nothing on the app's way keeps it (a device's app keeps no such record).
+// kept across runs: emptied as each Tester is made (Tester::new)
+let tester_rested : Map[String, Double] = {}
+
+///|
+/// What is said to move after the frame just drawn, each end as it says it, kept (tester_rested).
+fn tester_rests_seen() -> Unit {
+  let c = g()
+  let now : Map[String, Bool] = {}
+  for e in c.movers {
+    let r = e.m.rest_at(c.clock, c.frame_no)
+    now[e.what] = true
+    if r >= 0.0 && r < @double.infinity {
+      tester_rested[e.what] = r
+    }
+  }
+  // (one said to be at rest later that moves no more, cut short (put at its end, motion reduced): at rest by this
+  // frame, not at the end it said)
+  let cut = []
+  for what, r in tester_rested {
+    if r > c.clock && !now.contains(what) {
+      cut.push(what)
+    }
+  }
+  for what in cut {
+    tester_rested[what] = c.clock
+  }
 }
 
 ///|
@@ -103,6 +136,14 @@ pub fn rest_of(name : String) -> Double {
     if e.what.contains(name) {
       let r = e.m.rest_at(c.clock, c.frame_no)
       if r > c.clock && r > last {
+        last = r
+      }
+    }
+  }
+  // (and those so named already at rest: their ends as they said them, the latest, where none moves now)
+  if last < 0.0 {
+    for what, r in tester_rested {
+      if what.contains(name) && r > last {
         last = r
       }
     }

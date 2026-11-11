@@ -273,5 +273,5 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   assert_true(t.find("存入密码 测试服务登录") is None)
   assert_true(t.find("未存入 测试服务登录") is Some(_))
   assert_true(!vc.vaults_asked, msg="the card asked the vaults topic")
-  assert_true(t.rest_of("under/") < 0.0)
+  assert_true(t.rest_of("under/") <= t.time())
 }
