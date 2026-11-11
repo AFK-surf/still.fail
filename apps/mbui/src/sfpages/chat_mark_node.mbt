@@ -148,8 +148,9 @@ pub fn state_line_node(
 ///|
 /// The lead's icon (lead_icon's) in `parent`, 14 in its 10 wide column (2 out of it each side), in `ink` as it is now:
 /// a bell, a check, the archive box; waiting's arc with its three dots breathing one after another; watching's dot
-/// beating, its arcs lit after it, every lead_loop_ms (at rest with motion reduced).
-fn lead_icon_node(parent : @view.View, lead : String, ink : () -> Int64) -> Unit {
+/// beating, its arcs lit after it, every lead_loop_ms (at rest with motion reduced). `centred`: in the middle of a
+/// column at least as wide as it instead (an option's disc's: need_card_node).
+fn lead_icon_node(parent : @view.View, lead : String, ink : () -> Int64, centred? : Bool = false) -> Unit {
   let name = match lead {
     "need" => "bell"
     "done" => "check"
@@ -168,7 +169,7 @@ fn lead_icon_node(parent : @view.View, lead : String, ink : () -> Int64) -> Unit
     b
     .width(Is(Some(state_icon)))
     .height(Is(Some(state_icon)))
-    .offset(Is((-state_icon_out, 0.0)))
+    .offset(Is((if centred { 0.0 } else { -state_icon_out }, 0.0)))
     |> ignore
     match lead {
       // (its arc, and its dots breathing one after another, in one icon)

@@ -88,11 +88,19 @@ pub fn ask_here(String, String, (String) -> Unit, () -> Unit, value? : String, p
 
 pub fn ask_history_trigger(@ui.Ctx, String, Array[@text.Run], @ui.TextStyle, Double) -> Int32
 
+pub fn ask_history_trigger_node(@view.View, () -> Array[@text.Run], () -> @ui.TextStyle, Double, (@view.View) -> Unit) -> @view.View
+
 pub fn ask_line_button(@ui.Ctx, String, key~ : String, mark~ : Double, disabled? : Bool) -> Bool
+
+pub fn ask_line_button_node(@view.View, () -> String, Double, () -> Bool, () -> Unit) -> @view.View
 
 pub fn ask_line_card(@ui.Ctx, column? : Bool, () -> Unit) -> Int32
 
+pub fn ask_line_card_node(@view.View, Bool, (@view.View) -> Unit) -> @view.View
+
 pub fn ask_line_mark() -> @ui.Style
+
+pub fn ask_line_mark_node(@view.View, (@view.View) -> Unit) -> @view.View
 
 pub fn ask_line_start(Double) -> @ui.Style
 
@@ -1349,6 +1357,8 @@ pub fn one_of_node(@view.View, () -> String, () -> Array[(String, String)], (Str
 pub let option_check_share : Double
 
 pub fn options_card(@ui.Ctx, String, Array[(String, String, Bool)], Bool, Int32?, chosen? : Int32?, wide? : Bool, history? : Bool) -> Int32?
+
+pub fn options_card_node(@view.View, () -> Array[(String, String, Bool)], () -> Bool, () -> Int32?, chosen? : () -> Int32?, wide? : Bool, history? : Bool, on_pick? : (Int32) -> Unit) -> @view.View
 
 pub fn origin_mark_name(String) -> String
 
