@@ -830,7 +830,9 @@ fn usage_year_node(parent : @view.View, av : () -> Json?, weeks : () -> Int, tip
           },
           fn(m) { m.0 },
           fn(b, m) {
-            b.grow(By(fn() { m.get().1.to_double() })).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).height(Is(Some(14.0))).clips(Is(true)) |> ignore
+            // (14 high, or as its name's line where the system's size of words draws it higher: a least, which its
+            // words push open)
+            b.grow(By(fn() { m.get().1.to_double() })).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).min_height(Is(Some(14.0))).clips(Is(true)) |> ignore
             b.show(fn() { m.get().2 != "" }, fn(w) {
               // (none where its weeks have not the room for it: the year's last month, its first week only)
               w.words(By(fn() { m.get().2 })).words_look(Is(@ui.style_words(ug_grid_label))).ink(By(fn() { @ui.style_ink(ug_grid_label) })).shorter(Is([""]))

@@ -115,27 +115,6 @@ let corners_tape_rail : Array[String] = [
 ///|
 /// Words a box with its height said does not hold (mbui's Tester::fixed_outgrown) on every screen in every window
 /// (corners_wbtest.mbt), by window, language and screen: the bar it may only fall from, counted as the rule first ran
-/// (2026-11-11). A screen not listed has none. Listed: 智能体's card, its spend on a line 28 high in a box said 26 (an
-/// old view's, in sf/panel_centred_node.mbt and sf/sheet_node.mbt's), to be mended.
-let corners_outgrown_known : Map[String, Int] = {
-  let known = Map::new()
-  for k in [
-    ("desk-en chat-agent", 3),
-    ("desk-win-en chat-agent", 3),
-    ("desk-win-zh chat-agent", 3),
-    ("desk-zh chat-agent", 3),
-    ("phone-en chat-agent", 3),
-    ("phone-zh chat-agent", 3),
-    ("tablet-en chat-agent", 3),
-    ("tablet-zh chat-agent", 3),
-    ("touch-en chat-agent", 3),
-    ("touch-zh chat-agent", 3),
-    ("wide-en chat-agent", 3),
-    ("wide-win-en chat-agent", 3),
-    ("wide-win-zh chat-agent", 3),
-    ("wide-zh chat-agent", 3),
-  ] {
-    known[k.0] = k.1
-  }
-  known
-}
+/// (2026-11-11). A screen not listed has none; none is now (智能体's card's spend, an old view's, on its own line of 26
+/// since, as its box was).
+let corners_outgrown_known : Map[String, Int] = Map::new()

@@ -439,8 +439,7 @@ fn runtime_tags_node(t : @view.View, p : () -> Json?) -> Unit {
   t.box(fn(r) {
     @sf.style_node(r, fn() { pf_tags })
     r.each(tags, fn(x) { x.0 }, fn(tag, x) {
-      @sf.style_node(tag, fn() { pf_tag })
-      @sf.words_node(tag, fn() { x.get().1 }, fn() { pf_tag_words }) |> ignore
+      @sf.tag_node(tag, fn() { x.get().1 })
     })
   })
   |> ignore
@@ -2015,17 +2014,9 @@ let pf_check_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color
 let pf_state : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
-/// The runtimes' tags (runtimeTags: 4 apart, 8 after the name; a tag 18 high, 5 in, round 5, the hover's ground).
+/// The runtimes' tags (runtimeTags: 4 apart, 8 after the name; each the library's tag_node).
 // kept across runs: a value (no field of it changes)
 let pf_tags : @ui.Style = @ui.css("row gap=S1 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter radius=Base bg=Hover")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
