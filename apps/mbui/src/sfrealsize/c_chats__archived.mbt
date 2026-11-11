@@ -3,8 +3,8 @@
 ///|
 fn init {
   let asked =
-    #|{"topic":"chats","scope":"ws","mine":false,"limit":50}
+    #|{"topic":"chats","scope":"ws","mine":false}
   let messages =
-    #|[[{"path":["days"],"key":["daysAgo"],"patch":0,"ops":[{"path":["items"],"key":["station","id"],"drop":["ws/maple","k-maple-5"]},{"path":["items"],"key":["station","id"],"put":{"id":"k-studio-8","session":"k-studio-8","thread":4008,"title":"Fix flaky e2e on the mac runners","agents":[{"runtime":"claude","agentText":"Opus 5.5 · xhigh","maker":{"id":"anthropic"}}],"last":{"seq":48,"by":{"mine":false},"preview":"慢查询的原因是 orders(created_at) 上没有和 tenant_id 组合的索引，全表扫了 1200 万行。加了组合索引后从 2.3s 降到 18ms，迁移脚本在 PR 里。"},"unread":false,"station":"ws/studio","stationName":"Studio","stationEmoji":"🎛️","state":"block","people":[{"id":"dev.ops@acme.dev","email":"dev.ops@acme.dev","shown":{"name":"Ops Bot","picture":"https://avatars.slack-edge.com/2026-03-10/711020108310_8f3c10a2b9d1e4f07c6a5_192.jpg","mine":false}}],"creator":{"id":"dev.ops@acme.dev"},"peopleText":"Ops Bot 发起","pinned":false,"swipeArchive":true,"stateText":"需要你处理：需要你决定：周六上午 9 点做生产库迁移可以吗？","stateLead":"need","stateRest":"需要你决定：周六上午 9 点做生产库迁移可以吗？","tone":"wait"},"before":null}]},{"path":["more"],"set":369}]]
+    #|[[{"path":["more"],"set":389}]]
   put_changes(asked, "archived", messages)
 }

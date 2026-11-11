@@ -53,8 +53,9 @@ export const ASKED: Record<string, Record<string, unknown> & { topic: string }> 
   "stationPart machineLogins": { topic: "stationPart", scope: "ws", station, part: "machineLogins" },
   "stationPart logins": { topic: "stationPart", scope: "ws", station, part: "logins" },
   "stationPart updates": { topic: "stationPart", scope: "ws", station, part: "updates" },
-  "chats": { topic: "chats", scope: "ws", mine: false, limit: 50 },
-  "chats mine": { topic: "chats", scope: "ws", mine: true, limit: 50 },
+  // (its window told first, `WINDOWS`)
+  "chats": { topic: "chats", scope: "ws", mine: false },
+  "chats mine": { topic: "chats", scope: "ws", mine: true },
   // (a row pressed, held, swiped or pointed at: its chat's whole row, sfbase/rows.mbt whole_row; the chat's, its page's menu)
   "chatRow": { topic: "chatRow", station, session: key },
   "profiles": { topic: "profiles", scope: "ws" },
@@ -136,6 +137,13 @@ export const ASKED: Record<string, Record<string, unknown> & { topic: string }> 
   "messagePeek": { topic: "messagePeek", station, thread: PEEKS.message.thread, seq: PEEKS.message.seq },
   "job": { topic: "job", station, id: "job-maple-3" },
 };
+
+/// The chats' lists' windows as the app first tells them (`chats.window`; apps/mbui sfbase/rows.mbt `first_window`): the
+/// rows its room shows and a screen more, rounded up to ten, the same 30 on 小屏 (390×844, rows of 66) and on a wide
+/// screen (1280×800, rows of 54); `WINDOW_STEP` more as one is scrolled near its foot (`window_step`: a screen of rows,
+/// 20 at least).
+export const WINDOWS: Record<string, number> = { "chats": 30, "chats mine": 30 };
+export const WINDOW_STEP = 20;
 
 /// Those measured with the chat's six pages loaded (`CHAT_MESSAGES`), the rest with its last alone.
 export const LONG = new Set(["chat six pages", "chat compact six pages"]);
@@ -262,6 +270,7 @@ export async function held(long = false) {
   t.data.put("changelog", "seen", CHANGELOG_SEEN, false);
   changelog!.device(CHANGELOG_DEVICE);
   const names = Object.keys(ASKED).filter((name) => LONG.has(name) === long);
+  for (const name of names) if (WINDOWS[name] !== undefined) t.window(topicOf(name), WINDOWS[name]);
   names.forEach((name, i) => t.store.subscribe(1, i + 1, topicOf(name), true));
   // Set as the topics are watched, and again once the views watch what they found they are made of (a value set of a
   // topic nothing watches is not kept: the core's station topics read what is watched).
@@ -387,6 +396,12 @@ export const CAUSES: Record<string, Cause> = {
     },
   },
   renamed: { run: ({ t, base }) => t.set({ topic: "chatRows", station }, chatRenamed(base)) },
+  // The chats' lists scrolled near their foot: each told a window a step more (the rows added go out, not the list).
+  grown: {
+    run: ({ t }) => {
+      for (const [name, rows] of Object.entries(WINDOWS)) t.window(topicOf(name), rows + WINDOW_STEP);
+    },
+  },
   // Another station gone down.
   down: { run: ({ t }) => t.set({ topic: "link", station: "ws/willow" }, { state: "offline", message: "连不上这台 station：它可能关机了", last: "offline" }) },
   // Three of Maple's jobs told again (its `job` event): the chat's dev server crashed, its watch of CI ended red, the

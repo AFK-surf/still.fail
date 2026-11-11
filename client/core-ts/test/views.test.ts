@@ -831,7 +831,6 @@ test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
   const whole = t.views.chatsWhole("ws") as J;
   assert.equal(madeItems(whole.ok).length, 420);
   assert.deepEqual(t.store.value(list), { ok: firstOf(whole.ok, 100) });
-  assert.equal(madeItems(shown[0].value).length, 420);
   assert.ok(shown[1].value.items.length > 100, "the `@` menu lists past the page");
   for (const i of shown[1].value.items) assert.ok(typeof i.title === "string");
   for (const topic of topics) {
@@ -1078,6 +1077,8 @@ test("grouping_a_large_chat_list_does_not_repeatedly_ask_the_time_zone_for_the_s
   const input = Array.from({ length: 257 }, (_, i) => row(String(i + 1), now - 1_000_000 - ((i * 113) % 257) * 3_600_000));
   t.set(workspace(), oneStation());
   t.set(rows("ws/st"), input);
+  // (all of it in its window)
+  t.window(topic, input.length);
   t.subscribe(1, topic);
   await t.read(u, 1);
   await t.read(u, 1);

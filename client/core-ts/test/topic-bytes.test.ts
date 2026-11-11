@@ -55,8 +55,8 @@ const OVER: Record<string, number> = {
   "jobLog 300": 72,
   "drive": 72,
   "profiles": 64,
-  "chats mine": 56,
-  "chats": 56,
+  // (its first window, 30 rows as the app asks them: real-size-asked.ts WINDOWS; the list of all of them, under the bar)
+  "chats mine": 40,
   "history": 56,
   "chat": 56,
   "chat compact": 56,
@@ -65,6 +65,10 @@ const OVER: Record<string, number> = {
 
 /// Those over `DELTA_BAR_KB` as something changes, by `<name>/<cause>`: the heaviest message, KB as in `OVER`.
 const OVER_DELTA: Record<string, number> = {
+  // (a list scrolled near its foot told a window a step more: the step's 20 rows, ~1 KB each, put in its days, never
+  // the list whole again; a step of rows a screen holds is what the app needs the moment it comes)
+  "chats mine/grown": 24,
+  "chats/grown": 24,
   "vaultUses/used": 128,
   "usage/down": 88,
   "drive/file": 72,
