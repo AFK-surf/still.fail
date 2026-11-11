@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [8e60cc3ef](https://github.com/AFK-surf/still.fail/commit/8e60cc3ef41ab9526858fbd6bfa94d57a9d8df28) mbui: the corners worked out of an old view each f | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.36 | 161.99 |
 | [6b5d712ec](https://github.com/AFK-surf/still.fail/commit/6b5d712ec8acf81f95d311331d7e0ff4139e2862) app, core: a call given no on_done is one nobody r | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.37 | 182.65 |
 | [ee58f52b1](https://github.com/AFK-surf/still.fail/commit/ee58f52b16ea68ab1cb197964e6ee222b7167160) mbui: test.sh says testexe's lines of each run who | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.14 | 188.9 |
 | [80220ce56](https://github.com/AFK-surf/still.fail/commit/80220ce56c2138afb177d342bd78f313df9034e2) mbui: a list's block come at its foot is made alon | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.5 | 126.65 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [3cbd0905b](https://github.com/AFK-surf/still.fail/commit/3cbd0905bf22ecf621481076b9a52cacd01665f7) app: a history tile's figure on its own line, its  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 93.8 | 171.95 |
 | [ba12c35d5](https://github.com/AFK-surf/still.fail/commit/ba12c35d5138e2c8e1a7e59e3554393eea76dc63) app: the vault's 授权时限 (how long a use is allowed)  | 1.8 | 2.41 | 10.05 | 28.78 | 35.45 | 25.64 | 47.39 | 94.11 | 176.07 |
 | [98c5ec5f9](https://github.com/AFK-surf/still.fail/commit/98c5ec5f9efef64c598a516c15da26c63e38b775) sf: a line to type in on a card's ground, a field' | 1.8 | 2.41 | 10.04 | 28.71 | 35.27 | 25.64 | 47.37 | 94.24 | 154.28 |
-| [16fd90f9b](https://github.com/AFK-surf/still.fail/commit/16fd90f9b603ce46d07513061b35601404337a12) mbui: what holds a scroller makes its way as anyth | 1.8 | 2.41 | 10.04 | 28.71 | 35.26 | 25.63 | 47.37 | 93.96 | 184.49 |
