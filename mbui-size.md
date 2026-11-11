@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [90d1553f2](https://github.com/AFK-surf/still.fail/commit/90d1553f227953025dba5e8e6969aa5e7910f994) mbui: a list's heads' wake at a glide's end is not | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.01 | 168 |
 | [1cfe5cbab](https://github.com/AFK-surf/still.fail/commit/1cfe5cbab69f264d55ac6989e7ec5cdb717063a1) mbui: a bar to fall or a file to leave motion_coun | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.96 | 173.62 |
 | [6a55a1f22](https://github.com/AFK-surf/still.fail/commit/6a55a1f22207dc9dec05567c41050840cf5d2538) app: a page's bar made as nodes ends before a Wind | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.09 | 178.74 |
 | [7424a775e](https://github.com/AFK-surf/still.fail/commit/7424a775eeac80dcd46f9e46b7a3f1f7cc5d0228) mbui, app: 22 bars of how what moves goes fall to  | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.59 | 183.02 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [11b5f0537](https://github.com/AFK-surf/still.fail/commit/11b5f0537f73d70a149e6c91403c9851598d826c) app: a chat's pictures told to the nodes that read | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.42 | 131.81 |
 | [8c287f13b](https://github.com/AFK-surf/still.fail/commit/8c287f13b4f51267ccc7bcb47503e5ffa8fdfec6) ci: preview's iOS build says its unsigned IPA's up | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 131.81 |
 | [26cd17c5c](https://github.com/AFK-surf/still.fail/commit/26cd17c5c188f674989699363a10a49d8c1760bc) cloud: a relay in Shanghai among still.fail's (#54 | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.32 | 123.25 |
-| [391fece48](https://github.com/AFK-surf/still.fail/commit/391fece48955a0b82e59fd5c195e2541ab7550e6) mbui: a node's words with links in them are a grou | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 152.78 |
