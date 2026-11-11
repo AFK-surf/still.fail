@@ -492,6 +492,7 @@ fn outline_body(
                   end=fn() { item.clock },
                   chosen=fn() { item.seq == at.current },
                   lit=fn() { at.lit.get() == k },
+                  point=fn() { at.lit.set(k) },
                 )
               _ => {
                 @sf.waiting_node(b, fn(s) {
@@ -525,6 +526,7 @@ fn outline_body(
             fn() { who + " " + item.words },
             who=(fn() { who }, fn(f, size) { outline_face(f, src, item, size, stint) }),
             lit=fn() { at.lit.get() == k },
+            point=fn() { at.lit.set(k) },
           )
         }
         None => ()

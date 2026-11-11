@@ -129,6 +129,7 @@ fn outline_tester(
   w? : Double = 1280.0,
   h? : Double = 800.0,
   platform? : Int = 0,
+  pointing? : @ui.Pointing,
   outline? : @signals.Signal[Json?] = @signals.signal(None),
   newer? : Bool = false,
   top? : Double = -1.0,
@@ -180,7 +181,7 @@ fn outline_tester(
   if top >= 0.0 {
     @sfbase.kept_places["ws1/st1\u{1}s-c1"] = { top, offset: 0.0, bottom: -1.0 }
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, pointing?)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   t
@@ -422,6 +423,32 @@ test "对话目录: ↓ ↑ from its field move the row the keys are at, one lit
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
   assert_true(outline_panel(t) is None)
+}
+
+///|
+test "对话目录: the pointer moved onto a row takes the keys there, one ground, never the keys' and the pointer's both; Enter goes to it" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  let hover = @sf.theme().p.hover
+  let grounds = fn() {
+    let (px, py, pw, ph) = outline_panel(t).unwrap()
+    t.drawn_rects().filter(fn(r) { r.4 == hover && r.0 >= px && r.0 + r.2 <= px + pw + 0.5 && r.1 >= py && r.1 + r.3 <= py + ph + 0.5 })
+  }
+  let at_first = grounds()
+  assert_eq(at_first.length(), 1, msg="\{at_first}")
+  // (onto the row under the reader's: 林's 10:35, seq 23)
+  let (gx, gy, gw, gh, _) = at_first[0]
+  t.move_to(gx + gw / 2.0, gy + gh * 1.5)
+  t.run_for(@ui.move_most_ms)
+  let after = grounds()
+  assert_eq(after.length(), 1, msg="\{after}")
+  assert_eq(after[0].1, gy + gh)
+  t.key(@ui.key_code_enter)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(outline_reading().flash, "ts23")
 }
 
 ///|
@@ -689,7 +716,8 @@ test "对话目录: a found row gone to marks its words in its message, nothing 
 ///|
 test "对话目录: in the sheet its day headings on the title's line, the rows' grounds in from its sides as a sheet's rows are, the faces round in their corners" {
   let calls : Array[Made] = []
-  let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2)
+  // (a pointer's hand, where the row the keys are at is lit)
+  let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2, pointing=Mouse)
   let glyph = fn(words : String) {
     outline_drawn(t, "glyphs").iter().find_first(fn(g) { g.5 == words }).map(fn(g) { g.0 }).unwrap_or(-1.0)
   }
@@ -704,6 +732,22 @@ test "对话目录: in the sheet its day headings on the title's line, the rows'
   let (gx, _, gw, _, _, _) = grounds[0]
   assert_eq(gx, @sf.panel_card_in)
   assert_eq(gx + gw, 390.0 - @sf.panel_card_in)
+  // (round as a pick's rows are, row_corner, not a card's corner that made a capsule of it)
+  let r = @sf.row_corner.to_int()
+  let lines = t.frame_export().filter(fn(l) { l.has_prefix("rect ") && l.contains(" " + hover + " ") })
+  assert_true(lines.iter().any(fn(l) { l.contains(" r=\{r},\{r},\{r},\{r}") }), msg="\{lines}")
+  assert_eq(outline_faults(t), [])
+}
+
+///|
+test "对话目录: in the sheet to a finger no row has a ground at rest, the reader's in the accent's ink alone, as a pick's chosen choice" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2)
+  let hover = outline_hex(@sf.theme().p.hover)
+  let grounds = outline_drawn(t, "rect").filter(fn(r) { r.4 == hover && r.2 > 200.0 })
+  assert_eq(grounds.length(), 0, msg="\{grounds}")
+  let accent = outline_hex(@sf.theme().p.accent_text)
+  assert_true(outline_drawn(t, "glyphs").iter().any(fn(g) { g.4 == accent }), msg="\{outline_drawn(t, "glyphs")}")
   assert_eq(outline_faults(t), [])
 }
 
