@@ -497,9 +497,9 @@ test "a video taken down and let go goes from where the finger left it: its pict
   let (x, y, w, h) = t.holes()[0]
   // taken down past the line, the picture with the finger
   t.press_at(195.0, 300.0)
-  t.move(195.0, 380.0)
-  t.move(195.0, 460.0)
-  t.move(195.0, 500.0)
+  t.move_to(195.0, 380.0)
+  t.move_to(195.0, 460.0)
+  t.move_to(195.0, 500.0)
   let down = t.holes()[0].1
   assert_true(down > y + 120.0, msg="\{down} from \{y}")
   // let go: closing, the frame it shows grabbed first, its picture where the finger left it meanwhile

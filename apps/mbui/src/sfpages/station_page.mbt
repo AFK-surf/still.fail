@@ -247,8 +247,8 @@ fn station_retry(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 ///|
 /// Its 启动 where it is this machine's, not running here (local_stopped): no try at reaching it again, nothing there
 /// to reach; while it is being started, installed or updated, busy.
-fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> Unit {
-  let working = text(local, "doing") != ""
+fn station_start(c : @ui.Ctx, core : Core, own_station : Json?, address : String) -> Unit {
+  let working = text(own_station, "doing") != ""
   @sf.button(
     c,
     @sf.t("web-pages.localStation.start"),
@@ -257,7 +257,7 @@ fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> U
     busy=working,
     disabled=working,
     on_press=fn() {
-      local_start(core, local)
+      local_start(core, own_station)
     },
   ) |> ignore
 }

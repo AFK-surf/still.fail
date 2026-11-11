@@ -76,10 +76,10 @@ test "one of a few as a node beside the old one, with touch and with keyboard an
       assert_eq(drawn_within(t, l.rect), drawn_within(t, r.rect), msg="\{at}: at rest")
       assert_eq(words_within(t, l.rect), words_within(t, r.rect), msg="\{at}: its words")
       if platform == 0 {
-        t.move(l.rect.0 + 30.0, l.rect.1 + l.rect.3 / 2.0)
+        t.move_to(l.rect.0 + 30.0, l.rect.1 + l.rect.3 / 2.0)
         t.draw()
         let lit = drawn_within(t, l.rect)
-        t.move(r.rect.0 + 30.0, r.rect.1 + r.rect.3 / 2.0)
+        t.move_to(r.rect.0 + 30.0, r.rect.1 + r.rect.3 / 2.0)
         t.draw()
         assert_eq(lit, drawn_within(t, r.rect), msg="\{at}: pointed at")
         t.leave()

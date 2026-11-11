@@ -750,7 +750,7 @@ fn swipe_node(
                 // off to the left, then archived there (no copy of it left behind as it leaves the list: it is out
                 // of sight); refused, it comes back from there
                 rows.swiped_off[key] = true
-                off.go_by(sw, -w, @motion.move(), velocity=vx * 1000.0)
+                off.go_by(sw, -w, @motion.moved(), velocity=vx * 1000.0)
                 sw.at_moment(off.end(), fn() {
                   archive_row(src, i, failed=fn() {
                     rows.swiped_off.remove(key)

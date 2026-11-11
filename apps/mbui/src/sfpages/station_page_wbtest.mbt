@@ -725,12 +725,12 @@ test "a station's page opened again begins at its overview" {
 
 ///|
 /// Maple (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
-/// (`local`: the host's words for it), its page open with a mouse at `w`.
-fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
+/// (`own_station`: the host's words for it), its page open with a mouse at `w`.
+fn this_mba_tester(own_station : String, w? : Double = 390.0) -> @ui.Tester {
   // (this machine's station as the system says it from the start: the host's)
   let t = setting_tester(Station("ws1/st2"), w, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st2")
-  }, host=fn(h) { h.set_local_station(local) })
+  }, host=fn(h) { h.set_local_station(own_station) })
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -1218,7 +1218,7 @@ fn sp_tester(
     t.set_font_scale(scale)
   }
   t.run_for(@ui.move_most_ms)
-  t.move(w / 2.0, h / 2.0)
+  t.move_to(w / 2.0, h / 2.0)
   for _ in 0..<16 {
     match sp_row(t) {
       Some(r) if r.2 < 120.0 => t.wheel(w / 2.0, h / 2.0, -200.0)
@@ -1353,7 +1353,7 @@ test "a long account kind's panel on each screen: its search over a list that sc
     // (scrolled to its last: the search where it was)
     let x = next.1 + 40.0
     let y = next.2 + 40.0
-    t.move(x, y)
+    t.move_to(x, y)
     for _ in 0..<12 {
       if sp_seen(t, "账号 11", h=if wide { 680.0 } else { 844.0 }).length() > 0 {
         break

@@ -632,7 +632,7 @@ fn cn_waiting_app_node(
         @sf.line_end_node(c, fn(l) {
           let go = fn() {
             let (st, id) = @signals.untracked(fn() { (station(), app_id()) })
-            new_connect_dialog(src, core, @signals.untracked(here), st, resume=id)
+            new_connect_dialog(src, core, @signals.untracked(here), st, made_app=id)
           }
           if wide {
             @sf.button_node(l, fn() { @sf.t("web-pages.connects.continue") }, go) |> ignore

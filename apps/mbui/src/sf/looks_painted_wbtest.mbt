@@ -47,7 +47,7 @@ test "a button the pointer comes onto: its ground eases to the hover's as each f
   }
   let rest = ground()
   // (the pointer come onto it: built for that, its ground told to go to the hover's)
-  t.move(x, y)
+  t.move_to(x, y)
   let (built, grounds) = painted_until(t, t.time() + dur_ms, ground)
   // (it eases, through colours between, to the one under the hand)
   assert_true(grounds.length() > 3 && !grounds.contains(rest), msg="\{grounds}")
@@ -129,7 +129,7 @@ test "words to press the pointer comes onto (忽略): their ink mixed from the q
     Some(r) => (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
     None => fail("no 忽略")
   }
-  t.move(x, y)
+  t.move_to(x, y)
   // each frame: how far it is lit, and whether every glyph is drawn in the mix of the two inks that far (as one ink
   // mixed, whole: nothing under it showing through)
   let (built, seen) = painted_until(t, t.time() + dur_ms, fn() {

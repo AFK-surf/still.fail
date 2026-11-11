@@ -20,7 +20,7 @@ fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
 fn slide(t : @ui.Tester, x0 : Double, y0 : Double, x1 : Double, y1 : Double, steps : Int) -> Unit {
   for i in 1..=steps {
     let k = i.to_double() / steps.to_double()
-    t.move(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)
+    t.move_to(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)
   }
 }
 

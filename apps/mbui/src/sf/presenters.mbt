@@ -1710,7 +1710,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
       let to = if covered { 1.0 } else { 0.0 }
       if sheet {
         let way = dmax(p.pushed.untracked(), 1.0)
-        p.recede.animate(c, to, @motion.move(points=way))
+        p.recede.animate(c, to, @motion.moved(points=way))
       } else {
         // (dimmed as a dialog's ground comes and goes)
         p.recede.animate(c, to, @motion.tween(confirm_ground_ms, ease=if covered { Out } else { Leave }))
@@ -2763,7 +2763,7 @@ fn steps_shown(
     }
   }
   // (its height on its way with the slide: as long as the slide's way across the panel is far)
-  let slide = @motion.move(over=c.width)
+  let slide = @motion.moved(over=c.width)
   match @motion.measured(c, key_of(top)) {
     Some(h) =>
       if p.step_h_of < 0 {

@@ -478,7 +478,7 @@ fn sheet_node(
           None => ()
         }
         let way = dmax(pushed.untracked(), 1.0)
-        recede.go_by(layer, if h is Some(_) { 1.0 } else { 0.0 }, @motion.move(points=way))
+        recede.go_by(layer, if h is Some(_) { 1.0 } else { 0.0 }, @motion.moved(points=way))
       })
       |> ignore
       // (its title and what it says as they are now, `live`'s where it says them, as the host's sheet heads a panel:
@@ -743,7 +743,7 @@ fn sheet_node(
                   // (a tap on its grabber, its top 30: to the other end)
                   if d.oy < sheet_grab_tap {
                     let (lo, hi) = (sheet_grows_to[0], sheet_grows_to[1])
-                    tall.go_by(sheet, if at > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, @motion.move())
+                    tall.go_by(sheet, if at > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, @motion.moved())
                   }
                 } else if @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below) is None {
                   // (sinking away from where it is, as fast as it was going down)
@@ -752,7 +752,7 @@ fn sheet_node(
                 } else {
                   let f = @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below).unwrap_or(sheet_grows_to[0])
                   // (its height, up: its speed the other way, a second's)
-                  tall.go_by(sheet, f * total, @motion.move(), velocity=-speed * 1000.0)
+                  tall.go_by(sheet, f * total, @motion.moved(), velocity=-speed * 1000.0)
                 }
               }
             }
@@ -772,7 +772,7 @@ fn sheet_node(
                   cancel()
                 } else {
                   // (back from its speed, a second's)
-                  back.go_by(layer, 0.0, @motion.move(), velocity=speed * 1000.0)
+                  back.go_by(layer, 0.0, @motion.moved(), velocity=speed * 1000.0)
                 }
               }
             }

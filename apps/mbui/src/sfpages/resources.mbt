@@ -189,20 +189,20 @@ fn rs_sample(c : @ui.Ctx, core : Core) -> Unit {
 /// The made-up machine rs_sample draws (and its node, resources_node's bones).
 fn rs_sample_view() -> Json {
   let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
-  let use = fn(k : Double) -> Json { { "cpu": Json::number(k), "memory": Json::number(k * 2.0) } }
+  let usage = fn(k : Double) -> Json { { "cpu": Json::number(k), "memory": Json::number(k * 2.0) } }
   let group = fn(i : Int, n : Int, k : Double, processes : Array[Int]) -> Json {
     {
       "key": Json::string("sample" + i.to_string()),
       "title": w(n),
       "kindText": w(2),
-      "use": use(k),
+      "use": usage(k),
       "processes": Json::array(
         processes.mapi(fn(j, m) {
           Json::object({
             "key": Json::string("sample" + i.to_string() + "/" + j.to_string()),
             "name": w(m),
             "pid": Json::number((j + 1).to_double()),
-            "use": use(k / 2.0),
+            "use": usage(k / 2.0),
           })
         }),
       ),

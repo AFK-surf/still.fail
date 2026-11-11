@@ -588,7 +588,7 @@ test "wide: the machine's own sessions offered under the composer as its station
   assert_false(ground())
   assert_true(inks().length() > 0 && inks().iter().all(fn(k) { k == @sf.theme().p.muted }), msg="quiet: \{inks()}")
   // pointed at: its ground, its words the text's
-  t.move(ox, oy)
+  t.move_to(ox, oy)
   t.draw()
   assert_true(ground(), msg="the hover's ground under the offer")
   assert_true(inks().iter().all(fn(k) { k == @sf.theme().p.text }), msg="lit: \{inks()}")
@@ -1560,7 +1560,7 @@ test "wide: a place of the rail pressed with ⌘ held and dragged up a place is 
   t.press_at(x, y)
   t.hold_mods(0)
   for k in 1..=10 {
-    t.move(x, y - @sfdesk.rail_pitch * k.to_double() / 10.0)
+    t.move_to(x, y - @sfdesk.rail_pitch * k.to_double() / 10.0)
   }
   t.release(x, y - @sfdesk.rail_pitch)
   t.frame()
@@ -2202,7 +2202,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
     None => fail("no agent's message")
   }
   assert_eq(word("Claude · Opus 5.5").length(), 0)
-  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.move_to(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its label and its account under it, where it stands, its latest lines, the figures side by side, the quiet line
   let label = word("Claude · Opus 5.5")
@@ -2248,7 +2248,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   assert_true(quiet[0].2 + quiet[0].4 < last.2, msg="over the picture")
   assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
   // gone once the pointer has left it
-  t.move(900.0, 300.0)
+  t.move_to(900.0, 300.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word("Claude · Opus 5.5").length(), 0)
 }
@@ -2267,7 +2267,7 @@ test "wide: what an agent runs as, pressed in its card, opens its model's panel 
     Some(w) => w
     None => fail("no agent's message")
   }
-  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.move_to(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   let (x, y, w, h) = t.get(Button, label="Claude · Opus 5.5").rect
   t.click(Button, label="Claude · Opus 5.5")
@@ -2293,13 +2293,13 @@ test "wide: a web link in a message has its page's card while the pointer rests 
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let (x, y) = peek_words_at(t, "https://example.com/bench/list")
   assert_eq(word("列表滚动的性能数据").length(), 0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its card: the page's title over its site and where it goes
   assert_eq(word("列表滚动的性能数据").length(), 1, msg="its title")
   assert_eq(word("Example · example.com/bench/list").length(), 1, msg="where it goes")
   // gone once the pointer has left it
-  t.move(900.0, 100.0)
+  t.move_to(900.0, 100.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word("列表滚动的性能数据").length(), 0)
 }
@@ -2313,7 +2313,7 @@ test "wide: a pull request's link in a message has its card as GitHub says it: i
   let said = ["已合并", "acme/shop #128", "3 小时前", "首页列表按天分组", "lin", "+120", "4 个文件", "检查通过 9"]
   // (some said elsewhere too: a message's time)
   let before = said.map(fn(w) { word(w).length() })
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   for k, w in said {
     assert_eq(word(w).length(), before[k] + 1, msg=w)
@@ -2328,7 +2328,7 @@ test "wide: a file an agent names by its path is a chip in its words, its card a
   // its chip: its path and the line it names, as the core shortened it
   let (x, y) = peek_words_at(t, "src/list/place.mbt:12")
   assert_eq(t.locate("self.anchor = self.anchor + n").length(), 0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its card: its name and line, its whole path (home as ~), its lines round the one named
   assert_eq(word("place.mbt:12").length(), 1, msg="its name and line")
@@ -2362,13 +2362,13 @@ test "wide: a reference to a chat in a message has the chat's card while the poi
   // (its @ and its title one link: from either, the same card)
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
   assert_eq(word(said).length(), 0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // read by the core as the pointer came onto it, once each link in the run (peeks.mbt chats_named: kept across runs,
   // so asked again by none after one has read it), the chat found in the workspace's list: where it stands
   assert_true(calls.filter(fn(m) { m.name == "link.parse" }).length() <= 1)
   assert_eq(word(said).length(), 1, msg="where it stands")
-  t.move(900.0, 100.0)
+  t.move_to(900.0, 100.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word(said).length(), 0)
 }
@@ -2389,7 +2389,7 @@ test "wide: an agent's card says over each of its allowance's chips what is left
     Some(w) => w
     None => fail("no agent's message")
   }
-  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.move_to(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_eq(word("林的 Max").length(), 1, msg="its card")
   // its weekly window's chip, 18% left: what it says over it once the pointer rests there (which window, what is
@@ -2400,7 +2400,7 @@ test "wide: an agent's card says over each of its allowance's chips what is left
     t.words().filter(fn(w) { (w.0.contains("每周剩余 18%") || w.0.contains("2 天 4 小时后刷新")) && w.5 > 0.5 })
   }
   assert_eq(tip().length(), 0)
-  t.move(chip[0].1 + chip[0].3 / 2.0, chip[0].2 + chip[0].4 / 2.0)
+  t.move_to(chip[0].1 + chip[0].3 / 2.0, chip[0].2 + chip[0].4 / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
   assert_true(
     tip().iter().any(fn(w) { w.0.contains("每周剩余 18%") }) && tip().iter().any(fn(w) { w.0.contains("2 天 4 小时后刷新") }),
@@ -2418,12 +2418,12 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
   let part = t.locate("=Willow").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
   assert_eq(part.length(), 1, msg="\{t.locate("=Willow")}")
   assert_eq(word("机器详情").length(), 0)
-  t.move(part[0].0, part[0].1)
+  t.move_to(part[0].0, part[0].1)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its card: its name, what it says of itself, where to go on from it
   assert_eq(word("机器详情").length(), 1, msg="its card")
   // gone once the pointer has left it
-  t.move(900.0, 400.0)
+  t.move_to(900.0, 400.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word("机器详情").length(), 0)
 }
@@ -2480,7 +2480,7 @@ fn working_agent_card(stands? : String) -> @ui.Tester {
       }
     })
   guard last is Some(name) else { @halt.saying("no agent's message") }
-  t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
+  t.move_to(name.1 - 20.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t
 }
@@ -2575,16 +2575,16 @@ test "wide: an agent's card opened again has its latest lines as they are then: 
   )
   let (t, x, y) = lines_card(latest)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_eq(word("读了 src/ui/list.mbt").length(), 1, msg="its card, its lines")
   // the pointer gone from it: the card closed and gone
-  t.move(1270.0, 790.0)
+  t.move_to(1270.0, 790.0)
   t.run_for(card_gone_ms)
   assert_eq(word("跑了列表的测试").length(), 0, msg="its card gone")
   // one more done while it is closed; the pointer back, resting till it opens, and a little more
   latest.set(([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2))
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms + card_opening_ms)
   // as they are: no copy of the first leaving, the new one as whole as those that stayed, a line apart
   assert_eq(word("读了 src/ui/list.mbt").length(), 0, msg="no copy of what it showed before")
@@ -2601,7 +2601,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   )
   let (t, x, y) = lines_card(latest)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // where the three are at rest: a line apart
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
@@ -2892,7 +2892,7 @@ fn ref_rested() -> (Int, Bool) raise {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   let shown = t.words().filter(fn(w) { w.0 == "待处理 · 分组的标题用相对日期还是具体日期？" && w.5 > 0.5 }).length() == 1
   (calls.filter(fn(m) { m.name == "link.parse" }).length(), shown)

@@ -69,7 +69,7 @@ test "corners: toasts, fields, segmented choices, a toolbar" {
   t.draw()
   // pointed at: the password's button shows its ground
   let (x, y, w, h) = t.get(@ui.Role::Button, label="显示").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   assert_eq(t.corner_faults(), [])
 }
 

@@ -382,7 +382,7 @@ test "⌘K: the pointer going down its rows leaves only the one under it shown c
   assert_eq(first.length(), 1, msg="as it opens")
   for k in 0..<4 {
     let y = first[0] + @sf.theme().chat_list.found.row_h * (k.to_double() + 0.5)
-    t.move(list.x + list.w / 2.0, y)
+    t.move_to(list.x + list.w / 2.0, y)
     t.run_for(@ui.move_most_ms)
     let rows = chosen()
     assert_eq(rows.length(), 1, msg="the pointer on row \{k}: \{rows}")

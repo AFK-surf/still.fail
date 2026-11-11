@@ -173,7 +173,7 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
   let (x, y, w, h) = t.get(@ui.Role::Button, label="Bold").rect
   // (taken at its moment)
   let moved = t.time()
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   let due = moved + @kit.tooltip_delay_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
@@ -188,7 +188,7 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
   // a whole delay rested there again: still shut
   t.run_for(@kit.tooltip_delay_ms)
   assert_false(shown.val)
-  t.move(1.0, 1.0)
+  t.move_to(1.0, 1.0)
   assert_false(shown.val)
   // by the keyboard: at once; Escape shuts it
   t.tab()
@@ -213,7 +213,7 @@ test "tooltip: not through a dialog over its trigger: the pointer rests on the d
   open.val = true
   t.draw()
   assert_true(t.query(@ui.Role::Dialog, label="Hello") is Some(_))
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@kit.tooltip_delay_ms * 2.0)
   assert_false(shown.val)
 }
@@ -235,7 +235,7 @@ test "tooltip: lying over its own trigger, it stays: the pointer on it there is 
   })
   t.draw()
   let (x, y, w, h) = t.get(@ui.Role::Button, label="Bold").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@kit.tooltip_delay_ms)
   assert_true(shown.val)
   t.draw()
@@ -394,17 +394,17 @@ test "tooltip: one shown soon after another closed skips the wait" {
   })
   let (ax, ay, aw, ah) = t.get(@ui.Role::Button, label="A").rect
   let (bx, by, bw, bh) = t.get(@ui.Role::Button, label="B").rect
-  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.move_to(ax + aw / 2.0, ay + ah / 2.0)
   t.run_for(@kit.tooltip_delay_ms)
   assert_true(a.val)
-  t.move(bx + bw / 2.0, by + bh / 2.0)
+  t.move_to(bx + bw / 2.0, by + bh / 2.0)
   t.draw()
   assert_false(a.val)
   assert_true(b.val)
   // its skip gone by: the wait again
-  t.move(1.0, 1.0)
+  t.move_to(1.0, 1.0)
   t.run_for(@kit.tooltip_skip_ms)
-  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.move_to(ax + aw / 2.0, ay + ah / 2.0)
   t.draw()
   assert_false(a.val)
 }
@@ -423,7 +423,7 @@ test "tooltip: a newly hovered trigger replaces a focused trigger's tip" {
   t.tab()
   assert_eq(visible(), ["First tip"])
   let (x, y, w, h) = t.get(@ui.Role::Button, label="B").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@kit.tooltip_delay_ms)
   assert_eq(visible(), ["Second tip"])
   t.run_for(@kit.pop_out_ms)
@@ -468,7 +468,7 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
   let (x, y, w, h) = t.get(@ui.Role::Button, label="@ada").rect
   // (taken at its moment)
   let moved = t.time()
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   let due = moved + @kit.hover_card_open_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
@@ -478,13 +478,13 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
   t.draw()
   // onto the card: still open
   let (cx, cy, cw, ch) = t.rect_of("Ada Lovelace").unwrap()
-  t.move(cx + cw / 2.0, cy + ch / 2.0)
+  t.move_to(cx + cw / 2.0, cy + ch / 2.0)
   t.run_for(@kit.hover_card_close_ms)
   assert_true(open.val)
   // off both: closed after its delay
   // (taken at its moment)
   let moved = t.time()
-  t.move(380.0, 800.0)
+  t.move_to(380.0, 800.0)
   let due = moved + @kit.hover_card_close_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
@@ -510,23 +510,23 @@ test "hover card and tooltip: not while a press elsewhere is dragged across the 
   let (bx, by, bw, bh) = t.get(@ui.Role::Button, label="Bold").rect
   // pressed on the ground (an edge dragged), carried over each trigger and held there past its wait: neither opens
   t.press_at(380.0, 800.0)
-  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.move_to(ax + aw / 2.0, ay + ah / 2.0)
   t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_false(card.val)
-  t.move(bx + bw / 2.0, by + bh / 2.0)
+  t.move_to(bx + bw / 2.0, by + bh / 2.0)
   t.run_for(@kit.tooltip_delay_ms * 2.0)
   assert_false(tip.val)
   // let go there: the tip once the pointer has rested its wait from then
   let lifted = t.time()
   t.release(bx + bw / 2.0, by + bh / 2.0)
-  t.move(bx + bw / 2.0, by + bh / 2.0)
+  t.move_to(bx + bw / 2.0, by + bh / 2.0)
   t.run_for(lifted + @kit.tooltip_delay_ms - 1.0 - t.time())
   assert_false(tip.val)
   t.run_for(lifted + @kit.tooltip_delay_ms - t.time())
   assert_true(tip.val)
   // and the card so, the pointer come to it with no button down
   let moved = t.time()
-  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.move_to(ax + aw / 2.0, ay + ah / 2.0)
   t.run_for(moved + @kit.hover_card_open_ms - 1.0 - t.time())
   assert_false(card.val)
   t.run_for(moved + @kit.hover_card_open_ms - t.time())
@@ -553,13 +553,13 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   ignore(t.get(@ui.Role::Region, label="通知"))
   // paused while the pointer is over them
   let (x, y, w, h) = t.get(@ui.Role::Status, label="Saved").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(life_ms)
   assert_eq(list.val.length(), 2)
   // (none of their time went by before the pointer came over them)
   // (taken at its moment)
   let moved = t.time()
-  t.move(1.0, 1.0)
+  t.move_to(1.0, 1.0)
   let due = moved + life_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
@@ -800,9 +800,9 @@ test "toasts: toast_due says when the next goes (its time out), none while pause
   assert_eq(t.next_wake(), None)
   // paused under the pointer: none due
   let (x, y, w, h) = t.get(@ui.Role::Status, label="Saved").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   assert_eq(@kit.toast_due("toasts"), -1.0)
-  t.move(1.0, 1.0)
+  t.move_to(1.0, 1.0)
   // going on again: what was left of its time from here (none of it went while paused)
   let due = @kit.toast_due("toasts")
   assert_true(due > t.time() && due < shown + life + @kit.presence_in_ms + 100.0, msg="\{due}")

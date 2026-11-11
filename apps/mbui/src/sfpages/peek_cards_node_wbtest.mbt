@@ -118,14 +118,14 @@ fn peek_differ(old : Array[String], new : Array[String]) -> Array[String] {
 /// those words till its menu is.
 fn peek_rest_on(t : @ui.Tester, menu : String) -> Unit {
   let (x, y, w, h) = peek_trigger
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms + @ui.move_most_ms)
   if menu != "" {
     // (`menu` the words' key, read now the run's Tester is made)
     let menu = @sf.t(menu)
     match t.find(menu) {
       Some((mx, my)) => {
-        t.move(mx, my)
+        t.move_to(mx, my)
         t.run_for(@ui.move_most_ms)
       }
       None => @halt.saying("no \{menu} drawn")

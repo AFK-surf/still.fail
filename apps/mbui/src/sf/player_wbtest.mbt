@@ -146,7 +146,7 @@ test "a desktop's timeline dragged: paused, the picture going to the start of ea
   assert_true(told(t, 9, value="1"))
   assert_true(told(t, 3, value="200"))
   let (x1, y1) = at(0.75)
-  t.move(x1, y1)
+  t.move_to(x1, y1)
   assert_true(told(t, 3, value="700"))
   // the frame it is at, of how many, while the finger is on it
   assert_true(t.find("8 / 10 帧") is Some(_))
@@ -295,7 +295,7 @@ test "a desktop's: the bar's way back under the pointer lit on the film's black 
   }
   let lit = alpha(media_dark_text, media_hot_share)
   assert_false(under(lit))
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   assert_true(under(lit))
   // (the page's: dark on the black)

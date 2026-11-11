@@ -168,7 +168,7 @@ priv struct Rec {
   mut node : Int
   /// How a measured node was drawn after all of its ancestors' looks were applied.
   mut drawn : @ui.DrawnState?
-  mut ref : Int
+  mut anchor : Int
   /// the frame it was last laid out in (what this frame's builds of it read: layout_entry)
   mut seen : Int
   /// whether what lays it out is built (from its first layout until it is no longer built: rec_unbuilt), and whether
@@ -266,7 +266,7 @@ fn Rec::new() -> Rec {
     h: 0.0,
     node: -1,
     drawn: None,
-    ref: 0,
+    anchor: 0,
     seen: -10,
     alive: false,
     read: false,
@@ -1857,7 +1857,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
     }
     if e.key != 0 {
       let li = c.list_above(e.node)
-      let (ref, scope_node, rx, ry) = if li >= 0 {
+      let (anchor, scope_node, rx, ry) = if li >= 0 {
         let (lx, ly, _, _) = c.node_rect(li)
         let (pl, pt, _, _) = c.node_pad(li)
         let s = match scrolled.get(li) {
@@ -1901,7 +1901,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_x = r.x
         r.was_y = r.y
         r.was_vy = r.vy
-        r.was_ref = r.ref
+        r.was_ref = r.anchor
         r.was_alive = r.alive
         r.ox.step(c)
         r.oy.step(c)
@@ -1929,8 +1929,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_hh = r.hh
         r.g_now = false
       }
-      let lm = if li >= 0 { mo.lists.get(ref) } else { None }
-      let was_seen = r.was_alive && r.was_ref == ref
+      let lm = if li >= 0 { mo.lists.get(anchor) } else { None }
+      let was_seen = r.was_alive && r.was_ref == anchor
       // its list held at its foot as its rows changed (one gone, at its end): all it showed put down as far as they
       // lost, its place in it the same, moved so for that change all the same (the rows over a row gone come down
       // over it, those under it stay), and one come into view over them so comes down with them, from out of view
@@ -2074,7 +2074,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             let toward = (cx + dx) * vx <= 0.0 && (cy + dy) * vy <= 0.0
             let carried = sets_out_from_rest(spec) && toward && (vx.abs() > part_moving || vy.abs() > part_moving)
             let spec = if carried {
-              move(over=carried_way(cx + dx, vx, cy + dy, vy))
+              moved(over=carried_way(cx + dx, vx, cy + dy, vy))
             } else {
               spec.delayed(delay)
             }
@@ -2213,7 +2213,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           // migration, 2026-11-10: a composer growing a line let go of by words sent from it before it has grown)
           let spec = if sets_out_from_rest(spec) && v.abs() > reshape_moving {
             let way = ground_way(r, laid)
-            move(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
+            moved(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
           } else {
             spec
           }
@@ -2253,11 +2253,11 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       r.vy = vy
       r.w = nw
       r.h = nh
-      r.ref = ref
+      r.anchor = anchor
       r.seen = frame
       rec_built(c, e.key, r)
       r.exit = e.exit
-      r.list = ref
+      r.list = anchor
       r.scope_node = scope_node
       match e.exit {
         // what it draws kept, for its copy should it leave its list

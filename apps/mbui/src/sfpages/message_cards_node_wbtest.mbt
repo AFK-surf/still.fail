@@ -280,7 +280,7 @@ fn card_rig_both(
   if over != "" {
     let (x, y, ww, h) = old.rect_of(over).unwrap()
     point = (x + ww / 2.0, y + h / 2.0)
-    old.move(point.0, point.1)
+    old.move_to(point.0, point.1)
     old.run_for(@ui.move_most_ms)
   }
   if press != "" {
@@ -292,7 +292,7 @@ fn card_rig_both(
   t.set_font_scale(scale)
   t.run_for(@ui.move_most_ms)
   if over != "" {
-    t.move(point.0, point.1)
+    t.move_to(point.0, point.1)
     t.run_for(@ui.move_most_ms)
   }
   if press != "" {

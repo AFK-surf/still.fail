@@ -19,7 +19,7 @@ fn sub_back_a_frame_on(away : Bool) -> @ui.Tester raise {
   t.frame()
   assert_true(t.query(MenuItem, label="甲一") is None, msg="out of reach as it goes")
   if away {
-    t.move(4.0, 4.0)
+    t.move_to(4.0, 4.0)
   }
   // (shown again before its Move is over: the same row, back)
   shown.set(true)
@@ -38,7 +38,7 @@ test "a submenu row in a dialog called back a frame after it starts going, the p
   let t = sub_back_a_frame_on(true)
   assert_true(sub_has(t, "甲") && !sub_has(t, "甲一"), msg="back, closed: \{sub_at(t, ["甲", "甲一"])}")
   let (x, y) = sub_mid(t, "甲")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@ui.move_most_ms)
   assert_true(sub_has(t, "甲一"), msg="pointed at, open")
 }

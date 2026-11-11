@@ -1020,7 +1020,7 @@ test "用量 made once: what the pointer rests on said: a day of the year; by we
   }
   assert_true(mon.0 != "", msg="the year's Monday row found")
   let before = words_where(t)
-  t.move(370.0 - 20.0, mon.2 + mon.4 / 2.0)
+  t.move_to(370.0 - 20.0, mon.2 + mon.4 / 2.0)
   t.run_for(@ui.move_most_ms + @sf.tip_delay_ms)
   let first = words_where(t)
   assert_true(first.length() > before.length(), msg="a tip shown: \{first.length()} words, \{before.length()} before")
@@ -1033,7 +1033,7 @@ test "用量 made once: what the pointer rests on said: a day of the year; by we
   })
   assert_true(squares.length() > 0, msg="the last weeks' columns lit")
   let cell = squares[squares.length() - 1]
-  t.move(cell.0 + cell.2 / 2.0, cell.1 + cell.3 / 2.0)
+  t.move_to(cell.0 + cell.2 / 2.0, cell.1 + cell.3 / 2.0)
   t.run_for(@ui.move_most_ms + @sf.tip_delay_ms)
   let week = words_where(t)
   assert_true(week.iter().any(fn(w) { w.contains("起一周") }), msg="its week said: \{week}")

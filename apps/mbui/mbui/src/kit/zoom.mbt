@@ -677,7 +677,7 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool,
   // (as long as the furthest of its corners goes; from the moment it is told)
   let far = zmax(zabs(x - self.g_from[1]), zabs(y - self.g_from[2])) +
     zmax(self.nw, self.nh) * zabs(s - self.g_from[0])
-  self.glide.go(0.0, 1.0, @motion.move(over=far), 0.0, t)
+  self.glide.go(0.0, 1.0, @motion.moved(over=far), 0.0, t)
 }
 
 ///|

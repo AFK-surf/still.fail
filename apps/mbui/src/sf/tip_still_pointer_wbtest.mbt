@@ -35,7 +35,7 @@ test "a tool's tip, the tool carried from under a still pointer on a way: shown 
   t.draw()
   let tips = fn() { t.semantics().filter(fn(s) { s.role == Tooltip && s.label == "复制" }).length() }
   let n = t.get(Button, label="复制")
-  t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_eq(tips(), 1, msg="shown")
   let tree = @ui.view_tree().unwrap()

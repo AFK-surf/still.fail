@@ -249,7 +249,7 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
     let note = c.box(style=unsent_note, fn() {
       @sf.icon(c, "info", size=unsent_icon, color=p.red) |> ignore
       c.text(
-        if o.final && o.error != "" {
+        if o.refused && o.error != "" {
           @sf.t("web-main.draft.notSent", args=[("error", o.error)])
         } else {
           @sf.t("web-main.chat.unsent")
@@ -263,7 +263,7 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
     } else {
       @sf.t("web-main.chat.notSent")
     }, repeats=true)
-    if o.final {
+    if o.refused {
       // refused as it is (a file this station does not have): its words back in the composer, to be sent anew
       let draft = here.station + ":" + here.session
       let words = o.text
@@ -639,7 +639,7 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       st.places = activity_change_places(old_cells, new_cells, visible)
       reveal.animate(c, 1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
       let widened = dmin(c.words_across(st.words, style, mono=st.mono), visible) - dmin(c.words_across(st.was, style, mono=st.was_mono), visible)
-      swap.animate(c, 1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
+      swap.animate(c, 1.0, @motion.moved(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
     }
   }
   let k = swap.get(c)

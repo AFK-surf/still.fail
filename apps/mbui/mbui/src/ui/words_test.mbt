@@ -187,7 +187,7 @@ test "a press taken by the app scrolls nothing under it: not a box that scrolls 
     t.press_at(x0, y0)
     for k in 1..=10 {
       let f = k.to_double() / 10.0
-      t.move(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
+      t.move_to(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
     }
     t.release(x1, y1)
     t.draw()

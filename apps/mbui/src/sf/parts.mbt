@@ -259,7 +259,7 @@ fn button_part(
 
 ///|
 /// How a button whose words changed goes to its new width (button): a Move as long as its width changes.
-let button_reshape : @motion.Spec = @motion.move()
+let button_reshape : @motion.Spec = @motion.moved()
 
 ///|
 /// How far a button's words are in from its sides.

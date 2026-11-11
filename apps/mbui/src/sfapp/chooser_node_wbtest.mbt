@@ -118,7 +118,7 @@ fn ch_hand(old : Bool, platform : Int, wide : Bool) -> Array[String] {
   out.push("rest drawn: \{ch_drawn_in(t, r)}")
   let (x, y) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
   if platform == 0 {
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@ui.move_most_ms)
     out.push("pointed drawn: \{ch_drawn_in(t, r)}")
   }

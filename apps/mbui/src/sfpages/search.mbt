@@ -201,7 +201,7 @@ fn search_close(c : @ui.Ctx) -> Unit {
 /// The field's way up and back: from where it stood in the list (its top in the window) to the top, a Move as long as
 /// that (the list's rise at least).
 fn search_way() -> @motion.Spec {
-  @motion.move(points=dmax(search.from, search_list_rise))
+  @motion.moved(points=dmax(search.from, search_list_rise))
 }
 
 ///|

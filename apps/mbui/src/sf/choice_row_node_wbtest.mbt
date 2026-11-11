@@ -122,10 +122,10 @@ fn choice_rows_same(look : Look, platform : Int, card? : Bool = false) -> Unit r
     assert_eq(drawn_within(t, o.rect), drawn_within(t, n.rect), msg="\{at}: at rest")
     assert_eq(words_within(t, o.rect), words_within(t, n.rect), msg="\{at}: its words")
     // pointed at: the old one, then the node
-    t.move(o.rect.0 + 30.0, o.rect.1 + o.rect.3 / 2.0)
+    t.move_to(o.rect.0 + 30.0, o.rect.1 + o.rect.3 / 2.0)
     t.draw()
     let old_lit = drawn_within(t, o.rect)
-    t.move(n.rect.0 + 30.0, n.rect.1 + n.rect.3 / 2.0)
+    t.move_to(n.rect.0 + 30.0, n.rect.1 + n.rect.3 / 2.0)
     t.draw()
     assert_eq(old_lit, drawn_within(t, n.rect), msg="\{at}: pointed at")
     t.leave()

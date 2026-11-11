@@ -585,7 +585,7 @@ test "a column of the tree's that scrolls, with these bars, a mouse over it: scr
     |> ignore
   })
   t.draw()
-  t.move(200.0, 100.0)
+  t.move_to(200.0, 100.0)
   t.wheel(200.0, 100.0, 40.0)
   t.run_for(turn_done_ms)
   let drawn = t.drawn_instances()
@@ -606,9 +606,9 @@ fn thumb_opacity(t : Tester, x : Double) -> Double? {
 ///|
 test "a column of the tree's that scrolls, with these bars, and an old view's box kept to a height: the pointer come along their right edge, each bar coming in as the other, from nothing" {
   let came = fn(t : Tester, x : Double, y : Double) {
-    t.move(x - 40.0, y)
+    t.move_to(x - 40.0, y)
     t.run_for(bar_long_gone_ms)
-    t.move(x, y)
+    t.move_to(x, y)
     let first = thumb_opacity(t, 380.0).unwrap_or(0.0)
     t.run_for(bar_fade_part_ms)
     let mid = thumb_opacity(t, 380.0).unwrap_or(0.0)
@@ -672,7 +672,7 @@ test "a column of the tree's that scrolls in one that does too, with these bars:
     |> ignore
   })
   t.draw()
-  t.move(200.0, 150.0)
+  t.move_to(200.0, 150.0)
   // (the inner to its end: its thumb at its foot, 220 down, past the outer's at 200)
   for _ in 0..<3 {
     t.wheel(200.0, 150.0, 120.0)
@@ -703,7 +703,7 @@ fn flick_to_mouse(t : Tester, y : Double, at : () -> Double) -> (Bool, Bool, Boo
   t.run_for(hand_step_ms)
   let went_on = at() > let_go
   t.host_says_finger(Some(false))
-  t.move(200.0, y)
+  t.move_to(200.0, y)
   let before = at()
   t.run_for(hand_step_ms)
   let still = at() > before
@@ -771,10 +771,10 @@ test "an old view's box kept to a height in another as wide, and a column of the
   }, w=400.0, h=300.0, platform=0)
   old_t.draw()
   let near = fn(t : Tester) {
-    t.move(200.0, 100.0)
+    t.move_to(200.0, 100.0)
     t.run_for(bar_long_gone_ms)
     let before = thumbs_at(t, 380.0)
-    t.move(395.0, 100.0)
+    t.move_to(395.0, 100.0)
     t.run_for(turn_done_ms)
     (before, thumbs_at(t, 380.0))
   }
@@ -851,10 +851,10 @@ test "a column of the tree's that scrolls in another, with these bars: the inner
   t.draw()
   // (the outer moved on 80 by the wheel over its own rows: the inner at 20 to 120 down the window, its edge over the
   // outer's top, at 100, from 20 to 100)
-  t.move(200.0, 220.0)
+  t.move_to(200.0, 220.0)
   t.wheel(200.0, 220.0, 80.0)
   t.run_for(bar_long_gone_ms)
-  t.move(355.0, 60.0)
+  t.move_to(355.0, 60.0)
   t.run_for(turn_done_ms)
   assert_eq(thumbs_at(t, 340.0).filter(fn(th) { th.0 < 100.0 }), [])
 }
@@ -862,14 +862,14 @@ test "a column of the tree's that scrolls in another, with these bars: the inner
 ///|
 test "a column of the tree's that scrolls and an old view's box kept to a height, as tall and holding as much, with these bars: their thumbs where each other's are; the pointer just under each, in what takes it round it: each lit as the other" {
   let lit = fn(t : Tester) {
-    t.move(200.0, 100.0)
+    t.move_to(200.0, 100.0)
     t.wheel(200.0, 100.0, 40.0)
     t.run_for(turn_done_ms)
     let th = t.drawn_order().filter(fn(d) { d.0 == 0 && d.3 == scroll_bar_size && d.5 > 0.0 })
     guard th.length() == 1 else { return (th.map(fn(d) { (d.1, d.2, d.4) }), 0.0) }
     let (x, y, h) = (th[0].1, th[0].2, th[0].4)
     // (2 under its foot, in the 4 round it the pointer takes it in)
-    t.move(x + 1.5, y + h + 2.0)
+    t.move_to(x + 1.5, y + h + 2.0)
     t.run_for(turn_done_ms)
     let o = t.drawn_order().filter(fn(d) { d.0 == 0 && d.3 == scroll_bar_size && d.5 > 0.0 }).map(fn(d) { d.5 })
     ([(x, y, h)], o.get(0).unwrap_or(0.0))
@@ -914,7 +914,7 @@ test "a column of the tree's that scrolls and an old view's box kept to a height
       c.capped("over", 200.0, fn() { c.box(w=Px(400.0), h=Px(200.0 + over), fn() {  }) |> ignore }) |> ignore
     }, w=400.0, h=300.0, platform=0)
     old_t.draw()
-    old_t.move(200.0, 100.0)
+    old_t.move_to(200.0, 100.0)
     old_t.wheel(200.0, 100.0, 40.0)
     old_t.run_for(turn_done_ms)
     let old = (capped_id_at("over"), thumbs_at(old_t, 380.0).length())
@@ -935,7 +935,7 @@ test "a column of the tree's that scrolls and an old view's box kept to a height
       |> ignore
     })
     t.draw()
-    t.move(200.0, 100.0)
+    t.move_to(200.0, 100.0)
     t.wheel(200.0, 100.0, 40.0)
     t.run_for(turn_done_ms)
     ((scroll.most(), scroll_node_at_of(scroll)), thumbs_at(t, 380.0).length(), old)

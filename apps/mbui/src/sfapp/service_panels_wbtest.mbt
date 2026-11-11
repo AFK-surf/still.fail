@@ -528,7 +528,7 @@ test "自定义's width as the page fits the preview: nothing to turn, 横竖互
     // (the pointer resting on it: no name by it, the old one shown only where it turned)
     if platform == 0 {
       let k = t.get(Button, label="横竖互换")
-      t.move(k.rect.0 + k.rect.2 / 2.0, k.rect.1 + k.rect.3 / 2.0)
+      t.move_to(k.rect.0 + k.rect.2 / 2.0, k.rect.1 + k.rect.3 / 2.0)
       t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
       assert_true(t.semantics().iter().all(fn(s) { s.role != Tooltip }), msg="\{at}: no tip")
     }

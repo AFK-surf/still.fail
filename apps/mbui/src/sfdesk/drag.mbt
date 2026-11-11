@@ -391,7 +391,7 @@ fn fdrag_drop(c : @ui.Ctx, item : Dragged, t : FTarget, mods : Int) -> Unit {
       favorite_add(src, t.ws, { station: item.station, root: item.abs, path: "", name: item.name })
     }
     Some(into) => {
-      let move = fdrag_effect(item, into.station, mods) == "move"
+      let moves = fdrag_effect(item, into.station, mods) == "move"
       let anywhere = match dv_stations(src, t.ws).0 {
         Some(l) =>
           match l.iter().find_first(fn(s) { s.station == into.station }) {
@@ -400,7 +400,7 @@ fn fdrag_drop(c : @ui.Ctx, item : Dragged, t : FTarget, mods : Int) -> Unit {
           }
         None => false
       }
-      fdrag_transfer(c, src, item, into, move, t.name, anywhere)
+      fdrag_transfer(c, src, item, into, moves, t.name, anywhere)
     }
   }
 }
@@ -415,7 +415,7 @@ fn fdrag_transfer(
   src : Source,
   item : Dragged,
   into : DriveAt,
-  move : Bool,
+  moves : Bool,
   into_name : String,
   anywhere : Bool,
 ) -> Unit {
@@ -426,7 +426,7 @@ fn fdrag_transfer(
     return
   }
   fdrag_when(fn() { !(drive_folder(src, into.station, into_root, into.path) is (None, None)) }, fn() {
-    fdrag_send(c, src, item, into, move, into_name, anywhere)
+    fdrag_send(c, src, item, into, moves, into_name, anywhere)
   })
 }
 
@@ -437,7 +437,7 @@ fn fdrag_send(
   src : Source,
   item : Dragged,
   into : DriveAt,
-  move : Bool,
+  moves : Bool,
   into_name : String,
   anywhere : Bool,
 ) -> Unit {
@@ -447,7 +447,7 @@ fn fdrag_send(
     // (one that cannot be read: no names there to ask about)
     _ => []
   }
-  let what = @sf.t(if move { "web-pages.drive.moveWhat" } else { "web-pages.files.copyWhat" })
+  let what = @sf.t(if moves { "web-pages.drive.moveWhat" } else { "web-pages.files.copyWhat" })
   let into_json : Json = { "station": Json::string(into.station), "root": Json::string(into_root), "path": Json::string(into.path) }
   // the stations' copy (or move), the answer about a name there said
   let transfer = fn(answer : String?) {
@@ -466,7 +466,7 @@ fn fdrag_send(
           "names": [Json::string(item.name)],
         },
         "to": into_json,
-        "move": Json::boolean(move),
+        "move": Json::boolean(moves),
         "conflicts": Json::object(conflicts),
       },
       act_done(c, what),
@@ -515,7 +515,7 @@ fn fdrag_send(
     if answer == Some("skip") {
       return
     }
-    if move && item.station == into.station {
+    if moves && item.station == into.station {
       (src.call)(
         "drive.moves",
         {

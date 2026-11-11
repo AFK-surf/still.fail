@@ -32,9 +32,9 @@ let versions_state : VersionsState = {
 /// 22:13), in the device's local time.
 pub fn short_date_time(ms : Double) -> String {
   let day_ms = 86400000.0
-  let local = ms + @ui.utc_offset_min(ms).to_double() * 60000.0
-  let days = (local / day_ms).floor()
-  let minutes = ((local - days * day_ms) / 60000.0).floor().to_int()
+  let local_ms = ms + @ui.utc_offset_min(ms).to_double() * 60000.0
+  let days = (local_ms / day_ms).floor()
+  let minutes = ((local_ms - days * day_ms) / 60000.0).floor().to_int()
   // the day's date from the days since 1970-01-01 (the proleptic Gregorian calendar: H. Hinnant's civil_from_days)
   let z = days.to_int() + 719468
   let era = (if z >= 0 { z } else { z - 146096 }) / 146097

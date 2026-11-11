@@ -385,7 +385,7 @@ fn XParser::element(self : XParser) -> Unit {
     }
     None
   }
-  let (prefix, local) = split_qname(qname)
+  let (prefix, local_name) = split_qname(qname)
   let ns = match resolve(prefix) {
     Some(u) => u
     None => if prefix == "" { "" } else { return self.fail() }
@@ -409,7 +409,7 @@ fn XParser::element(self : XParser) -> Unit {
   let id = self.append_node({
     kind: XElement,
     ns,
-    name: local,
+    name: local_name,
     attrs,
     text: qname,
     parent: self.parent,

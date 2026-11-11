@@ -789,8 +789,8 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int, coor
       // gvar's deltas, with four phantom points after the outline's
       let vx = xs + [0, 0, 0, 0]
       let vy = ys + [0, 0, 0, 0]
-      let local = Array::makei(n_contours, fn(k) { u16(b, ends + k * 2) })
-      match self.simple_deltas(glyph, vx, vy, local, coords) {
+      let contour_ends = Array::makei(n_contours, fn(k) { u16(b, ends + k * 2) })
+      match self.simple_deltas(glyph, vx, vy, contour_ends, coords) {
         Some((dx, dy)) =>
           for k in 0..<n_points {
             xs[k] = xs[k] + fx_round(dx[k])

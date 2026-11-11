@@ -333,7 +333,7 @@ test "viewer on the tree: opened from the chat, zoomed, closed back into its thu
   t.run_for(@sfpages.reveal_ms)
   let (x, y) = t.locate("img:compare.png")[0]
   // (the pointer over the window, what is under it followed as long as it is: the window's, not the viewer's)
-  t.move(x, y)
+  t.move_to(x, y)
   let before = tree_held()
   let first = opened_closed(t, x, y, before)
   let again = opened_closed(t, x, y, before)
@@ -1676,7 +1676,7 @@ fn wheel_centre(moved_after : Bool) -> ((Double, Double), (Double, Double), (Dou
   let (mx, my) = (z.bw / 2.0, z.bh / 2.0)
   // (fitted, its middle under the stage's by half what the bar over it takes: as far again as it is zoomed)
   let (_, fy, _, fh) = z.rect_at(t.time()).unwrap()
-  t.move(mx, my)
+  t.move_to(mx, my)
   t.wheel_with(mx, my, 0.0, -693.0, @ui.wheel_mod_cmd)
   t.draw()
   let (rx, ry, rw, rh) = z.rect_at(t.time()).unwrap()
@@ -1685,7 +1685,7 @@ fn wheel_centre(moved_after : Bool) -> ((Double, Double), (Double, Double), (Dou
     (rx + rw / 2.0 - z.bw / 2.0).abs() < 0.001 && (ry + rh / 2.0 - z.bh / 2.0 - (fy + fh / 2.0 - z.bh / 2.0) * rh / fh).abs() < 0.001,
     msg="round the stage's middle: \{(rx, ry, rw, rh)}",
   )
-  t.move(100.0, 700.0)
+  t.move_to(100.0, 700.0)
   let (bx, by) = (400.0, 300.0)
   let before = ((bx - rx) / rw, (by - ry) / rh)
   t.wheel_told(bx, by, 0.0, -200.0, @ui.wheel_mod_cmd, t.time())
@@ -2216,7 +2216,7 @@ test "viewer on the tree, a wide window, a mouse: its bars hidden, the way to th
   t.touch(2, rx + rw / 2.0, ry + rh / 2.0)
   t.draw()
   assert_true(!v.bars_shown(), msg="its bars hidden")
-  t.move(dx, dy)
+  t.move_to(dx, dy)
   t.run_for(@sf.sleep_ms + @sf.wake_ms)
   assert_eq(after_disc(t), Some(1.0), msg="the pointer over it: there")
   // (held down on it, moved off it, past its going)
@@ -3006,7 +3006,7 @@ test "viewer on a phone's width, a mouse: its bars hidden by a click, shown by t
   assert_eq(head_drawn(), 0.0, msg="hidden: gone")
   // (the pointer along the top: shown, its 标注图片 pressed there)
   let (x, y, w, h) = t.get(Button, label=@sf.t("web-main.annotate.image")).rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sf.wake_ms * 2.0)
   assert_true(v.near_bar, msg="the pointer along the top")
   assert_eq(head_drawn(), 1.0, msg="the pointer along the top: shown")
@@ -3015,7 +3015,7 @@ test "viewer on a phone's width, a mouse: its bars hidden by a click, shown by t
   t.draw()
   assert_true(marking.on, msg="marking")
   // (the pointer back on the picture: still shown, marking)
-  t.move(px, py)
+  t.move_to(px, py)
   t.run_for(@sf.sleep_ms * 2.0)
   assert_true(!v.near_bar && !v.awake, msg="the pointer off the top, the bars asleep")
   assert_eq(head_drawn(), 1.0, msg="marking: shown")

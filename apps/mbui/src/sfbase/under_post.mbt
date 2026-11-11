@@ -6,7 +6,7 @@
 /// The room under a post going to its new height: a Move as long as its way is far, as every row's height in a chat's
 /// list goes (mbui's view/list_motion.mbt: what changes together moves as one, on one curve from one moment).
 // kept across runs: a curve, never written
-pub let close_gap : @motion.Spec = @motion.move()
+pub let close_gap : @motion.Spec = @motion.moved()
 
 ///|
 /// How long the archive buttons take to come and go, 忽略 too.

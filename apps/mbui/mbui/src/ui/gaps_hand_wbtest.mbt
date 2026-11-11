@@ -35,7 +35,7 @@ test "the spacing rules: rows flush under a resting pointer break no rule 1; one
   // the pointer resting on the first row (as a picture's hover leaves it)
   let pointed = pointed_rows(-1)
   pointed.frame()
-  pointed.move(100.0, 24.0)
+  pointed.move_to(100.0, 24.0)
   pointed.frame()
   assert_eq(rule1_count(pointed), 0)
   // the first row chosen, no hand anywhere: its neighbours light up flush against it

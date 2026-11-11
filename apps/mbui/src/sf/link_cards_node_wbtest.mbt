@@ -112,7 +112,7 @@ fn LinkRig::card_at(self : LinkRig, words : String) -> (Double, Double)? {
 test "a mouse resting on a link: its own card after hover_card_open_ms, beside that link (under it, at its start), not the other's; off it and the card, gone hover_card_close_ms after" {
   let r = link_rig()
   let short = 20.0
-  r.t.move(r.middle("甲的链接").0, r.middle("甲的链接").1)
+  r.t.move_to(r.middle("甲的链接").0, r.middle("甲的链接").1)
   r.t.run_for(hover_card_open_ms - short)
   assert_false(r.open(1), msg="not yet")
   r.t.run_for(short + hover_card_in_ms + short)
@@ -126,14 +126,14 @@ test "a mouse resting on a link: its own card after hover_card_open_ms, beside t
   }
   assert_true(r.card_at("乙的链接的卡") is None)
   // (off both: gone a while after)
-  r.t.move(760.0, 480.0)
+  r.t.move_to(760.0, 480.0)
   r.t.run_for(hover_card_close_ms - short)
   assert_true(r.open(1), msg="still, a while")
   r.t.run_for(short + hover_card_out_ms + short)
   assert_false(r.open(1), msg="gone")
   assert_true(r.card_at("甲的链接的卡") is None)
   // (onto 乙: its own, beside it)
-  r.t.move(r.middle("乙的链接").0, r.middle("乙的链接").1)
+  r.t.move_to(r.middle("乙的链接").0, r.middle("乙的链接").1)
   r.t.run_for(hover_card_open_ms + hover_card_in_ms + short)
   assert_true(r.open(3) && !r.open(1))
   let (bx, _, _, _) = r.piece("乙的链接")
@@ -148,11 +148,11 @@ test "a mouse resting on a link: its own card after hover_card_open_ms, beside t
 ///|
 test "a mouse resting on the words between links opens none; one resting on a link with no card opens none" {
   let r = link_rig(bare_b=true)
-  r.t.move(r.middle("先看").0, r.middle("先看").1)
+  r.t.move_to(r.middle("先看").0, r.middle("先看").1)
   r.t.run_for(hover_card_open_ms + hover_card_in_ms + 20.0)
   assert_false(r.open(1) || r.open(3))
   assert_true(r.hands.get(3) is None, msg="乙 has no card")
-  r.t.move(r.middle("乙的链接").0, r.middle("乙的链接").1)
+  r.t.move_to(r.middle("乙的链接").0, r.middle("乙的链接").1)
   r.t.run_for(hover_card_open_ms + hover_card_in_ms + 20.0)
   assert_true(r.card_at("乙的链接的卡") is None)
   assert_false(r.open(1))
@@ -180,19 +180,19 @@ test "a finger's long press on a link is its hold (its menu), no card; a right c
 test "what a card reads is read from the moment the pointer comes onto its link, while it or its card is there; let go once neither" {
   let r = link_rig()
   let (x, y) = r.middle("甲的链接")
-  r.t.move(x, y)
+  r.t.move_to(x, y)
   r.t.frame()
   assert_eq(r.reads, [("a", true)], msg="read as the pointer comes onto it")
   r.t.run_for(hover_card_open_ms + hover_card_in_ms + 20.0)
   // (onto its card: still read)
   match r.card_at("甲的链接的卡") {
-    Some((cx, cy)) => r.t.move(cx + 4.0, cy + 4.0)
+    Some((cx, cy)) => r.t.move_to(cx + 4.0, cy + 4.0)
     None => fail("甲's card not drawn")
   }
   r.t.run_for(hover_card_close_ms + 20.0)
   assert_eq(r.reads, [("a", true)], msg="on its card: still read")
   // (off both: let go once its card is gone)
-  r.t.move(760.0, 480.0)
+  r.t.move_to(760.0, 480.0)
   r.t.run_for(hover_card_close_ms + hover_card_out_ms + 40.0)
   assert_eq(r.reads, [("a", true), ("a", false)])
 }
@@ -202,7 +202,7 @@ test "a link said again without it: its card let go, its hand gone; the other's 
   let r = link_rig()
   assert_true(r.hands.contains(1) && r.hands.contains(3))
   let (x, y) = r.middle("乙的链接")
-  r.t.move(x, y)
+  r.t.move_to(x, y)
   r.t.run_for(hover_card_open_ms + hover_card_in_ms + 20.0)
   assert_true(r.open(3))
   r.runs.set([@ui.plain("先看 "), { ..@ui.plain("甲的链接"), link: "a" }, @ui.plain("，就这些。")])

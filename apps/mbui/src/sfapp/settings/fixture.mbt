@@ -1065,7 +1065,7 @@ fn fx_station_profile_states(profiles : Array[Json]) -> Json {
 ///|
 /// The profiles of one account: independently signed in on three stations and also borrowed on three.
 fn fx_profile_hosts() -> Array[Json] {
-  let member = fn(station : String, name : String, id : String, role : String, title : String, about : String) -> Json {
+  let profile_host = fn(station : String, name : String, id : String, role : String, title : String, about : String) -> Json {
     obj([
       ("station", str("ws1/" + station)), ("stationId", str(station)), ("stationName", str(name)),
       ("profileId", str(id)), ("profileName", str(id)), ("role", str(role)), ("title", str(title)),
@@ -1074,12 +1074,12 @@ fn fx_profile_hosts() -> Array[Json] {
     ])
   }
   let members = [
-    member("st1", "Willow", "cc", "host", "Willow", "在此 station 登录，借给 Maple、Cedar、Birch"),
-    member("st2", "Maple", "sh1", "user", "Maple", "向 Willow 借用"),
-    member("st3", "Cedar", "local", "own", "Cedar", "在此 station 单独登录"),
-    member("st3", "Cedar", "sh1", "user", "Cedar", "向 Willow 借用"),
-    member("st4", "Birch", "local", "own", "Birch", "在此 station 单独登录"),
-    member("st4", "Birch", "sh1", "user", "Birch", "向 Willow 借用"),
+    profile_host("st1", "Willow", "cc", "host", "Willow", "在此 station 登录，借给 Maple、Cedar、Birch"),
+    profile_host("st2", "Maple", "sh1", "user", "Maple", "向 Willow 借用"),
+    profile_host("st3", "Cedar", "local", "own", "Cedar", "在此 station 单独登录"),
+    profile_host("st3", "Cedar", "sh1", "user", "Cedar", "向 Willow 借用"),
+    profile_host("st4", "Birch", "local", "own", "Birch", "在此 station 单独登录"),
+    profile_host("st4", "Birch", "sh1", "user", "Birch", "向 Willow 借用"),
   ]
   if fx.profile_one_owner {
     return [members[0], members[1]]

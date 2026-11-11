@@ -58,7 +58,7 @@ fn chat_corners(w : Double, h : Double, scale : Double) -> Int raise {
   }
   let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap_or((w / 2.0, h / 2.0))
   let my = dmin(my, h / 2.0)
-  t.move(mx, my)
+  t.move_to(mx, my)
   let mut tries = 0
   let shown = fn() {
     match t.find("改好后的样子：") {

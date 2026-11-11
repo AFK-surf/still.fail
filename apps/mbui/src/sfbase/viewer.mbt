@@ -1107,8 +1107,8 @@ fn Viewer::gallery_at(self : Viewer) -> String {
         Some(r) => {
           r.sent_as_told.get() |> ignore
           let (row, part) = place_parts(self.at)
-          for source, local in r.sent_as {
-            if local == row {
+          for source, sent_row in r.sent_as {
+            if sent_row == row {
               return source + part
             }
           }
@@ -1762,7 +1762,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
             let (lift, far) = fly_way(t, Some(to), (c.width, c.height))
             v.fly_lift = lift
             v.fly.put(0.0)
-            v.fly.go(1.0, @motion.move(points=far), at~)
+            v.fly.go(1.0, @motion.moved(points=far), at~)
             pv_hidden.set(v.thumb_id())
           }
           None => ()
@@ -1895,7 +1895,7 @@ fn Viewer::fly_home_from(
   self.fly_lift = lift
   self.fly.put(q)
   // (what is left of its way: as far as it had come)
-  self.fly.go(0.0, @motion.move(points=far), at~)
+  self.fly.go(0.0, @motion.moved(points=far), at~)
 }
 
 ///|

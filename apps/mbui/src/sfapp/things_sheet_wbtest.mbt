@@ -253,11 +253,11 @@ fn things_peek_seen(t : @ui.Tester, r : ChatRef, kind : String, name : String, o
   let before = words_below(t, 1.0)
   let at = t.words().filter(fn(w) { w.0 == name && w.2 >= 844.0 * (1.0 - things_share) })
   guard at is [(_, x, y, w, h, _), ..] else { fail("\{name}: not drawn: \{before}") }
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
   let card = words_below(t, 1.0).filter(fn(w) { !before.contains(w) })
   // (off the row, onto the sheet's head: gone)
-  t.move(x + w / 2.0, 844.0 * (1.0 - things_share))
+  t.move_to(x + w / 2.0, 844.0 * (1.0 - things_share))
   t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
   let gone = words_below(t, 1.0).filter(fn(w) { !before.contains(w) }).length() == 0
   t.key(@ui.key_escape)
@@ -288,10 +288,10 @@ fn things_card_seen(t : @ui.Tester, r : ChatRef, kind : String, name : String, o
   let at = t.words().filter(fn(w) { w.0 == name && w.2 >= 844.0 * (1.0 - things_share) })
   guard at is [(_, x, y, w, h, _), ..] else { fail("\{name}: not drawn") }
   let (px, py) = (x + w / 2.0, y + h / 2.0)
-  t.move(px, py)
+  t.move_to(px, py)
   t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
   let out = seen(px, py)
-  t.move(px, 844.0 * (1.0 - things_share))
+  t.move_to(px, 844.0 * (1.0 - things_share))
   t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
   // (a card as tall as the window is still under the pointer: Escape shuts it first, then the sheet)
   for _ in 0..<2 {
@@ -324,13 +324,13 @@ test "小屏 with a mouse: a link's card whose row is nodes waits for the hand t
     let title = t.words().filter(fn(w) { w.0 == @sf.t("web-main.things.find") })
     guard title is [(_, tx, ty, tw, th, _), ..] else { fail("the sheet's field: not drawn") }
     t.press_at(tx + tw / 2.0, ty + th / 2.0)
-    t.move(x + w / 2.0, y + h / 2.0)
+    t.move_to(x + w / 2.0, y + h / 2.0)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     let held = t.find(@sf.t("common.link.copy")) is Some(_)
     t.release(x + w / 2.0, y + h / 2.0)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     let after = t.find(@sf.t("common.link.copy")) is Some(_)
-    t.move(x + w / 2.0, 844.0 * (1.0 - things_share))
+    t.move_to(x + w / 2.0, 844.0 * (1.0 - things_share))
     t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
     t.key(@ui.key_escape)
     t.run_for(sheet_way_ms(t))
@@ -400,7 +400,7 @@ test "小屏 with a mouse: a link's card whose row is nodes taller than the wind
         [(_, x, y, w, h), ..] => (x + w / 2.0, y + h / 2.0)
         _ => (0.0, 0.0)
       }
-      t.move(lx, ly)
+      t.move_to(lx, ly)
       t.wheel(lx, ly, things_card_wheel)
       t.run_for(@ui.move_most_ms)
       let wheeled = things_words_drawn(t).filter(fn(w) { w.0.has_prefix("label ") })
@@ -423,21 +423,21 @@ test "小屏 with a mouse: a link's card whose row is nodes, its address copied,
     let at = t.words().filter(fn(w) { w.0 == "列表滚动的性能数据" && w.2 >= 844.0 * (1.0 - things_share) })
     guard at is [(_, x, y, w, h, _), ..] else { fail("the link's row: not drawn") }
     let (px, py) = (x + w / 2.0, y + h / 2.0)
-    t.move(px, py)
+    t.move_to(px, py)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     guard t.all(Button, label=@sf.t("common.link.copy")) is [b, ..] else { fail("its copy: not drawn") }
     let (bx, by, bw, bh) = b.rect
-    t.move(bx + bw / 2.0, by + bh / 2.0)
+    t.move_to(bx + bw / 2.0, by + bh / 2.0)
     t.tap(bx + bw / 2.0, by + bh / 2.0)
     // (off the card and the row: gone; back on the row: shown again)
-    t.move(px, 844.0 * (1.0 - things_share))
+    t.move_to(px, 844.0 * (1.0 - things_share))
     t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
-    t.move(px, py)
+    t.move_to(px, py)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     let again = t.find(@sf.t("common.copied")) is Some(_)
     t.run_for(@sf.copied_ms)
     let after = t.find(@sf.t("common.link.copy")) is Some(_)
-    t.move(px, 844.0 * (1.0 - things_share))
+    t.move_to(px, 844.0 * (1.0 - things_share))
     t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
     t.key(@ui.key_escape)
     t.run_for(sheet_way_ms(t))
@@ -459,7 +459,7 @@ test "小屏 with a mouse: a link's card in the chat's things (web_peek_node): t
         let (x, y, w, h) = c.rect
         [(x + 3.0, y + h / 2.0), (x + w / 2.0, y + 3.0), (x + w / 2.0, y + h - 3.0), (x + w - 3.0, y + h / 2.0)]
         .map(fn(p) {
-          t.move(p.0, p.1)
+          t.move_to(p.0, p.1)
           t.run_for(@ui.move_most_ms)
           "\{t.cursor()}"
         })

@@ -48,10 +48,10 @@ test "desktop: the pointer's shape follows what is under it, and the arrow once 
     w=400.0,
     h=300.0,
   )
-  t.move(10.0, 10.0)
+  t.move_to(10.0, 10.0)
   assert_eq(t.cursor(), Hand)
   let (fx, fy) = t.find("words").unwrap()
-  t.move(fx, fy)
+  t.move_to(fx, fy)
   assert_eq(t.cursor(), IBeam)
   t.leave()
   assert_eq(t.cursor(), Arrow)
@@ -86,7 +86,7 @@ test "desktop: what takes presses is a hand by itself; not what is off, a ground
     h=300.0,
   )
   let seen = [15.0, 45.0, 75.0, 105.0, 135.0, 165.0].map(fn(y) {
-    t.move(10.0, y)
+    t.move_to(10.0, y)
     t.cursor()
   })
   assert_eq(seen, [Hand, Hand, Arrow, Arrow, Arrow, Arrow])
@@ -109,9 +109,9 @@ test "desktop: a link in words picked with the pointer is a hand, the words roun
     h=300.0,
   )
   let (x, y, w, h) = t.rect_of("open and the words after it").unwrap()
-  t.move(x + 3.0, y + h / 2.0)
+  t.move_to(x + 3.0, y + h / 2.0)
   assert_eq(t.cursor(), Hand)
-  t.move(x + w - 3.0, y + h / 2.0)
+  t.move_to(x + w - 3.0, y + h / 2.0)
   assert_eq(t.cursor(), IBeam)
 }
 
@@ -132,9 +132,9 @@ test "desktop: a ground that takes presses keeps the I-beam over its words picke
     h=300.0,
   )
   let (x, y, _, h) = t.rect_of("words on a ground").unwrap()
-  t.move(x + 3.0, y + h / 2.0)
+  t.move_to(x + 3.0, y + h / 2.0)
   assert_eq(t.cursor(), IBeam)
-  t.move(10.0, 10.0)
+  t.move_to(10.0, 10.0)
   assert_eq(t.cursor(), Arrow)
 }
 
@@ -151,7 +151,7 @@ test "desktop: what moves under a resting pointer is what it hovers" {
     w=400.0,
     h=300.0,
   )
-  t.move(10.0, 50.0)
+  t.move_to(10.0, 50.0)
   assert_eq(t.cursor(), Arrow)
   shift.val = 40.0
   t.frame()
@@ -315,7 +315,7 @@ test "desktop: words of a selectable paragraph are picked by a drag and copied; 
     h=300.0,
   )
   let (_, y, _, h) = t.rect_of("hello wide world").unwrap()
-  t.move(2.0, y + h / 2.0)
+  t.move_to(2.0, y + h / 2.0)
   assert_eq(t.cursor(), IBeam)
   t.drag(1.0, y + h / 2.0, 200.0, y + h / 2.0)
   assert_eq(t.ctx().selected_text(), "hello wide world")
@@ -464,7 +464,7 @@ test "desktop: words picked on down a list the wheel scrolls under the held poin
   t.draw()
   let (x, y, _, h) = t.rect_of("row 1 words").unwrap()
   t.press_at(x + 0.5, y + h / 2.0)
-  t.move(x + 20.0, 170.0)
+  t.move_to(x + 20.0, 170.0)
   // five rows scrolled under the pointer as it is held (the wheel's ease run out)
   t.wheel(x + 20.0, 170.0, 200.0)
   t.run_for(@ui.wheel_ease_ms)
@@ -507,7 +507,7 @@ test "desktop: words picked with the pointer held past a list's shown foot (onto
   let (x, y, _, h) = t.rect_of("row 1 words").unwrap()
   t.press_at(x + 0.5, y + h / 2.0)
   // held over what floats over the foot, the pointer still: the list scrolls on by itself
-  t.move(x + 20.0, 180.0)
+  t.move_to(x + 20.0, 180.0)
   let o0 = t.list_offset()
   t.run_for(@ui.scrollbar_hold_ms)
   let o1 = t.list_offset()
@@ -520,17 +520,17 @@ test "desktop: words picked with the pointer held past a list's shown foot (onto
     assert_eq(lines[k], "row \{k + 1} words")
   }
   // further past it, faster
-  t.move(x + 20.0, 199.0)
+  t.move_to(x + 20.0, 199.0)
   t.run_for(@ui.scrollbar_hold_ms)
   let o2 = t.list_offset()
   assert_true(o2 - o1 > o1 - o0, msg="\{o0} \{o1} \{o2}")
   // back in among the rows: it stops
-  t.move(x + 20.0, 100.0)
+  t.move_to(x + 20.0, 100.0)
   let o3 = t.list_offset()
   t.run_for(@ui.scrollbar_hold_ms)
   assert_eq(t.list_offset(), o3)
   // held past its top: it scrolls back up; let go, it stops
-  t.move(x + 20.0, -20.0)
+  t.move_to(x + 20.0, -20.0)
   t.run_for(@ui.wheel_ease_ms)
   let o4 = t.list_offset()
   assert_true(o4 < o3, msg="\{o3} \{o4}")
@@ -791,7 +791,7 @@ test "desktop: a finger hovers over nothing, and lifted it is nowhere; a mouse h
   assert_eq(tapped_at, [22])
   assert_eq(seen.val, "false false")
   let t = @ui.Tester::new(view, platform=0)
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   t.draw()
   assert_eq(seen.val, "true true")
 }
@@ -927,7 +927,7 @@ test "desktop: a finger or a pointer reaches a target smaller than its room from
   // the pointer resting where a click reaches the first: the first lit (and the row that holds it), as a click there
   // is its
   let t = @ui.Tester::new(view, platform=0)
-  t.move(250.0, 14.0)
+  t.move_to(250.0, 14.0)
   t.draw()
   assert_true(lit.contains("a") && !lit.contains("b"), msg="\{lit}")
 }
@@ -968,7 +968,7 @@ test "desktop: lit by the hand on it: a mouse resting on it, a finger pressing i
   t.draw()
   assert_false(lit.val)
   let t = @ui.Tester::new(view, platform=0)
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   t.draw()
   assert_true(lit.val)
 }

@@ -85,12 +85,12 @@ fn PointsHost::lit(self : PointsHost) -> (Bool, Bool, Bool, Cursor) {
 test "a node pointed at alone over an old view's button: it alone lit, its pointer's shape; a click still the old button's; the pointer gone, nothing lit" {
   let h = points_host()
   let away = h.lit()
-  h.t.move(40.0, 20.0)
+  h.t.move_to(40.0, 20.0)
   let over = h.lit()
   h.t.tap(40.0, 20.0)
   h.t.draw()
   let clicked = h.clicks.val
-  h.t.move(300.0, 150.0)
+  h.t.move_to(300.0, 150.0)
   let gone = h.lit()
   assert_eq(
     (away, over, clicked, gone),
@@ -101,7 +101,7 @@ test "a node pointed at alone over an old view's button: it alone lit, its point
 ///|
 test "a still mouse over a node pointed at alone over an old view's button: it pointed at no longer, the old one lit; a node taking presses over both, that one; each gone, as before" {
   let h = points_host()
-  h.t.move(40.0, 20.0)
+  h.t.move_to(40.0, 20.0)
   let first = h.lit()
   h.points.set(false)
   let old_lit = h.lit()

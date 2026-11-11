@@ -12,7 +12,7 @@ test "wide: the profile list shows a subscription's tier" {
 ///|
 /// The desk's page wheeled down until `words` shows on it (above the window's foot).
 fn desk_shown(t : @ui.Tester, words : String) -> Unit {
-  t.move(800.0, 400.0)
+  t.move_to(800.0, 400.0)
   for _ in 0..<12 {
     match t.find(words) {
       Some((_, y)) if y < 760.0 => break

@@ -46,9 +46,9 @@ let nc_actions : Array[String] = [
 ]
 
 ///|
-/// A new connect on `station`, in a dialog (NewConnectDialog): from the start, or (`resume`) from a Slack app made
+/// A new connect on `station`, in a dialog (NewConnectDialog): from the start, or (`made_app`) from a Slack app made
 /// before. Its wizard is opened once the frame is built, and let go of as the dialog closes.
-pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, resume? : String = "") -> Unit {
+pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, made_app? : String = "") -> Unit {
   nc_made.val += 1
   let key = "new-connect/" + nc_made.val.to_string()
   let f : NcFlow = {
@@ -88,7 +88,7 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
               ("form", str(f.form)),
               // (no `mobile`: one page draws the one flow, the web desktop's, on every screen; told it, the core's phone flow
               // asked for a step of its own (token) this page has not)
-              ("input", obj([("resume", if resume == "" { Json::null() } else { str(resume) })])),
+              ("input", obj([("resume", if made_app == "" { Json::null() } else { str(made_app) })])),
             ]),
             fn(r) {
               match r {

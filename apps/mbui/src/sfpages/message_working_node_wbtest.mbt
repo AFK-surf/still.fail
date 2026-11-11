@@ -161,13 +161,13 @@ test "one of two agents under the pointer, as the old view's: its words in the t
   let old = work_old(760.0, work_src(@signals.signal(live), []), view, "hover")
   old.run_for(@ui.move_most_ms)
   let (x, y, w, h) = old.rect_of("读 chat_rows.mbt").unwrap()
-  old.move(x + w / 2.0, y + h / 2.0)
+  old.move_to(x + w / 2.0, y + h / 2.0)
   old.run_for(@ui.move_most_ms)
   let was = head_drawn(old)
   let calls : Array[(String, Json)] = []
   let t = work_new(760.0, work_src(@signals.signal(live), calls), fn() { view })
   t.run_for(@ui.move_most_ms)
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(head_drawn(t), was)
   // (the stop's room: 24 square 4 from the line that opens its history, as the old view's, so it has 32 across to be

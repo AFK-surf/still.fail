@@ -184,7 +184,7 @@ test "中屏: the sidebar's edge held by a finger, the touch called off by the s
   let m = tape_chat(0, 720.0, 840.0)
   let (mx, my) = edge_middle(m, "调整侧边栏宽度")
   let tip = fn() { m.semantics().filter(fn(s) { s.role == Tooltip && s.label == "调整侧边栏宽度" }).length() }
-  m.move(mx, my)
+  m.move_to(mx, my)
   m.run_for(@sf.edge_tip_ms * 2.0)
   assert_eq(tip(), 1, msg="its tip shown")
   @ui.view_tree().unwrap().event(m.time(), fn() { @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page)) })
@@ -287,7 +287,7 @@ test "中屏: the sidebar's edge by a mouse: hidden at rest; pointed at, its bar
   let s12 = @ui.Space::px(S12)
   assert_true(edge_bar_drawn(t) is None, msg="at rest: hidden")
   // (pointed at: shown, long, the strong line's grey)
-  t.move(ex, ey)
+  t.move_to(ex, ey)
   t.run_for(edge_look_ms)
   guard edge_bar_drawn(t) is Some((x1, h1, on_ink)) else { fail("on it: not shown") }
   assert_eq(h1, s12, msg="on it: long")
@@ -299,7 +299,7 @@ test "中屏: the sidebar's edge by a mouse: hidden at rest; pointed at, its bar
   assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{(x2, h2, held_ink)}, on it \{(x1, on_ink)}")
   assert_eq((said_at(t, "调整侧边栏宽度").unwrap(), covered(t, "收起侧边栏").unwrap()), (room, page), msg="in hand: where it was")
   // (dragged 20 wider: the width, the page beside it and the edge 20 on, its bar with it)
-  t.move(ex + 20.0, ey)
+  t.move_to(ex + 20.0, ey)
   t.run_for(edge_look_ms)
   assert_eq(@sfdesk.wide.side_w.get(), 260.0, msg="dragged")
   assert_eq(covered(t, "收起侧边栏").unwrap().0, page.0 + 20.0, msg="the page as far on")

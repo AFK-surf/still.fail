@@ -53,7 +53,7 @@ test "wide: a chat whose agent made others has how many in its info (…), each 
   assert_true(t.query(MenuItem, label="旧版引导页的截图 · 已归档") is None)
   let (x, y, _, _) = t.rect_of("创建了 3 个对话").unwrap()
   let (px, _, _, _) = t.rect_of("发起").unwrap()
-  t.move(x + 4.0, y + 4.0)
+  t.move_to(x + 4.0, y + 4.0)
   t.run_for(@ui.move_most_ms)
   // left of the info's panel, not over it
   let (mx, _, mw, _) = t.rect_of("旧版引导页的截图 · 已归档").unwrap()

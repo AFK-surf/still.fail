@@ -193,7 +193,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
     let open = @motion.Way::new(if @signals.untracked(fn() { v().going }) { 1.0 } else { 0.0 })
     r.reacts(fn() { v().going }, fn(going) {
       let to = if going { 1.0 } else { 0.0 }
-      open.go(to, @motion.move().per_unit(version_bar_room), at=r.cause_at())
+      open.go(to, @motion.moved().per_unit(version_bar_room), at=r.cause_at())
     })
     let share = fn() {
       open.said()

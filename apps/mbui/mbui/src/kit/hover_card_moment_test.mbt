@@ -73,7 +73,7 @@ fn around(t : @ui.Tester, v : CardView, at : Double, ms : Double) -> Array[(Doub
 test "hover card: its trigger gone a frame and drawn again under the resting pointer waits from when it is drawn again, not from before" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@kit.hover_card_open_ms / 2.0)
   v.shown.set(false)
   t.draw()
@@ -104,7 +104,7 @@ test "hover card: kept with its part while nothing it reads changes, its wait go
 test "hover card: a new run waits from its own pointer, nothing of the run before" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@kit.hover_card_open_ms / 2.0)
   let (t, v2) = card_tester()
   ignore(v)
@@ -121,7 +121,7 @@ test "hover card: its trigger moved under the still pointer waits from the frame
   let (x, y) = middle_of(t, "@ada")
   // (the pointer where the trigger will be once it is 240 further down: its card under it, clear of the pointer once
   // it is back)
-  t.move(x, y + 240.0)
+  t.move_to(x, y + 240.0)
   t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_false(v.open.val, msg="nothing under the pointer")
   v.down.set(240.0)
@@ -147,15 +147,15 @@ test "hover card: its trigger moved under the still pointer waits from the frame
 test "hover card: kept open while the pointer is in a popover opened from it; closes hover_close_ms after it leaves that, the frame late" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_true(v.open.val, msg="opened")
   let (nx, ny) = middle_of(t, "Notes")
-  t.move(nx, ny)
+  t.move_to(nx, ny)
   t.click(@ui.Role::Button, label="Notes")
   t.run_for(@kit.hover_card_open_ms)
   let (ix, iy) = middle_of(t, "Inner notes")
-  t.move(ix, iy)
+  t.move_to(ix, iy)
   t.run_for(@kit.hover_card_close_ms * 2.0)
   assert_true(v.open.val, msg="kept by the pointer in its popover")
   let left = t.time()
@@ -170,7 +170,7 @@ test "hover card: kept open while the pointer is in a popover opened from it; cl
 test "hover card: kept open while the keyboard's focus is in it; closes hover_close_ms after Tab takes the focus out of it, the frame late" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_true(v.open.val, msg="opened")
   let mut on = false
@@ -182,7 +182,7 @@ test "hover card: kept open while the keyboard's focus is in it; closes hover_cl
     }
   }
   assert_true(on, msg="Tab to Notes: \{t.focused()}")
-  t.move(900.0, 900.0)
+  t.move_to(900.0, 900.0)
   t.run_for(@kit.hover_card_close_ms * 2.0)
   assert_true(v.open.val, msg="kept by the focus in it")
   // Tab out as the host hands it on, the frame late: its close from the key's moment
@@ -230,7 +230,7 @@ test "hover card: kept open by the keyboard's focus in it; a screen reader's Foc
   })
   t.draw()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_true(open.val, msg="opened")
   let mut on = false
@@ -242,7 +242,7 @@ test "hover card: kept open by the keyboard's focus in it; a screen reader's Foc
     }
   }
   assert_true(on, msg="Tab to Notes: \{t.focused()}")
-  t.move(790.0, 590.0)
+  t.move_to(790.0, 590.0)
   t.run_for(@kit.hover_card_close_ms * 2.0)
   assert_true(open.val, msg="kept by the focus in it")
   guard t.semantics().iter().find_first(fn(s) { s.label == "Tree button" }) is Some(tb) else { fail("no tree button") }

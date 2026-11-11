@@ -346,7 +346,7 @@ test "list: a row read from stays where it shows as one over it grows and one un
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, -1.0e6)
   t.wheel(100.0, 100.0, 330.0)
   t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)

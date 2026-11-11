@@ -219,7 +219,7 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
   assert_eq(field(Some(p), "codecs"), Some(["jpeg"]))
   let first_view = text(Some(p), "view")
   // scrolled up until its card is not built: cancelled
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<12 {
     if t.find("林 正在查看") is None {
       break
@@ -357,9 +357,9 @@ test "a preview goes on while its card's row is drawn again, not built: asked fo
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
   t.set_rows_on_pixels(true)
   // frames with nothing from outside (the pointer moved about the chat): its row drawn again as it was
-  t.move(100.0, 300.0)
-  t.move(140.0, 300.0)
-  t.move(180.0, 300.0)
+  t.move_to(100.0, 300.0)
+  t.move_to(140.0, 300.0)
+  t.move_to(180.0, 300.0)
   t.run_for(peek_ms)
   assert_eq(streams.length(), 1)
   assert_eq(running(streams, cancelled).length(), 1)

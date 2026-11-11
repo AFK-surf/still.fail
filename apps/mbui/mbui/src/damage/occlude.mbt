@@ -327,7 +327,7 @@ fn Damage::covered(self : Damage, n : Int, r : Rect) -> Bool {
 /// are then.
 fn Damage::cover_add(self : Damage, a : FixedArray[Double], k : Int, w : Double, h : Double, n : Int) -> Int {
   let o = k * inst_size
-  let opaque = a[o + 11] == 1.0 &&
+  let solid = a[o + 11] == 1.0 &&
     a[o + 7] == 0.0 &&
     a[o + 32] == 0.0 &&
     a[o + 21] == 0.0 &&
@@ -338,7 +338,7 @@ fn Damage::cover_add(self : Damage, a : FixedArray[Double], k : Int, w : Double,
     a[o + 57] == 0.0 &&
     a[o + 59] == 0.0
   // (one smaller than cover_least of the window hides too little to be worth asking every instance before it)
-  if !opaque || a[o + 2] * a[o + 3] < w * h * cover_least {
+  if !solid || a[o + 2] * a[o + 3] < w * h * cover_least {
     return n
   }
   // (a border not wholly opaque: only inside it)

@@ -205,7 +205,7 @@ fn HoverRig::open(self : HoverRig, name : String) -> Bool {
 ///|
 /// The pointer moved to `at`.
 fn HoverRig::move_to(self : HoverRig, at : (Double, Double)) -> Unit {
-  self.t.move(at.0, at.1)
+  self.t.move_to(at.0, at.1)
 }
 
 ///|
@@ -249,7 +249,7 @@ test "a card stays open as the pointer goes from its trigger onto it, across the
   assert_true(h.open("甲"), msg="open")
   // (into the gap between them a moment, then onto it)
   let r = h.trigger("甲")
-  h.t.move(r.0 + 40.0, r.1 + r.3 + hover_card_offset / 2.0)
+  h.t.move_to(r.0 + 40.0, r.1 + r.3 + hover_card_offset / 2.0)
   h.t.run_for(hover_short_ms)
   h.move_to(h.on_card("甲"))
   h.t.run_for(hover_card_close_ms + hover_settled_ms)
@@ -288,7 +288,7 @@ test "the pointer going from one trigger to the next: the first's card closes ho
 test "the pointer resting on a trigger held down rests on nothing: its card opens hover_card_open_ms after it is let go there, not before; a click on it its press" {
   let h = hover_rig()
   let (x, y) = h.on("甲")
-  h.t.move(x, y)
+  h.t.move_to(x, y)
   h.t.touch(0, x, y)
   h.t.run_for(hover_card_open_ms + hover_settled_ms)
   assert_false(h.open("甲"), msg="held down past its time: not open")
@@ -344,7 +344,7 @@ test "a card closes at once at a press outside it and its trigger, and at Escape
     let at = h.t.time()
     if case == "press" {
       // (a mouse's press elsewhere, the pointer there)
-      h.t.move(hover_away.0, hover_away.1)
+      h.t.move_to(hover_away.0, hover_away.1)
       h.t.touch(0, hover_away.0, hover_away.1)
       h.t.touch(2, hover_away.0, hover_away.1)
     } else {
@@ -505,7 +505,7 @@ test "a trigger pressed for nothing (a name in a bar): a tap or a click on it is
     let h = hover_rig(platform~)
     let (x, y) = h.middle("丙")
     if platform == 0 {
-      h.t.move(x, y)
+      h.t.move_to(x, y)
     }
     h.t.touch(0, x, y)
     h.t.touch(2, x, y)
@@ -542,7 +542,7 @@ test "a trigger only a finger's tap is said for (a station's name in a bar that 
   let modal = @signals.signal(false)
   let h = hover_rig(modal~)
   let (x, y) = h.middle("丁")
-  h.t.move(x, y)
+  h.t.move_to(x, y)
   h.t.touch(0, x, y)
   h.t.touch(1, x + 30.0, y)
   h.t.touch(2, x + 30.0, y)

@@ -1783,7 +1783,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
 
 ///|
 /// The pointer moved to (x, y), no button down.
-pub fn Tester::move(self : Tester, x : Double, y : Double) -> Unit {
+pub fn Tester::move_to(self : Tester, x : Double, y : Double) -> Unit {
   finger(1, x, y)
   self.drawn_now()
 }

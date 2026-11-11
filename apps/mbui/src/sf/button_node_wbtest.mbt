@@ -268,8 +268,8 @@ fn button_answers(
 
 ///|
 test "the button as a node, the pointer come onto it and gone: its ground's colour as the old one's, on the way and at the end" {
-  let on = fn(t : @ui.Tester, x, y) { t.move(x, y) }
-  let off = fn(t : @ui.Tester, _x, _y) { t.move(390.0, 290.0) }
+  let on = fn(t : @ui.Tester, x, y) { t.move_to(x, y) }
+  let off = fn(t : @ui.Tester, _x, _y) { t.move_to(390.0, 290.0) }
   let (old, new) = (button_answers(false, on, off), button_answers(true, on, off))
   assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{old}\nnode \{new}")
 }

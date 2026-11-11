@@ -95,7 +95,7 @@ test "an agent's card over its name, as over its picture: its background work an
     }
   })
   guard last is Some(name) else { fail("no agent's message") }
-  t.move(name.1 + name.3 / 2.0, name.2 + name.4 / 2.0)
+  t.move_to(name.1 + name.3 / 2.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // one line, under its latest lines, none of the lists it sums up
   let line = word(work_line)

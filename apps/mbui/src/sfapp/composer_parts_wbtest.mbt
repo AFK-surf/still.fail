@@ -95,7 +95,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   t.frame_at(v.fly.end() + @ui.frame_period_default)
   let (cx, cy, cw, ch) = t.get(Button, label=@sf.t("common.close")).rect
   let (cx, cy) = (cx + cw / 2.0, cy + ch / 2.0)
-  t.move(cx, cy)
+  t.move_to(cx, cy)
   t.touch(0, cx, cy)
   t.touch(2, cx, cy)
   t.frames_owed()

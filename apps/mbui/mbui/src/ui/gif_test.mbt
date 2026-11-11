@@ -72,7 +72,7 @@ test "a GIF in a part kept moves with nothing else changing: built again as its 
   let shown = fn() {
     t.drawlist().split("\n").filter(fn(l) { l.has_prefix("image ") }).map(fn(l) { l.to_owned() }).to_array()
   }
-  t.move(90.0, 90.0)
+  t.move_to(90.0, 90.0)
   t.run_for(a_moment)
   assert_true(shown().iter().any(fn(l) { l.contains("\"mem:gif#0\"") }))
   t.run_for(gif_frame)

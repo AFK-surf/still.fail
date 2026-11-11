@@ -38,7 +38,7 @@ test "a player: a double tap on the right third jumps on, said a moment; the spe
   // dragged to the timeline's middle: paused, its seeks one after another, sent there as it goes; let go, as before
   let told = fn(said : String) { t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(said) }) }
   t.press_at(10.0, 20.0)
-  t.move(195.0, 20.0)
+  t.move_to(195.0, 20.0)
   assert_true(m.scrubbing() is Some(ms) && (ms - 5000.0).abs() < 100.0)
   assert_true(told(" 2 0"))
   assert_true(told(" 9 1"))

@@ -184,7 +184,7 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
     } else {
       assert_true(t.query(Button, label="归档「夜里的构建又失败了」") is None, msg=at)
       let (x, y) = t.find("夜里的构建又失败了").unwrap()
-      t.move(x, y)
+      t.move_to(x, y)
       t.frame()
       match t.query(Button, label="归档「夜里的构建又失败了」") {
         Some(b) => {
@@ -203,7 +203,7 @@ test "a row's 归档 right clicked: the row's menu, nothing archived" {
   let calls : Array[Made] = []
   let t = lists_tester(calls, 1280.0, 0, false)
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let (bx, by, bw, bh) = t.get(Button, label="归档「夜里的构建又失败了」").rect
   t.right_click(bx + bw / 2.0, by + bh / 2.0)

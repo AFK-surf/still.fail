@@ -177,7 +177,7 @@ test "offers: Tab takes the one chosen, the focus staying; closed, Tab moves the
 test "offers: the pointer moving onto a row chooses it; a press on one takes it" {
   let x = offers_tester()
   let (rx, ry, rw, rh) = x.t.get(Button, label="丙").rect
-  x.t.move(rx + rw / 2.0, ry + rh / 2.0)
+  x.t.move_to(rx + rw / 2.0, ry + rh / 2.0)
   assert_eq(x.current.get(), 2)
   x.t.tap(rx + rw / 2.0, ry + rh / 2.0)
   assert_eq(x.taken, [2])
@@ -262,7 +262,7 @@ test "offers: a mouse's pointer over its ground (its head's words, its padding) 
   let x = offers_tester()
   let (dx, dy, dw, dh) = x.t.get(Dialog, label="可以选的").rect
   let shape_on = fn(px : Double, py : Double) {
-    x.t.move(px, py)
+    x.t.move_to(px, py)
     x.t.run_for(@ui.move_most_ms)
     x.t.cursor()
   }

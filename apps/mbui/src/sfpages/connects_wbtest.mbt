@@ -129,10 +129,10 @@ test "a connect's Slack app's buddies to pick from, with a mouse: the picked edg
   let (ox, oy) = middle_of(t, Button, "后端接口")
   assert_eq(edge_round(t, px, py), (2.0, edge_shown(t, px, py, th.color(Fg))), msg="picked at \{px},\{py}: \{edges_at(t, px, py)}")
   assert_eq(edge_round(t, ox, oy), (1.0, edge_shown(t, ox, oy, th.color(Line))), msg="not picked: \{edges_at(t, ox, oy)}")
-  t.move(ox, oy)
+  t.move_to(ox, oy)
   t.run_for(@ui.move_most_ms)
   assert_eq(edge_round(t, ox, oy), (1.0, edge_shown(t, ox, oy, th.color(FieldHover))), msg="under the pointer: \{edges_at(t, ox, oy)}")
-  t.move(1.0, 1.0)
+  t.move_to(1.0, 1.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(edge_round(t, ox, oy), (1.0, edge_shown(t, ox, oy, th.color(Line))), msg="the pointer gone")
 }

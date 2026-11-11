@@ -137,7 +137,7 @@ test "submenu: Right opens it at its first item, Left closes it alone; the point
   assert_eq(t.focused().unwrap().label, "Share")
   // the pointer onto it opens it; a choice in it closes everything
   let (x, y, w, h) = t.get(@ui.Role::MenuItem, label="Share").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.draw()
   t.click(@ui.Role::MenuItem, label="Copy link")
   assert_eq(chosen.val, Some("copy"))
@@ -197,7 +197,7 @@ test "menubar: a click opens a menu, the pointer moves among them, Left and Righ
   t.draw()
   ignore(t.get(@ui.Role::Menu, label="File"))
   let (x, y, w, h) = t.get(@ui.Role::MenuItem, label="Edit").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.draw()
   ignore(t.get(@ui.Role::Menu, label="Edit"))
   assert_true(t.query(@ui.Role::Menu, label="File") is None)
@@ -312,7 +312,7 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   let (x, y, w, h) = t.get(@ui.Role::Button, label="Learn").rect
   // (taken at its moment)
   let moved = t.time()
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   let due = moved + @kit.nav_menu_open_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
@@ -321,14 +321,14 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   t.draw()
   assert_true(t.find("Guides and tutorials") is Some(_))
   let (x2, y2, w2, h2) = t.get(@ui.Role::Button, label="Overview").rect
-  t.move(x2 + w2 / 2.0, y2 + h2 / 2.0)
+  t.move_to(x2 + w2 / 2.0, y2 + h2 / 2.0)
   t.draw()
   assert_true(t.find("What it is") is Some(_))
   assert_true(t.find("Guides and tutorials") is None)
   // away from both: closed after a moment
   // (taken at its moment)
   let moved = t.time()
-  t.move(380.0, 800.0)
+  t.move_to(380.0, 800.0)
   let due = moved + @kit.nav_menu_close_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())

@@ -104,7 +104,7 @@ fn bar_place_name(place : String) -> String {
 fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : (@sf.Beside) -> Unit) -> Unit {
   let t = @sf.theme()
   // BarSettingsScreen's onMove: the place at `j` put at `to`
-  let move = fn(j : Int, to : Int) {
+  let put_at = fn(j : Int, to : Int) {
     let (now, ncur) = (core.bars)()
     if to != j && i < now.length() && j < now[i].length() && to >= 0 && to < now[i].length() {
       let moved = now[i].copy()
@@ -133,7 +133,7 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
             match c.rect_of(id) {
               Some((_, _, w, _)) if w > 0.0 => {
                 let to = j + (went / w).round().to_int()
-                move(j, if to < 0 { 0 } else if to >= set.length() { set.length() - 1 } else { to })
+                put_at(j, if to < 0 { 0 } else if to >= set.length() { set.length() - 1 } else { to })
               }
               _ => ()
             }
@@ -146,10 +146,10 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
       }
       // a screen reader's (右移): one slot along
       if c.action_asked(id, Decrement) && j > 0 {
-        move(j, j - 1)
+        put_at(j, j - 1)
       }
       if c.action_asked(id, Increment) && j < set.length() - 1 {
-        move(j, j + 1)
+        put_at(j, j + 1)
       }
       // the slot, and its "−" over it beside (not inside) what the finger holds: a press on the "−" is its own
       let slot = c.box(style=if lifted { bar_slot_held } else { bar_slot }, fn() {

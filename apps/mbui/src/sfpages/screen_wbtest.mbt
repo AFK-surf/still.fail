@@ -444,7 +444,7 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   // a drag held still: no move again, however many frames are drawn while it is
   let was = r.inputs().length()
   r.t.press_at(ax, ay)
-  r.t.move(bx, by)
+  r.t.move_to(bx, by)
   let moved = r.inputs()[was:].to_owned()
   assert_eq(kind_of_input(moved[0]), "down")
   assert_eq(kind_of_input(moved[moved.length() - 1]), "move")

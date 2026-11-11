@@ -54,7 +54,7 @@ test "answered options can be read again by pressing the outcome, without answer
     assert_true(width < 250.0)
     // (a pointer resting on it opens nothing: only a press does)
     if platform == 0 {
-      t.move(x, y)
+      t.move_to(x, y)
       t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
       assert_true(t.find("这次只改列表，截图下次再说") is None)
     }
@@ -66,7 +66,7 @@ test "answered options can be read again by pressing the outcome, without answer
     // The pointer leaving the line leaves what it opened open.
     if platform == 0 {
       let (cx, cy) = t.find("这次只改列表，截图下次再说").unwrap()
-      t.move(cx, cy)
+      t.move_to(cx, cy)
       t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
       assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
     }
@@ -92,7 +92,7 @@ test "answered phone and sign-in requests show their original reason from the ou
       let before = relevant()
       // (a pointer resting on it opens nothing: only a press does)
       if platform == 0 {
-        t.move(x, y)
+        t.move_to(x, y)
         t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
         assert_true(t.find(reason) is None)
       }
@@ -114,7 +114,7 @@ test "a granted proxy request reveals its reason and allowed host" {
     let (x, y) = t.find("已允许使用 Axiom 查询 token").unwrap()
     // (a pointer resting on it opens nothing: only a press does)
     if platform == 0 {
-      t.move(x, y)
+      t.move_to(x, y)
       t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
       assert_true(t.find("查询中继连接日志，定位拨号失败的原因") is None)
     }
@@ -138,7 +138,7 @@ fn tap_now(t : @ui.Tester, words : String) -> Unit {
 ///|
 /// Scrolled until `words` show.
 fn scroll_to_words(t : @ui.Tester, words : String) -> Unit {
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<8 {
     if t.find(words) is Some(_) {
       break

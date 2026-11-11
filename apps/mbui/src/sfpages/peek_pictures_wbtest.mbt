@@ -69,7 +69,7 @@ fn peek_pictures_frames(
 ) -> Array[((Double, Double, Double, Double)?, Array[(Double, Double)])] raise {
   t.draw()
   let (x, y, w, h) = t.get(@ui.Role::Button, label="截图").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   let seen = []
   let frames = ((hover_open_ms + @ui.move_most_ms) / @ui.first_frame_ms).to_int() + answer_at + 4
   for i in 0..<frames {

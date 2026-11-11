@@ -29,16 +29,16 @@ fn laid_islands(spec? : () -> Spec = fn() { tween(push_ms, ease=Linear) }, two? 
     c.column(fn() {
       c.box(h=Px(top.get()), fn() {  }) |> ignore
       let n = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.text("a box") |> ignore })
-      layout(c, n, "laid/a", by="\{top.get()}", spec=if two { move() } else { spec() })
+      layout(c, n, "laid/a", by="\{top.get()}", spec=if two { moved() } else { spec() })
       if two {
         c.box(h=Px(top.get()), fn() {  }) |> ignore
         let m = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.text("a second box") |> ignore })
-        layout(c, m, "laid/b", by="\{top.get()}", spec=move())
+        layout(c, m, "laid/b", by="\{top.get()}", spec=moved())
       }
       // (its ground, and how far over its place it is drawn, read here: what reads it built again as it goes)
       let over = reshaped_over(c, "laid/ground")
       let g = c.box(w=Fill(1.0), h=Px(40.0 + top.get()), bg=0x3366CCFFL, fn() { c.text("over \{over.round()}") |> ignore })
-      reshape(c, g, "laid/ground", by="\{top.get()}", spec=if two { move() } else { spec() })
+      reshape(c, g, "laid/ground", by="\{top.get()}", spec=if two { moved() } else { spec() })
     })
     |> ignore
   }

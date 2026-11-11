@@ -52,7 +52,7 @@ pub fn tween(ms : Double, ease~ : @ui.Ease, delay? : Double = 0.0) -> Spec {
 /// fast as it went (or as the hand let it go: Anim::animate's `velocity`). `points`: how many points one of its units
 /// is (a progress from 0 to 1 over a way 300 points long: 300); `over`: how far it goes, said for it (what moves
 /// together, the furthest of them: Spec::over).
-pub fn move(points? : Double = 1.0, over? : Double = -1.0, delay? : Double = 0.0) -> Spec {
+pub fn moved(points? : Double = 1.0, over? : Double = -1.0, delay? : Double = 0.0) -> Spec {
   Moved(points, over, delay)
 }
 

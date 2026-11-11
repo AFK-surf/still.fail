@@ -984,7 +984,7 @@ pub fn Ctx::editor(
       self.take_press()
       self.editor_tap = 0
       self.focus_moved(id)
-      if (match st.local(self.press_x, self.press_y) { Some((lx, ly)) => st.pick_word(lx, ly, self.clock); None => false }) {
+      if (match st.local_point(self.press_x, self.press_y) { Some((lx, ly)) => st.pick_word(lx, ly, self.clock); None => false }) {
         self.word_drag = id
       }
       haptic(LongPress)
@@ -1233,7 +1233,7 @@ fn EditorState::on_handle(self : EditorState, x : Double, y : Double) -> Bool {
 /// same. None where it is drawn as nothing: no point of it there, nothing to do with the input. What takes a pointer
 /// in the window turns it so as it takes it (app.mbt); what is in its words' terms already (a trackpad's float,
 /// moved by its own way) is not turned again.
-fn EditorState::local(self : EditorState, x : Double, y : Double) -> (Double, Double)? {
+fn EditorState::local_point(self : EditorState, x : Double, y : Double) -> (Double, Double)? {
   match self.drawn_now() {
     Some((px, py, qx, qy, s)) => if s > 0.0 { Some((px + (x - qx) / s, py + (y - qy) / s)) } else { None }
     None => Some((x, y))
@@ -2231,7 +2231,7 @@ fn EditorState::pick_at(self : EditorState, by : PickBy) -> Unit {
 /// committed first.
 fn EditorState::widen_by_pointer(self : EditorState, x : Double, y : Double, t : Double) -> Unit {
   // (a pointer's, in the window: where it is in the words, none where they are drawn as nothing)
-  guard self.local(x, y) is Some((x, y)) else { return }
+  guard self.local_point(x, y) is Some((x, y)) else { return }
   self.blink0 = t
   self.menu = false
   self.sel_handles = false

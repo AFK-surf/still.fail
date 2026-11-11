@@ -5,12 +5,12 @@
 // (dec_old, dec_new, dec_src).
 
 ///|
-/// The fixture's entry of the outbox: `state` (sending, sent, failed); refused as it is (`final`); why; what it waits
+/// The fixture's entry of the outbox: `state` (sending, sent, failed); refused as it is (`refused`); why; what it waits
 /// on and how far; followed by the viewer's next; with a file, or a picture 800 × 600 (`picture`); quoting `quotes`
 /// (as the core gives them).
 fn out_entry(
   state : String,
-  final? : Bool = false,
+  refused? : Bool = false,
   error? : String = "",
   waits? : String = "",
   progress? : Double,
@@ -23,7 +23,7 @@ fn out_entry(
     "id": "o-1",
     "text": "这条还在路上，晚点再看结果",
     "state": Json::string(state),
-    "final": Json::boolean(final),
+    "final": Json::boolean(refused),
     "error": Json::string(error),
     "waits": Json::string(waits),
     "followed": Json::boolean(followed),
@@ -70,7 +70,7 @@ fn out_cases() -> Array[(String, Outgoing, Json?)] {
     ("sent", out_entry("sent"), None),
     ("followed", out_entry("sent", followed=true), None),
     ("not sent", out_entry("failed", error="连不上 Willow"), None),
-    ("refused", out_entry("failed", final=true, error="Willow 上没有这个文件"), None),
+    ("refused", out_entry("failed", refused=true, error="Willow 上没有这个文件"), None),
     ("sent again", out_entry("failed", error="连不上 Willow"), Some(out_doing("chat.retry"))),
     ("failed again", out_entry("failed", error="连不上 Willow"), Some(out_doing("chat.retry", failed="还是连不上"))),
     ("with a file", out_entry("sent", file=true), None),
@@ -140,12 +140,12 @@ test "under a mouse, as the old view's: 重试 on the hover ground in the text's
   let old = out_old(760.0, dec_src(@signals.signal(None), []), o)
   old.run_for(@ui.move_most_ms)
   let (x, y, w, h) = old.rect_of(@sf.t("common.retry")).unwrap()
-  old.move(x + w / 2.0, y + h / 2.0)
+  old.move_to(x + w / 2.0, y + h / 2.0)
   old.run_for(@ui.move_most_ms)
   let was = head_drawn(old)
   let t = out_new(760.0, dec_src(@signals.signal(None), []), fn() { o })
   t.run_for(@ui.move_most_ms)
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(head_drawn(t), was)
   dec_audit(t, "under a mouse")
@@ -193,7 +193,7 @@ test "not sent: 重试 asks the core to send it again and 删除 to drop it, by 
 test "refused as it is: 编辑 puts its words back in the composer and drops it" {
   let calls : Array[(String, Json)] = []
   let src = dec_src(@signals.signal(None), calls)
-  let t = out_new(760.0, src, fn() { out_entry("failed", final=true, error="Willow 上没有这个文件") })
+  let t = out_new(760.0, src, fn() { out_entry("failed", refused=true, error="Willow 上没有这个文件") })
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label=@sf.t("common.retry")) is None)
   t.click(Button, label=@sf.t("common.edit"))

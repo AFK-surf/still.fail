@@ -117,7 +117,7 @@ pub fn Tester::frame_export(self : Tester) -> Array[String] {
 pub fn Tester::probe_at(self : Tester, x : Double, y : Double) -> String {
   self.reads_own()
   let before = self.frame_export()
-  self.move(x, y)
+  self.move_to(x, y)
   self.frame()
   let after = self.frame_export()
   let counted : Map[String, Int] = Map([])

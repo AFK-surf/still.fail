@@ -65,7 +65,7 @@ pub struct Moves {
 pub fn[T : Eq] moves_for(
   owner : @view.View,
   by : () -> T,
-  spec? : Spec = move(),
+  spec? : Spec = moved(),
   spec_of? : (T, T) -> Spec,
   carry_of? : (T, T) -> Bool,
 ) -> Moves {

@@ -242,7 +242,7 @@ test "desk composer: the pointer moving over the `@` menu's chats chooses them; 
   let chosen = fn() raise { t.get(Button, label=b).selected }
   // moved onto it: chosen
   let (x, y, w, h) = t.get(Button, label=b).rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   assert_eq(chosen(), Some(true))
   // the keys move the choice to another, the pointer resting where it was
@@ -251,7 +251,7 @@ test "desk composer: the pointer moving over the `@` menu's chats chooses them; 
   t.frame()
   assert_eq(chosen(), Some(false))
   // moved again over it: chosen again
-  t.move(x + w / 2.0 + 4.0, y + h / 2.0)
+  t.move_to(x + w / 2.0 + 4.0, y + h / 2.0)
   t.frame()
   assert_eq(chosen(), Some(true))
 }

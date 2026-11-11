@@ -56,8 +56,8 @@ test "an Anim's value_at, asked as it is told, is what get has in the frame draw
   let specs : Array[(String, Spec)] = [
     ("tween", tween(200.0, ease=Out)),
     ("tween, delayed", tween(200.0, ease=Out, delay=70.0)),
-    ("move", move(points=300.0)),
-    ("move, delayed", move(points=300.0, delay=40.0)),
+    ("move", moved(points=300.0)),
+    ("move, delayed", moved(points=300.0, delay=40.0)),
     ("Compose's spring", spring()),
     ("Compose's spring, delayed", spring(delay=50.0)),
     ("Motion's tween", tween_to(duration=200.0)),

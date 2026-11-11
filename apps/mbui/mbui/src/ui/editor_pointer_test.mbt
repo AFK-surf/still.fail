@@ -37,7 +37,7 @@ test "a drag on from a double click widens what is picked by words, either way" 
   assert_eq(f.selection(), (6, 17))
   // (the button still down: on past where it began)
   let (x2, _) = letter_at(x0, y0, h, 1)
-  t.move(x2, y)
+  t.move_to(x2, y)
   t.release(x2, y)
   assert_eq(f.selection(), (11, 0))
 }

@@ -158,7 +158,7 @@ pub fn video_capsule(
   let fade = fn(on : Bool) { @motion.tween(half, ease=Out, delay=if on { comes_at } else { 0.0 }) }
   let length_k = @motion.told(c, key + "/length", if shown { 0.0 } else { 1.0 }, spec=fade(!shown))
   let share_k = @motion.told(c, key + "/share", if shown { 1.0 } else { 0.0 }, spec=fade(shown))
-  let reshape = if to_wider { @motion.move() } else { @motion.move(delay=half) }
+  let reshape = if to_wider { @motion.moved() } else { @motion.moved(delay=half) }
   c.layer(fn() {
     let foot = if corner == message_file_corner {
       video_capsule_foot

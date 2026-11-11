@@ -100,13 +100,13 @@ test "a node's link pointed at by the mouse: which one, by its first run, as the
   let (t, _, _, pieces) = links_tester(links~)
   let pointed = fn() { links.val.unwrap().pointed.get() }
   let p = pieces[1]
-  t.move((p.0 + p.2) / 2.0, (p.1 + p.3) / 2.0)
+  t.move_to((p.0 + p.2) / 2.0, (p.1 + p.3) / 2.0)
   assert_eq(pointed(), 1)
   // (past its words on its line, then off the node)
-  t.move(pieces[0].2 + 4.0, (pieces[0].1 + pieces[0].3) / 2.0)
+  t.move_to(pieces[0].2 + 4.0, (pieces[0].1 + pieces[0].3) / 2.0)
   assert_eq(pointed(), -1)
-  t.move((p.0 + p.2) / 2.0, (p.1 + p.3) / 2.0)
-  t.move(390.0, 390.0)
+  t.move_to((p.0 + p.2) / 2.0, (p.1 + p.3) / 2.0)
+  t.move_to(390.0, 390.0)
   assert_eq(pointed(), -1)
 }
 
@@ -216,7 +216,7 @@ test "a node's link pointed at by a pointer that stays where it is: covered, non
   let m = links_made(runs, covered~)
   let pointed = fn() { m.links.val.unwrap().pointed.get() }
   let g = link_glyphs(m.t)[0]
-  m.t.move(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
+  m.t.move_to(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
   assert_eq(pointed(), 1)
   covered.set(true)
   m.t.draw()
@@ -267,7 +267,7 @@ test "a node's link under a pointer that stays where it is, what holds the node 
   let dx = @signals.signal(0.0)
   let (t, _, links) = two_links(dx, @signals.signal(15.0))
   // (over the second, 4 glyphs of 15 and a space past the first: about 70 in)
-  t.move(80.0, 10.0)
+  t.move_to(80.0, 10.0)
   assert_eq(links.pointed.get(), 2)
   // (the node moved right by 70: the first under the pointer now)
   view_app.val.unwrap().event(t.time(), fn() { dx.set(60.0) })
@@ -278,7 +278,7 @@ test "a node's link under a pointer that stays where it is, what holds the node 
 test "a node's link under a pointer that stays where it is, its words set larger (the node as big): the link now under it pointed at; tapped at once after, no frame between, that one" {
   let size = @signals.signal(15.0)
   let (t, taps, links) = two_links(@signals.signal(0.0), size)
-  t.move(80.0, 10.0)
+  t.move_to(80.0, 10.0)
   assert_eq(links.pointed.get(), 2)
   // (words twice as large, told as an event from outside is (as what the app is told comes): the first reaches past
   // 80)
@@ -291,7 +291,7 @@ test "a node's link under a pointer that stays where it is, its words set larger
 ///|
 test "a node's link under a pointer that stays where it is, the system's size of words made larger (the node as big): the link now under it pointed at, as its words are measured again" {
   let (t, _, links) = two_links(@signals.signal(0.0), @signals.signal(15.0))
-  t.move(80.0, 10.0)
+  t.move_to(80.0, 10.0)
   assert_eq(links.pointed.get(), 2)
   // (twice as large: as the frame it is told in begins, the window's words measured again: Tree::words_again)
   t.set_font_scale(2.0)

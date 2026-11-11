@@ -94,7 +94,7 @@ fn steady_bar_case(over : @signals.Signal[Bool]) -> (Tester, @view.Scroll) {
     |> ignore
   })
   t.draw()
-  t.move(80.0, 100.0)
+  t.move_to(80.0, 100.0)
   (t, scroll)
 }
 

@@ -1187,7 +1187,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // a selection's handle under the finger (Android's): the finger moves that end, the menu away meanwhile
     // (the finger where it is in the field's words, as they are placed: EditorState::local)
     let in_words = match c.editors.get(c.focus_allowed()) {
-      Some(st) => st.local(x, y)
+      Some(st) => st.local_point(x, y)
       None => None
     }
     match (c.editors.get(c.focus_allowed()), in_words) {
@@ -1332,7 +1332,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         // sliding on from a long press's word: widened by words (the menu away meanwhile)
         match c.editors.get(c.word_drag) {
           Some(st) => {
-            match st.local(x, y) {
+            match st.local_point(x, y) {
               Some((lx, ly)) => st.widen_to(lx, ly)
               None => ()
             }
@@ -1349,12 +1349,12 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       } else if c.editor_drag {
         match c.editors.get(c.active) {
           Some(st) if c.clicks > 1 && (c.press_mods & mod_shift_key) == 0 =>
-            match st.local(x, y) {
+            match st.local_point(x, y) {
               Some((lx, ly)) => st.widen_to(lx, ly, by=if c.clicks == 2 { Words } else { Paragraphs })
               None => ()
             }
           Some(st) =>
-            match (st.tl, st.local(x, y)) {
+            match (st.tl, st.local_point(x, y)) {
               (Some(tl), Some((lx, ly))) => st.caret_to_point(tl, lx, ly)
               _ => ()
             }
@@ -1494,7 +1494,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
             (c.press_x - lx).abs() <= 2.0 * touch_slop() &&
             (c.press_y - ly).abs() <= 2.0 * touch_slop() {
             // a second tap soon after the first, near it: the word there picked (Compose's double tap)
-            match st.local(c.press_x, c.press_y) {
+            match st.local_point(c.press_x, c.press_y) {
               Some((lx, ly)) => st.pick_word(lx, ly, t) |> ignore
               None => ()
             }
@@ -2254,7 +2254,7 @@ fn float_caret(c : Ctx, st : EditorState, kind : Int, x : Double, y : Double, t 
 /// The caret put where a pointer at (`x`, `y`) in the window is in the field `st` (place_caret; nothing where it is
 /// drawn as nothing: EditorState::local).
 fn place_caret_at(st : EditorState, x : Double, y : Double, t : Double) -> Unit {
-  match st.local(x, y) {
+  match st.local_point(x, y) {
     Some((lx, ly)) => place_caret(st, lx, ly, t)
     None => ()
   }
@@ -2285,7 +2285,7 @@ fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
   // (the finger where it is in the field's words, as they are placed: none where they are drawn as nothing)
   let (x, y) = match c.editors.get(c.handle_drag) {
     Some(st) =>
-      match st.local(x, y) {
+      match st.local_point(x, y) {
         Some(p) => p
         None => return
       }

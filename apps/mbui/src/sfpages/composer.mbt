@@ -398,7 +398,7 @@ pub fn composer(
     // det-ok(motion-length): the field opening past ＋ and send kept off them on this clock, till their cutting is mended
     @motion.tween(composer_shape_ms, ease=Move)
   } else {
-    @motion.move()
+    @motion.moved()
   }
   let hint = composer_hint(
     c,

@@ -5,7 +5,7 @@
 /// Node `v` one thing with what has id `id` (@view's View::shared): made as one with it is let go of in the same change,
 /// it flies from where that one was drawn, as `spec` says (a Move as far as it goes). It.
 #callsite(autofill(loc))
-pub fn shared(v : @view.View, id : String, spec? : Spec = move(), loc~ : SourceLoc) -> @view.View {
+pub fn shared(v : @view.View, id : String, spec? : Spec = moved(), loc~ : SourceLoc) -> @view.View {
   v.shared(Is(id), flight_by(spec), loc~)
 }
 

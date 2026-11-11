@@ -1021,7 +1021,7 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)

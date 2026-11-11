@@ -255,7 +255,7 @@ fn account_blocks(c : @ui.Ctx, core : Core, ev : Json?) -> Array[() -> Unit] {
 ///|
 /// An account made up, for what its page shows while it is read (account_blocks in its bones): on two stations.
 fn account_sample() -> Json {
-  let member = fn(i : Int) -> Json {
+  let profile_host = fn(i : Int) -> Json {
     {
       "station": Json::string("sample/" + i.to_string()),
       "stationName": Json::string(@sf.sample_words(4 + i)),
@@ -268,6 +268,6 @@ fn account_sample() -> Json {
   {
     "station": "sample/0",
     "profile": { "checkText": Json::string(@sf.sample_words(4)), "check": { "detail": Json::string(@sf.sample_words(14)) } },
-    "members": [member(0), member(1)],
+    "members": [profile_host(0), profile_host(1)],
   }
 }

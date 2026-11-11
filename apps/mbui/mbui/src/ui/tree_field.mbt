@@ -434,7 +434,7 @@ fn tree_field_held(id : @view.NodeId) -> Unit {
   c.focus_moved(tree_said_id(id))
   let st = tf.st
   tf.editing = true
-  match st.local(x, y) {
+  match st.local_point(x, y) {
     Some((lx, ly)) => if st.pick_word(lx, ly, view_moment()) { tf.word_drag = true }
     None => ()
   }
@@ -453,7 +453,7 @@ fn tree_field_handle_down(x : Double, y : Double, at : Double) -> Bool {
   guard tree_said_ids.get(c.focus_allowed()) is Some(id) else { return false }
   guard tree_fields.get(id) is Some(tf) else { return false }
   let st = tf.st
-  guard st.local(x, y) is Some((lx, ly)) else { return false }
+  guard st.local_point(x, y) is Some((lx, ly)) else { return false }
   let which = st.on_sel_handle(lx, ly)
   let (which, dy) = if which != 0 {
     (which, ly - (if which == 2 { st.sel_ay } else { st.sel_by }))
@@ -518,13 +518,13 @@ fn tree_field_moved(id : @view.NodeId, x : Double, y : Double, at : Double) -> B
   } else if tf.handle != 0 {
     handle_move(g(), x, y, at)
   } else if tf.word_drag {
-    match st.local(x, y) {
+    match st.local_point(x, y) {
       Some((lx, ly)) => st.widen_to(lx, ly)
       None => ()
     }
     st.menu = false
   } else {
-    match (st.tl, st.local(x, y)) {
+    match (st.tl, st.local_point(x, y)) {
       (Some(_), Some((lx, ly))) if tf.clicks > 1 && !tf.shifted =>
         st.widen_to(lx, ly, by=if tf.clicks == 2 { Words } else { Paragraphs })
       (Some(tl), Some((lx, ly))) => st.caret_to_point(tl, lx, ly)
@@ -554,7 +554,7 @@ fn tree_field_tapped(id : @view.NodeId) -> Unit {
   let t = view_moment()
   let (was, lx, ly) = tf.last_tap
   if t - was <= double_tap_ms && (x - lx).abs() <= 2.0 * touch_slop() && (y - ly).abs() <= 2.0 * touch_slop() {
-    match st.local(x, y) {
+    match st.local_point(x, y) {
       Some((px, py)) => st.pick_word(px, py, t) |> ignore
       None => ()
     }

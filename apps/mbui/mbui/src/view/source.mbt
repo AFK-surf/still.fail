@@ -21,7 +21,7 @@ priv struct Source {
 /// A place as it is said: `module/path:line` (MoonBit's `path:line:col-line:col@module`, where it began).
 pub fn source_place(loc : SourceLoc) -> String {
   let s = loc.to_string()
-  let (path, module) = match s.rev_find("@") {
+  let (path, module_name) = match s.rev_find("@") {
     Some(i) => (s[:i].to_owned(), s[i + 1:].to_owned())
     None => (s, "")
   }
@@ -34,10 +34,10 @@ pub fn source_place(loc : SourceLoc) -> String {
       }
     None => path
   }
-  if module == "" {
+  if module_name == "" {
     path
   } else {
-    module + "/" + path
+    module_name + "/" + path
   }
 }
 

@@ -93,11 +93,11 @@ test "大屏: the sidebar's list's thumb shown where the edge's strip is: a mous
   let (px, py) = ((x0 + x1) / 2.0, ty + th / 2.0)
   // (where the list is, by its thumb: down it as the list scrolls on)
   let before = ty
-  t.move(px, py)
+  t.move_to(px, py)
   t.run_for(@ui.scrollbar_fade_ms)
   t.press_at(px, py)
   for i in 1..=4 {
-    t.move(px, py + 10.0 * i.to_double())
+    t.move_to(px, py + 10.0 * i.to_double())
     t.run_for(@ui.drag_step_ms)
   }
   t.release(px, py + 40.0)

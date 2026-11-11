@@ -115,10 +115,10 @@ test "desk: the bar hidden by a click shows while the pointer is along the top, 
   t.tap(640.0, 400.0)
   t.run_for(@ui.double_click_ms)
   assert_true(!v.bars_shown())
-  t.move(640.0, 20.0)
+  t.move_to(640.0, 20.0)
   t.draw()
   assert_true(v.bars_shown())
-  t.move(640.0, 400.0)
+  t.move_to(640.0, 400.0)
   t.draw()
   assert_true(!v.bars_shown())
 }

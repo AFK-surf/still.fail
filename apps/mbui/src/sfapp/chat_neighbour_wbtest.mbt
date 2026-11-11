@@ -10,7 +10,7 @@ test "chat neighbours: a list held under the pointer is traversed in its display
   // (its row in the list, where the pointer rests: not its title over the chat it opens)
   let (x, y) = t.find("给设置页加一个深色模式开关").unwrap()
   t.tap_text("给设置页加一个深色模式开关")
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   // The core moves CI to the top, while the list keeps it below the current row under the pointer.
   fix_clock_set(clock, 2001.0)

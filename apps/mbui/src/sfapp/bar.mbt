@@ -1408,7 +1408,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   m.vis.go_by(
     if shown { 1.0 } else { 0.0 },
     if shown {
-      @motion.move(points=bar_drop)
+      @motion.moved(points=bar_drop)
     } else {
       @motion.tween(bar_hide_ms, ease=Leave)
     },

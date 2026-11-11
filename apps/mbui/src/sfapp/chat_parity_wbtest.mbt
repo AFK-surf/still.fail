@@ -315,7 +315,7 @@ test "an agent's link to an archived chat written bare: its title as the core sa
   assert_true(t.find(link) is None)
   assert_true(t.find("已归档") is None)
   let (x, y, w, h) = t.run_rects("旧的对话")[0]
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find("已归档") is Some(_), msg="its card: that it is archived")
 }

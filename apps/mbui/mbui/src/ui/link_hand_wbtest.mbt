@@ -9,7 +9,7 @@ test "the pointer over a node's link across lines: a hand over each of its piece
   let last = glyphs[glyphs.length() - 1]
   assert_true(last.1 > first.1, msg="across lines: \{first} \{last}")
   let at = fn(x : Double, y : Double) {
-    m.t.move(x, y)
+    m.t.move_to(x, y)
     m.t.draw()
     m.t.cursor()
   }
@@ -32,10 +32,10 @@ test "the pointer moved over a node's links and off them: its shape said again, 
   let before = { ..tree.work() }
   let shapes = []
   for g in glyphs {
-    m.t.move(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
+    m.t.move_to(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
     m.t.draw()
     shapes.push(m.t.cursor())
-    m.t.move(42.0, g.1 + g.3 / 2.0)
+    m.t.move_to(42.0, g.1 + g.3 / 2.0)
     m.t.draw()
     shapes.push(m.t.cursor())
   }
@@ -51,10 +51,10 @@ test "the pointer moved over a node's links and off them: its shape said again, 
 test "the pointer moved off a node's words onto a link of them: the host told the hand once" {
   let m = links_made(@signals.signal(linked_runs))
   let g = link_glyphs(m.t)[0]
-  m.t.move(42.0, g.1 + g.3 / 2.0)
+  m.t.move_to(42.0, g.1 + g.3 / 2.0)
   m.t.draw()
   let told = m.t.fake.cursors_told
-  m.t.move(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
+  m.t.move_to(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
   m.t.draw()
   assert_eq((m.t.cursor(), m.t.fake.cursors_told - told), (Hand, 1))
 }
@@ -77,7 +77,7 @@ test "a still pointer over a node whose shape is said anew: the host told it at 
     |> ignore
   })
   t.draw()
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   t.draw()
   let told = t.fake.cursors_told
   assert_eq((t.cursor(), t.fake.wants), (ResizeX, false))

@@ -38,7 +38,7 @@ fn thumbs(t : @ui.Tester) -> Array[(Double, Double, Double, Double, Int64)] {
 test "scroll bar: a list scrolled shows a thumb 3 wide, 2 in from its right, in the words' colour at 26%, and goes" {
   let t = @ui.Tester::new(bar_rows([]), w=300.0, h=400.0)
   assert_eq(thumbs(t).length(), 0)
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, 300.0)
   // come in over its fade
   t.run_for(@ui.scrollbar_fade_ms)
@@ -68,7 +68,7 @@ test "scroll bar: a list scrolled shows a thumb 3 wide, 2 in from its right, in 
 ///|
 test "scroll bar: its track keeps clear of what floats over the list's foot, and of the corners it is cut by" {
   let t = @ui.Tester::new(bar_rows([], over_foot=100.0, corner=20.0), w=300.0, h=400.0)
-  t.move(295.0, 100.0)
+  t.move_to(295.0, 100.0)
   t.run_for(@ui.scrollbar_fade_ms)
   // at the top: below the corner's rounding
   assert_eq(thumbs(t)[0].1, 20.0 + 2.0)
@@ -82,17 +82,17 @@ test "scroll bar: its track keeps clear of what floats over the list's foot, and
 ///|
 test "scroll bar: the pointer along a list's right brings its bar out, and it goes a while after the pointer leaves" {
   let t = @ui.Tester::new(bar_rows([]), w=300.0, h=400.0)
-  t.move(200.0, 100.0)
+  t.move_to(200.0, 100.0)
   t.run_for(@ui.scrollbar_fade_ms)
   assert_eq(thumbs(t).length(), 0)
-  t.move(300.0 - @ui.scroll_bar_near + 1.0, 100.0)
+  t.move_to(300.0 - @ui.scroll_bar_near + 1.0, 100.0)
   t.run_for(@ui.scrollbar_fade_ms)
   assert_eq(thumbs(t).length(), 1)
   // as long as it stays there
   t.run_for(@ui.scrollbar_hold_ms * 2.0)
   assert_eq(thumbs(t).length(), 1)
   t.assert_idle()
-  t.move(200.0, 100.0)
+  t.move_to(200.0, 100.0)
   t.run_for(@ui.scrollbar_hold_ms)
   assert_eq(thumbs(t).length(), 1)
   t.run_for(@ui.scrollbar_fade_ms)
@@ -105,15 +105,15 @@ test "scroll bar: its thumb dragged scrolls the list as far as it moves, darker 
   let pressed : Array[Int] = []
   let t = @ui.Tester::new(bar_rows(pressed), w=300.0, h=400.0)
   // along the edge, off the thumb: out, light
-  t.move(296.0, 200.0)
+  t.move_to(296.0, 200.0)
   t.run_for(@ui.scrollbar_fade_ms)
   let (_, y0, _, _, light) = thumbs(t)[0]
   // on it: darker
-  t.move(296.0, 10.0)
+  t.move_to(296.0, 10.0)
   let lit = thumbs(t)[0].4
   assert_true((lit & 0xFFL) > (light & 0xFFL), msg="\{lit} \{light}")
   t.press_at(296.0, 10.0)
-  t.move(296.0, 10.0 + 93.0)
+  t.move_to(296.0, 10.0 + 93.0)
   let (_, y1, _, _, held) = thumbs(t)[0]
   assert_true((y1 - y0 - 93.0).abs() < 0.01, msg="\{y0} \{y1}")
   // the view as far down the rows as the thumb its track
@@ -175,14 +175,14 @@ test "scroll bar: a box kept to a height has one along its right, a box scrolled
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 100.0)
+  t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, 100.0)
   t.run_for(@ui.scrollbar_fade_ms)
   let tall = thumbs(t)
   assert_eq(tall.length(), 1)
   assert_eq(tall[0].0, 300.0 - 2.0 - 3.0)
   assert_true(tall[0].1 > 2.0 && tall[0].1 + tall[0].3 <= 200.0 - 2.0, msg="\{tall}")
-  t.move(100.0, 250.0)
+  t.move_to(100.0, 250.0)
   t.wheel_with(100.0, 250.0, 100.0, 0.0, 0)
   t.run_for(@ui.scrollbar_fade_ms)
   let wide = thumbs(t).filter(fn(r) { r.3 == 3.0 })
@@ -206,7 +206,7 @@ test "scroll bar: a box scrolled sideways out past the view it is for has its ba
     w=300.0,
     h=400.0,
   )
-  t.move(150.0, 50.0)
+  t.move_to(150.0, 50.0)
   t.wheel_with(150.0, 50.0, 100.0, 0.0, 0)
   t.run_for(@ui.scrollbar_fade_ms)
   let at_start = thumbs(t)
@@ -275,7 +275,7 @@ test "scroll bar: a field of more lines than it shows scrolls by the wheel, its 
   let t = @ui.Tester::new(field_rows(f), w=300.0, h=400.0)
   // its end shown, where the caret is
   assert_eq(field_scrolled(f), 180.0)
-  t.move(100.0, 30.0)
+  t.move_to(100.0, 30.0)
   t.wheel(100.0, 30.0, -100.0)
   assert_eq(field_scrolled(f), 80.0)
   assert_eq(f.selection(), (twelve_lines().length(), twelve_lines().length()))
@@ -308,7 +308,7 @@ fn inset_field_thumbs(r : Double) -> Array[(Double, Double, Double, Double, Int6
     w=300.0,
     h=400.0,
   )
-  t.move(100.0, 40.0)
+  t.move_to(100.0, 40.0)
   t.wheel(100.0, 40.0, -100.0)
   t.run_for(@ui.scrollbar_fade_ms)
   thumbs(t)

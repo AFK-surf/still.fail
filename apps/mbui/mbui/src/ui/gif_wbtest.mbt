@@ -76,7 +76,7 @@ priv struct MadeFrame {
   disposal : Int
   transparent : Int
   delay : Int
-  local : Int
+  local_colors : Int
   interlaced : Bool
   index : (Int, Int) -> Int
 }
@@ -88,12 +88,12 @@ priv struct MadeFrame {
 /// saying under 20 ms (so 100); a rect of its own 2 colours, cleared (2). They end at 100, 150, 220, 250, 350 and 430 ms.
 fn many_ways_gif() -> Bytes {
   let frames : Array[MadeFrame] = [
-    { x: 0, y: 0, w: 8, h: 6, disposal: 1, transparent: -1, delay: 10, local: 0, interlaced: false, index: fn(x, y) { (x + y) % 4 } },
-    { x: 2, y: 1, w: 4, h: 3, disposal: 2, transparent: 0, delay: 5, local: 0, interlaced: false, index: fn(x, y) { (x * y) % 4 } },
-    { x: 1, y: 2, w: 5, h: 3, disposal: 3, transparent: -1, delay: 7, local: 8, interlaced: true, index: fn(x, y) { (x + 2 * y) % 8 } },
-    { x: 0, y: 0, w: 3, h: 6, disposal: 0, transparent: 1, delay: 3, local: 0, interlaced: true, index: fn(x, y) { (x + 3 * y) % 4 } },
-    { x: 6, y: 3, w: 4, h: 3, disposal: 3, transparent: -1, delay: 1, local: 0, interlaced: false, index: fn(x, y) { (3 * x + y) % 4 } },
-    { x: 3, y: 0, w: 2, h: 2, disposal: 2, transparent: -1, delay: 8, local: 2, interlaced: false, index: fn(x, y) { (x + y) % 2 } },
+    { x: 0, y: 0, w: 8, h: 6, disposal: 1, transparent: -1, delay: 10, local_colors: 0, interlaced: false, index: fn(x, y) { (x + y) % 4 } },
+    { x: 2, y: 1, w: 4, h: 3, disposal: 2, transparent: 0, delay: 5, local_colors: 0, interlaced: false, index: fn(x, y) { (x * y) % 4 } },
+    { x: 1, y: 2, w: 5, h: 3, disposal: 3, transparent: -1, delay: 7, local_colors: 8, interlaced: true, index: fn(x, y) { (x + 2 * y) % 8 } },
+    { x: 0, y: 0, w: 3, h: 6, disposal: 0, transparent: 1, delay: 3, local_colors: 0, interlaced: true, index: fn(x, y) { (x + 3 * y) % 4 } },
+    { x: 6, y: 3, w: 4, h: 3, disposal: 3, transparent: -1, delay: 1, local_colors: 0, interlaced: false, index: fn(x, y) { (3 * x + y) % 4 } },
+    { x: 3, y: 0, w: 2, h: 2, disposal: 2, transparent: -1, delay: 8, local_colors: 2, interlaced: false, index: fn(x, y) { (x + y) % 2 } },
   ]
   let out : Array[Byte] = []
   for b in [b'G', b'I', b'F', b'8', b'9', b'a'] {
@@ -127,15 +127,15 @@ fn many_ways_gif() -> Bytes {
     u16(f.y)
     u16(f.w)
     u16(f.h)
-    let bits = if f.local == 8 { 3 } else if f.local == 4 { 2 } else { 1 }
-    let lf = (if f.local > 0 { 0x80 | (bits - 1) } else { 0 }) | (if f.interlaced { 0x40 } else { 0 })
+    let bits = if f.local_colors == 8 { 3 } else if f.local_colors == 4 { 2 } else { 1 }
+    let lf = (if f.local_colors > 0 { 0x80 | (bits - 1) } else { 0 }) | (if f.interlaced { 0x40 } else { 0 })
     out.push(lf.to_byte())
-    for c in 0..<f.local {
+    for c in 0..<f.local_colors {
       out.push(((c * 37 + 11) & 0xFF).to_byte())
       out.push(((c * 91 + 5) & 0xFF).to_byte())
       out.push(((200 - c * 23) & 0xFF).to_byte())
     }
-    let min_code = if f.local == 8 { 3 } else { 2 }
+    let min_code = if f.local_colors == 8 { 3 } else { 2 }
     out.push(min_code.to_byte())
     let indices = []
     for y in interlace_rows(f.h, f.interlaced) {

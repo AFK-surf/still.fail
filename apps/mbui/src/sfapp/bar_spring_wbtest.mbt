@@ -189,7 +189,7 @@ test "bar: sliding chooses the place under the finger as the notch closes and wh
     assert_true(drawn_boundary - open_boundary > 1.0, msg="\{ms}: \{open_boundary} \{drawn_boundary}")
     // This lies on opposite sides of the old and the drawn boundary: the drawn side is chats.
     let x = (open_boundary + drawn_boundary) / 2.0
-    t.move(x, y)
+    t.move_to(x, y)
     assert_eq(bar.felt, "\{told.cur}/chats", msg="\{ms}")
     t.release(x, y)
     assert_true(app.nav.top() == Home, msg="\{ms}")

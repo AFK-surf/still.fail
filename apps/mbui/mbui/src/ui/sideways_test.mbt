@@ -70,7 +70,7 @@ test "sideways: in a row drawn again as the list scrolled, a finger up or down o
   // the list dragged up a little by another row, slowly (no fling): the rows drawn again as it moves, not built
   t.press_at(150.0, 250.0)
   for i in 1..=6 {
-    t.move(150.0, 250.0 - 5.0 * i.to_double())
+    t.move_to(150.0, 250.0 - 5.0 * i.to_double())
   }
   assert_true(t.rows_kept() > 0, msg="\{t.rows_kept()}")
   // (held still past what the finger's speed is read from: let go, no fling)

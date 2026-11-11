@@ -207,7 +207,7 @@ test "⌘↓ in a chat scrolled up from its end takes the list back to its end, 
   // (a window lower than the chat: it scrolls)
   let t = keyed_chat(calls, h=480.0)
   let last = "做完了：列表、跳到最新的按钮、加载更早的消息都好了，截图也换了。"
-  t.move(640.0, 240.0)
+  t.move_to(640.0, 240.0)
   t.wheel(640.0, 240.0, -1200.0)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find(last) is None, msg="still at the end")

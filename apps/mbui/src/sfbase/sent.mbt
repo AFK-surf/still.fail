@@ -157,7 +157,7 @@ pub fn sent_local(
       progress: None,
       uploads: cards,
       created_at: c.moment(),
-      final: false,
+      refused: false,
     },
     // (a chat just made: none)
     before: match v {

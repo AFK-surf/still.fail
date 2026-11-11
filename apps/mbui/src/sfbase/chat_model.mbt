@@ -613,7 +613,7 @@ pub(all) struct Outgoing {
   /// when it was sent (the frames' clock's: "正在发送" shows a while after), and whether it was refused as it is (sent
   /// again it would be again: its words go back to the composer)
   created_at : Double
-  final : Bool
+  refused : Bool
 }
 
 ///|
@@ -822,7 +822,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
           (text(Some(u), "name"), number(Some(u), "size").to_int(), number(Some(u), "sent").to_int())
         }),
         created_at: number(s, "createdAt"),
-        final: flag(s, "final"),
+        refused: flag(s, "final"),
       }
     }),
     joins_until: opt_number(s, "joinsUntil"),

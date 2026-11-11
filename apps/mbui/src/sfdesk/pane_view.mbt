@@ -396,7 +396,7 @@ fn fold_moves_from(at : Double, to : FoldLook, was_look? : FoldLook) -> Unit {
   fold_goes.from = Some(from)
   fold_goes.to = Some(to)
   fold_goes.way.put(0.0)
-  fold_goes.way.go(1.0, @motion.move(over=fold_far(from, to)), at~)
+  fold_goes.way.go(1.0, @motion.moved(over=fold_far(from, to)), at~)
   fold_said()
 }
 

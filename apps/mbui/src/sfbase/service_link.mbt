@@ -321,7 +321,7 @@ pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json)
       }
     "go" => {
       let failed = fn(words : String) { tell({ "t": Json::string("error"), "message": Json::string(words) }) }
-      let method = text(Some(m), "method").to_upper()
+      let verb = text(Some(m), "method").to_upper()
       let path = text(Some(m), "path")
       let headers = link_headers(field(Some(m), "headers"))
       let body = match field(Some(m), "body") {
@@ -336,7 +336,7 @@ pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json)
           return
         }
       }
-      if !link_method(method) || !link_path(path) || l.fetches.contains(id) {
+      if !link_method(verb) || !link_path(path) || l.fetches.contains(id) {
         failed(svc("android-chat.web.badRequest"))
         return
       }
@@ -385,7 +385,7 @@ pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json)
           }
         },
       }
-      service_ask(src, p, method, path, headers, body, 0, [], sink, follow~, cookies~)
+      service_ask(src, p, verb, path, headers, body, 0, [], sink, follow~, cookies~)
     }
     _ => ()
   }

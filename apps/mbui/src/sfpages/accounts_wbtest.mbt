@@ -483,7 +483,7 @@ test "a profile model's id appears beside the option the pointer is over" {
   t.run_for(@kit.presence_in_ms)
   for (name, id) in [("Opus 5.5", "claude-opus-5-5"), ("Sonnet 5", "claude-sonnet-5")] {
     let (x, y, w, h) = t.rect_of(name).unwrap()
-    t.move(x + w / 2.0, y + h / 2.0)
+    t.move_to(x + w / 2.0, y + h / 2.0)
     t.run_for(@sf.tip_delay_ms + @kit.presence_in_ms)
     let tip = t.get(Tooltip, label=id).rect
     let gap = tip.0 - (x + w)

@@ -8,11 +8,11 @@ test "wide: the rail's 对话 and 用量 places, the pointer resting on each, sa
   for label in ["Station：" + @sfdesk.rail_stations_label(fixture("home"), "ws1"), "Profile"] {
     let place = t.query(Button, label~).unwrap()
     let (x, y, w, h) = place.rect
-    t.move(x + w / 2.0, y + h / 2.0)
+    t.move_to(x + w / 2.0, y + h / 2.0)
     t.run_for(@sfpages.hover_open_ms * 2.0)
     assert_true(t.find("分享卡片") is None, msg=label)
     assert_true(t.query(Button, label="分享卡片") is None, msg=label)
-    t.move(x + w + 600.0, y + h / 2.0)
+    t.move_to(x + w + 600.0, y + h / 2.0)
     t.run_for(@sfpages.hover_open_ms * 2.0)
   }
 }
@@ -40,10 +40,10 @@ test "wide: a figure of 对话's card pressed opens the chats it counts (2026-11
 /// nothing of it against the corners' rule, then pressed.
 fn rail_card_figure_pressed(t : @ui.Tester, figure : String) -> Unit raise {
   let (x, y, w, h) = t.query(Button, label="对话").unwrap().rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   let (fx, fy, fw, fh) = t.query(Button, label=figure).unwrap().rect
-  t.move(fx + fw / 2.0, fy + fh / 2.0)
+  t.move_to(fx + fw / 2.0, fy + fh / 2.0)
   t.draw()
   // (its ground lit under the pointer, in the card's corner: concentric with it)
   assert_eq(t.corner_faults(), [], msg=figure)
@@ -57,7 +57,7 @@ fn rail_card_figure_pressed(t : @ui.Tester, figure : String) -> Unit raise {
 fn rail_card_shown(t : @ui.Tester, label : String, words : Array[String]) -> Unit raise {
   let place = t.query(Button, label~).unwrap()
   let (x, y, w, h) = place.rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   for s in words {
     assert_true(t.find(s) is Some(_), msg=label + ": " + s)
@@ -65,7 +65,7 @@ fn rail_card_shown(t : @ui.Tester, label : String, words : Array[String]) -> Uni
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])
   assert_eq(t.squeeze_faults(), [])
-  t.move(x + w + 600.0, y + h / 2.0)
+  t.move_to(x + w + 600.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find(words[0]) is None, msg=label + ": its card gone")
 }
@@ -76,11 +76,11 @@ test "wide: a mouse's pointer over a rail card's ground is the arrow, over 分�
   let t = wide_tester(calls)
   let place = t.query(Button, label="用量").unwrap()
   let (x, y, w, h) = place.rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find("分享卡片") is Some(_), msg="its card")
   let shape_on = fn(px : Double, py : Double) {
-    t.move(px, py)
+    t.move_to(px, py)
     t.run_for(@ui.move_most_ms)
     t.cursor()
   }

@@ -13,7 +13,7 @@ test "the joined maker's hover ground is uncovered and square at the seam" {
   let tiles = t.all(Button).filter(fn(s) { s.label.has_suffix("的执行历史") })
   assert_true(tiles.length() == 1)
   let (x, y, w, h) = tiles[0].rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   let grounds = t.drawn_rect_corners().filter(fn(r) {
     r.0 == x && r.1 == y && r.2 == w && r.3 == h

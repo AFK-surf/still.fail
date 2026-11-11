@@ -4249,7 +4249,7 @@ fn old_press_owner(c : Ctx, x : Double, y : Double, chosen : @view.NodeId) -> @v
   let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
   // (a handle of the focused field's selection or caret, before what is under it: that field's)
   match c.editors.get(c.focus_allowed()) {
-    Some(st) if (match st.local(x, y) { Some((lx, ly)) => st.on_sel_handle(lx, ly) != 0 || st.on_handle(lx, ly); None => false }) =>
+    Some(st) if (match st.local_point(x, y) { Some((lx, ly)) => st.on_sel_handle(lx, ly) != 0 || st.on_handle(lx, ly); None => false }) =>
       return c.island_of_id(c.focus)
     _ => ()
   }

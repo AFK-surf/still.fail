@@ -1184,7 +1184,7 @@ fn swipe_to_archive(
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
             unghost(true)
-            off.animate(c, -width, @motion.move(), velocity=v)
+            off.animate(c, -width, @motion.moved(), velocity=v)
           }
         } else {
           back(v)

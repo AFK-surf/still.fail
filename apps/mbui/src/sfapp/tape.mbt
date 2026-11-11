@@ -232,7 +232,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
           let (x, y) = (number(Some(e), "x"), number(Some(e), "y"))
           match kind {
             "down" => t.press_at(x, y)
-            "move" => t.move(x, y)
+            "move" => t.move_to(x, y)
             _ => t.release(x, y)
           }
         }

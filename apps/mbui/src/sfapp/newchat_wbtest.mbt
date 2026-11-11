@@ -61,7 +61,7 @@ test "the bar: holding a place hides 令 or ＋, moving keeps it hidden, and let
     t.frame()
     t.run_for(held_frame_ms)
     assert_eq(disc_alpha(), 0L, msg="\{action} held")
-    t.move(x + 12.0, y)
+    t.move_to(x + 12.0, y)
     t.run_for(moved_frame_ms)
     assert_eq(disc_alpha(), 0L, msg="\{action} moved")
     t.release(x + 12.0, y)
@@ -145,7 +145,7 @@ test "the panel drawn up by a finger: the bar and the panel drawn up clear of th
   let rest = foot()
   t.press_at(xs[0], y)
   for i in 1..=20 {
-    t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+    t.move_to(xs[0], y - 64.0 * i.to_double() / 20.0)
   }
   t.run_for(@ui.move_most_ms)
   let held = foot()
@@ -463,19 +463,19 @@ test "the bar drawn up clear of a finger as long as it has it: drawn up, further
   }
   t.press_at(xs[0], y)
   for i in 1..=20 {
-    t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+    t.move_to(xs[0], y - 64.0 * i.to_double() / 20.0)
   }
   let up = raised()
   for i in 1..=30 {
-    t.move(xs[0], y - 64.0 - 400.0 * i.to_double() / 30.0)
+    t.move_to(xs[0], y - 64.0 - 400.0 * i.to_double() / 30.0)
   }
   let further = raised()
   for i in 1..=30 {
-    t.move(xs[0], y - 464.0 + 464.0 * i.to_double() / 30.0)
+    t.move_to(xs[0], y - 464.0 + 464.0 * i.to_double() / 30.0)
   }
   let back = raised()
   for i in 1..=20 {
-    t.move(xs[0] + (xs[2] - xs[0]) * i.to_double() / 20.0, y)
+    t.move_to(xs[0] + (xs[2] - xs[0]) * i.to_double() / 20.0, y)
   }
   let along = raised()
   t.release(xs[2], y)
@@ -483,7 +483,7 @@ test "the bar drawn up clear of a finger as long as it has it: drawn up, further
   // a finger sliding along the bar alone, never drawing the panel up
   t.press_at(xs[0], y)
   for i in 1..=20 {
-    t.move(xs[0] + (xs[1] - xs[0]) * i.to_double() / 20.0, y)
+    t.move_to(xs[0] + (xs[1] - xs[0]) * i.to_double() / 20.0, y)
   }
   let sliding = raised()
   t.release(xs[1], y)
@@ -506,7 +506,7 @@ test "the bar held: more room above the finger in a taller window, bounded by th
     t.press_at(xs[0], y)
     if open {
       for i in 1..=20 {
-        t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+        t.move_to(xs[0], y - 64.0 * i.to_double() / 20.0)
       }
     } else {
       t.run_for(bar_hold_ms)

@@ -93,7 +93,7 @@ pub(all) struct ChatList {
   /// how its panes slide one to another (navTrack: 240 ease-out; mHomePane: 240 standard) and how a row moves as the
   /// list changes (motion.ts MOVE; the phone's row spring)
   slide : @motion.Spec
-  move : @motion.Spec
+  reorder : @motion.Spec
 }
 
 ///|
@@ -161,8 +161,8 @@ pub let mouse_chat_list : ChatList = {
   waiting_noted: 6,
   keys: true,
   found: mouse_found,
-  slide: @motion.move(),
-  move: @motion.move_spring,
+  slide: @motion.moved(),
+  reorder: @motion.move_spring,
 }
 
 ///|
@@ -218,8 +218,8 @@ pub let touch_chat_list : ChatList = {
   waiting_noted: 4,
   keys: false,
   found: touch_found,
-  slide: @motion.move(),
-  move: @motion.row_spring,
+  slide: @motion.moved(),
+  reorder: @motion.row_spring,
 }
 
 ///|

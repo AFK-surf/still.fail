@@ -285,7 +285,7 @@ pub fn viz_frame(
     if tall.target() != said {
       match c.row_way() {
         Some(way) => on_row_way(c, tall, said, way)
-        None => tall.animate(c, said, @motion.move(over=(said - tall.get(c)).abs()))
+        None => tall.animate(c, said, @motion.moved(over=(said - tall.get(c)).abs()))
       }
     }
     let h = tall.get(c)

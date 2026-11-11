@@ -176,7 +176,7 @@ fn profile_found_node(
       ["sign-in", "trouble", "quota", "usage", "used-by", "stations", "models", "run", "share", "workspaces", "account", "env"]
     },
     fn(b, key) {
-      @motion.reveal_node(b, fn() { profile_keys(core, here, o, p, entry).contains(key) }, lazy=true, fn(r) {
+      @motion.reveal_node(b, fn() { profile_keys(core, here, o, p, entry).contains(key) }, deferred=true, fn(r) {
         profile_block_node(r, core, here, address, id, s, o, p, entry, open, stint, tips, key)
       })
       |> ignore
@@ -1055,7 +1055,7 @@ fn profile_usage_node(
     }
   }
   // (read after the page is made: its section opens on its way, pushing what is under it down as it goes, not at once)
-  @motion.reveal_node(b, fn() { usage() is Some(_) }, lazy=true, fn(u) {
+  @motion.reveal_node(b, fn() { usage() is Some(_) }, deferred=true, fn(u) {
     @sf.section_node(
       u,
       fn() {

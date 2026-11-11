@@ -1428,7 +1428,7 @@ pub fn Flow::hover(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
   let site = loc.to_string()
   emit("hover " + what)
   guard self.spot(what, site) is Some((x, y)) else { return }
-  self.t.move(x, y)
+  self.t.move_to(x, y)
   self.t.draw()
   self.core()
 }

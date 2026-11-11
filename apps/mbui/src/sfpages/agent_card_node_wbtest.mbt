@@ -537,7 +537,7 @@ test "a message's name says its press: clicked, its own (the agent's history); t
   t.run_for(@ui.move_most_ms)
   // (the name: 40 + 20 + 18 + 60, the row's middle)
   let (x, y) = (168.0, 62.0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(hover_open_ms + @ui.move_most_ms)
   assert_true(agent_trigger_open(hands, "名"), msg="rested on: its card")
   match @signals.untracked(hands["名"].card) {
