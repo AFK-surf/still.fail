@@ -98,12 +98,14 @@ jobs:
   # The Windows app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, its installer run by an installed
   # Electron app's updater, its data and sign-in kept), as the beta's became on 2026-10-26: built as the pipeline's
   # desktop-win job builds the beta's, from main's build as preview.yml's windows job left it in the Actions cache, its
-  # installer's .sig signed (scripts/release-sign.ts), not code-signed.
+  # installer's .sig signed (scripts/release-sign.ts), not code-signed. The release is the day before's main (#4929), whose
+  # build the cache has often lost by then: the build restored is a later commit's, and rebuilding from it took 3m44s
+  # on 2026-11-11 (48s from the commit's own), so the job has 10 minutes (it runs by hand).
   desktop-win:
     needs: plan
     runs-on: windows-2025
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     defaults:
       run:
         shell: bash
