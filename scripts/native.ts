@@ -349,7 +349,7 @@ const PARTS: Record<string, Part> = {
     env: "STILLFAIL_MB_READER",
     rust: false,
     inputs: ["station/mb/src", "station/mb/moon.mod", "station/mb/moon.work", "station/mb/build.sh",
-      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/moon.mod",
+      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/src/halt", "apps/mbui/mbui/moon.mod",
       ":(exclude,glob)**/*_test.mbt", ":(exclude,glob)**/*_wbtest.mbt", ":(exclude,glob)**/pkg.generated.mbti"],
     recipe: (t) => ({ moon: "native release", shell: t === "darwin-arm64" ? key("shell-apple", t) : key("shell-station", t), mac: key("shell-apple", "darwin-arm64") }),
     build(t, out) {
