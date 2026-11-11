@@ -228,6 +228,14 @@ if (typeof g.URL !== "function") {
     pathname = "";
     search = "";
     hash = "";
+    static canParse(input: string, base?: string): boolean {
+      try {
+        new URL(input, base);
+        return true;
+      } catch {
+        return false;
+      }
+    }
     constructor(input: string, base?: string) {
       const s = String(input);
       const m = /^([a-zA-Z][a-zA-Z0-9+.-]*:)\/\/(?:([^:@/]*)(?::([^@/]*))?@)?(\[[^\]]*\]|[^:/?#]*)(?::(\d*))?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(s);
