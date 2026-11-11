@@ -75,6 +75,10 @@ struct FakeHost {
   images : Map[Int, FakeImage]
   /// the last decode's number: each new one the next, never one let go of again (as every host numbers them)
   mut image_ids : Int
+  /// sources said to take a while to decode (Tester::decode_after): how many ms after each is asked for it is done
+  decode_after : Map[String, Double]
+  /// the decodes so said, by their id: the moment each is done (on the timeline: asked for, and that long after)
+  decode_due : Map[Int, Double]
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double

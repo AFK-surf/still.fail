@@ -666,6 +666,11 @@ impl @hostapi.Host for FakeHost with image_load(self, src, max_px) {
   }
   // (its source kept, a failed one's too: Tester::image_src describes the same id as a live host's)
   self.image_srcs[id] = src
+  // (said to take a while: done that long after it is asked for, Tester::decode_after)
+  match self.decode_after.get(src) {
+    Some(ms) => self.decode_due[id] = self.time + ms
+    None => ()
+  }
   id
 }
 

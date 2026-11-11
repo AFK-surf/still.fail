@@ -298,6 +298,12 @@ fn Tester::next_due(self : Tester) -> Double {
       due = r
     }
   }
+  // (and a decode said to take a while, at its moment: Tester::decode_after)
+  for id, at in self.fake.decode_due {
+    if at > now && at < due && self.fake.images.get(id) is Some(im) && im.state == 0 {
+      due = at
+    }
+  }
   // (and what the outside the test stands for says next: a kept message, at its moment)
   match outside_due.val {
     Some(f) => {
