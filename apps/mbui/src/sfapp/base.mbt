@@ -575,6 +575,7 @@ pub using @sfbase {
   type ReportingHost,
   // what the app does whichever frame draws it (app_frame.mbt, shell.mbt, open_links.mbt, notices.mbt, menu_bar.mbt)
   shell,
+  shell_set,
   type Shell,
   appearance,
   attend,

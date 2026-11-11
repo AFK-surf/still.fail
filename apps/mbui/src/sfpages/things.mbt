@@ -230,11 +230,11 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
 ///|
 /// A thing held or right clicked (box `id`, said in message `seq`): its menu at the pointer, 在对话中查看 first (`away`),
 /// then a link's copy (`url`: none for a file). The chat's info's pull requests have it too.
-pub fn thing_menu(c : @ui.Ctx, id : Int, seq : Double, url : String, away : (Double) -> Unit) -> Unit {
+pub fn thing_menu(c : @ui.Ctx, id : Int, seq : Double, url : String, away : (Double) -> Unit, beside? : (() -> Unit)? = None) -> Unit {
   match c.menu_asked(id) {
     Some((x, y)) => {
       @sf.menu_held(c, "thing") |> ignore
-      thing_menu_at(x, y, seq, url, away)
+      thing_menu_at(x, y, seq, url, away, beside~)
     }
     None => ()
   }
@@ -243,16 +243,20 @@ pub fn thing_menu(c : @ui.Ctx, id : Int, seq : Double, url : String, away : (Dou
 ///|
 /// A thing held (a node's hold, presses_held_node): its menu there (thing_menu_at), felt as it opens where a finger held
 /// it, as an old view's hold is (menu_held's).
-fn thing_held_at(x : Double, y : Double, seq : Double, url : String, away : (Double) -> Unit) -> Unit {
+fn thing_held_at(x : Double, y : Double, seq : Double, url : String, away : (Double) -> Unit, beside? : (() -> Unit)? = None) -> Unit {
   @sf.menu_held_node()
-  thing_menu_at(x, y, seq, url, away)
+  thing_menu_at(x, y, seq, url, away, beside~)
 }
 
 ///|
-/// A thing's menu at `x`, `y` in the window (thing_menu's): 在对话中查看 (`away` to message `seq`), then a link's copy
-/// (`url`: none for a file).
-fn thing_menu_at(x : Double, y : Double, seq : Double, url : String, away : (Double) -> Unit) -> Unit {
+/// A thing's menu at `x`, `y` in the window (thing_menu's): 在对话中查看 (`away` to message `seq`), a file's 在侧边打开
+/// where it is offered (`beside`: thing_beside), then a link's copy (`url`: none for a file).
+fn thing_menu_at(x : Double, y : Double, seq : Double, url : String, away : (Double) -> Unit, beside? : (() -> Unit)? = None) -> Unit {
   let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.things.show"), fn() { away(seq) }, icon="chat"))]
+  match beside {
+    Some(f) => menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preview.openBeside"), f, icon="panel-open")))
+    None => ()
+  }
   if url != "" {
     menu.push(Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { @sfbase.copy_out(url, said=@sf.t("common.link.copied")) }, icon="copy")))
   }
@@ -342,6 +346,17 @@ fn thing_open(src : Source, r : ChatRef, kind : String, t : Json?) -> Unit {
 }
 
 ///|
+/// A thing's 在侧边打开 (thing_menu_at's `beside`): a file's, or a picture's of the chat (`kind` "files", "media"), where
+/// it is offered (beside_offered), opened in a tab beside the chat; None for anything else.
+fn thing_beside(r : ChatRef, kind : String, t : Json?) -> (() -> Unit)? {
+  guard kind == "files" || kind == "media" else { return None }
+  let a = @sfbase.attachment_of(field(t, "file").unwrap_or(Json::object({})))
+  guard @sfbase.beside_offered(a.path, a.name) else { return None }
+  let owner = if a.owner != "" { a.owner } else { r.session }
+  Some(fn() { @sfbase.open_preview(r.station, owner, a, beside=true) })
+}
+
+///|
 /// What a message sent its pictures and videos with says, over them: when and who (in the quiet grey), then its first
 /// words, cut to the line.
 fn media_said(c : @ui.Ctx, group : Json?) -> Unit {
@@ -407,7 +422,7 @@ fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?
   c.on_press(id, fn() {
     @sfbase.open_preview(r.station, owner, a, steps=InChat(Some(thread), r.session))
   })
-  thing_menu(c, id, number(t, "seq"), "", away)
+  thing_menu(c, id, number(t, "seq"), "", away, beside=thing_beside(r, "media", t))
   let video = file_kind(a.name) == "video"
   let picture = if video {
     @sfbase.video_still(c, src, r.station, owner, a, r.station + "/" + owner + "/" + a.path)
@@ -452,7 +467,7 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
   let url = text(t, "url")
   let (name, meta) = thing_words(kind, t)
   c.on_press(id, fn() { thing_open(src, r, kind, t) })
-  thing_menu(c, id, seq, url, away)
+  thing_menu(c, id, seq, url, away, beside=thing_beside(r, kind, t))
   // pointed at, a link's card over it, a pull request's as a message's link to it shows it (peeks.mbt)
   if kind != "files" {
     // (at its left: under it, it would cover the rows after it)
@@ -926,13 +941,13 @@ fn media_tile_node(
     .height(Is(Some(h)))
     // (pointed at, a shade fainter: things_tile's hovered)
     .alpha(By(fn() { if @sf.hovered_node(b) { things_tile_lit } else { 1.0 } }))
-    .on_menu(fn(m) { thing_menu_at(m.wx, m.wy, number(tv, "seq"), "", away) })
+    .on_menu(fn(m) { thing_menu_at(m.wx, m.wy, number(tv, "seq"), "", away, beside=thing_beside(r, "media", tv)) })
     |> ignore
     @sf.presses_held_node(
       b,
       fn() { @sfbase.open_preview(r.station, owner, a, steps=InChat(Some(thread), r.session)) },
       @ui.long_press_ms,
-      fn(d) { thing_held_at(d.wx, d.wy, number(tv, "seq"), "", away) },
+      fn(d) { thing_held_at(d.wx, d.wy, number(tv, "seq"), "", away, beside=thing_beside(r, "media", tv)) },
     )
     b.says(Is(Some(@view.said(Button, label=@sf.t(if video { "web-main.file.play" } else { "web-main.file.view" }, args=[("name", a.name)])))))
     |> ignore
@@ -992,7 +1007,7 @@ fn thing_row_node(row : @view.View, src : Source, r : ChatRef, kind : String, t 
     .says(By(fn() { Some(@view.said(Button, label=words().0)) }))
     .on_menu(fn(m) {
       let tn = @signals.untracked(t)
-      thing_menu_at(m.wx, m.wy, number(tn, "seq"), text(tn, "url"), away)
+      thing_menu_at(m.wx, m.wy, number(tn, "seq"), text(tn, "url"), away, beside=thing_beside(r, kind, tn))
     })
     |> ignore
     // pointed at, a link's card over it, a pull request's as a message's link to it shows it (thing_row's web_peek: at
@@ -1002,7 +1017,7 @@ fn thing_row_node(row : @view.View, src : Source, r : ChatRef, kind : String, t 
     }
     @sf.presses_held_node(b, fn() { thing_open(src, r, kind, @signals.untracked(t)) }, @ui.long_press_ms, fn(d) {
       let tn = @signals.untracked(t)
-      thing_held_at(d.wx, d.wy, number(tn, "seq"), text(tn, "url"), away)
+      thing_held_at(d.wx, d.wy, number(tn, "seq"), text(tn, "url"), away, beside=thing_beside(r, kind, tn))
     })
     b.box(fn(m) {
       @sf.style_node(m, fn() { things_row_mark })

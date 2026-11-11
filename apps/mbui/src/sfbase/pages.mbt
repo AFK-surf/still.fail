@@ -800,6 +800,7 @@ pub fn reset() -> Unit {
   links_reset()
   menu_bar_given.val = ""
   shell.val = bare_shell()
+  beside_room_now.set(false)
   // the page shown alone in a window of its own (window.mbt)
   lone_page.val = None
   windows_open.clear()

@@ -55,7 +55,8 @@ pub(all) struct Fixture {
 
 ///|
 /// The tabs kept to begin with: the new chat's Station 文件 (newchat-files), and what the first row's chat has open
-/// beside it on the wide frame's screenshots (its agent's history, its services and jobs, agent 往来).
+/// beside it on the wide frame's screenshots (its agent's history, its services and jobs, agent 往来, a file of its in
+/// the viewer: chat-view-side its Markdown, chat-view-side-image its picture, opened beside it before the app began).
 pub fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
   let kept = fn(tab : String) -> Json { { "tabs": [Json::string(tab)], "active": Json::string(tab) } }
   match mode {
@@ -67,8 +68,22 @@ pub fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
     "chat-service-side" => { "ws1/st1:s-c1": kept("service:j-web") }
     "chat-history-side" | "chat-model-pop" | "chat-model-accounts" => { "ws1/st1:s-c1": kept("s-c1") }
     "chat-tabs-side" => { "ws1/st1:s-c1": { "tabs": ["s-c1", "jobs"], "active": "jobs" } }
+    "chat-view-side" | "chat-view-side-image" => { "ws1/st1:s-c1": kept(fixture_view_tab(mode)) }
     _ => {}
   }
+}
+
+///|
+/// The file of the first row's chat open beside it in the viewer (chat-view-side: 说明.md; chat-view-side-image:
+/// 界面草图.png), its tab as the app keeps it (sfbase's view_tab_key).
+pub fn fixture_view_tab(mode : String) -> String {
+  let name = if mode == "chat-view-side-image" { "界面草图.png" } else { "说明.md" }
+  for f in preview_files() {
+    if f.0.name == name {
+      return @sfbase.view_tab_key("ws1/st1", "s-c1", f.0, None, false)
+    }
+  }
+  ""
 }
 
 ///|
@@ -78,6 +93,10 @@ pub fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
   match mode {
     "chat-screen-tab" => { "ws1/st1:s-c1": { "open": ["screen:[\"ws-1/st-1\",\"browser:tab-1\"]"], "shown": "screen:[\"ws-1/st-1\",\"browser:tab-1\"]" } }
     "chat-tabs-side" => { "ws1/st1:s-c1": { "open": ["s-c1", "jobs"], "shown": "jobs" } }
+    "chat-view-side" | "chat-view-side-image" => {
+      let tab = fixture_view_tab(mode)
+      { "ws1/st1:s-c1": { "open": [Json::string(tab)], "shown": Json::string(tab) } }
+    }
     _ => {}
   }
 }

@@ -224,9 +224,23 @@ fn stored_name(path : String) -> String {
 }
 
 ///|
-/// A message's file opened in the preview (FilePreview): an image steps through the chat's.
-fn open_file(here : MessageHere, a : Attachment, at? : String = "") -> Unit {
-  open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session), at~)
+/// A message's file opened in the preview (FilePreview): an image steps through the chat's. `beside`: asked beside the
+/// chat (its menu's 在侧边打开); else as the press asks (open_preview's).
+fn open_file(here : MessageHere, a : Attachment, at? : String = "", beside? : Bool) -> Unit {
+  match beside {
+    Some(b) => open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session), at~, beside=b)
+    None => open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session), at~)
+  }
+}
+
+///|
+/// 在侧边打开 of a message's file, where it is offered (beside_offered: a side panel for the chat, a file that opens
+/// there): the file in a tab beside the chat.
+fn beside_option(here : MessageHere, a : Attachment, at : String) -> @sf.MenuItem? {
+  if !@sfbase.beside_offered(a.path, a.name) {
+    return None
+  }
+  Some(@sf.menu_item_of(@sf.t("web-main.preview.openBeside"), fn() { open_file(here, a, at~, beside=true) }, icon="panel-open"))
 }
 
 ///|
@@ -235,8 +249,13 @@ let named_open_serial : Ref[Int] = Ref(0)
 
 ///|
 /// A file an agent names by its path: check it in the agent's session before opening it. A path in code can name
-/// something that was never a file, or one removed since the pointer last rested on it.
-fn open_named(src : Source, station : String, agent : String, path : String) -> Unit {
+/// something that was never a file, or one removed since the pointer last rested on it. `beside`: asked beside the chat
+/// (its menu's 在侧边打开); else as the press asked, said as it is pressed (beside_held), not as the answer comes.
+fn open_named(src : Source, station : String, agent : String, path : String, beside? : Bool) -> Unit {
+  let beside = match beside {
+    Some(b) => b
+    None => @sfbase.beside_held()
+  }
   named_open_serial.val += 1
   let serial = named_open_serial.val
   guard agent != "" && !path.has_suffix("/") else { return }
@@ -251,7 +270,7 @@ fn open_named(src : Source, station : String, agent : String, path : String) -> 
     match answer {
       Ok(Object(_) as file) if text(Some(file), "kind") != "" && text(Some(file), "kind") != "dir" => {
         let a = attachment_of({ "name": Json::string(stored_name(path)), "path": Json::string(path) })
-        open_preview(station, agent, a, named=true)
+        open_preview(station, agent, a, named=true, beside~)
       }
       // (not opened is said, as the web's FileRef says a failed open: the press is not left without an answer)
       Ok(_) => toast_later(@sf.t("web-main.preview.openFailed", args=[("name", stored_name(path)), ("error", @sf.t("web-main.preview.openFolder"))]))
@@ -446,7 +465,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   })
   let thumb = @sfbase.thumb_place(here.station + "/" + owner + "/" + a.path, here.station, here.session, at)
   let downloading = download_of(src, here.station, owner, stored_name(a.path))
-  file_menu(c, open, key, quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
+  file_menu(c, open, key, quote=quote_of(here, a, owner, by), more=[beside_option(here, a, at), download_option(src, here, a, owner)])
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
   // what it waits on take, the box's corners cutting it (imageBox.ts letterbox; any: its frame's, concentric with
   // what holds it where it is in a corner of that, a quote's card)
@@ -732,7 +751,7 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   let failed = text(dl, "state") == "failed"
   let place = @sfbase.thumb_occurrence(here.station, here.session, at)
   let key = "msg-card/" + place + "/" + @sfbase.file_key(a)
-  file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
+  file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by), more=[beside_option(here, a, at), download_option(src, here, a, owner)])
   let id = text(dl, "id")
   @sf.file_card(
     c,
