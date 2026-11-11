@@ -34,6 +34,9 @@
 /// MBUI_CHAT_ROW (2026-11-11: a row of the chats' lists what it draws, what a press, a hold, a swipe or a pointer reads
 /// of it its chat's whole row, `chatRow`) off in all 81 as it came: as MBUI_CONNECT_ROWS, only the replay reads it,
 /// which reads the app's `chatRow` out of the run's chats' list, whose rows were whole.
+/// MBUI_CHATS_WINDOW (2026-11-11: a chats' list asked without a `limit`, how many of its rows go out its window, told
+/// the core before it is asked and raised as it is scrolled) off in all 81 as it came: only the replay reads it, which
+/// answers the app's list by the run's asked with its first limit and tells the run no window.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 79,
   "MBUI_DEVICES": 80,
@@ -43,6 +46,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_CONNECT_ROWS": 80,
   "MBUI_KEEP_CHAT": 80,
   "MBUI_CHAT_ROW": 81,
+  "MBUI_CHATS_WINDOW": 81,
 }
 
 ///|

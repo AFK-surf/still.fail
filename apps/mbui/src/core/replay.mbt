@@ -132,6 +132,8 @@ pub(all) enum Pace {
 /// params is the run's next of its name, not said to differ.
 let reports : Array[String] = [
   "client.focus", "chat.place", "draft.put", "drive.place", "composer.text", "composer.comment",
+  // (a chats' list's window raised as it is scrolled near its foot: as the frames scrolled it)
+  "chats.window",
   // the core's pure calls a replay's app answers from what is kept (src/sfkept) when it has the answer, and asks the
   // tape for when not: a tape's that the app answered itself is not where the two went apart, nor one it asks of a tape
   // from before the call (sfreplay's source.mbt tells the tape of each it answered, as a report)

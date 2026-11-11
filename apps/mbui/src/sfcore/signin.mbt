@@ -517,6 +517,13 @@ pub let trace_switches : Array[String] = [
   // read off the list's rows) gone from it, so only the replay reads it: a trace without it has the app's `chatRow`
   // read out of its run's `chats` list, whose rows were whole (src/sfreplay/source.mbt))
   "MBUI_CHAT_ROW",
+  // (a chats' list asked as `chats {scope, mine, watching, hidden}`, how many of its rows go out its window, told the core
+  // before it is asked (`chats.window`: the rows the screen shows and a screen more, sfbase's chats_told_before) and
+  // raised as it is scrolled near its foot, never a `limit` in the topic and a page more another topic. Like
+  // MBUI_CHAT_ROW the app does not branch on it, its old way gone from it, so only the replay reads it: a trace without
+  // it has the app's list answered by its run's `chats` asked with its first `limit` (@core.Replay's twin topics), and
+  // the app's `chats.window` told nothing (src/sfreplay/source.mbt))
+  "MBUI_CHATS_WINDOW",
 ]
 
 ///|
