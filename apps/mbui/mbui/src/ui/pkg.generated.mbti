@@ -186,6 +186,8 @@ pub fn gallery_read() -> GalleryRead?
 
 pub fn gif_frames(Bytes) -> GifFrames?
 
+pub fn glyph_cells(String, @view.WordsLook, Double, mono? : Bool) -> Array[(Double, Double)]
+
 pub fn h264_here() -> Bool
 
 pub fn h265_here() -> Bool
@@ -1203,7 +1205,7 @@ pub fn Ctx::frame_ms(Self) -> Double
 pub fn Ctx::frame_number(Self) -> Int32
 pub fn Ctx::gives_way(Self, Int32) -> Unit
 pub fn Ctx::glass_solid(Self) -> Bool
-pub fn Ctx::glyphs_by(Self, Int32, (GlyphAt) -> GlyphLook) -> Unit
+pub fn Ctx::glyphs_by(Self, Int32, (@view.GlyphAt) -> @view.GlyphLook) -> Unit
 pub fn Ctx::hand_lit(Self, Bool) -> Bool
 pub fn Ctx::hand_on(Self, Int32) -> Bool
 pub fn Ctx::hand_shown(Self, Bool, () -> Unit) -> Unit
@@ -1658,23 +1660,6 @@ pub(all) struct GifFrames {
 }
 
 type Glyph
-
-pub(all) struct GlyphAt {
-  index : Int32
-  x : Double
-  y : Double
-  h : Double
-  top : Double
-  foot : Double
-} derive(Eq, Show)
-
-pub(all) struct GlyphLook {
-  alpha : Double
-  dx : Double
-  dy : Double
-  scale : Double
-  sx : Double
-} derive(Eq, Show)
 
 type Group
 
@@ -3101,6 +3086,10 @@ pub using @paint {type CornerRoots}
 pub using @view {type Cursor}
 
 pub using @paint {type Glass}
+
+pub using @view {type GlyphAt}
+
+pub using @view {type GlyphLook}
 
 pub using @text {type Ground}
 

@@ -512,29 +512,12 @@ pub fn Ctx::look(self : Ctx, i : Int, look : Look) -> Unit {
 }
 
 ///|
-/// How a glyph is drawn over how it is laid out: its opacity, offsets and uniform scale about its ink's middle. `sx`
-/// scales horizontally about its advance's middle.
-pub(all) struct GlyphLook {
-  alpha : Double
-  dx : Double
-  dy : Double
-  scale : Double
-  sx : Double
-} derive(Show, Eq)
-
-///|
-/// A glyph as it is painted, for its own look (Ctx::glyphs_by): its number (from 0 in the order painted, the order
-/// read in), where its line's box starts (x, y in the window) and its line's height, and the top and foot of what
-/// cuts the node that says the looks (the window's part it shows in; not what cuts a part of it, a code block's box). What is not a glyph is said with the number of the glyph after it, its own
-/// box's start and height.
-pub(all) struct GlyphAt {
-  index : Int
-  x : Double
-  y : Double
-  h : Double
-  top : Double
-  foot : Double
-} derive(Show, Eq)
+// How a glyph is drawn over how it is laid out, and a glyph as it is painted (mbui/view's words.mbt), taken in here by
+// name: what an old view's glyphs are drawn by (Ctx::glyphs_by), one type with what a node's are (View::glyphs_by).
+pub using @view {
+  type GlyphLook,
+  type GlyphAt,
+}
 
 ///|
 /// Each glyph of the words node `i` holds (the node's and all in it) drawn with what `f` gives for it as it is
