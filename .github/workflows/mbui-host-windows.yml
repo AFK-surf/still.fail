@@ -20,6 +20,8 @@ on:
       - "apps/mbui/mbui/scripts/win_keys_test.c"
       - "apps/mbui/mbui/scripts/win_clip_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
+      - "apps/mbui/mbui/src/host/station_install.h"
+      - "apps/mbui/mbui/scripts/station_install_test.c"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
       - "apps/mbui/mbui/scripts/done_runner.py"
@@ -64,6 +66,11 @@ jobs:
           mkdir -p out/clip
           cl.exe -nologo -W4 -Isrc/host scripts/win_clip_test.c -Foout/clip/ -Feout/clip/win_clip_test.exe -link user32.lib shell32.lib ole32.lib
           out/clip/win_clip_test.exe
+      - name: "What the host hands the station's installer: the token, the workspace lock's hash, nothing refused dropped (src/host/station_install.h)"
+        run: |
+          mkdir -p out/install
+          cl.exe -nologo -W3 -WX -D_CRT_SECURE_NO_WARNINGS -Isrc/host scripts/station_install_test.c -Foout/install/ -Feout/install/station_install_test.exe
+          out/install/station_install_test.exe
       - name: "The log files: stderr kept in rotating files, nothing of a secret, nobody waiting for a stalled disk (src/host/win_logs.h)"
         run: |
           mkdir -p out/logs

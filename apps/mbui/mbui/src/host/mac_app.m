@@ -17,6 +17,7 @@
 #include "post.h"
 #include "done_watch.h"
 #include "update_delta.h"  // (the Updates' delta)
+#include "station_install.h"  // what the installer is handed
 
 // (Network's path monitor, below: the framework asked of the linker by this file, as an app of mbui's links what its
 // own moon.pkg names, which need not be Network)
@@ -1417,22 +1418,20 @@ static void local_heard(NSData *piece) {
   });
 }
 
-static NSString *local_install(NSDictionary *ask) {
-  NSString *origin = [ask[@"origin"] isKindOfClass:NSString.class] ? ask[@"origin"] : @"";
-  if (![origin hasPrefix:@"https://"] && ![origin hasPrefix:@"http://"]) return @"origin";
-  NSMutableArray *args = [@[
-    @"-c",
-    @"f=$(mktemp) && curl -fsSL \"$0/install.sh\" -o \"$f\" && sh \"$f\" \"$@\"; s=$?; rm -f \"$f\"; exit $s",
-    origin
-  ] mutableCopy];
-  if ([ask[@"token"] isKindOfClass:NSString.class] && [ask[@"token"] length]) {
-    [args addObject:ask[@"token"]];
-    // (install.sh's second: the workspace lock's hash it pins, after the token only)
-    if ([ask[@"lock"] isKindOfClass:NSString.class] && [ask[@"lock"] length]) [args addObject:ask[@"lock"]];
-  }
+static NSString *local_install(NSString *json) {
+  // (what it is handed: station_install.h, held by its test)
+  station_ask ask;
+  if (!station_ask_read(json.UTF8String, &ask)) return @"origin";
+  const char *argv[8];
+  int argc = station_mac_args(&ask, argv);
+  NSMutableArray *args = [NSMutableArray array];
+  for (int i = 0; i < argc; i++) [args addObject:@(argv[i])];
+  NSString *token = @(ask.token);
+  BOOL beta = ask.beta;
+  station_ask_free(&ask);
   NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
   [env addEntriesFromDictionary:login_env()];
-  if ([ask[@"channel"] isEqual:@"beta"]) env[@"STILLFAIL_CHANNEL"] = @"beta";
+  if (beta) env[@"STILLFAIL_CHANNEL"] = @"beta";
   NSTask *t = [NSTask new];
   t.executableURL = [NSURL fileURLWithPath:@"/bin/sh"];
   t.arguments = args;
@@ -1459,7 +1458,7 @@ static NSString *local_install(NSDictionary *ask) {
   }
   [t waitUntilExit];
   NSString *s = [[NSString alloc] initWithData:said encoding:NSUTF8StringEncoding] ?: @"";
-  fprintf(stdout, "mac: the station's installer (%s) exited %d\n%s\n", ask[@"token"] ? "install" : "update",
+  fprintf(stdout, "mac: the station's installer (%s) exited %d\n%s\n", token.length ? "install" : "update",
           t.terminationStatus, s.UTF8String);
   fflush(stdout);
   if (t.terminationStatus == 0) return nil;
@@ -1479,9 +1478,7 @@ void mb_host_local_station_act(moonbit_string_t action) {
   NSRange space = [a rangeOfString:@" "];
   if (space.location != NSNotFound && ([a hasPrefix:@"install "] || [a hasPrefix:@"update "])) {
     NSString *verb = [a substringToIndex:space.location];
-    NSData *j = [[a substringFromIndex:space.location + 1] dataUsingEncoding:NSUTF8StringEncoding];
-    NSDictionary *ask = j ? [NSJSONSerialization JSONObjectWithData:j options:0 error:nil] : nil;
-    if (![ask isKindOfClass:NSDictionary.class]) return;
+    NSString *ask = [a substringFromIndex:space.location + 1];
     if (local_doing) {
       local_failed = @"busy";
       [the_view requestFrame];
