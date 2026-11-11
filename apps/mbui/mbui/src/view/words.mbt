@@ -19,6 +19,10 @@ pub(all) struct WordsLook {
   /// wrapped, broken where its lines come out as even as they may on as many lines (ui's TextPatch `balance`: a
   /// note's under a title)
   balance : Bool
+  /// wrapped, on so many lines at most (0: as many as they take), the last ending in an ellipsis where they are cut
+  /// after it, measured and drawn so (ui's TextPatch `max_lines`, as Ctx::text's and Ctx::rich's); on one line, none of
+  /// it. Said in the look, not on the node, so no node that does not say it carries it (2026-11-12)
+  max_lines : Int
 } derive(Eq, Debug)
 
 ///|
@@ -37,8 +41,9 @@ pub(all) enum Spacing {
 pub let letters_own : Spacing = Ems(0.0)
 
 ///|
-/// Words as a node set them till they were said to be otherwise: 15 points, regular, 22 a line, wrapped.
-pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own, balance: false }
+/// Words as a node set them till they were said to be otherwise: 15 points, regular, 22 a line, wrapped, on as many
+/// lines as they take.
+pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own, balance: false, max_lines: 0 }
 
 ///|
 /// How a node's words in pieces (View::words_runs) are set where a piece says nothing of it itself, as an old view's

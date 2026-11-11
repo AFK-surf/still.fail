@@ -19,7 +19,7 @@ fn old_in_list() -> (Tester, @view.Scroll) {
           row.height(Is(Some(50.0))) |> ignore
           row.box(fn(w) {
             w
-            .words(Is("row \{i}"), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false })
+            .words(Is("row \{i}"), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
             .ink(By(fn() { tree_theme().color(Fg) }))
             |> ignore
           })

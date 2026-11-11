@@ -20,7 +20,7 @@ fn tree_picked_tester(picks : Bool, platform? : Int = 0, centered? : Bool = fals
       page.box(fn(n) {
         n
         .width(Is(Some(300.0)))
-        .words_runs(Is(picked_runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .words_runs(Is(picked_runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
         .words_centered(Is(centered))
         |> ignore
       })
@@ -138,7 +138,7 @@ test "words picked in a page's list scrolled away and back (the nodes that show 
       page.scrolls_window(s, fn() { keys.get() }, est=22.0, fn(b, i) {
         b.box(fn(n) {
           n
-          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
           |> ignore
         })
         |> ignore
@@ -199,7 +199,7 @@ fn picked_list_tester(height : @signals.Signal[Double], hidden : @signals.Signal
       page.scrolls_window(s, fn() { Array::makei(40, fn(i) { i }) }, est=22.0, fn(b, i) {
         b.box(fn(n) {
           n
-          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
           |> ignore
         })
         |> ignore
@@ -307,7 +307,7 @@ test "words picked in a row that scrolls across (a code block's line), held past
         b.width(Is(Some(200.0))) |> ignore
         b.scrolls(s, fn(held) {
           held.box(fn(n) {
-            n.words_runs(Is([plain(line)]), ink=0x333333FFL, look={ size: 12.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false })
+            n.words_runs(Is([plain(line)]), ink=0x333333FFL, look={ size: 12.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
             |> ignore
           })
           |> ignore

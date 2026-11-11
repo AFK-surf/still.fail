@@ -67,7 +67,7 @@ pub fn marks_actions_node(
   let meta = fn(weight : Int) -> @view.WordsLook {
     let th = @ui.tree_theme()
     let (size, _) = th.text_size(Meta)
-    { size, weight, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
+    { size, weight, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   }
   parent.box(made_for=loc, fn(row) {
     row.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(marks_actions_apart)) |> ignore

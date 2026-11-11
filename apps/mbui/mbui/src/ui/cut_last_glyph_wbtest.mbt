@@ -35,7 +35,7 @@ fn cut_drawn(tree : Bool, words : String, w : Double) -> (Int, Array[Int]) {
       root.box(fn(col) {
         col.width(Is(Some(w))).lines_up(Is(Some(Start))) |> ignore
         col.box(fn(t) {
-          t.words(Is(words), look={ size: 25.0, weight: 400, line: 30.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+          t.words(Is(words), look={ size: 25.0, weight: 400, line: 30.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
         })
         |> ignore
       })

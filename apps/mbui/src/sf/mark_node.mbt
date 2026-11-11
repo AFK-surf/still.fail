@@ -47,7 +47,7 @@ pub fn avatar_node(
     d.show(fn() { !decoded() }, fn(l) {
       l
       .words(By(fn() { initial(name()) }))
-      .words_look(Is({ size: half, weight: 600, line: half, wrap: false, tracking: @view.letters_own, balance: false }))
+      .words_look(Is({ size: half, weight: 600, line: half, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }))
       .ink(Is(face_ink))
       |> ignore
     })
@@ -138,7 +138,7 @@ pub fn station_mark_node(
         Some(@ui.text_advance(emoji(), size=node_sp(e, size * 0.9)))
       }))
       .words(By(emoji))
-      .words_look(Is({ size: size * 0.9, weight: 400, line: size, wrap: false, tracking: @view.letters_own, balance: false }))
+      .words_look(Is({ size: size * 0.9, weight: 400, line: size, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }))
       .ink(By(fn() { @ui.tree_theme().fg }))
       // (on the baseline the app's own face gives it, whatever face its words are in, where lines are set as the web
       // sets them: station_mark's)
@@ -230,7 +230,7 @@ pub fn tile_avatar_node(
     d.show(fn() { !decoded() }, at_once=true, fn(l) {
       l
       .words(By(fn() { initial(name()) }))
-      .words_look(Is({ size: half, weight: 600, line: half, wrap: false, tracking: @view.letters_own, balance: false }))
+      .words_look(Is({ size: half, weight: 600, line: half, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }))
       .ink(Is(face_ink))
       |> ignore
     })

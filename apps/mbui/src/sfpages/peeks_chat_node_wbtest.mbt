@@ -138,3 +138,38 @@ test "a chat's card made once as nodes holds what the old view's did: alone, one
     assert_eq(t.audit(), [], msg=name)
   }
 }
+
+///|
+test "a chat's card made once as nodes cuts long words where the old view's did: the message its link names on six lines at most, an archived chat's note on three" {
+  let long = "这一条消息说得很长很长：列表按天分组已经做好了，今天和昨天之外的日子都写日期；滚动的时候每一帧的耗时都量过了，" +
+    "最慢的一帧是在分组的标题刚进来的时候；接下来想把图片的解码挪到后台去，再看看能不能把分组标题做成固定在顶上的样子，" +
+    "这样往回翻的时候也知道自己在哪一天；另外搜索结果里的高亮颜色也要改一下，现在在暗色主题里看不太清楚，最后再补几个测试。"
+  let message = fixture_message_obj()
+  message["text"] = Json::string(long)
+  let said = (Some(Json::object(message)), None)
+  let archived : LinkedChat = { href: "", title: "归档的对话", archived: true, note: long, thread: None }
+  let base = "https://app.still.fail/o/ws1/st1/"
+  for c in [
+    ("one message, said at length", base + "s-c2?message=2", None),
+    ("archived, its note at length", base + "s-old", Some(archived)),
+  ] {
+    let (name, href, linked) = c
+    let old = pc_old("ws1/st1", href, linked, said, true, true)
+    let was = pf_drawn(old)
+    let was_lines = old.lines_of("这一条消息")
+    let t = pc_new("ws1/st1", href, linked, said, true, true)
+    assert_eq(pf_drawn(t), was, msg=name)
+    let lines = t.lines_of("这一条消息")
+    assert_eq(lines, was_lines, msg=name)
+    assert_true(lines.length() == (if linked is None { 6 } else { 3 }) && lines[lines.length() - 1].has_suffix("…"), msg="\{name}: \{lines}")
+  }
+}
+
+///|
+/// The made-up message its link names (fixture_message_peek's), its fields to be changed.
+fn fixture_message_obj() -> Map[String, Json] {
+  match @sffixture.fixture_message_peek() {
+    Object(m) => m.copy()
+    _ => {}
+  }
+}

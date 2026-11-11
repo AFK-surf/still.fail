@@ -50,21 +50,21 @@ test "shown across: the words and drawings in it within its box, none laid out n
           // (a ground alone: nothing shown)
           row.box(fn(g) { g.width(Is(Some(30.0))).height(Is(Some(10.0))).ground(Is(0x3366CCFFL)) |> ignore }) |> ignore
           row.box(fn(w) {
-            w.words(Is("Join"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false })
+            w.words(Is("Join"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
             |> ignore
           })
           |> ignore
           row.box(fn(w) {
             w
             .laid_nowhere(By(fn() { gone.get() }))
-            .words(Is("Wide words"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false })
+            .words(Is("Wide words"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
             |> ignore
           })
           |> ignore
           row.box(fn(w) {
             w
             .alpha(Is(0.0))
-            .words(Is("Clear"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false })
+            .words(Is("Clear"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
             |> ignore
           })
           |> ignore
@@ -90,7 +90,7 @@ test "shown across: the words and drawings in it within its box, none laid out n
 test "shown across as an event finds it: words come to show and read at once, no frame between, as after a frame" {
   let more = @signals.signal(false, same=fn(a, b) { a == b })
   let page : Ref[@view.View?] = Ref(None)
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(p) {

@@ -373,6 +373,7 @@ fn table_frame_node(
                 wrap: true,
                 tracking: @view.letters_own,
                 balance: false,
+                max_lines: 0,
               }
             }
             let runs = fn() { table_cell_runs(words()) }

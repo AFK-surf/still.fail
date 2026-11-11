@@ -5,7 +5,7 @@
 ///|
 /// How these tests' words are set: 10 points, on one line (`wrap`: else on lines).
 fn sq_look(wrap? : Bool = false, size? : Double = 10.0) -> @view.WordsLook {
-  { size, weight: 400, line: 14.0, wrap, tracking: @view.letters_own, balance: false }
+  { size, weight: 400, line: 14.0, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|

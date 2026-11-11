@@ -7,7 +7,7 @@
 /// How words of `style` are set on a node of the tree's now (View::words_look), as Ctx::text sets them: its size (15
 /// where it says none); its line its leading's where it says one (Font: the font's own, 0), else its size's as the
 /// theme has it, else the theme's share of its size as drawn; its weight (400 where it says none); wrapped unless it
-/// says not to; its letters' spacing its tracking's at its size as drawn.
+/// says not to; its letters' spacing its tracking's at its size as drawn; wrapped, on as many lines as it says at most.
 pub fn style_words(style : TextStyle) -> @view.WordsLook {
   let th = tree_theme()
   let st = style.resolve(g().narrow, th.dark)
@@ -36,6 +36,7 @@ pub fn style_words(style : TextStyle) -> @view.WordsLook {
       None => @view.letters_own
     },
     balance: st.balance.unwrap_or(false),
+    max_lines: st.max_lines.unwrap_or(0),
   }
 }
 

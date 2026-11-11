@@ -16,7 +16,7 @@ fn row_picked_tester(n : Int) -> (Tester, @view.Scroll) {
       page.scrolls_window(s, fn() { Array::makei(n, fn(i) { i }) }, est=22.0, fn(b, i) {
         b.box(fn(w) {
           w
-          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
           |> ignore
         })
         |> ignore
@@ -96,7 +96,7 @@ fn row_picked_reused_tester(n : Int, made : Ref[Int]) -> Tester {
           made.val = made.val + 1
           b.box(fn(w) {
             w
-            .words_runs(By(fn() { [plain("第 \{key()} 段 "), bold("hello")] }), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+            .words_runs(By(fn() { [plain("第 \{key()} 段 "), bold("hello")] }), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
             |> ignore
           })
           |> ignore

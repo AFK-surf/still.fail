@@ -673,7 +673,7 @@ fn net_words_node(p : @view.View, words : () -> String, ink : () -> Int64, weigh
     }
     w
     .words(By(words))
-    .words_look(By(fn() { { size: @sf.theme().t.meta, weight, line: net_line_h, wrap: false, tracking: @view.letters_own, balance: false } }))
+    .words_look(By(fn() { { size: @sf.theme().t.meta, weight, line: net_line_h, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 } }))
     .ink(By(ink))
     |> ignore
   })

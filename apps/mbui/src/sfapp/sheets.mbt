@@ -1272,7 +1272,7 @@ fn waiting_rows(c : @ui.Ctx, error : Json?, sample : () -> Unit) -> Unit {
 /// Words as the job's sheet sets them (an old view's words of a size, a weight and a wrap said alone, as nodes): `size`
 /// as the theme has it, on lines of the theme's line to it (or `line` points), the face's own letters.
 fn job_words(size : Double, weight? : Int = 400, wrap? : Bool = true, line? : Double = 0.0) -> @view.WordsLook {
-  { size, weight, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap, tracking: @view.letters_own, balance: false }
+  { size, weight, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|

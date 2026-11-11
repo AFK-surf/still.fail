@@ -69,7 +69,7 @@ fn same_tree(
             |> ignore
             row.box(fn(w) {
               w
-              .words(Is(same_words(i)), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false })
+              .words(Is(same_words(i)), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
               .ink(By(fn() { tree_theme().color(Fg) }))
               |> ignore
             })

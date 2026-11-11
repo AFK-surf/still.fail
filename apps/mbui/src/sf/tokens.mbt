@@ -3132,6 +3132,7 @@ pub let top_bar_title_look : @view.WordsLook = {
   wrap: false,
   tracking: ScaledPoints(-0.4),
   balance: false,
+  max_lines: 0,
 }
 
 ///|
@@ -3143,4 +3144,5 @@ pub let home_workspace_title_look : @view.WordsLook = {
   wrap: false,
   tracking: ScaledPoints(-0.4),
   balance: false,
+  max_lines: 0,
 }

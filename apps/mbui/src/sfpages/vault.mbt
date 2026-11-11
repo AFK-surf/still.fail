@@ -837,7 +837,7 @@ fn vt_mono_node(parent : @view.View, words : () -> String, size : @ui.TextSize, 
     // (its size as the theme's is now: followed, the system's size of words changed)
     let look = fn() -> @view.WordsLook {
       let (px, line) = @ui.tree_theme().text_size(size)
-      { size: px, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
+      { size: px, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
     }
     w
     .words_runs(By(fn() { [@ui.span(words(), mono=true)] }), look=@signals.untracked(look))

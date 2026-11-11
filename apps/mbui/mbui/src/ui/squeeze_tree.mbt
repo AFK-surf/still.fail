@@ -34,13 +34,13 @@
 // - what it draws of its own besides a ground or words (a picture, a drawing, glass, a shadow, an old view hosted in
 //   it: Content::draws), tree_draws_at, as an old view's node's shapes and lines are;
 // - its words (a node of their own in it, as Ctx::with_tree_nodes puts them): set and laid out as the tree draws them
-//   (view_host's: their size, line, letters' spacing, digits, balance; what is drawn of them, View::shorter's way of
-//   saying them chosen, one line cut with an ellipsis); said they may be cut as Tree::allows_ellipsis says, both as
-//   `allow_ellipsis` and, on one line, as `w=Cut` (on lines they are never cut short);
+//   (view_host's: their size, line, letters' spacing, digits, balance, how many lines at most; what is drawn of them,
+//   View::shorter's way of saying them chosen, one line cut with an ellipsis, lines cut after the last of those they
+//   say, as `max_lines`); said they may be cut as Tree::allows_ellipsis says, both as `allow_ellipsis` and, on one
+//   line, as `w=Cut` (on lines they are never cut short across);
 // - a field (ui's field): its placeholder as the field is placed (Ctx::tree_field_box), held as an old view's.
 // What an old view's node says that no node of the tree does, none of it read: `drop`'s ⋯ (a row's View::drops is,
-// but the squeeze reads neither), `portal` (the tree's layers are what the root holds), `max_lines` (the tree's words
-// have none), `in_sideways`.
+// but the squeeze reads neither), `portal` (the tree's layers are what the root holds), `in_sideways`.
 
 ///|
 /// The fields of the window's tree among the frame's nodes, as each is placed (Ctx::with_tree_nodes `facts`), by
@@ -191,6 +191,7 @@ fn Ctx::tree_words_facts(
   let (size, line, style, spacing) = (view_sp(scale, k.size), view_line(scale, k), view_words_style(), view_spacing(scale, k))
   w.wrap = k.wrap
   w.balance = k.balance
+  w.max_lines = k.max_lines
   w.center = c.words_center
   w.line_h = line
   w.spacing = spacing
@@ -212,7 +213,20 @@ fn Ctx::tree_words_facts(
   if c.runs.is_empty() {
     let lay = fn(s : String) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) }
     let shown = view_words_set(c.words_drawn.unwrap_or(c.words), k, c.words_breaks)
-    let tl = layout_words(shown, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
+    let tl = layout_words(
+      shown,
+      size,
+      k.weight,
+      if k.wrap { c.w } else { 1.0e9 },
+      k.wrap,
+      balance=k.balance,
+      line~,
+      style~,
+      spacing~,
+      max_lines=k.max_lines,
+    )
+    // (cut after the last of the lines it says, as an old view's: Node::text_layout's)
+    w.full_cut = k.wrap && k.max_lines > 0 && tl.text != shown
     let tl = if !k.wrap && tl.w > c.w + 0.5 { ellipsized(shown, tl, c.w, lay) } else { tl }
     w.tl = Some(tl)
     w.full = Some(if k.wrap { tl } else { lay(w.text) })
@@ -229,7 +243,15 @@ fn Ctx::tree_words_facts(
       w.rcut = Some(cut)
       w.rl = Some(layout_rich(cut, 1.0e9))
     } else {
-      w.rl = Some(layout_rich(rich, if k.wrap { c.w } else { 1.0e9 }))
+      let lay = layout_rich(rich, if k.wrap { c.w } else { 1.0e9 })
+      // (cut after the last of the lines it says it is drawn on, as drawn: view_runs_laid)
+      if runs_past(rich, lay) {
+        let cut = cut_rich(rich, lay, c.w)
+        w.rcut = Some(cut)
+        w.rl = Some(layout_rich(cut, c.w))
+      } else {
+        w.rl = Some(layout_rich(rich, if k.wrap { c.w } else { 1.0e9 }))
+      }
     }
   }
 }

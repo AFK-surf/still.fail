@@ -604,7 +604,7 @@ let tab_picture_margin : Double = 12.0
 fn tab_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.WordsLook {
   let th = @ui.tree_theme()
   let (px, own) = th.text_size(size)
-  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false }
+  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|
@@ -775,7 +775,7 @@ fn tab_picture_node(s : @view.View, src : Source, vw : Viewer) -> Unit {
       }))
       .words_look(By(fn() {
         let size = @sf.theme().t.body
-        { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @sf.theme().p.muted }))
       |> ignore

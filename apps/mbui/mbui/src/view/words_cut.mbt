@@ -9,7 +9,8 @@
 /// of the logic's moment (what a change under way told counted, nothing placed by it: Tree::measured_now): ended in an
 /// ellipsis where one line of them has not the room (as they are drawn: their one line wider than they are laid out),
 /// said one of their shorter ways (View::shorter), or wrapped and laid out less tall than their lines (the lines past its
-/// foot, as an old view's lines left off after its last). As an old view's box is (ui's Ctx::shows_cut: the words' own
+/// foot, or past the last it says it is drawn on, WordsLook's `max_lines`, as an old view's lines left off after its
+/// last). As an old view's box is (ui's Ctx::shows_cut: the words' own
 /// and every box holding them). Read where a change is taken, once, never followed; a binding reading it fails its test
 /// (said where its node was made). False where it is let go.
 pub fn View::words_cut_now(self : View) -> Bool {
@@ -54,11 +55,13 @@ fn Tree::words_cut_at(self : Tree, at : Int) -> Bool {
     return false
   }
   let scale = self.words_scale_at(at)
+  // (all of them, where they say how many lines they are drawn on: cut after the last as they are laid out)
+  let look = if l.words_look.max_lines > 0 { { ..l.words_look, max_lines: 0 } } else { l.words_look }
   let measured = fn(width : Double) {
     if runs {
-      (self.measure_runs)(l.runs, l.words_look, l.runs_look, width, scale)
+      (self.measure_runs)(l.runs, look, l.runs_look, width, scale)
     } else {
-      (self.measure)(l.words, l.words_look, width, scale)
+      (self.measure)(l.words, look, width, scale)
     }
   }
   if l.words_look.wrap {

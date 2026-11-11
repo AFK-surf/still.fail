@@ -1006,7 +1006,7 @@ fn splash_of_tree(v : @view.View, label : () -> String?, now : () -> Bool) -> Un
       m.show(fn() { label() is Some(_) }, fn(w) {
         w
         .words(By(fn() { label().unwrap_or("") }))
-        .words_look(By(fn() { { size: @sf.theme().t.meta, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false } }))
+        .words_look(By(fn() { { size: @sf.theme().t.meta, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 } }))
         .ink(By(fn() { @sf.theme().p.muted }))
         .words_centered(Is(true))
         |> ignore

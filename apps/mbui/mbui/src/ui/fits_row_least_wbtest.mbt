@@ -110,7 +110,7 @@ fn fits_least_nodes(
   t.check_looks(false)
   let width = @signals.signal(widths[0], same=fn(a, b) { a == b })
   let parts : Ref[Array[@view.View]] = Ref([])
-  let look : @view.WordsLook = { size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(outer) {
       outer.row(Is(true)).width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))) |> ignore
@@ -232,7 +232,7 @@ test "what such a row may leave out is what it holds itself: what may leave in a
   t.check_looks(false)
   let width = @signals.signal(400.0, same=fn(a, b) { a == b })
   let parts : Ref[Array[@view.View]] = Ref([])
-  let look : @view.WordsLook = { size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(outer) {
       outer.row(Is(true)).width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))) |> ignore
@@ -382,7 +382,7 @@ fn fits_bar_nodes(widths : Array[Double], note? : Bool = false) -> Array[FitsBar
   t.check_looks(false)
   let width = @signals.signal(widths[0], same=fn(a, b) { a == b })
   let parts : Ref[Array[@view.View]] = Ref([])
-  let look : @view.WordsLook = { size: 16.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 16.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(outer) {
       outer.row(Is(true)).width(By(fn() { Some(width.get()) })).height(Is(Some(32.0))).gap(Is(16.0)) |> ignore

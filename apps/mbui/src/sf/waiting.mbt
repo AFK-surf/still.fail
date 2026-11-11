@@ -477,7 +477,7 @@ pub fn wait_line_node(parent : @view.View, words : () -> String, loc~ : SourceLo
       .words_look(By(fn() {
         let th = @ui.tree_theme()
         let (size, own) = th.text_size(Ui)
-        { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { if long.get() { theme().p.muted } else { alpha(theme().p.muted, 0.0) } }))
       |> ignore
@@ -593,7 +593,7 @@ fn wait_pill_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -
       .words_look(By(fn() {
         let th = @ui.tree_theme()
         let (size, _) = th.text_size(Meta)
-        { size, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { theme().p.red }))
       .words_centered(Is(true))

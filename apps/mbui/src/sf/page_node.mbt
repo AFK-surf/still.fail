@@ -1630,7 +1630,7 @@ pub fn tap_text_node(
     b.box(fn(w) {
       w
       .words(By(label))
-      .words_look(Is({ size, weight: 400, line: size * 1.4, wrap: false, tracking: @view.letters_own, balance: false }))
+      .words_look(Is({ size, weight: 400, line: size * 1.4, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }))
       .ink(By(fn() { link_ink() }))
       |> ignore
     })

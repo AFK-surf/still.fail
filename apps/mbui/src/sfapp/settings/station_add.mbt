@@ -619,7 +619,7 @@ let command_room : @ui.Style = @ui.css("row w=Full gap=S2")
 ///|
 /// A command's words: the code face's 12, two to its copy button.
 // kept across runs: a value (no field of it changes)
-let command_words : @view.WordsLook = { size: 12.0, weight: 400, line: command_line, wrap: true, tracking: @view.letters_own, balance: false }
+let command_words : @view.WordsLook = { size: 12.0, weight: 400, line: command_line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
 
 ///|
 /// 添加这台 Mac in node `v` (add_this_machine's): what it does, its button; pressed, the panel closed, the station added

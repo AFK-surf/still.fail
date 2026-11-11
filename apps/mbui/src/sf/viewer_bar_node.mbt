@@ -192,7 +192,7 @@ fn bar_tool_corner() -> @view.Live[Double] {
 fn bar_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.WordsLook {
   let th = @ui.tree_theme()
   let (px, own) = th.text_size(size)
-  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false }
+  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|
@@ -305,7 +305,7 @@ pub fn viewer_coming_node(
       }))
       .words_look(By(fn() {
         let (size, line) = @ui.tree_theme().text_size(Meta)
-        { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { ink().muted }))
       |> ignore

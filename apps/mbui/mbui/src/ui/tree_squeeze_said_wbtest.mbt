@@ -11,6 +11,7 @@ let unsaid_cut_look : @view.WordsLook = {
   wrap: false,
   tracking: @view.letters_own,
   balance: false,
+  max_lines: 0,
 }
 
 ///|

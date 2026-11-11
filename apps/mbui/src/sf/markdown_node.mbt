@@ -595,7 +595,7 @@ fn md_words_node(
     // (a line said as a share of the size (`line`): that share of the words as they are drawn, the system's size of
     // words applied first, as the old view's paragraph's line_em; else Md::lh's points)
     let line = if md.line > 0.0 { -md.line } else { md_line(md, size) }
-    { size, weight: if weight > 0 { weight } else { 400 }, line, wrap, tracking: @view.letters_own, balance: false }
+    { size, weight: if weight > 0 { weight } else { 400 }, line, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
   }
   // (its links as they are, where something is told of them or has cards over them)
   let shown : @signals.Signal[Array[(String, String, Int)]] = @signals.signal([])
@@ -929,6 +929,7 @@ pub fn code_block_node(
       wrap,
       tracking: @view.letters_own,
       balance: false,
+      max_lines: 0,
     }
     // (each of its lines a line of its own, scrolled across or wrapped: code_block's `breaks`)
     w.words_runs(By(runs), look~).words_breaks(Is(true)).ink(By(fn() { theme().p.text })) |> ignore
@@ -1001,7 +1002,7 @@ let md_task_check : Double = 11.0
 /// Words of `size` on one line, in 400, on lines `line` high (0: the theme's line for that size as they are drawn, the
 /// system's size of words applied first, as old text's with none said: style_words' share of their size).
 fn md_plain_look(size : Double, line : Double) -> @view.WordsLook {
-  { size, weight: 400, line: if line > 0.0 { line } else { -@ui.tree_theme().text_line }, wrap: false, tracking: @view.letters_own, balance: false }
+  { size, weight: 400, line: if line > 0.0 { line } else { -@ui.tree_theme().text_line }, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|

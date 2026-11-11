@@ -25,7 +25,7 @@ fn ground_tester(runs : Array[Run]) -> (Tester, @view.NodeId) {
       |> ignore
       b.box(fn(n) {
         n
-        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
         |> ignore
         runs_links(n, fn() { runs }, fn(_) {  }) |> ignore
       })
@@ -64,7 +64,7 @@ test "a link across three lines is still pressed on each piece" {
       id.val = Some(n.id())
       n
       .width(Is(Some(160.0)))
-      .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+      .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
       |> ignore
       runs_links(n, fn() { runs }, fn(h) { went.push(h) }) |> ignore
     })
