@@ -305,7 +305,8 @@ test "关于's 本机 Station in English, at each width and with either hand, up
     let (w, platform) = case
     for mode in ["settings", "settings-station-away"] {
       let at = "\{w} platform \{platform} \{mode}"
-      let t = setting_tester(About, w, platform~, mode~, ready=fn() { @sf.set_language(Some("en")) }, host=fn(h) {
+      // (English as the device says it: what a test sets before its Tester is put back as the Tester starts)
+      let t = setting_tester(About, w, platform~, mode~, env=[("MBUI_LOCALE", "en-US")], host=fn(h) {
         h.set_local_station(about_local)
       })
       assert_eq(t.find("0.1.1288") is Some(_), platform == 0, msg=at)

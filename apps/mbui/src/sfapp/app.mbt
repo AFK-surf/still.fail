@@ -49,7 +49,6 @@ fn new_run() -> Unit {
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
-  @sf.set_language(None)
   files_cornered.val = false
   image_quoted_at.val = -1
   bar_glyph.val = None

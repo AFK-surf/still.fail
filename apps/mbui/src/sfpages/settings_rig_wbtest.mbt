@@ -23,6 +23,7 @@ fn setting_tester(
   h? : Double = 900.0,
   ready? : () -> Unit = fn() {  },
   host? : (@ui.Tester) -> Unit = fn(_) {  },
+  env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
   @sfbase.reset()
   reset()
@@ -58,6 +59,7 @@ fn setting_tester(
     w~,
     h~,
     platform~,
+    env~,
   )
   // (what the device's host says from the start: a performance record kept)
   host(t)
