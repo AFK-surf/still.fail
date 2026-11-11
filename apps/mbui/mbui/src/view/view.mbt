@@ -9379,6 +9379,21 @@ pub fn Tree::take_scrolled(self : Tree) -> Bool {
 }
 
 ///|
+/// What Tree::take_scrolled and Tree::take_scrolled_nodes would take now, left as it is: for a paint whose taking is
+/// put back after it (Tree::scrolled_put_back; ui's look at a build that kept rows, a Tester's).
+pub fn Tree::scrolled_held(self : Tree) -> (Bool, Array[NodeId]) {
+  (self.scrolled_now, self.scrolled_ats.copy())
+}
+
+///|
+/// What Tree::scrolled_held said, put back as it was.
+pub fn Tree::scrolled_put_back(self : Tree, held : (Bool, Array[NodeId])) -> Unit {
+  self.scrolled_now = held.0
+  self.scrolled_ats.clear()
+  self.scrolled_ats.append(held.1)
+}
+
+///|
 /// The nodes that scroll whose held moved since this was last asked, as Tree::take_scrolled says whether any did: each
 /// where it is drawn all drawn anew (ui's view_paint, what a host draws again).
 pub fn Tree::take_scrolled_nodes(self : Tree) -> Array[NodeId] {

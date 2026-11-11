@@ -262,6 +262,8 @@ fn looks_looked(
   if !looks_check.val {
     return
   }
+  // (what a pass of it that kept rows drew and was found by, against the frame as painted: tester_rows.mbt)
+  kept_drawn_compare(c)
   if kind < 2 {
     looks_nodes_kept(c)
   }
