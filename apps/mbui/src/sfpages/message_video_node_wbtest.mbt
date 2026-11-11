@@ -115,7 +115,7 @@ test "a message's video right clicked or held: 加载 where nothing brings it, �
 test "a message's video as the pointer rests on it: its name in no tip while what it shows shows whole, as video_item's" {
   let t = video_tester([])
   let (bw, bh) = video_box()
-  t.move(bw / 2.0, bh / 3.0)
+  t.move_to(bw / 2.0, bh / 3.0)
   t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
   let tips = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
   assert_eq(tips, [])

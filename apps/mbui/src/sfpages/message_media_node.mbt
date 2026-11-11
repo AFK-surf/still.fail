@@ -97,7 +97,7 @@ fn message_image_node(
       file_lift_scale,
     )
     // (one end of the preview's flight by its thumbnail's id: the preview's end not a node yet)
-    f.shared(By(thumb), @motion.flight_by(@motion.move())) |> ignore
+    f.shared(By(thumb), @motion.flight_by(@motion.moved())) |> ignore
     f.pick(at_once=true, fn() { key() == "!" }, fn(p, none) {
       // (all of its box: what is in it laid out in it, its middle the box's)
       p.width(Is(Some(w))).height(Is(Some(h))) |> ignore

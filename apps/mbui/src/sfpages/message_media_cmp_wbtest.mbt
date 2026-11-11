@@ -241,7 +241,7 @@ test "a message's pictures and videos as nodes drawn as the old view draws them,
       let unbreathed = fn(l : Array[String]) {
         l.map(fn(x) {
           match (x.has_prefix("image "), x.rev_find(",")) {
-            (true, Some(i)) => x.view(end_offset=i).to_string()
+            (true, Some(i)) => x.view(end_offset=i).to_owned()
             _ => x
           }
         })
