@@ -380,6 +380,8 @@ pub fn Tester::new(
     image_srcs: {},
     images: {},
     image_ids: 0,
+    decode_after: {},
+    decode_due: {},
     bold: 0.0,
     ui_face: 0.0,
     generation: 0,
@@ -945,6 +947,11 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   // says when: Tester::finish)
   if self.fake.auto_finish {
     for p in self.pending() {
+      // (one said to take a while: done at its own moment, not before; a frame is drawn there: next_due)
+      match self.fake.decode_due.get(p.1) {
+        Some(due) if p.0 == 1 && due > at + 1.0e-9 => continue
+        _ => ()
+      }
       self.finish(p.0, p.1)
     }
   }
@@ -2403,6 +2410,14 @@ pub fn Tester::tap_run(self : Tester, s : String) -> Unit {
   }
   let (x, y, w, h) = rs[0]
   self.tap(x + w / 2.0, y + h / 2.0)
+}
+
+///|
+/// The picture at `src` takes `ms` to decode: asked for at a moment, its host says it is decoded at that moment and
+/// `ms` after it, on the timeline (a frame drawn there), not at the frame after it is asked for, as every other one
+/// is. Where the test says when itself (Tester::finish), that.
+pub fn Tester::decode_after(self : Tester, src : String, ms : Double) -> Unit {
+  self.fake.decode_after[src] = ms
 }
 
 ///|
