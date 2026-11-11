@@ -152,7 +152,7 @@ test "the history's details: its turns' line says its work after it, none withou
   assert_eq(word("4m 12s").length(), 1)
   assert_eq(word("12m").length(), 1)
   assert_true(word("清单").length() == 1 && word("已完成 2/6").length() == 1)
-  let ys = ["读 claude.ts 里的 task 帧", "station 推送 tasks 和 plan", "core 的 agentCard 加上后台和清单", "跑检查并提交"].map(fn(s) {
+  let ys = ["读 claude.ts 里的 task 帧", "station 推送 tasks 和 plan", "core 的 agentCard 加上后台和清单", "跑检查并提交"].map(fn(s) raise {
     let w = word(s)
     assert_eq(w.length(), 1)
     w[0].2

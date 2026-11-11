@@ -242,7 +242,7 @@ test "errors are checked: catch narrows what a fiber raised" {
         @effect.sleep(1)
         2
       }
-      try @effect.race_first(fn() -> Int { raise Broke("nope") }, quick) catch {
+      try @effect.race_first(fn() -> Int raise { raise Broke("nope") }, quick) catch {
         Broke(m) => out.push("err \{m}")
         e => out.push("other \{e}")
       } noraise {

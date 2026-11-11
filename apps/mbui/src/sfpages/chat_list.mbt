@@ -1059,9 +1059,9 @@ let float_place : @ui.Style = @ui.css("w=Full h=Full")
 /// A round button over the list (chatToBottom): 32 high, round, a line round it on the canvas, a shadow under it; its
 /// count beside its arrow; the hover ground under the pointer.
 // kept across runs: a value (no field of it changes)
-let float_button : @ui.Style = @ui.css(
+let float_button : @ui.Style = @ui.css((
   #|row h=S8 min_w=S8 px=S2 gap=S1 radius=Full border=B1 border_color=Line bg=Surface shadow=Md align=ACenter justify=JCenter
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

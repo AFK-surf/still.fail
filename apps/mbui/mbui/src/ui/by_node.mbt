@@ -29,7 +29,8 @@ fn[V] ByNode::contains(self : ByNode[V], id : @view.NodeId) -> Bool {
 
 ///|
 /// `v` kept for node `id`, in place of what was kept for it or for another made at its index before.
-fn[V] ByNode::op_set(self : ByNode[V], id : @view.NodeId, v : V) -> Unit {
+#alias("_[_]=_")
+fn[V] ByNode::put(self : ByNode[V], id : @view.NodeId, v : V) -> Unit {
   guard id.at >= 0 else { return }
   while self.slots.length() <= id.at {
     self.slots.push(None)

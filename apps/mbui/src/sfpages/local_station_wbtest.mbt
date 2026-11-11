@@ -38,9 +38,9 @@ test "本机 Station still.fail's desktop app ran (in a workspace, no service, s
     if platform != 0 {
       continue
     }
-    let t = setting_tester(LocalStation, w, platform~, host=fn(h) { h.set_local_station(
+    let t = setting_tester(LocalStation, w, platform~, host=fn(h) { h.set_local_station((
       #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","name":"星火工作室","stationName":"MacBook","removed":false}}
-      ,
+      ),
     ) })
     let at = "\{w}"
     assert_true(t.find("已停止") is Some(_), msg=at)
@@ -57,9 +57,9 @@ test "本机 Station still.fail's desktop app ran (in a workspace, no service, s
 
 ///|
 test "本机 Station with data in no workspace and no service: nothing to start it with" {
-  let t = setting_tester(LocalStation, 1280.0, platform=0, host=fn(h) { h.set_local_station(
+  let t = setting_tester(LocalStation, 1280.0, platform=0, host=fn(h) { h.set_local_station((
     #|{"data":"~/.stillfail","runner":"none"}
-    ,
+    ),
   ) })
   assert_true(t.find("已停止") is Some(_))
   assert_true(t.query(Button, label="启动") is None)

@@ -3530,7 +3530,7 @@ fn fx_resources() -> Json {
     obj([("key", str(key)), ("pid", Json::number(pid)), ("name", str(name)), ("endable", Json::boolean(endable)), ("use", u)])
   }
   let tile = fn(key : String, label : String, value : String, sub : String, points : Array[Double]) {
-    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(Json::number(_))))])
+    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(x => Json::number(x))))])
   }
   let chat = fx_use(25.9, 59.0e6, 0.0, 2.9e6, ("25.9%", "59 MB", "0 B/s", "2.9 MB/s"))
   let notes = fx_use(14.1, 980.0e6, 0.0, 13.0e3, ("14.1%", "980 MB", "0 B/s", "13 KB/s"))

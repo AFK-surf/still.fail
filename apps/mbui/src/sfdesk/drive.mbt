@@ -1700,9 +1700,9 @@ let empty_box : @ui.Style = @ui.css("w=Full pt=S14 pb=S14 px=S6 gap=S3 align=ACe
 /// What is held over the list (drop): over all of it, its words and mark in the middle, the page's ground at 82%
 /// under them, ringed in the accent.
 // kept across runs: a value (no field of it changes)
-let drop_box : @ui.Style = @ui.css(
+let drop_box : @ui.Style = @ui.css((
   #|w=Full h=Full gap=S2 align=ACenter justify=JCenter radius=Xl2 bg=A(Bg,O80) border=B2 border_color=A(Accent,O60)
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

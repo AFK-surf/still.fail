@@ -1839,9 +1839,9 @@ let narrow_key_side : Double = 36.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_top_button : @ui.Style = @ui.css(
+let narrow_top_button : @ui.Style = @ui.css((
   #|w=S9 h=S9 align=ACenter justify=JCenter radius=Full hovered{bg=Tint} selected{bg=Tint}
-)
+))
 
 ///|
 /// The name over its chapter and how far (title): the name in the page's ui size, 600; under it its caption, quiet.
@@ -2370,9 +2370,9 @@ let desk_size_row_h : Double = 32.0 + 2.0 * corner_inset
 ///|
 /// A size's key (sizeKey): its corner its row's next step in, concentric with the row's (desk_size_key_corner).
 // kept across runs: a value (no field of it changes)
-let desk_size_key_box : @ui.Style = @ui.css(
+let desk_size_key_box : @ui.Style = @ui.css((
   #|h=S8 min_w=S11 px=S2_5 align=ACenter justify=JCenter hovered{bg=Tint} disabled{opacity=O35}
-)
+))
 
 ///|
 /// How round a size's key is: its row's corner less the ladder's inset it stands in from the row's ends (18 less 8,

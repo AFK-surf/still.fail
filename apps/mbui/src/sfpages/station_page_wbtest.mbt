@@ -738,9 +738,9 @@ fn this_mba_tester(own_station : String, w? : Double = 390.0) -> @ui.Tester {
 ///|
 test "this machine's station not running here: its page says it stopped and offers 启动, not 重试; pressed, made a service" {
   for w in [390.0, 1100.0] {
-    let t = this_mba_tester(
+    let t = this_mba_tester((
       #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
-      ,
+      ),
       w~,
     )
     let at = "\{w}"
@@ -756,16 +756,16 @@ test "this machine's station not running here: its page says it stopped and offe
 
 ///|
 test "this machine's station being installed: its page says so, its 启动 busy; one running here, or another machine's, tried again" {
-  let t = this_mba_tester(
+  let t = this_mba_tester((
     #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
-    ,
+    ),
   )
   assert_true(t.find("正在更新") is Some(_))
   assert_true(t.query(Button, label="重试") is None)
   // running here (the app not reaching it yet): tried again, as any
-  let t = this_mba_tester(
+  let t = this_mba_tester((
     #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
-    ,
+    ),
   )
   assert_true(t.query(Button, label="重试") is Some(_))
   assert_true(t.query(Button, label="启动") is None)
@@ -773,9 +773,9 @@ test "this machine's station being installed: its page says so, its 启动 busy;
   let t = setting_tester(Station("ws1/st2"), 390.0, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st1")
   }, host=fn(h) {
-    h.set_local_station(
+    h.set_local_station((
       #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Willow","removed":false}}
-      ,
+      ),
     )
   })
   t.run_for(@ui.move_most_ms)

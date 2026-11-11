@@ -376,7 +376,7 @@ test "wide, many models and Codex's efforts and speeds: the models, how hard it 
   let all = t.get(Button, label="SWE-2").rect
   // how hard it thinks, its levels one under another at the panel's right, beside the models (2026-11-02 用户「思考深度
   // 放在整个面板的右边」「模型跟思考深度的并排的」)
-  let levels = ["最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) { t.get(Radio, label=l).rect })
+  let levels = ["最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) raise { t.get(Radio, label=l).rect })
   for i, r in levels {
     assert_true(r.0 == levels[0].0 && r.0 >= all.0 + all.2, msg="\{levels}, beside \{all}")
     assert_true(i == 0 || r.1 > levels[i - 1].1, msg="\{levels}")

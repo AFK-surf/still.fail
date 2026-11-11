@@ -143,9 +143,9 @@ test "添加 station's sheet offers 添加这台 Mac while this machine has none
 test "添加 station's sheet: no 添加这台 Mac where this machine has a station" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station(
+  t.set_local_station((
     #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
-    ,
+    ),
   )
   app.nav.replace(Place("stations"))
   t.run_for(@ui.move_most_ms)
@@ -159,9 +159,9 @@ test "添加 station's sheet: no 添加这台 Mac where this machine has a stati
 test "本机 Station: the one here brought up to the latest release from its card's menu" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station(
+  t.set_local_station((
     #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
-    ,
+    ),
   )
   app.nav.replace(Setting(@settings.Route::LocalStation))
   t.run_for(@ui.move_most_ms)
@@ -182,9 +182,9 @@ test "本机 Station: the one here brought up to the latest release from its car
 test "本机 Station while the installer runs: how far, as a bar and its percent, and the step it said" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station(
+  t.set_local_station((
     #|{"doing":"install","percent":42,"said":"正在下载 still.fail station"}
-    ,
+    ),
   )
   app.nav.replace(Setting(@settings.Route::LocalStation))
   t.run_for(@ui.move_most_ms)

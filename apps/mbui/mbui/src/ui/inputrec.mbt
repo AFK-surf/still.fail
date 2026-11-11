@@ -71,7 +71,7 @@ fn input_taped(kind : String, t : Double, args : Array[Double], text? : String) 
     let m : Map[String, Json] = {
       "k": Json::string(kind),
       "t": Json::number(t),
-      "a": Json::array(args.map(Json::number(_))),
+      "a": Json::array(args.map(x => Json::number(x))),
     }
     match text {
       Some(s) => m["s"] = Json::string(s)

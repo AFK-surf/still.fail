@@ -269,9 +269,9 @@ test "关于's 本机 Station, at each width and with either hand: where the app
 test "关于's 本机 Station where the core has none of its software up: its version as the host says it; while it is away, that its update is seen once it is up; nothing to update it with" {
   // (in a workspace this account is not in)
   let t = setting_tester(About, 1280.0, host=fn(h) {
-    h.set_local_station(
+    h.set_local_station((
       #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","workspace":{"id":"ws9","station":"st9","name":"别处","stationName":"Elm","removed":false}}
-      ,
+      ),
     )
   })
   assert_true(about_drawn(t, "Station 0.1.4600"))

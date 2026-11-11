@@ -302,7 +302,7 @@ pub fn fix_crowded_model(model : String, name : String, family : String, maker :
     "name": Json::string(name),
     "family": Json::string(family),
     "maker": { "id": Json::string(maker) },
-    "runtimes": Json::array(runtimes.map(Json::string(_))),
+    "runtimes": Json::array(runtimes.map(x => Json::string(x))),
     "ids": [Json::string(model)],
     "availability": "here",
   }
@@ -520,7 +520,7 @@ pub fn fix_pick() -> Json {
     // (the configurations used most, starred or not)
     "combos": fix_combos(),
     // (every model starred, one of the configurations used most or not)
-    "liked": Json::array(n.liked.map(Json::string(_))),
+    "liked": Json::array(n.liked.map(x => Json::string(x))),
     // (the makers of its models, in their order, as the core says them)
     "makers": {
       let makers : Array[(String, String, Int)] = []

@@ -569,12 +569,12 @@ test "a field of the tree's as an old view's, said so: its placeholder said its 
     let tree_one = run(true)
     assert_eq(tree_one, old_one, msg="\{what}: the tree's \{tree_one}, the old view's \{old_one}")
   }
-  alike("its placeholder's shorter way", fn(tree) { field_said_so(tree, "", placeholder=long, shorter=["shorter", "short"]) })
-  alike("a secret", fn(tree) { field_said_so(tree, "hunter2", secret=true) })
-  alike("a look", fn(tree) {
+  alike("its placeholder's shorter way", fn(tree) raise { field_said_so(tree, "", placeholder=long, shorter=["shorter", "short"]) })
+  alike("a secret", fn(tree) raise { field_said_so(tree, "hunter2", secret=true) })
+  alike("a look", fn(tree) raise {
     field_said_so(tree, "abc def", look=fn(d) { (d, if d.length() >= 3 { [(0, 3, 0xFF0000FFL)] } else { [] }) })
   })
-  alike("the input method's key", fn(tree) { field_said_so(tree, "go", ime_action=3) })
+  alike("the input method's key", fn(tree) raise { field_said_so(tree, "go", ime_action=3) })
 }
 
 ///|

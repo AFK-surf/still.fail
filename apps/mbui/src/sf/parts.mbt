@@ -2818,10 +2818,10 @@ let input_size : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let input_box : @ui.Style = @ui.css(
+let input_box : @ui.Style = @ui.css((
   #|row w=Full px=S4 py=S1_5 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
   #|disabled{opacity=O55}
-)
+))
 
 ///|
 /// Pointed at or written in: the field's hover grey round it.
@@ -2917,10 +2917,10 @@ pub fn select(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let select_box : @ui.Style = @ui.css(
+let select_box : @ui.Style = @ui.css((
   #|row w=Full px=S4 py=S1_5 gap=S2 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
   #|justify=JBetween disabled{opacity=O55}
-)
+))
 
 ///|
 /// Pointed at, open or focused: the field's hover grey round it.
@@ -3171,9 +3171,9 @@ let choice_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mu
 ///|
 /// The radio mark: 18 round, edged 1.5 (the strong grey; the ink chosen), its dot 8 in the ink.
 // kept across runs: a value (no field of it changes)
-let radio_mark : @ui.Style = @ui.css(
+let radio_mark : @ui.Style = @ui.css((
   #|w=S4_5 h=S4_5 radius=Full border=B1 border_color=Border align=ACenter justify=JCenter
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3478,9 +3478,9 @@ let panel_foot_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_button_box : @ui.Style = @ui.css(
+let panel_button_box : @ui.Style = @ui.css((
   #|row h=S6 px=S2_5 gap=S1 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O50}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3500,9 +3500,9 @@ let panel_button_quiet : @ui.TextStyle = panel_button_words.then(@ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_icon_box : @ui.Style = @ui.css(
+let panel_icon_box : @ui.Style = @ui.css((
   #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O35}
-)
+))
 
 ///|
 /// Where a small panel's icon button stands in its top end corner (its ×): as far in as makes its circle
@@ -3645,9 +3645,9 @@ pub fn chooser(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chooser_box : @ui.Style = @ui.css(
+let chooser_box : @ui.Style = @ui.css((
   #|row h=S7 px=S2 gap=S1_25 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

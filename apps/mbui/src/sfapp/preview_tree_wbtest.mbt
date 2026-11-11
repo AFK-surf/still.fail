@@ -3057,7 +3057,7 @@ test "viewer on the tree, a phone: its floating bar's tools and × as far apart 
     @sf.t("android-misc.drive.share"),
     @sf.t("web-main.preview.download"),
     @sf.t("web-main.preview.closeKey"),
-  ].map(fn(label) { t.get(Button, label~).rect })
+  ].map(fn(label) raise { t.get(Button, label~).rect })
   keys.sort_by(fn(a, b) { a.0.compare(b.0) })
   assert_true(keys.length() >= 3, msg="its tools and ×: \{keys}")
   for i in 1..<keys.length() {

@@ -5,11 +5,11 @@ test "a replay's direct accounts subscription survives a source signal leaving" 
   @core.subscribe("accounts") |> ignore
   let live = src.topic("accounts", {})
   let stop = @signals.effect(fn() { live.get() |> ignore })
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|{"out":{"id":7,"subscribe":{"topic":"accounts"},"keyed":true}}
     #|{"in":{"id":7,"value":{"signedIn":true}}}
     #|{"in":{"id":7,"value":{"signedIn":false}}}
-  )
+  ))
   r.attach()
   let accounts = @core.subscribe("accounts")
   assert_eq(r.deliver(at_most=1), 1)
@@ -42,12 +42,12 @@ test "a new flow does not subscribe the previous flow's held topics" {
 test "a run from before the stations' rows: the app's rows, a station and a part read out of its stations, made once" {
   @core.client.reset()
   let src = source()
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|{"out":{"id":3,"subscribe":{"topic":"stations","scope":"w","brief":true},"keyed":true}}
     #|{"in":{"id":3,"value":[{"station":"w/a","name":"A"}]}}
     #|{"out":{"id":4,"subscribe":{"topic":"stations","scope":"w"},"keyed":true}}
     #|{"in":{"id":4,"value":[{"station":"w/a","name":"A","models":[1],"host":{"os":"mac","cpu":2},"overview":{"disk":{"free":1},"profiles":[{"id":"p"}]}}]}}
-  )
+  ))
   r.keep_stations()
   r.attach()
   let rows_p : Map[String, Json] = { "scope": "w" }
@@ -94,10 +94,10 @@ test "a run from before the stations' rows: the app's rows, a station and a part
 test "a run from before the connects' rows: one connect and its choice's sessions read out of its connects whole, made once, held with them" {
   @core.client.reset()
   let src = source()
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|{"out":{"id":5,"subscribe":{"topic":"connects","scope":"w","mine":false},"keyed":true}}
     #|{"in":{"id":5,"value":{"me":{},"items":[{"station":"w/a","stationName":"A","connect":{"id":"c1","name":"One"},"sessions":[{"key":"s1"}],"running":1,"candidates":[{"key":"s1","titleText":"T","description":"D","current":true,"statusText":"x"}]}],"wait":{"reading":false,"failing":[]},"slackApps":[],"noProfile":false}}}
-  )
+  ))
   r.keep_stations()
   r.attach()
   let all_p : Map[String, Json] = { "scope": "w", "mine": false }

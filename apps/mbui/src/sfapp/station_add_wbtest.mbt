@@ -175,7 +175,7 @@ test "添加 station: named, 生成命令 makes the command (workspace.enroll) a
     assert_eq(joined.length(), 1, msg=at)
     assert_false(sa_drawn(t, "取消"), msg=at)
     assert_false(sa_drawn(t, "在该机器的终端中执行："), msg=at)
-    sa_leaving(t, at, fn() { t.click(Button, label="完成") }, seen=["station 是一台运行 still.fail 的机器。为它命名，然后在该机器的终端中执行生成的命令，它会安装 still.fail 并加入。", joined[0].0, "完成"], unseen=["取消", "在该机器的终端中执行：", "名称"])
+    sa_leaving(t, at, fn() raise { t.click(Button, label="完成") }, seen=["station 是一台运行 still.fail 的机器。为它命名，然后在该机器的终端中执行生成的命令，它会安装 still.fail 并加入。", joined[0].0, "完成"], unseen=["取消", "在该机器的终端中执行：", "名称"])
     @settings.fixture_motion(0)
   }
 }
@@ -245,7 +245,7 @@ test "添加 station: a station of another workspace, the first open one picked,
     assert_true(sa_at(t, "客厅的 mini", at).1 < sa_at(t, "实验机", at).1, msg="\{at}: where it was")
     assert_true(t.get(Button, label="添加到此 workspace").disabled, msg=at)
     assert_true(sa_drawn(t, "完成") && !sa_drawn(t, "取消"), msg=at)
-    sa_leaving(t, at, fn() { t.click(Button, label="完成") }, seen=["将你在其他 workspace 管理的 station 也添加到这里", "客厅的 mini", "已加入此 workspace", "完成"], unseen=["取消"])
+    sa_leaving(t, at, fn() raise { t.click(Button, label="完成") }, seen=["将你在其他 workspace 管理的 station 也添加到这里", "客厅的 mini", "已加入此 workspace", "完成"], unseen=["取消"])
   }
 }
 
@@ -256,7 +256,7 @@ test "添加 station: 添加这台 Mac pressed, closed as it showed, the station
     let calls : Array[Made] = []
     let t = sa_open(calls, platform=0, wide~)
     t.run_for(@ui.move_most_ms)
-    sa_leaving(t, at, fn() { t.click(Button, label="添加这台 Mac") }, seen=["也可以直接添加这台 Mac：在这里下载 station 并加入这个 workspace，不用到终端里执行命令。", "station 是一台运行 still.fail 的机器。为它命名，然后在该机器的终端中执行生成的命令，它会安装 still.fail 并加入。", "名称"], unseen=[])
+    sa_leaving(t, at, fn() raise { t.click(Button, label="添加这台 Mac") }, seen=["也可以直接添加这台 Mac：在这里下载 station 并加入这个 workspace，不用到终端里执行命令。", "station 是一台运行 still.fail 的机器。为它命名，然后在该机器的终端中执行生成的命令，它会安装 still.fail 并加入。", "名称"], unseen=[])
     assert_eq(t.local_acts().length(), 1, msg=at)
     assert_true(t.local_acts()[0].has_prefix("install"), msg=at)
   }

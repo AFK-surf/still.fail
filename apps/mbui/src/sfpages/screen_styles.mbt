@@ -42,9 +42,9 @@ let mouse_pair_box : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 ///|
 /// One of them, floating on its own: round, 44 (a press's least), on the floating ground (the ink at 8% pressed).
 // kept across runs: a value (no field of it changes)
-let mouse_button_box : @ui.Style = @ui.css(
+let mouse_button_box : @ui.Style = @ui.css((
   #|w=S11 h=S11 radius=Full bg=Floating shadow=Sm align=ACenter justify=JCenter pressed{bg=Hover}
-)
+))
 
 ///|
 /// Over the frame's foot, at its end, 12 in (the mouse's buttons, 全屏 and sideways).
@@ -74,9 +74,9 @@ let take_over_place : @ui.Style = @ui.css("w=Full px=S3 py=S1 align=ACenter")
 ///|
 /// A round button (40), the ink at 10% under it while it is on.
 // kept across runs: a value (no field of it changes)
-let round_button_box : @ui.Style = @ui.css(
+let round_button_box : @ui.Style = @ui.css((
   #|w=S10 h=S10 radius=Full align=ACenter justify=JCenter selected{bg=A(Fg,O10)}
-)
+))
 
 ///|
 let round_icon : Double = 20.0
@@ -183,9 +183,9 @@ let keys_row_box : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 /// A key: 36 high, 40 wide at least, round, 10 in, its words or mark in a row (never squeezed: a key short of room
 /// leaves whole); the ink at 6%, or the ink while it is held.
 // kept across runs: a value (no field of it changes)
-let row_key_box : @ui.Style = @ui.css(
+let row_key_box : @ui.Style = @ui.css((
   #|row h=S9 min_w=S10 px=S2_5 radius=Full bg=Tint align=ACenter justify=JCenter selected{bg=Fg}
-)
+))
 
 ///|
 let key_icon : Double = 18.0

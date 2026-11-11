@@ -1389,7 +1389,8 @@ fn inst_outer_chosen(a : FixedArray[Double], b : Int, here : Int) -> Unit {
   }
   let mut most = dmax(own, clip_cut_least)
   let mut from = if own > clip_cut_least { -2 } else { -1 }
-  for k in if beyond && !apart { [here, here + 12] } else { [here] } {
+  let rows_at = if beyond && !apart { [here, here + 12] } else { [here] }
+  for k in rows_at {
     let d = clip_cut_depth(clip_stack, k, x0, y0, x1, y1, r, sm)
     if d > most {
       most = d

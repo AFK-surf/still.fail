@@ -524,9 +524,9 @@ let go_keys_box : @ui.Style = @ui.css("w=Full pt=S2_5")
 /// The station's button (switchButton): 22 high, 7 in, 5 between, a hairline round it on the raised ground, its corner
 /// the options'.
 // kept across runs: a value (no field of it changes)
-let switch_button : @ui.Style = @ui.css(
+let switch_button : @ui.Style = @ui.css((
   #|row h=S6 px=S2 gap=S1_25 align=ACenter radius=Lg bg=Raised border=B1 border_color=Line hovered{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

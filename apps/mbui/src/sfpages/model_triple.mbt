@@ -913,7 +913,8 @@ fn triple_body(
             !combos.is_empty(),
             fn() {
               triple_column_head(c, @sf.t("web-main.combos.label"))
-              for xg in if up { combos.rev() } else { combos } {
+              let combos_turned = if up { combos.rev() } else { combos }
+              for xg in combos_turned {
                 let (x, gone) = xg
                 triple_combo_row(c, src, station, of, v, Some(x), model_of(Json::string(text(Some(x), "model"))), names_w, saved, close, gone~)
               }
@@ -926,7 +927,8 @@ fn triple_body(
         scroll("triple/first", if flat { list_most } else { list_most - row_h }, fn() {
           // (the configurations used most nearest what opened the panel, the starred past them, the rest of a few past
           // those)
-          for i, g in if up { shown.rev() } else { shown } {
+          let shown_turned = if up { shown.rev() } else { shown }
+          for i, g in shown_turned {
             if i > 0 {
               c.box(style=triple_apart, fn() {  }) |> ignore
             }
@@ -2053,22 +2055,22 @@ let triple_rows : @ui.Style = @ui.css("w=Full gap=SPx")
 /// A row's ground, concentric with its small panel as a menu's row is (panel_in): a capsule 34 high, a taller row (an
 /// account with what is left of it under its name) the ladder's 18, not a capsule as round as half its height.
 // kept across runs: a value (no field of it changes)
-let triple_option_style : @ui.Style = @ui.css(
+let triple_option_style : @ui.Style = @ui.css((
   #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter hovered{bg=Hover}
-).then(@ui.style(radius=@sf.panel_in))
+)).then(@ui.style(radius=@sf.panel_in))
 
 ///|
 /// A configuration's row once it is taken out (triple_combo_row's `gone`): a row's room, no ground under the pointer.
 // kept across runs: a value (no field of it changes)
-let triple_option_gone : @ui.Style = @ui.css(
+let triple_option_gone : @ui.Style = @ui.css((
   #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter
-).then(@ui.style(radius=@sf.panel_in))
+)).then(@ui.style(radius=@sf.panel_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_option_on : @ui.Style = @ui.css(
+let triple_option_on : @ui.Style = @ui.css((
   #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter bg=Hover
-).then(@ui.style(radius=@sf.panel_in))
+)).then(@ui.style(radius=@sf.panel_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2205,9 +2207,9 @@ let small_primary : @ui.Style = @ui.css("h=S6 px=S2_5 align=ACenter justify=JCen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_primary_off : @ui.Style = @ui.css(
+let small_primary_off : @ui.Style = @ui.css((
   #|h=S6 px=S2_5 align=ACenter justify=JCenter radius=Full bg=Primary opacity=O50
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

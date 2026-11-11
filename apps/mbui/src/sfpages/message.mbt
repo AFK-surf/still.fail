@@ -1331,9 +1331,9 @@ let place_corner_room : @ui.Style = @ui.css("w=Full h=Full align=AEnd justify=JE
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_corner_mark : @ui.Style = @ui.css(
+let place_corner_mark : @ui.Style = @ui.css((
   #|w=S3_5 h=S3_5 radius=Full bg=Bg border=B1 border_color=Line align=ACenter justify=JCenter
-).then(@sf.outset_end(6.0)).then(@sf.outset_bottom(6.0))
+)).then(@sf.outset_end(6.0)).then(@sf.outset_bottom(6.0))
 
 ///|
 /// A notice (msgSystem): across the chat, in its middle, its time 4 under it once opened.

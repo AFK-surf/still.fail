@@ -1479,7 +1479,8 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     laid_once(
       c,
       fn() {
-        for e in if order.is_empty() { mo.entries } else { order } {
+        let entries_in_order = if order.is_empty() { mo.entries } else { order }
+        for e in entries_in_order {
           // (what its move reads, read for what draws its node: the part's or the row's kept, whoever told it: Ctx::reads_for)
           c.reads_for(e.node, fn() { layout_entry(c, e, still, frame, scrolled) })
         }

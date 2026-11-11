@@ -250,7 +250,8 @@ fn size_row(
 /// then its files).
 fn kept_sample(c : @ui.Ctx, chats : Bool) -> Unit {
   list_card(c, fn() {
-    for n in if chats { [6, 8, 5] } else { [4] } {
+    let sample_sizes = if chats { [6, 8, 5] } else { [4] }
+    for n in sample_sizes {
       size_row(c, "", @sf.sample_words(n), if chats { "" } else { @sf.sample_words(14) }, 1.0) |> ignore
     }
   })

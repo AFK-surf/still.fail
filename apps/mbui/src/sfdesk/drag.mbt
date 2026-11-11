@@ -839,9 +839,9 @@ let fdrag_ghost_place : @ui.Style = @ui.css("w=Full h=Full align=AStart")
 ///|
 /// The picture carried: a chip on the raised ground, its shadow under it.
 // kept across runs: a value (no field of it changes)
-let fdrag_ghost_chip : @ui.Style = @ui.css(
+let fdrag_ghost_chip : @ui.Style = @ui.css((
   #|row h=S8 px=S3 gap=S2 align=ACenter radius=Lg bg=Raised shadow=Lg opacity=O90
-)
+))
 
 ///|
 /// What a drop over it would land in: ringed in the accent on its wash.

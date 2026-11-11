@@ -380,7 +380,7 @@ test "wide: how hard it thinks one under another, from the least to the most" {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
   // (in their order down their column: from the least to the most)
-  let order = ["低", "中", "高", "最高"].map(fn(l) { t.get(Radio, label=l).rect })
+  let order = ["低", "中", "高", "最高"].map(fn(l) raise { t.get(Radio, label=l).rect })
   for i in 1..<order.length() {
     assert_true(order[i].0 == order[0].0 && order[i].1 > order[i - 1].1, msg="\{order}")
   }

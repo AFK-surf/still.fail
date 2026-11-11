@@ -92,8 +92,8 @@ pub fn fixture_keymap(changed : Map[String, Array[String]], send_key? : String =
       "group": Json::string(a.1),
       "name": Json::string(tr("web-main.keymap." + a.0)),
       "typing": Json::string(a.4),
-      "keys": Json::array(keys.map(Json::string(_))),
-      "labels": Json::array(labels.map(Json::string(_))),
+      "keys": Json::array(keys.map(x => Json::string(x))),
+      "labels": Json::array(labels.map(x => Json::string(x))),
       "text": Json::string(if labels.length() == 0 { tr("web-main.shortcuts.unset") } else { labels.join(" / ") }),
       "changed": Json::boolean(changed.contains(a.0)),
       "listed": Json::boolean(!fx_key_unlisted.contains(a.0)),
@@ -187,7 +187,7 @@ pub fn fixture_keys_set(changed : Map[String, Array[String]], params : Json) -> 
 pub fn fixture_keys(changed : Map[String, Array[String]]) -> Json {
   let o : Map[String, Json] = Map([])
   for k, v in changed {
-    o[k] = Json::array(v.map(Json::string(_)))
+    o[k] = Json::array(v.map(x => Json::string(x)))
   }
   Json::object(o)
 }

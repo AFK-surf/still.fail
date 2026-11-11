@@ -308,11 +308,11 @@ test "a watch the run let go of and asked again, both dropped: what came for it 
 
 ///|
 test "the bytes the run sent beside a call are the test's to give again" {
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|CORETRACE {"out":{"id":3,"call":"station.upload.part","params":{"name":"a.jpg","offset":0}},"w":10,"b":"ffd8ff"}
     #|CORETRACE {"in":{"id":3,"ok":{"have":3}},"w":20}
     #|CORETRACE {"out":{"id":4,"call":"station.upload.part","params":{"name":"b.pdf","offset":0}},"w":30}
-    ,
+    ),
   )
   assert_eq(r.sent_bytes("station.upload.part", "name", "a.jpg"), Some(b"\xff\xd8\xff"))
   assert_eq(r.sent_bytes("station.upload.part", "name", "b.pdf"), None)
@@ -497,14 +497,14 @@ test "at the run's pace, a step that acts taken when its input went, what came b
 
 ///|
 test "frame_period: the run's frames as its host's lines space them, two lines a frame" {
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|{"info":{"view":1,"at":[0]},"w":1000.0}
     #|{"info":{"view":1,"at":[0]},"w":1000.3}
     #|{"info":{"view":1,"at":[16]},"w":1016.5}
     #|{"info":{"view":1,"at":[16]},"w":1016.8}
     #|{"info":{"view":1,"at":[33]},"w":1033.25}
     #|{"info":{"view":1,"at":[900]},"w":1900.0}
-    ,
+    ),
   )
   // (the pause before the last left out)
   assert_eq(r.frame_period(), Some(16.625))
@@ -604,12 +604,12 @@ test "a run from before the stations' rows: its stations the replay's own, the a
 
 ///|
 test "a run with the stations' rows: its stations matched as any topic, a whole one never given for a brief" {
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|{"out":{"id":2,"subscribe":{"topic":"stations","scope":"w","brief":true},"keyed":true}}
     #|{"in":{"id":2,"value":[{"station":"w/a"}]},"w":20}
     #|{"out":{"id":4,"subscribe":{"topic":"station","scope":"w","station":"w/a"},"keyed":true}}
     #|{"in":{"id":4,"value":{"station":"w/a"}},"w":30}
-  )
+  ))
   let c = r.client()
   // asked as the run asked it: matched, answered
   let one = c.subscribe("station", params={ "scope": "w", "station": "w/a" })

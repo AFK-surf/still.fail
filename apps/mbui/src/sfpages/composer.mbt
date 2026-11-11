@@ -2556,9 +2556,9 @@ fn cc_places(c : @ui.Ctx, on : Array[(String, String)]) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cc_trigger : @ui.Style = @ui.css(
+let cc_trigger : @ui.Style = @ui.css((
   #|row h=S7 px=S2 gap=S1_5 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
