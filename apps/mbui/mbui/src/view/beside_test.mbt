@@ -376,3 +376,48 @@ test "beside a piece of its anchor (`piece`): by that piece, given how big the a
   t.frame(400.0, 300.0) |> ignore
   assert_eq(at(), (110.0, 231.0), msg="by it again")
 }
+
+///|
+/// Where a box 60 by 30 is drawn beside one 40 by 20 at (`ax`, 100) in a window 400 by 300: under it, 6 off, lined up at
+/// its start, moved `shift` further along (View::beside's along_offset); beside the piece (10, 0, 20, 20) of it where
+/// `piece`.
+fn beside_shifted(ax : Double, shift : Double, piece? : Bool = false) -> (Double, Double) {
+  let ids : Map[String, @view.NodeId] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(Is((ax, 100.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b.width(Is(Some(60.0))).height(Is(Some(30.0))) |> ignore
+        if piece {
+          b.beside(ids["a"], side=Bottom, along=Start, offset=6.0, along_offset=shift, piece=fn(_, _) {
+            Some((10.0, 0.0, 20.0, 20.0))
+          })
+          |> ignore
+        } else {
+          b.beside(ids["a"], side=Bottom, along=Start, offset=6.0, along_offset=shift) |> ignore
+        }
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let d = t.drawn_of(ids["b"]).unwrap()
+  (d.x, d.y)
+}
+
+///|
+test "beside: moved along its side by along_offset, either way, from its anchor's start; kept in the window by its padding as ever; from a piece of its anchor where it has one" {
+  assert_eq(beside_shifted(100.0, 0.0), (100.0, 126.0), msg="none: at its anchor's start")
+  assert_eq(beside_shifted(100.0, 10.0), (110.0, 126.0), msg="10 on")
+  assert_eq(beside_shifted(100.0, -10.0), (90.0, 126.0), msg="10 back")
+  // (its anchor near the window's right: 340 would leave it past 400 - 8; kept in, at 332)
+  assert_eq(beside_shifted(330.0, 10.0), (332.0, 126.0), msg="kept in the window")
+  // (a piece of its anchor 10 in: from the piece's start, 110, 5 on)
+  assert_eq(beside_shifted(100.0, 5.0, piece=true), (115.0, 126.0), msg="from its piece")
+}
