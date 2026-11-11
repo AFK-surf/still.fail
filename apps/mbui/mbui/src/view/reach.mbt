@@ -158,6 +158,86 @@ fn Tree::near_said(
 }
 
 ///|
+/// The room a press has round node `id`, drawn as `box` (x0, y0, x1, y1), as the hit test gives it (Tree::target_at
+/// asked, nothing worked out beside it): across, on the line through its middle, from as far before its left edge to as
+/// far past its right as a press there is on it; down, so on the line through its middle across. Each way it is drawn
+/// as big as a press's room at least it is pressed only where drawn (press_small), its box. So what the room rules
+/// measure (ui's rooms.mbt) is what a press does where the tree is drawn: what is drawn over another and within it
+/// takes the press there first, where two reach the nearer has it, what the press lands in cuts what it reaches. What
+/// the tree counts of its searches (found_walked, near_kept) is left as it was: a check's asking is none of its work.
+pub fn Tree::press_room_found(
+  self : Tree,
+  id : NodeId,
+  box : (Double, Double, Double, Double),
+) -> (Double, Double, Double, Double) {
+  let least = self.least_now()
+  let (x0, y0, x1, y1) = box
+  let (walked, kept) = (self.work.found_walked, self.work.near_kept)
+  let (mx, my) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+  let (rx0, rx1) = if x1 - x0 < least {
+    let far = least - (x1 - x0)
+    (x0 - self.reached_past(id, x0, my, -1.0, 0.0, far), x1 + self.reached_past(id, x1, my, 1.0, 0.0, far))
+  } else {
+    (x0, x1)
+  }
+  let (ry0, ry1) = if y1 - y0 < least {
+    let far = least - (y1 - y0)
+    (y0 - self.reached_past(id, mx, y0, 0.0, -1.0, far), y1 + self.reached_past(id, mx, y1, 0.0, 1.0, far))
+  } else {
+    (y0, y1)
+  }
+  self.work.found_walked = walked
+  self.work.near_kept = kept
+  (rx0, ry0, rx1, ry1)
+}
+
+///|
+/// How far from (x, y), an edge of what node `id` draws, going (dx, dy) out of it, a press is still on it
+/// (Tree::target_at), `far` at most (a press's room past one edge: as much as the room is wider than what is drawn, it
+/// moved in from the window's edge whole): found in eight steps out and halved sixteen times in the last, to the
+/// 1024th of a point (a place the layout gives, a half's or a third's, read as it is, no hair of a halving left on it).
+fn Tree::reached_past(
+  self : Tree,
+  id : NodeId,
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  far : Double,
+) -> Double {
+  let on = fn(d : Double) {
+    match self.target_at(x + dx * d, y + dy * d) {
+      Pressed(t) | Dragged(t) => t == id
+      _ => false
+    }
+  }
+  let step = far / 8.0
+  let mut hit = 0.0
+  let mut miss = -1.0
+  for k = 1; k <= 8; k = k + 1 {
+    let d = step * k.to_double()
+    if on(d) {
+      hit = d
+    } else {
+      miss = d
+      break
+    }
+  }
+  if miss < 0.0 {
+    return far
+  }
+  for _ in 0..<16 {
+    let d = (hit + miss) / 2.0
+    if on(d) {
+      hit = d
+    } else {
+      miss = d
+    }
+  }
+  (hit * 1024.0).round() / 1024.0
+}
+
+///|
 /// What a press at (x, y) is on, `top` found there (the topmost that takes it, at `top_order` in the walk, drawn as
 /// `top_box`; Nothing: none): `top`, or what of `near` (Tree::near_said) is drawn over it and within it whose room
 /// (press_reaches: cut to `top`, moved in from what bounds its input and the window) holds (x, y), the nearest of
