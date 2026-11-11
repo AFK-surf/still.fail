@@ -443,3 +443,69 @@ test "words sent: the chat's rows they fly past are kept, not built again each f
   let own = built.filter(fn(n) { n <= 1 }).length()
   assert_true(own * 4 >= built.length() * 3, msg="rows built each frame of their flight: \{built}")
 }
+
+///|
+test "words sent in a chat whose turn is over: 已完成 closing as they come and 处理中 opening after them, every row drawn goes up only" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  // (as a device has it: the core has them a frame after the press, the station takes them and sets its agent to work
+  // 350 ms after; 已完成 shows only while nothing is on its way and the agent idles, chat-done-live. A freshly recorded
+  // core trace of the same, bar_going_down's, had 已完成's row, closing under half open and nothing of it drawn, said by
+  // rows_steady as come back as 处理中 opened, every row seen going up only (rows_steady_return holds what is drawn: the
+  // coordinator of the migration, 2026-11-11). Here its card still waiting, the words answer it from the frame they are
+  // sent (sent_here_view), 已完成 going in that frame, over their row: it only goes up, nothing comes back)
+  new_run()
+  fix_pace.val = (350.0, 30000.0, fix_turn_end_ms)
+  fix_core_for.val = 17.0
+  let src = fixture("chat-done-live")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  // (words the core's answers are kept for, src/sfkept)
+  t.type_text("看一下列表")
+  // (the field's top: what is drawn below it is the composer's, not the list's)
+  let field = match t.find("看一下列表") {
+    Some((_, y)) => y - 30.0
+    None => 844.0
+  }
+  let working = @sf.t("android-chat.chat.working")
+  tap_send(t)
+  let sent = t.time()
+  // (where each of the words drawn, once on the screen, was the frame before, and how far down any went in a frame;
+  // till 处理中's row is open: it comes as the station takes them, its room on the list's way from then)
+  let last : Map[String, Double] = {}
+  let bad : Array[String] = []
+  let mut came = false
+  while t.time() < sent + 350.0 + 2.0 * @ui.move_most_ms {
+    t.frame()
+    let said = t.words_said()
+    let n : Map[String, Int] = {}
+    for w in said {
+      n[w.0] = n.get(w.0).unwrap_or(0) + 1
+    }
+    let seen : Map[String, Double] = {}
+    for w in said {
+      if n.get(w.0) == Some(1) && w.5 > 0.0 && w.2 + w.4 < field && w.2 + w.4 > 0.0 {
+        seen[w.0] = w.2
+      }
+      if w.0 == working && w.5 > 0.0 {
+        came = true
+      }
+    }
+    for k, y in seen {
+      match last.get(k) {
+        Some(was) if y - was >= 0.5 => bad.push("\{k} down \{y - was} at \{t.time() - sent}")
+        _ => ()
+      }
+    }
+    last.clear()
+    for k, y in seen {
+      last[k] = y
+    }
+  }
+  assert_true(came, msg="处理中 not drawn")
+  assert_eq(bad, [])
+}
