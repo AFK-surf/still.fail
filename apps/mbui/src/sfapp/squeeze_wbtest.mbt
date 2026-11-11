@@ -29,15 +29,16 @@ fn test_window_corner(platform : Int) -> Double {
 /// `mode` in window `win` (its name, size, platform and the size class its host says, "" none) in `lang`, a moment
 /// after it opens (what it opens with over), drawn: the corner and squeeze tests' (corners_wbtest.mbt); with `said`, what
 /// people, agents and stations wrote in it at its longest (squeeze_said_wbtest.mbt); with `font_scale`, the system's
-/// size of words (words_large_wbtest.mbt).
+/// size of words (words_large_wbtest.mbt); with `changing`, on the workspace of real size (real_size_wbtest.mbt).
 fn screen_in(
   mode : String,
   win : (String, Double, Double, Int, String),
   lang : String,
   said? : Bool = false,
-  real? : Bool = false,
+  changing? : @sfrealsize.RealSizeChanging? = None,
   dark? : Bool = false,
   font_scale? : Double = 1.0,
+  moves_held? : Bool = true,
 ) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
@@ -46,11 +47,26 @@ fn screen_in(
     match src.val {
       Some(s) => s
       None => {
-        // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
-        let s = fixture_app(mode)
-        let s = if said { said_longest_source(s) } else { s }
-        // (`real`: what the core sends each topic on a workspace of real size: real_size_wbtest.mbt)
-        let s = if real { @sfrealsize.real_size_source(s) } else { s }
+        let s = match changing {
+          // (`changing`: what the core sends each topic on a workspace of real size, as a device holds it and takes its
+          // changes: real_size_wbtest.mbt. What the mode puts up over its pages (a sheet, a panel) opened over it as
+          // well, reading what the pages read)
+          Some(c) => {
+            reset()
+            let s = c.source(@sffixture.fixture(mode))
+            open_fixture_over(mode, s)
+            s
+          }
+          None => {
+            let s = fixture_app(mode)
+            // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
+            if said {
+              said_longest_source(s)
+            } else {
+              s
+            }
+          }
+        }
         src.val = Some(s)
         s
       }
@@ -65,6 +81,9 @@ fn screen_in(
     window_corner=test_window_corner(platform),
     // (the corner test says each screen's faults against its bar itself, all of them: none stops it at the first)
     corners_held=false,
+    // (`moves_held` false: how what moves goes frame to frame not judged, for the real size's sweep, which counts the
+    // frames it walks and does not look at them: real_size_wbtest.mbt says why it needs it)
+    words_over_held=moves_held,
     // (the device's language: the fixture's prefs say none; motion reduced, as a person may have it: what a screen
     // opens with at its end at once and a spinner held, so no frame is drawn between its first and the one measured,
     // none of which ever changed what fits: 576 screens' ten frames each were most of the sfapp run, 2026-10-25)
