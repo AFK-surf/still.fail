@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4cb54577a](https://github.com/AFK-surf/still.fail/commit/4cb54577a45e3ff3cff6a8f736f96c31c8566635) ci: at a frame rate only what a rate is for; the p | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94 | 171.98 |
 | [3cbd0905b](https://github.com/AFK-surf/still.fail/commit/3cbd0905bf22ecf621481076b9a52cacd01665f7) app: a history tile's figure on its own line, its  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 93.8 | 171.95 |
 | [ba12c35d5](https://github.com/AFK-surf/still.fail/commit/ba12c35d5138e2c8e1a7e59e3554393eea76dc63) app: the vault's 授权时限 (how long a use is allowed)  | 1.8 | 2.41 | 10.05 | 28.78 | 35.45 | 25.64 | 47.39 | 94.11 | 176.07 |
 | [98c5ec5f9](https://github.com/AFK-surf/still.fail/commit/98c5ec5f9efef64c598a516c15da26c63e38b775) sf: a line to type in on a card's ground, a field' | 1.8 | 2.41 | 10.04 | 28.71 | 35.27 | 25.64 | 47.37 | 94.24 | 154.28 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6d985b7a7](https://github.com/AFK-surf/still.fail/commit/6d985b7a745263f260eb8c47a5e6cfc06dce56bb) mac: update in place where a translocated app was  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 151.58 |
 | [351ef47b8](https://github.com/AFK-surf/still.fail/commit/351ef47b876954e1c506c5514ec2409c0b63720b) core: what each topic sends at a workspace's real  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 185.99 |
 | [8b8145742](https://github.com/AFK-surf/still.fail/commit/8b8145742b38dd9215873c0705d546a6b3972890) mbui: words picked with the pointer never end on a | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.96 | 171.75 |
-| [2e1be559b](https://github.com/AFK-surf/still.fail/commit/2e1be559b17ed69cd2e5801958eb528fc58a5698) mbui: a stop told at a moment after its frame's is | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.95 | 156.36 |
