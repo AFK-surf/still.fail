@@ -243,6 +243,8 @@ struct FakeHost {
   /// the marks' drawings answered as the test says (Tester::marks_by_hand, Tester::marks_answer), not by the frame
   /// after each is asked
   mut marks_by_hand : Bool
+  /// the pickers' answers told as the test says (Tester::picks_by_hand, Tester::pick_answer), not at each ask
+  mut picks_by_hand : Bool
   /// what the app handed to the system's share sheet (@ui.share), oldest first
   shares : Array[(String, String, String, Bytes)]
   /// the device's performance record (@hostapi.perf_state: -1 none kept here, 0 off, 1 on; Tester::set_perf), and
@@ -1038,8 +1040,6 @@ fn answers_by_the_frame() -> Unit {
   for kind, _ in kinds {
     if kind < answers_told.length() &&
       kind != outside_update &&
-      kind != outside_pick &&
-      kind != outside_native &&
       @hostapi.answers_by_frame(kind) {
       answer_told(kind)
     }

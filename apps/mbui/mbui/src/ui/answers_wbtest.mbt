@@ -3,7 +3,11 @@
 // after frame.
 
 ///|
-test "a pick is waited on from its ask until its answer is taken, the frame after" {
+/// How long the person takes to pick (any while).
+let picking_while : Double = 100.0
+
+///|
+test "a pick is waited on from its ask until its answer is taken, as the person answers it; read the frame after" {
   let ask : Ref[Pick?] = Ref(None)
   let asked = Ref(false)
   let took = Ref(false)
@@ -23,11 +27,16 @@ test "a pick is waited on from its ask until its answer is taken, the frame afte
     c.text("files", wrap=false) |> ignore
   })
   t.picks([("a.txt", b"hi")])
+  // (the person takes their while: answered as the test says, not as it is asked)
+  t.picks_by_hand()
   asked.val = true
   // asked in this frame: awaited, with what it is
   t.frame(ms=0.0)
   assert_true(runtime().awaited().iter().any(fn(a) { a.0.contains("a pick") }))
-  // its answer the frame after, taken: no longer awaited
+  t.run_for(picking_while)
+  assert_true(runtime().awaited().iter().any(fn(a) { a.0.contains("a pick") }))
+  // answered: taken as its event comes, no longer awaited, read by the frame after
+  t.pick_answer(1)
   t.draw()
   assert_true(took.val)
   assert_eq(runtime().awaiting(), 0)
@@ -125,14 +134,14 @@ test "a pick's answer someone reads (an old view's build): told at the moment it
   })
   t.picks([("a.txt", b"hi"), ("b.txt", b"yo")])
   t.draw()
+  // (its answer not there till its event: the fake's pickers answer as they are asked otherwise)
+  t.picks_by_hand()
   ask.val = pick(Files)
-  // (its answer not there till its event: the fake's pickers answer by the frame otherwise)
-  t.fake.pick_asks[0] = { kind: Files, frame: 2147483647, taken: false }
   t.draw()
   assert_true(t.find("picking") is Some(_))
   assert_false(t.fake.wants || g().wants_frame)
   // the system answers: its event, between frames
-  t.fake.pick_asks[0] = { kind: Files, frame: -1, taken: false }
+  t.fake.pick_asks[0].said = true
   on_outside(outside_pick, 1, 1)
   // told: the build that read it is to be built again, a frame asked for it
   assert_true(t.fake.wants)

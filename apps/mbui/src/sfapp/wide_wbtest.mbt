@@ -1829,6 +1829,43 @@ test "wide: 文件 from the computer held over the folder say where they go; let
 }
 
 ///|
+/// How long the host takes to read files let go on the window (any while).
+let files_reading : Double = 300.0
+
+///|
+test "wide: 文件 from the computer let go on the folder, their reading done a while after: a folder of them made and filled, each file up" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  let (x, y) = t.find("合同草稿.pdf").unwrap()
+  let at = (x, y + 120.0)
+  t.hold_files(Some(at))
+  t.frame()
+  t.frame()
+  // (the host reads them a while, as a device's does: what they hold told when the test says)
+  t.picks_by_hand()
+  t.drop_files(at.0, at.1, [
+    ("新的/", Bytes::new(0)),
+    ("新的/记录.txt", @utf8.encode("一行字\n")),
+    ("清单.txt", @utf8.encode("另一行\n")),
+  ])
+  t.frame()
+  t.frame()
+  t.frame()
+  assert_eq(named(calls, "drive.mkdir").length(), 0)
+  t.run_for(files_reading)
+  // read: the host says so
+  t.pick_answer(t.pick_asks().length())
+  t.frame()
+  t.frame()
+  t.frame()
+  let made = named(calls, "drive.mkdir")
+  assert_eq(made.length(), 1, msg="taken once they were read")
+  assert_eq(text(Some(made[0].params), "path"), "新的")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("清单.txt") is Some(_), msg="up")
+}
+
+///|
 test "wide: 文件's columns as Finder's: an edge dragged makes its column wider (that one), with ⌥ every one (kept: prefs.set driveViews.column); pressed twice as wide as its names" {
   let calls : Array[Made] = []
   let t = files_dragging(calls, view="columns")

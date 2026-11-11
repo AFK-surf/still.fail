@@ -12,7 +12,8 @@
 //
 // Under a Tester the host is the test's: a call waits (the app not at rest, Tester::rest_why says which) until the
 // test answers it (Tester::answer_native, refuse_native), or a name's calls are answered as they are asked
-// (Tester::native_answers), each from the frame after.
+// (Tester::native_answers), each told at that moment as a host's event tells it (FakeHost::due: after the event that
+// asked or answered, before the clock moves on or an input comes), at any rate of frames.
 
 ///|
 /// A native call asked (`native_call`): its answer once the host has given it (`got`).
@@ -26,11 +27,12 @@ pub struct NativeCall {
 }
 
 ///|
-/// A Tester's call: its name and params, and its answer with the frame it was given in.
+/// A Tester's call: its name and params, its answer once given, and whether its host's event told it (fake_native_due).
 priv struct FakeNative {
   name : String
   params : Json
-  mut answer : (Result[Json, String], Int)?
+  mut answer : Result[Json, String]?
+  mut said : Bool
 }
 
 ///|
@@ -134,16 +136,27 @@ fn native_of_line(line : String) -> (String, Result[Json, String])? {
 }
 
 ///|
-/// `name`'s call asked first and not answered yet answered `r` (else its next call): taken from the next frame.
+/// `name`'s call asked first and not answered yet answered `r` (else its next call, as it is asked): told now.
 fn fake_native_give(f : FakeHost, name : String, r : Result[Json, String]) -> Unit {
-  for a in f.dev.natives {
+  for i, a in f.dev.natives {
     if a.name == name && a.answer is None {
-      a.answer = Some((r, g().frame_no))
-      f.wants = true
+      a.answer = Some(r)
+      fake_native_due(f, i + 1)
       return
     }
   }
   f.dev.native_held.push((name, r))
+}
+
+///|
+/// Call `id`'s answer, given now, told by its host's event at this moment (FakeHost::due: after the event under way,
+/// before the clock moves on), as a device's host tells it as it comes (MB_OUTSIDE_NATIVE).
+fn fake_native_due(f : FakeHost, id : Int) -> Unit {
+  f.due(f.time, "a native call answered", fn() {
+    guard f.dev.natives.get(id - 1) is Some(a) && !a.said && a.answer is Some(r) else { return }
+    a.said = true
+    on_outside(outside_native, id, if r is Ok(_) { 1 } else { -1 })
+  })
 }
 
 ///|
@@ -165,14 +178,14 @@ pub fn Tester::native_asked(self : Tester) -> Array[(String, Json)] {
 }
 
 ///|
-/// The native call `id` (Tester::native_calls) answered `json`, now: taken from the next frame. Nothing if it is
-/// answered already.
+/// The native call `id` (Tester::native_calls) answered `json`, now: told at this moment, as a host's event (after
+/// what is going on, before the clock moves on or an input comes). Nothing if it is answered already.
 pub fn Tester::answer_native(self : Tester, id : Int, json : Json) -> Unit {
   fake_native_answer(self.fake, id, Ok(json))
 }
 
 ///|
-/// The native call `id` refused, `why`, now: taken from the next frame.
+/// The native call `id` refused, `why`, now: told at this moment, as answer_native's.
 pub fn Tester::refuse_native(self : Tester, id : Int, why : String) -> Unit {
   fake_native_answer(self.fake, id, Err(why))
 }
@@ -182,13 +195,13 @@ fn fake_native_answer(f : FakeHost, id : Int, r : Result[Json, String]) -> Unit 
   guard id >= 1 && id <= f.dev.natives.length() else { return }
   let a = f.dev.natives[id - 1]
   guard a.answer is None else { return }
-  a.answer = Some((r, g().frame_no))
-  f.wants = true
+  a.answer = Some(r)
+  fake_native_due(f, id)
 }
 
 ///|
-/// `name`'s calls answered by `answer` (given the call's params) as they are asked, each from the frame after: the
-/// test's host, for calls whose answer is not what the test is about.
+/// `name`'s calls answered by `answer` (given the call's params) as they are asked, each told at that moment (after
+/// the event that asked): the test's host, for calls whose answer is not what the test is about.
 pub fn Tester::native_answers(self : Tester, name : String, answer : (Json) -> Json) -> Unit {
   self.fake.dev.native_auto[name] = fn(p) { Ok(answer(p)) }
 }

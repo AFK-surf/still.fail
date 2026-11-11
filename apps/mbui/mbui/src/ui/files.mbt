@@ -82,13 +82,30 @@ pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
 }
 
 ///|
-/// What the system's pickers give from now on, whatever is asked (as MBUI_PICK_FILES does a host's): `files` (their
-/// names and bytes); none: the person calls the picker off.
+/// What the system's pickers give from now on, whatever is asked (as MBUI_PICK_FILES does a host's), each ask answered
+/// at its moment, told as a host's event (after the event that asked, before the clock moves on): `files` (their names
+/// and bytes); none: the person calls the picker off.
 pub fn Tester::picks(self : Tester, files : Array[(String, Bytes)]) -> Unit {
   self.fake.picks.clear()
   for f in files {
     self.fake.picks.push({ name: f.0, bytes: f.1, held: 0, size: f.1.length().to_double(), src: "" })
   }
+}
+
+///|
+/// The system's pickers from now on answered as the test says (Tester::pick_answer), as a person takes their while,
+/// not at each ask.
+pub fn Tester::picks_by_hand(self : Tester) -> Unit {
+  self.fake.picks_by_hand = true
+}
+
+///|
+/// The person answers ask `n` (from 1, in the order asked: Tester::pick_asks) now, with what the pickers give
+/// (Tester::picks): told at this moment, as a host's event (after what is going on, before the clock moves on or an
+/// input comes).
+pub fn Tester::pick_answer(self : Tester, n : Int) -> Unit {
+  let f = self.fake
+  f.due(f.time, "a pick answered", fn() { fake_pick_said(f, n) })
 }
 
 ///|
