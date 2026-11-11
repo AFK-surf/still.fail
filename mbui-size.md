@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4a3fdb277](https://github.com/AFK-surf/still.fail/commit/4a3fdb277585bbe3a57332422c2cdb7d29bd555d) native.ts: a release's assets that could not be li | 1.81 | 2.43 | 10.11 | 28.84 | 35.67 | 25.67 | 47.52 | 94.54 | 174.36 |
 | [3d78e06ad](https://github.com/AFK-surf/still.fail/commit/3d78e06ad6093c58df2818805b24c2e07351614e) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.54 | 179.33 |
 | [89ddb06c6](https://github.com/AFK-surf/still.fail/commit/89ddb06c630614459cb5acc1a81e7e6f8c7178aa) sf: the composer's least room is worked out of its | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.41 | 162.14 |
 | [a5accdbad](https://github.com/AFK-surf/still.fail/commit/a5accdbad8ac91788c618d28ebdd6e0fde00e90b) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.27 | 149.89 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [b0d44ea06](https://github.com/AFK-surf/still.fail/commit/b0d44ea06d3272db1fd2f1968efd9d00633d9e24) fix(sfdesk): avoid flooding the core while clearin | 1.78 | 2.38 | 9.92 | 28.54 | 34.74 | 25.49 | 46.93 | 94 | 143.22 |
 | [7e073ec98](https://github.com/AFK-surf/still.fail/commit/7e073ec9853b3f7dc4f357f909696b840c28d459) mbui: a box gone_empty takes no room holding nothi | 1.78 | 2.38 | 9.92 | 28.54 | 34.74 | 25.49 | 46.91 | 94.13 | 179.72 |
 | [39bcd19a7](https://github.com/AFK-surf/still.fail/commit/39bcd19a7d08bed6546e1d1419d3d3e203850874) mbui: a way set off again turns back while it is s | 1.78 | 2.38 | 9.91 | 28.54 | 34.72 | 25.48 | 46.89 | 94.52 | 169.68 |
-| [40f35d3be](https://github.com/AFK-surf/still.fail/commit/40f35d3be2e7c649b0f7d2ffadc3961fb30a3dfd) mbui: a scripted run's img: finds a picture or sha | 1.78 | 2.38 | 9.91 | 28.54 | 34.72 | 25.48 | 46.89 | 94.32 | 137.98 |
