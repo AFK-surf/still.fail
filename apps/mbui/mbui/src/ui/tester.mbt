@@ -236,6 +236,8 @@ fn leaked_state() -> Array[String] {
   check("image_cache", image_cache.length())
   check("image_data", image_data.length())
   check("image_vector_drawers", image_vector_drawers.length())
+  // (a GIF that moves, its decoder with it: GifCycle)
+  check("moving_images", moving_images.length())
   check("code_fields", code_fields.length() + code_clears.length())
   check("open_views", open_views.length() + stacked_views.length())
   check("streams", open_streams.length() + stream_nodes.length())
