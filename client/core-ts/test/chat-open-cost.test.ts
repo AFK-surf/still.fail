@@ -132,3 +132,28 @@ test("a_chat_shown_is_not_made_again_as_a_switch_of_workspace_commits_onto_it", 
   assert.notEqual(JSON.stringify(v(values, 1)), shown);
   core.close();
 });
+
+test("a_chat_let_go_of_keeping_it_and_asked_again_is_answered_by_what_changed_not_hashed_again", async () => {
+  // Back to a workspace within seconds, the app asks its chat again with the version of what it kept (`have`, as it
+  // let it go with `keep`: sfbase's topic_kept). The core hashed the chat whole to answer (digest.ts `version`, 4-5 ms
+  // in Hermes for a chat of 46 KB, and as much again as it was let go of), though it remembered what the client holds:
+  // what changed from that is worked out by its items, and none changed is the same version.
+  const { host, core } = await started();
+  const client = core.connect();
+  const values = new Map();
+  const chat = parseTopic({ topic: "chat", station: "ws/st", session: "k1", compact: true })!;
+  subscribe(core, client, 1, chat);
+  await host.settle();
+  apply(host, values);
+  const before = { ...work };
+  core.receive(client, { kind: "unsubscribe", id: 1, unsubscribe: true, keep: true });
+  await host.settle();
+  const said = host.takeEmitted().map(([, m]) => m as { id?: number; v?: string }).find((m) => m.id === 1 && typeof m.v === "string");
+  assert.ok(said, "its version said as it is let go of");
+  core.receive(client, { kind: "subscribe", id: 2, subscribe: chat, keyed: true, have: said!.v! });
+  await host.settle();
+  const again = host.takeEmitted().map(([, m]) => m as Record<string, unknown>).filter((m) => m.id === 2);
+  assert.deepEqual(again[0], { id: 2, same: true });
+  assert.equal(workSince(before).versions, 1, "hashed once, as it was let go of");
+  core.close();
+});
