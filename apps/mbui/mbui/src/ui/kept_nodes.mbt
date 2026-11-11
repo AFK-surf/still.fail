@@ -27,6 +27,11 @@ priv struct RowNodes {
   mut watch : @signals.Watch
   /// A keyed row's retained drawing, when its contents can be replayed safely.
   mut drawing : RowDrawing?
+  /// what its list did to it as it laid it (Ctx::place_list's `lay`): how far down what comes and goes in it was put
+  /// from where its build laid it, how tall it was cut, whether it was cut; what it drew kept was drawn so
+  mut laid_by : Double
+  mut laid_h : Double
+  mut laid_cut : Bool
   /// The key supplied by ListRows at the position this row was built at.
   mut row_key : String?
   /// the pass of a frame's build it was last laid in (NodesRun's `pass`)
@@ -609,6 +614,9 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     item,
     watch,
     drawing: None,
+    laid_by: 0.0,
+    laid_h: -1.0,
+    laid_cut: false,
     row_key: None,
     laid_pass,
     store: [],
