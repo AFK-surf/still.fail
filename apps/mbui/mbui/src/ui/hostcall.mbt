@@ -232,6 +232,9 @@ struct FakeHost {
   /// a list's rows set on its pixels (rows_on_pixels): every platform's host does; a Tester's only where its test says
   /// so (Tester::set_rows_on_pixels), its frames' layout else as it always was
   mut rows_on_pixels : Bool
+  /// it keeps groups of instances (groups_here): every platform's host does, a Tester's too unless its test says it
+  /// keeps none (Tester::set_groups), as the web's host, a list drawn out flat in each frame
+  mut groups : Bool
   /// the window's tree keeps where in the source each node was made (keeps_sources): a Tester's does, unless what it
   /// runs is measured as a device runs it (Tester::new's `keeps_sources`)
   keeps_sources : Bool
