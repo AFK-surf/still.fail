@@ -286,7 +286,7 @@ let kbd_h : Double = 336.0
 /// On the frames' clock to where the sheet rests, as it says (@kit.sheet_rest: its springs and its scrim's fade):
 /// risen from below, a row is tapped where it is.
 fn run_to_sheet_rest(t : @ui.Tester) -> Unit raise {
-  let end = @kit.sheet_rest("sf-present")
+  let end = @sf.presented_rest()
   if end < 0.0 || end > 1.0e300 {
     fail("the sheet does not move (its rest: \{end})")
   }

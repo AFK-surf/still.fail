@@ -31,7 +31,7 @@ fn hold_quote(t : @ui.Tester, x : Double, y : Double) -> Unit {
   t.run_for(@ui.long_press_ms + 20.0)
   t.release(x, y)
   t.draw()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("引用")
   t.frame()
   t.frame()

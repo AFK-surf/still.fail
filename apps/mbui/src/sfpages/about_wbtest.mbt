@@ -170,7 +170,7 @@ test "关于's 检查更新 pressed: the update dialog over the page asks still.
     })
     t.tap_text("检查更新")
     t.draw()
-    t.run_for(if platform == 2 { @kit.sheet_rest("sf-present") - t.time() } else { @kit.dialog_ms })
+    t.run_for(if platform == 2 { @sf.presented_rest() - t.time() } else { @kit.dialog_ms })
     let at = "\{w} platform \{platform}"
     assert_eq(asked.length(), 1, msg=at)
     assert_true(@sfbase.update_dialog_open(), msg=at)

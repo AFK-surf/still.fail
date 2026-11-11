@@ -160,6 +160,6 @@ fn page_add(t : @ui.Tester) -> @ui.SemNode? {
 /// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
 /// a dialog (with a pointer) past its coming.
 fn presented_in(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
 }

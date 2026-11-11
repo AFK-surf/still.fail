@@ -168,7 +168,7 @@ fn Ctx::sizes_steady_made(self : Ctx, i : Int) -> String {
 ///|
 /// A measure's last frames (rows_steady_fault's samples, the display's frames `period` apart; it last turned back at
 /// `turned`): the frame before the last a step or a spike (off both frames round it the same way), or a dead stop (at
-/// speed, then at rest at once); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
+/// speed, then at rest at once and the frame after); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
 /// rest, going on as fast or slowing) is none: an eased way out sets out so (sf/motion.mbt). In a list's row whose way
 /// set out at `set_out` between them, as rows_steady_fault has a row's place: the speed it takes up then, from where it
 /// was, is the way's (a row joining the rows' way under way goes on its share of it as they do: list_size.mbt).
@@ -197,9 +197,16 @@ fn sizes_steady_fault(
     let on = v1 * v2 > 0.0 && v2.abs() >= 0.25 * v1.abs() && v2.abs() <= v1.abs()
     let sets_out = on && (v0.abs() < 0.5 || (rest_before && v0 * v1 > 0.0 && v0.abs() < v1.abs()))
     let off = (v1 - (v0 + v2) / 2.0).abs()
-    if v0.abs() > least && v1.abs() > least && v0 * v1 > 0.0 && v2.abs() < 0.2 * v1.abs() &&
-      v1.abs() > 0.5 * v0.abs() {
-      return (Some("stopped dead from \{v1} a frame (\{v0} before) at \{seen[3].1} seen=\{all}"), turned)
+    // (a dead stop is at rest the frame after as well: one turned back through rest between two frames goes on the
+    // other way then, as fast as it slowed or faster)
+    if all.length() > 4 && all[0].1 < seen[0].1 {
+      let u = fn(a : Int) { (all[a + 1].2 - all[a].2) / (all[a + 1].1 - all[a].1) * period }
+      let (u0, u1, u2, u3) = (u(0), u(1), u(2), u(3))
+      let turns = u3 * u1 < 0.0 && u3.abs() >= 0.2 * u1.abs()
+      if u0.abs() > least && u1.abs() > least && u0 * u1 > 0.0 && u2.abs() < 0.2 * u1.abs() &&
+        u1.abs() > 0.5 * u0.abs() && !turns {
+        return (Some("stopped dead from \{u1} a frame (\{u0} before) at \{all[3].1} seen=\{all}"), turned)
+      }
     }
     // (at rest, or all but, then setting out: none)
     let resting = v0.abs() < least && v1.abs() < least
@@ -250,6 +257,11 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     let al = Array::make(k, 1.0)
     let c_top = Array::make(k, -1.0e9)
     let c_bot = Array::make(k, 1.0e9)
+    // (and across: how far its looks put it off where it is laid out, and what clips it there, so what is cut off to a
+    // side, a page slid off out of its column, shows as little as what is cut off above or below)
+    let xb = Array::make(k, 0.0)
+    let c_left = Array::make(k, -1.0e9)
+    let c_right = Array::make(k, 1.0e9)
     let row_at = Array::make(k, 0.0)
     let in_row = Array::make(k, false)
     // (and when the rows' way of the list it is in last set out: list_size.mbt's RowCauses, -1 none)
@@ -274,14 +286,15 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       let n = self.nodes[i]
       let p = n.parent
       let (pa, pb, palpha) = if p >= 0 && p < k { (ya[p], yb[p], al[p]) } else { (1.0, 0.0, 1.0) }
-      let (la, lb, lalpha) = match self.drawn_entry(i) {
+      let (la, lb, lalpha, ldx) = match self.drawn_entry(i) {
         Some(e) => {
           let l = e.look_now()
           let oy = n.y + l.oy * n.fh
-          (l.sy, oy * (1.0 - l.sy) + l.dy, l.alpha)
+          (l.sy, oy * (1.0 - l.sy) + l.dy, l.alpha, l.dx)
         }
-        None => (1.0, 0.0, 1.0)
+        None => (1.0, 0.0, 1.0, 0.0)
       }
+      xb[i] = (if p >= 0 && p < k { xb[p] } else { 0.0 }) + ldx
       ya[i] = pa * la
       yb[i] = pa * lb + pb
       al[i] = palpha * n.opacity * lalpha
@@ -289,10 +302,15 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         let pn = self.nodes[p]
         c_top[i] = c_top[p]
         c_bot[i] = c_bot[p]
+        c_left[i] = c_left[p]
+        c_right[i] = c_right[p]
         if pn.clip {
           let top = ya[p] * pn.y + yb[p]
           c_top[i] = dmax(c_top[i], top)
           c_bot[i] = dmin(c_bot[i], top + ya[p] * pn.fh)
+          let left = pn.x + xb[p]
+          c_left[i] = dmax(c_left[i], left)
+          c_right[i] = dmin(c_right[i], left + pn.fw)
         }
         if pn.tree_rows {
           // (a row of a page's list of the window's tree: its place the list's (rows_steady.mbt, Scroll::grew_above),
@@ -337,14 +355,29 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         Some({ ground: Some((_, y, _, h, _)), .. }) => (y, y + h)
         _ => (gy, gy + gh)
       }
-      let shows = al[i] > 0.05 && n.fw > 0.0 && dmin(bot0, c_bot[i]) > dmax(top0, c_top[i])
+      let left0 = n.x + xb[i]
+      // (none of an old view the window's tree places nowhere now: laid out nowhere, its page off to a side)
+      let placed = match n.island {
+        Some(id) => old_placed.iter().any(fn(p) { p.0 == id })
+        None => true
+      }
+      let shows = placed &&
+        al[i] > 0.05 &&
+        n.fw > 0.0 &&
+        dmin(bot0, c_bot[i]) > dmax(top0, c_top[i]) &&
+        dmin(left0 + n.fw, c_right[i]) > dmax(left0, c_left[i]) &&
+        // (nor what is off the window to a side: a page slid off out of its sheet, an old view's held in it)
+        left0 + n.fw > 0.0 &&
+        left0 < self.width
       let row_top = row_at[i]
       let in_row = in_row[i]
       // (words: where they stand; how tall is how many lines they take, no motion's)
       let words = n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor
       let measures = if words { [(false, top0 - row_top)] } else { [(true, bot0 - top0), (false, top0 - row_top)] }
       for m in measures {
-        let key = (n.ident, n.kind, n.bg, m.0)
+        // (a place in a row and one in the window are two measures, never one stepping from the other: what holds it
+        // starting or stopping to scroll, as what it holds comes to be taller than it or not, moves nothing)
+        let key = (n.ident, if !m.0 && in_row { -1 - n.kind } else { n.kind }, n.bg, m.0)
         here.add(key)
         let seen = match sizes_steady.seen.get(key) {
           Some(s) => s

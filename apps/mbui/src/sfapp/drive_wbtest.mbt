@@ -39,7 +39,8 @@ fn bar_rested(t : @ui.Tester) -> Unit {
 /// Frames on to where sheet `key` said it is at rest (its springs and its scrim's fade: @kit.sheet_rest).
 fn sheet_rested(t : @ui.Tester, key : String) -> Unit {
   t.draw()
-  let e = @kit.sheet_rest(key)
+  // (the presenters' own, whichever kind draws it: presented_rest)
+  let e = if key == "sf-present" { @sf.presented_rest() } else { @kit.sheet_rest(key) }
   if e > t.time() && e < 1.0e300 {
     t.run_for(e - t.time())
   }

@@ -335,7 +335,7 @@ test "a sized page on its canvas: the ground dragged moves it, 适应 (its sizes
   // 适应, among the sizes (its ⋯'s): fitted again, the sizes gone
   t.click(Button, label="更多操作")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("页面尺寸")
   t.frame()
   presented_rested(t)

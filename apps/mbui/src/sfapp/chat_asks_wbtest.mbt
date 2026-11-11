@@ -32,7 +32,7 @@ test "an agent's context: its tile opens what can be done; clearing it asked fir
   assert_true(@sf.presenting(), msg="what can be done to it")
   t.tap_text("清空上下文")
   // (to where the presenters' sheet rests: the panel's gone down, the question's up in its place)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   // asked first: nothing cleared yet, its action the one 清空上下文 there is
   assert_true(t.find("清空此 agent 的上下文？") is Some(_), msg="the question")
   assert_eq(t.locate("清空上下文").length(), 1)

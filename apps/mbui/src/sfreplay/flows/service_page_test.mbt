@@ -21,7 +21,7 @@ test "47-service-page" {
     f.see_n(2, "网页开好了 201409")
     // the chat's jobs: its sheet raised
     f.tap("icon:web")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest())
     f.see("服务")
     // the service: its page pushed, the site view loading it
     f.tap("在线")
@@ -42,7 +42,7 @@ test "47-service-page" {
     f.gone("/b.html")
     // its size from the bar's ⋯ (a phone's, its one row under the page), in the presenters' sheet
     f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest())
     f.tap("页面尺寸")
     f.run_to(@sf.presented_rest())
     f.tap("手机")

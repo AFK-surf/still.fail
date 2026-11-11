@@ -192,3 +192,14 @@ test "sizes steady in what a node of the tree's scrolls: what it holds measured 
   assert_eq((rest, squeezed), ([], []))
   assert_true(jolted.length() > 0, msg="a row gone at once half way: no jolt found")
 }
+
+///|
+test "sizes steady: at speed then at rest, and so the frame after, a dead stop; turned back through rest between two frames, none" {
+  let p = 1000.0 / 60.0
+  let at = fn(ys : Array[Double]) { ys.mapi(fn(i, y) { (i.to_double() * p, i.to_double() * p, y) }) }
+  // (a sheet closed as it grows: up 29 a frame, then down, its turn between two frames)
+  let turn = at([0.0, -30.0, -59.0, -56.2, -11.4])
+  assert_true(sizes_steady_fault(turn, p, turned=-1.0e9).0 is None)
+  let stop = at([0.0, -30.0, -59.0, -59.5, -59.5])
+  assert_true(sizes_steady_fault(stop, p, turned=-1.0e9).0 is Some(_))
+}

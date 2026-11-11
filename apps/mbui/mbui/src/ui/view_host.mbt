@@ -55,6 +55,9 @@ priv struct OldIsland {
   /// old frame last laid it out, told the signal (None before it first is)
   fits : (Double, @signals.Signal[Double?])?
   mut held_box : Int
+  /// told, a `natural` one's, as what it holds comes to another height after it was first laid out, as tall as it was
+  /// before (old's `reshaped`)
+  reshaped : ((Double) -> Unit)?
 }
 
 ///|
@@ -3050,6 +3053,9 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// in itself): its node held shorter than what it holds asks (its holder short of room), nothing of it cut off; what it
 /// asks never the height it was given. Not with `fits` (not yet: one that fits laid out as a `natural` one is,
 /// cut where its node is shorter).
+/// `reshaped`, a `natural` one's: told, as how tall it was, as what it holds comes to another height once it was laid
+/// out, at that cause (laid out again in the same frame after it: what it said there laid out with it), for what holds
+/// it to go from that height to the new one as it holds no motion of its own (a sheet's height).
 /// `unlaid`, a `natural` one's: how tall it is taken to be till first laid out (in a list: as tall as a screen, the rows
 /// after it made only as it is known to leave room for them).
 #callsite(autofill(loc))
@@ -3061,6 +3067,7 @@ pub fn old(
   gives? : Bool = false,
   fits? : (Double, @signals.Signal[Double?]),
   unlaid? : () -> Double,
+  reshaped? : (Double) -> Unit,
   loc~ : SourceLoc,
 ) -> @view.View {
   v.hosted(make=fn(n) {
@@ -3149,6 +3156,7 @@ pub fn old(
       went: @signals.signal(None, same=fn(a, b) { a == b }),
       fits: if natural { fits } else { None },
       held_box: -1,
+      reshaped: if natural { reshaped } else { None },
     })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
@@ -5094,7 +5102,12 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         // given and laid out in)
         let h = if o.gives { c.asked_height(o.held_box) } else { c.nodes[o.held_box].fh }
         if s.untracked() != Some(h) {
+          let was = s.untracked()
           s.set(Some(h))
+          match (was, o.reshaped) {
+            (Some(w), Some(f)) => f(w)
+            _ => ()
+          }
           c.read_changed("an old view's height, what it holds laid out")
         }
         match o.fits {

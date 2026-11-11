@@ -20,6 +20,12 @@ priv struct ThingsAt {
 let things_at : Map[String, ThingsAt] = {}
 
 ///|
+/// Told as a page of things' old body has another kind chosen (ThingsAt's `kind`): what it built read again, as an old
+/// view in a node of the window's tree is built again only as what it read changes.
+// kept across runs: a counter (only what reads it is told)
+let things_kind_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 fn things_reset() -> Unit {
   things_at.clear()
 }
@@ -143,6 +149,7 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
     ThingsShown => ()
   }
   let whole = flag(v, "whole")
+  things_kind_told.get() |> ignore
   let kind = things_kind_of(at.kind, has)
   let shown = items(v, kind)
   let rows : Array[() -> Unit] = []
@@ -161,7 +168,10 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
         }
         let chosen = @sf.segmented(c, "things/kinds/" + key, labels, has.search(kind).unwrap_or(0), item_w~)
         match has.get(chosen) {
-          Some(k) if k != kind => at.kind = k
+          Some(k) if k != kind => {
+            at.kind = k
+            things_kind_told.set(things_kind_told.untracked() + 1)
+          }
           _ => ()
         }
       } else {

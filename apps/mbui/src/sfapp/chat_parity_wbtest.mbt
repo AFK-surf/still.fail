@@ -367,7 +367,7 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
   })
   t.tap_text("林小满")
   // its menu, the presenters' sheet with a finger, up
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("这是我") is Some(_), msg="its menu")
   t.tap_text("这是我")
   let sent = named(calls, "slack.identity")

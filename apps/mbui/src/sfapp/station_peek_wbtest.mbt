@@ -35,7 +35,7 @@ fn peek_from_agent(calls : Array[Made]) -> @ui.Tester raise {
   let t = decide_core(calls, "chat-agent")
   assert_true(t.find("历史") is Some(_), msg="the agent's card")
   t.tap_text("Station")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   // (the agent's own sheet sinking as far as it is tall: any way is over by then)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("历史") is None, msg="the agent's card went down")
@@ -78,7 +78,7 @@ test "an agent's station's card: 文件 opens its files" {
   let calls : Array[Made] = []
   let t = peek_from_agent(calls)
   t.tap_text("文件")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("查看所有文件")
   assert_true(!@sf.presenting())
   match app.nav.top() {

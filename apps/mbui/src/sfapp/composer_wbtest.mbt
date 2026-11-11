@@ -723,7 +723,7 @@ fn plus_opened() -> @ui.Tester raise {
   assert_eq(app.nav.depth(), 2)
   t.click(Button, label=@sf.t("web-main.composer.attach"))
   assert_true(@sf.presenting())
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t
 }
 
@@ -735,7 +735,7 @@ test "back with ＋'s sheet up puts the sheet away, the chat stays; back again l
   t.back()
   assert_true(!@sf.presenting())
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("整理发布清单") is Some(_))
   t.back()
   t.run_for(@ui.nav_rest() - t.time())
@@ -752,7 +752,7 @@ test "the system's back gesture with ＋'s sheet up puts the sheet away, the cha
   t.back_gesture(200.0, true)
   assert_true(!@sf.presenting())
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("整理发布清单") is Some(_))
 }
 

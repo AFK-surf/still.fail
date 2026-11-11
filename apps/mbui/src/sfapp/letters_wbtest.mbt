@@ -30,7 +30,7 @@ test "letters are not in the chat: from its sheet, the chats written with, one o
   assert_true(t.find("补充一点") is None, msg="not in the chat")
   t.tap_text("agent 往来")
   // (the chat's sheet goes, theirs comes up, to where it rests)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(asked.length() > 0)
   let of_chat : Map[String, Json] = { "station": Json::string("ws1/st1"), "thread": Json::number(7.0) }
   assert_eq(asked[0], of_chat)

@@ -71,7 +71,7 @@ fn beside_of(from : Anchor) -> Beside {
 fn open_it(t : @ui.Tester) -> Unit {
   t.tap_text("打开")
   if presented_how == [AsSheet] {
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(presented_rest() - t.time())
   } else {
     t.run_for(@kit.presence_in_ms)
   }
@@ -548,7 +548,7 @@ test "one over another: a confirm from a menu's item comes when the menu has gon
   })
   open_it(t)
   t.tap_text("删除它")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   assert_eq(presented_how, [AsSheet, AsSheet])
   t.back()
   assert_eq(presented_how, [AsSheet])
@@ -629,7 +629,7 @@ test "one over another with a finger at Small: one scrim however many sheets, th
   assert_eq(scrims_drawn(t, phone), 1)
   let (_, y0) = t.drawn_of("面板内容").unwrap()
   t.tap_text("删掉")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   t.run_for(@ui.move_most_ms)
   assert_eq(presented_how, [AsSheet, AsSheet])
   // (no darker for the second: the one under dims, the one over it not)
@@ -650,7 +650,7 @@ test "one over another with a finger at Small: one scrim however many sheets, th
   )
   // (the one over it gone: the one under forward again, its scrim as it was all along)
   t.back()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   t.run_for(@ui.move_most_ms)
   assert_eq(presented_how, [AsSheet])
   assert_eq(scrims_drawn(t, phone), 1)
@@ -865,19 +865,21 @@ test "a panel a panel's button opens as it closes, with a finger at Small: a ste
   assert_eq(presented_how, [AsSheet])
   assert_true((one_sheet(t).0 - top0).abs() < 0.5, msg="\{one_sheet(t)} \{top0}")
   assert_eq(scrim_alpha(t, phone), dim)
-  assert_true(t.find("详情内容") is Some(_) && t.find("信息内容") is None)
+  // (a page of the same sheet: sliding in over the first, which slides off)
+  assert_true(t.find("详情内容") is Some(_))
   for _ in 0..<way_frames {
     t.run_for(@ui.frame_period_default)
     one_sheet(t) |> ignore
     assert_eq(scrim_alpha(t, phone), dim)
   }
+  assert_true(t.find("信息内容") is None)
   let (top1, _) = one_sheet(t)
   assert_true(top1 > top0 + 10.0, msg="\{top1} \{top0}")
   assert_eq(said, [])
   // back: the first again where this one stood, on to as tall as it was; this one let go of, the first not
   t.back()
   assert_true(presenting())
-  assert_true(t.find("信息内容") is Some(_) && t.find("详情内容") is None)
+  assert_true(t.find("信息内容") is Some(_))
   assert_true((one_sheet(t).0 - top1).abs() < 0.5, msg="\{one_sheet(t)} \{top1}")
   assert_eq(scrim_alpha(t, phone), dim)
   for _ in 0..<way_frames {

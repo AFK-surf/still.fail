@@ -482,10 +482,11 @@
     },
     "old-island": {
       "src/sf/menu_node.mbt": 1,
-      "src/sf/panel_centred_node.mbt": 6,
+      "src/sf/panel_centred_node.mbt": 5,
       "src/sf/panel_node.mbt": 4,
       "src/sf/pick_node.mbt": 1,
       "src/sf/presented_node.mbt": 1,
+      "src/sf/sheet_node.mbt": 1,
       "src/sf/stage_node.mbt": 2,
       "src/sfapp/app.mbt": 3,
       "src/sfapp/entry_tree.mbt": 1,

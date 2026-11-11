@@ -53,6 +53,24 @@ fn panel_centred_node(
         { alpha: 1.0, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: look().words }
       })
     }
+    // (its close button in its top corner, an old view in `o` (`let_go`: its field let go of first, field_let_go))
+    let close_old = fn(o : @view.View, let_go : Bool) {
+      @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
+        let held = c.box(style=dialog_close_row, fn() {
+          c.box(style=dialog_close_corner(), fn() {
+            icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
+              if let_go {
+                field_let_go(keyed)
+              }
+              cancel()
+            }) |> ignore
+          })
+          |> ignore
+        })
+        words_look(c, held)
+      })
+      |> ignore
+    }
     // (what it holds and its head on the line of its words, a row's padding in: panel_centred's)
     let words_in = panel_words - dialog_pad
     // (what it holds and its foot nodes, panel_nodes')
@@ -140,20 +158,8 @@ fn panel_centred_node(
             |> ignore
             return
           }
-          @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
-            let held = c.box(style=dialog_close_row, fn() {
-              c.box(style=dialog_close_corner(), fn() {
-                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
-                  // (its field let go of first, as the old frame has it: field_let_go)
-                  field_let_go(keyed)
-                  cancel()
-                }) |> ignore
-              })
-              |> ignore
-            })
-            words_look(c, held)
-          })
-          |> ignore
+          // (its field let go of first, as the old frame has it: field_let_go)
+          close_old(o, true)
         })
       }
       if x.live is None {
@@ -486,18 +492,7 @@ fn panel_centred_node(
       if steps is Some(_) {
         d.box(fn(o) {
           o.over(Is(true)).width(By(fn() { Some(w()) }))|> ignore
-          @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
-            let held = c.box(style=dialog_close_row, fn() {
-              c.box(style=dialog_close_corner(), fn() {
-                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
-                  cancel()
-                }) |> ignore
-              })
-              |> ignore
-            })
-            words_look(c, held)
-          })
-          |> ignore
+          close_old(o, false)
         })
         |> ignore
       }

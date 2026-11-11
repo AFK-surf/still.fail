@@ -346,7 +346,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   // (the chat's menu goes, the relay's sheet comes up, to where it rests: the presenters')
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   // (with touch nothing takes the keyboard's focus as it opens: the keyboard would come up over the places)
   assert_true(!t.ctx().field_focused(), msg="a field focused as the relay opened on a phone")
   assert_true(t.find("接力到频道") is Some(_))
@@ -380,3 +380,128 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   assert_true(t.find("开头附一句（可选）") is None)
 }
 
+
+///|
+/// Where words `s` are drawn across (the first drawn so), if they are.
+fn words_x(t : @ui.Tester, s : String) -> Double? {
+  t.words().iter().find_first(fn(w) { w.0 == s }).map(fn(w) { w.1 })
+}
+
+///|
+/// From the sheet `t` shows, `row` tapped: the next a page of the same sheet
+/// sliding in from its end as the first slides off to its start, every frame one sheet and one scrim, the sheet's top
+/// going from where it stood straight to where the next has it; back: the first sliding back where it was, the sheet
+/// as tall as it was. `scroll`: the first scrolled so far first, as far scrolled after.
+fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> Unit raise {
+  let top0 = sheet_tops(t)
+  assert_eq(top0.length(), 1, msg="\{row}: \{top0}")
+  let in_window = fn() { t.words().filter(fn(w) { w.0.length() > 1 && w.1 >= 0.0 && w.1 < 390.0 }) }
+  let shown0 = in_window()
+  let before : Set[String] = Set::from_array(shown0.map(fn(w) { w.0 }))
+  // (in and back once at rest, to know what the next shows of its own and where)
+  t.tap_text(row)
+  t.run_for(@sf.presented_rest() - t.time())
+  let shown1 = in_window()
+  let after : Set[String] = Set::from_array(shown1.map(fn(w) { w.0 }))
+  let own = shown1.filter(fn(w) { !before.contains(w.0) })
+  assert_true(own.length() > 0, msg="\{row}: nothing of its own in \{t.words().map(fn(w) { w.0 })}")
+  let (next, next_x) = (own[0].0, own[0].1)
+  // (words of the first page alone: what it is told by as it slides)
+  let firsts = shown0.filter(fn(w) { !after.contains(w.0) })
+  assert_true(firsts.length() > 0, msg="\{row}: the first page's words all still shown")
+  let (first, x0) = (firsts[0].0, firsts[0].1)
+  let top1 = sheet_tops(t)[0]
+  assert_true(t.query(Button, label="返回") is Some(_), msg="\{row}: no back key")
+  t.back()
+  t.run_for(@sf.presented_rest() - t.time())
+  assert_true(@sf.presenting(), msg="\{row}: back closed it")
+  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{words_x(t, first)}")
+  // (scrolled, where it scrolls: as far scrolled as it comes back)
+  let y0 = t.drawn_of(first).unwrap().1
+  if scroll > 0.0 {
+    t.wheel(195.0, 600.0, scroll)
+    t.run_for(@ui.move_most_ms)
+  }
+  let y_scrolled = t.drawn_of(first).map(fn(p) { p.1 })
+  // in, frame by frame
+  t.tap_text(row)
+  let mut first_x = x0
+  let mut next_at = 10000.0
+  let mut between = false
+  let mut top = top0[0]
+  let up = top1 < top0[0]
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    let tops = sheet_tops(t)
+    assert_eq(tops.length(), 1, msg="\{row}: \{tops}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{row}")
+    // (its top one way only, from where it stood to where the next has it)
+    if up {
+      assert_true(tops[0] <= top + 0.5, msg="\{row}: \{tops[0]} after \{top}")
+    } else {
+      assert_true(tops[0] >= top - 0.5, msg="\{row}: \{tops[0]} after \{top}")
+    }
+    top = tops[0]
+    match words_x(t, first) {
+      Some(x) => {
+        assert_true(x <= first_x + 0.5, msg="\{row}: \{first} at \{x} after \{first_x}")
+        first_x = x
+      }
+      None => first_x = -10000.0
+    }
+    match words_x(t, next) {
+      Some(x) => {
+        assert_true(x <= next_at + 0.5, msg="\{row}: \{next} at \{x} after \{next_at}")
+        if x > next_x + 20.0 && x < next_x + 370.0 {
+          between = true
+        }
+        next_at = x
+      }
+      None => ()
+    }
+  }
+  assert_true(between, msg="\{row}: \{next} never seen on its way in")
+  assert_true(first_x < x0 - 300.0, msg="\{row}: \{first} not off to the start: \{first_x}")
+  assert_true((next_at - next_x).abs() < 0.5, msg="\{row}: \{next} at \{next_at}, not \{next_x}")
+  assert_true((top - top1).abs() < 0.5, msg="\{row}: top \{top}, not \{top1}")
+  // back, frame by frame: the first in from the start, where it was left
+  t.back()
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1, msg="\{row} back: \{sheet_tops(t)}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{row} back")
+  }
+  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{sheet_tops(t)} \{top0}")
+  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{words_x(t, first)}")
+  let y_back = t.drawn_of(first).map(fn(p) { p.1 })
+  assert_true(
+    match (y_back, y_scrolled) {
+      (Some(a), Some(b)) => (a - b).abs() < 0.5
+      (None, None) => true
+      _ => false
+    },
+    msg="\{row}: \{first} not as it was left: \{t.drawn_of(first)}, \{y_scrolled} (\{y0})",
+  )
+}
+
+///|
+test "小屏: the chat's own sheet on to its agent's card, what its agents wrote and what was said in it: each a page of the same sheet sliding in, the chat's sheet kept as it was left" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-letters-info")
+  t.run_for(@sf.presented_rest() - t.time())
+  for row in ["Claude · Opus 5.5", @sf.t("web-main.letters.title"), @sf.t("web-main.things.title")] {
+    assert_true(t.find(row) is Some(_), msg=row)
+    steps_in_one_sheet(t, row)
+  }
+  t.back()
+  t.run_for(@sf.presented_rest() - t.time())
+  assert_false(@sf.presenter_visible())
+}
+
+///|
+test "小屏: the chat's 任务 on to a job: a page of the same sheet sliding in, the list kept as it was left" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-jobs")
+  t.run_for(@sf.presented_rest() - t.time())
+  steps_in_one_sheet(t, "盯 CI")
+}
