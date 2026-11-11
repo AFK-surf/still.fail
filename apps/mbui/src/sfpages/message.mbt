@@ -914,8 +914,10 @@ fn notice_copy(c : @ui.Ctx, m : Message, ink : @ui.Color) -> Unit {
 }
 
 ///|
-/// Notices opened (all their words and their time), by message.
-let notices_open : Map[String, Bool] = {}
+/// Notices opened (all their words and their time), by message: what a notice's row reads as it is made, as it changes
+/// (notice_said_node's `opened`).
+// kept across runs: let go as the app begins anew (message_reset)
+let notices_open : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 /// A word at a notice's end that acts on it (InstallAction, ReportAction): " · " at 60%, then the word, underlined;
