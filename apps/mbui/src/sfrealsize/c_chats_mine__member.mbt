@@ -3,7 +3,7 @@
 ///|
 fn init {
   let asked =
-    #|{"topic":"chats","scope":"ws","mine":true,"limit":50}
+    #|{"topic":"chats","scope":"ws","mine":true}
   let messages =
     #|[[{"path":["members"],"set":13}]]
   put_changes(asked, "member", messages)

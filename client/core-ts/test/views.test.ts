@@ -714,11 +714,12 @@ test("an_agent_can_be_moved_to_the_profiles_of_its_runtime", () => {
   assert.ok(choices(ov, s, 0).some((c: J) => c.model === "m" && c.accounts.codex.length === 2));
 });
 
-test("chats_asked_with_a_limit_have_their_first_rows_and_say_how_many_more", async () => {
+test("chats_told_a_window_have_their_first_rows_and_say_how_many_more", async () => {
   // A list of 1400 chats went whole to the app as it opened, a screen of them shown (2026-11-08).
   const t = setup();
   const u = ui();
-  t.subscribe(1, { topic: "chats", scope: "ws", limit: 2 });
+  t.window({ topic: "chats", scope: "ws" }, 2);
+  t.subscribe(1, { topic: "chats", scope: "ws" });
   t.set(workspace(), oneStation());
   await t.read(u, 1);
   const now = t.host.nowMs();
@@ -732,12 +733,11 @@ test("chats_asked_with_a_limit_have_their_first_rows_and_say_how_many_more", asy
   await t.read(u, 1);
   assert.deepEqual(ids(u.value), ["4", "1"]);
   assert.equal(u.value.more, 2);
-  // all of them in it: no `more`
-  const all = ui();
-  t.subscribe(2, { topic: "chats", scope: "ws", limit: 10 });
-  await t.read(all, 2);
-  assert.deepEqual(ids(all.value), ["4", "1", "2", "3"]);
-  assert.equal(all.value.more ?? null, null);
+  // all of them in it, its window raised: no `more`
+  t.window({ topic: "chats", scope: "ws" }, 10);
+  await t.read(u, 1);
+  assert.deepEqual(ids(u.value), ["4", "1", "2", "3"]);
+  assert.equal(u.value.more ?? null, null);
 });
 
 /// Whether a value holds an object as only a row not made yet is (views.ts `unmade`): none goes out.
@@ -753,9 +753,9 @@ const madeItems = (v: J): J[] => {
   for (const i of items) assert.ok(typeof i.id === "string" && typeof i.title === "string", `a made row: ${JSON.stringify(i)}`);
   return items;
 };
-/// What a list's page of `limit` rows is of the whole list (views.ts firstRows as it was).
-function firstOf(whole: J, limit: number): J {
-  let left = limit;
+/// What a list's window of `rows` rows is of the whole list (views.ts firstRows as it was).
+function firstOf(whole: J, rows: number): J {
+  let left = rows;
   let more = 0;
   const days: J[] = [];
   for (const d of whole.days) {
@@ -791,56 +791,55 @@ test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
   for (const id of names) t.data.release(rows(`ws/${id}`));
   assert.ok(names.every((id) => !t.data.loaded(rows(`ws/${id}`))));
   const page = ui();
+  const list: Topic = { topic: "chats", scope: "ws" };
   let from = work.rows;
-  t.subscribe(1, { topic: "chats", scope: "ws", limit: 50 });
+  t.window(list, 50);
+  t.subscribe(1, list);
   await t.read(page, 1);
   await t.read(page, 1);
   assert.ok(names.every((id) => t.data.loaded(rows(`ws/${id}`))), "its stations' rows loaded behind it");
   assert.equal(madeItems(page.value).length, 50);
   assert.equal(page.value.more, 370);
   assert.ok(work.rows - from <= 50, `the first page made ${work.rows - from} rows`);
-  // scrolled: 50 more
+  // scrolled: its window 50 more
   from = work.rows;
-  const longer = ui();
-  t.subscribe(2, { topic: "chats", scope: "ws", limit: 100 });
-  await t.read(longer, 2);
-  assert.equal(madeItems(longer.value).length, 100);
+  t.window(list, 100);
+  await t.read(page, 1);
+  assert.equal(madeItems(page.value).length, 100);
   assert.ok(work.rows - from <= 50, `scrolling made ${work.rows - from} rows`);
   // One far down the list changes: no row made; one in the page: its row alone.
   from = work.rows;
   t.set(rows("ws/e"), records(4, { e80: { title: "改了" } }));
-  await t.readAll([[page, 1], [longer, 2]]);
+  await t.read(page, 1);
   assert.equal(work.rows - from, 0, "a chat outside the page");
   from = work.rows;
   t.set(rows("ws/e"), records(4, { e80: { title: "改了" }, e1: { title: "也改了" } }));
-  await t.readAll([[page, 1], [longer, 2]]);
+  await t.read(page, 1);
   assert.equal(work.rows - from, 1, "a chat in the page");
   assert.ok(madeItems(page.value).some((i: J) => i.title === "也改了"));
   // The page is the whole list's first rows, its days and `more`; the whole list, a search, the `@` menu and the rail's
   // card have made rows.
   const topics: Topic[] = [
-    { topic: "chats", scope: "ws", limit: 50 },
-    { topic: "chats", scope: "ws", limit: 100 },
-    { topic: "chats", scope: "ws" },
+    list,
     { topic: "search", scope: "ws", query: "" },
     { topic: "chatSearch", scope: "ws", query: "标题", limit: 500 },
     { topic: "railCard", scope: "ws", place: "chats" },
   ];
-  for (let i = 2; i < topics.length; i++) t.subscribe(1 + i, topics[i]);
-  const shown = topics.slice(2).map(() => ui());
-  await t.readAll(shown.map((u, i) => [u, 3 + i] as [Ui, number]));
-  const whole = t.store.value(topics[2]) as J;
+  for (let i = 1; i < topics.length; i++) t.subscribe(1 + i, topics[i]);
+  const shown = topics.slice(1).map(() => ui());
+  await t.readAll(shown.map((u, i) => [u, 2 + i] as [Ui, number]));
+  const whole = t.views.chatsWhole("ws") as J;
   assert.equal(madeItems(whole.ok).length, 420);
-  for (const limit of [50, 100]) assert.deepEqual(t.store.value({ topic: "chats", scope: "ws", limit }), { ok: firstOf(whole.ok, limit) });
-  assert.equal(madeItems(shown[0].value).length, 420);
-  assert.ok(shown[2].value.items.length > 100, "the `@` menu lists past the page");
-  for (const i of shown[2].value.items) assert.ok(typeof i.title === "string");
+  assert.deepEqual(t.store.value(list), { ok: firstOf(whole.ok, 100) });
+  assert.ok(shown[1].value.items.length > 100, "the `@` menu lists past the page");
+  for (const i of shown[1].value.items) assert.ok(typeof i.title === "string");
   for (const topic of topics) {
     const v = t.store.value(topic);
     assert.ok(v !== undefined && "ok" in v, `${topicKey(topic)} has a value`);
     assert.ok(!holdsStandIn(v.ok), `${topicKey(topic)} holds no row not made`);
   }
-  assert.ok(![page, longer, ...shown].some((u) => holdsStandIn(u.value)), "none went out");
+  assert.ok(!holdsStandIn(whole.ok), "the whole list holds no row not made");
+  assert.ok(![page, ...shown].some((u) => holdsStandIn(u.value)), "none went out");
 });
 
 test("a_lists_rows_behind_its_first_screen_are_loaded_after_the_first_answers_of_its_burst", async () => {
@@ -896,7 +895,7 @@ test("writing_another_pref_does_not_make_a_chat_list_again", async () => {
   t.set(link("ws/st"), { state: "online" });
   t.set(rows("ws/st"), [row("1", t.host.nowMs() - 1000), row("2", t.host.nowMs() - 2000)]);
   t.set(prefs(), { archiveHint: "done" });
-  t.subscribe(1, { topic: "chats", scope: "ws", limit: 50 });
+  t.subscribe(1, { topic: "chats", scope: "ws" });
   await t.read(u, 1);
   assert.deepEqual(ids(u.value), ["1", "2"]);
   const before = t.router.computed;
@@ -1078,6 +1077,8 @@ test("grouping_a_large_chat_list_does_not_repeatedly_ask_the_time_zone_for_the_s
   const input = Array.from({ length: 257 }, (_, i) => row(String(i + 1), now - 1_000_000 - ((i * 113) % 257) * 3_600_000));
   t.set(workspace(), oneStation());
   t.set(rows("ws/st"), input);
+  // (all of it in its window)
+  t.window(topic, input.length);
   t.subscribe(1, topic);
   await t.read(u, 1);
   await t.read(u, 1);

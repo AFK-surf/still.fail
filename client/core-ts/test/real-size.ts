@@ -1046,16 +1046,18 @@ export function cardCame(base: number, at: number): { rows: J[]; before: J; afte
   return { rows: rowsWith(base, 0, (r, i) => (i === CARD_ROW ? after : r)), before, after };
 }
 
-/// A chat of Maple's the station recommended archiving, archived at `at` by its archiving: its rows without it, its
-/// archived rows with it first.
-export const ARCHIVED_ROW = 5;
+/// A chat of Maple's archived at `at` by its station's archiving: its rows without it, its archived rows with it
+/// first. One among the first rows its lists show (their first window, real-size-asked.ts `WINDOWS`), so the lists a
+/// device holds lose a row and take the next in.
+export const ARCHIVED_ROW = 2;
 export function chatArchived(base: number, at: number): { rows: J[]; archived: J[] } {
   const row = { ...rowOf(base, 0, ARCHIVED_ROW), archived: { at, by: "auto", alone: true } };
   return { rows: rowsWith(base, 0, (r, i) => (i === ARCHIVED_ROW ? null : r)), archived: [row, ...Array.from({ length: ARCHIVED }, (_, i) => rowOf(base, 0, i, true))] };
 }
 
-/// A chat of Maple's with no title yet named by its agent (`chat_title`) with the words the search looks for.
-export const RENAMED_ROW = 7;
+/// A chat of Maple's with no title yet named by its agent (`chat_title`) with the words the search looks for: a pinned
+/// one, among the first rows its lists show (their first window), so the row a device holds is told its title.
+export const RENAMED_ROW = 77;
 export function chatRenamed(base: number): J[] {
   return rowsWith(base, 0, (r, i) => (i === RENAMED_ROW ? { ...r, named: { ...r.named, thread: { ...r.named.thread, title: "迁移演练：Postgres 15 → 17 切换" }, firstText: null } } : r));
 }

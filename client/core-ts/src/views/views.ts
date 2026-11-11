@@ -69,9 +69,9 @@ const u64 = (v: J): number | null => (typeof v === "number" && Number.isInteger(
 const sharedOrCopied = (v: J): J => v !== null && typeof v === "object" && Object.isFrozen(v) ? v : structuredClone(v);
 
 const DAY_MS = 86_400_000;
-/// How many rows a list shows before its stations' rows are loaded: more than a screen holds. Done whenever the
-/// stations hold more (2026-10-29: on a phone's Hermes, 300 rows made at once kept the first page 150 ms; 80, 60).
-export const HEAD = 80;
+/// How many of a chat list's rows go out while it has not been told its window (`chats.window`, Views `chatsWindow`):
+/// what a page showed of it first before the app said how many it shows (only tests and replays of old runs ask so).
+export const WINDOW_UNTOLD = 50;
 
 /// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
 /// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
@@ -237,12 +237,15 @@ function madeDay(d: J, n: number): J {
   return day;
 }
 
-/// The list with its first `limit` rows, in their days, and how many more it has (`more`): what a page shows of it
-/// first, the rest asked for as it is scrolled to (a list of 1400 chats went whole as the app opened, 2026-11-08). What
-/// the core works out of the list (its marks, its search, its cards) is of the whole of it (`wholeRows`). Only the rows
-/// it gives are made (`madeRow`).
-function firstRows(chats: J, limit: number): J {
-  let left = limit;
+/// A chat list's key among the windows (Views `chatsWindow`): its topic's params, said or left to their defaults.
+const windowKey = (list: Topic): string => JSON.stringify([list.scope, list.mine === true, list.watching === true, list.hidden === true]);
+
+/// The list with its first `window` rows, in their days, and how many more it has (`more`): what a page shows of it,
+/// its window raised as it is scrolled to the rest (a list of 1400 chats went whole as the app opened, 2026-11-08).
+/// What the core works out of the list (its marks, its search, its cards) is of the whole of it (`wholeRows`). Only the
+/// rows it gives are made (`madeRow`).
+function firstRows(chats: J, window: number): J {
+  let left = window;
   let more = 0;
   const was = arr(get(chats, "days"));
   const days: J[] = [];
@@ -261,8 +264,8 @@ function firstRows(chats: J, limit: number): J {
   return days.every((d, i) => d === was[i]) ? chats : { ...chats, days };
 }
 
-/// The whole list with every row made: what reads the list besides a page (the list asked without a limit, a search,
-/// the `@` menu). The chats' rail card reads the list as it is: it counts by each row's `state` alone.
+/// The whole list with every row made: what reads the list besides a page (a search, the `@` menu, a share's choice).
+/// The chats' rail card reads the list as it is: it counts by each row's `state` alone.
 const wholeRows = (chats: J): J => firstRows(chats, Infinity);
 
 /// What a station's row reads of its overview (OverviewRow), picked from what it says (`undefined`: not read): its
@@ -764,8 +767,12 @@ export class Views implements Owner {
   readonly #marks = new Map<string, Derived<J>>();
   /// What reads how the vault of a workspace answers agents' requests (a chat's cards): made again as it changes.
   readonly #vaultSeen = new Marks();
-  /// What reads what the views keep of their own (an update notice open, copying to a thread, a scope's rows loaded).
+  /// What reads what the views keep of their own (an update notice open, copying to a thread, a scope's rows loaded, a
+  /// list's window).
   readonly #seen = new Marks();
+  /// How many rows of each chat list go out (`chats.window`), by the list (windowKey): its own, kept while its topic
+  /// is (let go of, until it is evicted), so a list opened again later starts from what it is told then.
+  readonly #windows = new Map<string, number>();
 
   constructor(core: ViewsEnv) {
     this.#core = core;
@@ -812,6 +819,8 @@ export class Views implements Owner {
     const key = topicKey(view);
     const live = this.#views.get(key);
     this.#views.delete(key);
+    // (nothing holds the list any more: told again as it is asked again)
+    if (view.topic === "chats") this.#windows.delete(windowKey(view));
     if (view.topic === "chat") for (const k of [...this.#steadied.keys()]) if (k.startsWith(`shown\u0001${String(view.station)}\u0001`)) this.#steadied.delete(k);
     for (const w of live?.watches.values() ?? []) w.drop();
   }
@@ -1417,9 +1426,9 @@ export class Views implements Owner {
   #compute(view: Topic): Value | undefined {
     switch (view.topic) {
       case "chats": {
-        const chats = this.#chats(view.scope as string, view.mine === true, view.watching === true, view.hidden === true ? "hidden" : "visible");
+        const chats = this.#chats(view.scope as string, view.mine === true, view.watching === true, view.hidden === true ? "hidden" : "visible", this.chatsWindow(view));
         if (chats === undefined || !("ok" in chats)) return chats;
-        return { ok: typeof view.limit === "number" ? firstRows(chats.ok, view.limit) : wholeRows(chats.ok) };
+        return { ok: firstRows(chats.ok, this.chatsWindow(view)) };
       }
       case "chatRow":
         return this.#wholeRow(view.station as string, view.session as string);
@@ -1694,7 +1703,9 @@ export class Views implements Owner {
 
   // ── the chat list ──
 
-  #chats(scope: string, mine: boolean, watching: boolean, visibility: "visible" | "hidden" | "all" = "visible"): Value | undefined {
+  /// `first`: how many rows a page shows of it first (its window), what is read of its stations' records for its first
+  /// screen while they are not loaded (#head); none, as many as a page ever shows first (WINDOW_UNTOLD).
+  #chats(scope: string, mine: boolean, watching: boolean, visibility: "visible" | "hidden" | "all" = "visible", first = WINDOW_UNTOLD): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const data = this.#core.data;
@@ -1722,11 +1733,24 @@ export class Views implements Owner {
     // how many chats are left to bring the latest of.
     let checking = false;
     let behind = 0;
-    // The first screen first: while the stations' rows are not loaded, and they are more than a list
-    // shows on top, those are read by one query, and the rest are loaded after, a station at a time.
+    // The first screen first: while the stations' rows are not loaded, and they are more than the list shows first
+    // (its window, and one more to know it has more), those are read by one query, and the rest are loaded after, a
+    // station at a time.
     const known = stations.filter((s) => data.listed(s.address, "chats")).map((s) => s.address);
     const unloaded = known.filter((s) => !data.loaded({ topic: "chatRows", station: s }));
-    const head = unloaded.length > 0 && data.chatCount(unloaded) > HEAD ? this.#head(scope, known) : null;
+    const heads = first + 1;
+    // Whether the list shows a record, as `make` below decides it of each before its row is made: what the first
+    // screen's records are read by (#head), so a list of some of its stations' chats (the viewer's own, the hidden,
+    // the watched, none of those being archived here) opens on its window of them, not on those of them among the
+    // first of all.
+    const shows = (station: string, raw: J): boolean => {
+      if (mine && get(raw, "mine") !== true) return false;
+      if (this.local.beingArchived(station, raw)) return false;
+      const shown = this.local.asChanging(station, raw);
+      if (visibility !== "all" && (get(shown, "hidden") === true) !== (visibility === "hidden")) return false;
+      return !watching || present.watches(arr(get(shown, "agents")));
+    };
+    const head = unloaded.length > 0 && data.chatCount(unloaded) > heads ? this.#head(scope, known, heads, mine, shows) : null;
     for (const s of stations) {
       const read = head !== null && data.listed(s.address, "chats") ? ({ ok: head.get(s.address) ?? [] } as Value) : this.value({ topic: "chatRows", station: s.address });
       if (!(read && "ok" in read)) unread.push(s.address);
@@ -1898,8 +1922,6 @@ export class Views implements Owner {
     return { ok: { me, stations: states, loading, days, trouble, members: count, leading: "agents", glyph, note, ...(syncing !== null ? { syncing } : {}) } };
   }
 
-  /// The rows a scope's list shows on top (HEAD of them), by station, while its stations' rows load: one is loaded
-  /// after another, the list computed again after each.
   /// The messages a search's words find in the chats the sidebar lists (those `refs.search` would list, by the same
   /// station and exclusion), newest first, at most `view.messages`: each with its chat's row, who said it and its line.
   /// What the search (views/search.ts) reads of the views.
@@ -1947,10 +1969,21 @@ export class Views implements Owner {
     return out;
   }
 
-  #head(scope: string, stations: string[]): Map<string, J[]> {
+  /// The rows a scope's list shows on top (`n` of them: its window and one more, to know it has more; 2026-11-11, 80
+  /// whatever it showed, 9.5 ms of a list's 12.5 in Hermes making and putting out 50 rows of them on a first open), by
+  /// station, while its stations' rows load: one is loaded after another, the list computed again after each. They are
+  /// the first records the list shows (`shows`; `mine`, read of the viewer's own alone): where fewer than `n` of those
+  /// read are, twice as many are read, until `n` show or there are no more.
+  #head(scope: string, stations: string[], n: number, mine: boolean, shows: (station: string, raw: J) => boolean): Map<string, J[]> {
     const data = this.#core.data;
     const out = new Map<string, J[]>();
-    for (const [station, row] of data.chatHead(stations, HEAD)) out.set(station, [...(out.get(station) ?? []), row]);
+    let limit = n;
+    let read = data.chatHead(stations, limit, mine);
+    while (read.length >= limit && read.reduce((k, [station, row]) => k + (shows(station, row) ? 1 : 0), 0) < n) {
+      limit *= 2;
+      read = data.chatHead(stations, limit, mine);
+    }
+    for (const [station, row] of read) out.set(station, [...(out.get(station) ?? []), row]);
     // (its stations' rows loaded behind the first screen: what shows them is made again then)
     this.#seen.read(`loaded ${scope}`);
     if (!this.#loading.has(scope)) {
@@ -2915,6 +2948,34 @@ export class Views implements Owner {
     this.#seen.read(`cc ${station} ${thread}`);
     const prefix = `${station} ${thread} `;
     return [...this.#cc].filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length)));
+  }
+
+  /// How many of chat list `list`'s rows go out (`chatsWindow`'s): as it was told, WINDOW_UNTOLD where it was not.
+  chatsWindow(list: Topic): number {
+    const key = windowKey(list);
+    this.#seen.read(`window ${key}`);
+    return this.#windows.get(key) ?? WINDOW_UNTOLD;
+  }
+
+  /// Chat list `list` (its topic `chats`, asked or about to be) shows `rows` of its rows (`chats.window`): its first
+  /// rows that many, said as a screen asks it; told again while the list is kept, it only grows (a page that showed
+  /// more as it was scrolled, or another reading it too, keeps them). What shows the list is made again with them: its
+  /// keyed value goes out as the rows added (collections.ts), not whole.
+  setChatsWindow(list: Topic, rows: number): void {
+    const key = windowKey(list);
+    const was = this.#windows.get(key);
+    const now = was === undefined ? rows : Math.max(was, rows);
+    if (now === was) return;
+    this.#windows.set(key, now);
+    this.#seen.touch(`window ${key}`);
+  }
+
+  /// A scope's chats as its list `chats {scope}` has them, every row made (not its window: what reads the list besides
+  /// a page, a share's choice of a chat).
+  chatsWhole(scope: string): Value | undefined {
+    const chats = this.#chats(scope, false, false);
+    if (chats === undefined || !("ok" in chats)) return chats;
+    return { ok: wholeRows(chats.ok) };
   }
 
   /// Copying to a chat's thread `to` ticked or not: its pages show it.

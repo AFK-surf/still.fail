@@ -153,6 +153,15 @@ fn chat_rows_listed() -> Bool {
 }
 
 ///|
+/// Whether this Tester's run told a chats' list its window (its trace's head with MBUI_CHATS_WINDOW): one without it
+/// asked each list with a `limit` (its first 50 rows) and a page more as another topic, its core knowing no window. Its
+/// replay's app asks the list as the app does now, answered by the run's with its first limit (@core.Replay's twin
+/// topics: what came for that one), and tells the core no window (replay_tells, the source's `call`): the run had none.
+fn chats_windowed() -> Bool {
+  @sfcore.trace_switch("MBUI_CHATS_WINDOW")
+}
+
+///|
 /// The run's chats' list a chat's whole row is read out of in such a run.
 fn chat_row_list(params : Map[String, Json]) -> Map[String, Json] {
   @sfbase.chats_asked(@settings.workspace_of(@settings.text(Some(Json::object(params)), "station")), "all")
@@ -437,6 +446,10 @@ pub fn source() -> @sfapp.Source {
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
     // run's language, which only the run knows).
     call: fn(name, params, done) {
+      // (a list's window, which a run from before it never told: nothing asked of the run, answered nothing)
+      if name == "chats.window" && !chats_windowed() {
+        return
+      }
       // (one whose answer nobody reads: asked as the app asks it, none given to the core, @sfbase.answer_unread)
       if @sfbase.unread_answer(done) {
         @core.call(name, params~)
@@ -595,6 +608,18 @@ let started : Ref[Bool] = Ref::new(false)
 fn init {
   @ui.on_reset(fn() { started.val = false })
   @core.client.keep(replay_kept)
+  @core.client.tells_before(replay_tells)
+}
+
+///|
+/// What the core's client tells it before a topic is asked (sfbase's chats_told_before, as src/stillfail's app tells
+/// it), where the run's app did, its trace's head saying so: a chats' list's first window with MBUI_CHATS_WINDOW.
+fn replay_tells(name : String, topic : Json) -> Array[(String, Json)] {
+  if chats_windowed() {
+    @sfbase.chats_told_before(name, topic)
+  } else {
+    []
+  }
 }
 
 ///|

@@ -150,7 +150,7 @@ pub fn changelog_node(
     }
   }
   // (near the last change it holds while the core has more of the tab: a page more of it asked, once for what shows,
-  // as chats_ask_more asks once for the rows the list holds)
+  // as sfbase's chats_grow tells a chats' list its window once for the rows it holds)
   let more = fn() { count(value(), "more") > 0 }
   let ask_more = fn() {
     let part = @signals.untracked(fn() { changelog_part.get() })

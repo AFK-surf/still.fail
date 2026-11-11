@@ -58,8 +58,8 @@ static NSArray<NSString *> *home(NSString *ws) {
   return @[
     [NSString stringWithFormat:@"{\"topic\":\"lock\",\"workspace\":\"%@\"}", ws],
     [NSString stringWithFormat:@"{\"topic\":\"longJobs\",\"scope\":\"%@\"}", ws],
-    // (LIMIT: how many rows the list is asked, 50 as the app asks at first)
-    [NSString stringWithFormat:@"{\"topic\":\"chats\",\"scope\":\"%@\",\"mine\":false,\"limit\":%d}", ws, getenv("LIMIT") ? atoi(getenv("LIMIT")) : 50],
+    // (its window told first: show's `chats.window`)
+    [NSString stringWithFormat:@"{\"topic\":\"chats\",\"scope\":\"%@\",\"mine\":false}", ws],
     [NSString stringWithFormat:@"{\"topic\":\"workspaceMarks\",\"workspace\":\"%@\"}", ws],
     [NSString stringWithFormat:@"{\"topic\":\"workspace\",\"workspace\":\"%@\"}", ws],
     [NSString stringWithFormat:@"{\"topic\":\"stations\",\"scope\":\"%@\"}", ws],
@@ -82,6 +82,9 @@ static void show(const char *label, NSString *ws, int first) {
   t0 = now_ms();
   if (!first) tell([NSString stringWithFormat:@"{\"id\":%d,\"call\":\"prefs.set\",\"params\":{\"workspace\":\"%@\"}}", from + 90, ws]);
   NSArray<NSString *> *topics = home(ws);
+  // (the list's window told before it is asked, as the app tells it: LIMIT rows, 20 by default; sfbase's
+  // chats_told_before)
+  tell([NSString stringWithFormat:@"{\"id\":%d,\"call\":\"chats.window\",\"params\":{\"scope\":\"%@\",\"mine\":false,\"rows\":%d}}", from + 92, ws, getenv("LIMIT") ? atoi(getenv("LIMIT")) : 20]);
   for (int i = 0; i < TOPICS; i++) tell([NSString stringWithFormat:@"{\"id\":%d,\"subscribe\":%@,\"keyed\":true}", from + i, topics[i]]);
   if (held_from >= 0) for (int i = 0; i < TOPICS; i++) tell([NSString stringWithFormat:@"{\"id\":%d,\"unsubscribe\":true}", held_from + i]);
   tell([NSString stringWithFormat:@"{\"id\":%d,\"call\":\"client.focus\",\"params\":{\"visible\":true,\"focused\":true,\"workspace\":\"%@\"}}", from + 91, ws]);

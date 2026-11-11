@@ -3,8 +3,8 @@
 ///|
 fn init {
   let asked =
-    #|{"topic":"chats","scope":"ws","mine":false,"limit":50}
+    #|{"topic":"chats","scope":"ws","mine":false}
   let messages =
-    #|[[{"path":["days"],"key":["daysAgo"],"patch":0,"ops":[{"path":["items"],"key":["station","id"],"patch":["ws/maple","k-maple-7"],"ops":[{"path":["title"],"set":"迁移演练：Postgres 15 → 17 切换"}]}]}]]
+    #|[[{"path":["days"],"key":["daysAgo"],"patch":-1,"ops":[{"path":["items"],"key":["station","id"],"patch":["ws/maple","k-maple-77"],"ops":[{"path":["title"],"set":"迁移演练：Postgres 15 → 17 切换"}]}]}]]
   put_changes(asked, "renamed", messages)
 }

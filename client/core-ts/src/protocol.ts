@@ -99,7 +99,8 @@ export const TOPICS: Record<string, Spec> = {
   adminItem: { account: S, list: S, id: S },
   adminOverview: { account: S },
   adminRelays: { account: S, range: ["string", "skip"] },
-  chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"], hidden: ["bool", "skipFalse"], limit: ["u32", "skip"] },
+  // (how many of its rows go out is no part of it: its window, `chats.window`, views.ts Views `chatsWindow`)
+  chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"], hidden: ["bool", "skipFalse"] },
   // One chat's row whole (ChatItem), as the list made it before its rows were what they draw (ListedChat): what a row
   // offers only as it is pressed, held, swiped or pointed at (its menu, its swipe's question, its time), asked as that
   // begins and held while it is open (apps/mbui sfbase rows.mbt `whole_row`). Null where the station lists no such chat.

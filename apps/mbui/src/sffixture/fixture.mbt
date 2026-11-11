@@ -6,8 +6,8 @@
 // read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
 // scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept);
 // "home-share" (one of them shared and pictured from its row's menu, and in Slack); "long-paged" (a long account's
-// chats, two hundred days of them, given a page at a time as the core gives them: firstRows, its `limit` and `more`;
-// scripts/instrbench.sh's `paged`).
+// chats, two hundred days of them, given by each list's window as the core gives them: firstRows, `chats.window` and
+// `more`; scripts/instrbench.sh's `paged`).
 
 ///|
 pub(all) struct Fixture {
@@ -51,6 +51,9 @@ pub(all) struct Fixture {
   /// the look the card to share is drawn in (the prefs' `shareLook`; "" none kept): share-card-<key> (but -dark) opens
   /// it in that look
   mut share_look : String
+  /// each chats' list's window as it was told (`chats.window`, by fixture_window_key), as the core's views.ts keeps it:
+  /// only grows; long-paged's lists give that many of their rows, 50 where untold
+  windows : Map[String, Int]
 }
 
 ///|
@@ -707,9 +710,21 @@ fn fixture_days_head(f : Fixture) -> Array[Json] {
 }
 
 ///|
-/// The first `limit` rows of `days`, in their days, and how many more there are (the core's views.ts firstRows).
-fn first_rows(days : Array[Json], limit : Int) -> (Array[Json], Int) {
-  let mut left = limit
+/// How many of a list's rows the core sends while it is told no window (views.ts WINDOW_UNTOLD).
+let fixture_window_untold : Int = 50
+
+///|
+/// A chats' list's key among the windows (Fixture `windows`): its params, said or left to their defaults, as views.ts's
+/// windowKey.
+fn fixture_window_key(params : Map[String, Json]) -> String {
+  let on = fn(k : String) { if params.get(k) is Some(True) { "1" } else { "0" } }
+  text(Some(Json::object(params)), "scope") + "\u{1}" + on("mine") + on("watching") + on("hidden")
+}
+
+///|
+/// The first `window` rows of `days`, in their days, and how many more there are (the core's views.ts firstRows).
+fn first_rows(days : Array[Json], window : Int) -> (Array[Json], Int) {
+  let mut left = window
   let mut more = 0
   let out : Array[Json] = []
   for d in days {
@@ -924,9 +939,10 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   }
   let empty = days.iter().all(fn(d) { items(Some(d), "items").length() == 0 })
   // (its first `limit` rows and how many more it has, as the core's firstRows gives them)
-  let (days, more) = match params.get("limit") {
-    Some(Number(n, ..)) if f.mode == "long-paged" => first_rows(days, n.to_int())
-    _ => (days, 0)
+  let (days, more) = if f.mode == "long-paged" {
+    first_rows(days, f.windows.get(fixture_window_key(params)).unwrap_or(fixture_window_untold))
+  } else {
+    (days, 0)
   }
   let chats : Json = {
     "stations": if scope == "ws1" { stations } else { [] },
@@ -1611,6 +1627,8 @@ pub fn round_trip_again(
   let serving = fn() {
     if mine.val == 0 {
       mine.val = @core.serve(send)
+      // (as the app's client tells it: a chat list's first window before the list: src/stillfail's main)
+      @core.client.tells_before(@sfbase.chats_told_before)
     }
   }
 
@@ -1727,6 +1745,7 @@ fn made_fixture(mode : String) -> Fixture {
     chat_tabs: fixture_chat_tabs(mode),
     tabs_shown: fixture_tabs_shown(mode),
     sidebars: {},
+    windows: {},
     share_look: if mode.has_prefix("share-card-") && mode != "share-card-dark" {
       // (share-card-<key>-coming, -failed: its files of the looks on their way, not had)
       let look = mode.unsafe_substring(start="share-card-".length(), end=mode.length())
@@ -1898,6 +1917,28 @@ pub fn fixture(mode : String) -> Source {
           @ui.came_from_outside()
         }
         done(r)
+      }
+      // a chats' list's window: kept as the core keeps it, growing only, the list given by it as the core's comes, from
+      // outside, not in the middle of what asked it (fix_later)
+      if name == "chats.window" {
+        match params {
+          Object(p) => {
+            let key = fixture_window_key(p)
+            let rows = match p.get("rows") {
+              Some(Number(n, ..)) => n.to_int()
+              _ => 0
+            }
+            fix_later(0.0, fn() {
+              if rows > f.windows.get(key).unwrap_or(0) {
+                f.windows[key] = rows
+                f.changed()
+              }
+            })
+          }
+          _ => ()
+        }
+        done(Ok(Json::null()))
+        return
       }
       match fixture_kept(name, params, None) {
         Some(r) => {

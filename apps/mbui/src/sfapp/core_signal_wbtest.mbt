@@ -1052,54 +1052,130 @@ fn signal_client_source(client : @core.Client) -> Source {
 }
 
 ///|
-test "asking for more chats moves the signal reader while a direct reader keeps the first page" {
-  @sfbase.chat_limits_reset()
-  let sent : Array[String] = []
-  let client = @core.Client::new(fn(s) { sent.push(s) })
-  let src = signal_client_source(client)
-  let first_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 50 }
-  let next_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 100 }
-  let direct = client.subscribe("chats", params=first_params)
-  let more = Ref(-1)
-  let stop = @signals.effect(fn() { more.val = @sfbase.chats_more(src, "ws1", "all") })
-  client.receive_json({ "id": Json::number(direct.id.to_double()), "value": { "more": 7 } })
-  assert_eq(more.val, 7)
-  @sfbase.chats_ask_more(src, "ws1", "all", @sfbase.chats_page)
-  assert_true(physical_equal(client.peek_topic("chats", params=first_params).unwrap(), direct), msg="the first page's direct reader remains")
-  guard client.peek_topic("chats", params=next_params) is Some(next) else { fail("the signal did not ask for the next page") }
-  client.receive_json({ "id": Json::number(next.id.to_double()), "value": { "more": 3 } })
-  assert_eq(more.val, 3)
-  client.unsubscribe(direct)
-  assert_true(client.peek_topic("chats", params=first_params) is None, msg="the first page leaves with its last reader")
-  assert_true(client.peek_topic("chats", params=next_params) is Some(_), msg="the next page remains followed")
-  stop()
-  assert_true(client.peek_topic("chats", params=next_params) is None, msg="the next page leaves with its signal reader")
-  @sfbase.chat_limits_reset()
+/// signal_client_source with its calls asked of `client` too.
+fn signal_client_calls(client : @core.Client) -> Source {
+  {
+    ..signal_client_source(client),
+    call: fn(name, params, done) {
+      if @sfbase.unread_answer(done) {
+        client.call(name, params~) |> ignore
+      } else {
+        client.call(name, params~, on_done=done) |> ignore
+      }
+    },
+  }
 }
 
 ///|
-test "a signal keeps the shown chat page until the next page arrives" {
-  @sfbase.chat_limits_reset()
-  let client = @core.Client::new(fn(_) {  })
-  let src = signal_client_source(client)
-  let first_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 50 }
-  let next_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 100 }
-  let shown = Ref("")
-  let stop = @signals.effect(fn() { shown.val = @sfbase.text(@sfbase.chats_topic(src, "ws1").value, "marker") })
-  guard client.peek_topic("chats", params=first_params) is Some(first) else { fail("the first page was not followed") }
-  client.receive_json({ "id": Json::number(first.id.to_double()), "value": { "marker": "first" } })
-  assert_eq(shown.val, "first")
-  @sfbase.chats_ask_more(src, "ws1", "all", @sfbase.chats_page)
-  guard client.peek_topic("chats", params=next_params) is Some(next) else { fail("the next page was not followed") }
-  assert_eq(shown.val, "first", msg="the first page remains visible while the next is pending")
-  assert_true(client.peek_topic("chats", params=first_params) is Some(_))
-  client.receive_json({ "id": Json::number(next.id.to_double()), "value": { "marker": "next" } })
-  assert_eq(shown.val, "next")
-  assert_true(client.peek_topic("chats", params=first_params) is None, msg="the old page leaves after the handoff")
-  assert_true(client.peek_topic("chats", params=next_params) is Some(_))
+/// What of `sent` (a client's messages out) is a chats' list asked, let go of, or told its window: `sub`, `unsub`,
+/// `window <rows>`, in order.
+fn chats_sent(sent : Array[String]) -> Array[String] {
+  let ids : Map[Int, Bool] = {}
+  let out : Array[String] = []
+  for text in sent {
+    let j = @json.parse(text) catch { _ => continue }
+    guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
+    match (m.get("subscribe"), m.get("unsubscribe"), m.get("call")) {
+      (Some(Object(t)), _, _) if t.get("topic") == Some(Json::string("chats")) => {
+        ids[n.to_int()] = true
+        out.push("sub")
+      }
+      (_, Some(True), _) if ids.contains(n.to_int()) => out.push("unsub")
+      (_, _, Some(String("chats.window"))) =>
+        match m.get("params") {
+          Some(Object(p)) =>
+            match p.get("rows") {
+              Some(Number(r, ..)) => out.push("window " + r.to_int().to_string())
+              _ => ()
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  out
+}
+
+///|
+/// A chats' list's value of `n` rows (in one day) and `more` past them.
+fn chats_of_rows(n : Int, more : Int, marker? : String = "") -> Json {
+  let items = Array::makei(n, fn(i) { Json::object({ "station": "ws1/st1", "id": Json::string("c\{i}") }) })
+  { "days": [{ "daysAgo": 0, "items": Json::array(items) }], "more": Json::number(more.to_double()), "marker": Json::string(marker) }
+}
+
+///|
+/// ws1's list of all its chats, holding `held` rows with `more` past them (as read by a reader), scrolled near its foot
+/// (sfpages' list node: chats_grow with what it holds and has more of).
+fn grow(src : Source, held : Ref[Int], more : Ref[Int]) -> Unit {
+  @sfbase.chats_grow(src, "ws1", "all", held.val, more.val)
+}
+
+///|
+test "a chats' list scrolled for more is told a window more on the one subscription its readers share, once till it comes" {
+  @sfbase.chat_windows_reset()
+  @sfbase.window_tall.val = 844.0
+  let first = @sfbase.first_window(844.0)
+  let step = @sfbase.window_step(844.0)
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.tells_before(@sfbase.chats_told_before)
+  let src = signal_client_calls(client)
+  let params : Map[String, Json] = { "scope": "ws1", "mine": false }
+  let direct = client.subscribe("chats", params~)
+  let more = Ref(-1)
+  let held = Ref(0)
+  let stop = @signals.effect(fn() {
+    more.val = @sfbase.chats_more(src, "ws1", "all")
+    held.val = @sfbase.chats_held(chats_of(src, "ws1", "all").0)
+  })
+  client.receive_json({ "id": Json::number(direct.id.to_double()), "value": chats_of_rows(first, 7) })
+  assert_eq(more.val, 7)
+  grow(src, held, more)
+  // (asked again before the rows came: told nothing more)
+  grow(src, held, more)
+  assert_true(physical_equal(client.peek_topic("chats", params~).unwrap(), direct), msg="the one subscription remains")
+  client.receive_json({ "id": Json::number(direct.id.to_double()), "value": chats_of_rows(first + 7, 0) })
+  assert_eq(more.val, 0)
+  // (all of it come: none asked)
+  grow(src, held, more)
+  client.unsubscribe(direct)
+  assert_true(client.peek_topic("chats", params~) is Some(_), msg="the signal reader holds it still")
   stop()
-  assert_true(client.peek_topic("chats", params=next_params) is None, msg="the last reader releases the new page")
-  @sfbase.chat_limits_reset()
+  assert_true(client.peek_topic("chats", params~) is None, msg="it leaves with its last reader")
+  assert_eq(chats_sent(sent), ["window \{first}", "sub", "window \{first + step}", "unsub"])
+  @sfbase.chat_windows_reset()
+}
+
+///|
+test "a chats' list's rows stay shown while its window grows: no list asked anew, none let go of" {
+  @sfbase.chat_windows_reset()
+  @sfbase.window_tall.val = 844.0
+  let first = @sfbase.first_window(844.0)
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.tells_before(@sfbase.chats_told_before)
+  let src = signal_client_calls(client)
+  let params : Map[String, Json] = { "scope": "ws1", "mine": false }
+  let shown = Ref("")
+  let more = Ref(0)
+  let held = Ref(0)
+  let stop = @signals.effect(fn() {
+    shown.val = @sfbase.text(@sfbase.chats_topic(src, "ws1").value, "marker")
+    more.val = @sfbase.chats_more(src, "ws1", "all")
+    held.val = @sfbase.chats_held(chats_of(src, "ws1", "all").0)
+  })
+  guard client.peek_topic("chats", params~) is Some(list) else { fail("the list was not followed") }
+  client.receive_json({ "id": Json::number(list.id.to_double()), "value": chats_of_rows(first, 9, marker="first") })
+  assert_eq(shown.val, "first")
+  grow(src, held, more)
+  assert_eq(shown.val, "first", msg="its rows shown while the rows added are on their way")
+  client.receive_json({ "id": Json::number(list.id.to_double()), "value": chats_of_rows(first + 9, 0, marker="next") })
+  assert_eq(shown.val, "next")
+  assert_true(physical_equal(client.peek_topic("chats", params~).unwrap(), list))
+  assert_eq(chats_sent(sent).filter(fn(m) { m == "sub" || m == "unsub" }), ["sub"])
+  stop()
+  assert_true(client.peek_topic("chats", params~) is None, msg="the last reader lets it go")
+  @sfbase.chat_windows_reset()
 }
 
 ///|

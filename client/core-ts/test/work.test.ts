@@ -74,7 +74,9 @@ async function homeChanging(n: number) {
   const { host, core, push } = await started(answers);
   push("made", { rows: true, marks: true });
   const ui = core.connect();
-  subscribe(core, ui, 1, { topic: "chats", scope: "ws", mine: false, limit: 50 });
+  // (its window said first, as the app says it: chats.window)
+  call(core, ui, 2, "chats.window", { scope: "ws", rows: 50 });
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws", mine: false });
   await host.time.pass(1_000, 50);
   const from = { ...work };
   for (let k = 1; k <= 10; k++) {
@@ -83,7 +85,7 @@ async function homeChanging(n: number) {
     await host.time.pass(200, 50);
   }
   const counted = workSince(from);
-  const shown = core.inner.store.get({ topic: "chats", scope: "ws", mine: false, limit: 50 }) as { days: { items: { thread: number }[] }[] };
+  const shown = core.inner.store.get({ topic: "chats", scope: "ws", mine: false }) as { days: { items: { thread: number }[] }[] };
   core.close();
   return { counted, top: shown.days.flatMap((d) => d.items).slice(0, 3).map((r) => r.thread) };
 }

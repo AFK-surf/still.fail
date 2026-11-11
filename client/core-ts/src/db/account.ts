@@ -1071,12 +1071,14 @@ export class AccountDb {
     return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
   }
 
-  /// The rows of these stations a list shows first: the pinned, then the latest active, `limit` of them.
-  chatHead(stations: string[], limit: number): [string, J][] {
+  /// The rows of these stations a list shows first: the pinned, then the latest active, `limit` of them; `mine`, of the
+  /// viewer's own alone (a list of them, whose first rows are not the first of all: its column, not a row read to see).
+  chatHead(stations: string[], limit: number, mine = false): [string, J][] {
     if (stations.length === 0) return [];
     const marks = stations.map(() => "?").join(", ");
-    const found = this.sql.all(`SELECT station, id FROM chat WHERE archived = 0 AND station IN (${marks}) ORDER BY pinned_at DESC, last_active DESC LIMIT ?`, [...stations, limit]);
-    const made = this.#chatRowsFound(found, 0, () => this.sql.all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) ORDER BY pinned_at DESC, last_active DESC LIMIT ?`, [...stations, limit]));
+    const where = `archived = 0 AND station IN (${marks})${mine ? " AND mine = 1" : ""} ORDER BY pinned_at DESC, last_active DESC LIMIT ?`;
+    const found = this.sql.all(`SELECT station, id FROM chat WHERE ${where}`, [...stations, limit]);
+    const made = this.#chatRowsFound(found, 0, () => this.sql.all(`SELECT station, id, json, unread FROM chat WHERE ${where}`, [...stations, limit]));
     return found.flatMap((r, i): [string, J][] => (made[i] === undefined ? [] : [[String(r[0]), made[i]]]));
   }
 
