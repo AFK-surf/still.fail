@@ -1627,7 +1627,7 @@ export class Views implements Owner {
       case "archive":
         return archive(this, this.local, view.scope as string, this.#core.host, typeof view.q === "string" ? view.q : "", typeof view.limit === "number" ? view.limit : 0);
       case "workspaceMarks":
-        return marks.marks(this, typeof view.workspace === "string" ? view.workspace : null);
+        return marks.marks(this);
       case "chatJobs": {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) });
         if (chat === undefined || !("ok" in chat)) return chat;

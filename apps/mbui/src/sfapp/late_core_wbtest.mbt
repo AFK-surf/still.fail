@@ -310,7 +310,8 @@ test "a workspace switched and switched back: each workspace's chats subscribed 
 
 ///|
 /// How late the made-up core answers each of a workspace's topics in the switches below: each at a moment of its own,
-/// some tens of ms after it is asked (the marks the wide frame's pane lands by first, what it lands on asked after).
+/// some tens of ms after it is asked (the marks the wide frame's pane lands by, held from the start; what it lands on
+/// asked at the press).
 fn switch_late(name : String) -> Double {
   match name {
     "chats" => 40.0
@@ -347,10 +348,10 @@ test "a workspace switched over a core answering each of its topics tens of ms l
       faults.push(name + ": from the switch on \{Repr(after)}")
     }
     // (within switch_wait_ms, and not before the last it waits for came: on the wide frame the new chat the pane lands
-    // on, asked once the marks said it)
+    // on, asked at the press as the marks held across the switch say it)
     let f = frames[i]
-    // (小屏's Home opens on its list, the latest of what it waits for here; not on the marks)
-    let last = if wide { switch_late("workspaceMarks") + switch_late("newChat") } else { switch_late("chats") }
+    // (小屏's Home opens on its list, the latest of what it waits for here)
+    let last = if wide { switch_late("newChat") } else { switch_late("chats") }
     if f.0 > @sfbase.switch_wait_ms || f.0 < last {
       faults.push(name + ": switched at \{f.0}, not between \{last} and \{@sfbase.switch_wait_ms}")
     }

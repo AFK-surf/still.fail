@@ -2,7 +2,7 @@
 // (client/core-ts/bench/ws-switch-seed.ts seeds the data directory), asked what the app asks as it starts on one and is
 // switched to the other (src/sfbase/workspace_switch.mbt). At the press the app keeps the screen as it was and only
 // holds what the new workspace's first screen opens on (小屏: sfapp's home_opens; 大屏: sfdesk's frame_opens, the page
-// its pane lands on asked once workspaceMarks says it); once all of that is answered (or switch_wait_ms passed) it
+// its pane lands on asked at the press, as the workspaces' marks held since the start say it); once all of that is answered (or switch_wait_ms passed) it
 // commits: prefs.set, what the new screen asks besides, the old screen's topics let go of. The messages and their order
 // are the app's own client's, captured in the Tester (2026-11-11); what it keeps of a topic it lets go of (a chat, the
 // lists a place opens on: kept_name) let go of with `keep` and asked again with `have`, as the app's client is told to
@@ -164,6 +164,11 @@ static const int land_thread = 1001, land_seen = 300;
 static int left_chat;
 static char left_station[64], left_key[64];
 
+// The workspaces' marks as the app asks them (sfbase's marks_asked: one topic whichever workspace is shown), asked as
+// the app starts and held across every switch; their value as it first came, what a switch's pane lands by.
+#define MARKS @"{\"topic\":\"workspaceMarks\"}"
+static char *marks_text;
+
 static void land_from(const char *text, NSString *ws) {
   land_station[0] = land_key[0] = 0;
   if (!text) return;
@@ -186,8 +191,9 @@ static void land(NSString *ws, int role, int start) {
 }
 
 // What the old screen held, let go of in the order the app's client lets go of it.
-static const char *small_order[] = {"notify", "driveTransfers", "longJobs", "workspace", "stations", "profiles", "workspaceMarks", "chats", "status", "lock", NULL};
-static const char *wide_order[] = {"lock", "notify", "chatJobs", "stations", "composer", "chatFeedback", "chatOutline", "newChat", "chat", "chatRow", "driveTransfers", "status", "workspaceMarks", "longJobs", "chats", NULL};
+// (the workspaces' marks, one topic whichever is shown, held all along: never let go of at a switch)
+static const char *small_order[] = {"notify", "driveTransfers", "longJobs", "workspace", "stations", "profiles", "chats", "status", "lock", NULL};
+static const char *wide_order[] = {"lock", "notify", "chatJobs", "stations", "composer", "chatFeedback", "chatOutline", "newChat", "chat", "chatRow", "driveTransfers", "status", "longJobs", "chats", NULL};
 static int rank(const char *name) {
   const char **order = wide_screen ? wide_order : small_order;
   for (int i = 0; order[i]; i++)
@@ -228,7 +234,6 @@ static void commit(NSString *ws) {
   call(@"prefs.set", [NSString stringWithFormat:@"{\"workspace\":\"%@\"}", ws]);
   if (!wide_screen) {
     call_ws("lock", COMMIT, ws, "workspace");
-    call_ws("workspaceMarks", COMMIT, ws, "workspace");
     call_ws("workspace", COMMIT, ws, "workspace");
     call_ws("stations", COMMIT, ws, "scope");
     call_ws("profiles", COMMIT, ws, "scope");
@@ -276,12 +281,12 @@ static void start(NSString *ws) {
     call_ws("longJobs", HELD, ws, "scope");
     list_of(ws, HELD);
     sub("changelog", HELD, @"{\"topic\":\"changelog\",\"news\":true}");
-    call_ws("workspaceMarks", START, ws, "workspace");
+    sub("workspaceMarks", START, MARKS);
     call_ws("workspace", START, ws, "workspace");
     call_ws("stations", START, ws, "scope");
     call_ws("profiles", START, ws, "scope");
   } else {
-    call_ws("workspaceMarks", HELD, ws, "workspace");
+    sub("workspaceMarks", HELD, MARKS);
     list_of(ws, HELD);
     call_ws("longJobs", HELD, ws, "scope");
     call_ws("status", START, ws, "workspace");
@@ -304,7 +309,6 @@ static void press(NSString *ws) {
     list_of(ws, HELD);
     call_ws("longJobs", HELD, ws, "scope");
   } else {
-    call_ws("workspaceMarks", HELD, ws, "workspace");
     list_of(ws, HELD);
     call_ws("longJobs", HELD, ws, "scope");
   }
@@ -344,6 +348,13 @@ static void show(const char *label, NSString *ws, int first) {
   if (first) start(ws);
   else press(ws);
   printf("== %s: %s (%s)\n", label, ws.UTF8String, wide_screen ? "大屏" : "小屏");
+  // (the pane lands by the marks held: what it asks, asked at the press)
+  if (!first && wide_screen) {
+    land_from(marks_text, ws);
+    land(ws, FOLLOW, 0);
+    asked_land = 1;
+    printf("  +%7.1f ms  asked %s (of the marks held)\n", now_ms() - t0, land_station[0] ? "chat" : "newChat");
+  }
   // Each message as it comes: a follow-up asked as its cause is answered, the commit as the last waited is.
   while (now_ms() - t0 < WATCH_MS) {
     dispatch_semaphore_wait(told, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_MSEC)));
@@ -371,6 +382,7 @@ static void show(const char *label, NSString *ws, int first) {
       s->first = at;
       s->len = got[k].len;
       printf("  +%7.1f ms  %-5s %-16s %7zu B  [%s, asked +%.1f]\n", at, got[k].error ? "error" : got[k].same ? "same" : got[k].delta ? "delta" : "value", s->name, got[k].len, roles[s->role], s->asked);
+      if (strcmp(s->name, "workspaceMarks") == 0 && got[k].value && got[k].text && !marks_text) marks_text = strdup(got[k].text);
       if (wide_screen && !asked_land && strcmp(s->name, "workspaceMarks") == 0 && s->role == HELD) {
         land_from(got[k].text, ws);
         land(ws, FOLLOW, first);

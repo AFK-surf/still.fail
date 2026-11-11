@@ -280,10 +280,10 @@ pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, B
 let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a == b })
 
 ///|
-/// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
-/// else what is wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
-pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
+/// Each frame signed in: the number on the app's icon (the desktop app's followBadge), the core's badge, else what is
+/// wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
+pub fn badge_frame(c : @ui.Ctx, src : Source) -> Unit {
+  let marks = src.topic("workspaceMarks", marks_asked()).get().value
   let badge = match field(marks, "badge") {
     Some(Number(_, ..)) => count(marks, "badge")
     _ =>

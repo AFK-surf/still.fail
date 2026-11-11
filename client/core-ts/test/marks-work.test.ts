@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import type { Topic } from "../src/protocol.ts";
+import { parseTopic, topicKey, type Topic } from "../src/protocol.ts";
 import { work, workSince } from "../src/work.ts";
 import { link, prefs, rows, setup, ui } from "./views-rig.ts";
 
@@ -12,7 +12,9 @@ holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-const marksOf = (workspace: string): Topic => ({ topic: "workspaceMarks", workspace });
+/// The marks as the app asks them (one topic whichever workspace is shown; asked as an app from before asked them, of
+/// the one shown, the same topic).
+const marksOf = (workspace: string): Topic => parseTopic({ topic: "workspaceMarks", workspace })!;
 
 function row(id: string, thread: number, at: number): J {
   return { id, session: id, thread, title: `${id} 的标题`, agents: [{ key: id, connect: "c1", profile: "p1", runtime: "claude", model: "opus", effort: null, process: "cold", pending: 0, lastTurn: null }], last: null, unread: false, mine: true, lastActiveAt: at, connect: null, origin: null };
@@ -73,22 +75,23 @@ test("a_workspaces_marks_are_put_together_of_each_workspaces_own", async () => {
   assert.deepEqual([m.workspaces.ws.alert, m.workspaces.ws.wait, m.workspaces.ws.unread, m.workspaces.ws.badge, m.workspaces.ws.label], [1, 2, 2, 5, "1 个出错 · 2 个待你处理 · 2 个有新消息"]);
   assert.deepEqual([m.workspaces.wb.alert, m.workspaces.wb.wait, m.workspaces.wb.unread, m.workspaces.wb.badge], [2, undefined, 2, 3]);
   assert.deepEqual([m.workspaces.wb.items[0].workspaceName, m.workspaces.wb.items[0].workspaceEmoji, m.workspaces.wb.items[0].stationName], ["Labs", "🧪", "lab"]);
-  // The badge is every workspace's; `others` the workspaces' besides the one shown.
-  assert.deepEqual([m.badge, m.others, m.othersLabel], [8, "alert", "其他 workspace：2 个出错 · 2 个有新消息"]);
+  // The badge is every workspace's; each one's `others` the workspaces' besides it, as shown while it is.
+  assert.equal(m.badge, 8);
+  assert.deepEqual([m.workspaces.ws.others, m.workspaces.ws.othersLabel], ["alert", "其他 workspace：2 个出错 · 2 个有新消息"]);
+  assert.deepEqual([m.workspaces.wb.others, m.workspaces.wb.othersLabel], ["alert", "其他 workspace：1 个出错 · 2 个待你处理 · 2 个有新消息"]);
 });
 
-test("a_switch_of_workspace_makes_no_rows_part_again", async () => {
-  const { t, a, b } = await twoWorkspaces();
-  assert.equal(a.value.others, "alert");
+test("a_switch_of_workspace_asks_no_mark_again", async () => {
+  // The marks were asked of the workspace shown: a switch asked another topic, its value whole (24.6 KB of the
+  // real-size two, shaped again, 2.4 ms in Hermes before 大屏's list could be made), the same but which workspace's
+  // others it said. One topic whichever is shown: the app holds it across a switch, and asks nothing.
+  const { t, a } = await twoWorkspaces();
+  assert.equal(topicKey(marksOf("wb")), topicKey(marksOf("ws")));
   const before = { ...work };
-  // As the app switches: the topic of the workspace shown let go (kept a while), that of the next asked.
-  t.store.unsubscribe(1, 1);
-  t.subscribe(2, marksOf("wb"));
-  await t.readAll([[b, 2]]);
-  assert.deepEqual([workSince(before).workspaceMarks, workSince(before).marked], [0, 0]);
-  assert.deepEqual([b.value.others, b.value.othersLabel], ["alert", "其他 workspace：1 个出错 · 2 个待你处理 · 2 个有新消息"]);
-  assert.deepEqual(b.value.workspaces, a.value.workspaces);
-  assert.equal(b.value.badge, a.value.badge);
+  t.set(prefs(), { workspace: "wb" });
+  await t.readAll([[a, 1]]);
+  assert.deepEqual([workSince(before).workspaceMarks, workSince(before).marked, workSince(before).shapes], [0, 0, 0]);
+  assert.equal(a.value.workspaces.wb.others, "alert");
 });
 
 test("writing_the_workspace_shown_makes_no_workspaces_mark_again", async () => {
@@ -144,7 +147,10 @@ test("a_row_that_changed_makes_its_own_part_again_and_no_other", async () => {
   t.set(prefs(), { workspace: "ws", failsGone: { ws: [failure] } });
   await t.readAll([[a, 1]]);
   assert.deepEqual([workSince(letGo).workspaceMarks, workSince(letGo).marked], [1, 0]);
-  assert.equal((t.store.value(marksOf("ws")) as J).ok.workspaces.wb, kept.ok.workspaces.wb);
+  // (the other's mark not made again: what it says of the others, this one, is what is new of it)
+  const wb = (t.store.value(marksOf("ws")) as J).ok.workspaces.wb;
+  assert.equal(wb.items, kept.ok.workspaces.wb.items);
+  assert.deepEqual([wb.others, wb.othersLabel], ["wait", "其他 workspace：2 个待你处理 · 2 个有新消息"]);
   assert.deepEqual([a.value.workspaces.ws.alert, a.value.workspaces.ws.items.map((i: J) => i.session)], [0, ["k1", "u1", "u2"]]);
   // A row of the other workspace: that one alone.
   const other = { ...work };

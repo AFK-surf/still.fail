@@ -743,9 +743,9 @@ pub fn fix_attention_marks() -> Json {
         "unread": 1,
         "tone": "alert",
         "items": [Json::object(wait), Json::object(failed), Json::object(unread)],
+        "others": "done",
       },
     },
-    "others": "done",
     "badge": 2,
     "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
   }

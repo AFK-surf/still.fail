@@ -331,7 +331,7 @@ pub fn shell_opens(src : Source, ws : String, ask : (String, Map[String, Json]) 
   let of = Json::string(ws)
   let reads : Array[(String, Map[String, Json])] = [
     ("lock", { "workspace": of }),
-    ("workspaceMarks", marks_asked(ws)),
+    ("workspaceMarks", marks_asked()),
     ("doing", {}),
     ("driveTransfers", { "workspace": of }),
     ("status", { "workspace": of }),

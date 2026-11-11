@@ -108,10 +108,11 @@ fn rail_menu_from(place : String, src : Source) -> (Double, Double, Double, Doub
 }
 
 ///|
-/// What the rail (rail_node) shows of workspace `ws` as it opens, asked of `ask` (sfbase's opens_answered): the core's
-/// marks (its places' tones, the workspaces' at its foot), what it reads of it but the prefs, which are the app's whole.
-fn rail_opens(ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
-  @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked(ws)))
+/// What the rail (rail_node) shows of a workspace as it opens, asked of `ask` (sfbase's opens_answered): the core's
+/// marks (its places' tones, the workspaces' at its foot: one topic whichever workspace is shown), what it reads of it but
+/// the prefs, which are the app's whole.
+fn rail_opens(ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked()))
 }
 
 ///|
@@ -481,7 +482,7 @@ fn rail_place_node(item : @view.View, src : Source, tips : @sf.TipLayer, place :
   let tone = fn() {
     match ws() {
       Some(w) => {
-        let marks = src.topic("workspaceMarks", @sfbase.marks_asked(w.id)).get().value
+        let marks = src.topic("workspaceMarks", @sfbase.marks_asked()).get().value
         let here = field(field(marks, "workspaces"), w.id)
         match place {
           "chats" => text(here, "tone")
@@ -774,7 +775,7 @@ fn rail_workspaces_node(r : @view.View, src : Source, tips : @sf.TipLayer, at : 
   let ws = fn() { @sfbase.workspace_in_view(src).0 }
   let marks = fn() {
     match ws() {
-      Some(w) => field(src.topic("workspaceMarks", @sfbase.marks_asked(w.id)).get().value, "workspaces")
+      Some(_) => field(src.topic("workspaceMarks", @sfbase.marks_asked()).get().value, "workspaces")
       None => None
     }
   }

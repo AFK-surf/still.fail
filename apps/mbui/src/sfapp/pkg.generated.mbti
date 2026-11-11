@@ -66,7 +66,7 @@ pub fn attachment_of(@json.Json) -> @sfbase.Attachment
 
 pub fn attend(@sfbase.Source, String, Bool) -> Unit
 
-pub fn badge_frame(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+pub fn badge_frame(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn bar_landed() -> Double
 

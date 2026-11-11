@@ -3,7 +3,7 @@
 ///|
 fn init {
   let asked =
-    #|{"topic":"workspaceMarks","workspace":"ws"}
+    #|{"topic":"workspaceMarks"}
   let messages =
     #|[[{"path":["workspaces","ws","items",0,"at"],"set":1791277200650}]]
   put_changes(asked, "thing", messages)

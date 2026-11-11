@@ -2558,11 +2558,9 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What the settings say of the workspace as a whole (the `settings` view), over its stations." }),
   WorkspaceMarksView: struct([
     ["workspaces", map("WorkspaceMark")],
-    ["others", opt("String"), { doc: "alert | wait | done: the others' mark; none when nothing there wants anyone." }],
-    ["othersLabel", opt("String"), { doc: "其他 workspace：1 个出错了 · 2 个有新消息" }],
     ["badge", "u32", { default: true, doc: "What the app's badge says (the Dock's): every workspace's `badge`." }],
     ["badgeKinds", "BadgeKinds", { default: true, doc: "What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says." }],
-  ], { doc: "What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):\nby workspace id; and of those other than the one in view, the most urgent." }),
+  ], { doc: "What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):\nby workspace id, each with what the others have waiting; one value whichever is shown." }),
   WorkspaceWaysView: struct([
     ["ways", vec("WayRow")],
     ["off", "u32", { doc: "How many are turned off." }],
@@ -2588,6 +2586,8 @@ export const SHAPES: Record<string, Shape> = {
     ["elsewhere", opt("u32"), { doc: "Chats they take part in whose agent waits for someone else (not counted). Absent for 0." }],
     ["mineTone", opt("String"), { doc: "`tone` of only the chats they take part in (the 我参与的 list's; the whole list's is `tone`)." }],
     ["watchingTone", opt("String"), { doc: "`tone` of only the watching chats (the 监控中 list's)." }],
+    ["others", opt("String"), { doc: "While it is the one shown: alert | wait | done, the other workspaces' mark; none when nothing there wants\nanyone." }],
+    ["othersLabel", opt("String"), { doc: "That in words: 其他 workspace：1 个出错了 · 2 个有新消息" }],
   ], { doc: "A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many\nhave something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a\nchat's mark) and in words, none when it is 0 and 0; the chat last\nopen in it." }),
   MarkItem: struct([
     ["kind", "String", { doc: "alert (an agent of a chat they started went wrong) | wait (a card or need waiting for them) | done (unread)" }],

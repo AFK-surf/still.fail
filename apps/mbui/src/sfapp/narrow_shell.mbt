@@ -257,7 +257,7 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the core and the workspace links are opened against, as the frame ends (links.mbt)
   c.after_build("links", fn() { links_frame(src, w) })
   // the number on the app's icon (app_frame.mbt)
-  badge_frame(c, src, w)
+  badge_frame(c, src)
   // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
   // (whether one waits read as a signal: this part, kept as its nodes, built again as one is given)
   if links_wait() {
