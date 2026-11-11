@@ -189,3 +189,9 @@ pub fn Ease::at(self : Ease, t : Double) -> Double {
     Flight => bezier_at(0.6, 0.0, 0.2, 1.0, t)
   }
 }
+
+///|
+/// PRINT ONLY: the test file and where its Tester was made.
+pub fn zz_where() -> String {
+  "\{sizes_steady.file} (made at \{looks_made_at.val})"
+}

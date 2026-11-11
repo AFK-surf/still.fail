@@ -1218,6 +1218,7 @@ fn SheetRise::go(
     // from rest at its foot, as long as how tall it is as each frame lays it out, as before; NaN)
     let plan = if late && up && u - off.0 == 0.0 && v0 == 0.0 { @double.not_a_number } else { h }
     self.way = Some({ at, up, u0: u - off.0, v0, plan })
+    println("MOTION sheetgo \{@ui.zz_where()}: at=\{at} up=\{up} u0=\{u - off.0} v0=\{v0} h=\{h} hv=\{hv} late=\{late}")
     self.said.set(self.said.untracked() + 1)
   }
   match sheet.val {
