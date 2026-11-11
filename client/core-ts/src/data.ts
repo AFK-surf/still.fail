@@ -6,7 +6,7 @@
 // Topics of this data have no value of their own: their value is read from here (`shared`), by query, when it goes
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
-import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type LogTable, type RowChange, frozen } from "./db/account.ts";
+import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
 import type { MdStore } from "./markdown.ts";
@@ -297,6 +297,8 @@ export class Data {
   readonly #listReads = new Map<string, { signal: ReactiveSource<boolean>; station: string; kind: ListKind }>();
   readonly #slackNamesReads = new Map<string, { signal: ReactiveSource<number>; revision: number; names: [string, string][]; sawDifferent: boolean }>();
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
+  /// How the views judge whether this core can read an overview (judgeOverviews).
+  #fit: OverviewFit | null = null;
   /// Sign-ins for new profiles as their station answered a step of them (`login.new`, `login.code`), by station and
   /// login: shown in its overview's `logins` while the overview still has the login where the step found it (`from`: the
   /// state it moved on from; null, not listed yet). A code sent showed its field again, empty, until the station's next
@@ -405,6 +407,7 @@ export class Data {
       }
       if (db.readOnly) note = { kind: "newer", detail: null };
       db.onCommit = (changes) => this.#committed(changes);
+      db.fit = this.#fit;
       db.onFull = (full, error) => this.#setNote(sub, full ? { kind: "full", detail: error } : null);
       this.#dbs.set(sub, db);
       if (note) this.#setNote(sub, note);
@@ -662,7 +665,7 @@ export class Data {
     if (kind) return db.list(station, kind);
     switch (topic.topic) {
       case "overview":
-        if ([...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
+        if (this.#overlaid(station)) return this.shown(topic);
         return db.stationDoc(station, "overview");
       case "stationUsage":
         return db.stationDoc(station, "usage");
@@ -682,6 +685,12 @@ export class Data {
   get(topic: Topic): unknown {
     const v = topic.topic === "overview" ? this.#rawOverview(topic) : this.shared(topic);
     return v === undefined ? undefined : structuredClone(v);
+  }
+
+  /// Whether a station's overview is shown with what is being done to it here (a profile's models being saved, a
+  /// sign-in's step): `shared` gives it so, made anew, not as it is held.
+  #overlaid(station: string): boolean {
+    return [...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP));
   }
 
   #rawOverview(topic: Topic): unknown {
@@ -743,6 +752,7 @@ export class Data {
     this.#loginSteps.delete(key);
     if (isObject(job) && loginAt(this.#rawOverview({ topic: "overview", station }), id) === from) this.#loginSteps.set(key, { id, job, from });
     this.#tell({ topic: "overview", station });
+    this.#tellQuery({ topic: "$overview-fit", station });
   }
 
   /// The steps an overview of the station has gone past (or that it no longer has where they were): let go.
@@ -761,12 +771,14 @@ export class Data {
     if (this.#modelEdits.has(key)) return false;
     this.#modelEdits.set(key, [models, changed]);
     this.#tell({ topic: "overview", station });
+    this.#tellQuery({ topic: "$overview-fit", station });
     return true;
   }
 
   endModels(station: string, id: string): void {
     this.#modelEdits.delete(join([station, id]));
     this.#tell({ topic: "overview", station });
+    this.#tellQuery({ topic: "$overview-fit", station });
   }
 
   /// A held topic's new value (read, or as an event left it). `confirmed`: it came from its source just now (else it
@@ -1106,6 +1118,38 @@ export class Data {
   overviewPart(station: string): unknown {
     this.#readQuery({ topic: "$overview-part", station });
     return this.of(station)?.overviewPart(station);
+  }
+
+  /// What a station's row reads of its overview (account.ts overviewRow), kept beside it with the list's part: read in
+  /// a computed, it is made again only as that changes.
+  overviewRow(station: string): unknown {
+    this.#readQuery({ topic: "$overview-row", station });
+    return this.of(station)?.overviewRow(station);
+  }
+
+  /// How the views judge whether this core can read an overview, for each database to judge one as it is written and
+  /// keep the verdict beside it (account.ts #overviewWritten).
+  judgeOverviews(fit: OverviewFit | null): void {
+    this.#fit = fit;
+    for (const db of this.#dbs.values()) db.fit = fit;
+  }
+
+  /// Whether this core can read a station's overview as kept beside it (account.ts overviewFit): undefined, none held;
+  /// null, nothing kept for this core's shapes, or what is shown is not what is held (overlaid): to be judged as it is
+  /// read (and kept: keepOverviewFit). Read in a computed, it is made again as the overview changes.
+  overviewFit(station: string): boolean | null | undefined {
+    this.#readQuery({ topic: "$overview-fit", station });
+    const db = this.of(station);
+    if (!db) return undefined;
+    const fit = db.overviewFit(station);
+    return fit !== undefined && this.#overlaid(station) ? null : fit;
+  }
+
+  /// A verdict on a station's overview as it is held, judged as it was read (none was kept), kept beside it; none
+  /// where what was judged is not what is held (overlaid).
+  keepOverviewFit(station: string, readable: boolean): void {
+    if (this.#overlaid(station)) return;
+    this.of(station)?.keepOverviewFit(station, readable);
   }
 
   /// How many sidebar rows these stations have.

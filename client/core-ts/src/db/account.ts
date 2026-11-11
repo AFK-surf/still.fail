@@ -35,6 +35,12 @@ type J = any;
 /// its person, whether it asks something.
 export type Derive = { tone(row: J): string | null; asks(row: J): boolean };
 
+/// How this core judges whether it can read a station's overview (views.ts OVERVIEW_FIT, judged as the station's page
+/// would show it): `shapes`, the id of what judges it, which a verdict is kept by (`station_fit`; made as it is first
+/// read); `judge`, the verdict
+/// on an overview as the database holds it (the record `stationDoc` gives, so what judging it made serves its readers).
+export type OverviewFit = { readonly shapes: string; judge: (station: string, overview: J) => boolean };
+
 /// A chat row before and after a burst (undefined: not there).
 export type RowChange = { id: string; before: J | undefined; after: J | undefined };
 type ReadChatChange = RowChange & { archived: boolean; between?: J[] };
@@ -306,6 +312,9 @@ export class AccountDb {
   readonly #said: boolean = false;
   /// Whether each overview's part the chat list reads is kept (`station_part`; it could not be made without room).
   #parts = false;
+  /// How this core judges an overview as it is written, and keeps the verdict beside it (`station_fit`, made with
+  /// `station_part`); none: judged as it is read, nothing kept.
+  fit: OverviewFit | null = null;
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
   readonly #runner: Runner;
@@ -630,18 +639,18 @@ export class AccountDb {
 
   putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic | null): void {
     const put = () => this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
-    if (kind === "overview") this.#partWritten(station, put);
+    if (kind === "overview") this.#overviewWritten(station, put);
     else put();
   }
 
   dropStationDoc(station: string, kind: string, topic: Topic | null): void {
     const drop = () => this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
-    if (kind === "overview") this.#partWritten(station, drop);
+    if (kind === "overview") this.#overviewWritten(station, drop);
     else drop();
   }
 
-  /// What the chat list reads of a station's overview (schema.ts overviewPartOf), undefined while none is held: kept
-  /// beside it (`station_part`, by triggers), not the overview, which is not read.
+  /// What the chat list and a station's row read of a station's overview (schema.ts overviewPartOf), undefined while
+  /// none is held: kept beside it (`station_part`, by triggers), not the overview, which is not read.
   overviewPart(station: string): J {
     const key = K("part", station);
     if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
@@ -649,6 +658,21 @@ export class AccountDb {
     const part = text === undefined ? undefined : frozen(JSON.parse(text));
     this.#cache.set(key, part ?? null);
     return part;
+  }
+
+  /// What a station's row reads of its overview (the part's `row`: schema.ts overviewPartOf), undefined while none is
+  /// held or it is not an object. A part without it (a database a newer core wrote, kept otherwise) has it made of the
+  /// overview by SQLite.
+  overviewRow(station: string): J {
+    const part = this.overviewPart(station);
+    if (part === undefined) return undefined;
+    if ("row" in part) return part.row ?? undefined;
+    const key = K("row", station);
+    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+    const r = this.sql.all(`SELECT ${overviewPartOf("st.json")} -> '$.row' FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
+    const row = typeof r?.[0] === "string" ? frozen(JSON.parse(r[0])) : null;
+    this.#cache.set(key, row);
+    return row ?? undefined;
   }
 
   /// An overview's part as the database holds it; where it could not keep them (no room, a database a newer core
@@ -660,16 +684,70 @@ export class AccountDb {
     return typeof r?.[0] === "string" ? r[0] : undefined;
   }
 
-  /// The overview written or dropped by `write`, its part with it (the triggers): said (`$overview-part`) only where the
-  /// part is not what it was.
-  #partWritten(station: string, write: () => void): void {
+  /// Whether this core can read a station's overview as kept beside it (`station_fit`) for its shapes (`fit.shapes`):
+  /// undefined, no overview held; null, none kept (judged by another core's shapes, or not at all: written by a core
+  /// that knows nothing of it, before it, or where it could not be kept).
+  overviewFit(station: string): boolean | null | undefined {
+    const key = K("fit", station);
+    if (this.#cache.has(key)) {
+      const v = this.#cache.get(key);
+      return v === "none" ? undefined : v;
+    }
+    let v: boolean | null | undefined;
+    if (!this.#parts || this.readOnly || this.fit === null) {
+      // (nothing kept: whether there is an overview, by its key alone)
+      v = this.sql.all("SELECT 1 FROM station WHERE address = ? AND kind = 'overview'", [station]).length > 0 ? null : undefined;
+    } else {
+      const r = this.sql.all("SELECT EXISTS (SELECT 1 FROM station WHERE address = ?1 AND kind = 'overview'), (SELECT readable FROM station_fit WHERE address = ?1 AND shapes = ?2)", [station, this.fit.shapes])[0];
+      v = r === undefined || r[0] === 0 ? undefined : r[1] === null || r[1] === undefined ? null : r[1] === 1;
+    }
+    this.#cache.set(key, v === undefined ? "none" : v);
+    return v;
+  }
+
+  /// A verdict on a station's overview as it is held (judged as it was read: none was kept), kept beside it.
+  keepOverviewFit(station: string, readable: boolean): void {
+    if (!this.#parts || this.readOnly || this.fit === null) return;
+    const shapes = this.fit.shapes;
+    this.#write(() => {
+      this.sql.run("INSERT OR REPLACE INTO station_fit (address, shapes, readable) VALUES (?, ?, ?)", [station, shapes, readable ? 1 : 0]);
+      this.#cache.set(K("fit", station), readable);
+    });
+  }
+
+  /// The overview written or dropped by `write`, its part with it (the triggers): said only where the part is not what
+  /// it was, as what the chat list reads (`$overview-part`) and as what a station's row reads (`$overview-row`) each
+  /// changed. Where the overview is not what it was, its verdict (dropped by the triggers) is this core's again, judged
+  /// as it is written (`fit`), and said (`$overview-fit`).
+  #overviewWritten(station: string, write: () => void): void {
     this.#write(() => {
       const before = this.#partText(station);
+      const key = K("st", station, "overview");
+      const was = this.#cache.get(key);
       write();
       const after = this.#partText(station);
-      if (after === before) return;
-      this.#cache.set(K("part", station), after === undefined ? null : frozen(JSON.parse(after)));
-      this.#tell({ topic: "$overview-part", station });
+      if (after !== before) {
+        const [b, a] = [before === undefined ? undefined : JSON.parse(before), after === undefined ? undefined : frozen(JSON.parse(after))];
+        this.#cache.set(K("part", station), a ?? null);
+        this.#cache.delete(K("row", station));
+        const rest = (p: J) => (p === undefined ? undefined : { ...p, row: undefined });
+        if (!equal(rest(b), rest(a))) this.#tell({ topic: "$overview-part", station });
+        if (!equal(b?.row, a?.row)) this.#tell({ topic: "$overview-row", station });
+      }
+      const now = this.#cache.get(key);
+      if (now === was && now !== undefined) return;
+      this.#cache.delete(K("fit", station));
+      this.#tell({ topic: "$overview-fit", station });
+      if (!this.#parts || this.fit === null || !isObject(now)) return;
+      let readable: boolean;
+      try {
+        readable = this.fit.judge(station, now);
+      } catch {
+        // (not judged: judged again as it is read)
+        return;
+      }
+      this.sql.run("INSERT OR REPLACE INTO station_fit (address, shapes, readable) VALUES (?, ?, ?)", [station, this.fit.shapes, readable ? 1 : 0]);
+      this.#cache.set(K("fit", station), readable);
     });
   }
 

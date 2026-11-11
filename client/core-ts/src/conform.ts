@@ -183,6 +183,43 @@ function walk(v: unknown, ty: Ty, path: string): unknown {
   return out;
 }
 
+/// What a value is put through as shape `ty` is, as a key (its length and two FNV-1a hashes): of every shape it
+/// reaches, as declared (src/shapes/schema.ts) of what conform reads (not their words for people or the clients'
+/// types), so another whenever one of them is declared otherwise. What a verdict on whether a value fits is kept by
+/// (views.ts OVERVIEW_FIT).
+export function shapeKey(ty: Ty): string {
+  const reached = new Map<string, unknown>();
+  const reach = (t: Ty): void => {
+    if (typeof t !== "string") {
+      if ("opt" in t) reach(t.opt);
+      else if ("vec" in t) reach(t.vec);
+      else if ("map" in t) reach(t.map);
+      else for (const x of t.tuple) reach(x);
+      return;
+    }
+    const shape = SHAPES[t];
+    if (shape === undefined || reached.has(t)) return;
+    if (shape.kind === "struct") {
+      reached.set(t, [shape.default, shape.fields.map((f) => [f.name, f.ty, f.default, f.skipNone])]);
+      for (const f of shape.fields) reach(f.ty);
+    } else if (shape.kind === "enum") reached.set(t, [shape.values, shape.default]);
+    else {
+      reached.set(t, [shape.tag, shape.content, shape.variants]);
+      for (const v of Object.values(shape.variants)) reach(v);
+    }
+  };
+  reach(ty);
+  const text = JSON.stringify([ty, [...reached]]);
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x0100019d);
+  }
+  return `${text.length}.${(a >>> 0).toString(36)}.${(b >>> 0).toString(36)}`;
+}
+
 /// The value through the shape `ty`, or why not (`path: what`).
 export function conform(ty: Ty, value: unknown): { ok: unknown } | { error: string } {
   return conformTy(ty, value);
