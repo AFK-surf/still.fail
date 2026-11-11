@@ -265,7 +265,7 @@ fn textrec(args : Array[String]) -> Int {
     "  let t = @ui.Tester::new(fn(c) { gallery(c, \"\{page}\") }, w=\{w}, h=\{h}, text=run_\{name}, run=run_\{name}, scale=\{scale}, time=\{t0} - 16.0, stable=\{stable}\{plat})",
     "  let frames = t.replay_frames(run_\{name})",
     "  let apart = frames.filter(fn(f) { f.1 != f.2 })",
-    "  println(\"frames \\{frames.length()}, apart \\{apart.length()}, text missing \\{t.text_missing()}\")",
+    "  println(\"frames \\{frames.length()}, apart \\{apart.length()}, text missing \\{Repr(t.text_missing())}\")",
     "  if apart.length() > 0 {",
     "    println(\"first apart: frame \\{apart[0].0}\")",
     "    for line in t.drawn_text().split(\"\\n\") {",
