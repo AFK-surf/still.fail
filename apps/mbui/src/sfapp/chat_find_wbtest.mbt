@@ -440,7 +440,7 @@ test "对话目录: the pointer moved onto a row takes the keys there, one groun
   assert_eq(at_first.length(), 1, msg="\{at_first}")
   // (onto the row under the reader's: 林's 10:35, seq 23)
   let (gx, gy, gw, gh, _) = at_first[0]
-  t.move(gx + gw / 2.0, gy + gh * 1.5)
+  t.move_to(gx + gw / 2.0, gy + gh * 1.5)
   t.run_for(@ui.move_most_ms)
   let after = grounds()
   assert_eq(after.length(), 1, msg="\{after}")
