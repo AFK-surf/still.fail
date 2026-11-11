@@ -520,7 +520,8 @@ for t in $targets; do
   done
   for p in "${pids[@]}"; do wait $p || code=1; done
   for i in "${!runs[@]}"; do [ -f "$out.$i" ] && cat "$out.$i"; rm -f "$out.$i"; done > "$out"
-  # (how what moves goes, said where a run counts it (MBUI_TEST_MOTION=count): all of it kept, past LINES_OUT's tail)
+  # (how what moves goes and each file's bars, said where a run says them (mbui's src/ui/tester_fps.mbt: motion_runs, at
+  # 60 and 120 and with MBUI_TEST_BARS at the default rate): all of it kept, past LINES_OUT's tail)
   [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
   # (each flow's pace passes, where each split from its strict pass (src/sfreplay's orders), past LINES_OUT's tail)
   grep -a '^PACE [^ ]*: ' "$out"

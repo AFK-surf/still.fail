@@ -539,12 +539,12 @@ fn Tester::hold_sizes_steady(self : Tester) -> Unit {
       continue
     }
     sizes_steady.found.add(who)
+    let bar = sizes_steady_bars.get(sizes_steady.file).unwrap_or(0)
+    motion_known_said("sizes_steady", sizes_steady.file, sizes_steady.found.length(), bar, f)
     if self.motion == Count {
       println("MOTION sizes_steady \{sizes_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
       continue
     }
-    let bar = sizes_steady_bars.get(sizes_steady.file).unwrap_or(0)
-    motion_known_said("sizes_steady", sizes_steady.file, sizes_steady.found.length(), bar, f)
     if sizes_steady.found.length() > bar {
       let said = "sizes not steady (sizes_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{sizes_steady.found.length()} now, \{bar} known in \{sizes_steady.file}"
