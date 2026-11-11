@@ -67,6 +67,7 @@ fn sizes_steady_begin(loc : String, held : Bool) -> Unit {
     None => loc
   }
   @flex.zz_file.val = sizes_steady.file
+  @flex.fill_file.val = sizes_steady.file
 }
 
 ///|

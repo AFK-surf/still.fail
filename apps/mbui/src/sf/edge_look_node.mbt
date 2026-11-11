@@ -21,12 +21,20 @@ pub fn EdgeWay::new(v : Double) -> EdgeWay {
 ///|
 /// Off to `to` over `ms` (eased out, or as `ease` says) from `n`'s cause's moment, from where it is then; its end a
 /// moment of `n`'s.
-pub fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double, ease? : @ui.Ease = Out) -> Unit {
+#callsite(autofill(loc))
+pub fn EdgeWay::go(
+  self : EdgeWay,
+  n : @view.View,
+  to : Double,
+  ms : Double,
+  ease? : @ui.Ease = Out,
+  loc~ : SourceLoc,
+) -> Unit {
   if self.way.target() == to {
     return
   }
   (self.due)()
-  self.way.go(to, @motion.tween(ms, ease~), at=n.cause_at())
+  self.way.go(to, @motion.tween(ms, ease~), at=n.cause_at(), loc~)
   self.due = if self.way.ends_at() >= 0.0 {
     n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
@@ -38,18 +46,20 @@ pub fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double, eas
 /// Off to `to` as `spec` says (a Move by how far it goes) from `n`'s cause's moment, from where it is then (as fast as
 /// it goes then); its end a moment of `n`'s.
 /// `velocity`: as fast as that instead (per second: a hand letting it go).
+#callsite(autofill(loc))
 pub fn EdgeWay::go_by(
   self : EdgeWay,
   n : @view.View,
   to : Double,
   spec : @motion.Spec,
   velocity? : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
   if self.way.target() == to {
     return
   }
   (self.due)()
-  self.way.go(to, spec, at=n.cause_at(), velocity?)
+  self.way.go(to, spec, at=n.cause_at(), velocity?, loc~)
   self.due = if self.way.ends_at() >= 0.0 {
     n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
@@ -60,10 +70,18 @@ pub fn EdgeWay::go_by(
 ///|
 /// Off from `from` (put there at that moment, still) to `to` as `spec` says, from `n`'s cause's moment; its end a moment
 /// of `n`'s: gone again from the start of its way (a cover's, sent to another item).
-pub fn EdgeWay::go_from(self : EdgeWay, n : @view.View, from : Double, to : Double, spec : @motion.Spec) -> Unit {
+#callsite(autofill(loc))
+pub fn EdgeWay::go_from(
+  self : EdgeWay,
+  n : @view.View,
+  from : Double,
+  to : Double,
+  spec : @motion.Spec,
+  loc~ : SourceLoc,
+) -> Unit {
   (self.due)()
   self.way.put(from)
-  self.way.go(to, spec, at=n.cause_at())
+  self.way.go(to, spec, at=n.cause_at(), loc~)
   self.due = if self.way.ends_at() >= 0.0 {
     n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {

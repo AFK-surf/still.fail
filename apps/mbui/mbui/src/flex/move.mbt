@@ -687,3 +687,6 @@ pub let zz_file : Ref[String] = Ref("")
 pub fn zz_way(kind : String, at : Double, from : Double, v : Double, to : Double) -> Unit {
   println("MOTION way \{zz_file.val}: \{kind} at=\{at} from=\{from} v=\{v} to=\{to}")
 }
+/// NUMBERS ONLY (a draft): the test file a Tester was made in, for view's fill_told lines (set by ui as a Tester is made).
+// kept across runs: set by each Tester (ui's sizes_steady_begin)
+pub let fill_file : Ref[String] = Ref("")
