@@ -19,14 +19,262 @@
 // row come).
 
 ///|
-/// A block of a list's column as its tops are worked out (View::scrolls_window's `laid`): its key, its top in the
-/// column, its height, and whether it was laid out (else as tall as said it would be). Written again in its place as
-/// they are worked out again, none made each time.
+/// A block of a list's column as it is counted now (View::scrolls_window's `laid`, a Column's): its key, its top in
+/// the column, its height, and whether it was laid out (else as tall as said it would be).
 priv struct Laid[K] {
-  mut key : K
-  mut top : Double
-  mut h : Double
-  mut known : Bool
+  key : K
+  top : Double
+  h : Double
+  known : Bool
+}
+
+///|
+/// A page's list's blocks as they are counted (View::scrolls_window's `laid`): their keys, each one's height as it is
+/// laid out (on its host's pixels where it sets a page's list's rows on them) and whether it was laid out, and the sums
+/// of those heights two by two up a tree. Each sum is its two parts' as they are now, added anew whenever one of them
+/// changes, none ever added to or taken from: where a block's top is (the sum of all over it, taken down the tree in
+/// one order of adding) is a function of the heights as they are now and of how many there are, whatever order they
+/// were measured in; on a host's pixels put on the grid's own number for the pixel it comes to, as flex puts each row's
+/// top (layout_flex's rows_grid). A height told changes its leaf and the sums over it, as many as the tree is deep;
+/// a top is that many additions: what is counted of 1,500 keys as one is measured no more than of 30, but for a few.
+priv struct Column[K] {
+  mut keys : Array[K]
+  hs : Array[Double]
+  knowns : Array[Bool]
+  /// the tree, `cap` leaves (the heights, then 0) from `cap` on, each sum over them at half its index, the whole at 1
+  mut sums : Array[Double]
+  /// each top as it was last read and the count of changes it was read at (`told`): read again only once a height is
+  /// told or all of it filled again since, never added up anew for each reading of it
+  tops : Array[Double]
+  tops_at : Array[Int]
+  mut told : Int
+  mut cap : Int
+  mut grid : Double
+  /// the leaves put since it was filled again (Column::refill) that the sums over them are to be added anew for, from
+  /// and up to (Column::summed)
+  mut from : Int
+  mut upto : Int
+}
+
+///|
+fn[K] Column::new() -> Column[K] {
+  {
+    keys: [],
+    hs: [],
+    knowns: [],
+    sums: [0.0, 0.0],
+    tops: [],
+    tops_at: [],
+    told: 0,
+    cap: 1,
+    grid: 0.0,
+    from: 0,
+    upto: 0,
+  }
+}
+
+///|
+fn[K] Column::length(self : Column[K]) -> Int {
+  self.keys.length()
+}
+
+///|
+/// All of it again: `keys`, each with its height as laid out on the grid of `g` pixels a point and whether it was laid
+/// out.
+fn[K : Eq] Column::fill(self : Column[K], keys : Array[K], hs : Array[(Double, Bool)], g : Double) -> Unit {
+  self.refill(keys, g, whole=true) |> ignore
+  for i, h in hs {
+    self.put(i, h.0, h.1)
+  }
+  self.summed()
+}
+
+///|
+/// Filled again for `keys` on the grid of `g` pixels a point, kept as it is up to the first place whose key is not the
+/// key it held there (`whole`: from the first): that place, from which each block's height is to be put
+/// (Column::put), the sums over them then added anew (Column::summed). Its shape is a function of how many blocks it
+/// holds alone (a block at place i in the same leaf whatever came before), so what is kept is what a filling of all of
+/// it would have come to: a key appended puts one leaf and adds the sums over it, as a height told does; a key put in
+/// before the first, all of it. Whether the heights of those kept changed is told by Column::set, as ever. What it keeps
+/// is written where it is, grown or cut to as many: nothing made again for each key.
+fn[K : Eq] Column::refill(self : Column[K], keys : Array[K], g : Double, whole? : Bool = false) -> Int {
+  let n = keys.length()
+  let was = self.keys.length()
+  let mut cap = 1
+  while cap < n {
+    cap = cap * 2
+  }
+  // (the first place whose key is another: compared key by key, never by the arrays' being one)
+  let mut p = 0
+  let same_shape = g == self.grid && cap == self.cap && self.sums.length() == 2 * cap
+  if same_shape && !whole {
+    let m = if n < was { n } else { was }
+    while p < m && keys[p] == self.keys[p] {
+      p = p + 1
+    }
+  }
+  self.keys = keys
+  self.grid = g
+  // (every top kept read again: none of them read at this count)
+  self.told = self.told + 1
+  if self.hs.length() > n {
+    self.hs.truncate(n)
+    self.knowns.truncate(n)
+  }
+  while self.hs.length() < n {
+    self.hs.push(0.0)
+    self.knowns.push(false)
+  }
+  while self.tops.length() < n {
+    self.tops.push(0.0)
+    self.tops_at.push(-1)
+  }
+  self.cap = cap
+  if same_shape {
+    // (the leaves it held past as many as it holds now: none)
+    for i in n..<(if was < cap { was } else { cap }) {
+      self.sums[cap + i] = 0.0
+    }
+  } else {
+    self.sums = Array::make(2 * cap, 0.0)
+  }
+  self.from = p
+  self.upto = if was > n && same_shape { (if was < cap { was } else { cap }) } else { n }
+  p
+}
+
+///|
+/// Block `i`'s height as laid out on the grid and whether it was laid out, as it is filled again (Column::refill).
+fn[K] Column::put(self : Column[K], i : Int, h : Double, known : Bool) -> Unit {
+  self.hs[i] = h
+  self.knowns[i] = known
+  self.sums[self.cap + i] = h
+}
+
+///|
+/// The sums over the leaves put since it was filled again (Column::put) added anew, each its two parts' as they are
+/// now, from the leaves up: those over the leaves from where it was kept, no others.
+fn[K] Column::summed(self : Column[K]) -> Unit {
+  guard self.from < self.upto else { return }
+  let sums = self.sums
+  let mut lo = (self.cap + self.from) / 2
+  let mut hi = (self.cap + self.upto - 1) / 2
+  while lo >= 1 {
+    for q in lo..=hi {
+      sums[q] = sums[2 * q] + sums[2 * q + 1]
+    }
+    lo = lo / 2
+    hi = hi / 2
+  }
+  self.from = 0
+  self.upto = 0
+}
+
+///|
+/// Block `i`'s height told: `h` as laid out on the grid, whether it was laid out; the sums over it added anew.
+fn[K] Column::set(self : Column[K], i : Int, h : Double, known : Bool) -> Unit {
+  self.told = self.told + 1
+  self.hs[i] = h
+  self.knowns[i] = known
+  let mut p = self.cap + i
+  self.sums[p] = h
+  p = p / 2
+  while p >= 1 {
+    self.sums[p] = self.sums[2 * p] + self.sums[2 * p + 1]
+    p = p / 2
+  }
+}
+
+///|
+/// Where block `i`'s top is: the sums of all over it, taken from the root down to it (the one order of adding for it),
+/// on the grid's own number for its pixel where there is one.
+fn[K] Column::top(self : Column[K], i : Int) -> Double {
+  if self.tops_at[i] == self.told {
+    return self.tops[i]
+  }
+  let mut acc = 0.0
+  let mut node = 1
+  let mut lo = 0
+  let mut hi = self.cap
+  while node < self.cap {
+    let mid = (lo + hi) / 2
+    if i < mid {
+      node = 2 * node
+      hi = mid
+    } else {
+      acc = acc + self.sums[2 * node]
+      node = 2 * node + 1
+      lo = mid
+    }
+  }
+  let g = self.grid
+  let t = if g > 0.0 { (acc * g + 0.5).floor() / g } else { acc }
+  self.tops[i] = t
+  self.tops_at[i] = self.told
+  t
+}
+
+///|
+/// Block `i`'s key, height as laid out, and whether it was laid out.
+fn[K] Column::key(self : Column[K], i : Int) -> K {
+  self.keys[i]
+}
+
+///|
+fn[K] Column::h(self : Column[K], i : Int) -> Double {
+  self.hs[i]
+}
+
+///|
+fn[K] Column::known(self : Column[K], i : Int) -> Bool {
+  self.knowns[i]
+}
+
+///|
+/// Block `i` as it is counted now.
+fn[K] Column::op_get(self : Column[K], i : Int) -> Laid[K] {
+  { key: self.keys[i], top: self.top(i), h: self.hs[i], known: self.knowns[i] }
+}
+
+///|
+/// The last block as it is counted now; none where there is none.
+fn[K] Column::last(self : Column[K]) -> Laid[K]? {
+  if self.keys.length() == 0 {
+    None
+  } else {
+    Some(self[self.keys.length() - 1])
+  }
+}
+
+///|
+/// The first block whose foot is past `y`, as they go down (each foot no higher than the next one's); as many as there
+/// are where none is. Its foot is where the next one's top is (the last one's, where all of them end), so it is found
+/// going down the sums once, as Column::top goes down them for one top: at each sum, the top of the first block of its
+/// right half (all over it, added in the same order, on the grid's number for its pixel) past `y` or not.
+fn[K] Column::first_past(self : Column[K], y : Double) -> Int {
+  let n = self.keys.length()
+  let g = self.grid
+  let on_grid = fn(t : Double) { if g > 0.0 { (t * g + 0.5).floor() / g } else { t } }
+  if n == 0 || on_grid(self.sums[1]) <= y {
+    return n
+  }
+  let mut acc = 0.0
+  let mut node = 1
+  let mut lo = 0
+  let mut hi = self.cap
+  while node < self.cap {
+    let mid = (lo + hi) / 2
+    let right = acc + self.sums[2 * node]
+    if on_grid(right) > y {
+      node = 2 * node
+      hi = mid
+    } else {
+      acc = right
+      node = 2 * node + 1
+      lo = mid
+    }
+  }
+  if lo < n { lo } else { n }
 }
 
 ///|
@@ -115,9 +363,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
   })
   // (each block's top in the column and its height, in order: as tall as it was measured, else est)
-  // (the keys they were worked out for, where each is among them, and its height and whether it was laid out: made
-  // again as the keys change, else only those whose height changed since)
+  // (the keys they were worked out for and where each is among them; what they come to, counted (Column): made again as
+  // the keys change, else only those whose height changed since told it)
   let laid_keys : Ref[Array[K]] = Ref([])
+  let laid_at : Map[K, Int] = Map([])
   // (each key's number, given as it is first asked (words picked in its row: View::row_place), kept while the list
   // lives: what its row is known by, whichever node it is made in (Tree's rows_named); a key come back the same row)
   let row_numbers : Map[K, Int] = Map([])
@@ -132,17 +381,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
     }
   }
-  let laid_at : Map[K, Int] = Map([])
-  let laid_h : Array[(Double, Bool)] = []
   let height_of = fn(k : K) {
     match heights.get(k) {
       Some(h) => (h, true)
       None => (est, false)
     }
   }
-  // (what they come to, one array kept and written again from the first whose height changed down, those over it as
-  // they were: told changed each time it is worked out, the same array)
-  let laid_out : Array[Laid[K]] = []
+  let column : Column[K] = Column::new()
   let laid_grid = Ref(-1.0)
   // (how many times they were worked out: what shows by them worked out again each time)
   let laid_rev = Ref(0)
@@ -153,74 +398,50 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (as tall as each is laid out in the column: on its host's pixels where it sets a page's list's rows on them,
     // Tree::rows_slot)
     let g = self.tree.rows_grid_now()
-    let mut from = 0
-    if physical_equal(ks, laid_keys.val) && g == laid_grid.val && laid_out.length() == ks.length() {
-      from = ks.length()
+    if physical_equal(ks, laid_keys.val) && g == laid_grid.val && column.length() == ks.length() {
       for k in heights_changed {
         match laid_at.get(k) {
           Some(i) => {
-            laid_h[i] = height_of(k)
-            from = from.min(i)
+            let (h, known) = height_of(k)
+            column.set(i, rows_slot_on(h, g), known)
           }
           None => ()
         }
       }
     } else {
       laid_keys.val = ks
-      laid_at.clear()
-      laid_h.clear()
-      laid_out.clear()
-      for i, k in ks {
+      // (kept as it was up to the first key that is another: from there its keys found and their heights put again; the
+      // heights told of those kept told as ever)
+      let was = column.keys
+      let p = column.refill(ks, g)
+      for i in p..<was.length() {
+        if laid_at.get(was[i]) == Some(i) {
+          laid_at.remove(was[i])
+        }
+      }
+      for i in p..<ks.length() {
+        let k = ks[i]
         laid_at[k] = i
-        laid_h.push(height_of(k))
+        let (h, known) = height_of(k)
+        column.put(i, rows_slot_on(h, g), known)
+      }
+      column.summed()
+      for k in heights_changed {
+        match laid_at.get(k) {
+          Some(i) if i < p => {
+            let (h, known) = height_of(k)
+            column.set(i, rows_slot_on(h, g), known)
+          }
+          _ => ()
+        }
       }
     }
     laid_grid.val = g
     heights_changed.clear()
-    // (each top on the rows' grid where they are on one, as flex puts them there (layout_flex's rows_grid): a sum of
-    // whole pixels put on the grid's own number for the one it comes to, the same number whatever was added again from
-    // where)
-    let mut top = if from > 0 {
-      let b = laid_out[from - 1]
-      if g > 0.0 {
-        ((b.top + b.h) * g + 0.5).floor() / g
-      } else {
-        b.top + b.h
-      }
-    } else {
-      0.0
-    }
-    for i in from..<ks.length() {
-      let (h, known) = laid_h[i]
-      let h = rows_slot_on(h, g)
-      // (each written again in its place, none made but for one more than before)
-      if i < laid_out.length() {
-        let b = laid_out[i]
-        b.key = ks[i]
-        b.top = top
-        b.h = h
-        b.known = known
-      } else {
-        laid_out.push({ key: ks[i], top, h, known })
-      }
-      top = if g > 0.0 { ((top + h) * g + 0.5).floor() / g } else { top + h }
-    }
-    laid_out
+    column
   }, same=fn(_, _) { false })
   // (the first of them whose foot is past `y`, as they go down: each foot no higher than the next one's)
-  let first_past = fn(all : Array[Laid[K]], y : Double) {
-    let mut lo = 0
-    let mut hi = all.length()
-    while lo < hi {
-      let mid = (lo + hi) / 2
-      if all[mid].top + all[mid].h > y {
-        hi = mid
-      } else {
-        lo = mid + 1
-      }
-    }
-    lo
-  }
+  let first_past = fn(all : Column[K], y : Double) { all.first_past(y) }
   // (where it is scrolled to, as what it holds is drawn now)
   let at = fn() { s.drawn(self.tree) }
   // (made at its foot where it follows it: Scroll::to_foot, there however far that comes to be)
@@ -260,7 +481,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   )
   // (the anchor among the blocks as they are counted now, or the first of its stand-ins that is: where it is among them
   // and how far down its top the top of what shows was; none put yet, or none of them left, none)
-  let held_at = fn(all : Array[Laid[K]]) -> (Int, Double)? {
+  let held_at = fn(all : Column[K]) -> (Int, Double)? {
     guard anchor.val is Some((k, off)) else { return None }
     if laid_at.get(k) is Some(i) && i < all.length() {
       return Some((i, off))
@@ -275,15 +496,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (where the top of what shows is by where the blocks are counted now: the anchor's, moved as the scroll was since it
   // was put; none yet, where the scroll is. What came in or went over what shows since has moved the blocks' tops, not
   // yet the scroll (its fill puts it): by the scroll alone, what shows would be read off other blocks.)
-  let top_now = fn(all : Array[Laid[K]], x : Double) {
+  let top_now = fn(all : Column[K], x : Double) {
     match (held_at(all), anchor_x.val) {
-      (Some((i, off)), Some(was)) => all[i].top + off + (x - was)
+      (Some((i, off)), Some(was)) => all.top(i) + off + (x - was)
       _ => x
     }
   }
   // (where the top of what shows is with the column at its foot, showing `vh` of it: by its blocks as they are counted
   // now and its foot's room, followed)
-  let foot_top = fn(all : Array[Laid[K]], vh : Double) {
+  let foot_top = fn(all : Column[K], vh : Double) {
     let blocks_h = match all.last() {
       Some(b) => b.top + b.h
       None => 0.0
@@ -356,9 +577,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     None => ()
   }
   // (the first from `i` on that holds what shows: none of them, the `i`th)
-  let holding = fn(all : Array[Laid[K]], i : Int) {
+  let holding = fn(all : Column[K], i : Int) {
     let mut j = i
-    while j < all.length() && !holds(all[j].key) {
+    while j < all.length() && !holds(all.key(j)) {
       j = j + 1
     }
     if j < all.length() {
@@ -439,7 +660,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         let to = match ask {
           Bring(k, off) =>
             match laid_at.get(k) {
-              Some(i) if i < all.length() => Some(all[i].top + off)
+              Some(i) if i < all.length() => Some(all.top(i) + off)
               _ => None
             }
           ToEnd => Some(most)
@@ -485,17 +706,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // holds where the column is as it is moved, before one come in over it measured otherwise)
   let seen_rows : Map[K, Bool] = Map([])
   // (what is made, the stretch it covers, as `shown_now` says)
-  let made_now = fn(all : Array[Laid[K]]) {
+  let made_now = fn(all : Column[K]) {
     match (shown_now.get(0), shown_now.last()) {
       (Some(a), Some(b)) =>
         match (laid_at.get(a), laid_at.get(b)) {
           (Some(i), Some(j)) =>
             made.set(
               (
-                if i == 0 { @double.neg_infinity } else { all[i].top },
-                all[i].top + all[i].h,
-                all[j].top,
-                if j == all.length() - 1 { @double.infinity } else { all[j].top + all[j].h },
+                if i == 0 { @double.neg_infinity } else { all.top(i) },
+                all.top(i) + all.h(i),
+                all.top(j),
+                if j == all.length() - 1 { @double.infinity } else { all.top(j) + all.h(j) },
               ),
             )
           _ => ()
@@ -509,7 +730,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // past it start is known only then; what is sure stays made whatever comes in over it or under it. `up_first`: the
   // first of them is sure by its top (those over it sure too, measured or not); else by its foot. None sure (`lo`
   // past `hi`): from the first that meets it down, as far as the first never measured.)
-  let window = fn(all : Array[Laid[K]], top : Double, vh : Double, lo : Int, hi : Int, up_first : Bool) -> Array[K] {
+  let window = fn(all : Column[K], top : Double, vh : Double, lo : Int, hi : Int, up_first : Bool) -> Array[K] {
     let now = []
     // (showing none of it, a page under another: none made, the one it is held by neither, what it reads let go)
     if vh <= 0.0 {
@@ -517,9 +738,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     if lo > hi {
       let mut i = first_past(all, top)
-      while i < all.length() && all[i].top < top + vh {
-        now.push(all[i].key)
-        if !all[i].known {
+      while i < all.length() && all.top(i) < top + vh {
+        now.push(all.key(i))
+        if !all.known(i) {
           break
         }
         i = i + 1
@@ -527,38 +748,38 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       return now
     }
     let mut a = lo
-    if all[lo].known || up_first {
+    if all.known(lo) || up_first {
       let mut i = lo - 1
-      while i >= 0 && all[i].top + all[i].h > top {
+      while i >= 0 && all.top(i) + all.h(i) > top {
         a = i
-        if !all[i].known {
+        if !all.known(i) {
           break
         }
         i = i - 1
       }
     }
     let mut b = hi
-    if all[hi].known {
+    if all.known(hi) {
       let mut i = hi + 1
-      while i < all.length() && all[i].top < top + vh {
+      while i < all.length() && all.top(i) < top + vh {
         b = i
-        if !all[i].known {
+        if !all.known(i) {
           break
         }
         i = i + 1
       }
     }
     for i in a..=b {
-      now.push(all[i].key)
+      now.push(all.key(i))
     }
     // (past one never measured, come in among those that show: those made under it that meet where it shows as they
     // are counted kept made, not let go to be made again once it is measured; where they are is worked out then, and
     // they go only if it puts them out of sight)
-    if !all[b].known {
+    if !all.known(b) {
       let mut i = b + 1
-      while i < all.length() && all[i].top < top + vh {
-        if showing.contains(all[i].key) {
-          now.push(all[i].key)
+      while i < all.length() && all.top(i) < top + vh {
+        if showing.contains(all.key(i)) {
+          now.push(all.key(i))
         }
         i = i + 1
       }
@@ -604,7 +825,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let mut hi = -1
     for k in shown_now {
       guard seen_rows.contains(k) && laid_at.get(k) is Some(i) && i < all.length() else { continue }
-      if all[i].top + all[i].h > x && all[i].top < x + vh {
+      if all.top(i) + all.h(i) > x && all.top(i) < x + vh {
         lo = lo.min(i)
         hi = hi.max(i)
       }
@@ -670,7 +891,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let fresh = fn() {
         let i = first_past(all, x)
         if i < all.length() {
-          (i, x - all[i].top)
+          (i, x - all.top(i))
         } else {
           (all.length() - 1, 0.0)
         }
@@ -693,7 +914,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         let all = laid.untracked()
         if all.length() > 0 {
           let i = ai.min(all.length() - 1).max(0)
-          let at_now = all[i].top + aoff
+          let at_now = all.top(i) + aoff
           let j = holding(all, first_past(all, at_now).min(all.length() - 1))
           // (what was seen and still shows holding it, before one come to show: what comes in over it measured
           // otherwise than it was counted moves what was seen none, the column moved with it instead)
@@ -703,13 +924,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           }
           let mut seen = j
           while seen < all.length() &&
-                all[seen].top < at_now + vh &&
-                !(seen_rows.contains(all[seen].key) && holds(all[seen].key)) {
+                all.top(seen) < at_now + vh &&
+                !(seen_rows.contains(all.key(seen)) && holds(all.key(seen))) {
             seen = seen + 1
           }
-          let j = if seen < all.length() && all[seen].top < at_now + vh { seen } else { j }
+          let j = if seen < all.length() && all.top(seen) < at_now + vh { seen } else { j }
           ai = j
-          aoff = at_now - all[j].top
+          aoff = at_now - all.top(j)
         }
       }
       _ => ()
@@ -785,13 +1006,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // (a block brought to the middle: by its height as it is counted now, measured or not, again as it is measured)
       ai = ai.min(all.length() - 1).max(0)
       if centring {
-        aoff = all[ai].h / 2.0 - vh / 2.0
+        aoff = all.h(ai) / 2.0 - vh / 2.0
       }
       let most = dmax(0.0, whole_now() - vh)
-      top = if follows_foot || to_end { most } else { dclamp(all[ai].top + aoff, 0.0, most) }
+      top = if follows_foot || to_end { most } else { dclamp(all.top(ai) + aoff, 0.0, most) }
       match from {
-        Some((i, margin)) if follows_foot && i < all.length() && all[i].top - margin < most => {
-          top = dmax(0.0, all[i].top - margin)
+        Some((i, margin)) if follows_foot && i < all.length() && all.top(i) - margin < most => {
+          top = dmax(0.0, all.top(i) - margin)
           follows_foot = false
           // (held by it from now, as it is measured anew in this fill too)
           ai = i
@@ -815,15 +1036,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         // output following its end made every line it showed again for each line more, 2026-11-11)
         let mut i = all.length() - 1
         let mut from = all.length() - 1
-        while i >= 0 && all[i].top + all[i].h > top {
-          if all[i].known {
+        while i >= 0 && all.top(i) + all.h(i) > top {
+          if all.known(i) {
             from = i
             break
           }
           i = i - 1
         }
         from
-      } else if all[ai].top + all[ai].h > top && all[ai].top < top + vh {
+      } else if all.top(ai) + all.h(ai) > top && all.top(ai) < top + vh {
         ai
       } else {
         first_past(all, top).min(all.length() - 1)
@@ -878,11 +1099,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     anchor.val = if all.length() > 0 {
       let first = holding(all, first_past(all, top).min(all.length() - 1))
       let mut j = first
-      while j < all.length() && all[j].top < top + vh && !(all[j].known && holds(all[j].key)) {
+      while j < all.length() && all.top(j) < top + vh && !(all.known(j) && holds(all.key(j))) {
         j = j + 1
       }
-      let j = if j < all.length() && all[j].top < top + vh { j } else { first }
-      Some((all[j].key, top - all[j].top))
+      let j = if j < all.length() && all.top(j) < top + vh { j } else { first }
+      Some((all.key(j), top - all.top(j)))
     } else {
       None
     }
@@ -890,7 +1111,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     anchor_else.clear()
     for k in shown_now {
       if holds(k) && laid_at.get(k) is Some(i) && i < all.length() {
-        anchor_else.push((k, top - all[i].top))
+        anchor_else.push((k, top - all.top(i)))
       }
     }
     // (what is made, the stretch it covers)
