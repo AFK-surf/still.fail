@@ -332,6 +332,7 @@ const daysLeft = (secs: number) => Math.max(0, Math.ceil(secs / 86400));
 export function install(inner: Inner): void {
   hooks.enrolled = enrolled;
   hooks.roster = roster;
+  hooks.added = added;
   hooks.lockRefused = refused;
   hooks.lockWaiting = waiting;
   inner.cloudSync.carry = (ws) => carried(inner, ws);
@@ -1470,7 +1471,8 @@ export function lockView(inner: Inner, ws: string): J {
   const stations = arr(get(v, "stations")).map((s) => ({
     id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id) && keeps(inner, ws, s.id),
   }));
-  const members = [...f.members].map(([s, m]) => ({
+  // (those added who have not signed in yet are the workspace page's, `added`: no one here to show devices of)
+  const members = [...f.members].filter(([s]) => !isPending(s)).map(([s, m]) => ({
     sub: s, email: m.email, name: str(get(people.get(s), "name")) ?? "", role: m.role, you: s === sub,
     nameText: str(get(people.get(s), "name")) || m.email, roleText: roleText(m.role),
     groups: byApp([...f.devices.values()].filter((d) => d.sub === s).map(device)),
@@ -1775,34 +1777,98 @@ export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): 
   });
 }
 
-/// A member or a station taken out of a locked workspace by this account, or a member given another role: so in its
-/// lock first, by this device, where it signs there for an owner or an admin (`member.remove` takes their devices with
-/// them; `member` with the role, which the lock's rules decide who may give). The cloud's word alone is not the lock's:
-/// it could hold back the end of a member's credential or let a station back in, and the stations would take them as
-/// the lock still says; an admin made a member there would still sign as an admin. Where this device signs nothing there
-/// (a web page, one not let in), or the lock does not name them, the cloud's word is all there is, as before; once the
-/// lock is to say it, a failure here is the call's, and the cloud is not asked.
-export function roster(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
+/// Someone added by email who has not signed in yet is held in the lock under this name, with the role the one who
+/// added them signed (`added`); it is made theirs as their first device is approved (`Lock.admit`). No account has it
+/// (a sub is the cloud's id). The email is in the name alone and the entry's own `email` left empty: a station finds a
+/// member by email (station/src/cloud/lock.ts `memberWithEmail`), and would take this name for the person. Kept as
+/// `member` and `member.remove` entries, which every station folds already, those from before as well.
+const PENDING = "pending:";
+export function pendingOf(email: string): string | null {
+  const name = PENDING + email.trim().toLowerCase();
+  // (a member's sub is 200 long at most: rules/src/lock/lock.mbt `member`)
+  return name.length <= 200 ? name : null;
+}
+export const isPending = (sub: string): boolean => sub.startsWith(PENDING);
+
+/// This device's role in the lock `entries` make, as it signs there with its own key; null where it signs nothing.
+function signerRole(inner: Inner, sub: string, entries: Entry[]): string | null {
+  const key = signerOf(inner);
+  if (key === null || !inner.host.appKeys) return null;
+  try {
+    const by = signerIn(checkLock(entries, now(inner)), key, now(inner));
+    return by !== null && by.sub === sub && by.own ? by.role : null;
+  } catch {
+    return null;
+  }
+}
+
+/// The workspace's lock, read again, where this device signs it for an owner or an admin of it; null otherwise (a web
+/// page, one not let in, no lock or one turned off): the cloud's word is all there is there, as before.
+function managed(inner: Inner, sub: string, ws: string): Effect.Effect<{ entries: Entry[]; role: string } | null> {
   return Effect.gen(function* () {
     if (inner.provider.kind !== "stillfail" || inner.workspaces.owner(ws) !== sub) return null;
     yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a roster change" });
     const h = held(inner, ws);
-    const key = signerOf(inner);
-    if (!h?.head || key === null || !inner.host.appKeys) return null;
-    const f = fold(h.entries);
-    const member = "member" in what ? f.members.get(what.member) : undefined;
-    if (f.disabled || ("member" in what ? member === undefined || ("role" in what && member.role === what.role) : !f.stations.has(what.station))) return null;
-    let by: ReturnType<typeof signerIn> = null;
-    try {
-      by = signerIn(checkLock(h.entries, now(inner)), key, now(inner));
-    } catch {
-      return null;
-    }
-    if (by === null || by.sub !== sub || !by.own || (by.role !== "owner" && by.role !== "admin")) return null;
+    if (!h?.head || fold(h.entries).disabled) return null;
+    const role = signerRole(inner, sub, h.entries);
+    return role === "owner" || role === "admin" ? { entries: h.entries, role } : null;
+  });
+}
+
+/// A member or a station taken out of a locked workspace by this account, or a member given another role: so in its
+/// lock first, by this device, where it signs there for an owner or an admin (`member.remove` takes their devices with
+/// them; `member` with the role, which the lock's rules decide who may give). The cloud's word alone is not the lock's:
+/// it could hold back the end of a member's credential or let a station back in, and the stations would take them as
+/// the lock still says; an admin made a member there would still sign as an admin. A role given to someone the lock
+/// has not heard of yet (their first device not approved) puts them in it with that role: else the lock made them a
+/// member as their device was approved, whatever they had been given (2026-11-11: made an owner, they were one in the
+/// cloud alone). Where this device signs nothing there, the cloud's word is all there is, as before; once the lock is
+/// to say it, a failure here is the call's, and the cloud is not asked.
+export function roster(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
+  return Effect.gen(function* () {
+    const m = yield* managed(inner, sub, ws);
+    if (m === null) return null;
+    const f = fold(m.entries);
     const lock = new Lock(inner, ws, sub, null);
-    if ("station" in what) return yield* lock.append("station.remove", { key: what.station });
-    if ("role" in what) return yield* lock.append("member", { sub: what.member, email: member!.email, role: what.role });
-    return yield* lock.append("member.remove", { sub: what.member });
+    if ("station" in what) return f.stations.has(what.station) ? yield* lock.append("station.remove", { key: what.station }) : null;
+    const member = f.members.get(what.member);
+    if ("gone" in what) return member === undefined ? null : yield* lock.append("member.remove", { sub: what.member });
+    if (member?.role === what.role) return null;
+    const email = member?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email"));
+    if (email === null) return null;
+    return yield* lock.append("member", { sub: what.member, email, role: what.role });
+  });
+}
+
+/// People added to a locked workspace (`workspace.addMembers`, `role`; `answer` the cloud's): in its lock as well, with
+/// that role, by this device's signature where it signs there for an owner or an admin. One with an account under their
+/// sub, as the answer's view names them; one who has not signed in yet under `pendingOf` their email. One the cloud
+/// had already is left as the lock has them, unless it has not heard of them. As `roster`, a failure is the call's (the
+/// cloud has them then: added again, the lock is asked again).
+export function added(inner: Inner, sub: string, ws: string, role: string, answer: unknown): Effect.Effect<unknown, CoreError> {
+  return Effect.gen(function* () {
+    const m = yield* managed(inner, sub, ws);
+    if (m === null || (role === "owner" && m.role !== "owner")) return null;
+    const members = arr(get(get(answer, "view"), "members"));
+    const emails = (k: string) => arr(get(answer, k)).flatMap((e) => (typeof e === "string" ? [e.toLowerCase()] : []));
+    const subsOf = (email: string) => members.filter((x) => typeof x?.sub === "string" && str(x.email)?.toLowerCase() === email).map((x) => ({ sub: x.sub as string, email: x.email as string }));
+    const known = fold(m.entries).members;
+    const wanted = [
+      ...emails("joined").flatMap(subsOf),
+      ...emails("already").flatMap(subsOf).filter((x) => !known.has(x.sub)),
+      // (a member needs no name held: their first device approved makes them one)
+      ...emails("added").flatMap((email) => {
+        const name = role === "member" ? null : pendingOf(email);
+        return name === null ? [] : [{ sub: name, email: "" }];
+      }),
+    ];
+    const lock = new Lock(inner, ws, sub, null);
+    for (const w of wanted) {
+      const has = fold(held(inner, ws)?.entries ?? m.entries).members.get(w.sub);
+      if (has?.role === role) continue;
+      yield* lock.append("member", { sub: w.sub, email: w.email, role });
+    }
+    return null;
   });
 }
 
@@ -1895,13 +1961,22 @@ export class Lock {
   }
 
   /// Someone the cloud has made a member, in the lock now, as a person approves their first device: a member, whatever
-  /// the cloud calls them (it lowers roles and raises none; a role above that takes someone's signature saying so). One
-  /// the lock has heard of since (another device got there first) is left as they are.
+  /// the cloud calls them (it lowers roles and raises none; a role above that takes someone's signature saying so, as
+  /// the one who added them signed it under their email, `added`). One the lock has heard of since (another device got
+  /// there first) is left as they are.
   admit(sub: string, email: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
       const { entries } = yield* self.#chain();
-      return fold(entries).members.has(sub) ? null : yield* self.append("member", { sub, email, role: "member" });
+      const f = fold(entries);
+      if (f.members.has(sub)) return null;
+      // Added by email before they had an account (`added`): the role the one who added them signed, the name it was
+      // held under taken out. An admin makes no owner: a member then, the name left for an owner's device to make theirs.
+      const name = pendingOf(email);
+      const pending = name === null ? undefined : f.members.get(name);
+      const gives = pending !== undefined && (pending.role !== "owner" || signerRole(self.#inner, self.sub, entries) === "owner");
+      yield* self.append("member", { sub, email, role: gives ? pending!.role : "member" });
+      return gives ? yield* self.append("member.remove", { sub: name }) : null;
     });
   }
 
