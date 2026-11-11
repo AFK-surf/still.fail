@@ -285,6 +285,20 @@ test "a message gone to is lit whole as a band: across the list from edge to edg
 }
 
 ///|
+test "a notice gone to lights its own pill, round, never a band across the list behind it" {
+  // (opened at still.fail's notice, its flash held at its peak)
+  let t = screen("chat-flash-notice", @ui.move_most_ms)
+  assert_eq(@sfpages.flashing_now.val, ("ts1", 1.0))
+  let ground = @sf.theme().p.accent_bg
+  let lit = t.drawn_rect_corners().filter(fn(r) { r.4 >> 8 == ground >> 8 && (r.4 & 0xFFL) != 0L })
+  assert_eq(lit.length(), 1)
+  let (x, _, w, h, _, corners) = lit[0]
+  // the pill's, in from the list's sides, as round as it (its ends whole half circles)
+  assert_true(x > 1.0 && w < 388.0 && h > 0.0)
+  assert_true(corners.0 >= h / 2.0 - 0.5, msg="\{corners} for \{h}")
+}
+
+///|
 test "with motion reduced, a message gone to is lit whole for its flash's time, then not: no fade" {
   let calls : Array[Made] = []
   let sys = fake_system()

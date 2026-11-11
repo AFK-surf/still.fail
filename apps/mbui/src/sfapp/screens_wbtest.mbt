@@ -403,6 +403,11 @@ test "chat-flash-mine" {
   check("chat-flash-mine", @ui.move_most_ms)
 }
 
+///|
+test "chat-flash-notice" {
+  check("chat-flash-notice", @ui.move_most_ms)
+}
+
 // The drive's pages pushed over Home (shots.sh DRIVE_MODES)
 
 ///|

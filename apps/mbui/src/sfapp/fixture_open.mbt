@@ -280,9 +280,15 @@ pub fn open_fixture_mode(mode : String) -> Unit {
     title: "整理发布清单",
     station_name: "Willow",
   }
-  if mode == "chat-flash" || mode == "chat-flash-mine" {
-    // opened from a notification at a message (Ana's, or yours), its flash held at its peak (slice 10's)
-    open_chat_at(rich, if mode == "chat-flash" { 4.0 } else { 6.0 }, held=true)
+  if mode == "chat-flash" || mode == "chat-flash-mine" || mode == "chat-flash-notice" {
+    // opened from a notification at a message (Ana's, yours, or still.fail's notice), its flash held at its peak
+    // (slice 10's)
+    let seq = match mode {
+      "chat-flash" => 4.0
+      "chat-flash-mine" => 6.0
+      _ => 1.0
+    }
+    open_chat_at(rich, seq, held=true)
   } else if mode.has_prefix("chat") {
     open_chat(rich)
     // the cards' states (chat_fixture.mbt): chat-cards, chat-answering

@@ -201,7 +201,8 @@ pub fn chat_list(
             // row's under the pointer does
             let under = if i + 1 < n { top_at(i + 1) / 2.0 } else { 0.0 }
             let (band, band_by) = match e {
-              Said(m) if whole && m.ts == lit.0 && lit.1 > 0.0 => (Some((lit.1, top / 2.0, under)), None)
+              // (a notice lights its own pill: system_notice)
+              Said(m) if whole && m.ts == lit.0 && lit.1 > 0.0 && !m.system => (Some((lit.1, top / 2.0, under)), None)
               Said(m) => {
                 let on = @sfbase.message_menu_on("m:" + m.ts)
                 let a = @motion.told(c, "msg-menu/" + m.ts, if on { 1.0 } else { 0.0 }, spec=@sf.nav_fade)
