@@ -16,19 +16,22 @@ test "记忆 as a place of the bottom bar: the top bar names it, no title of its
 
 ///|
 test "记忆, 关于, 更新日志, 一台 station 的记忆, 归档, 一台 station 的归档 and 自动决策 as places of the bottom bar, made once: the top bar names each and has settings, what it holds under it; the window wider, the same place still shows" {
-  for case in [
-    ("memories", "全局记忆 · 项目记忆"),
-    ("about", "服务条款"),
-    ("changelog", "10 月 19 日"),
-    ("memory:ws1/st1", "发布流程"),
-    ("archiving", "Willow"),
-    ("archiving:ws1/st1", "按模型判断"),
-    ("decisions-settings", @sf.t("web-pages.automaticDecisions.completion")),
-  ] {
-    let (place, words) = case
+  // (each place's words read in its own run, once it has begun: read before, they are the run before's)
+  let cases : Array[(String, () -> String)] = [
+    ("memories", fn() { "全局记忆 · 项目记忆" }),
+    ("about", fn() { "服务条款" }),
+    ("changelog", fn() { "10 月 19 日" }),
+    ("memory:ws1/st1", fn() { "发布流程" }),
+    ("archiving", fn() { "Willow" }),
+    ("archiving:ws1/st1", fn() { "按模型判断" }),
+    ("decisions-settings", fn() { @sf.t("web-pages.automaticDecisions.completion") }),
+  ]
+  for case in cases {
+    let (place, said) = case
     new_run()
     let src = fixture("settings")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=900.0, platform=2)
+    let words = said()
     t.draw()
     app.nav.replace(Place(place))
     t.draw()

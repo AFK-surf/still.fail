@@ -461,22 +461,23 @@ fn station_archiving_tester(
 
 ///|
 test "一台 station 的归档 made once, with a finger and with keyboard and mouse, at the system's larger words; its managers' alone, off, and not online: what each says" {
-  let cases : Array[(String, Int, Double, (Json) -> Json, Array[String], Array[String])] = [
-    ("as it is", 2, 1.0, fn(a) { a }, ["按模型判断", "7 天", "不归档"], []),
-    ("as it is", 0, 1.0, fn(a) { a }, ["按模型判断", "7 天", "不归档"], []),
-    ("as it is", 2, 2.0, fn(a) { a }, ["按模型判断", "7 天", "不归档"], []),
-    ("not a manager", 2, 1.0, archiving_with([("canEdit", Json::boolean(false))]), [@sf.t("web-pages.archiving.adminOnly")], []),
-    ("off", 2, 1.0, archiving_with([("mode", Json::string("off"))]), ["不归档"], [@sf.t("web-pages.archiving.idle")]),
-    ("too old to say", 2, 1.0, fn(_) { Json::null() }, [@sf.t("web-pages.archiving.upgrade")], ["按模型判断"]),
+  // (the words each row says read in its own run, once it has begun: read before, they are the run before's)
+  let cases : Array[(String, Int, Double, (Json) -> Json, () -> Array[String], () -> Array[String])] = [
+    ("as it is", 2, 1.0, fn(a) { a }, fn() { ["按模型判断", "7 天", "不归档"] }, fn() { [] }),
+    ("as it is", 0, 1.0, fn(a) { a }, fn() { ["按模型判断", "7 天", "不归档"] }, fn() { [] }),
+    ("as it is", 2, 2.0, fn(a) { a }, fn() { ["按模型判断", "7 天", "不归档"] }, fn() { [] }),
+    ("not a manager", 2, 1.0, archiving_with([("canEdit", Json::boolean(false))]), fn() { [@sf.t("web-pages.archiving.adminOnly")] }, fn() { [] }),
+    ("off", 2, 1.0, archiving_with([("mode", Json::string("off"))]), fn() { ["不归档"] }, fn() { [@sf.t("web-pages.archiving.idle")] }),
+    ("too old to say", 2, 1.0, fn(_) { Json::null() }, fn() { [@sf.t("web-pages.archiving.upgrade")] }, fn() { ["按模型判断"] }),
   ]
   for c in cases {
     let (what, platform, scale, f, shown, none) = c
     let made = station_archiving_tester(platform, scale~, f=@signals.signal(f))
     assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="\{what}")
-    for w in shown {
+    for w in shown() {
       assert_true(made.find(w) is Some(_), msg="\{what}: \{w} at \{platform} \{scale}")
     }
-    for w in none {
+    for w in none() {
       assert_true(made.find(w) is None, msg="\{what}: no \{w} at \{platform} \{scale}")
     }
   }

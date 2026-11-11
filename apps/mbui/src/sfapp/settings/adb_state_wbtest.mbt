@@ -2,6 +2,8 @@
 
 ///|
 test "共享调试 held off Wi-Fi on adbd's plain port: Wi-Fi and Wireless debugging are not asked for" {
+  // (its own run of the settings first: what the words are read in is this test's, not the one's before it)
+  reset()
   let phone : Json = { "developer": true, "wifi": false, "wireless": false }
   let held : Json = { "phase": "offered", "adb": "connected" }
   assert_true(adb_next(Some(held), Some(phone), true) is None)

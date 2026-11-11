@@ -177,6 +177,12 @@ yet and you can add one, add it.
   must fail is asked as an app's run on a host asks it, its fault told (`@view.faults_stop`, `@view.fault_told`) and
   its words asserted. detlint's `panic-test` counts those left, only falling (the coordinator of the migration,
   2026-11-11).
+- A test starts its own run of the app (an app's `new_run`, a Tester) before it reads anything of the app: before
+  that, what it reads is the app as the test before it in the process left it (a landing's titles read in the English
+  of gate_wbtest's last run, found in none of the Chinese it drew: only where CI's grouping put the two files in one
+  process, #5433). There is no moment between two tests to put the app back in; the reading side holds it. detlint's
+  `read-before-run` (the app's detlint.json `run_first`: what starts a run, what reads its words) (the coordinator of
+  the migration, 2026-11-11).
 
 ## Tools are MoonBit, not Python
 

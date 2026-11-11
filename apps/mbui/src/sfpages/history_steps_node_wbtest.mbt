@@ -14,7 +14,6 @@ test "history reminder keeps its label on one line beside a long note and opens 
       @sf.set_words(@sfbase.fill)
       @sf.set_language(Some(lang))
       let src = @sffixture.fixture("history")
-      let title = @sf.t("web-main.history.reminder", args=[("name", "still.fail")])
       let t = @ui.Tester::new(
         fn(c) {
           @sf.begin(c) |> ignore
@@ -30,6 +29,8 @@ test "history reminder keeps its label on one line beside a long note and opens 
         platform~,
       )
       t.draw()
+      // (its words read once its run has begun)
+      let title = @sf.t("web-main.history.reminder", args=[("name", "still.fail")])
       let at = "\{lang}, width \{w}, platform \{platform}"
       let (title_x, _, title_w, title_h) = t.rect_of(title).unwrap()
       let (line_x, _, _, line_h) = t.rect_of(first).unwrap()
