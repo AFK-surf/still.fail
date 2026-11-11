@@ -469,6 +469,33 @@ fn app_is(src : Source) -> AppIs {
 }
 
 ///|
+/// What the app shows as a whole in a window `width` wide (sfbase's Shown, its name shown_kind's): what the window's
+/// tree picks (app_tree's share sheet over another app, app_is, shell_is), a page the stack's top: on 小屏 the page on
+/// top, on 中屏 and 大屏 the page the pane lands on and shows (the chats' sidebar or the rail beside it are no page;
+/// sfdesk's land pushes what it lands on), a window of its own its page. What is presented over it (a sheet, a panel,
+/// a menu) is not said.
+fn shown_now(src : Source, width : Double) -> @sfbase.Shown {
+  if share_over.get() {
+    return @sfbase.Shown::Share
+  }
+  match app_is(src) {
+    Failed | Starting => @sfbase.Shown::Starting
+    SignedOut => @sfbase.Shown::SignIn
+    SignedIn =>
+      match shell_is(src, width) {
+        Stacked | Taped | Paned => @sfbase.Shown::Shows(app.nav.top())
+        Lone =>
+          match @sfbase.lone_page.val {
+            Some(p) => @sfbase.Shown::Shows(p)
+            None => @sfbase.Shown::Starting
+          }
+        Landing => @sfbase.Shown::Landing
+        Reading | Unsized => @sfbase.Shown::Starting
+      }
+  }
+}
+
+///|
 /// The window as a tree made once (mbui's view_host.mbt, the way there's 4: from the outside in): the
 /// state the app is in (app_is) a node picked by it, made as it comes and let go as it goes, the app in that state an old
 /// view in it, built the old way on the window's ground (`view` the old frame around it: what every state shares, the
@@ -488,6 +515,9 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     // (pictures by their address as the core gives them, said before any page of nodes is made: what one shows on its
     // first frame asks the core, not the library's stand-in; the old frame says it each build, the same)
     @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
+    // (what the app shows, by its kind alone, told the window thread's journal as it changes, on every host: what its
+    // hang reports and the device's performance record say; no frame asks it)
+    root.reacts(fn() { @sfbase.shown_kind(shown_now(src, root.window().0)) }, @ui.journal_shows)
     // (what the splash waits by, kept by what lives through the app's states: splash_begin)
     splash_owner.val = Some(root)
     // (its nodes drawn in still.fail's theme, the one its old views are built in, as light or dark is set: view's

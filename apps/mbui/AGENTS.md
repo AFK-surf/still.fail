@@ -161,6 +161,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - Every screen is swept at the default size of words (corners_wbtest.mbt) and, in a phone's window, at the system's
   words set to 1.3 (`src/sfapp/words_large_wbtest.mbt`: what fits and words over words at rest; the user, 2026-11-10).
   A new state a report shows gets a fixture mode in `corner_modes`, so both sweeps see it.
+- The hang reports sent to PostHog (`ui_hang`, `ui_hang_summary`: `src/stillfail/reports.mbt`) name what was shown by
+  its kind alone, never which chat, station or file (sfbase's `shown_kind`, literals only): every screen's name is one
+  of `shown_known` (`src/sfapp/shown_wbtest.mbt`, held as the real-size sweep opens each), and a new kind of page adds
+  its name there (the user, 2026-11-11).
 - Both sweeps hold each screen as well to the words a box with its height said does not hold (mbui's
   `Tester::fixed_outgrown`, in `t.audit()` too): a box holding words grows with them (a least, or its height worked out
   of their line at the system's size of words, as `list_looks_at` does), or, where they are part of a mark of a size

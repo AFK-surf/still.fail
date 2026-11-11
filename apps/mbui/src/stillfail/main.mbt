@@ -508,7 +508,8 @@ fn main {
   // (said with each summary of the frames into the device's performance record while it is kept: the core's
   // messages, the page shown, the screens open; @ui.perf_also)
   @ui.perf_also("core", @core.perf_said)
-  @ui.perf_also("page", fn(_) { @sfbase.page_kind(@sfbase.app.nav.top()) })
+  // (the page shown as the journal was told it, sfbase's shown_kind: what the hang reports say too)
+  @ui.perf_also("page", fn(_) { @ui.journal_shown() })
   @ui.perf_also("screens", @sfpages.screens_perf)
   @ui.run(
     @sf.product(),

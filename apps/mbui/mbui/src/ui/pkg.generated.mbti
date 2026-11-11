@@ -214,6 +214,10 @@ pub fn is_gif(Bytes) -> Bool
 
 pub fn italic(String) -> @text.Run
 
+pub fn journal_shown() -> String
+
+pub fn journal_shows(String) -> Unit
+
 pub fn keep(String, String, Bytes, way? : @hostapi.KeepWay) -> Keep?
 
 pub fn keep_awake(Bool) -> Unit

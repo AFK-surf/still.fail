@@ -272,3 +272,102 @@ test "many short parts of a kind, each under 1 ms (0.1 at least), summed: what a
   assert_eq(part, "core topic chat delta")
   assert_true(ms > 59.9 && ms < 60.1, msg=ms.to_string())
 }
+
+///|
+test "a hang says what the app showed as its interval was sealed, not what it shows as it is told; none said, no page" {
+  let (_, clock) = journal_start()
+  defer set_work_clock(None)
+  let told : Array[Hang] = []
+  hangs_told(Some(fn(h) { told.push(h) }))
+  // (none said yet: its JSON has no page, its line none)
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  assert_eq(told[0].page, "")
+  assert_false(told[0].json().stringify().contains("\"page\""), msg=told[0].json().stringify())
+  assert_false(told[0].said().contains("page="), msg=told[0].said())
+  journal_shows("Home")
+  journal_shows("Chat")
+  // a frame asked for while Chat shows, the page changed as the frame runs (its work under way), sealed after
+  view_event_said(fn() {  }, fn() {
+    clock.val += 15.0
+    h_request_frame()
+  }, what="key")
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 40.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), 1080.0, 1122.0)
+  journal_shows("Setting Usage")
+  journal_seal(Presented, 1123.0)
+  assert_eq(told.length(), 2)
+  assert_eq(told[1].page, "Setting Usage")
+  // (what a gate held and sends later says the one sealed under, whatever shows by then)
+  journal_shows("Home")
+  assert_eq(told[1].page, "Setting Usage")
+  let j = told[1].json().stringify()
+  assert_true(j.contains("\"page\":\"Setting Usage\""), msg=j)
+  assert_true(told[1].said().contains("phase=startup page=Setting Usage active="), msg=told[1].said())
+  assert_eq(journal_shown(), "Home")
+}
+
+///|
+test "the summary's counts by what was shown add up to its counts in all, and are counted from none once said" {
+  let (t, clock) = journal_start()
+  defer set_work_clock(None)
+  let said : Array[HangSummary] = []
+  hang_summary_told(Some(fn(s) { said.push(s) }))
+  // a frame before any name is said: under ""
+  t.draw()
+  journal_shows("Home")
+  // a stall, closed idle; an event of 30 ms asking for a frame: a late frame, and the frame counted
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  view_event_said(fn() {  }, fn() {
+    clock.val += 30.0
+    h_request_frame()
+  }, what="key")
+  t.draw()
+  t.draw()
+  journal_shows("Chat")
+  // blocking work, closed idle; a frame
+  view_event_said(fn() {  }, fn() { clock.val += 30.0 }, what="messages")
+  t.draw()
+  journal_shows("Home")
+  t.draw()
+  clock.val += 1000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said.length(), 1)
+  let s = said[0]
+  assert_eq((s.stalls, s.late, s.blocking), (1, 1, 1))
+  let sum = fn(k : Int) { s.by_page.fold(init=0, fn(n, p) { n + [p.1, p.2, p.3, p.4][k] }) }
+  assert_eq((sum(0), sum(1), sum(2), sum(3)), (s.frames, s.stalls, s.late, s.blocking))
+  assert_eq(s.by_page.map(fn(p) { p.0 }), ["", "Home", "Chat"])
+  assert_eq(s.by_page[1].2, 1)
+  assert_eq(s.by_page[1].3, 1)
+  assert_eq(s.by_page[2].4, 1)
+  let j = s.json().stringify()
+  assert_true(j.contains("\"by_page\":{\"\":[") && j.contains("\"Chat\":["), msg=j)
+  // (counted from none again once said, the one shown now first)
+  t.draw()
+  clock.val += 1000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said[1].by_page.map(fn(p) { p.0 }), ["Home"])
+  assert_eq(said[1].by_page[0].1, said[1].frames)
+}
+
+///|
+test "past 32 names what the app shows is other; a run begun again keeps none" {
+  let (_, _) = journal_start()
+  defer set_work_clock(None)
+  for i in 0..<32 {
+    journal_shows("Page \{i}")
+    assert_eq(journal_shown(), "Page \{i}")
+  }
+  journal_shows("Page thirtythree")
+  assert_eq(journal_shown(), "other")
+  journal_shows("Page 0")
+  assert_eq(journal_shown(), "Page 0")
+  journal_shows("Page thirtyfour")
+  assert_eq(journal_shown(), "other")
+  shown_counts[shown_slot.val * 4] += 1
+  journal_reset()
+  assert_eq(journal_shown(), "")
+  assert_eq(shown_names, [])
+  assert_true(shown_counts.iter().all(fn(k) { k == 0 }))
+  journal_shows("Chat")
+  assert_eq(journal_shown(), "Chat")
+}

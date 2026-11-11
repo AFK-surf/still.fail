@@ -471,8 +471,11 @@ pub(all) struct ScreenAt {
 } derive(Eq)
 
 ///|
-/// What page `p` is, by its kind alone (no chat's, station's or file's name: the device's performance record says it,
-/// @ui.perf_also "page").
+/// What page `p` is, by its kind alone: a name out of a fixed set written here, never a chat's, station's, session's,
+/// file's, job's or person's id, name, title or path, nor anything typed. What the window thread's hang reports sent
+/// to PostHog say of the page shown (shown_kind, mbui's journal_shows) and the device's performance record says too.
+/// Each is a constructor's literal; a place, data, only as one of `bar_places` (else `other`); a page of the settings
+/// as its route's constructor alone (setting_kind). sfapp's shown_wbtest holds every name a screen comes to.
 pub fn page_kind(p : Page) -> String {
   match p {
     Home => "Home"
@@ -487,9 +490,98 @@ pub fn page_kind(p : Page) -> String {
     PreviewFile(_, _, _, _) => "PreviewFile"
     History(_, _, _) => "History"
     NewChat => "NewChat"
-    Place(place) => "Place " + place
-    Setting(_) => "Setting"
+    Place(place) => "Place " + place_kind(place)
+    Setting(r) => "Setting " + setting_kind(r)
     Screen(_) => "Screen"
+  }
+}
+
+///|
+/// A place of the bar's by its name, as a literal of the places a bar can hold (bars.mbt's bar_places); any other
+/// `other`: what comes in a string is never said as it came.
+fn place_kind(place : String) -> String {
+  match place {
+    "chats" => "chats"
+    "files" => "files"
+    "stations" => "stations"
+    "profiles" => "profiles"
+    "connects" => "connects"
+    "usage" => "usage"
+    "archive" => "archive"
+    "vault" => "vault"
+    _ => "other"
+  }
+}
+
+///|
+/// A page of the settings by its route's constructor alone: no station's address, id or key it carries.
+fn setting_kind(r : @settings.Route) -> String {
+  match r {
+    Home => "Home"
+    Me => "Me"
+    Appearance => "Appearance"
+    Fonts => "Fonts"
+    Workspace => "Workspace"
+    Security => "Security"
+    SecurityOpen => "SecurityOpen"
+    Vault => "Vault"
+    Stations => "Stations"
+    Station(_) => "Station"
+    Profiles(_) => "Profiles"
+    Profile(_, _) => "Profile"
+    Connects(_) => "Connects"
+    Connect(_, _) => "Connect"
+    Memories => "Memories"
+    Memory(_) => "Memory"
+    MemoryDoc(_, _, _) => "MemoryDoc"
+    Usage => "Usage"
+    Archive => "Archive"
+    AdbShare(_) => "AdbShare"
+    NewProfile(_) => "NewProfile"
+    ProfileAccount(_) => "ProfileAccount"
+    VaultItems => "VaultItems"
+    VaultItem(_, _) => "VaultItem"
+    AutoDecisions => "AutoDecisions"
+    AutoCompletion => "AutoCompletion"
+    AutoPolicy(_) => "AutoPolicy"
+    BarSettings => "BarSettings"
+    KeptFiles => "KeptFiles"
+    KeptChat(_, _) => "KeptChat"
+    Changelog => "Changelog"
+    About => "About"
+    Shortcuts => "Shortcuts"
+    LocalStation => "LocalStation"
+    Notifications => "Notifications"
+    Permissions => "Permissions"
+    Archiving => "Archiving"
+    StationArchiving(_) => "StationArchiving"
+    UsagePrices(_) => "UsagePrices"
+    RunSettings(_, _) => "RunSettings"
+  }
+}
+
+///|
+/// What the app shows as a whole (sfapp's shown_now says which): before it can show a workspace (the splash, the
+/// accounts or workspaces still read or failing), the way in signed out, the landing with no workspace, a share sheet
+/// over another app, or a page (the stack's top, the page the pane lands on on 中屏 and 大屏; a window of its own's).
+pub(all) enum Shown {
+  Starting
+  SignIn
+  Landing
+  Share
+  Shows(Page)
+} derive(Eq)
+
+///|
+/// What the app shows by its kind alone (page_kind's for a page): what it tells the window thread's journal as that
+/// changes (mbui's journal_shows), which its hang reports and the device's performance record say.
+pub fn shown_kind(s : Shown) -> String {
+  match s {
+    Starting => "Starting"
+    SignIn => "Sign in"
+    Landing => "Landing"
+    Share => "Share"
+    Shows(p) => page_kind(p)
   }
 }
 

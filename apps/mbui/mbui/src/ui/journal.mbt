@@ -12,6 +12,8 @@
 // by the work's clock (work_now): a Tester's is its own and still within a frame, so what it runs takes no time and
 // finds no hang unless a test gives it a clock (set_work_clock). What it keeps of a piece is its kind, never what it
 // carried (no key, no words, no message of the core's), and of a frame's why the code it names alone (journal_places).
+// What the app shows it is told as that changes (journal_shows), a name it does not read: a hang says the one shown as
+// its interval was sealed, the summary its counts by the name shown as each was counted.
 
 ///|
 /// One piece of the window's thread's work.
@@ -103,9 +105,11 @@ pub(all) enum HangTrigger {
 /// starting); from what it waited on to its end (ms on the work clock: from the frame's asking, or the first piece that
 /// made it one); its longest piece, its work in all, its pieces (folded ones apart), the journal's lost under it (its
 /// beginning overwritten before it closed: no budget is judged then), what made it a hang, the longest first, at most
-/// `hang_contributors_kept`, and how many more there were.
+/// `hang_contributors_kept`, and how many more there were; what the app said it showed as the interval was sealed
+/// (journal_shows: "" none said yet).
 pub(all) struct Hang {
   trigger : HangTrigger
+  page : String
   sealed_by : Seal
   startup : Bool
   start : Double
@@ -127,7 +131,9 @@ pub(all) struct Hang {
 /// the bands `frame_band_ms` bounds (below 4 ms, 4 to 8, ... , 24 and over: one more than the bounds), four times
 /// over, by whether a finger's move was handled since the frame before and whether the window's tree laid anything
 /// out for it (`still`, `still_laid`, `moved`, `moved_laid`, each frame in one). Frames whose interval the journal
-/// lost the beginning of are in none.
+/// lost the beginning of are in none. `by_page`: of the frames presented, stalls, late frames and blocking, those
+/// counted while each name the app said it showed was (journal_shows; "" before it said one), in the order the names
+/// were said: they add up to the four counts above.
 pub(all) struct HangSummary {
   shown_ms : Double
   work_ms : Double
@@ -139,6 +145,7 @@ pub(all) struct HangSummary {
   still_laid : Array[Int]
   moved : Array[Int]
   moved_laid : Array[Int]
+  by_page : Array[(String, Int, Int, Int, Int)]
 } derive(Eq, Show, Debug)
 
 ///|
@@ -254,6 +261,89 @@ let journal_moved : Ref[Bool] = Ref(false)
 let journal_laid : Ref[Bool] = Ref(false)
 
 ///|
+/// How many names of what the app shows the journal tells apart (journal_shows): one past them is `other`.
+let shown_names_most : Int = 32
+
+///|
+/// The names the app said it showed since the summary was last said (the one shown now kept), in the order said: a
+/// name's slot is its place here and one (0: none said yet; shown_names_most + 1: `other`).
+// kept across runs: put back as a run begins (journal_reset), begun again as the summary is said (journal_said_shown)
+let shown_names : Array[String] = []
+
+///|
+/// The slot of the name shown now (shown_names'), and the name as the app said it.
+// kept across runs: put back as a run begins (journal_reset)
+let shown_slot : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: put back as a run begins (journal_reset)
+let shown_said : Ref[String] = Ref("")
+
+///|
+/// The summary's counts by the name shown as each was counted, four a slot (shown_slot's): frames, stalls, late
+/// frames, blocking. A frame presented costs one rise of one of them.
+// kept across runs: put back as a run begins (journal_reset), emptied as the app is hidden (journal_said_shown)
+let shown_counts : FixedArray[Int] = FixedArray::make(4 * (shown_names_most + 2), 0)
+
+///|
+/// What the app shows now told, by `name` (a kind, never which: still.fail's sfbase shown_kind), as it changes, never
+/// asked each frame: a hang says the one shown as its interval is sealed, the summary counts by it. Past
+/// `shown_names_most` names since the summary was last said, `other`.
+pub fn journal_shows(name : String) -> Unit {
+  shown_said.val = name
+  shown_slot.val = shown_slot_of(name)
+}
+
+///|
+fn shown_slot_of(name : String) -> Int {
+  if name == "" {
+    return 0
+  }
+  for i, n in shown_names {
+    if n == name {
+      return i + 1
+    }
+  }
+  if shown_names.length() >= shown_names_most {
+    return shown_names_most + 1
+  }
+  shown_names.push(name)
+  shown_names.length()
+}
+
+///|
+/// The name of what the app shows now as the journal keeps it (journal_shows; `other` past its most; "" none said):
+/// what its hangs and summary say, the device's performance record too.
+pub fn journal_shown() -> String {
+  shown_name(shown_slot.val)
+}
+
+///|
+fn shown_name(slot : Int) -> String {
+  if slot == 0 {
+    ""
+  } else if slot > shown_names_most {
+    "other"
+  } else {
+    shown_names[slot - 1]
+  }
+}
+
+///|
+/// The summary's counts by name (HangSummary's `by_page`): each slot counted, in their order ("" first, `other` last).
+fn shown_by_page() -> Array[(String, Int, Int, Int, Int)] {
+  let out = []
+  for slot in 0..<(shown_names_most + 2) {
+    let at = slot * 4
+    let (f, s, l, b) = (shown_counts[at], shown_counts[at + 1], shown_counts[at + 2], shown_counts[at + 3])
+    if f + s + l + b > 0 {
+      out.push((shown_name(slot), f, s, l, b))
+    }
+  }
+  out
+}
+
+///|
 // kept across runs: an app's main sets it once; put back as a run begins (journal_reset)
 let hang_tell : Ref[((Hang) -> Unit)?] = Ref(None)
 
@@ -294,6 +384,10 @@ fn journal_reset() -> Unit {
   hang_summary_tell.val = None
   journal_notes.clear()
   journal_tree_work.val = (0, 0, 0, 0)
+  shown_names.clear()
+  shown_slot.val = 0
+  shown_said.val = ""
+  shown_counts.fill(0)
   journal_listens()
 }
 
@@ -454,6 +548,7 @@ fn journal_frame(c : Ctx, tw : Double, t0 : Double, t3 : Double, t4 : Double) ->
   )
   journal_work(Present, t3, t4)
   journal_counts[0] += 1.0
+  shown_counts[shown_slot.val * 4] += 1
   journal_seal(Presented, t4)
   journal_presented.val = true
   journal_dirty_at.val = -1.0
@@ -582,6 +677,7 @@ fn journal_seal(seal : Seal, at : Double) -> Unit {
   }
   let hang = {
     trigger,
+    page: journal_shown(),
     sealed_by: seal,
     startup,
     start,
@@ -595,11 +691,13 @@ fn journal_seal(seal : Seal, at : Double) -> Unit {
     contributors,
     elided,
   }
-  journal_counts[match trigger {
+  let count = match trigger {
     Stall => 1
     LateFrame => 2
     Blocking => 3
-  }] += 1.0
+  }
+  journal_counts[count] += 1.0
+  shown_counts[shown_slot.val * 4 + count] += 1
   if hangs_found.length() >= hangs_kept_most {
     hangs_found.remove(0) |> ignore
   }
@@ -629,10 +727,15 @@ fn journal_said_shown(at : Double) -> Unit {
     still_laid: bands(1),
     moved: bands(2),
     moved_laid: bands(3),
+    by_page: shown_by_page(),
   }
   journal_counts.fill(0.0)
   journal_counts[5] = -1.0
   journal_bands.fill(0)
+  shown_counts.fill(0)
+  // (the names begun again, the one shown now first: a long run's names past the most are told apart again)
+  shown_names.clear()
+  shown_slot.val = shown_slot_of(shown_said.val)
   if hang_summary_tell.val is Some(f) {
     @signals.untracked(fn() { f(summary) })
   }
@@ -722,12 +825,13 @@ fn Worked::notes_said(self : Worked) -> String {
 }
 
 ///|
-/// The hang in a line (the log's `HANG`, the performance record's `hang:`): its rule, what closed it, its times, what
-/// made it one, the longest first.
+/// The hang in a line (the log's `HANG`, the performance record's `hang:`): its rule, what closed it, what the app
+/// showed (none said: not said), its times, what made it one, the longest first.
 pub fn Hang::said(self : Hang) -> String {
   let active = self.end - self.start
   let busy = if active > 0.0 { (dmin(self.work_ms / active, 1.0) * 100.0).round() } else { 100.0 }
   "trigger=\{self.trigger.name()} sealed=\{self.sealed_by.name()} phase=\{if self.startup { "startup" } else { "steady" }} " +
+  (if self.page != "" { "page=\{self.page} " } else { "" }) +
   "active=\{journal_ms(active)}ms stall=\{journal_ms(self.stall_ms)}ms work=\{journal_ms(self.work_ms)}ms busy=\{busy}% " +
   "pieces=\{self.pieces} small=\{self.small}/\{journal_ms(self.small_ms)}ms lost=\{self.lost} by: " +
   self.contributors.map(fn(w) { w.said() }).join(" | ") +
@@ -736,7 +840,7 @@ pub fn Hang::said(self : Hang) -> String {
 
 ///|
 /// The hang as JSON (what an app sends of it: still.fail's reports.mbt): its times from its start (ms), each
-/// contributor its kind, start, ms, and a frame's parts.
+/// contributor its kind, start, ms, and a frame's parts; what the app showed as `page` (none said: no field).
 pub fn Hang::json(self : Hang) -> Json {
   let active = self.end - self.start
   let contributors = self.contributors.map(fn(w) {
@@ -766,7 +870,7 @@ pub fn Hang::json(self : Hang) -> Json {
     }
     Json::object(o)
   })
-  {
+  let o : Map[String, Json] = {
     "trigger": Json::string(self.trigger.name()),
     "sealed_by": Json::string(self.sealed_by.name()),
     "phase": Json::string(if self.startup { "startup" } else { "steady" }),
@@ -783,11 +887,20 @@ pub fn Hang::json(self : Hang) -> Json {
     "contributors": Json::array(contributors),
     "contributors_elided": Json::number(self.elided.to_double()),
   }
+  if self.page != "" {
+    o["page"] = Json::string(self.page)
+  }
+  Json::object(o)
 }
 
 ///|
-/// The summary as JSON (reports.mbt's).
+/// The summary as JSON (reports.mbt's): its counts by what was shown as `by_page`, each name's [frames, stalls, late
+/// frames, blocking] (none said yet: under "").
 pub fn HangSummary::json(self : HangSummary) -> Json {
+  let by_page : Map[String, Json] = {}
+  for p in self.by_page {
+    by_page[p.0] = journal_counts_json([p.1, p.2, p.3, p.4])
+  }
   {
     "shown_ms": Json::number(journal_ms(self.shown_ms)),
     "work_ms": Json::number(journal_ms(self.work_ms)),
@@ -802,6 +915,7 @@ pub fn HangSummary::json(self : HangSummary) -> Json {
       "moved": journal_counts_json(self.moved),
       "moved_laid": journal_counts_json(self.moved_laid),
     },
+    "by_page": Json::object(by_page),
   }
 }
 

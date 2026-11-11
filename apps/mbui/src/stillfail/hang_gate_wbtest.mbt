@@ -2,6 +2,7 @@
 fn gate_hang(trigger : @ui.HangTrigger, end : Double, stall : Double) -> @ui.Hang {
   {
     trigger,
+    page: "Chat",
     sealed_by: Presented,
     startup: false,
     start: end - stall,
