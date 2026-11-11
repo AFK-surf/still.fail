@@ -13,6 +13,8 @@
 // each with what it weighs now in KB, rounded up to the next 8 so the fixture's drift does not flap it: one there must
 // still be over the bar (else it comes out of the table) and no heavier than said (else it grew). The tables only fall.
 // Every topic of `TOPICS` is either asked here or in `NOT_MEASURED` with why: a new topic is placed in one of them.
+// What is weighed is weighed full: every list and map a value's shape declares holds something in the fixture, or is
+// in `EMPTY` with why (a topic weighed empty passed at tens of bytes: `changelog`, 2026-11-11, ~190 KB on a phone).
 // On failure, and with TOPIC_BYTES_PRINT=1, the table is printed: each topic's bytes, and of one over its bar its
 // heaviest fields (a list's items as `[]`), as the app's `@core.weights` says them, and the fixture's `stations` field
 // by field beside what the owner's phone was sent (`PHONE_STATIONS`).
@@ -25,10 +27,30 @@ import { Devices } from "../src/devices.ts";
 import type { PersonalLock } from "../src/personal-lock.ts";
 import type { Rigs } from "../src/rigs.ts";
 import { holdLanguage } from "../src/i18n.ts";
+import type { Ty } from "../src/conform.ts";
+import { shapeOf } from "../src/present.ts";
 import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
+import { SHAPES } from "../src/shapes/schema.ts";
+import { isObject } from "../src/util.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, CHAT_MESSAGES, OPENS, OUTLINED, OUTLINED_ENTRIES, UP, devicesSaid, fixture, hostReading, messageAdded, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { CHAT, CHAT_MESSAGES, DRIVE, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, OUTLINED_ENTRIES, PEEKS, SEARCH, UP, VAULT_ITEM, devicesSaid, fixture, hostReading, messageAdded, more, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged, records, screensOf, transcriptOf } from "./real-size.ts";
 import { applyKeyed } from "../src/collections.ts";
+import type { Inner } from "../src/core.ts";
+import type { Owner } from "../src/core/routing.ts";
+import type { Data } from "../src/data.ts";
+import { Browsing } from "../src/drive-browse.ts";
+import { driveCount, kindOf } from "../src/drive.ts";
+import { Notices } from "../src/notices.ts";
+import { screensView } from "../src/screens.ts";
+import type { Store } from "../src/store.ts";
+import type { FakeHost } from "../src/testing.ts";
+import { lockView } from "../src/views/lock.ts";
+import { joinable, memberships } from "../src/views/memberships.ts";
+import { itemsView, usesView, vaultsView } from "../src/views/vault.ts";
+import type { Views } from "../src/views/views.ts";
+import { waysView } from "../src/views/ways.ts";
+import * as xshare from "../src/views/xshare.ts";
+import { Workspaces } from "../src/workspace.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
 
 holdLanguage();
@@ -76,18 +98,62 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "usage": { topic: "usage", scope: "ws", days: 7 },
   "fleet": { topic: "fleet", scope: "ws" },
   "railCard": { topic: "railCard", scope: "ws", place: "chats" },
+  "railCard usage": { topic: "railCard", scope: "ws", place: "usage" },
   "resources": { topic: "resources", scope: "ws", station },
   "workspace": { topic: "workspace", workspace: "ws" },
   "workspaceMarks": { topic: "workspaceMarks", workspace: "ws" },
   "longJobs": { topic: "longJobs", scope: "ws" },
   "archive": { topic: "archive", scope: "ws", limit: 60 },
-  "search": { topic: "search", scope: "ws", query: "迁移" },
-  "chatSearch": { topic: "chatSearch", scope: "ws", query: "迁移", station, limit: 8, elsewhere: true, exclude: key },
+  "search": { topic: "search", scope: "ws", query: SEARCH },
+  "chatSearch": { topic: "chatSearch", scope: "ws", query: SEARCH, station, limit: 8, elsewhere: true, exclude: key },
   "changelog": { topic: "changelog" },
   "changelog news": { topic: "changelog", news: true },
   "devices": { topic: "devices", workspace: "ws" },
   // (of the chat of four weeks held whole: what it is made of is all of a chat held)
   "chatOutline": { topic: "chatOutline", station: OUTLINED.station, thread: OUTLINED.thread },
+  // (the chat's agent's activity row, sfpages/chat_rows.mbt; its live state as it runs, 160 entries of its timeline)
+  "live": { topic: "live", station, key },
+  // (the chat's dev server's log: its last line, a job's row; the sheet's 300 lines, sfapp/sheets.mbt job_output_most;
+  // the desktop's 400, sfdesk/jobs.mbt job_output_lines: each as long as the station reads, 64 KB at most)
+  "jobLog line": { topic: "jobLog", station, job: JOB, lines: JOB_LOG_LINES[0] },
+  "jobLog 300": { topic: "jobLog", station, job: JOB, lines: JOB_LOG_LINES[1] },
+  "jobLog 400": { topic: "jobLog", station, job: JOB, lines: JOB_LOG_LINES[2] },
+  // (a folder of 420, sfbase/drive_viewer.mbt drive_params; and as a place shows it: the phone's list, sfbase/browse.mbt,
+  // and a desktop page's columns, sfdesk/drive.mbt, where names may be changed)
+  "drive": { topic: "drive", ...DRIVE },
+  "driveBrowse phone": { topic: "driveBrowse", owner: "page", place: "phone", view: "list", ...DRIVE },
+  "driveBrowse columns": { topic: "driveBrowse", owner: "page", place: "p1", view: "columns", ...DRIVE, write: true },
+  // (the notices page, sfpages/notifications.mbt: as many as are kept, notices.ts KEEP)
+  "notices": { topic: "notices", workspace: "ws" },
+  // (安全模式, sfpages/security.mbt: the twelve members' devices, the five stations)
+  "lock": { topic: "lock", workspace: "ws" },
+  // (the vault, sfpages/vault.mbt and vault_item.mbt: 36 secrets, the uses of the most used one)
+  "vaults": { topic: "vaults", workspace: "ws" },
+  "vaultItems": { topic: "vaultItems", workspace: "ws", vault: "plain" },
+  "vaultUses": { topic: "vaultUses", workspace: "ws", vault: "plain", item: VAULT_ITEM },
+  // (adding a station, sfapp/settings/station_add.mbt; a station's workspaces, sfpages/station_page.mbt)
+  "joinable": { topic: "joinable", workspace: "ws" },
+  "memberships": { topic: "memberships", station },
+  // (a station's screens, sfpages/station_page.mbt; its network, sfpages/station_facts.mbt; the workspace's ways,
+  // sfpages/workspace_page.mbt)
+  "screens": { topic: "screens", station },
+  "stationNet": { topic: "stationNet", station },
+  "workspaceWays": { topic: "workspaceWays", workspace: "ws" },
+  // (what the chat and others wrote each other, sfdesk/letters.mbt; its things, sfpages/things.mbt, and looked in)
+  "chatLetters": { topic: "chatLetters", station, thread: CHAT.thread },
+  "chatThings": { topic: "chatThings", station, thread: CHAT.thread },
+  "chatThings q": { topic: "chatThings", station, thread: CHAT.thread, q: "png" },
+  // Those of one thing whose size nothing in the core bounds, at the most their station sends: a station's presets
+  // (sfpages/presets.mbt); a link's card (sfpages/peeks.mbt), a page's with its icon and picture inline, a pull
+  // request's; a file a message names, a picture's peek and a text's; a message of another chat a link names; a job
+  // (sfdesk/service_tab.mbt), the soak with all the notices its station shows.
+  "presets": { topic: "presets", station },
+  "linkPreview page": { topic: "linkPreview", station, url: PEEKS.page },
+  "linkPreview pull": { topic: "linkPreview", station, url: PEEKS.pull },
+  "filePeek picture": { topic: "filePeek", station, key, path: PEEKS.picture },
+  "filePeek text": { topic: "filePeek", station, key, path: PEEKS.text },
+  "messagePeek": { topic: "messagePeek", station, thread: PEEKS.message.thread, seq: PEEKS.message.seq },
+  "job": { topic: "job", station, id: "job-maple-3" },
 };
 
 /// Those measured with the chat's six pages loaded (`CHAT_MESSAGES`), the rest with its last alone.
@@ -95,15 +161,23 @@ const LONG = new Set(["chat six pages", "chat compact six pages"]);
 
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
 const OVER: Record<string, number> = {
-  "chat six pages": 248,
-  "chat compact six pages": 248,
-  "usage": 88,
+  "filePeek picture": 344,
+  "chat six pages": 264,
+  "chat compact six pages": 264,
+  "linkPreview page": 224,
+  "jobLog 400": 176,
+  "jobLog 300": 128,
+  "vaultUses": 128,
+  "usage": 112,
+  "chats mine": 80,
   "chats": 72,
-  "chats mine": 72,
+  "drive": 72,
   "profiles": 64,
   "history": 56,
-  "chat": 48,
-  "chat compact": 48,
+  "chat": 56,
+  "chat compact": 56,
+  "live": 40,
+  "chatLetters": 40,
 };
 
 /// Those over `DELTA_BAR_KB` as something changes, by `<name>/<cause>`: the heaviest message, KB as in `OVER`.
@@ -113,23 +187,126 @@ const OVER_DELTA: Record<string, number> = {};
 /// the core's own, which no UI can ask, so it is no topic of `TOPICS`; views/views.ts.)
 const RAW = "a station's raw record, no UI asks it";
 const FORM = "a form's";
-const OWN = "the device's own, does not grow with the workspace";
-const PAGE = "a page's of one thing, does not grow with the workspace";
-const LATER = "not yet in the fixture";
+/// What the device keeps of its own, and what a page of one thing holds, unweighed only where the core bounds it (the
+/// bound named); the rest of them (`UNBOUNDED`) grow with nothing the core holds back, not weighed yet: what the report
+/// of 2026-11-11 found of each.
+const UNBOUNDED = "nothing in the core bounds it (to weigh)";
 const NOT_MEASURED: Record<string, string> = {
   link: RAW, overview: RAW, sessions: RAW, session: RAW, host: RAW, memory: RAW, net: RAW, way: RAW, threads: RAW, thread: RAW, letters: RAW, chatRows: RAW,
   slackApp: RAW, jobs: RAW, machineLogins: RAW, machineLogin: RAW, machineLoginScreen: RAW, archivedRows: RAW, stationUsage: RAW, stationResources: RAW,
   stationSearch: RAW,
   slackTokens: FORM, connectFlow: FORM, decisionForm: FORM, policyForm: FORM, agentEnvForm: FORM, profileFlow: FORM, lockDraft: FORM,
-  accounts: OWN, workspaces: OWN, loginSessions: OWN, status: OWN, connection: OWN, draft: OWN, composer: OWN, notify: OWN, prefs: OWN, doing: OWN,
-  adbShare: OWN, adbCard: OWN, rigs: OWN, previewLoad: OWN, releases: OWN, fonts: OWN, downloads: OWN, drivePlace: OWN, filesTabs: OWN,
-  driveTransfers: OWN, lockPrompts: OWN,
+  adbCard: "four fields, its line a word of the core's or the phone's message (adb.ts card)", releases: "one number (core.ts `told`)",
+  fonts: "the fonts of a fixed catalogue, by id (font-files.ts, fonts.ids, SHARE_LOOKS_FILES)", drivePlace: "three fields (DrivePlace)",
+  filesTabs: "twelve tabs at most, each of one or two panes (drive-browse.ts MOST_TABS)",
+  previewLoad: "200 rows at most, past it only while those that load have not finished (preview-load.ts)",
+  accounts: UNBOUNDED, workspaces: UNBOUNDED, loginSessions: UNBOUNDED, status: UNBOUNDED, connection: UNBOUNDED, draft: UNBOUNDED, composer: UNBOUNDED,
+  notify: UNBOUNDED, prefs: UNBOUNDED, doing: UNBOUNDED, adbShare: UNBOUNDED, rigs: UNBOUNDED, downloads: UNBOUNDED, driveTransfers: UNBOUNDED, lockPrompts: UNBOUNDED,
   admin: "still.fail's operators' console, not the app's", adminList: "still.fail's operators' console, not the app's", adminItem: "still.fail's operators' console, not the app's",
   adminOverview: "still.fail's operators' console, not the app's", adminRelays: "still.fail's operators' console, not the app's",
-  presets: PAGE, linkPreview: PAGE, filePeek: PAGE, messagePeek: PAGE, screenCard: PAGE, job: PAGE, shareIn: PAGE, chatFeedback: PAGE, imageNear: PAGE,
-  live: LATER, jobLog: LATER, drive: LATER, driveBrowse: LATER, notices: LATER, lock: LATER, vaults: LATER, vaultItems: LATER, vaultUses: LATER,
-  joinable: LATER, memberships: LATER, screens: LATER, workspaceWays: LATER, stationNet: LATER, chatLetters: LATER, chatThings: LATER,
+  screenCard: "eight fields of one screen (screens.ts screenCard)", imageNear: "the two pictures beside one, at most (placed.ts near)",
+  shareIn: "30 chats (share-in.ts LISTED) and the workspace's stations, 64 at most (client/limits.ts STATIONS_PER_WORKSPACE)",
+  chatFeedback: UNBOUNDED,
 };
+
+/// What a topic's value as the fixture makes it holds nothing of, though its shape declares it (a list, a map), by the
+/// name `ASKED` gives it and the path (as the table prints them; `(whole)` the value itself, a variant of a union in
+/// parentheses), and why the fixture has none of it: a path under one listed is listed with it. A value weighed with
+/// a list empty weighs nothing of what a workspace of real size has in it, so what is listed here must be what such a
+/// workspace has none of, or a state it is not in. It only falls: one that now holds something comes out.
+const ERROR = "an error, which the fixture's workspace is not in";
+const WELL = "what is wrong, and all is well there";
+const SAVING = "a change being saved or sent, none in the fixture";
+const NONE = "a thing the workspace of real size has none of";
+const STATE = "a state the fixture is not in";
+const OLDER = "on the chat's earlier pages, not its last (its six pages' hold it)";
+const LETTER = "what a letter, an agent's words to another chat, does not have";
+const ASKED_SO = "not made for the way the app asks it here";
+const NEVER = "the core never makes it, whatever the workspace";
+const KIND = "another kind's: of a pull request (labels, its time), a text file (lines), a folder (entries)";
+const CHANGELOG = "its feed is another change's (changelog-pages)";
+/// A chat's paths EMPTY lists, as each way of asking it has them: the chat at its last page (`older`), compact.
+const chatEmpty = (older: boolean, compact: boolean): Record<string, string> => ({
+  // (QuotaWindow's `time`: present.ts `times` makes a quota's windows anew, never into each; `refills` says `resetsAt`)
+  "agents[].profile.quota.windows[].time": NEVER, "agents[].account.quota.windows[].time": NEVER,
+  // (a Slack message given to the agent with files)
+  "messages[].elsewhere[].attachments": STATE,
+  // (what its agents said in Slack before its first message read: one read from its first message has said nothing before it)
+  elsewhere: older ? OLDER : STATE,
+  outbox: SAVING,
+  ...(older ? { "messages[].notice.lines": OLDER } : {}),
+  // (compact sends a chat's jobs as `chatJobs` does: output.ts compactChat)
+  ...(compact ? { "agents[].jobs": ASKED_SO } : {}),
+});
+const EMPTY: Record<string, Record<string, string>> = {
+  "station": {
+    problems: WELL, profileStates: WELL, "overview.profiles[].modelsSaving": SAVING,
+    // (a decision-only provider's, Jev's; the workspaces the station joined, it joined none)
+    "overview.profiles[].decisionModels": NONE, "overview.profiles[].workspaces": NONE,
+    // (offers: a station with no chats of its own; formerly: the stations it took the place of, none lost)
+    "overview.copies.offers": STATE, "overview.copies.formerly": NONE,
+  },
+  "stationPart profiles": { "[].modelsSaving": SAVING, "[].quota.windows[].time": NEVER, "[].decisionModels": NONE, "[].workspaces": NONE },
+  // (a sign-in under way: Willow's)
+  "stationPart logins": { "(whole)": STATE },
+  // (foundMarks: a search's alone, views/search.ts foundChat)
+  "chats": { "days[].items[].foundMarks": NEVER, "note.failing": ERROR },
+  "chats mine": { "days[].items[].foundMarks": NEVER, "note.failing": ERROR },
+  // (profiles.ts gives its note no failing)
+  "profiles": { "wait.failing": NEVER },
+  "connects": { "wait.failing": ERROR },
+  "connects mine": { "wait.failing": ERROR },
+  // (a single-session connect's session, and the one weighed is many sessions')
+  "connect": { "bound.efforts": STATE, "bound.time": STATE, "bound.watch.names": STATE },
+  // (a new chat's pick names no account's allowance, choose.ts `#now` quiet; the model it takes with nothing chosen,
+  // Fable, runs on one runtime; borrow: a model only another station has, picked)
+  "newChat": { "pick.account.profile.quota.windows": ASKED_SO, "pick.runtimes": STATE, "pick.borrow.lines": STATE },
+  "pick": { "account.profile.quota.windows": ASKED_SO, runtimes: STATE, "borrow.lines": STATE },
+  "chat": chatEmpty(true, false),
+  "chat compact": chatEmpty(true, true),
+  "chat six pages": chatEmpty(false, false),
+  "chat compact six pages": chatEmpty(false, true),
+  // (a summary says whether there are jobs, jobs.ts)
+  "chatJobs summary": { jobs: ASKED_SO },
+  // (its account unable to run, the disk filling, its context cut mid-turn)
+  "agentCard": { attention: STATE },
+  "usage": { "wait.failing": ERROR },
+  // (the chats' card has no rows, rail-cards.ts chatsCard: the usage card's are weighed)
+  "railCard": { rows: ASKED_SO, days: ASKED_SO },
+  // (notes: a station down, unread or not counting; the one asked is up and counted)
+  "resources": { "wait.failing": ERROR, notes: WELL },
+  "archive": { errors: ERROR, "wait.failing": ERROR },
+  // (none of the chats found is one shared, or one waiting on a card)
+  "search": {
+    "items[].xshare.to": STATE, "messages[].chat.decision.options": STATE, "messages[].chat.decision.card.options": STATE, "messages[].chat.decision.card.vaultAsk.hosts": STATE,
+    "messages[].chat.foundMarks": NEVER, "wait.failing": ERROR,
+  },
+  // (words, messages: asked with `messages`, which the app does not pass)
+  "chatSearch": { "items[].xshare.to": STATE, "items[].foundMarks": NEVER, words: ASKED_SO, messages: ASKED_SO },
+  "changelog": { tabs: CHANGELOG, "news.entries": CHANGELOG },
+  "changelog news": { tabs: CHANGELOG, "news.entries": CHANGELOG },
+  // (a rig's devices', a station that only runs tasks: the workspace has none)
+  "devices": { "devices[].requests": NONE },
+  // (names chosen, a tree's folders open, columns widened by hand)
+  "driveBrowse phone": { "chosen.names": STATE, open: STATE, widths: STATE },
+  "driveBrowse columns": { "chosen.names": STATE, open: STATE, widths: STATE },
+  // (this device being approved face to face)
+  "lock": { "me.pair.approvers": STATE },
+  "vaults": { refused: ERROR },
+  // (a simulator's panels and case: none is up)
+  "screens": { "screens[].panels": STATE, "screens[].chrome": STATE },
+  "chatLetters": {
+    "chats[].letters[].quotes": LETTER, "chats[].letters[].notice.lines": LETTER, "chats[].letters[].options": LETTER, "chats[].letters[].card.options": LETTER,
+    "chats[].letters[].card.vaultAsk.hosts": LETTER, "chats[].letters[].elsewhere": LETTER, "chats[].letters[].chats": LETTER,
+  },
+  // (what is looked for, `png`, only pictures' names have)
+  "chatThings q": { files: ASKED_SO, links: ASKED_SO, pulls: ASKED_SO },
+  "linkPreview page": { labels: KIND, time: KIND },
+  "filePeek picture": { "lines.text": KIND, entries: KIND },
+  "filePeek text": { entries: KIND },
+};
+/// Those that may say `loading: true` as they are weighed, by topic, and why.
+const LOADING: Record<string, string> = { changelog: CHANGELOG };
 
 // ── weighing ──
 
@@ -235,16 +412,93 @@ const topicOf = (name: string): Topic => {
   return t;
 };
 
-/// A rig with every view, a new chat's and a model's pickers, the changelog; the real-size workspace set in it, the chat
-/// with its six pages loaded (`long`) or its last alone, the chat of four weeks held whole, and every topic of `ASKED` measured so subscribed as the app
-/// subscribes (keyed), its messages to each by id.
+/// The core's parts the pages' own topics are made of (core.ts `Inner`), as far as those read them here: the account
+/// and its workspaces, what the device holds, its links to the stations all up.
+function innerOf(parts: { host: FakeHost; store: Store; data: Data; views?: Views }): Inner {
+  const workspaces = new Workspaces(parts.host, parts.store.runner);
+  workspaces.setOwners(new Map([["ws", "s1"], [OTHER_WORKSPACE.id, "s1"], ["ws-friends", "s1"]]));
+  return {
+    host: parts.host, store: parts.store, runner: parts.store.runner, data: parts.data, views: parts.views, workspaces,
+    accounts: { list: () => [{ sub: "s1", email: "me@x.com", name: "左子健" }] },
+    stations: { seen: { read: () => {} }, link: () => ({ state: { state: "online" } }) },
+    provider: { kind: "stillfail" }, adb: { personal: () => ({ standing: () => "member" }) }, meshNow: () => null,
+  } as unknown as Inner;
+}
+
+/// Owners of the topics no view makes, as core.ts plugs them in: a drive's places (views/browse.ts), the notices
+/// (attention.ts), the lock (views/lock.ts), the vault (views/vault.ts), stations to join and what a station is in
+/// (views/memberships.ts), a station's screens (station/topics.ts, its `GET /screens` as `screens` gives it).
+function pageOwners(inner: Inner, notices: Notices, screens: () => J): Owner[] {
+  const browsing = new Browsing({
+    prefs: () => inner.data.shared({ topic: "prefs" }),
+    setPrefs: () => {},
+    entries: (station, root, path) => {
+      const folder = inner.data.shared({ topic: "drive", station, root, path }) as J;
+      return isObject(folder) ? (folder.entries as J[]).map((e) => ({ name: e.name, dir: e.dir === true, size: e.size ?? 0, mtime: e.mtime ?? 0, kind: e.dir ? "folder" : kindOf(e.name) })) : null;
+    },
+    stations: (ws) => ((inner.data.shared({ topic: "workspace", workspace: ws }) as J)?.stations ?? []).flatMap((s: J) => {
+      const station = `${ws}/${s.id}`;
+      const drive = (inner.data.shared({ topic: "overview", station }) as J)?.drive;
+      return isObject(drive) ? [{ station, name: s.name ?? s.id, home: typeof drive.home === "string" ? drive.home : null }] : [];
+    }),
+    now: () => inner.host.nowMs(), newId: () => "b0", invalid: (what) => new Error(what), countText: driveCount,
+    changed: (pick) => inner.store.invalidateAll((topic) => topic.topic === "driveBrowse" && pick(topic)),
+  });
+  const of = (names: string[], compute: (topic: Topic) => unknown, start?: (topic: Topic) => void): Owner => ({ owns: (topic: Topic) => names.includes(topic.topic), start, compute: (topic: Topic) => ({ ok: compute(topic) }) });
+  return [
+    of(["driveBrowse"], (topic) => browsing.view(topic), (topic) => browsing.started(String(topic.place))),
+    of(["notices"], (topic) => notices.value(typeof topic.workspace === "string" ? topic.workspace : null)),
+    of(["lock"], (topic) => lockView(inner, String(topic.workspace))),
+    of(["vaults"], (topic) => vaultsView(inner, String(topic.workspace))),
+    of(["vaultItems"], (topic) => itemsView(inner, String(topic.workspace), String(topic.vault))),
+    of(["vaultUses"], (topic) => usesView(inner, String(topic.workspace), String(topic.vault), String(topic.item))),
+    of(["joinable"], (topic) => joinable(inner, String(topic.workspace))),
+    of(["memberships"], (topic) => memberships(inner, String(topic.station))),
+    of(["screens"], (topic) => screensView(inner, String(topic.station), topic.station === CHAT.station ? screens() : { screens: [], outdated: false }, true)),
+  ];
+}
+
+/// The notices the workspace's chats' rows bring as each up station tells them one message on from where they were
+/// (a card come where it waits on one): what a device has heard of them by then, the latest `KEEP`.
+function noticesHeard(notices: Notices, rows: [string, J[]][]): void {
+  for (const [station, list] of rows) {
+    notices.changed(station, list.map((r) => ({ id: r.id, before: { ...r, last: { ...r.last, seq: r.last.seq - 1 }, card: undefined, decision: undefined }, after: r })), false);
+  }
+}
+
+/// A rig with every view, a new chat's and a model's pickers, the changelog, the pages' own topics (`pageOwners`); the
+/// real-size workspace set in it, the chat with its six pages loaded (`long`) or its last alone, the chat of four weeks
+/// held whole, and every topic of `ASKED` measured so subscribed as the app subscribes (keyed), its messages to each by id.
 async function held(long = false) {
   const chat = long ? CHAT_MESSAGES : OPENS;
   // (the workspace's devices as core.ts makes them: what each up station says, the rigs' none here)
   let devices: Devices | null = null;
+  let notices: Notices | null = null;
+  let screens: J = undefined;
+  const inners = new WeakMap<Data, Inner>();
+  const innerFor = (parts: { host: FakeHost; store: Store; data: Data }) => {
+    if (!inners.has(parts.data)) inners.set(parts.data, innerOf(parts));
+    return inners.get(parts.data)!;
+  };
   const t = setup({
     all: true,
+    // (the account's workspaces and how their stations are reached, as core.ts gives the views them of its `/v1/me`)
+    env: (parts) => ({
+      places: () => xshare.places(innerFor(parts)),
+      ways: (ws) => {
+        const me = parts.data.record("me", "s1") as J;
+        const w = (me?.workspaces ?? []).find((x: J) => x.id === ws);
+        return me === undefined ? undefined : waysView(me.relay_urls, me.relay_names, w?.relays ?? [], w?.ways_off ?? []);
+      },
+    }),
     owners: ({ host, store, data, views }) => {
+      const inner = innerFor({ host, store, data });
+      (inner as J).views = views;
+      notices = new Notices({
+        workspaces: inner.workspaces, now: () => host.nowMs(), emailOf: (ws) => (ws === "ws" ? "me@x.com" : null),
+        members: (ws) => ((data.shared({ topic: "workspace", workspace: ws }) as J)?.members ?? []),
+        slackUsers: (station) => ((data.shared({ topic: "overview", station }) as J)?.slackUsers ?? []),
+      });
       devices = new Devices({
         host, store, rigs: () => ({ devices: () => [] }) as unknown as Rigs, personal: () => null as unknown as PersonalLock,
         subOf: (ws) => (ws === "ws" ? "s1" : null), emailOf: (ws) => (ws === "ws" ? "me@x.com" : null),
@@ -255,20 +509,25 @@ async function held(long = false) {
         new Choose({ store, data, now: () => host.nowMs(), agent: (s, k) => views.agent(s, k) }),
         new Changelog(host, store, data),
         { owns: (topic: Topic) => topic.topic === "devices", compute: (topic: Topic) => ({ ok: d.value(String(topic.workspace)) }) },
+        ...pageOwners(inner, notices, () => screens),
       ];
     },
   });
   const base = t.host.nowMs();
+  screens = screensOf(base);
+  for (const [table, k, value] of records(base)) t.data.put(table, k, value);
   const names = Object.keys(ASKED).filter((name) => LONG.has(name) === long);
   names.forEach((name, i) => t.store.subscribe(1, i + 1, topicOf(name), true));
   // Set as the topics are watched, and again once the views watch what they found they are made of (a value set of a
   // topic nothing watches is not kept: the core's station topics read what is watched).
   for (let round = 0; round < 2; round++) {
-    for (const [topic, value] of fixture(base, chat)) t.set(topic, value);
+    for (const [topic, value] of [...fixture(base, chat), ...more(base)]) t.set(topic, value);
     t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), outlinedLog(base));
+    for (const key of CHAT.keys) t.data.putItems("transcript", CHAT.station, key, key === CHAT.keys[0] ? transcriptOf(base) : []);
     for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
     await t.host.time.pass(100);
   }
+  noticesHeard(notices!, UP.map((station) => [station, (t.data.shared({ topic: "chatRows", station }) as J[]) ?? []]));
   // (what is made after the rest: Markdown read, a page's words)
   for (let i = 0; i < 5; i++) await t.host.settle();
   t.host.takeEmitted();
@@ -324,6 +583,114 @@ test("what each topic the app asks is sent whole holds to its bar on a workspace
     console.log(table(`What each topic is sent whole (bar ${BAR_KB} KB):`, [...first].map(([name, m]) => ({ name, bytes: bytes(m), bar: OVER[name] !== undefined ? 0 : BAR_KB, value: m.value }))));
     if (first.get("stations")?.value !== undefined) console.log(beside(first.get("stations").value));
   }
+  assert.deepEqual(faults, []);
+});
+
+// ── what the fixture leaves empty ──
+
+/// `path` and a field of it, as the table says paths (`(whole)` the value itself).
+const pathAt = (path: string, k: string) => (path === "" ? k : `${path}.${k}`);
+const shown = (path: string) => (path === "" ? "(whole)" : path);
+
+/// Every list and map `ty` declares under `path`, at every depth (a shape met again inside itself not gone into).
+function declared(ty: Ty, path: string, out: Set<string>, within: string[] = []): void {
+  if (typeof ty === "object") {
+    if ("opt" in ty) return declared(ty.opt, path, out, within);
+    if ("vec" in ty) {
+      out.add(path);
+      return declared(ty.vec, `${path}[]`, out, within);
+    }
+    if ("map" in ty) {
+      out.add(path);
+      return declared(ty.map, `${path}{}`, out, within);
+    }
+    return ty.tuple.forEach((t, i) => declared(t, `${path}[${i}]`, out, within));
+  }
+  const shape = SHAPES[ty];
+  if (shape === undefined || shape.kind === "enum" || within.includes(ty)) return;
+  const inner = [...within, ty];
+  if (shape.kind === "tagged") for (const [w, t] of Object.entries(shape.variants)) declared(t, `${pathAt(path, shape.content)}(${w})`, out, inner);
+  else for (const f of shape.fields) declared(f.ty, pathAt(path, f.name), out, inner);
+}
+
+/// The lists and maps of `v` (as `ty`) that hold something, by path, added to `out`.
+function holding(v: unknown, ty: Ty, path: string, out: Set<string>): void {
+  if (v === null || v === undefined) return;
+  if (typeof ty === "object") {
+    if ("opt" in ty) return holding(v, ty.opt, path, out);
+    if ("vec" in ty) {
+      if (!Array.isArray(v)) return;
+      if (v.length > 0) out.add(path);
+      return v.forEach((x) => holding(x, ty.vec, `${path}[]`, out));
+    }
+    if ("map" in ty) {
+      if (typeof v !== "object") return;
+      const xs = Object.values(v as object);
+      if (xs.length > 0) out.add(path);
+      return xs.forEach((x) => holding(x, ty.map, `${path}{}`, out));
+    }
+    if (Array.isArray(v)) ty.tuple.forEach((t, i) => holding(v[i], t, `${path}[${i}]`, out));
+    return;
+  }
+  const shape = SHAPES[ty];
+  if (shape === undefined || shape.kind === "enum" || typeof v !== "object") return;
+  const o = v as Record<string, unknown>;
+  if (shape.kind === "tagged") {
+    const t = shape.variants[String(o[shape.tag])];
+    if (t !== undefined) holding(o[shape.content], t, `${pathAt(path, shape.content)}(${String(o[shape.tag])})`, out);
+  } else for (const f of shape.fields) holding(o[f.name], f.ty, pathAt(path, f.name), out);
+}
+
+/// Of a value no shape declares: its lists and objects, and those of them that hold something.
+function found(v: unknown, path: string, all: Set<string>, held: Set<string>): void {
+  if (v === null || typeof v !== "object") return;
+  all.add(path);
+  const xs = Array.isArray(v) ? v : Object.values(v);
+  if (xs.length > 0) held.add(path);
+  if (Array.isArray(v)) v.forEach((x) => found(x, `${path}[]`, all, held));
+  else for (const [k, x] of Object.entries(v)) found(x, fieldName(k) ? pathAt(path, k) : `${path}{}`, all, held);
+}
+
+/// Whether `outer` is a path `path` is under.
+const under = (path: string, outer: string) => path !== outer && (outer === "" || (path.startsWith(outer) && "[{.(".includes(path[outer.length]!)));
+
+/// What `EMPTY` says against what the values sent whole hold: each list or map no value fills that is not listed,
+/// each listed that holds something now or is no path of its shape, a value that is still loading or none.
+function emptyFaults(first: Map<string, J>): string[] {
+  const faults: string[] = [];
+  for (const name of Object.keys(ASKED)) {
+    const m = first.get(name);
+    const listed = EMPTY[name] ?? {};
+    if (m === undefined || !("value" in m) || m.value === null || m.value === undefined) {
+      faults.push(`${name}: answered with no value (${m === undefined ? "nothing came" : JSON.stringify(m.error ?? m.value)})`);
+      continue;
+    }
+    if (isObject(m.value) && m.value.loading === true && LOADING[ASKED[name]!.topic] === undefined) faults.push(`${name}: still loading as it is weighed: the fixture gives it nothing to read`);
+    const ty = shapeOf(topicOf(name));
+    const all = new Set<string>();
+    const held = new Set<string>();
+    if (ty === undefined) found(m.value, "", all, held);
+    else {
+      declared(ty, "", all);
+      holding(m.value, ty, "", held);
+    }
+    const empty = [...all].filter((p) => !held.has(p));
+    const outermost = empty.filter((p) => !empty.some((o) => under(p, o)));
+    for (const p of outermost) if (listed[shown(p)] === undefined) faults.push(`${name}: ${shown(p)} is empty in the fixture: fill it in real-size.ts, or list it in EMPTY with why`);
+    for (const p of Object.keys(listed)) {
+      const at = p === "(whole)" ? "" : p;
+      if (!all.has(at)) faults.push(`${name}: EMPTY lists ${p}, no list or map of its shape`);
+      else if (held.has(at)) faults.push(`${name}: ${p} holds something now: bring it out of EMPTY`);
+      else if (!outermost.includes(at)) faults.push(`${name}: EMPTY lists ${p}, under ${shown(outermost.find((o) => under(at, o))!)} listed already`);
+    }
+  }
+  for (const name of Object.keys(EMPTY)) if (!(name in ASKED)) faults.push(`${name}: in EMPTY but not asked`);
+  return faults;
+}
+
+test("what each topic the app asks is sent whole fills what its shape declares", async () => {
+  const faults = emptyFaults(await firstOfAll());
+  if (print || faults.length > 0) console.log(["What the fixture leaves empty, not in EMPTY or wrongly there:", ...faults.map((f) => `    ${f}`)].join("\n"));
   assert.deepEqual(faults, []);
 });
 
