@@ -234,6 +234,37 @@ test("a device holding no lock where the cloud's view says there is one reads it
   assert.deepEqual(held(inner, "ws")?.entries, h.entries);
 });
 
+test("the cloud keeping no lock, asked as no station answered, does not make this device forget the one it holds", async () => {
+  const { inner, st, run, r, cloud } = await setUp();
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  const h = held(inner, "ws")!;
+  assert.notEqual(h.head, null);
+  // No station serves the lock now (as one from before), so the cloud is asked; and the cloud has lost it.
+  st.say.old = true;
+  r.cloud.chains.set("ws", []);
+  cloud.asked.length = 0;
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  assert.ok(cloud.asked.some((a) => a.startsWith("GET /lock")), cloud.asked.join());
+  assert.equal(held(inner, "ws")?.head?.hash, h.head!.hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
+});
+
+test("the page to turn safe mode on, asked where none is held and the cloud's view says there is a lock, reads the lock instead", async () => {
+  const { inner, st, run, r } = await setUp();
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  const h = held(inner, "ws")!;
+  assert.notEqual(h.head, null);
+  // (#5540's device: the lock let go, the stations keeping it still)
+  inner.data.put("lock", "ws", { head: null, entries: [] });
+  await r.watch({ topic: "lockDraft", workspace: "ws" });
+  for (let i = 0; i < 50 && held(inner, "ws")?.head == null; i++) await r.host.time.pass(10);
+  assert.equal(held(inner, "ws")?.head?.hash, st.head().hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
+});
+
 test("a station refusing this device tells its lock's last entries: one taken out hears so, with no cloud", async () => {
   const { inner, st, cloud, run, signer, r } = await setUp();
   await run(read(inner, "ws"));

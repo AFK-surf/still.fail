@@ -433,6 +433,10 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     // What follows what is held, when it is the same lock; all of it otherwise.
     const said = yield* cloud(`/lock?after=${was?.head ? was.head.seq : -1}`);
     const head = readHead(get(said, "head"));
+    // The cloud keeping none is not the end of a lock held here and not turned off: it only carries the lock (the root
+    // AGENTS.md, The cloud is the account system), and its word alone, asked because no station answered just now,
+    // would have this device take safe mode for off. The stations it names all keeping none is what ends it (readLockOf).
+    if (head === null && was?.head && !fold(was.entries).disabled) return;
     const more = arr(get(said, "entries")) as Entry[];
     const same = was?.head && head && was.head.genesis === head.genesis;
     let entries = same ? [...was!.entries, ...more.filter((e) => e.seq > was!.head!.seq)] : more;
@@ -1586,6 +1590,10 @@ function draft(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     const sub = inner.workspaces.owner(ws);
     if (sub === null) return;
     const p = part(inner, ws);
+    // None held here while the cloud's view says the workspace has a lock: this device is behind, not the workspace
+    // unlocked. The lock is read first, and held, this is no draft's page any more: it showed the stations keeping the
+    // workspace's own lock as keeping another, to be reset on their machines (#5540).
+    if (!held(inner, ws)?.head && cloudSays(view(inner, ws))) yield* Effect.ignore(read(inner, ws));
     // The devices that came to the stations (each says those that came to it); of the cloud only when none says.
     const came: J[][] = [];
     yield* Effect.forEach(
