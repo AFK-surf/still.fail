@@ -201,9 +201,14 @@ jobs:
             done
           done
           echo "units: $n0 of main's, $(( $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) - n0 )) more of $got merged branches' for $(echo $shas | wc -w) commits since ${from:0:8}"
-      - name: The units this run had before
+      # (what main's store had: a branch puts all its units main's lacks, its earlier pushes' too, so a change that
+      # compiled over several pushes (each stopped at its 5 minutes, its units kept) is main's whole once merged)
+      - name: The units main's store had
         if: env.OWN == 'b-'
-        run: (mkdir -p "$MBC_STORE" && cd "$MBC_STORE" && find . -mindepth 2 -maxdepth 2 -type d | sort) > "$RUNNER_TEMP/units-before"
+        run: |
+          mkdir -p "$RUNNER_TEMP/store-main" "$RUNNER_TEMP/store-arch"
+          # (and arch/next's: everyone's already, a cache on main's ref)
+          { (cd "$RUNNER_TEMP/store-main" && find . -mindepth 2 -maxdepth 2 -type d); (cd "$RUNNER_TEMP/store-arch" && find . -mindepth 2 -maxdepth 2 -type d); } | sort -u > "$RUNNER_TEMP/units-before"
       - name: The mbui app's tests and the flows seen again (native, ${{ env.PART }})
         id: tests
         run: |
@@ -246,15 +251,15 @@ jobs:
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
         # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
         run: moon version && bash apps/mbui/scripts/check.sh
-      # (a branch's: the units it compiled, for main's run once it is merged (above). Its own cache is its branch's
-      # alone; main's run is helped by it, never waits on it: a failed upload fails nothing)
+      # (a branch's: the units it has that main's store lacks, for main's run once it is merged (above). Its own cache
+      # is its branch's alone; main's run is helped by it, never waits on it: a failed upload fails nothing)
       - name: The units this run compiled, for main's
         id: queue-units
         if: always() && env.OWN == 'b-'
         run: |
           (cd "$MBC_STORE" && find . -mindepth 2 -maxdepth 2 -type d | sort) > "$RUNNER_TEMP/units-after"
           comm -13 "$RUNNER_TEMP/units-before" "$RUNNER_TEMP/units-after" > "$RUNNER_TEMP/units-new"
-          echo "units compiled: $(wc -l < "$RUNNER_TEMP/units-new")"
+          echo "units main's store lacks: $(wc -l < "$RUNNER_TEMP/units-new")"
           mkdir -p "$RUNNER_TEMP/queue-units"
           [ ! -s "$RUNNER_TEMP/units-new" ] || tar -cf "$RUNNER_TEMP/queue-units/units.tar" -C "$MBC_STORE" -T "$RUNNER_TEMP/units-new"
       - if: always() && steps.queue-units.outcome == 'success'
