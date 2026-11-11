@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { specOf, type Spec } from "../src/collections.ts";
 import { markdown } from "../src/markdown.ts";
 import { Output } from "../src/output.ts";
 import * as present from "../src/present.ts";
+import { deepFreeze, isObject, shaped } from "../src/util.ts";
 import { work } from "../src/work.ts";
 
 test("output_an_agents_markdown_goes_out_as_the_tree_kept_for_its_words_not_copied_again", () => {
@@ -117,4 +119,61 @@ test("a_value_given_again_is_made_again_as_a_signal_its_making_read_moves_on_wha
   const again = out.shape(topic, raw, c, false);
   assert.equal(work.shapes - from, 1);
   assert.notEqual(again, first);
+});
+
+test("every_keyed_topics_items_are_decorated_as_they_are_never_written_and_never_marked_as_gone_out", () => {
+  // Each item was deep-copied before it was decorated: 1.3 ms of the 52 items of a chat list's first page in Hermes
+  // (2026-11-11). Decoration copies what it puts something in: an item given it frozen, as the store's are, goes out
+  // as a copy decorated would, and is itself never marked as gone out (which another value holding it would take it as).
+  const now = Date.UTC(2026, 10, 11, 4, 30, 10);
+  const c = { now, offsetMin: 480 };
+  // An item with what each of `times`'s ways puts in (times in words beside a time, a quota's windows, its resets and
+  // credits, beside a `time` it already has), what `session` reads, and parts with nothing put in.
+  const item = (spec: Spec, i: number): Record<string, unknown> => ({
+    ...Object.fromEntries((spec.key ?? []).map((k) => [k, k === "outgoing" ? null : `${k}${i}`])),
+    lastActiveAt: now - (i + 2) * 60_000,
+    time: { updatedAt: { ago: "早先" } },
+    last_seen: Math.floor(now / 1000) - 3600,
+    process: "cold", pending: 0, runtime: "claude", model: "opus", title: `item ${i}`,
+    lastTurn: { kind: "message", ending: "final", need: "合并了", outcome: "completed", startedAt: now - 600_000, endedAt: now - 500_000 },
+    quota: {
+      state: "ok", credits: { balance: "3.5" }, resetCount: 1, resetExpiries: [now + 86_400_000],
+      resets: [{ kind: "weekly", left: 1, expiries: [now + 86_400_000] }],
+      windows: [{ label: "5h", usedPercent: 40, resetsAt: now + 3_600_000 }], scoped: [{ label: "Fable", usedPercent: 10 }],
+    },
+    plain: { parts: [1, { b: 2 }], text: "无" },
+  });
+  // A value of the topic's keyed lists, each of two items, and one item with nothing in it to put.
+  const valueOf = (spec: Spec, i = 0): unknown => {
+    if (spec.key) return [0, 1].map((n) => (spec.item ? { ...item({ key: spec.key }, n), ...(valueOf(spec.item, n) as object) } : item(spec, i * 2 + n))).concat(spec.item ? [] : [Object.fromEntries(spec.key.map((k) => [k, `${k}-bare`]))]);
+    return Object.fromEntries(Object.entries(spec.fields ?? {}).map(([f, s]) => [f, valueOf(s, i)]));
+  };
+  const leaves = (spec: Spec, v: unknown): unknown[] => {
+    if (spec.key) return (v as unknown[]).flatMap((x) => (spec.item ? leaves(spec.item, x) : [x]));
+    return Object.entries(spec.fields ?? {}).flatMap(([f, s]) => leaves(s, (v as Record<string, unknown>)[f]));
+  };
+  const topics = ["chats", "chatSearch", "search", "chat", "archive", "chatRows", "archivedRows", "threads", "sessions", "jobs", "history", "chatOutline", "changelog", "vaults", "vaultItems", "driveTransfers", "downloads", "jobLog", "stations", "newChat"];
+  for (const name of topics) {
+    const topic = { topic: name, station: "w/s", scope: "w" };
+    const spec = specOf(topic)!;
+    const raw = valueOf(spec);
+    deepFreeze(raw);
+    const out = new Output().shape(topic, raw, c, false) as { ok: unknown };
+    assert.ok("ok" in out, name);
+    // (a job's log is made anew of its items whole, jobs.ts `log`: its items decorated all the same, above)
+    if (name === "jobLog") continue;
+    const given = leaves(spec, raw);
+    const sent = leaves(spec, out.ok);
+    assert.equal(sent.length, given.length, name);
+    for (const [i, x] of given.entries()) {
+      assert.deepEqual(sent[i], present.decorateItem(topic, structuredClone(x), c), `${name}: as a copy decorated`);
+      assert.notEqual(sent[i], x, `${name}: not the item itself`);
+      assert.ok(!shaped.has(x as object), `${name}: the item not marked as gone out`);
+      // (a part of it nothing is put in goes out as it is, not a copy: no shape here to make it anew)
+      const part = (x as Record<string, unknown>).plain;
+      if (part !== undefined && present.ticks(topic) && name !== "stations") assert.equal((sent[i] as Record<string, unknown>).plain, part, `${name}: a part with nothing put in, not copied`);
+    }
+    // (what the decoration puts in, where the topic says times in words: so it was put, not left out)
+    if (present.ticks(topic) && name !== "stations") assert.ok(isObject((sent[0] as Record<string, unknown>).time) && "lastActiveAt" in ((sent[0] as Record<string, Record<string, unknown>>).time), name);
+  }
 });
