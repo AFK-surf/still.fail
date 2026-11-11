@@ -468,7 +468,9 @@ let mark_cursor_at : Int = 6
 ///|
 /// What is said of the target `id` as it is built, marked on its node (the way there's 1: what a frame
 /// says is what its nodes hold, kept with them). Said of an id whose node is not made yet, it is marked on it as it is
-/// (Ctx::id_built). The shape said last is the one.
+/// (Ctx::id_built); one that has no node at all (a link in rich words) keeps it in the frame's `marks_ahead`, which a
+/// list's row or a part kept as its nodes says again each frame it is kept (built_used), its build not run. The shape
+/// said last is the one.
 fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
   if id == 0 {
     return
@@ -478,7 +480,15 @@ fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
       let n = self.nodes[i]
       n.marks = with_marks(n.marks, m, cursor)
     }
-    _ => self.marks_ahead[id] = with_marks(self.marks_ahead.get(id).unwrap_or(0), m, cursor)
+    _ => {
+      self.marks_ahead[id] = with_marks(self.marks_ahead.get(id).unwrap_or(0), m, cursor)
+      // (an id whose node this build makes later has it marked on it then, and what is said again of it then is
+      // read by nothing: its node, kept, holds it)
+      built_used(fn() {
+        let c = g()
+        c.marks_ahead[id] = with_marks(c.marks_ahead.get(id).unwrap_or(0), m, cursor)
+      })
+    }
   }
 }
 
