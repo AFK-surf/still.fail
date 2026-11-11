@@ -276,15 +276,15 @@ pub fn frame_offscreen(
 
 ///|
 /// What looks at each pass of a frame's build as it is over (`at` 0 as it is laid out, 1 as nothing else builds it
-/// again; `kept0` the rows kept before it), where something does (a Tester's: rows_pass_looked): true, the frame
-/// built again.
+/// again; `kept0` the rows kept before it; `root` the frame's root as it built it), where something does (a Tester's:
+/// rows_pass_looked): true, the frame built again.
 // kept across runs: set by each Tester as it is made, let go as its run ends
-let pass_look : Ref[((Ctx, Int, Int) -> Bool)?] = Ref(None)
+let pass_look : Ref[((Ctx, Int, Int, Int) -> Bool)?] = Ref(None)
 
 ///|
-fn pass_looked(c : Ctx, at : Int, kept0 : Int) -> Bool {
+fn pass_looked(c : Ctx, at : Int, kept0 : Int, root : Int) -> Bool {
   match pass_look.val {
-    Some(f) => f(c, at, kept0)
+    Some(f) => f(c, at, kept0, root)
     None => false
   }
 }
@@ -488,13 +488,13 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
     c.actions.clear()
     building.val = false
     // (what looks at each pass, where something does (a Tester's: tester_rows.mbt): true, built again)
-    if pass_looked(c, 0, kept0) {
+    if pass_looked(c, 0, kept0, root) {
       continue
     }
     if c.read_back_moved && pass < frame_passes_most {
       continue
     }
-    if pass_looked(c, 1, kept0) {
+    if pass_looked(c, 1, kept0, root) {
       continue
     }
     break
@@ -573,8 +573,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
 /// The frame's tree from `root`, as it is laid out, painted: its instances, what is tapped and scrolled where, what is
 /// read out, the native views placed, what the host is told of the field with the keys. `alone`: painted again, its
 /// build the last one's (frame_watch.mbt): what that build made for the frames after it (its layers, what takes the
-/// focus) is as it left it.
-fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
+/// focus) is as it left it. `drawn_only`: its instances and targets drawn and found, nothing of them taken or told
+/// (no glyphs asked ahead, no shot, nothing given out, said or published: a Tester's look at a build that kept rows).
+fn frame_paint(c : Ctx, root : Int, alone? : Bool = false, drawn_only? : Bool = false) -> Unit {
   paint_phase.val = 1
   paint_base.wake = -1.0
   paint_clock_at.val = ""
@@ -618,12 +619,18 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // (the handles of words a finger picked, over everything, as a field's: finger_select.mbt)
   c.paint_finger_ends()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
-  glyphs_ahead()
+  if !drawn_only {
+    glyphs_ahead()
+  }
   c.emit_segs()
   // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn over kept for a frame of it alone
   // (frame_watch.mbt)
   looks_keep(c)
   looks_apply(c)
+  // (what it draws alone, nothing of it taken or told: a Tester's look at a build that kept rows, tester_rows.mbt)
+  if drawn_only {
+    return
+  }
   // the shots being taken, each into instances of its own (shot.mbt)
   c.paint_shots()
   c.sync_views()

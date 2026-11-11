@@ -72,6 +72,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
       }
       fake.val = None
       shot_watch.val = None
+      kept_seen_said("")
       pass_look.val = None
       frame_look.val = None
       @hostapi.set_host(restore)
@@ -505,6 +506,9 @@ pub fn Tester::new(
   corners_hold.val = corners_held
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
+  // (the Tester before's KEPT-SEEN said, this one's begun: tester_rows.mbt)
+  kept_seen_said(loc.to_string(), w~, h~)
+  kept_compare.val = @env.get_env_var("MBUI_KEPT_COMPARE").unwrap_or("") != "0"
   looks_made_at.val = loc.to_string()
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)

@@ -15,8 +15,13 @@ if [ -z "${GITHUB_ACTIONS:-}" ] && [ "${MBUI_WHOLE_SUITE:-}" != 1 ]; then
 fi
 cd "$D/.."
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
-moon_tests -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/figure -p mbui/dmath -p mbui/zip ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+ui_out=$(mktemp)
+moon_tests -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/figure -p mbui/dmath -p mbui/zip ${UPDATE:+--update} 2>&1 | grep -v "$F" > "$ui_out"
 code=${PIPESTATUS[0]}
+# TEMPORARY (the kept-check draft's numbers): its lines, all of them, past LINES_OUT's tail
+grep -a '^KEPT-APART \|^KEPT-SEEN ' "$ui_out" | sed 's/^/NUMBERS /'
+grep -av '^KEPT-APART \|^KEPT-SEEN ' "$ui_out" | tail -${LINES_OUT:-60}
+rm -f "$ui_out"
 moon_tests -p mbui/text 2>&1 | grep -v "$F" | tail -8
 [ ${PIPESTATUS[0]} = 0 ] || code=1
 if [ "${TEXTDIFF:-1}" != 0 ]; then
