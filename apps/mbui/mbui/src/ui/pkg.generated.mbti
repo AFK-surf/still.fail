@@ -2794,6 +2794,8 @@ pub fn Tester::time(Self) -> Double
 pub fn Tester::touch(Self, Int32, Double, Double) -> Unit
 pub fn Tester::touch_at(Self, Int32, Double, Double, Double) -> Unit
 pub fn Tester::touch_raw(Self, Int32, Int32, Double, Double, Double) -> Unit
+pub fn Tester::tree_frames(Self) -> Array[TreeFrame]
+pub fn Tester::tree_frames_from_now(Self) -> Unit
 pub fn Tester::turn_of(Self, String) -> Double?
 pub fn Tester::type_text(Self, String) -> Unit
 pub fn Tester::ui_face_wider(Self, Double) -> Unit
@@ -3008,6 +3010,13 @@ pub(all) enum Tracking {
   Exact(Double)
 } derive(Eq, Show, @debug.Debug)
 pub fn Tracking::px(Self, Double) -> Double
+
+pub(all) struct TreeFrame {
+  made : Int32
+  let_go : Int32
+  laid : Int32
+  measured : Int32
+} derive(Eq, Show)
 
 pub struct Velocity {
   // private fields

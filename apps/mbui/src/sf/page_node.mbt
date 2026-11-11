@@ -188,7 +188,8 @@ priv enum PageItem {
 /// (`scroll`: a page of parts, each part's page its own as it was left). `head`: a head of its own in place of its
 /// title, which says its name (an account's: own_head_node), made where the title would be (under the frame's bar that
 /// names it too); narrow, under back where the frame gives that, back's line its first, what the page does (`actions`)
-/// at that line's end (own_head's back_line), told the head as it is made (head_back_holds).
+/// at that line's end (own_head's back_line), told the head as it is made (head_back_holds). `near_foot`: a page more
+/// asked as its list is scrolled near its foot while it has more (View::scrolls_window's).
 pub fn page_node(
   v : @view.View,
   title : () -> String,
@@ -204,6 +205,7 @@ pub fn page_node(
   scroll? : @view.Scroll,
   tips? : TipLayer,
   head? : (@view.View) -> Unit,
+  near_foot? : (Double, () -> Bool, () -> Unit),
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
@@ -235,8 +237,8 @@ pub fn page_node(
       None => own_scroll
     }
     match l {
-      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, head)
-      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips, head)
+      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, head, near_foot)
+      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips, head, near_foot)
     }
   })
   // (its own layer only where it has what is for by a mark to say: nothing over a page that has none)
@@ -334,6 +336,7 @@ fn narrow_page_node(
   actions : ((@view.View) -> Unit)?,
   scroll : @view.Scroll,
   head : ((@view.View) -> Unit)?,
+  near_foot : (Double, () -> Bool, () -> Unit)?,
   loc~ : SourceLoc,
 ) -> Unit {
   // (a head of its own under back: back's line its first, what the page does at that line's end, own_head's)
@@ -367,7 +370,7 @@ fn narrow_page_node(
   }
   v.box(made_for=loc, fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, near_foot?, fn(s, item) {
       with_look(Narrow, fn() {
         match item {
           // under what stands over it (a status bar)
@@ -457,8 +460,12 @@ fn narrow_page_node(
               })
               |> ignore
             })
-          // what it holds, each block in the page's room
-          Block(k) => page_block(s, fn(room) { block(room, k) })
+          // what it holds, each block in the page's room (as tall as its slot, on a host's pixels whole pixels tall,
+          // for what grows in it to reach the next: a card's pieces, card_piece_node)
+          Block(k) => {
+            s.grow(Is(1.0)) |> ignore
+            page_block(s, fn(room) { block(room, k) })
+          }
           // 30 under the last (in a panel of its own, its last card as far from its foot as from its sides: page_foot),
           // then the frame's room
           Foot => s.height(By(fn() { Some(page_foot(s) + frame().foot) })) |> ignore

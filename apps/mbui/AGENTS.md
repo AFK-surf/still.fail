@@ -110,6 +110,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   (mbui's `mbui/src/view`; `mbui/AGENTS.md`, Two views). What is new or rewritten is nodes: a page is `@sf.page_node`, a
   panel `@sf.panel_nodes` (drawn on 小屏 as a sheet from the foot), a long list `View::each` in what scrolls
   (`View::scrolls_window`); the library's parts are its `*_node.mbt` ones. A press does its work in its handler (`on_press`, `on_pick`, `on_change`).
+- A page's list makes a block only while it shows, so a block is a row, not a group of them: a card of a long list
+  is made a block a row, each a piece of the card (`@sf.card_piece_node`), as 更新日志's days are (2026-11-11: a day of
+  62 changes made one block was made whole in the frame it came into view).
 - What is left of the old is counted by detlint and only falls: `old-island` (`@ui.old` hosting a Ctx in a node),
   `old-list` (`Ctx::list`), `old-panel`, `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`.
   A change never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.

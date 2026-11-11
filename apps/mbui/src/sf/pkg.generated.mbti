@@ -229,6 +229,10 @@ pub fn card_lines(@ui.Ctx, String, words? : String, note? : String, bad? : Strin
 
 pub let card_pad : Double
 
+pub fn card_piece_node(@view.View, () -> CardPiece, (@view.View) -> Unit) -> Unit
+
+pub fn card_piece_of(Int32, Int32) -> CardPiece
+
 pub let card_radius : @ui.Radius
 
 pub let card_title : @ui.TextStyle
@@ -371,7 +375,9 @@ pub fn danger_row_node(@view.View, () -> String, () -> Unit, busy? : () -> Bool)
 
 pub fn data_image(String) -> String
 
-pub fn day_group_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
+pub fn day_change_node(@view.View, () -> CardPiece, () -> Array[ChangeLine], () -> String, () -> String, () -> Bool) -> Unit
+
+pub fn day_heading_node(@view.View, () -> String) -> Unit
 
 pub let desk_card : @ui.Style
 
@@ -1384,7 +1390,7 @@ pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
 
-pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer, head? : (@view.View) -> Unit) -> Unit
+pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer, head? : (@view.View) -> Unit, near_foot? : (Double, () -> Bool, () -> Unit)) -> Unit
 
 pub fn page_none_node(@view.View, () -> String) -> Unit
 
@@ -2625,6 +2631,13 @@ pub fn Book::at(Self, Int32) -> (Int32, Int32)
 pub fn Book::offset_of(Self, Int32, Double) -> Int32
 
 #derive(Eq)
+pub(all) enum CardPiece {
+  CardWhole
+  CardTop
+  CardBetween
+  CardFoot
+} derive(Eq, Show)
+
 pub(all) struct ChangeLine {
   label : String
   text : String

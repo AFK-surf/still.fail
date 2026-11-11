@@ -509,6 +509,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     for i in a..=b {
       now.push(all[i].key)
     }
+    // (past one never measured, come in among those that show: those made under it that meet where it shows as they
+    // are counted kept made, not let go to be made again once it is measured; where they are is worked out then, and
+    // they go only if it puts them out of sight)
+    if !all[b].known {
+      let mut i = b + 1
+      while i < all.length() && all[i].top < top + vh {
+        if showing.contains(all[i].key) {
+          now.push(all[i].key)
+        }
+        i = i + 1
+      }
+    }
     now
   }
   // Scrolled so that one more meets where it shows, or the first or the last made no more does, or the blocks counted

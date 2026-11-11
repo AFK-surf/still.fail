@@ -135,9 +135,9 @@ export type Topic =
   | { topic: "doing" }
   | { topic: "composer"; key: string }
   | { topic: "previewLoad"; station: string; port: number }
-  // What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen`
-  // (client/core-ts/src/changelog.ts).
-  | { topic: "changelog" }
+  // What changed in still.fail, as this app shows it (the tab `part`'s first `limit` changes), and what an update
+  // brought until `changelog.seen` (`news` alone; client/core-ts/src/changelog.ts).
+  | { topic: "changelog"; part?: string; limit?: number; news?: boolean }
   // What each workspace has waiting (how many chats want their person, how many are unread) and the chat last open in
   // it; of those other than `workspace` (the one in view), the most urgent (client/core-ts/src/views/marks.ts).
   | { topic: "workspaceMarks"; workspace?: string }

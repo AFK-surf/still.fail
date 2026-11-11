@@ -163,7 +163,7 @@ export const TOPICS: Record<string, Spec> = {
   policyForm: { station: S, form: S },
   agentEnvForm: { station: S, form: S },
   profileFlow: { station: S, form: S },
-  changelog: { news: ["bool", "skipFalse"] },
+  changelog: { news: ["bool", "skipFalse"], part: ["string", "skip"], limit: ["u32", "skip"] },
   releases: {},
   fonts: {},
   workspaceMarks: { workspace: ["string", "skip"] },
