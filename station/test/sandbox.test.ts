@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
-import { checkSandbox, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
+import { checkSandbox, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs, syncFor } from "../src/agents/sandbox.ts";
 import { runnerId } from "../src/agents/process.ts";
 import { routes } from "../src/api/routes/sandbox.ts";
 import { ConfigFile } from "../src/ops/config.ts";
@@ -90,5 +90,16 @@ describe("placing", () => {
     const data = tempdir();
     cleanups.push(placeIn(data, () => null, () => []));
     assert.equal(inSandbox(data, "k", "claude", [], "/"), null);
+  });
+
+  test("syncs Antigravity's gemini config dir while skipping its runtime caches and databases", () => {
+    const data = tempdir();
+    const entries = syncFor(data, "agy", { ANTIGRAVITY_GEMINI_DIR: "/h/agy/.gemini" }, "/tmp/cwd");
+    const agyEntry = entries.find((e) => e.path === "/h/agy/.gemini");
+    assert.ok(agyEntry);
+    assert.equal(agyEntry.mode, "whole");
+    for (const ignored of ["brain", "cache", "log", "conversation_summaries.db", "conversation_summaries.db-wal"]) {
+      assert.ok(agyEntry.skip?.includes(ignored), `expected ${ignored} in skip`);
+    }
   });
 });

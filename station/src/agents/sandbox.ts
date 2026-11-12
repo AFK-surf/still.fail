@@ -107,6 +107,21 @@ export function placeIn(data: string, config: () => SandboxConfig | null, ports:
 /// `lentFile`, the Claude driver's token).
 const CLAUDE_OWN = ["projects", "todos", "shell-snapshots", "statsig", "debug", "logs", "file-history", "ide", "session-env", "plugins", "cache", "telemetry", "paste-cache", "history.jsonl", "backups", ".credentials.json"];
 const CODEX_OWN = ["sessions", "archived_sessions", "log", "tmp", ".tmp", "shell_snapshots", "cache", "history.jsonl", "models_cache.json", "auth.json"];
+const AGY_OWN = [
+  "annotations",
+  "brain",
+  "cache",
+  "crashes",
+  "implicit",
+  "log",
+  "persistent_terminals",
+  "updater",
+  "conversation_summaries.db",
+  "conversation_summaries.db-shm",
+  "conversation_summaries.db-wal",
+  "jetbox_summaries_proto.pb",
+  "last_check.timestamp",
+];
 
 /// Where a Codex login lent to its sandboxes is kept here (its refresh token stays here): copied there as auth.json.
 export function lentFile(data: string, home: string): string {
@@ -128,6 +143,9 @@ export function syncFor(data: string, runtime: string, env: NodeJS.ProcessEnv, c
     sync.push({ path: home, mode: "whole", skip: CODEX_OWN }, { path: join(home, "sessions"), mode: "append" }, { path: join(home, "archived_sessions"), mode: "append" });
     const lent = lentFile(data, home);
     if (existsSync(lent)) sync.push({ path: lent, to: join(home, "auth.json"), mode: "whole", back: false });
+  }
+  if (runtime === "agy" && env.ANTIGRAVITY_GEMINI_DIR) {
+    sync.push({ path: env.ANTIGRAVITY_GEMINI_DIR, mode: "whole", skip: AGY_OWN });
   }
   const other: Record<string, string> = { dsh: "DSH_HOME", grok: "GROK_HOME" };
   const home = other[runtime] && env[other[runtime]];
