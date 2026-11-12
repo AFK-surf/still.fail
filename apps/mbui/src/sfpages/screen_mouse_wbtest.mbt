@@ -286,7 +286,7 @@ test "全屏 in 控制中心 fills the screen with the window, the bar kept; clo
 }
 
 ///|
-test "an agent driving it: who drives and 接管 among the bar's tools; 接管 asks for control" {
+test "an agent driving it: who drives said by the bar's line, 接管 among its tools with how the view goes and 控制中心; 接管 asks for control" {
   let r = mouse_rig()
   let agent = "Agent「修登录」"
   r.state(
@@ -300,7 +300,8 @@ test "an agent driving it: who drives and 接管 among the bar's tools; 接管 a
   r.config()
   r.frame(1000.0)
   assert_true(r.t.find("\{agent} 正在控制") is Some(_))
-  assert_true(r.labelled(tr("web-pages.screen.panel")) is None)
+  assert_true(r.labelled(tr("web-pages.screen.panel")) is Some(_))
+  assert_true(r.labelled(tr("web-pages.screen.stats")) is Some(_))
   r.t.tap_text("接管")
   let asked = r.told("screen.control")
   assert_eq(asked.length(), 1)
@@ -319,10 +320,10 @@ test "在新窗口打开 in 控制中心 (a desktop's): the screen goes to a win
   nav_rested(r.t)
   let opened = r.t.windows_opened()
   assert_eq(opened.length(), 1)
-  // what the window is started with names this screen, and reads back as it
+  // what the window is started with names this screen, and reads back as it: the page's own, its title too
   assert_true(
     @sfbase.window_page(opened[0]) ==
-    Some(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "", until_gone: false })),
+    Some(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false })),
   )
   // here it is closed, its view let go of: not open twice
   assert_true(!(app.nav.top() is Screen(_)))
@@ -391,5 +392,31 @@ test "this device's input method by the press on the screen being driven, not at
   let (ix, iy, _, _) = r.t.ime_rect()
   assert_eq(ix, x)
   assert_eq(iy, y)
+  mouse_done(r)
+}
+
+///|
+test "a mouse's press on a drop row's 在访达中显示 over the picture is its alone: nothing pressed on the screen under it" {
+  let r = screen_rig(w=1280.0, h=800.0, platform=0)
+  r.t.run_for(@sf.later_ms)
+  driven(r)
+  screen_fix_drops(true)
+  r.t.draw()
+  r.t.draw()
+  let (x, y) = r.labelled(tr("android-misc.screen.reveal")).unwrap()
+  let u = r.ui()
+  let sh = u.shown(r.t.ctx())
+  assert_true(
+    x > u.stage_x + sh.x && x < u.stage_x + sh.x + sh.w && y > u.stage_y + sh.y && y < u.stage_y + sh.y + sh.h,
+    msg="\{x},\{y}",
+  )
+  let before = r.inputs().filter(fn(j) { text(Some(j), "t") == "pointer" && kind_of_input(j) != "move" }).length()
+  r.t.move_to(x, y)
+  r.t.tap(x, y)
+  r.t.draw()
+  let after = r.inputs().filter(fn(j) { text(Some(j), "t") == "pointer" && kind_of_input(j) != "move" })
+  assert_eq(after.length(), before)
+  assert_eq(r.inputs().filter(fn(j) { text(Some(j), "t") == "reveal" }).length(), 1)
+  r.t.run_for(@sf.toast_ms)
   mouse_done(r)
 }

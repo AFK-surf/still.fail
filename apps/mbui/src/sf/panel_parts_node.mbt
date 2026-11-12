@@ -519,9 +519,9 @@ pub fn panel_said_row_node(
 
 ///|
 /// A panel's row that turns something on or off in `parent` (switch_row's in a panel): `title`, its switch at its end,
-/// which alone answers (`on`, `turn`: switch_node's). In a sheet (narrow) a narrow row's (min a row's height, 12
-/// between), its words as far in as the panel's (words_in_now's); beside what opened it (wide) a wide control row's,
-/// its title as strong as a setting's.
+/// which alone answers (`on`, `turn`: switch_node's), in by a row's padding as the panel's labels, notes and choices are
+/// (its words where theirs are, its switch where their ends are). In a sheet (narrow) a narrow row's (min a row's
+/// height, 12 between); beside what opened it (wide) a wide control row's, its title as strong as a setting's.
 #callsite(autofill(loc))
 pub fn panel_switch_row_node(
   parent : @view.View,
@@ -532,12 +532,18 @@ pub fn panel_switch_row_node(
 ) -> Unit {
   let control = fn(r : @view.View) { switch_node(r, on, turn, title) }
   if look_node(parent) is Wide {
-    wide_control_row_node(parent, title, fn() { "" }, None, control, looks=(fn() { setting_title() }, fn() { theme().rows.note }))
+    parent.box(made_for=loc, fn(b) {
+      style_node(b, fn() { panel_text_box })
+      wide_control_row_node(b, title, fn() { "" }, None, control, looks=(fn() { setting_title() }, fn() { theme().rows.note }), loc~)
+    })
+    |> ignore
     return
   }
   let at = panel_in_of(parent)
+  // (as panel_label_in's: a sheet's list's words where the sheet's are, else a row's padding in)
+  let sides = if at.listed && !at.small && at.words > 0.0 { room(at.words) } else { @ui.Space::S2_5 }
   parent.box(made_for=loc, fn(r) {
-    style_node(r, fn() { pg_said_row_square.then(@ui.style(min_h=Fixed(theme().items.least), px=room(at.words))) })
+    style_node(r, fn() { pg_said_row_square.then(@ui.style(min_h=Fixed(theme().items.least), px=sides)) })
     r.box(fn(words) {
       style_node(words, fn() { pg_row_words }, in_row=true)
       words.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore

@@ -187,6 +187,24 @@ test "组合键 while driving: a Windows station's, tiles at 控制中心's top,
 }
 
 ///|
+test "组合键 with a modifier held on the keys row: it goes with the combo's own, and is let go" {
+  let r = screen_rig()
+  r.live()
+  r.press_key(tr("android-misc.screen.key.option"))
+  assert_eq(r.ui().held.mods, mod_alt)
+  open_center(r)
+  r.t.tap_text(tr("web-pages.screen.combo.taskManager"))
+  r.t.draw()
+  let ins = r.inputs()
+  assert_eq(ins.length(), 2)
+  assert_eq(number(Some(ins[0]), "mods"), (mod_ctrl | mod_shift | mod_alt).to_double())
+  assert_eq(r.ui().held.mods, 0)
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  screen_done(r.t)
+}
+
+///|
 test "常用键 while driving: F1–F12 and the keys the row has not, each sent down and up; 控制中心 stays open" {
   let r = screen_rig()
   r.live()

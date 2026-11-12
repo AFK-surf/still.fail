@@ -547,9 +547,9 @@ let net_chip_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S2 align=ACen
 let net_mark_tile : @ui.Style = @ui.css("w=S6 h=S6 radius=Full bg=Tint align=ACenter justify=JCenter")
 
 ///|
-/// Who drives it and 接管 among the viewer's bar's tools: its dot, the words (cut short first) and 接管, 10 apart.
+/// 接管 among the viewer's bar's tools (who drives said in the bar's line).
 // kept across runs: a value (no field of it changes)
-let take_over_bar_row : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
+let take_over_bar_row : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// The signal mark's bars side by side, 2 apart, standing on its foot.

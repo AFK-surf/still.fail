@@ -487,6 +487,7 @@
   "android-misc.screen.takenBy": "{names} took over control; you're view only now",
   "android-misc.screen.taken": "Control was taken over; you're view only now",
   "android-misc.screen.took": "You took over control; {names} now view only",
+  "android-misc.screen.people": "People viewing",
   "android-misc.screen.paste": "Paste the phone's clipboard",
   "android-misc.screen.pasteWhat": "paste",
   "android-misc.screen.clipboardEmpty": "The clipboard is empty",

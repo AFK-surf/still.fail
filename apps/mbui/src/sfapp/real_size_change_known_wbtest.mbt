@@ -1365,6 +1365,7 @@ let real_size_change_known : Map[String, (Int, Int, Int, Int, Int, Int)] = {
   "wide screen-clipboard-old-station stationNet/sample": (0, 0, 0, 0, 0, 0),
   "wide screen-files-done stationNet/sample": (0, 0, 0, 0, 0, 0),
   "wide screen-files-going stationNet/sample": (0, 0, 0, 0, 0, 0),
+  "wide screen-agent-driving stationNet/sample": (0, 0, 0, 0, 0, 0),
   "wide screen-live stationNet/sample": (0, 0, 0, 0, 0, 0),
   "wide screen-login-fill stationNet/sample": (0, 0, 0, 0, 0, 0),
   "wide screen-login-pick stationNet/sample": (0, 0, 0, 0, 0, 0),

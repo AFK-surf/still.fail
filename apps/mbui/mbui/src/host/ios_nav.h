@@ -461,7 +461,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
 - (void)barItems:(NSArray<NSDictionary *> *)items ink:(UIColor *)ink accent:(UIColor *)accent bare:(BOOL)bare title:(NSString *)title {
   NSMutableString *key = [NSMutableString stringWithFormat:@"%d\x1f%@\x1e", bare, bare ? title : @""];
   for (NSDictionary *d in items) {
-    [key appendFormat:@"%@\x1f%@\x1f%@\x1f%@", d[@"id"], d[@"icon"], d[@"dot"], d[@"title"]];
+    [key appendFormat:@"%@\x1f%@\x1f%@\x1f%@\x1f%@", d[@"id"], d[@"icon"], d[@"dot"], d[@"title"], d[@"prominent"]];
     for (NSDictionary *m in d[@"menu"]) [key appendFormat:@"\x1d%@\x1f%@\x1f%@\x1f%@", m[@"id"], m[@"title"], m[@"checked"], m[@"icon"]];
     [key appendString:@"\x1e"];
   }
@@ -488,9 +488,20 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
     // (`act/` the toolbar's: down the side, at the column's foot over the tabs, 待处理's bell by them)
     NSMutableArray<UIBarButtonItem *> *foot = [NSMutableArray array];
     NSString *lastIdent = @"";
+    // UIKit keeps an existing item's shared glass when its prominence changes; rebuild the bare viewer's group.
+    BOOL regroup = NO;
+    if (bare) {
+      for (NSDictionary *d in items) {
+        NSDictionary *before = slot.barSpecs[d[@"id"]];
+        if (before && [before[@"prominent"] boolValue] != [d[@"prominent"] boolValue]) {
+          regroup = YES;
+          break;
+        }
+      }
+    }
     for (NSDictionary *d in items) {
       NSString *ident = d[@"id"];
-      UIBarButtonItem *b = slot.barItems[ident];
+      UIBarButtonItem *b = regroup ? nil : slot.barItems[ident];
       BOOL reuse = b && [slot.barSpecs[ident] isEqual:d] && [slot.barInk isEqual:ink] && [slot.barAccent isEqual:accent];
       if (!reuse) {
         // (the same action said otherwise, its icon, words, menu or dot, in the same colours: the item there changed in
@@ -576,7 +587,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
             b.tintColor = ink;
           }
           // (the app's own, 待处理's, on a glass of its own, apart from the card's: the user, 2026-10-27)
-          if ([ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.sharesBackground = NO;
+          if ((bare && prominent) || [ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.sharesBackground = NO;
 #ifdef __IPHONE_27_0
           // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27, more wanted than the
           // workspace's and than any page's action; a page's first, and of a page's one that is itself a menu (a

@@ -551,6 +551,8 @@ pub fn sample_chat(Int32) -> @sfbase.ChatItem
 
 pub fn sample_stations() -> Array[@json.Json]
 
+pub fn screen_covered(@sfbase.Source, String, String, Bool) -> Unit
+
 pub fn screen_fix_others(Array[String]) -> Unit
 
 pub fn screen_fixture_stream(@json.Json, (@json.Json, Bytes?) -> Unit, (Result[@json.Json, @json.Json]) -> Unit) -> Int32

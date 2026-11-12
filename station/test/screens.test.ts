@@ -1162,6 +1162,23 @@ test("what a view cannot be: answered with a status and why, in the asker's lang
   await Promise.all([none.served, codecs.served, path.served, refused.served, failed.served]);
 });
 
+test("a machine that lets the station take no input (a Mac without Accessibility): the view asked to drive only looks, says why, takes nobody's", async () => {
+  const hub = new ScreenHub();
+  const source = Object.assign(new FakeSource(), { access: (): ScreenAccess => ({ capture: true, control: false, app: "still.fail Helper" }) });
+  hub.add(source);
+  const v = await open(hub, member);
+  const states: any[] = [];
+  await until(v.frames, KIND.video, states);
+  assert.equal(states[0].control, false);
+  assert.deepEqual([states[0].access.capture, states[0].access.control, typeof states[0].access.message], [true, false, "string"]);
+  assert.deepEqual(hub.people("fake").controlledBy, []);
+  await v.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "text", text: "x" }))));
+  await settle();
+  assert.deepEqual(source.views[0]!.inputs, []);
+  await v.stream.finish();
+  await v.served;
+});
+
 test("the list: GET /screens with each source's access; an old station's 404; `screens` on the event stream", async () => {
   const hub = new ScreenHub();
   hub.add(new FakeSource());

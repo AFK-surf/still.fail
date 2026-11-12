@@ -26,18 +26,21 @@ fn center_node(
   // (a simulator's page has its device's buttons beside the picture: screen_debug.mbt)
   v.show(fn() { state() |> ignore; s.driving() && !s.simulator() }, fn(d) {
     @sf.panel_group_node(d, fn() { @sf.t("web-pages.screen.combos") }, fn(g) {
-      g.pick(fn() { screen_os(src, s.station) }, fn(b, os) { combo_tiles_node(b, s, combos_for(os), done) })
+      g.pick(fn() { screen_os(src, s.station) }, fn(b, os) { combo_tiles_node(b, s, u, combos_for(os), done) })
     })
     @sf.panel_group_node(d, fn() { @sf.t("web-pages.screen.commonKeys") }, fn(g) { key_tiles_node(g, s, u) })
-    // the mouse's buttons shown or not (the keys row's, the floating pair), kept on this device
-    @sf.panel_group_node(d, fn() { "" }, fn(g) {
-      @sf.panel_switch_row_node(g, fn() { @sf.t("web-pages.screen.mouseButtons") }, fn() { state() |> ignore; mouse_shown(s, u) }, fn(
-        on,
-      ) {
-        u.mouse_set.set(Some(on))
-        prefs_chosen(c, s, "screenMouse", if on { "" } else { "off" })
+    // the mouse's buttons shown or not (the keys row's, the floating pair: touch's, where the page has them), kept on
+    // this device
+    if @sf.soft_keyboard() {
+      @sf.panel_group_node(d, fn() { "" }, fn(g) {
+        @sf.panel_switch_row_node(g, fn() { @sf.t("web-pages.screen.mouseButtons") }, fn() { state() |> ignore; mouse_shown(s, u) }, fn(
+          on,
+        ) {
+          u.mouse_set.set(Some(on))
+          prefs_chosen(c, s, "screenMouse", if on { "" } else { "off" })
+        })
       })
-    })
+    }
   })
   v.show(fn() { state() |> ignore; s.phase() == "live" }, fn(l) {
     @sf.panel_group_node(l, fn() { "" }, fn(g) {
@@ -196,8 +199,9 @@ fn center_node(
         send_asked(c, s, u)
       }, icon=fn() { "upload" })
     })
-    // in a window of its own (a desktop's), as the web's ScreenPage: it leaves this one, so it is not open twice
-    let alone : @sfbase.Page = Screen({ station: s.station, screen: s.screen, title: "", until_gone: false })
+    // in a window of its own (a desktop's), as the web's ScreenPage: it leaves this one, so it is not open twice; the
+    // page it is, its title and whether it goes once its screen is gone
+    let alone : @sfbase.Page = Screen(u.at.unwrap_or({ station: s.station, screen: s.screen, title: "", until_gone: false }))
     if @sfbase.window_opens_for(alone) {
       @sf.panel_row_node(g, fn() { @sf.t("web-pages.screen.window") }, fn() {
         done()
@@ -227,7 +231,7 @@ fn center_node(
           (src.call)("screen.endView", Json::object(params), @sfbase.answer_unread)
         }
         done()
-      }, icon=fn() { "close" })
+      }, icon=fn() { "eye-off" })
     })
     @sf.panel_row_node(g, fn() { @sf.t("web-pages.screen.leave") }, fn() {
       done()
@@ -249,12 +253,13 @@ fn center_choice_node(parent : @view.View, labels : () -> Array[String], chosen 
 
 ///|
 /// The combos as tiles in `parent`, three to a row: an icon over its name (what it does, not its keys: a phone has no
-/// keys to press for it), a tap sending its keys down and up, and 控制中心 closing (`done`).
-fn combo_tiles_node(parent : @view.View, s : ScreenSess, combos : Array[Combo], done : () -> Unit) -> Unit {
+/// keys to press for it), a tap sending its keys down and up with the modifiers the keys row holds too, and 控制中心
+/// closing (`done`).
+fn combo_tiles_node(parent : @view.View, s : ScreenSess, u : ScreenUi, combos : Array[Combo], done : () -> Unit) -> Unit {
   tiles_node(parent, combos.length(), 3, tile_gap, fn(row, i) {
     let k = combos[i]
     center_tile_node(row, tile_box, k.name, fn() {
-      stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods)
+      stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods | u.held.take())
       done()
     }, fn(t) {
       @sf.icon_node(t, k.icon, round_icon, By(fn() { @ui.tree_theme().color(Fg) })) |> ignore

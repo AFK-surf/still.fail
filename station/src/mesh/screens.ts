@@ -254,12 +254,15 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const ask = asked(head.screen);
   if (ask.codecs.length === 0) return refuse(400, `screen.codecs: one of ${CODECS.join(", ")}`);
   if (ask.peek && !source.peek) return refuse(501, "this screen is not previewed");
-  // A viewer (read-only member) sees, and does not drive.
+  // A viewer (read-only member) sees, and does not drive; nor does anyone where the machine does not let the station
+  // take input (a Mac without the Accessibility grant): said once it is open, when the source has looked again (what it
+  // said before may be from before the grant was given).
   const name = viewer.name || viewer.email;
-  const { control, took } = ask.control && !readOnly(viewer) ? hub.drive(id, viewer.device, ask.taken === true, name) : { control: false, took: [] };
+  const drives = ask.control && !readOnly(viewer);
+  const driven = drives ? hub.drive(id, viewer.device, ask.taken === true, name) : { control: false, took: [] };
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true, ...(ask.opus ? { opus: true } : {}) } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true, ...(ask.opus ? { opus: true } : {}) } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && driven.control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
@@ -280,6 +283,9 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
     return;
   }
   const access = accessShown(source.access?.(), lang);
+  // (as the source has it now it is open: a grant it found missing as it opened drives nothing)
+  const control = driven.control && access?.control !== false;
+  const took = control ? driven.took : [];
   const now = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
   // How long the loop stood still, on the host's own clock: what the pacer's times on the view's clock leave out only
   // when that clock is the host's (the live one). On another (a TestClock) the host's stands are no part of its time,

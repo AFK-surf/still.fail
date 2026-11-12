@@ -915,6 +915,11 @@ test "控制 chosen but the station cannot take input: seen, nothing sent, why s
   r.config()
   r.frame(1000.0)
   assert_true(r.t.find("在 辅助功能 里打开 stillfail-station") is Some(_))
+  assert_true(r.sess().undriven() is Some(_))
+  // nothing of driving it: no keys row, keyboard, trackpad or pasting
+  for label in ["键盘", "触控板", "Esc", "粘贴手机剪贴板"] {
+    assert_true(r.labelled(label) is None, msg=label)
+  }
   r.tap_at(0.5, 0.5)
   assert_eq(r.inputs().length(), 0)
   screen_done(r.t)
@@ -1630,4 +1635,248 @@ fn screen_fix_passkeys() -> Unit {
       "1\u{1f}\u{1f}\u{1f}\u{1f}\u{1f}NotAllowedError\u{1f}"
     }
   })
+}
+
+///|
+/// The pointer's inputs told the screen.
+fn pointers_of(r : ScreenRig) -> Array[Json] {
+  r.inputs().filter(fn(j) { text(Some(j), "t") == "pointer" })
+}
+
+///|
+/// Whether what is labelled `label` says it is pressed (None: it is not there).
+fn pressed_of(r : ScreenRig, label : String) -> Bool? {
+  for s in r.t.semantics() {
+    if s.label == label && !s.hidden {
+      return Some(s.pressed == Some(true))
+    }
+  }
+  None
+}
+
+///|
+test "sideways, driven directly: a tap on a drop row's 在访达中显示 over the picture is its alone, no click on the screen under it" {
+  let r = screen_rig(touch="direct")
+  driven(r)
+  r.t.resize(844.0, 390.0)
+  r.t.draw()
+  screen_fix_drops(true)
+  r.t.draw()
+  r.t.draw()
+  let (x, y) = r.labelled(tr("android-misc.screen.reveal")).unwrap()
+  // (over the picture: a press there would be a click on the screen too)
+  let u = r.ui()
+  let sh = u.shown(r.t.ctx())
+  assert_true(
+    x > u.stage_x + sh.x && x < u.stage_x + sh.x + sh.w && y > u.stage_y + sh.y && y < u.stage_y + sh.y + sh.h,
+    msg="\{x},\{y}",
+  )
+  let before = pointers_of(r).length()
+  r.t.tap(x, y)
+  r.t.draw()
+  assert_eq(pointers_of(r).length(), before)
+  assert_eq(r.inputs().filter(fn(j) { text(Some(j), "t") == "reveal" }).length(), 1)
+  // held there: no right click either
+  r.t.press_at(x, y)
+  r.t.run_for(screen_hold_ms)
+  r.t.release(x, y)
+  r.t.draw()
+  assert_eq(pointers_of(r).length(), before)
+  r.t.run_for(@sf.toast_ms)
+  screen_done(r.t)
+}
+
+///|
+test "a modifier held on the keys row goes round what a press on the stage clicks or drags, then is let go" {
+  let r = screen_rig(touch="direct")
+  r.live(others=[])
+  let meta = fn(j : Json, kind : String) { text(Some(j), "key") == "Meta" && kind_of_input(j) == kind }
+  // a tap: ⌘ down, the click, ⌘ up
+  r.press_key("Command")
+  assert_eq(r.ui().held.mods, mod_meta)
+  r.tap_at(0.5, 0.5)
+  let tap = r.inputs()
+  assert_eq(tap.length(), 4)
+  assert_true(meta(tap[0], "down"))
+  assert_eq(kind_of_input(tap[1]), "down")
+  assert_eq(kind_of_input(tap[2]), "up")
+  assert_true(meta(tap[3], "up"))
+  assert_eq(r.ui().held.mods, 0)
+  assert_true(pressed_of(r, tr("android-misc.screen.key.command")) != Some(true))
+  // the next tap goes alone
+  r.t.run_for(screen_double_tap_ms)
+  r.tap_at(0.5, 0.5)
+  assert_eq(r.inputs().length(), 6)
+  // a drag: ⇧ down before its button, up after it lets go
+  r.press_key(tr("android-misc.screen.key.shift"))
+  let from = r.inputs().length()
+  let (ax, ay) = r.at(0.2, 0.5)
+  let (bx, by) = r.at(0.6, 0.5)
+  r.t.drag(ax, ay, bx, by)
+  let drag = r.inputs()[from:].to_owned()
+  assert_eq(text(Some(drag[0]), "key"), "Shift")
+  assert_eq(kind_of_input(drag[0]), "down")
+  assert_eq(kind_of_input(drag[1]), "down")
+  assert_eq(kind_of_input(drag[drag.length() - 2]), "up")
+  assert_eq(text(Some(drag[drag.length() - 1]), "key"), "Shift")
+  assert_eq(kind_of_input(drag[drag.length() - 1]), "up")
+  // held: a right click with ⌥ round it
+  r.press_key(tr("android-misc.screen.key.option"))
+  let from = r.inputs().length()
+  let (hx, hy) = r.at(0.5, 0.5)
+  r.t.press_at(hx, hy)
+  r.t.run_for(screen_hold_ms)
+  r.t.release(hx, hy)
+  let held = r.inputs()[from:].to_owned()
+  assert_eq(held.length(), 4)
+  assert_eq(text(Some(held[0]), "key"), "Alt")
+  assert_eq(number(Some(held[1]), "buttons"), btn_secondary.to_double())
+  assert_eq(text(Some(held[3]), "key"), "Alt")
+  assert_eq(kind_of_input(held[3]), "up")
+  assert_eq(r.ui().held.mods, 0)
+  screen_done(r.t)
+}
+
+///|
+test "a modifier held on the keys row goes round the trackpad's click and its two fingers' right click" {
+  let r = screen_rig()
+  r.state("live", others=[], more={ "kind": "desktop" })
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.sess().pad(r.sess().src))
+  r.press_key("Command")
+  r.tap_at(0.5, 0.5)
+  let tap = r.inputs()
+  assert_eq(tap.length(), 4)
+  assert_eq(text(Some(tap[0]), "key"), "Meta")
+  assert_eq(kind_of_input(tap[1]), "down")
+  assert_eq(text(Some(tap[3]), "key"), "Meta")
+  assert_eq(r.ui().held.mods, 0)
+  r.t.run_for(screen_double_tap_ms)
+  r.press_key(tr("android-misc.screen.key.control"))
+  let from = r.inputs().length()
+  let (p1x, p1y) = r.at(0.3, 0.5)
+  let (p2x, p2y) = r.at(0.6, 0.5)
+  r.t.press_at(p1x, p1y)
+  r.t.touch(4, p2x, p2y)
+  r.t.draw()
+  r.t.touch(6, p2x, p2y)
+  r.t.release(p1x, p1y)
+  let right = r.inputs()[from:].to_owned()
+  assert_eq(right.length(), 4)
+  assert_eq(text(Some(right[0]), "key"), "Control")
+  assert_eq(number(Some(right[1]), "buttons"), btn_secondary.to_double())
+  assert_eq(text(Some(right[3]), "key"), "Control")
+  assert_eq(r.ui().held.mods, 0)
+  screen_done(r.t)
+}
+
+///|
+test "a modifier held on the keys row is let go as the view stops driving: 只看 and back to 控制 finds none held" {
+  let r = screen_rig()
+  r.live(others=[])
+  r.press_key("Command")
+  assert_eq(r.ui().held.mods, mod_meta)
+  r.t.tap_text("只看")
+  r.state("live", control=false, others=[])
+  assert_eq(r.ui().held.mods, 0)
+  r.t.tap_text("控制")
+  r.state("live", control=true, others=[])
+  r.t.draw()
+  assert_true(pressed_of(r, tr("android-misc.screen.key.command")) != Some(true))
+  assert_eq(r.ui().held.mods, 0)
+  // a key typed now goes alone
+  r.press_key("Tab")
+  let last = r.inputs()[r.inputs().length() - 1]
+  assert_eq(number(Some(last), "mods"), 0.0)
+  screen_done(r.t)
+}
+
+///|
+test "zoomed in, driven directly: two fingers moving together pan the picture here, nothing sent; fitted, they scroll the screen" {
+  let r = screen_rig(touch="direct")
+  r.state("live", control=false, others=[])
+  r.config()
+  r.frame(1000.0)
+  let u = r.ui()
+  r.tap_at(0.5, 0.5)
+  r.tap_at(0.5, 0.5)
+  r.t.run_for(@ui.move_most_ms)
+  assert_true(u.zoom.zoomed(r.t.ctx()))
+  r.state("live", control=true, others=[])
+  r.t.run_for(screen_double_tap_ms)
+  let two = fn(cx : Double, cy : Double) {
+    r.t.press_at(cx - 50.0, cy)
+    r.t.touch(4, cx + 50.0, cy)
+    r.t.draw()
+    for i in [1, 2, 3, 4, 5, 6] {
+      let d = i.to_double() * 20.0
+      r.t.touch(1, cx - 50.0 + d, cy)
+      r.t.touch(5, cx + 50.0 + d, cy)
+      r.t.draw()
+    }
+    r.t.touch(6, cx + 50.0 + 120.0, cy)
+    r.t.release(cx - 50.0 + 120.0, cy)
+    r.t.run_for(@ui.move_most_ms)
+  }
+  let rect0 = u.shown(r.t.ctx())
+  let before = r.inputs().length()
+  two(195.0, 400.0)
+  let rect1 = u.shown(r.t.ctx())
+  assert_true(rect1.x - rect0.x > 60.0, msg="\{rect0.x} → \{rect1.x}")
+  assert_eq(r.inputs().length(), before)
+  // fitted again: they scroll the screen
+  u.zoom.fit_now(at=r.t.ctx().moment())
+  r.t.run_for(@ui.move_most_ms)
+  assert_false(u.zoom.zoomed(r.t.ctx()))
+  let (mx, my) = r.at(0.4, 0.5)
+  two(mx, my)
+  assert_true(r.inputs()[before:].iter().any(fn(j) { text(Some(j), "t") == "wheel" }))
+  screen_done(r.t)
+}
+
+///|
+test "左键 driven directly with no pointer said by the station: clicks where the last tap was, not the middle" {
+  let r = screen_rig(touch="direct")
+  r.live(others=[])
+  assert_true(r.sess().cursor() is None)
+  r.tap_at(0.25, 0.75)
+  r.t.run_for(screen_double_tap_ms)
+  let from = r.inputs().length()
+  r.press_key(tr("android-misc.screen.key.mouseLeft"))
+  let left = r.inputs()[from:].to_owned()
+  assert_eq(left.length(), 2)
+  assert_true(close_to(number(Some(left[0]), "x"), 0.25), msg="\{number(Some(left[0]), "x")}")
+  assert_true(close_to(number(Some(left[0]), "y"), 0.75))
+  screen_done(r.t)
+}
+
+///|
+test "the keyboard's button by where the keys go: on while they come here, the soft keyboard up or not; pressed again, let go" {
+  let r = screen_rig()
+  r.live(others=[])
+  // (a keyboard plugged in: no soft keyboard comes up)
+  r.tap_label("键盘")
+  assert_true(r.t.key_catching())
+  assert_eq(pressed_of(r, "键盘"), Some(true))
+  r.tap_label("键盘")
+  assert_false(r.t.key_catching())
+  assert_eq(pressed_of(r, "键盘"), Some(false))
+  screen_done(r.t)
+}
+
+///|
+test "sideways, the rail's people button only while others are on it, named so; pressed, the line said" {
+  let r = screen_rig()
+  r.live(others=[])
+  r.t.resize(844.0, 390.0)
+  r.t.draw()
+  assert_true(r.labelled(tr("android-misc.screen.people")) is None)
+  assert_true(r.labelled("控制") is Some(_))
+  r.state("live", others=["李雷"])
+  r.t.draw()
+  r.tap_label(tr("android-misc.screen.people"))
+  assert_true(r.t.find("控制 · 李雷也在看") is Some(_))
+  r.t.run_for(rail_say_ms)
+  screen_done(r.t)
 }

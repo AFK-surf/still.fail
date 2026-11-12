@@ -583,6 +583,7 @@ let zh : Map[String, String] = {
   "android-misc.screen.passkey.asking": "在 Windows 的窗口里确认…",
   "android-misc.screen.passkey.failed": "没有签好：{why}",
   "android-misc.screen.pasteWhat": "粘贴",
+  "android-misc.screen.people": "在看的人",
   "android-misc.screen.reveal": "在访达中显示",
   "android-misc.screen.revealWhat": "在访达中显示",
   "android-misc.screen.section": "屏幕",

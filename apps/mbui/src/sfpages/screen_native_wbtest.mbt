@@ -159,3 +159,67 @@ test "screen system audio negotiates only on a capable host, mutes immediately, 
   assert_true(r.told("screen.view").last().unwrap().stringify().contains("\"sound\":false"))
 }
 
+
+///|
+/// The system bar's action `id` (over/…) as it is handed over: its title and icon, and whether it is on.
+fn native_act(id : String) -> (String, String, Bool)? {
+  for a in @sf.native_over.acts {
+    if a.0 == "over/" + id {
+      return Some((a.1, a.2, @sf.native_over.active.contains("over/" + id)))
+    }
+  }
+  None
+}
+
+///|
+test "the system bar's screen, driving with the keyboard down: the mouse's buttons over the frame; its actions say what is on and are there only when they mean something" {
+  let r = screen_rig(w=951.0, h=669.0, platform=1)
+  r.state("live", others=[], more={ "kind": "desktop" })
+  r.config()
+  r.frame(1000.0)
+  @sf.native_bars.on.set(true)
+  @sf.native_bars.side.set(84.0)
+  @sf.native_over_clear()
+  r.t.run_for(@ui.move_most_ms)
+  assert_true(@sf.native_over.up)
+  // the keyboard down: 左键 and 右键 over the frame, as sideways
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is Some(_))
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseRight")) is Some(_))
+  // 控制 as it is now (the pointer, on), the trackpad on, the keyboard not taking keys
+  assert_eq(native_act("screen-mode"), Some((tr("android-misc.screen.drive"), "cursor", true)))
+  assert_eq(native_act("screen-pad"), Some((tr("android-misc.screen.trackpad"), "trackpad", true)))
+  assert_eq(native_act("screen-keyboard"), Some((tr("android-misc.screen.keyboard"), "keyboard", false)))
+  // alone on it: no one to show; live: its figures
+  assert_true(native_act("screen-people") is None)
+  assert_true(native_act("screen-stats") is Some(_))
+  // the keyboard taken: on, the keys row over the frame's foot in the mouse's buttons' place once it is up
+  for a in @sf.native_over.acts.copy() {
+    if a.0 == "over/screen-keyboard" { (a.3)() }
+  }
+  r.t.set_ime_inset(300.0)
+  @sf.native_over_clear()
+  r.t.run_for(@ui.move_most_ms)
+  assert_true(r.t.key_catching())
+  assert_eq(native_act("screen-keyboard").map(fn(a) { a.2 }), Some(true))
+  assert_true(r.labelled("Esc") is Some(_))
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseRight")) is Some(_))
+  r.t.set_ime_inset(0.0)
+  // someone else on it: who, named as such
+  r.state("live", others=["李雷"], more={ "kind": "desktop" })
+  @sf.native_over_clear()
+  r.t.run_for(@ui.move_most_ms)
+  assert_eq(native_act("screen-people").map(fn(a) { a.0 }), Some(tr("android-misc.screen.people")))
+  // 只看 chosen: 只看 (the eye), off
+  for a in @sf.native_over.acts.copy() {
+    if a.0 == "over/screen-mode" { (a.3)() }
+  }
+  r.state("live", control=false, others=["李雷"], more={ "kind": "desktop" })
+  @sf.native_over_clear()
+  r.t.run_for(@ui.move_most_ms)
+  assert_eq(native_act("screen-mode"), Some((tr("android-misc.screen.look"), "eye", false)))
+  // on its way again: no figures to show
+  r.state("reconnecting", others=["李雷"], more={ "kind": "desktop" })
+  @sf.native_over_clear()
+  r.t.run_for(@ui.move_most_ms)
+  assert_true(native_act("screen-stats") is None)
+}
