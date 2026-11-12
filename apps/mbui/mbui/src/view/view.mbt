@@ -742,10 +742,11 @@ pub struct Tree {
   /// what comes or goes down a column at one moment, with what was on its way there then: one way for all of it
   /// (flex's ComeGroup), and the nodes in it (Tree::come_group_join), by the column
   priv come_groups : Map[Int, (@flex.ComeGroup, Array[View])]
-  /// the held columns of the page's lists whose blocks' insides make their way in the list's one way
-  /// (View::scrolls_window, not said at once), each with what in its blocks was set coming or going since: what is on
-  /// its way in them as the list's group is said (Tree::come_group_settle), none of their subtrees walked
-  priv list_inner : Map[Int, Array[View]]
+  /// the held columns of the page's lists, each with whether its blocks' insides make their way in the list's one way
+  /// (View::scrolls_window, not said at once) and what in its blocks was set coming or going since: what is on its way
+  /// in them as the list's group is said (Tree::come_group_settle), and how long what a press there set off goes
+  /// (press_stays.mbt), none of their subtrees walked
+  priv list_inner : Map[Int, (Bool, Array[View])]
   /// what is due being done (Tree::advance)
   mut advancing : Bool
   /// where its logic stands: what is due by then done (Tree::advance), what is said from then on said as of then at the
@@ -8577,13 +8578,17 @@ fn Tree::come_group_join(self : Tree, v : View, st : @flex.Style, at : Double) -
   } else {
     let list = self.list_holding(own)
     match self.list_inner.get(list) {
-      Some(inner) if list != own => {
+      Some((joins, inner)) if list != own => {
         // (those let go or come to their way's end forgotten as one more is kept)
         let kept = inner.filter(fn(w) { w.live() is Some(m) && m.coming && w.at != v.at })
         inner.clear()
         inner.append(kept)
         inner.push(v)
-        list
+        if joins {
+          list
+        } else {
+          own
+        }
       }
       _ => own
     }
@@ -8604,8 +8609,8 @@ fn Tree::come_group_join(self : Tree, v : View, st : @flex.Style, at : Double) -
 }
 
 ///|
-/// The held column of the page's list whose blocks' insides join its way (Tree's list_inner) that column `col` is or
-/// lies in; `col` where none is (lists do not nest: one at most).
+/// The held column of the page's list (Tree's list_inner) that column `col` is or lies in; `col` where none is (lists
+/// do not nest: one at most).
 fn Tree::list_holding(self : Tree, col : Int) -> Int {
   let mut p = col
   while p >= 0 {
@@ -8618,12 +8623,23 @@ fn Tree::list_holding(self : Tree, col : Int) -> Int {
 }
 
 ///|
-/// The held column `at` of a page's list (View::scrolls_window) joining what its blocks hold to its way from now, till
-/// `self` goes: what comes or goes down a column in one of them goes in its group (Tree::come_group_join).
-fn View::list_joins_inner(self : View, at : Int) -> Unit {
+/// The held column `at` of a page's list (View::scrolls_window) keeping what its blocks hold set coming or going, and
+/// where `joins`, joining it to its way, from now till `self` goes: what comes or goes down a column in one of them
+/// goes in its group (Tree::come_group_join).
+fn View::list_keeps_inner(self : View, at : Int, joins : Bool) -> Unit {
   let tree = self.tree
-  tree.list_inner[at] = []
+  tree.list_inner[at] = (joins, [])
   self.owns(fn() { tree.list_inner.remove(at) }) |> ignore
+}
+
+///|
+/// What the blocks of the page's list held in `at` hold that was set coming or going at moment `at_ms`, and is still
+/// on its way: none where it keeps none (Tree's list_inner).
+fn Tree::list_inner_at(self : Tree, at : Int, at_ms : Double) -> Array[View] {
+  match self.list_inner.get(at) {
+    Some((_, inner)) => inner.filter(fn(w) { w.live() is Some(m) && m.coming && m.flex.style.come_at == at_ms })
+    None => []
+  }
 }
 
 ///|
@@ -8677,7 +8693,7 @@ fn Tree::come_group_settle(self : Tree, col : Int, g : @flex.ComeGroup, views : 
     on_way(k)
   }
   match self.list_inner.get(col) {
-    Some(inner) => {
+    Some((true, inner)) => {
       let kept = inner.filter(fn(w) {
         w.live() is Some(m) &&
         m.coming &&
@@ -8689,7 +8705,7 @@ fn Tree::come_group_settle(self : Tree, col : Int, g : @flex.ComeGroup, views : 
         on_way(w.at)
       }
     }
-    None => ()
+    _ => ()
   }
   // (one alone goes its own way, as it always did)
   if live.length() + under_way.length() < 2 {
