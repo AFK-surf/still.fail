@@ -75,7 +75,7 @@ let corners_tape_rail : Array[String] = [
   "service-stopped", "share-in", "share-in-files", "share-in-stations", "lock-security", "lock-upgrade", "screen-agent-driving",
   "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
   "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
-  "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick",
+  "screen-full-tools", "screen-gone", "screen-keys", "screen-live", "screen-login-fill", "screen-login-pick",
   "screen-not-drivable", "screen-outdated", "screen-read-only", "screen-reconnecting", "screen-trackpad",
   "screen-trackpad-command", "settings-home", "settings-appearance", "settings-me", "settings-me-reading",
   "settings-workspace", "settings-security", "settings-vault", "settings-vault-items", "settings-vault-item",

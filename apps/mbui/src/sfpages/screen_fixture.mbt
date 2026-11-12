@@ -22,6 +22,7 @@
 //   screen-files-going, -done (-dark)   two files sent to its machine: going (the first under a free name), then there
 //   screen-center, -stats (-dark)       driving a Windows desktop that changes its scale: 控制中心 open; the view's
 //                                       figures open
+//   screen-keys (-dark)                 the same, 按键 open by the keyboard (组合键, F1–F12…)
 //   screen-simulator, -center, -logs,   driving an iOS Simulator: its page, what debugs an app beside the picture; 控制中心
 //     -apps, -device (-dark)            open; its 日志 open; its 重启 App open; 设备 showing
 //   screen-login-fill, -pick (-dark)    driving a tab whose focus is in github.com's password field: 用 1Password
@@ -86,6 +87,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"
+    "screen-keys" => u.asked_panel = "keys"
     "screen-stats" => u.asked_panel = "net"
     "screen-simulator-center" => u.asked_panel = "center"
     "screen-simulator-logs" => u.asked_panel = "logs"
@@ -290,7 +292,7 @@ pub fn screen_fixture_stream(
     "screen-clipboard-driving" =>
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
     "screen-clipboard-old-station" => live(true, true, [], None, None, None, None, None, None)
-    "screen-center" | "screen-stats" => {
+    "screen-center" | "screen-stats" | "screen-keys" => {
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
         Object(m) => m.copy()

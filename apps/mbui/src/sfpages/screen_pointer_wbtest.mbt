@@ -236,9 +236,9 @@ test "a trackpad starts where the station's pointer is: at its first press and a
   assert_true(close_to(number(Some(again[0]), "y"), 0.75))
   r.t.run_for(screen_double_tap_ms)
   // direct, then the trackpad chosen again: it starts where the station's pointer is now
-  r.tap_label("触控板")
+  pad_turned(r)
   assert_true(!r.sess().pad(r.sess().src))
-  r.tap_label("触控板")
+  pad_turned(r)
   assert_true(r.sess().pad(r.sess().src))
   assert_eq(r.ui().pad.at(), (0.9, 0.1))
   r.t.run_for(@sf.toast_ms)

@@ -33,11 +33,13 @@ test "with keyboard and mouse: the viewer's bar across the top, the picture unde
   assert_true(r.labelled(tr("common.back")) is Some(_))
   assert_true(r.labelled(tr("web-pages.screen.stats")) is Some(_))
   assert_true(r.labelled(tr("web-pages.screen.panel")) is Some(_))
+  assert_true(r.labelled(tr("web-pages.screen.combos")) is Some(_))
   assert_true(r.labelled("控制") is Some(_))
-  // none of a phone's: its ×, the keyboard to raise, the trackpad, the paste button, the keys row
+  // none of a phone's: its ×, the keyboard to raise, the trackpad, 按键, the paste button, the keys row
   assert_true(r.labelled("关闭") is None)
   assert_true(r.labelled("键盘") is None)
   assert_true(r.labelled("触控板") is None)
+  assert_true(r.labelled(tr("web-pages.screen.keysPanel")) is None)
   assert_true(r.labelled("粘贴手机剪贴板") is None)
   assert_true(r.labelled("Esc") is None)
   // the picture under the bar, the window's width

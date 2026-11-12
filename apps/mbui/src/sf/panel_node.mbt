@@ -164,8 +164,11 @@ fn panel_node(
         }
         // (a live one headed only while it has a title, what stands at its head's end with it, as small_panel heads it;
         // what it is presented with headed by a head's end alone too)
+        // (a step further in from a panel, what it holds nodes: headed by its back key before its title, untitled too,
+        // as a sheet's page and a dialog have it)
+        let stepped = x.nodes is Some(_) && keyed.under is Some(_)
         let headed_now : @signals.Computed[Bool] = @signals.computed(
-          fn(_) { !x.heads_itself && title() != "" },
+          fn(_) { !x.heads_itself && (title() != "" || stepped) },
           same=fn(a, b) { a == b },
         )
         let headed = fn() { headed_now.get() }
@@ -193,7 +196,22 @@ fn panel_node(
             h.alpha(By(fn() { look().words })) |> ignore
             h.box(fn(b) {
               style_node(b, fn() { panel_head_box })
-              words_node(b, title, fn() { panel_title }) |> ignore
+              if !stepped {
+                words_node(b, title, fn() { panel_title }) |> ignore
+                return
+              }
+              // (its back key before its title, back to the panel it came from, concentric in its corner)
+              b.box(fn(line) {
+                style_node(line, fn() { panel_step_line })
+                line.box(fn(k) {
+                  style_node(k, fn() { step_back_out }, in_row=true)
+                  icon_button_node(k, "chevron-left", fn() { t("common.back") }, fn() { back_under(keyed) |> ignore }, size=step_back_side)
+                  |> ignore
+                })
+                |> ignore
+                words_node(line, title, fn() { panel_title }).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+              })
+              |> ignore
             })
             |> ignore
           })
@@ -362,6 +380,17 @@ fn panel_node(
     leave=@kit.pop_out_ms,
   )
 }
+
+///|
+/// A step's head beside what opened it: its back key, then its title, a step's head's gap apart (step_head_gap), up
+/// from where a title's line is so that the key stands as far in from the panel's top as from its side, concentric with
+/// its corner (as far in as its corner less the key's).
+// kept across runs: a value (no field of it changes)
+let panel_step_line : @ui.Style = @ui.css("row w=Full align=ACenter gap=S1").then(@ui.style(mt=room(panel_step_up)))
+
+///|
+/// How far up from a title's line (panel_head_box's, panel_pad and its top in) a step's head stands (panel_step_line).
+let panel_step_up : Double = r_menu - step_back_side / 2.0 - panel_pad - @ui.Space::S1_5.px()
 
 ///|
 /// A part of a panel's out to its sides (and `over` above it, `under` below it, where it stands by the panel's top or

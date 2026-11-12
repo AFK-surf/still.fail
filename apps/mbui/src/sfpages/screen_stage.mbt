@@ -130,8 +130,10 @@ fn screen_pointer_layer(
 }
 
 ///|
-/// The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it.
-fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit {
+/// The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it; `pair`: the
+/// mouse's buttons floating at the end of its foot (mouse_float), what else is there in a column of its own ending
+/// before them, never under them.
+fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, pair? : Bool = false) -> Unit {
   let phase = s.phase()
   let over = phase_over(phase)
   // over, the screen's place kept, gone dark (its last size, or a desktop's when none came)
@@ -318,7 +320,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     |> ignore
     // (over the stage, not in it: a press on what is pressed here is its alone, not the screen's under it too)
     c.layer(fn() {
-      c.box(style=stage_foot, fn() {
+      let notes = fn() {
         c.box(style=stage_foot_column, fn() {
           // (beside the device they are at the foot of what is done with it: nothing over the app being debugged)
           if !(u.logs.beside && u.logs.shown) {
@@ -337,8 +339,17 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
           }
         })
         |> ignore
-      })
-      |> ignore
+      }
+      if pair {
+        // (the mouse's buttons in the foot's corner, as far in as they float, what else is there before them)
+        c.box(style=screen_corner_end(stage_foot_paired), fn() {
+          c.box(style=stage_foot_before, fn() { notes() }) |> ignore
+          mouse_float(c, s, u)
+        })
+        |> ignore
+      } else {
+        c.box(style=stage_foot, notes) |> ignore
+      }
     })
     |> ignore
   })
@@ -434,7 +445,7 @@ fn drops(c : @ui.Ctx, s : ScreenSess) -> Unit {
     return
   }
   // a row's round key (34) at its top end, the first's in the panel's corner concentric with it (drop_row_box)
-  c.box(style=drops_box, fn() {
+  c.box(style=drops_box, id=c.id("screen-drops"), fn() {
     for d in s.drops {
       c.scope(c.id("screen-drop/\{d.serial}"), fn() { drop_row(c, s, d) })
     }

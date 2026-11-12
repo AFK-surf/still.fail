@@ -605,8 +605,8 @@ test "a trackpad moves the pointer and clicks where it points; two fingers tappe
   assert_eq(number(Some(keys[0]), "mods"), 4.0)
   assert_eq(number(Some(keys[1]), "mods"), 4.0)
   assert_eq(number(Some(keys[2]), "mods"), 0.0)
-  // chosen direct: kept on this device
-  r.tap_label("触控板")
+  // chosen direct (控制中心's 触控板): kept on this device
+  pad_turned(r)
   assert_eq(text(r.told("prefs.set").last(), "screenTouch"), "direct")
   assert_true(!r.sess().pad(r.sess().src))
   r.t.run_for(@sf.toast_ms)
@@ -1232,6 +1232,15 @@ fn driven(r : ScreenRig) -> Unit {
 }
 
 ///|
+/// 控制中心's 触控板 pressed (trackpad or direct, turned), 控制中心 shut again.
+fn pad_turned(r : ScreenRig) -> Unit {
+  open_center(r)
+  r.tap_label("触控板")
+  r.t.draw()
+  shut(r)
+}
+
+///|
 test "driving it: 粘贴 beside the keyboard (发送文件 in 控制中心); 粘贴 sends the device's clipboard; refused, said; empty, said" {
   let r = screen_rig()
   driven(r)
@@ -1519,31 +1528,6 @@ test "全屏 and sideways, driving: 左键 and 右键 in a capsule of their own 
   r.state("live", control=false)
   r.t.draw()
   assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is None)
-  screen_done(r.t)
-}
-
-///|
-test "鼠标左右键 in 控制中心 hides the mouse's buttons (the keys row's and the floating pair) and keeps it on the device; on again, back" {
-  let r = screen_rig()
-  r.live(others=[])
-  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is Some(_))
-  open_center(r)
-  r.t.click(Switch, label=tr("web-pages.screen.mouseButtons"))
-  r.t.draw()
-  assert_eq(text(r.told("prefs.set").last(), "screenMouse"), "off")
-  shut(r)
-  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is None)
-  r.t.resize(844.0, 390.0)
-  r.t.draw()
-  assert_true(r.labelled(tr("android-misc.screen.key.mouseRight")) is None)
-  r.t.resize(390.0, 844.0)
-  r.t.draw()
-  open_center(r)
-  r.t.click(Switch, label=tr("web-pages.screen.mouseButtons"))
-  r.t.draw()
-  assert_true(r.told("prefs.set").last() is Some(Object(o)) && o.get("screenMouse") == Some(Json::null()))
-  shut(r)
-  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is Some(_))
   screen_done(r.t)
 }
 
