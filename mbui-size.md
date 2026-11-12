@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b98a38608](https://github.com/AFK-surf/still.fail/commit/b98a386088b756a26bdfc673e0ff40d7ab660696) cloud: one cloud answering as the other product to | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 94.6 | 188.29 |
 | [c53c9b785](https://github.com/AFK-surf/still.fail/commit/c53c9b785a4e389ea32dd7ae069242cdc6a8028b) core tests: the test clock takes the steps that wo | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 94.6 | 188.29 |
 | [839854c0e](https://github.com/AFK-surf/still.fail/commit/839854c0edea3b18e32c202c449042027a66ad97) cloud: push to both products' apps from one cloud  | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 95.26 | 175.58 |
 | [04650114d](https://github.com/AFK-surf/still.fail/commit/04650114d5241c9192a7403f6926868b2430afe0) core tests: what answering each way the app asks r | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 95.26 | 175.58 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [20027072d](https://github.com/AFK-surf/still.fail/commit/20027072d5fa229a5ba6fee7c204f4c22b55a1c2) mbui: a page's list scrolled with nothing laid out | 1.86 | 2.49 | 10.42 | 29.19 | 36.86 | 26 | 48.55 | 93.95 | 179.41 |
 | [e02e43d2a](https://github.com/AFK-surf/still.fail/commit/e02e43d2a6b8e36ea270c769eabd1c433f7e2891) Install the Antigravity CLI from the app, by its o | 1.86 | 2.49 | 10.42 | 29.19 | 36.85 | 25.99 | 48.55 | 94.14 | 127.3 |
 | [e0220aca7](https://github.com/AFK-surf/still.fail/commit/e0220aca7876c7a632209df99c9caf77239a495a) mbui: 正在发送 counted from when the message was sent, | 1.86 | 2.49 | 10.42 | 29.19 | 36.85 | 25.99 | 48.55 | 93.6 | 174.89 |
-| [627960c24](https://github.com/AFK-surf/still.fail/commit/627960c243efddcd2134db194779e3f65e8f5dad) core: every lock call and roster write in each way | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.18 | 180.46 |
