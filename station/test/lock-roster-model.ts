@@ -394,13 +394,11 @@ function grounded(h: Holder, root: string, stmts: Stmt[], out: Roster): Roster {
     }
   }
   for (const id of attackers.keys()) if (!label.has(id)) label.set(id, "undec");
-  // the pairs that stand, with their role; those left undecided
-  const stands = (pair: string): Role3 | undefined => {
-    if (pair === rootPair) return "owner";
-    if (label.get(`n:${pair}|owner`) === "out") return "owner";
-    if (label.get(`n:${pair}|admin`) === "out") return "admin";
-    return undefined;
-  };
+  // the pairs that stand, with their role (that of an admit of theirs in force, as `n:` has it; read off `pairs`, as a
+  // pair that signed no admit and no cancellation has no `n:`, and was taken as standing nowhere until 2026-11-12, when
+  // the rules written from this model (rules/src/lock/roster.mbt) found an admin's cancellation of a station ignored);
+  // those left undecided
+  const stands = (pair: string): Role3 | undefined => (pair === rootPair ? "owner" : out.pairs.get(pair));
   for (const a of admits) {
     const l = label.get(`a:${a.h}`)!;
     const k = `${a.body.sub}|${a.body.lock}`;
@@ -937,7 +935,7 @@ export type Measured3 = {
 };
 
 /// What a statement in force did to the list at `r`: null where it took effect, else why not.
-function effect(r: Roster, it: Intent, h: string): string | null {
+export function effect(r: Roster, it: Pick<Intent, "kind" | "body" | "log"> & { dev: { sub: string } }, h: string): string | null {
   const sub = it.dev.sub, pair = r.pairs.get(`${sub}|${it.log}`), p1 = r.step1.get(`${sub}|${it.log}`);
   if (r.labels.size > 0) {
     const mine = `${sub}|${it.log}`;
@@ -960,7 +958,9 @@ function effect(r: Roster, it: Intent, h: string): string | null {
       if (cs.length > 0) return manages(pair) ? "it may cancel none of what it names" : r.undecided.has(mine) ? "its signer is undecided (a circle of removals)" : "its signer is not in the list";
       return null;
     }
-    if (it.kind.startsWith("ws.station") && !manages(pair)) return "its signer is not in the list";
+    // (a station's statement whose signer a circle of removals leaves undecided is said so, as an admit's is: told
+    // "not in the list" until 2026-11-12, when the rules written from this model said otherwise)
+    if (it.kind.startsWith("ws.station") && !manages(pair)) return r.undecided.has(mine) ? "its signer is undecided (a circle of removals)" : "its signer is not in the list";
     return null;
   }
   if (it.kind === "ws.member") {
