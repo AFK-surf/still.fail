@@ -1,6 +1,6 @@
 //! The MoonBit front (station/mb's program, `--builder mesh`): the station's iroh endpoint kept for its Node across
 //! handovers, so an update binds no new endpoint and its relays stay linked (station/src/mesh/front.ts). The launcher
-//! starts it before the first Node and keeps it as long as it runs: across Node's handovers and restarts, and across its
+//! starts it before the first Node (or, taking up one from before it, before the Node of that handover) and keeps it as long as it runs: across Node's handovers and restarts, and across its
 //! own `renew` (its pid and the pipe to its stdin handed on). Its stdin is that pipe: the launcher gone, it ends. Each Node
 //! is told where it listens (STILLFAIL_MESH_FRONT); where none could be started, a Node binds the endpoint itself as
 //! before (the mesh addon). Unix only: the front listens on a Unix socket.
