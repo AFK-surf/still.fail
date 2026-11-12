@@ -1,4 +1,4 @@
-// Writes the preview host's files (src/preview.ts) to dist/cloud-preview, for the static Worker ember-preview, with
+// Writes the preview host's files (src/preview.ts) to dist/cloud-preview, for the static Worker stillfail-preview, with
 // the page marking (web/src/annotate/frame.ts) bundled into one script.
 //   node cloud/build-static.ts
 import { mkdirSync, writeFileSync } from "node:fs";
