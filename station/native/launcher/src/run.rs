@@ -546,6 +546,9 @@ fn resume(options: Options, run: PathBuf, state: &str) -> i32 {
     // This launcher is the release's (it was run from there).
     let own = hash_of(&options.app.join(LAUNCHER_IN_APP));
     let Resumed { lock, mcp, admin, parent, front, node, version, served } = resumed;
+    // None handed on (a launcher from before the front, or one whose front would not run): one started here, before
+    // the Node the handover starts, so a station that only ever updates comes to have one without being started again.
+    let front = front.or_else(|| crate::front::Front::start(&options.app, &options.data));
     let mut station = Lifecycle::new(System { options, lock, mcp, admin, parent, own, front }, Times::of_env(), run, with_parent);
     station.adopt(node, version, served);
     // A Node that ended meanwhile (its SIGCHLD held, then come) is reaped as signals come.

@@ -686,6 +686,32 @@ fn one_front_serves_every_node_across_handovers_and_ends_with_the_launcher() {
 }
 
 #[test]
+fn a_launcher_from_before_the_front_renewed_starts_one_for_the_next_node() {
+    let mut station = Station::new("frontrenew");
+    // a release without the program: no front, the Node binds the endpoint itself
+    station.start("");
+    station.up();
+    let first = station.started()[0];
+    until("the Node to say its front", || station.log().into_iter().any(|(_, p, w)| p == first && w.starts_with("front ")).then_some(()));
+    assert!(station.said(first, "front none"));
+    // an update that brings the program and a new launcher (renew): the new launcher starts the front for the next Node
+    release_front(&station);
+    release_launcher(&station, "exec \"$BUILT\" \"$@\"\n");
+    station.conf("version=0.2.0\n");
+    station.signal(libc::SIGUSR2);
+    until("station.json of the new version", || station.station_json().filter(|s| s["version"] == "0.2.0"));
+    let new = *station.started().last().unwrap();
+    let socket = station.data.join("run/front.sock");
+    until("the new Node to say its front", || station.log().into_iter().any(|(_, p, w)| p == new && w.starts_with("front ")).then_some(()));
+    assert!(station.said(new, &format!("front {}", socket.display())), "{:?}", station.log());
+    let fronts = station.fronts();
+    assert_eq!(fronts.len(), 1);
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+    until("the front to end with the launcher", || (!alive(fronts[0])).then_some(()));
+}
+
+#[test]
 fn a_front_that_ends_is_started_again_unless_it_ended_as_it_started() {
     let mut station = Station::new("frontends");
     release_front(&station);
