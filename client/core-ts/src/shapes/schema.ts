@@ -1913,7 +1913,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String", { doc: "`waiting` for a station of the lock to take it; `failed` (`dismissText` drops it)." }],
     ["stations", vec("String"), { said: true, doc: "The stations it waits for, by name (three at most)." }],
     ["why", opt("String"), { said: true, doc: "Failed for another reason than a change made meanwhile: that reason, in the station's words." }],
-    ["dismissText", opt("String"), { said: true, doc: "A failed one's button that drops it (知道了)." }],
+    ["dismissText", opt("String"), { doc: "A failed one's button that drops it (知道了)." }],
   ], { doc: "A change signed here that no station took yet (client/core-ts/src/lock-pending.ts): not in effect, shown as such." }),
   LockView: struct([
     ["available", "bool", { doc: "Whether the control plane keeps locks (still.fail cloud's does; Comma's not)." }],
@@ -1932,7 +1932,7 @@ export const SHAPES: Record<string, Shape> = {
     ["renew", vec("LockDevice"), { doc: "The viewer's own web devices running out soon." }],
     ["attention", "u32"],
     ["pending", vec("LockPending"), { default: true, doc: "The changes this device made that no station of the lock took yet, oldest first, then those to its person's own lock\n(one made in both once); none from a core of before." }],
-    ["pendingText", opt("String"), { said: true, doc: "Their heading (以下改动还没有生效), while there are any." }],
+    ["pendingText", opt("String"), { doc: "Their heading (以下改动还没有生效), while there are any." }],
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts)." }),
   LockPromptWorkspace: struct([
     ["id", "String"],
@@ -2177,7 +2177,7 @@ export const SHAPES: Record<string, Shape> = {
     ["devices", vec("AdbPersonalDevice"), { default: true }],
     ["pair", opt("AdbPersonalPair")],
     ["pending", vec("LockPending"), { default: true, doc: "The changes this device made to it that no station of theirs took yet, oldest first." }],
-    ["pendingText", opt("String"), { said: true, doc: "Their heading, while there are any." }],
+    ["pendingText", opt("String"), { doc: "Their heading, while there are any." }],
   ], { doc: "The person's own lock as this device has it (the `adbShare` topic's `personal`)." }),
   AdbLend: struct([
     ["station", "String"],

@@ -22,8 +22,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "personal.*.pending.*.text",
     "personal.*.pending.*.stations.*",
     "personal.*.pending.*.why",
-    "personal.*.pending.*.dismissText",
-    "personal.*.pendingText",
   ],
   "agentCard": [
     "jobs",
@@ -674,8 +672,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "pending.*.text",
     "pending.*.stations.*",
     "pending.*.why",
-    "pending.*.dismissText",
-    "pendingText",
   ],
   "lockDraft": [
     "members.*.email",
