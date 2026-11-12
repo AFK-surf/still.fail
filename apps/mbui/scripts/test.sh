@@ -336,7 +336,11 @@ for t in $targets; do
           # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
           # says why): by the table every runner's pages 180 s a program where they were 246)
           120) specs="4,4,500,1 12,12,26,1 2,8,370,1 12,12,220,1" ;;
-          24 | 7) specs="4,4,90,2 4,4,14,2 1,4,840,2 4,4,120,1" ;;
+          # (the first's other runs at 24 and 7, the packages' programs, 105-133 s and 85-106 beside its pages, not the
+          # 46 and 43 they were reckoned at: its job 235-266 s of its 5 minutes on main's runs of 2026-11-12, a3e59ea9
+          # 43157398527, 36b56f21 43159426488, c9f8f144 43159891701; reckoned 300 of its cores, the third's 900 so that
+          # its pages on one program take none of the first's)
+          24 | 7) specs="4,4,300,2 4,4,14,2 1,4,900,2 4,4,120,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
         esac
         g1=() g2=() g3=() g4=()
