@@ -599,7 +599,7 @@ def main() -> None:
         "web": [f"{origin}/", f"{old}/"],
         "web-beta": [f"{template['vars'].get('BETA_ORIGIN', 'https://app.youdid.wtf')}/"],
         "admin": [f"{admin}/", f"{old_admin}/"],
-        "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
+        "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_stillfail/frame"],
         "status": ["https://still.fail/status"],
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],

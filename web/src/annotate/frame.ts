@@ -1,22 +1,21 @@
 // Marking a web service's page in a preview, for a chat's agent: this runs in the preview's frame (the preview host's
-// /_ember/frame, cloud/src/preview.ts), loaded there as /_ember/annotate.js. The service's page is in a frame of that frame, on the same origin, so its
+// /_stillfail/frame, cloud/src/preview.ts), loaded there as /_stillfail/annotate.js. The service's page is in a frame of that frame, on the same origin, so its
 // document can be read and its clicks held here without anything put into the service.
 //
-// Told by the client (ember-preview-annotate): `on` (true/false) starts or ends picking, `remove` drops a mark,
+// Told by the client (stillfail-preview-annotate): `on` (true/false) starts or ends picking, `remove` drops a mark,
 // `clear` drops them all, `capture` asks for the pictures: with `each`, one PNG per mark, of what the window shows
 // with only that mark drawn on it (a mark scrolled out of sight gets the window's worth of page around it); without
 // (clients before that), the whole page with all the marks on it. `canvas` (true/false)
-// that the page is on a canvas, whose zooming and two fingers it then hands on (ember-preview-gesture). It says
-// (ember-preview-annotated): `picked` with where a mark is, `focus` when a marked element is picked again, `at` with
+// that the page is on a canvas, whose zooming and two fingers it then hands on (stillfail-preview-gesture). It says
+// (stillfail-preview-annotated): `picked` with where a mark is, `focus` when a marked element is picked again, `at` with
 // where the marks are in the frame's viewport as the page scrolls or moves (the client draws them), `off` when Esc
 // ended picking, `reset` when the page went elsewhere (its marks gone), `shot` with the pictures (`shots`, or `png`). The frame says it can
-// do this (its ember-preview-at) once attach() has its page frame. Only the box under the pointer is drawn here.
+// do this (its stillfail-preview-at) once attach() has its page frame. Only the box under the pointer is drawn here.
 import { domToCanvas } from "modern-screenshot";
 
 declare global {
   interface Window {
     stillfailAnnotate?: { attach(inner: HTMLIFrameElement, nonce: string): void };
-    emberAnnotate?: { attach(inner: HTMLIFrameElement, nonce: string): void };
   }
 }
 
@@ -48,8 +47,7 @@ const MARK = "#ef6a3c";
 const MAX_HEIGHT = 12000;
 const MAX_PIXELS = 36e6;
 
-// Under both names: frames from before the rename (the preview host's, the desktop app's) look for `emberAnnotate`.
-window.stillfailAnnotate = window.emberAnnotate = { attach };
+window.stillfailAnnotate = { attach };
 
 function attach(inner: HTMLIFrameElement, nonce: string) {
   let on = false;
@@ -61,7 +59,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
   let doc: Document | null = null;
 
   const say = (data: Record<string, unknown>, transfer: Transferable[] = []) =>
-    parent.postMessage({ type: "ember-preview-annotated", nonce, ...data }, "*", transfer);
+    parent.postMessage({ type: "stillfail-preview-annotated", nonce, ...data }, "*", transfer);
 
   // What is drawn over the page here: the box under the pointer while picking, with what it is. The marks are the
   // client's to draw (it is told where they are).
@@ -176,10 +174,10 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
 
   // The page as a canvas's (the client laid it out at a size of its own and said `canvas`): zooming (⌘/Ctrl and the
   // wheel, which a trackpad's pinch is) and two fingers on it move the canvas, not the page. They are said to the
-  // client (ember-preview-gesture: the wheel's delta, or the fingers, where they are in the page's viewport).
+  // client (stillfail-preview-gesture: the wheel's delta, or the fingers, where they are in the page's viewport).
   let canvas = false;
   let fingers = false;
-  const gesture = (data: Record<string, unknown>) => parent.postMessage({ type: "ember-preview-gesture", nonce, ...data }, "*");
+  const gesture = (data: Record<string, unknown>) => parent.postMessage({ type: "stillfail-preview-gesture", nonce, ...data }, "*");
   const wheel = (event: WheelEvent) => {
     if (!canvas || !(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
@@ -236,7 +234,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
   hook();
 
   addEventListener("message", (event) => {
-    if (event.source !== parent || (event.data?.type !== "stillfail-preview-annotate" && event.data?.type !== "ember-preview-annotate")) return;
+    if (event.source !== parent || event.data?.type !== "stillfail-preview-annotate") return;
     const data = event.data as { on?: boolean; remove?: number; clear?: boolean; capture?: number; each?: boolean; canvas?: boolean };
     hook();
     if (typeof data.canvas === "boolean") canvas = data.canvas;

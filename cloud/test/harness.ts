@@ -436,8 +436,6 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/admin/assets/console.js": "// the console",
   "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",
   "/preview/_stillfail/sw.js": "// the preview's service worker",
-  "/preview/_ember/frame.html": "<title>still.fail preview (old path)</title>",
-  "/preview/_ember/sw.js": "// the preview's service worker (old path)",
   "/preview/404.html": "这是 still.fail 的预览地址",
 };
 

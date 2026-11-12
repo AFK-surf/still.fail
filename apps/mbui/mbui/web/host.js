@@ -1375,7 +1375,7 @@
     }
   });
   // ---- a site's frame ----
-  const FROM_FRAME = /^(stillfail|ember)-preview-/;
+  const FROM_FRAME = /^stillfail-preview-/;
   const siteSay = (v, said) => { v.said.push(JSON.stringify(said)); H.requestFrame(); };
   const siteSays = (v, words) => siteSay(v, { said: JSON.stringify(words) });
   const toBase64 = (b) => { let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); };

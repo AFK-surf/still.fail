@@ -12,7 +12,6 @@ import { apnsKeys, apnsPushAny } from "./apns";
 import { fcmPushAny, serviceAccounts } from "./fcm";
 import { langOf, requestLang, type Lang } from "./i18n.ts";
 import { line, noticeBodyFor, shown, showsOf, type Shows } from "./noticeText";
-import { FORMER_NOTICE_PREFIX } from "./compat";
 import { stationSender } from "./tracing";
 import { validAuthSecret, validPoint, webPush, type Outcome, type Vapid } from "./webpush";
 
@@ -122,8 +121,7 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   } catch {
     return reply({ error: "too_large" }, 413);
   }
-  // (stations from before 2026-11-05 sign them as ember-station-notify-v1)
-  const station = await stationSender(request, env, body, "station-notify-v1", [FORMER_NOTICE_PREFIX]);
+  const station = await stationSender(request, env, body, "station-notify-v1");
   if (!station) return reply({ error: "invalid_signature" }, 401);
   let notices: Notice[];
   let workspace: string | null = null;

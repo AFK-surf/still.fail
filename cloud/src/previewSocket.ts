@@ -230,72 +230,6 @@ const WORKER_SOCKET = `(() => {
 `;
 
 /**
- * A `link` over the page's own requests, for a host that answers them itself (the desktop app's stillfail-preview://):
- * `GET /_ember/socket/<id>?path=&protocols=` opens the socket and streams what happens on it, `POST /_ember/socket/<id>`
- * sends one message. Both are framed as the station frames a socket (client/core-ts/src/station/sync.ts, SocketFrame: a kind
- * byte, the length in 4 bytes big-endian, the payload), with kind 0 for its opening (the sub-protocol).
- */
-export const FETCH_LINK = `(path, protocols, on) => {
-  const at = "/_ember/socket/" + crypto.randomUUID();
-  const stop = new AbortController();
-  const utf8 = new TextEncoder();
-  const text = new TextDecoder();
-  const frame = (kind, payload) => {
-    const out = new Uint8Array(5 + payload.length);
-    out[0] = kind;
-    new DataView(out.buffer).setUint32(1, payload.length);
-    out.set(payload, 5);
-    return out;
-  };
-  let ended = false;
-  const end = (code, reason, failed) => {
-    if (ended) return;
-    ended = true;
-    stop.abort();
-    on.close(code, reason, failed);
-  };
-  fetch(at + "?path=" + encodeURIComponent(path) + "&protocols=" + encodeURIComponent(protocols.join(",")), { signal: stop.signal, cache: "no-store" })
-    .then(async (answer) => {
-      if (!answer.ok || !answer.body) return end(1006, "", true);
-      const reader = answer.body.getReader();
-      let buf = new Uint8Array(0);
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) return end(1006, "", true);
-        const joined = new Uint8Array(buf.length + value.length);
-        joined.set(buf);
-        joined.set(value, buf.length);
-        buf = joined;
-        while (buf.length >= 5) {
-          const len = new DataView(buf.buffer, buf.byteOffset).getUint32(1);
-          if (buf.length < 5 + len) break;
-          const kind = buf[0];
-          const payload = buf.slice(5, 5 + len);
-          buf = buf.slice(5 + len);
-          if (kind === 0) on.open(text.decode(payload));
-          else if (kind === 1) on.message(text.decode(payload));
-          else if (kind === 2) on.message(payload);
-          else if (kind === 8) {
-            const code = payload.length >= 2 ? (payload[0] << 8) | payload[1] : 1005;
-            return end(code, text.decode(payload.slice(2)), code === 1006);
-          }
-        }
-      }
-    })
-    .catch(() => end(1006, "", true));
-  // One after another, in the order sent; kept alive, so a close sent as the page goes still gets there.
-  let sending = Promise.resolve();
-  const post = (bytes, failed = () => {}) => {
-    sending = sending.then(() => fetch(at, { method: "POST", body: bytes, keepalive: true }).then((r) => { if (!r.ok) failed(); }, failed));
-  };
-  return {
-    send: (data) => post(typeof data === "string" ? frame(1, utf8.encode(data)) : frame(2, data)),
-    // A close that did not get there stops the socket's stream instead: nothing is left open.
-    close: (code, reason) => post(frame(8, new Uint8Array([code >> 8, code & 255, ...utf8.encode(reason)])), () => stop.abort()),
-  };
-}`;
-
-/**
  * What puts socketScript into a page of the service, first in its <head>: `withSocketTag(body)`, a page's body with the
  * script's tag in it. JavaScript, for the web's service worker (cloud/src/preview.ts) to carry as it is; the desktop app
  * runs it in its main process. The tag goes after the <head> tag, else after <html>, else after the doctype, else
@@ -303,7 +237,7 @@ export const FETCH_LINK = `(path, protocols, on) => {
  * doctype cut in two. Tags are ASCII: the bytes are searched as they are, whatever the page's encoding.
  */
 export const SOCKET_TAG_JS = `
-const SOCKET_TAG = new TextEncoder().encode('<script src="/_ember/socket.js"></script>');
+const SOCKET_TAG = new TextEncoder().encode('<script src="/_stillfail/socket.js"></script>');
 function socketTagAt(bytes, whole) {
   const text = String.fromCharCode(...bytes.subarray(0, 4096)).toLowerCase();
   // All there is to wait for: the doctype, or the very start, will do.
