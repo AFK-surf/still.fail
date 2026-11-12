@@ -51,7 +51,9 @@ const OVER_SHOWN: Over = {
   "card": ["reads", "shared", "equaled", "diffed", "fitted"],
   "archived": ["reads", "shared", "built", "fitted"],
   "renamed": ["reads", "shared", "diffed"],
-  "grown": ["reads"],
+  // (grown's shared joined as share came to take a source's own objects handed again by a lookup: 206 and 202 before, of
+  // every row equal to the one kept and not it; 88 and 92 now, of the days the rows the window grew by go into)
+  "grown": ["reads", "shared"],
   "down": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
   "job": ["reads", "shared", "equaled"],
   "usage": ["shared", "copied", "fitted"],

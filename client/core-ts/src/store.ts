@@ -14,7 +14,7 @@
 // is in view (`inView`), what changed is kept from the subscribers and goes out as one difference per topic once one is.
 import { Effect } from "effect";
 import { computed, observe, signal, tracking, untracked, type Derived, type Source as ReactiveSource } from "./reactive.ts";
-import { type AnyOp, diffKeyed, heavier, share, specOf } from "./collections.ts";
+import { type AnyOp, diffKeyed, heavier, type Kept, share, specOf } from "./collections.ts";
 import { diff, largerThan, type Op } from "./delta.ts";
 import { Output } from "./output.ts";
 import { CoreError } from "./error.ts";
@@ -110,6 +110,9 @@ type Entry = {
   selections: WeakMap<(value: Value | undefined) => unknown, WeakMap<object, Derived<unknown>>>;
   stop?: () => void;
   job?: () => void;
+  /// What its source's objects were kept as in its value (collections.ts `share`): a source that keeps what it made and
+  /// hands it again is given the object kept, by one lookup. Its own: another topic keeps the same object as another.
+  kept?: Kept;
   /// The value last sent to the subscribers; the next emission is the difference to it.
   sent?: Value;
   /// What would go out of it changed without a subscriber (#sentHolds no longer): it needs output when a page next asks
@@ -793,7 +796,7 @@ export class Store {
     // the last value differs from it: not compared again.
     let shared = false;
     if (now.subscribers.length > 0 && computed !== undefined && "ok" in computed && now.value !== undefined && "ok" in now.value && now.value.ok !== computed.ok) {
-      const kept = share(now.value.ok, computed.ok, specOf(topic));
+      const kept = share(now.value.ok, computed.ok, specOf(topic), (now.kept ??= new WeakMap()));
       computed = kept === now.value.ok ? now.value : { ok: sharedValue(kept) };
       shared = true;
     }

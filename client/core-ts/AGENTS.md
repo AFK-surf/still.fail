@@ -24,8 +24,11 @@ design rules (the user, 2026-10-03):
    what equals the last value as the same objects (`src/collections.ts` `share`), sends a keyed subscriber insert,
    patch, drop and move ops of its keyed lists (`diffKeyed`), and shapes again only items that are not the objects that
    went out (`src/output.ts`). In each of these steps an item that is the object it was costs one comparison of two
-   references (or a lookup by the object) and nothing else; the rest is walked only for what is not the same. What
-   that still walks for one change is counted (`test/view-work.test.ts`).
+   references (or a lookup by the object) and nothing else; the rest is walked only for what is not the same. An item
+   a view keeps and hands again is so too where it is not the object the store holds (the store kept the one of
+   before, or put one together of both): `share` remembers what a value, a keyed list and each of its items was kept
+   as (a topic's own `kept`), so a list a view keeps the items of is a keyed list (`SPECS`). What that still walks for
+   one change is counted (`test/view-work.test.ts`).
 7. **Workspaces are isolated** from each other.
 
 ## What a topic sends is bounded
