@@ -14,8 +14,8 @@
 // - each background command and subagent is told as it starts (system/task_started, is_backgrounded; or task_updated
 //   with it later) and as it ends (task_notification, or task_updated with a final status); a subagent's own commands
 //   say owned_by_subagent. They all end with the process.
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
-import { link, mkdir, realpath, symlink } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
+import { link, mkdir, readdir, realpath, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { REPO_RULES_COMMAND } from "./repo-rules.ts";
 import { log } from "../ops/log.ts";
@@ -96,24 +96,24 @@ export const userMessage = (text: string) => JSON.stringify({ type: "user", mess
 /// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl: looked for in the directory of `cwd`
 /// (where it runs on), then in every project's (it ran elsewhere before: many directories on a station, each looked at).
 /// Where it is, or null.
-export function transcriptAt(home: string, sessionId: string, cwd: string): string | null {
+export async function transcriptAt(home: string, sessionId: string, cwd: string): Promise<string | null> {
   const project = claudeProject(cwd);
   const here = project === null ? null : join(home, "projects", project, `${sessionId}.jsonl`);
-  if (here !== null && existsSync(here)) return here;
+  if (here !== null && (await isFile(here))) return here;
   let dirs: string[];
   try {
-    dirs = readdirSync(join(home, "projects"));
+    dirs = await readdir(join(home, "projects"));
   } catch {
     return null;
   }
   for (const d of dirs) {
     const path = join(home, "projects", d, `${sessionId}.jsonl`);
-    try {
-      if (statSync(join(home, "projects", d)).isDirectory() && existsSync(path)) return path;
-    } catch {}
+    if (await isFile(path)) return path;
   }
   return null;
 }
+
+const isFile = (path: string) => stat(path).then((s) => s.isFile(), () => false);
 
 /// A session found in another directory's project (it ran elsewhere before) is linked into `cwd`'s, where `--resume`
 /// looks: an older Claude Code looks only there (2.1.63, on FB-16's station; 2.1.321 looks in every project's) and ends
@@ -330,7 +330,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const home = options.profile.home;
     mkdirSync(home, { recursive: true });
     if (options.resume !== undefined) {
-      const found = transcriptAt(home, options.resume, options.cwd);
+      const found = await transcriptAt(home, options.resume, options.cwd);
       // claude would start and exit at once; failing here lets the caller start fresh.
       if (found === null) throw new Error(`no claude transcript for session ${options.resume}`);
       await bringTranscript(home, options.resume, options.cwd, found);
