@@ -7,6 +7,7 @@
 // as before, and takes what comes. Real processes and sockets: the side run's.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import { createSocket } from "node:dgram";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -150,6 +151,37 @@ test("a Node binding again takes what comes from then on; the first keeps its ow
     await device2.close();
     await second.close();
   } finally {
+    await f.stop();
+  }
+});
+
+test("a front can bind a fixed port after an older endpoint releases it", { skip }, async () => {
+  const addon = loadMesh();
+  const f = await front();
+  const old = createSocket("udp4");
+  await new Promise<void>((resolve) => old.bind(0, "127.0.0.1", resolve));
+  let oldClosed = false;
+  try {
+    const addr = `127.0.0.1:${old.address().port}`;
+    const options = { secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [], discovery: false, bindAddr: addr };
+    const bind = () => withFront(addon, f.socket).bind(options);
+    await assert.rejects(bind());
+    await new Promise<void>((resolve) => old.close(resolve));
+    oldClosed = true;
+    const station = await bind();
+    const device = await bindOn(addon, randomBytes(32));
+    try {
+      assert.ok(station.sockets().includes(addr));
+      const accepting = station.accept();
+      const connection = await device.connect(addrOf(station), ALPN);
+      assert.equal((await accepting)!.remoteId(), device.id());
+      connection.close(0, "");
+    } finally {
+      await device.close();
+      await station.close();
+    }
+  } finally {
+    if (!oldClosed) await new Promise<void>((resolve) => old.close(resolve));
     await f.stop();
   }
 });

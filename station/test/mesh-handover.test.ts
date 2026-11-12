@@ -12,15 +12,21 @@ import { memoryMesh } from "./memory-mesh.ts";
 import { StationParts } from "../src/parts.ts";
 import { settle } from "./hub-fakes.ts";
 
-function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cubic" | "bbr") {
+function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cubic" | "bbr", scenario: { front?: boolean; failures?: number } = {}) {
   const original = process.env.STILLFAIL_MESH_BIND_ADDR;
+  const originalFront = process.env.STILLFAIL_MESH_FRONT;
   if (bindAddr === undefined) delete process.env.STILLFAIL_MESH_BIND_ADDR;
   else process.env.STILLFAIL_MESH_BIND_ADDR = bindAddr;
+  if (scenario.front) process.env.STILLFAIL_MESH_FRONT = "/front.sock";
+  else delete process.env.STILLFAIL_MESH_FRONT;
   t.after(() => {
     if (original === undefined) delete process.env.STILLFAIL_MESH_BIND_ADDR;
     else process.env.STILLFAIL_MESH_BIND_ADDR = original;
+    if (originalFront === undefined) delete process.env.STILLFAIL_MESH_FRONT;
+    else process.env.STILLFAIL_MESH_FRONT = originalFront;
   });
   const previous = Promise.withResolvers<void>();
+  const exited = Promise.withResolvers<void>();
   const built = Promise.withResolvers<void>();
   const binding = Promise.withResolvers<void>();
   const accepting = Promise.withResolvers<void>();
@@ -32,7 +38,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
   const cloud = { state: { workspace_name: "ws" }, data: mkdtempSync(join(tmpdir(), "mesh-handover-")), relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
   const inputs = Layer.mergeAll(
     Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [], device: null }),
-    Layer.succeed(Previous)({ pid: null, gone: previous.promise, exited: previous.promise }),
+    Layer.succeed(Previous)({ pid: scenario.front ? 123 : null, gone: previous.promise, exited: exited.promise }),
     Layer.succeed(Own)({ paths: () => [] } as never),
     Layer.succeed(Peers)({ attach: () => {} } as never),
     Layer.succeed(Parts)(new StationParts()),
@@ -49,6 +55,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
       calls++;
       boundCongestion = options.congestion;
       binding.resolve();
+      if (calls <= (scenario.failures ?? 0)) throw new Error("port is held by the previous station");
       const endpoint = await memoryMesh().bind(options);
       // Its relay link never up: no real sockets or timers in this scheduling regression.
       endpoint.online = () => new Promise<void>(() => {});
@@ -67,7 +74,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
     built.resolve();
     yield* Effect.never;
   })));
-  return { previous, built, binding, accepting, running, calls: () => calls, presence: () => presence, congestion: () => boundCongestion };
+  return { previous, exited, built, binding, accepting, running, calls: () => calls, presence: () => presence, congestion: () => boundCongestion };
 }
 
 test("the mesh starts with its saved controller, cubic when no choice was made", async (t) => {
@@ -114,6 +121,48 @@ test("a station stopped during handover does not bind after its predecessor exit
   s.previous.resolve();
   await settle();
   assert.equal(s.calls(), 0);
+});
+
+test("the front binds again after its predecessor releases the fixed port", async (t) => {
+  const s = startup(t, "0.0.0.0:4770", undefined, { front: true, failures: 1 });
+  try {
+    await s.built.promise;
+    await s.binding.promise;
+    await settle();
+    assert.equal(s.calls(), 1);
+    s.previous.resolve();
+    await settle();
+    assert.equal(s.calls(), 1); // A timed-out handover does not mean the old process has exited.
+    s.exited.resolve();
+    await settle();
+    assert.equal(s.calls(), 2);
+    await s.accepting.promise;
+  } finally {
+    await Effect.runPromise(Fiber.interrupt(s.running));
+  }
+});
+
+test("the front takes over an existing endpoint before its predecessor exits", async (t) => {
+  const s = startup(t, "0.0.0.0:4770", undefined, { front: true });
+  try {
+    await s.built.promise;
+    await s.accepting.promise;
+    assert.equal(s.calls(), 1);
+  } finally {
+    await Effect.runPromise(Fiber.interrupt(s.running));
+    s.previous.resolve();
+  }
+});
+
+test("a stopped station does not retry the front's failed bind", async (t) => {
+  const s = startup(t, "0.0.0.0:4770", undefined, { front: true, failures: 1 });
+  await s.built.promise;
+  await s.binding.promise;
+  await Effect.runPromise(Fiber.interrupt(s.running));
+  s.previous.resolve();
+  s.exited.resolve();
+  await settle();
+  assert.equal(s.calls(), 1);
 });
 
 for (const bindAddr of [undefined, "0.0.0.0:0", "[::]:0"]) {
