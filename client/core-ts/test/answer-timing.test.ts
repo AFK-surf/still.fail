@@ -1,12 +1,14 @@
 // Every call a person waits on that the workspace's lock has a part in, made in each way its station and the cloud can
 // answer: the station at once, late (its link back 10 s on, as a station just started anew) or never (its machine
-// asleep: asked, it neither answers nor closes), the cloud answering or never answering anything. 2026-11-12 five
+// asleep: asked, it neither answers nor closes), or none named (a lock that never had a station, or whose last was
+// taken out: the cloud's to keep, views/lock.ts `#cloudOnly`), the cloud answering or never answering anything. 2026-11-12 five
 // fixes merged that waited ASKED_MS on the stations and then on the cloud alone: with the cloud frozen and the station
 // late, a device approved face to face was never answered (#5646), and every test was green, their stations answering
-// at once or never and nothing between. Here each call in each of the six:
+// at once or never and nothing between. Here each call in each of the eight:
 // - what one of them takes is done: answered ok, within the bound of the way it came (`bound`);
 // - what neither can take answers all the same, an error, within ASKED_MS + TAKEN_MS and the reread's wait;
-// - a call that needs the cloud (the roster's, which is the cloud's: members, roles, stations) is done only with it.
+// - a call that needs the cloud (the roster's, which is the cloud's: members, roles, stations) is done only with it,
+//   and so is every write where the lock names no station; what the cloud does not answer then fails by CLOUD_WRITE_MS.
 // What does not hold is in `KNOWN` with why, and `KNOWN` only falls.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -14,6 +16,7 @@ import { Effect } from "effect";
 import { REREAD_WAIT_MS } from "../src/core/execute.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, entryHash } from "../src/lock.ts";
+import { CLOUD_WRITE_MS } from "../src/lock-pending.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { ASKED_MS, TAKEN_MS, held, read } from "../src/views/lock.ts";
 import { serveTrusted, tryOne } from "../src/views/pair.ts";
@@ -33,7 +36,7 @@ const LIMIT_MS = 30_000;
 /// few steps here.
 const SLACK_MS = 200;
 
-type Station = "now" | "late" | "never";
+type Station = "now" | "late" | "never" | "none";
 type Cloud = "answers" | "never";
 type Rig = Awaited<ReturnType<typeof rig>>;
 type Outcome = { ms: number | null; ok: boolean; said: unknown };
@@ -60,14 +63,16 @@ const KNOWN: Record<string, string> = {};
 /// Whether the call is to be done in this cell.
 function done(needs: "either" | "cloud" | "none", st: Station, cloud: Cloud): boolean {
   if (needs === "none") return true;
-  if (needs === "cloud") return cloud === "answers";
+  if (needs === "cloud" || st === "none") return cloud === "answers";
   // (what no station took by the call's wait answers as pending, whatever the cloud does: views/lock.ts `Lock.append`)
   return true;
 }
 
 /// How long the call may take in this cell: done, as the one that takes it answers; failing, once neither did.
 function bound(ok: boolean, st: Station, cloud: Cloud): number {
-  if (!ok) return ASKED_MS + TAKEN_MS + REREAD_WAIT_MS + SLACK_MS;
+  if (!ok) return st === "none" ? CLOUD_WRITE_MS + REREAD_WAIT_MS + SLACK_MS : ASKED_MS + TAKEN_MS + REREAD_WAIT_MS + SLACK_MS;
+  // (no station to wait for: the cloud's answer is the call's)
+  if (st === "none") return SLACK_MS;
   if (st === "now") return ASKED_MS + SLACK_MS;
   if (cloud === "answers") return ASKED_MS + REREAD_WAIT_MS + SLACK_MS;
   return LATE_MS + REREAD_WAIT_MS + SLACK_MS;
@@ -100,14 +105,14 @@ function station(first: Entry, now: () => number) {
 }
 
 /// A locked workspace `ws` (s1 the owner, this device its app; s2 a member with a phone; a web page of s1's), its one
-/// station A serving it, the lock read and held.
-async function setUp() {
+/// station A serving it (`named`; else the lock names no station, A only the workspace's), the lock read and held.
+async function setUp(named = true) {
   const g = grant();
   const more = [
     { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8" },
     { id: WEB, sub: "s1", kind: "web", label: "web", exp: 2_000_000_000 },
   ];
-  const r = await rig((signer) => ({ ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME, more) }), undefined, A);
+  const r = await rig((signer) => ({ ws: genesis("ws", signer, true, named ? [{ key: A, name: "a" }] : [], g.keys, ME, more) }), undefined, A);
   const inner = r.core.inner;
   const st = station(r.cloud.chains.get("ws")![0]!, () => r.host.nowMs());
   const original = inner.stations.requests.call.bind(inner.stations.requests);
@@ -192,7 +197,7 @@ async function timedCall(s: Setup, name: string, params: Record<string, unknown>
   return { ms, ok: answer !== undefined && "ok" in answer, said: answer?.error ?? null };
 }
 
-const STATIONS: Station[] = ["now", "late", "never"];
+const STATIONS: Station[] = ["now", "late", "never", "none"];
 const CLOUDS: Cloud[] = ["answers", "never"];
 
 test("every lock call answers in each way its station and the cloud answer: done where one takes it, an error in time where neither does", async (t) => {
@@ -201,7 +206,7 @@ test("every lock call answers in each way its station and the cloud answer: done
   for (const c of CALLS) {
     for (const st of STATIONS) {
       for (const cloud of CLOUDS) {
-        const s = await setUp();
+        const s = await setUp(st !== "none");
         cloudAs(s.r, cloud);
         if (st === "late") s.st.say.lateUntil = s.r.host.nowMs() + LATE_MS;
         if (st === "never") s.st.say.silent = true;
