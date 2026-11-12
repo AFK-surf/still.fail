@@ -308,3 +308,49 @@ test "bar places kept: 用量 comes back scrolled where it was left" {
   assert_true(kept_scrolled(top, left, top_now), msg="用量 scrolled before it was left")
   assert_eq(back, left.1, msg="用量 scrolled where it was left")
 }
+
+///|
+/// Each change of the real workspace's chats' lists taken (by every cause, real_size_changed's), or with `back` each
+/// put back as it was first; whether any was.
+fn kept_chats_changed(c : @sfrealsize.RealSizeChanging, back : Bool) -> Bool {
+  let mut any = false
+  for i, way in c.ways() {
+    if way.0 == "chats" {
+      if back {
+        c.put_back(i)
+        any = true
+      } else {
+        for change in c.changed(i) {
+          for m in change.1 {
+            c.put(i, m)
+            any = true
+          }
+        }
+      }
+    }
+  }
+  any
+}
+
+///|
+test "bar places kept: Home's rows changed as it rested are there at once as it is taken back, as on Home made anew; changed after, they move" {
+  // (the owner's phone, 2026-11-12: back to 对话 from Station, the rows under 今天 drawn only as they came in, over
+  // row_size_ms, as were each new to the list)
+  for kept in [true, false] {
+    let (t, c, _) = home_again_open("kept rows \{kept}", @ui.frame_period_default)
+    bars_picked.set(Some(([kept_bar], 0)))
+    t.run_for(kept_switch_over_ms)
+    kept_go(t, "connects", kept)
+    t.run_for(kept_switch_over_ms)
+    assert_true(kept_chats_changed(c, false))
+    t.run_for(kept_few_frames_ms)
+    kept_go(t, "chats", kept)
+    t.run_for(@ui.frame_period_default)
+    assert_true(@sfpages.rows_rest() <= t.time(), msg="kept \{kept}: no row coming or going as Home is switched back to")
+    // (changed again while it is the page shown: its rows make their way as ever)
+    t.run_for(kept_switch_over_ms)
+    assert_true(kept_chats_changed(c, true))
+    t.run_for(@ui.frame_period_default)
+    assert_true(@sfpages.rows_rest() > t.time(), msg="kept \{kept}: rows moving as the list changes in view")
+  }
+}
