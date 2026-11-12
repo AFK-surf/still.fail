@@ -57,10 +57,12 @@ priv struct Composing {
   /// each build and frame made at that moment starts from that one, frame_body may build it twice)
   mut draft_was : (Double, String)
   /// the moment it was last laid out for another page (a new chat's roomy in the page, a chat's at its foot) and how it
-  /// was laid out and the choices in its row till then (as draft_was)
-  mut roomy_was : (Double, Bool?, (() -> Unit)?)
+  /// was laid out, the choices in its row and whether the soft keyboard was up till then (as draft_was)
+  mut roomy_was : (Double, Bool?, (() -> Unit)?, Bool?)
   /// as they were before what this build is built at changed them (draft_was, roomy_was): as this build has them
   mut roomy_before : Bool?
+  /// whether the soft keyboard was up as it was last built (new_chat.mbt's `wide` reads the same)
+  mut keys_up : Bool?
   mut draft_before : String
   /// whether what waits in it now was in it before it was switched to it at this moment (the same draft): what is put
   /// in since comes in (held_coming), what a draft opened with is there at once
@@ -136,9 +138,10 @@ let composing : Composing = {
   draft: "",
   took: {},
   roomy_before: None,
+  keys_up: None,
   draft_before: "",
   draft_was: (-1.0, ""),
-  roomy_was: (-1.0, None, None),
+  roomy_was: (-1.0, None, None, None),
   same_draft: false,
   switching: false,
   notices_new: false,
@@ -181,12 +184,13 @@ fn composing_reset() -> Unit {
   composing.draft = ""
   composing.took.clear()
   composing.roomy_before = None
+  composing.keys_up = None
   composing.toolbar = None
   composing.toolbar_before = None
   composing.toolbar_leaving = None
   composing.draft_before = ""
   composing.draft_was = (-1.0, "")
-  composing.roomy_was = (-1.0, None, None)
+  composing.roomy_was = (-1.0, None, None, None)
   composing.same_draft = false
   composing.switching = false
   composing.notices_new = false
@@ -252,12 +256,14 @@ pub fn composer(
     composing.draft_was = (c.moment(), composing.draft)
   }
   if composing.roomy != Some(spec.roomy) {
-    composing.roomy_was = (c.moment(), composing.roomy, composing.toolbar)
+    composing.roomy_was = (c.moment(), composing.roomy, composing.toolbar, composing.keys_up)
   }
   composing.draft_before = composer_was(c)
-  let (roomy_at, roomy_was, toolbar_was) = composing.roomy_was
+  let (roomy_at, roomy_was, toolbar_was, keys_up_was) = composing.roomy_was
   composing.roomy_before = if roomy_at == c.moment() { roomy_was } else { composing.roomy }
   composing.toolbar_before = if roomy_at == c.moment() { toolbar_was } else { composing.toolbar }
+  // (the keyboard as it was before this build's moment changed how roomy it is)
+  let keys_up_before = if roomy_at == c.moment() { keys_up_was } else { composing.keys_up }
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
     composing.draft = whose
@@ -374,11 +380,19 @@ pub fn composer(
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
-  // laid out for another page than before (a new chat's roomy in the page): at the moment it was
-  let moved = match composing.roomy_before {
+  // laid out for another page than before (a new chat's roomy in the page, become its chat's at its foot): at the
+  // moment it was. The same draft laid out roomy or not with the soft keyboard as it was (a new chat's page made
+  // narrower or wider by the window, an edge dragged: new_chat.mbt's `wide`) has moved to no other page: what it is
+  // laid out as there at once, nothing in it moving for it (apps/mbui/AGENTS.md, Motion). The keyboard come or gone as
+  // it changed is its taking the focus or letting it go, seen through the keyboard: its own cause, moved as ever
+  let roomy_changed = match composing.roomy_before {
     Some(was) => was != spec.roomy
     None => false
   }
+  let keys_up = c.ime_inset() > 0.0
+  let keys_same = keys_up_before == Some(keys_up)
+  let laid_anew = roomy_changed && composing.same_draft && keys_same
+  let moved = roomy_changed && !laid_anew
   // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
   // them, not a page's quick start that leaves them behind and goes far in its first frame)
   let opening = composer_opening(c, "\{spec.roomy}|\{multiline}")
@@ -406,6 +420,7 @@ pub fn composer(
     w,
     focused || held,
     moved,
+    laid_anew,
     "\{spec.roomy}|\{multiline}|\{w.files.get().length()}|\{w.quotes.get().length()}|\{w.error.get() != ""}",
     shape,
   )
@@ -433,7 +448,7 @@ pub fn composer(
   // (what it is shaped for: what it holds, or what words sent from it held as they were sent while they hold it, so
   // it is shaped for the same till they let go of it: composer_held_lines)
   let shapes = @sfbase.flight_held_shaped(c, spec.draft).unwrap_or(composer_shapes(w, quote_pictures, file_pictures))
-  let holds = if whose != composing.draft_before && !moved {
+  let holds = if (whose != composing.draft_before && !moved) || laid_anew {
     ""
   } else {
     "\{spec.roomy}|\{multiline}|\{w.error.get() != ""}|" + shapes
@@ -523,6 +538,7 @@ pub fn composer(
   // window, the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is
   // where it is laid out at once (sf/motion.mbt)
   composing.roomy = Some(spec.roomy)
+  composing.keys_up = Some(keys_up)
   // (at a page's foot down the system's column, not roomy in a new chat's middle: opened from its foot, a keyboard
   // coming in the same frame taken at once, the user 2026-10-30 「以底部为 origin」; there the keyboard lifts it from its
   // first point on, ios_app.m ime_over)
@@ -885,13 +901,16 @@ fn composer_hint(
   w : Writing,
   hidden : Bool,
   moved : Bool,
+  laid_anew : Bool,
   shape : String,
   going : @motion.Spec,
 ) -> @motion.Anim {
   let hint = @motion.anim(c, "composer/hint", 1.0)
-  // (another chat's draft swapped in is no change of shape: it is where it is laid out at once)
+  // (another chat's draft swapped in is no change of shape, nor the same draft laid out roomy or not by the width it is
+  // given (`laid_anew`): it is where it is laid out at once)
   let reshaped = shape != composing.hint_shape &&
     composing.hint_shape != "" &&
+    !laid_anew &&
     ("\u{1}" + spec.session == composing.draft_before || moved)
   composing.hint_shape = shape
   if hidden || @sfbase.flight_hint_away(c, w.key) {
