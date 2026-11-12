@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [3aa695f5f](https://github.com/AFK-surf/still.fail/commit/3aa695f5f2c79821758de737b08483d580cc3c3b) app: a chat's bar on 中屏 and 大屏 as nodes of the win | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 93.98 | 140.55 |
 | [f3f6e9e98](https://github.com/AFK-surf/still.fail/commit/f3f6e9e987573d96e484d62758a503ae64ba7b9e) mbui: the kept checks look at what was drawn as th | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.37 | 161.48 |
 | [90d1553f2](https://github.com/AFK-surf/still.fail/commit/90d1553f227953025dba5e8e6969aa5e7910f994) mbui: a list's heads' wake at a glide's end is not | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.01 | 168 |
 | [1cfe5cbab](https://github.com/AFK-surf/still.fail/commit/1cfe5cbab69f264d55ac6989e7ec5cdb717063a1) mbui: a bar to fall or a file to leave motion_coun | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.96 | 173.62 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f56628719](https://github.com/AFK-surf/still.fail/commit/f56628719ec11ee097714cc8fed9bef4e8389abb) sf: a panel's ground is the arrow under a mouse (g | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.77 | 47.8 | 94.57 | 140.66 |
 | [d2482190e](https://github.com/AFK-surf/still.fail/commit/d2482190e3650f97ce2a895f92a60a784a3765b2) app: what a person wrote made once as nodes: the v | 1.83 | 2.44 | 10.18 | 28.92 | 35.95 | 25.76 | 47.8 | 94.67 | 163.05 |
 | [11b5f0537](https://github.com/AFK-surf/still.fail/commit/11b5f0537f73d70a149e6c91403c9851598d826c) app: a chat's pictures told to the nodes that read | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.42 | 131.81 |
-| [8c287f13b](https://github.com/AFK-surf/still.fail/commit/8c287f13b4f51267ccc7bcb47503e5ffa8fdfec6) ci: preview's iOS build says its unsigned IPA's up | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 131.81 |
