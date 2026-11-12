@@ -133,6 +133,59 @@ test "a click with ⇧ or ⌘ held is one there: their keys go down before it an
   assert_eq(kind_of_input(ins[2]), "up")
   assert_eq(text(Some(ins[3]), "code"), "ShiftLeft")
   assert_eq(kind_of_input(ins[3]), "up")
+  // each key's own event says what is held after it: ⇧'s down with it, its up without
+  assert_eq(number(Some(ins[0]), "mods"), mod_shift.to_double())
+  assert_eq(number(Some(ins[3]), "mods"), 0.0)
+  // ⌘ and ⇧: down one more each, up one fewer each
+  let from = r.inputs().length()
+  r.t.hold_mods(@ui.mod_cmd | @ui.mod_shift_key)
+  r.tap_at(0.5, 0.5)
+  r.t.hold_mods(0)
+  let keys = r.inputs()[from:].to_owned().filter(fn(j) { text(Some(j), "t") == "key" })
+  assert_eq(keys.map(fn(k) { text(Some(k), "code") }), ["MetaLeft", "ShiftLeft", "MetaLeft", "ShiftLeft"])
+  assert_eq(keys.map(fn(k) { kind_of_input(k) }), ["down", "down", "up", "up"])
+  assert_eq(keys.map(fn(k) { number(Some(k), "mods") }), [4.0, 12.0, 8.0, 0.0])
+  mouse_done(r)
+}
+
+///|
+test "a wheel with ⌘ or ⇧ held is one there: their keys go down before it and up after it; a pinch said as ⌃ alone goes bare" {
+  let r = mouse_rig()
+  r.live(others=[])
+  let (mx, my) = r.at(0.4, 0.4)
+  r.t.move_to(mx, my)
+  let from = r.inputs().length()
+  r.t.hold_mods(@ui.mod_cmd)
+  r.t.wheel_with(mx, my, 0.0, -120.0, @ui.wheel_mod_cmd)
+  r.t.hold_mods(0)
+  let zoom = r.inputs()[from:].to_owned()
+  assert_eq(zoom.map(fn(j) { text(Some(j), "t") }), ["key", "wheel", "key"])
+  assert_eq(text(Some(zoom[0]), "code"), "MetaLeft")
+  assert_eq(kind_of_input(zoom[0]), "down")
+  assert_eq(number(Some(zoom[0]), "mods"), mod_meta.to_double())
+  assert_eq(number(Some(zoom[1]), "dy"), -120.0)
+  assert_true(close_to(number(Some(zoom[1]), "x"), 0.4))
+  assert_eq(text(Some(zoom[2]), "code"), "MetaLeft")
+  assert_eq(kind_of_input(zoom[2]), "up")
+  assert_eq(number(Some(zoom[2]), "mods"), 0.0)
+  // ⇧: sideways on the station as here
+  let from = r.inputs().length()
+  r.t.hold_mods(@ui.mod_shift_key)
+  r.t.wheel_with(mx, my, 0.0, 60.0, @ui.wheel_mod_shift)
+  r.t.hold_mods(0)
+  let side = r.inputs()[from:].to_owned()
+  assert_eq(side.map(fn(j) { text(Some(j), "code") }), ["ShiftLeft", "", "ShiftLeft"])
+  // a host that says a trackpad's pinch is a wheel with ⌃, no key held: no ⌃ made of it
+  let from = r.inputs().length()
+  r.t.wheel_with(mx, my, 0.0, 30.0, @ui.wheel_mod_ctrl)
+  let bare = r.inputs()[from:].to_owned()
+  assert_eq(bare.map(fn(j) { text(Some(j), "t") }), ["wheel"])
+  // a pinch marked so: nothing, with ⌃ held too
+  let from = r.inputs().length()
+  r.t.hold_mods(@ui.mod_ctrl)
+  r.t.wheel_with(mx, my, 0.0, 30.0, @ui.wheel_mod_ctrl | @ui.wheel_mod_pinch)
+  r.t.hold_mods(0)
+  assert_eq(r.inputs().length(), from)
   mouse_done(r)
 }
 

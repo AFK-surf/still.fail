@@ -209,3 +209,44 @@ test "where pictures are drawn by the app, the station's pointer is drawn over t
   assert_false(screen_value_quiet(r.cursor_moved(0.25, 0.75)))
   screen_done(r.t)
 }
+
+///|
+test "a trackpad starts where the station's pointer is: at its first press and as it is chosen, never again as the station's lags behind it" {
+  let r = screen_rig()
+  r.state("live", others=[], more={
+    "kind": Json::string("desktop"),
+    "cursor": { "x": Json::number(0.25), "y": Json::number(0.75), "shape": Json::string("default") },
+  })
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.sess().pad(r.sess().src))
+  // its first press: a click where the station's pointer is, not the middle
+  r.tap_at(0.6, 0.2)
+  let first = r.inputs()
+  assert_eq(kind_of_input(first[0]), "down")
+  assert_true(close_to(number(Some(first[0]), "x"), 0.25))
+  assert_true(close_to(number(Some(first[0]), "y"), 0.75))
+  r.t.run_for(screen_double_tap_ms)
+  // the station says its pointer is elsewhere: the next press is where the trackpad left it
+  r.cursor_at(0.9, 0.1, "default")
+  let from = r.inputs().length()
+  r.tap_at(0.6, 0.2)
+  let again = r.inputs()[from:].to_owned()
+  assert_true(close_to(number(Some(again[0]), "x"), 0.25))
+  assert_true(close_to(number(Some(again[0]), "y"), 0.75))
+  r.t.run_for(screen_double_tap_ms)
+  // direct, then the trackpad chosen again: it starts where the station's pointer is now
+  r.tap_label("触控板")
+  assert_true(!r.sess().pad(r.sess().src))
+  r.tap_label("触控板")
+  assert_true(r.sess().pad(r.sess().src))
+  assert_eq(r.ui().pad.at(), (0.9, 0.1))
+  r.t.run_for(@sf.toast_ms)
+  let from = r.inputs().length()
+  r.tap_at(0.6, 0.2)
+  let chosen = r.inputs()[from:].to_owned()
+  assert_true(close_to(number(Some(chosen[0]), "x"), 0.9))
+  assert_true(close_to(number(Some(chosen[0]), "y"), 0.1))
+  r.t.run_for(screen_double_tap_ms)
+  screen_done(r.t)
+}

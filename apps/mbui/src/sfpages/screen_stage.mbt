@@ -43,13 +43,20 @@ fn ScreenUi::fit(self : ScreenUi) -> SRect {
 fn pointer_now(s : ScreenSess, u : ScreenUi) -> (Double, Double)? {
   if u.mouse.over {
     None
-  } else if s.driving() && s.pad(s.src) {
+  } else if pad_points(s, u) {
     Some(u.pad.at())
   } else if pointer_shape(s) == "none" {
     None
   } else {
     s.cursor()
   }
+}
+
+///|
+/// The trackpad's pointer is the one drawn: driving it as a trackpad, once the pad was moved or started where the
+/// station's pointer is (until then the station's own is, where the first press starts it).
+fn pad_points(s : ScreenSess, u : ScreenUi) -> Bool {
+  s.driving() && s.pad(s.src) && u.pad.placed
 }
 
 ///|
@@ -94,7 +101,7 @@ fn screen_pointer_layer(
         on: st,
         part,
         // (the station's: not the trackpad's, nor hidden under this device's mouse or on the screen)
-        follows: !u.mouse.over && !(s.driving() && s.pad(s.src)) && pointer_shape(s) != "none",
+        follows: !u.mouse.over && !pad_points(s, u) && pointer_shape(s) != "none",
       })
     None => None
   }
@@ -716,6 +723,9 @@ fn screen_gestures(
         g.presses += 1
         g.drives = s.driving()
         g.pad = g.drives && s.pad(s.src)
+        if g.pad && !u.pad.placed {
+          u.pad.start_at(s.cursor())
+        }
         g.mode = 0
         g.sx = d.x0 - ox
         g.sy = d.y0 - oy
@@ -1000,7 +1010,7 @@ fn mouse_drive_new() -> MouseDrive {
 /// What a mouse did on the stage since the last frame, as the screen takes it (a mouse): its
 /// moves over the picture (the frame's last), its primary button down where it is, moved held (past the picture's
 /// edge, at its edge) and up, its secondary button a right click, its wheel (in pixels, not a pinch); with ⇧ ⌃ ⌥ ⌘
-/// held as a button goes down, their keys round it. A press on the stage, a picture's letterbox too, gives it the
+/// held as a button goes down or the wheel turns, their keys round it. A press on the stage, a picture's letterbox too, gives it the
 /// keyboard. Only while driving it: only looking, nothing goes.
 fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher : String) -> Unit {
   let m = u.mouse
@@ -1094,11 +1104,18 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
     }
     _ => ()
   }
-  // the wheel, where the mouse is (a trackpad's pinch zooms nothing there)
+  // the wheel, where the mouse is, the keys held round it (⌃ or ⌘ to zoom, ⇧ sideways); a trackpad's pinch zooms nothing
+  // there. The keys are the keyboard's, not the wheel's: a host may say a pinch is a wheel with ⌃ and not mark it one.
   let (dx, dy, wmods) = @ui.wheel_of(c, stage)
   if driving && (dx != 0.0 || dy != 0.0) && (wmods & @ui.wheel_mod_pinch) == 0 {
     match on_frame(px, py, false) {
-      Some(at) => send(wheel_input(at, dx, dy))
+      Some(at) => {
+        // (those a press still held went down with already go up with it)
+        let mods = mods_of_held(@ui.mods_held()) & (if m.sent_down { m.mods } else { 0 }).lnot()
+        mods_round(send, mods, "down")
+        send(wheel_input(at, dx, dy))
+        mods_round(send, mods, "up")
+      }
       None => ()
     }
   }
