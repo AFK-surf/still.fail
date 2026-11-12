@@ -378,16 +378,14 @@ function lacking(access: J): string | null {
   return missing.length > 0 ? unavailable(missing) : null;
 }
 
-/// The chat a session is in among the viewer's chats of the station (its `chatRows`): the session's own chat over one it
-/// only takes part in; null when the viewer has none with it (archived, another workspace's, not read yet).
+/// The chat a session is in among the viewer's chats of the station (its listed ones): the session's own chat over one it
+/// only takes part in (data.ts chatOfAgent); null when the viewer has none with it (archived, another workspace's, not
+/// read yet).
 export function chatOf(inner: Inner, station: string, session: string): { id: string; title: string; link: string } | null {
-  const rows = inner.data.shared({ topic: "chatRows", station });
-  if (!Array.isArray(rows)) return null;
-  const has = (row: J) => Array.isArray(get(row, "agents")) && (get(row, "agents") as J[]).some((a) => get(a, "key") === session);
-  const row = rows.find((r) => get(r, "session") === session) ?? rows.find(has);
-  const id = get(row, "id");
+  const row = inner.data.chatNamedOfAgent(station, session);
+  const id = row?.id;
   if (typeof id !== "string" || id === "") return null;
-  const title = typeof get(row, "title") === "string" && get(row, "title") !== "" ? (get(row, "title") as string) : t("core-views.screen.someChat");
+  const title = typeof row?.title === "string" && row.title !== "" ? row.title : t("core-views.screen.someChat");
   const addr = StationAddr.parse(station);
   return { id, title, link: `/w/${encode(addr.workspace)}/s/${encode(addr.station)}/chats/${encode(id)}` };
 }

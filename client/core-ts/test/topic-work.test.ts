@@ -18,7 +18,10 @@
 //   next 8: one there must still be over the bar (else it comes out of the table) and read no more than said.
 // - GROWS: with each thing held three times, what it reads grows at most 1.2 times what it sends grows (read(3) ÷
 //   read(1), where read(1) is taken as 8 KB at least, ≤ 1.2 × max(1, sent(3) ÷ sent(1))), or reads 8 KB at most. Those
-//   over now are in `GROWS` by name and knob, each with its ratio rounded up to the next 0.5, the same rule.
+//   over now are in `GROWS` by name and knob, each with what it reads at that knob in KB rounded up to the next 8: one
+//   there must still be over the ratio (else it comes out of the table) and read no more than said there; a failure
+//   says its ratio. (Its reading at the knob, not the ratio: a fixed part of what it reads taken away raises the ratio
+//   of what is left, and the table only falls.)
 // The tables only fall. A way of asking the rig cannot answer as a device does is in `NOT_HELD` with why; every name of
 // `ASKED` is measured or there. On failure, and with TOPIC_WORK_PRINT=1, each name's numbers at each size and the five
 // statements that read most at k = 1 and at the knob it fails at; with TOPIC_WORK_PRINT=1, the tables as they would be.
@@ -67,7 +70,7 @@ const OVER_READ: Record<string, number> = {
   "stationPart logins": 32,
   "stationPart updates": 32,
   chats: 80,
-  "chats mine": 856,
+  "chats mine": 80,
   profiles: 72,
   profile: 72,
   "profile key": 72,
@@ -78,39 +81,28 @@ const OVER_READ: Record<string, number> = {
   newChat: 40,
   pick: 144,
   settings: 144,
-  chat: 240,
-  "chat compact": 240,
-  "chatJobs compact": 240,
-  "chatJobs summary": 240,
+  "chatJobs compact": 48,
+  "chatJobs summary": 48,
   agentCard: 48,
   usage: 304,
-  fleet: 1528,
-  railCard: 824,
-  "railCard usage": 352,
+  fleet: 320,
+  railCard: 344,
+  "railCard usage": 232,
   workspaceMarks: 344,
-  longJobs: 248,
-  archive: 368,
-  search: 184,
+  search: 176,
   chatSearch: 128,
   chatOutline: 672,
   "driveBrowse phone": 40,
   "driveBrowse columns": 40,
   vaults: 192,
   vaultItems: 184,
-  screens: 192,
-  chatLetters: 224,
-  chatThings: 248,
-  "chatThings q": 248,
-  "start 小屏/waited": 744,
-  "start 小屏/idle": 1320,
-  "start 大屏/waited": 704,
-  "start 大屏/idle": 1280,
-  "switch 小屏/waited": 320,
-  "switch 小屏/idle": 984,
-  "switch 大屏 to 新对话/waited": 352,
-  "switch 大屏 to 新对话/idle": 944,
-  "switch 大屏 to a chat/waited": 368,
-  "switch 大屏 to a chat/idle": 968,
+  chatThings: 48,
+  "chatThings q": 48,
+  "start 小屏/waited": 512,
+  "start 小屏/idle": 512,
+  "start 大屏/waited": 472,
+  "start 大屏/idle": 472,
+  "switch 大屏 to 新对话/waited": 128,
   "place profiles/waited": 72,
   "place profiles/idle": 72,
   "place connects/waited": 144,
@@ -119,73 +111,51 @@ const OVER_READ: Record<string, number> = {
   "place vault/idle": 192,
   "place usage/waited": 304,
   "place usage/idle": 304,
-  "place archive/waited": 360,
-  "place archive/idle": 360,
 };
 /// The same, asked again.
-const OVER_READ_AGAIN: Record<string, number> = {
-  longJobs: 48,
-};
-/// Those whose reading grows faster than what they send with a knob, by name (`<name> again` warm) and knob: the ratio,
-/// rounded up to a multiple of 0.5.
+const OVER_READ_AGAIN: Record<string, number> = {};
+/// Those whose reading grows faster than what they send with a knob, by name (`<name> again` warm) and knob: what each
+/// reads with that thing held three times, KB rounded up to a multiple of 8.
 const GROWS: Record<string, Partial<Record<Knob, number>>> = {
-  "chats mine": { chats: 2.5, stations: 2.5 },
-  connect: { chats: 3 },
-  chat: { chats: 3 },
-  "chat compact": { chats: 3 },
-  "chatJobs compact": { chats: 3 },
-  "chatJobs summary": { chats: 3 },
-  fleet: { chats: 3, stations: 3.5 },
-  railCard: { chats: 3, stations: 3 },
-  longJobs: { chats: 2.5 },
-  archive: { chats: 3, stations: 3 },
-  screens: { chats: 3 },
-  chatLetters: { chats: 3 },
-  chatThings: { chats: 2.5 },
-  "chatThings q": { chats: 2.5 },
-  "chat six pages": { chats: 3 },
-  "chat compact six pages": { chats: 3 },
-  "start 小屏/waited": { chats: 2.5, stations: 2.5 },
-  "start 小屏/idle": { chats: 3, stations: 3 },
-  "start 大屏/waited": { chats: 2.5 },
-  "start 大屏/idle": { chats: 3, stations: 3 },
-  "switch 小屏/waited": { chats: 2.5 },
-  "switch 小屏/idle": { chats: 3, stations: 3 },
-  "switch 大屏 to 新对话/waited": { chats: 2.5 },
-  "switch 大屏 to 新对话/idle": { chats: 3, stations: 3 },
-  "switch 大屏 to a chat/waited": { chats: 2 },
-  "switch 大屏 to a chat/idle": { chats: 3, stations: 3 },
-  "place archive/waited": { chats: 3.5, stations: 3.5 },
-  "place archive/idle": { chats: 3.5, stations: 3.5 },
-  "stationPart archiving": { profiles: 2 },
-  "stationPart automaticDecisions": { profiles: 2 },
-  "stationPart machineLogins": { profiles: 2 },
-  "stationPart logins": { profiles: 2 },
-  "stationPart updates": { profiles: 2 },
-  profiles: { profiles: 3, stations: 3.5 },
-  profile: { profiles: 3, stations: 3.5 },
-  "profile key": { profiles: 3, stations: 3.5 },
-  connects: { profiles: 2 },
-  "connects mine": { profiles: 2 },
-  newChat: { profiles: 2 },
-  pick: { profiles: 2, stations: 3 },
-  settings: { profiles: 2, stations: 3 },
-  history: { profiles: 2 },
-  agentCard: { profiles: 2 },
-  usage: { profiles: 1.5 },
-  "place profiles/waited": { profiles: 3, stations: 3.5 },
-  "place profiles/idle": { profiles: 3, stations: 3.5 },
-  "place connects/waited": { profiles: 2 },
-  "place connects/idle": { profiles: 2 },
-  "place usage/waited": { profiles: 1.5 },
-  "place usage/idle": { profiles: 1.5 },
-  chatRow: { people: 1.5 },
-  "railCard usage": { stations: 2.5 },
-  "search again": { stations: 1.5 },
-  vaults: { stations: 2.5 },
-  vaultItems: { stations: 2.5 },
-  "place vault/waited": { stations: 2.5 },
-  "place vault/idle": { stations: 2.5 },
+  connect: { chats: 648 },
+  railCard: { chats: 1016, stations: 1024 },
+  "start 小屏/waited": { chats: 1176, stations: 1376 },
+  "start 小屏/idle": { chats: 1176, stations: 1376 },
+  "start 大屏/waited": { chats: 1136, stations: 1192 },
+  "start 大屏/idle": { chats: 1136, stations: 1192 },
+  "stationPart archiving": { profiles: 56 },
+  "stationPart automaticDecisions": { profiles: 56 },
+  "stationPart machineLogins": { profiles: 56 },
+  "stationPart logins": { profiles: 56 },
+  "stationPart updates": { profiles: 56 },
+  profiles: { profiles: 200, stations: 216 },
+  profile: { profiles: 200, stations: 216 },
+  "profile key": { profiles: 200, stations: 216 },
+  connects: { profiles: 264 },
+  "connects mine": { profiles: 264 },
+  newChat: { profiles: 64 },
+  pick: { profiles: 264, stations: 416 },
+  settings: { profiles: 264, stations: 416 },
+  history: { profiles: 72 },
+  agentCard: { profiles: 72 },
+  usage: { profiles: 432 },
+  fleet: { profiles: 448, stations: 952 },
+  "switch 小屏/idle": { profiles: 296, stations: 368 },
+  "switch 大屏 to 新对话/waited": { profiles: 152 },
+  "switch 大屏 to 新对话/idle": { profiles: 160 },
+  "place profiles/waited": { profiles: 200, stations: 216 },
+  "place profiles/idle": { profiles: 200, stations: 216 },
+  "place connects/waited": { profiles: 272 },
+  "place connects/idle": { profiles: 272 },
+  "place usage/waited": { profiles: 424 },
+  "place usage/idle": { profiles: 424 },
+  chatRow: { people: 16 },
+  archive: { people: 24 },
+  "railCard usage": { stations: 696 },
+  vaults: { stations: 384 },
+  vaultItems: { stations: 376 },
+  "place vault/waited": { stations: 384 },
+  "place vault/idle": { stations: 384 },
 };
 
 // ── measuring ──
@@ -221,7 +191,6 @@ function byName(f: Found): Map<string, Measured> {
 const KB = 1024;
 const kb = (n: number) => n / KB;
 const up8 = (n: number) => Math.max(8, Math.ceil(kb(n) / 8) * 8);
-const upHalf = (r: number) => Math.ceil(r * 2) / 2;
 const overRead = (m: Measured) => m.read > Math.max(READ_PER_SENT * m.sent, READ_FREE_KB * KB);
 const growth = (one: Measured, three: Measured) => three.read / Math.max(one.read, READ_FREE_KB * KB);
 const growsBar = (one: Measured, three: Measured) => GROWS_SLACK * Math.max(1, one.sent > 0 ? three.sent / one.sent : 1);
@@ -293,12 +262,13 @@ test("what answering each way the app asks reads follows what it sends, not how 
       if (m3 === undefined) continue;
       const over = growsOver(m1, m3);
       const r = growth(m1, m3);
-      if (over) (wouldGrow[name] ??= {})[knob] = upHalf(r);
+      if (over) (wouldGrow[name] ??= {})[knob] = up8(m3.read);
       const said_ = GROWS[name]?.[knob];
+      const grew = `× ${r.toFixed(2)} (${kb(m1.read).toFixed(1)} → ${kb(m3.read).toFixed(1)} KB) while what it sends grows × ${(m1.sent > 0 ? m3.sent / m1.sent : 1).toFixed(2)}`;
       if (said_ === undefined) {
-        if (over) fail(name, `with ${knob} × 3 reads × ${r.toFixed(2)} (${kb(m1.read).toFixed(1)} → ${kb(m3.read).toFixed(1)} KB) while what it sends grows × ${(m1.sent > 0 ? m3.sent / m1.sent : 1).toFixed(2)}`, knob);
+        if (over) fail(name, `with ${knob} × 3 reads ${grew}`, knob);
       } else if (!over) fail(name, `no longer grows past what it sends with ${knob}: take it out of GROWS`, knob);
-      else if (r > said_) fail(name, `with ${knob} × 3 reads × ${r.toFixed(2)}, more than the ${said_} said`, knob);
+      else if (kb(m3.read) > said_) fail(name, `with ${knob} × 3 reads ${kb(m3.read).toFixed(1)} KB, more than the ${said_} said (${grew})`, knob);
     }
   }
   for (const [name, knobs] of Object.entries(GROWS)) if (!one.has(name)) fail(name, `in GROWS (${Object.keys(knobs).join(", ")}), measured nowhere`);

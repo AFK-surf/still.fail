@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
 import { fleetView, spentOf } from "../src/views/fleet.ts";
+import { rowState } from "../src/present.ts";
+import { localDay } from "../src/views/usage.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -10,11 +12,20 @@ const agent = (running: boolean): J => ({ key: "a", runtime: "claude", model: "c
 const row = (id: string, ...agents: J[]): J => ({ id, session: `s-${id}`, agents });
 // a chat at rest, its last letter written `at`
 const quiet = (id: string, at: number): J => ({ ...row(id, agent(false)), lastActiveAt: at });
+/// A station's chats as the card reads them (views.ts fleet: their columns and `chat_agent`), of its rows: on 10/26 UTC.
+const listed = (rows: J[]) => ({
+  today: rows.some((r) => typeof r.lastActiveAt === "number" && localDay(r.lastActiveAt, 0) === "2026-10-26"),
+  running: rows.filter((r) => rowState(r.agents) === "run").map((r) => String(r.id)),
+  chatOf: (k: string) => {
+    const r = rows.find((x) => x.session === k) ?? rows.find((x) => x.agents.some((a: J) => a.key === k));
+    return r === undefined ? null : String(r.id);
+  },
+});
 // an account (the profiles view's item): its kind, and the profiles it is on each station
 const account = (key: string, group: string, ...on: [string, string][]): J => ({ key, group, members: on.map(([station, profileId]) => ({ station, profileId })) });
 // a station's calls on a day, of a profile
 const call = (day: string, profile: string, input: number, output: number, cost: number | null, more: J = {}): J => ({ day, profile, calls: 1, input, cacheRead: 0, cacheWrite: 0, output, cost, ...more });
-const at = (station: string, calls: J[]): J => ({ station, online: true, rows: [], archived: [], jobs: [], runs: [], calls });
+const at = (station: string, calls: J[]): J => ({ station, online: true, ...listed([]), archived: [], jobs: [], runs: [], calls });
 
 test("the card shared says, by kind of account, how many accounts the chats used over the last 7 days and, model by model, their tokens and what they would cost; an account on two stations once", () => {
   const profiles = [
@@ -93,18 +104,18 @@ test("the card shared says how many chats are at work now, and on how many stati
   const task = (session: string, more: J = {}): J => ({ id: session, session: `remote:w:${session}`, state: "running", ...more });
   const v = fleetView(
     [
-      { station: "w/a", online: true, rows: [row("1", agent(true)), row("2", agent(true), agent(false)), row("3", agent(false))], archived: [on(25, 9), on(26, 1), on(1, 3)], jobs: [], runs: [], calls: [] },
-      { station: "w/b", online: true, rows: [row("4", agent(true))], archived: [on(25, 20), on(26, 5), on(26, 6)], jobs: [], runs: [], calls: [] },
+      { station: "w/a", online: true, ...listed([row("1", agent(true)), row("2", agent(true), agent(false)), row("3", agent(false))]), archived: [on(25, 9), on(26, 1), on(1, 3)], jobs: [], runs: [], calls: [] },
+      { station: "w/b", online: true, ...listed([row("4", agent(true))]), archived: [on(25, 20), on(26, 5), on(26, 6)], jobs: [], runs: [], calls: [] },
       // down: none of what it last said counted
-      { station: "w/c", online: false, rows: [row("5", agent(true))], archived: [on(26, 3)], jobs: [], runs: [{ at: on(26, 1), session: "remote:w:a:s-1" }], calls: [] },
+      { station: "w/c", online: false, ...listed([row("5", agent(true))]), archived: [on(26, 3)], jobs: [], runs: [{ at: on(26, 1), session: "remote:w:a:s-1" }], calls: [] },
       // today's chats, at rest: one written in today (e), one archived today (g); f's quiet since yesterday
-      { station: "w/e", online: true, rows: [quiet("6", on(26, 3))], archived: [], jobs: [], runs: [], calls: [] },
-      { station: "w/f", online: true, rows: [quiet("7", on(25, 22))], archived: [], jobs: [], runs: [], calls: [] },
-      { station: "w/g", online: true, rows: [quiet("8", on(25, 23))], archived: [on(26, 2)], jobs: [], runs: [], calls: [] },
+      { station: "w/e", online: true, ...listed([quiet("6", on(26, 3))]), archived: [], jobs: [], runs: [], calls: [] },
+      { station: "w/f", online: true, ...listed([quiet("7", on(25, 22))]), archived: [], jobs: [], runs: [], calls: [] },
+      { station: "w/g", online: true, ...listed([quiet("8", on(25, 23))]), archived: [on(26, 2)], jobs: [], runs: [], calls: [] },
       {
         station: "w/d",
         online: true,
-        rows: [],
+        ...listed([]),
         archived: [],
         jobs: [task("a:s-3"), task("a:s-1"), task("a:s-9", { queued: true }), task("a:s-3", { state: "exited" }), task("a:s-3", { watch: true }), task("c:s-5")],
         runs: [],
@@ -114,7 +125,7 @@ test("the card shared says how many chats are at work now, and on how many stati
       {
         station: "w/h",
         online: true,
-        rows: [],
+        ...listed([]),
         archived: [],
         jobs: [],
         runs: [[1, "s-1"], [25, "s-1"], [25, "s-1"], [26, "s-1"], [26, "s-3"]].map(([d, k], i) => ({ at: on(d as number, i), session: `remote:w:a:${k}` })),

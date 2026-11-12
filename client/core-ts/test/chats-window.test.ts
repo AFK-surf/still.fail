@@ -116,10 +116,10 @@ test("a list of 420 chats on 5 stations told a window of 20 makes 20 rows and re
   assert.equal(rowsOf(first.value).length, 20);
   assert.equal(first.value.more > 0, true, "it says it has more");
   assert.ok(spent.rows <= 20, `its first answer made ${spent.rows} rows`);
-  assert.ok(spent.rowJson <= 21, `its first answer read ${spent.rowJson} records' JSON`);
-  // (the rest of its stations' rows loaded behind it, none of them made)
+  assert.ok(spent.rowJson <= 20, `its first answer read ${spent.rowJson} records' JSON`);
+  // (and nothing more of its stations' rows: the window is all a list reads, db/chat-reads.ts)
   await t.host.time.pass(100);
-  assert.ok(NAMES.every((name) => t.data.loaded(rows(`ws/${name}`))), "its stations' rows loaded behind it");
+  assert.ok(NAMES.every((name) => !t.data.loaded(rows(`ws/${name}`))), "none of its stations' rows loaded");
   assert.equal(rowsOf(valueOf(t, ALL)).length, 20);
   assert.equal(valueOf(t, ALL).more, 400);
   assert.ok(work.rows - from.rows <= 20, `the list made ${work.rows - from.rows} rows`);
@@ -185,7 +185,7 @@ test("a window raised from 20 to 40 makes the 20 rows added and sends them alone
   assert.equal(rowsOf(now).length, 40);
   assert.equal(now.more, 380);
   // (no list read them before, so none is kept beside its record, db/account.ts `chat_row`: made as they are read)
-  assert.deepEqual([work.rows - made, work.rowsKept - kept], [19, 0], "the rows added made, no other: the first of them made with the window's");
+  assert.deepEqual([work.rows - made, work.rowsKept - kept], [20, 0], "the rows added made, no other");
   rowsOf(now).slice(0, 20).forEach((r, i) => assert.equal(r, out[i], `row ${i} the same object`));
   const grew = messages.get(1)!.slice(sent);
   assert.equal(grew.length, 1, "one message");

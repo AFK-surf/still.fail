@@ -406,6 +406,138 @@ export function ensureListRows(sql: Sql): void {
   }
 }
 
+/// How this core derives a chat record's columns beyond those every core writes (CHAT_COLUMNS, `state`): another number
+/// whenever one of them would come out otherwise of the same record, so that rows derived before are derived again.
+export const CHAT_MADE = 1;
+
+/// The columns of a chat's record that SQLite makes of its JSON (`j`, an expression of it), as the record is put and as a
+/// row another core put is derived again: whether it is hidden; its title; whether it is marked archived, and when
+/// (archive.ts: the mark's `at`, else its last activity; null where that is not a number). What reads by them reads what
+/// the JS reading the record would (views.ts, archive.ts, fleet.ts): list-rows.test.ts holds each to it. What only the
+/// core says of a record (`state`, `watched`: what its agents do, whether one keeps watch) is the core's (Derive).
+export const CHAT_COLUMNS: [name: string, of: (j: string) => string][] = [
+  ["hidden", (j) => `(json_type(${j}, '$.hidden') IS 'true')`],
+  ["title", (j) => `(CASE json_type(${j}, '$.title') WHEN 'text' THEN json_extract(${j}, '$.title') END)`],
+  ["archived_mark", (j) => `(json_type(${j}, '$.archived') IS 'object')`],
+  ["archived_at", (j) => `(CASE WHEN json_type(${j}, '$.archived') IS NOT 'object' THEN NULL
+    WHEN coalesce(json_type(${j}, '$.archived.at'), 'null') = 'null' THEN (CASE WHEN json_type(${j}, '$.lastActiveAt') IN ('integer', 'real') THEN json_extract(${j}, '$.lastActiveAt') END)
+    WHEN json_type(${j}, '$.archived.at') IN ('integer', 'real') THEN json_extract(${j}, '$.archived.at') END)`],
+];
+
+/// The chats each agent's session is among the agents of (its row's `agents[].key`), listed or archived: what finds the
+/// chat a session takes part in without reading the station's rows (screens.ts chatOf, views.ts #ranFrom, fleet.ts).
+/// Kept by triggers on `chat`, as `chat_row` is, so whoever writes a record (an older core too) keeps it.
+const chatAgentsOf = (row: "new" | "old") => `INSERT OR IGNORE INTO chat_agent (station, session, archived, id)
+        SELECT ${row}.station, json_extract(a.value, '$.key'), ${row}.archived, ${row}.id
+        FROM json_each(CASE json_type(${row}.json, '$.agents') WHEN 'array' THEN ${row}.json ELSE '{"agents":[]}' END, '$.agents') AS a
+        WHERE json_type(CASE a.type WHEN 'object' THEN a.value ELSE '{}' END, '$.key') = 'text';`;
+const chatTriggers = (): [string, string][] => [
+  ["chat_agent_put", `CREATE TRIGGER chat_agent_put AFTER INSERT ON chat
+      BEGIN
+        DELETE FROM chat_agent WHERE station = new.station AND archived = new.archived AND id = new.id;
+        ${chatAgentsOf("new")}
+      END`],
+  ["chat_agent_set", `CREATE TRIGGER chat_agent_set AFTER UPDATE OF station, archived, id, json ON chat
+      BEGIN
+        DELETE FROM chat_agent WHERE station = old.station AND archived = old.archived AND id = old.id;
+        ${chatAgentsOf("new")}
+      END`],
+  ["chat_agent_drop", `CREATE TRIGGER chat_agent_drop AFTER DELETE ON chat
+      BEGIN
+        DELETE FROM chat_agent WHERE station = old.station AND archived = old.archived AND id = old.id;
+      END`],
+  // (a record's JSON changed in place: never by this core's writer, which puts it whole; by another core, its columns
+  // made of it again at once, and it marked to be derived again at the next open)
+  ["chat_made_set", `CREATE TRIGGER chat_made_set AFTER UPDATE OF json ON chat
+      BEGIN
+        UPDATE chat SET made = NULL, ${CHAT_COLUMNS.map(([c, of]) => `${c} = ${of("new.json")}`).join(", ")} WHERE rowid = new.rowid;
+      END`],
+];
+
+/// What deriving a database's chat columns again took at its open (ensureChatColumns): the rows SQLite derived, those
+/// whose JSON was read here (`state`), the bytes of that JSON. Zero where nothing was to be derived.
+export type ChatColumnsMade = { rows: number; read: number; bytes: number };
+
+/// The columns of a chat's record that only this core can say (`state`, `watched`: through Derive) or that SQLite
+/// makes of its JSON (CHAT_COLUMNS), each row marked with the derivation it was made by (`made`, CHAT_MADE), and the
+/// chats each session takes part in (`chat_agent`). This core's writer puts them with every record (account.ts
+/// #putChatRow). An older core's write puts its own columns only, `made` left NULL; and every core opens its database
+/// alone (locking_mode EXCLUSIVE, every host), so what an older core wrote is all there before this one reads anything:
+/// at every open the rows whose `made` is not CHAT_MADE are derived again, SQLite making its columns itself (no JSON
+/// crosses to the core for them), the core reading only those rows' agents for `state` and `watched` (present.rowState
+/// and present.watches read no more). Whether there are any is asked of
+/// the index on `made` alone. `chat_agent` is kept by triggers (SQL says all of it), made again whole where a trigger
+/// was missing or not this core's. Made where missing at every open, as `said`.
+export function ensureChatColumns(sql: Sql, derive: (agents: unknown) => { state: string | null; watched: boolean }): ChatColumnsMade {
+  sql.exec("BEGIN IMMEDIATE");
+  try {
+    const has = new Set(sql.all("PRAGMA table_info(chat)").map((r) => String(r[1])));
+    for (const column of ["state", "watched", "made", ...CHAT_COLUMNS.map(([c]) => c)]) if (!has.has(column)) sql.exec(`ALTER TABLE chat ADD COLUMN ${column}`);
+    // The indexes the declared reads are found by (chat-reads.ts; chat-plans.test.ts holds each read's plan to its
+    // bound): `chat_listed` the window's counts and the chats at work, of it alone; `chat_marks` the marked rows, of it
+    // alone (in the place of `chat_marked`, which held their stations only); `chat_client` a chat by the key it was
+    // asked for here by; `chat_archive` the archive's newest in its order, across stations; `chat_archived_at` the
+    // archive's counts, of it alone. Partial, each holds only the rows its reads are of; one read of an index alone has
+    // every column its statement names in it, those of the index's own WHERE too (SQLite takes it as covering only so),
+    // and is searched by more terms than `chat_ord` (`chat_archived_at`'s `archived_mark`: else the device's SQLite
+    // took `chat_ord`, and the table's rows).
+    sql.exec(`
+      CREATE INDEX IF NOT EXISTS chat_made ON chat (made);
+      CREATE INDEX IF NOT EXISTS chat_archived_at ON chat (station, archived, archived_mark, archived_at DESC, thread, session) WHERE archived_mark = 1;
+      CREATE INDEX IF NOT EXISTS chat_archive ON chat (archived, coalesce(archived_at, 0) DESC) WHERE archived_mark = 1;
+      CREATE INDEX IF NOT EXISTS chat_listed ON chat (station, archived, state, mine, hidden, watched, last_active, thread, session, id) WHERE archived = 0;
+      CREATE INDEX IF NOT EXISTS chat_marks ON chat (station, archived, id, tone, asks) WHERE archived = 0 AND (tone IS NOT NULL OR asks = 1);
+      DROP INDEX IF EXISTS chat_marked;
+      CREATE INDEX IF NOT EXISTS chat_client ON chat (station, client_key) WHERE client_key IS NOT NULL;
+      CREATE TABLE IF NOT EXISTS chat_agent (station TEXT NOT NULL, session TEXT NOT NULL, archived INTEGER NOT NULL, id TEXT NOT NULL, PRIMARY KEY (station, session, archived, id)) WITHOUT ROWID;
+      CREATE INDEX IF NOT EXISTS chat_agent_row ON chat_agent (station, archived, id);
+    `);
+    const had = new Map(sql.all("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'chat'").map((r) => [String(r[0]), String(r[1])]));
+    let remade = false;
+    for (const [name, statement] of chatTriggers()) {
+      const was = had.get(name);
+      if (was !== undefined && spaced(was) === spaced(statement)) continue;
+      if (was !== undefined) sql.exec(`DROP TRIGGER ${name}`);
+      sql.exec(statement);
+      remade = true;
+    }
+    if (remade) {
+      sql.exec("DELETE FROM chat_agent");
+      sql.exec(`INSERT OR IGNORE INTO chat_agent (station, session, archived, id)
+        SELECT c.station, json_extract(a.value, '$.key'), c.archived, c.id
+        FROM chat AS c, json_each(CASE json_type(c.json, '$.agents') WHEN 'array' THEN c.json ELSE '{"agents":[]}' END, '$.agents') AS a
+        WHERE json_type(CASE a.type WHEN 'object' THEN a.value ELSE '{}' END, '$.key') = 'text'`);
+    }
+    const out: ChatColumnsMade = { rows: 0, read: 0, bytes: 0 };
+    // (by the index on `made` alone: no row read)
+    const unmade = "made IS NULL OR made < ? OR made > ?";
+    const any = sql.all(`SELECT 1 FROM chat WHERE made IS NULL UNION ALL SELECT 1 FROM chat WHERE made < ? UNION ALL SELECT 1 FROM chat WHERE made > ? LIMIT 1`, [CHAT_MADE, CHAT_MADE]).length > 0;
+    if (any) {
+      out.rows = sql.run(`UPDATE chat SET ${CHAT_COLUMNS.map(([c, of]) => `${c} = ${of("chat.json")}`).join(", ")} WHERE ${unmade}`, [CHAT_MADE, CHAT_MADE]);
+      for (;;) {
+        // (of each its agents alone, as SQLite reads them of its JSON)
+        const page = sql.all(`SELECT rowid, json_extract(json, '$.agents') FROM chat WHERE ${unmade} LIMIT 256`, [CHAT_MADE, CHAT_MADE]);
+        if (page.length === 0) break;
+        for (const [rowid, agents] of page) {
+          out.read++;
+          out.bytes += typeof agents === "string" ? agents.length : 0;
+          const d = derive(typeof agents === "string" ? JSON.parse(agents) : agents);
+          sql.run("UPDATE chat SET state = ?, watched = ?, made = ? WHERE rowid = ?", [d.state, d.watched ? 1 : 0, CHAT_MADE, rowid as number]);
+        }
+      }
+    }
+    sql.exec("COMMIT");
+    return out;
+  } catch (e) {
+    try {
+      sql.exec("ROLLBACK");
+    } catch {
+      // Rolled back already.
+    }
+    throw e;
+  }
+}
+
 /// A thread's letters (what its agents and other chats' wrote each other), item by item: their own log beside its
 /// entries (the station's GET /threads/:id/letters, numbered from 1 in it). Made where missing at every open, as `said`.
 export function ensureLetters(sql: Sql): void {

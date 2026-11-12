@@ -407,6 +407,8 @@ if part ts; then
   if touches "$ts_core|^apps/mbui/src/sfkept/kept\\.mbt$"; then prep core deps client/core-ts; step "kept core answers" after core node client/core-ts/scripts/kept-answers.ts --check; fi
   # What makes the views writes only on what it made, never on what it was given (「谁能改什么」).
   if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
+  # Nothing that answers the app reads a station's chats whole: the chat table is read by what a view shows.
+  if touches '^client/core-ts/(src|scripts)/'; then step "core reads no chat list whole" after core node client/core-ts/scripts/whole-lists.ts --check; fi
 
 fi
 

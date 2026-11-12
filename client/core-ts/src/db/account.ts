@@ -20,7 +20,8 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureLetters, ensureListRows, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, versionOf } from "./schema.ts";
+import { CHAT_COLUMNS, CHAT_MADE, type ChatColumnsMade, ensureChatColumns, ensureFilesKept, ensureKept, ensureLetters, ensureListRows, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, versionOf } from "./schema.ts";
+import { CHAT_READS, type ChatRead } from "./chat-reads.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -33,7 +34,10 @@ type J = any;
 
 /// What the core finds a chat row by that only it can say (views/marks.ts, decisions.ts): how urgent the row is for
 /// its person, whether it asks something.
-export type Derive = { tone(row: J): string | null; asks(row: J): boolean };
+/// `state`: what its agents are doing as its list's row says it (present.rowState: "block", "run", "failed", or null), of its
+/// `agents` alone (a row derived again at open is given those alone: schema.ts ensureChatColumns); `watched`, whether one
+/// of its agents keeps watch (present.watches), of them too.
+export type Derive = { tone(row: J): string | null; asks(row: J): boolean; state(row: J): string | null; watched(row: J): boolean };
 
 /// How this core judges whether it can read a station's overview (views.ts OVERVIEW_FIT, judged as the station's page
 /// would show it): `shapes`, the id of what judges it, which a verdict is kept by (`station_fit`; made as it is first
@@ -305,7 +309,16 @@ const MD_SHOWN_EVERY = 86_400_000;
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
 
 /// The chat columns of a row, and its JSON without them.
-type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number };
+type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number; state: string | null; watched: number };
+
+/// A chat row a declared read found (chat-reads.ts): its keys, the read's own columns after them (`cols`, from the
+/// fourth), and its record where the read asked for it (read by its key, from the cache where held).
+export type ChatFound = { station: string; archived: boolean; id: string; cols: SqlRow; record: J | undefined };
+
+/// The statement that puts a chat's record: the columns every core writes, `state` and `made` this core's, and those
+/// SQLite makes of its JSON (schema.ts CHAT_COLUMNS), of the JSON given last.
+const PUT_CHAT = `INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, state, watched, made, json, ${CHAT_COLUMNS.map(([c]) => c).join(", ")})
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${CHAT_MADE}, r.json, ${CHAT_COLUMNS.map(([, of]) => of("r.json")).join(", ")} FROM (SELECT ? AS json) AS r`;
 
 
 /// The logs a station's channels are held in (station/channel-kinds.ts): a thread's entries, its letters (their own log
@@ -382,6 +395,8 @@ export class AccountDb {
   /// Told when a burst could not be written for want of room (true), and once one could again (false).
   onFull: (full: boolean, error: string | null) => void = () => {};
   #full = false;
+  /// What deriving the chat columns again took as this database was opened (schema.ts ensureChatColumns).
+  chatColumnsMade: ChatColumnsMade | null = null;
 
   constructor(sub: string, name: string, sql: Sql, runner: Runner, derive: Derive) {
     this.sub = sub;
@@ -413,6 +428,12 @@ export class AccountDb {
         this.#listRowsKept = true;
       } catch {
         // No room to make it: a list's rows are made as they are read, this time.
+      }
+      try {
+        this.chatColumnsMade = ensureChatColumns(sql, (agents) => ({ state: derive.state({ agents }), watched: derive.watched({ agents }) }));
+      } catch (e) {
+        // No room to derive them: the rows another core wrote are read by the columns they have, this time.
+        console.error("still.fail core: a chat's columns could not be derived:", e instanceof Error ? e.message : String(e));
       }
       try {
         if (ensureSlackSaid(sql)) this.#fillSlackSaid();
@@ -1107,6 +1128,8 @@ export class AccountDb {
       running,
       tone: this.#derive.tone(row),
       asks: this.#derive.asks(row) ? 1 : 0,
+      state: this.#derive.state(row),
+      watched: this.#derive.watched(row) ? 1 : 0,
     };
   }
 
@@ -1114,10 +1137,7 @@ export class AccountDb {
     const c = this.#chatCols(row);
     // (asked before the record is put: its triggers take the row kept beside it)
     const listed = !archived && this.#listRowHeld(station, id);
-    this.#run(
-      "INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.json],
-    );
+    this.#run(PUT_CHAT, [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.state, c.watched, c.json]);
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
     // (its row kept beside it went with it, by the triggers: made again of it, where it is listed)
@@ -1195,30 +1215,68 @@ export class AccountDb {
     });
   }
 
+  /// What a declared read finds (chat-reads.ts), each row with its record where `wants` says so (every row by default):
+  /// read by its key, from the cache where it is held, its JSON read only where it is not.
+  chatFound<P>(read: ChatRead<P>, p: P, wants: (cols: SqlRow) => boolean = () => true): ChatFound[] {
+    const rows = this.sql.all(read.sql, read.params(p));
+    const out: ChatFound[] = rows.map((r) => ({ station: String(r[0]), archived: r[1] === 1, id: String(r[2]), cols: r.slice(3), record: undefined }));
+    if (!read.records) return out;
+    for (const archived of [0, 1]) {
+      const of = out.filter((f) => (f.archived ? 1 : 0) === archived && wants(f.cols));
+      if (of.length === 0) continue;
+      const made = this.#records(of.map((f) => [f.station, f.id]), archived);
+      of.forEach((f, i) => (f.record = made[i]));
+    }
+    return out;
+  }
+
+  /// What a declared read of counts or columns answers (chat-reads.ts), as SQLite gives it.
+  chatCounted<P>(read: ChatRead<P>, p: P): SqlRow[] {
+    return this.sql.all(read.sql, read.params(p));
+  }
+
+  /// Chat records by their keys (station, id), `archived` or not, in that order (undefined: none): each kept by its key
+  /// as it is kept, the JSON of those not kept read by one statement (json_each), by their primary keys.
+  #records(found: [string, string][], archived: number): (J | undefined)[] {
+    const out: (J | undefined)[] = found.map(([station, id]) => this.#cache.get(K("chat", station, archived, id)) ?? undefined);
+    const missing = found.filter((_, i) => out[i] === undefined);
+    if (missing.length === 0) return out;
+    const read = new Map<string, SqlRow>();
+    for (const r of this.sql.all("SELECT c.station, c.id, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = json_extract(k.value, '$[0]') AND c.archived = ? AND c.id = json_extract(k.value, '$[1]')", [JSON.stringify(missing), archived])) {
+      read.set(K(String(r[0]), String(r[1])), r);
+    }
+    found.forEach(([station, id], i) => {
+      if (out[i] !== undefined) return;
+      const r = read.get(K(station, id));
+      if (r !== undefined) out[i] = this.#chatRow(station, archived, id, r[2], r[3]);
+    });
+    return out;
+  }
+
+  /// A sidebar row by its id where it is held in memory (read or written this run): nothing read.
+  heldChat(station: string, id: string): J {
+    const kept = this.#cache.get(K("chat", station, 0, id));
+    return kept === null ? undefined : kept;
+  }
+
   /// A sidebar row by its id.
   chat(station: string, id: string): J {
     // (a row kept by its key is the one in the database: written, it is kept anew; gone, let go)
     const kept = this.#cache.get(K("chat", station, 0, id));
     if (kept !== undefined && kept !== null) return kept;
-    const r = this.sql.all("SELECT json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
-    return r ? this.#chatRow(station, 0, id, r[0], r[1]) : undefined;
+    return this.chatFound(CHAT_READS.row, { station, id })[0]?.record;
   }
 
   /// The row of a chat a link names (its row's id, or its agent's session), listed or archived, and whether archived: a
-  /// row or two read, not the station's lists.
+  /// row read, not the station's lists.
   chatNamed(station: string, id: string): { row: J; archived: boolean } | undefined {
-    for (const archived of [0, 1]) {
-      const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id])[0]
-        ?? this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? AND session = ? ORDER BY ord LIMIT 1", [station, archived, id])[0];
-      if (r) return { row: this.#chatRow(station, archived, String(r[0]), r[1], r[2]), archived: archived === 1 };
-    }
-    return undefined;
+    const found = this.chatFound(CHAT_READS.named, { station, id })[0];
+    return found?.record === undefined ? undefined : { row: found.record, archived: found.archived };
   }
 
   /// The sidebar row of a thread.
   chatOfThread(station: string, thread: number): J {
-    const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ? ORDER BY ord LIMIT 1", [station, thread])[0];
-    return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
+    return this.chatFound(CHAT_READS.thread, { station, thread })[0]?.record;
   }
 
   /// The sidebar rows a thread's or an agent's session's changes touch: the thread's chat's; the rows the session is
@@ -1233,14 +1291,17 @@ export class AccountDb {
 
   /// The sidebar row of an agent's session.
   chatOfSession(station: string, session: string): J {
-    const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND session = ? ORDER BY ord LIMIT 1", [station, session])[0];
-    return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
+    return this.chatFound(CHAT_READS.session, { station, session })[0]?.record;
+  }
+
+  /// The sidebar row an agent's session is among the agents of (`chat_agent`), the first in the list's order.
+  chatOfAgent(station: string, session: string): J {
+    return this.chatFound(CHAT_READS.agent, { station, session })[0]?.record;
   }
 
   /// The sidebar row asked for here under a client key (views/local.ts).
   chatOfClientKey(station: string, key: string): J {
-    const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND client_key = ? LIMIT 1", [station, key])[0];
-    return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
+    return this.chatFound(CHAT_READS.client, { station, key })[0]?.record;
   }
 
   /// The rows of these stations a list shows first: the pinned, then the latest active, `limit` of them; `mine`, of the
@@ -1364,11 +1425,32 @@ export class AccountDb {
   /// The rows of these stations that ask something of their person or are unread (views/marks.ts).
   marked(stations: string[]): [string, J][] {
     if (stations.length === 0) return [];
-    const marks = stations.map(() => "?").join(", ");
-    const where = `archived = 0 AND station IN (${marks}) AND (tone IS NOT NULL OR asks = 1)`;
-    const found = this.sql.all(`SELECT station, id FROM chat WHERE ${where}`, stations);
-    const made = this.#chatRowsFound(found, 0, () => this.sql.all(`SELECT station, id, json, unread FROM chat WHERE ${where}`, stations));
-    return found.flatMap((r, i): [string, J][] => (made[i] === undefined ? [] : [[String(r[0]), made[i]]]));
+    return this.chatFound(CHAT_READS.marked, { stations }).flatMap((f): [string, J][] => (f.record === undefined ? [] : [[f.station, f.record]]));
+  }
+
+  /// The rows kept beside listed chats' records (`chat_row`) under each one's station's key in force (`keys`), of those
+  /// found (station, id): as they were read or kept this run, else read, by their keys, those kept under that key alone.
+  keptListRows(found: [string, string][], keys: Map<string, string>): (ListRow | undefined)[] {
+    const out = found.map(([station, id]): ListRow | undefined => {
+      const kept = this.#cache.get(K("lrow", station, id)) as ListRow | undefined;
+      return kept !== undefined && kept.key === keys.get(station) ? kept : undefined;
+    });
+    if (!this.#listRowsKept || this.listRows === null) return out;
+    const missing = found.filter((_, i) => out[i] === undefined);
+    if (missing.length === 0) return out;
+    const read = new Map<string, SqlRow>();
+    for (const r of this.sql.all("SELECT r.station, r.id, r.key, r.state, r.whole, r.sent FROM json_each(?) AS k CROSS JOIN chat_row AS r WHERE r.station = json_extract(k.value, '$[0]') AND r.id = json_extract(k.value, '$[1]') AND r.key = json_extract(k.value, '$[2]')", [JSON.stringify(missing.map(([s, id]) => [s, id, keys.get(s) ?? ""]))])) {
+      read.set(K(String(r[0]), String(r[1])), r);
+    }
+    found.forEach(([station, id], i) => {
+      if (out[i] !== undefined) return;
+      const r = read.get(K(station, id));
+      if (r === undefined || typeof r[4] !== "string" || typeof r[5] !== "string") return;
+      const row = this.#readListRow(String(r[2]), r[3], r[4], r[5]);
+      this.#cache.set(K("lrow", station, id), row);
+      out[i] = row;
+    });
+    return out;
   }
 
   /// The viewer read a thread up to `n`: its rows unread no more where that covers their last message.

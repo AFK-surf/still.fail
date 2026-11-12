@@ -7,7 +7,8 @@
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
 import { OVERVIEW_CHAT, OVERVIEW_PROFILED } from "./db/schema.ts";
-import { AccountDb, LIST_OF, type Changes, type Derive, type HeadRow, type ListKind, type ListRow, type ListRowMaker, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
+import { AccountDb, LIST_OF, type ChatFound, type Changes, type Derive, type HeadRow, type ListKind, type ListRow, type ListRowMaker, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
+import { CHAT_READS, chatKeys, type ChatRead, type ReadKey } from "./db/chat-reads.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
 import type { MdStore } from "./markdown.ts";
@@ -274,7 +275,11 @@ export const rowsRead: { count: number; by?: Map<string, number> } = { count: 0 
 /// An account's database opened, or why not (`sql`: the file opened, its tables not read).
 type Opened = { db: AccountDb; sql: Sql } | { db: null; sql: Sql | null; error: SqlError | HostError };
 
-const NO_DERIVE: Derive = { tone: () => null, asks: () => false };
+const NO_DERIVE: Derive = { tone: () => null, asks: () => false, state: () => null, watched: () => false };
+/// Every declared read of the chat table (db/chat-reads.ts).
+const CHAT_READ_LIST: readonly ChatRead<never>[] = Object.values(CHAT_READS) as readonly ChatRead<never>[];
+/// What a declared read's readers are told by, of one of its keys.
+const readTopic = (name: string, k: ReadKey): Topic => ({ topic: name, station: k[0], key: k.slice(1).join(SEP) });
 
 /// How long a session counts as used lately once its chat or history was opened (`usedLately`).
 export const RECENT_MS = 3 * 86_400_000;
@@ -550,23 +555,26 @@ export class Data {
       for (const l of this.#logChanged) l(table, station, id);
     }
     for (const station of slackStations) this.#refreshSlackNames(station);
+    // Each declared read told by the keys a written row says, before and after (db/chat-reads.ts `of`); whether it is
+    // marked worked out only while the station's marks are read.
     for (const [station, rows] of changes.readChats) {
-      let markedChanged = false;
-      const markedRead = this.#queryReads.has(topicKey({ topic: "$marked", station }));
+      const markedRead = this.#queryReads.has(topicKey(readTopic(CHAT_READS.marked.name, [station])));
+      const told = new Set<string>();
       for (const row of rows.values()) {
-        this.#tellQuery({ topic: "$chat-row", station, id: row.id });
-        if (markedRead && !row.archived && !markedChanged) {
-          markedChanged = [row.before, row.after, ...(row.between ?? [])].some((value) =>
-            value !== undefined && (this.#derive.tone(value) !== null || this.#derive.asks(value))
-          );
-        }
         for (const value of [row.before, row.after, ...(row.between ?? [])]) {
-          if (typeof get(value, "session") === "string") this.#tellQuery({ topic: "$chat-session", station, session: value.session });
-          if (typeof get(value, "thread") === "number") this.#tellQuery({ topic: "$chat-thread", station, thread: value.thread });
-          if (typeof get(value, "clientKey") === "string") this.#tellQuery({ topic: "$chat-client", station, key: value.clientKey });
+          if (value === undefined) continue;
+          const c = chatKeys(station, row.archived, row.id, value, markedRead && !row.archived && (this.#derive.tone(value) !== null || this.#derive.asks(value)));
+          for (const read of CHAT_READ_LIST) {
+            for (const k of read.of(c)) {
+              const topic = readTopic(read.name, k);
+              const key = topicKey(topic);
+              if (told.has(key)) continue;
+              told.add(key);
+              this.#tellQuery(topic);
+            }
+          }
         }
       }
-      if (markedChanged) this.#tellQuery({ topic: "$marked", station });
     }
     for (const [station, rows] of changes.chats) {
       const list = [...rows.values()];
@@ -1072,24 +1080,64 @@ export class Data {
     this.of(station)?.dropChat(station, id);
   }
 
+  /// What a declared read of the chat table finds (db/chat-reads.ts), across the databases of the stations it reads (its
+  /// `station`, or its `stations` each in theirs): read in a computed, it is made again as its keys are told.
+  /// `wants`: which of the rows it finds (by its own columns) have their records read.
+  chatFound<P extends { station: string } | { stations: string[] }>(read: ChatRead<P>, p: P, wants?: (cols: SqlRow) => boolean): ChatFound[] {
+    return this.#chatRead(read, p, (db, q) => db.chatFound(read, q, wants));
+  }
+
+  /// What a declared read of counts or columns answers (db/chat-reads.ts), across the databases as chatFound's.
+  chatCounted<P extends { station: string } | { stations: string[] }>(read: ChatRead<P>, p: P): SqlRow[] {
+    return this.#chatRead(read, p, (db, q) => db.chatCounted(read, q));
+  }
+
+  #chatRead<P extends { station: string } | { stations: string[] }, T>(read: ChatRead<P>, p: P, of: (db: AccountDb, p: P) => T[]): T[] {
+    for (const k of read.keys(p)) this.#readQuery(readTopic(read.name, k));
+    if ("station" in p) {
+      const db = this.of(p.station);
+      return db === undefined ? [] : of(db, p);
+    }
+    const by = new Map<AccountDb, string[]>();
+    for (const s of p.stations) {
+      const db = this.of(s);
+      if (db) by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    return [...by].flatMap(([db, stations]) => of(db, { ...p, stations }));
+  }
+
+  /// A listed chat's record where it is held in memory now (read or written this run), else undefined: nothing read.
+  heldChat(station: string, id: string): unknown {
+    this.#readQuery(readTopic(CHAT_READS.row.name, [station, id]));
+    return this.of(station)?.heldChat(station, id);
+  }
+
   chat(station: string, id: string): unknown {
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-row", station, id });
+    this.#readQuery(readTopic(CHAT_READS.row.name, [station, id]));
     return this.of(station)?.chat(station, id);
   }
 
   chatNamed(station: string, id: string): { row: unknown; archived: boolean } | undefined {
     void this.listed(station, "chats");
     void this.listed(station, "archived");
-    this.#readQuery({ topic: "$chat-row", station, id });
-    this.#readQuery({ topic: "$chat-session", station, session: id });
+    this.#readQuery(readTopic(CHAT_READS.named.name, [station, id]));
     return this.of(station)?.chatNamed(station, id);
+  }
+
+  /// The chat a link names (as chatNamed finds it): its id, its title and whether it is archived, of their columns, no
+  /// record read.
+  chatTitled(station: string, id: string): { id: string; title: string | null; archived: boolean } | undefined {
+    void this.listed(station, "chats");
+    void this.listed(station, "archived");
+    const f = this.chatFound(CHAT_READS.named, { station, id }, () => false)[0];
+    return f === undefined ? undefined : { id: f.id, title: typeof f.cols[0] === "string" ? f.cols[0] : null, archived: f.archived };
   }
 
   chatOfThread(station: string, thread: number): unknown {
     if (!Number.isInteger(thread)) return undefined;
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-thread", station, thread });
+    this.#readQuery(readTopic(CHAT_READS.thread.name, [station, thread]));
     return this.of(station)?.chatOfThread(station, thread);
   }
 
@@ -1100,13 +1148,33 @@ export class Data {
 
   chatOfSession(station: string, session: string): unknown {
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-session", station, session });
+    this.#readQuery(readTopic(CHAT_READS.session.name, [station, session]));
     return this.of(station)?.chatOfSession(station, session);
+  }
+
+  /// The listed chat an agent's session is in: its own (chatOfSession), else the first it is among the agents of
+  /// (`chat_agent`), as the station names a session's chat.
+  chatOfAgent(station: string, session: string): unknown {
+    const own = this.chatOfSession(station, session);
+    if (own !== undefined) return own;
+    this.#readQuery(readTopic(CHAT_READS.agent.name, [station, session]));
+    return this.of(station)?.chatOfAgent(station, session);
+  }
+
+  /// The listed chat an agent's session is in (as chatOfAgent finds it): its id and title alone, of their columns, no
+  /// record read.
+  chatNamedOfAgent(station: string, session: string): { id: string; title: string | null } | undefined {
+    void this.listed(station, "chats");
+    for (const read of [CHAT_READS.session, CHAT_READS.agent]) {
+      const f = this.chatFound(read, { station, session }, () => false)[0];
+      if (f !== undefined) return { id: f.id, title: typeof f.cols[0] === "string" ? f.cols[0] : null };
+    }
+    return undefined;
   }
 
   chatOfClientKey(station: string, key: string): unknown {
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-client", station, key });
+    this.#readQuery(readTopic(CHAT_READS.client.name, [station, key]));
     return this.of(station)?.chatOfClientKey(station, key);
   }
 
@@ -1211,6 +1279,19 @@ export class Data {
     return [...by].flatMap(([db, list]) => db.listHead(list, limit, mine, keys));
   }
 
+  /// The rows kept beside listed chats' records (station, id) under their stations' keys in force (`keys`), across their
+  /// databases (account.ts keptListRows): undefined where none is kept under it.
+  keptListRows(found: [string, string][], keys: Map<string, string>): (ListRow | undefined)[] {
+    const out: (ListRow | undefined)[] = found.map(() => undefined);
+    const by = new Map<AccountDb, number[]>();
+    found.forEach(([s], i) => {
+      const db = this.of(s);
+      if (db) by.set(db, [...(by.get(db) ?? []), i]);
+    });
+    for (const [db, at] of by) db.keptListRows(at.map((i) => found[i]), keys).forEach((row, j) => (out[at[j]] = row));
+    return out;
+  }
+
   /// The row kept beside a listed chat's record under `key`, where it was read or kept this run (account.ts).
   keptListRow(station: string, id: string, key: string): ListRow | undefined {
     return this.of(station)?.keptListRow(station, id, key);
@@ -1254,7 +1335,7 @@ export class Data {
     const by = new Map<AccountDb, string[]>();
     for (const s of stations) {
       void this.listed(s, "chats");
-      this.#readQuery({ topic: "$marked", station: s });
+      this.#readQuery(readTopic(CHAT_READS.marked.name, [s]));
       const db = this.of(s);
       if (!db) continue;
       by.set(db, [...(by.get(db) ?? []), s]);
