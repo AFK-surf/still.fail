@@ -365,6 +365,9 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     }
     (feel, g().scale)
   })
+  // (the mouse dragging what scrolls up or down only where the frames say it drags lists: Ctx::mouse_drags_lists, the
+  // last said holding, as an old view's list is dragged)
+  t.pointer_drags_scroll(fn() { desk.mouse_drags })
   // (what comes or goes at once where motion is reduced)
   t.reduces_motion(reduced_motion)
   // (what is drawn smaller than a press's room reached from round it, the room by the native input as an old view's
