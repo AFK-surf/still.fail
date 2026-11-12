@@ -423,14 +423,17 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
 ///|
 /// Where the nodes of the window's tree `t` are drawn, each value as a node asks it (Tree::drawn_by): the size of words
 /// its words are measured at (Ctx::sp's, view_words_measure), the window's pixels, glass solid or not, the soft keyboard,
-/// a picture's decodes; and the focus let go of as Ctx::blur lets it go, on either side.
+/// a picture's decodes (whether one is ready, asking none: the paint asks for what it comes to, Ctx::view_picture and
+/// Ctx::view_unseen; View::image_ask for what is wanted before it is drawn); and the focus let go of as Ctx::blur lets it
+/// go, on either side.
 fn view_drawn_by(t : @view.Tree) -> Unit {
   t.drawn_by(
     words_scale=fn() { font_scale() },
     pixel_scale=fn() { g().scale },
     glass_solid=fn() { glass_paint.solid },
     keyboard_inset=fn() { ime_said.get() },
-    image_ready=fn(src, px) { g().image_ready(src, px) },
+    image_ready=fn(src, _) { image_ready_asking_none(src) },
+    image_ask=fn(src, px) { g().image_ready(src, px) |> ignore },
     focus_let_go=fn() { g().blur() },
   )
 }

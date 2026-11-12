@@ -729,3 +729,37 @@ fn Tree::share_let_go(self : Tree, at : Int) -> Unit {
     self.places_rev = self.places_rev + 1
   }
 }
+
+///|
+/// The pictures asked for (View::image_ask) since this was last done, asked of what hosts the tree now, each where the
+/// node that asked still stands in the window's tree, each once: one made and let go of before now (in a change told
+/// in parts, or in one pass of a layout and gone in a later, a page's list's block) has nothing asked. Done as a change
+/// ends, the outermost (Tree::change_ended), and as a frame's layout ends outside every change (Tree::brought).
+fn Tree::images_asked_now(self : Tree) -> Unit {
+  if self.images_wanted.is_empty() {
+    return
+  }
+  let wanted = self.images_wanted.copy()
+  self.images_wanted.clear()
+  let asked : Array[(String, Double)] = []
+  for w in wanted {
+    let (id, src, px) = w
+    if self.alive_id(id) && self.attached(id.at) && !asked.contains((src, px)) {
+      asked.push((src, px))
+      (self.env.image_ask)(src, px)
+    }
+  }
+}
+
+///|
+/// A change of the tree ended (an event told, a moment come on the timeline, a change at its cause, a structure's, a
+/// binding's run at the moment it was told; one told outside every event, as where things stand is settled after it:
+/// Tree::settle_now): the pictures asked for in it (View::image_ask) asked now, where it was the outermost and no layout
+/// is under way (a frame's ends in Tree::brought, which asks for what its passes left standing).
+/// Nothing asked for, nothing done but this test.
+fn Tree::change_ended(self : Tree) -> Unit {
+  if self.images_wanted.is_empty() || self.in_change() || self.laying || self.draining > 0 {
+    return
+  }
+  self.images_asked_now()
+}

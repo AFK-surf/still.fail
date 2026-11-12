@@ -628,7 +628,15 @@ fn cd_avatar_node(m : @view.View, core : Core, cv : () -> Json?, side : Double, 
   }
   m.box(fn(d) {
     d.width(Is(Some(side))).height(Is(Some(side))) |> ignore
-    let ready = fn() { key() != "" && d.image_ready(key(), side * d.pixel_scale()) }
+    // (its picture's node made only once it is decoded: its decode asked here, nothing drawn of it asking it before)
+    let ready = fn() {
+      let k = key()
+      if k == "" {
+        return false
+      }
+      d.image_ask(k, side * d.pixel_scale())
+      d.image_ready(k, side * d.pixel_scale())
+    }
     d.show(ready, fn(p) {
       p
       .width(Is(Some(side)))

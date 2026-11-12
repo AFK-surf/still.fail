@@ -111,9 +111,8 @@ fn message_video_node(
         if k == "" || k == "!" {
           None
         } else {
-          // (decoded as large as it is drawn, reveal_px's: asked so, and drawn again as its host says it is)
+          // (decoded as large as it is drawn, reveal_px's: asked so by what draws it, as it comes to it)
           let px = dmin(dmax(w, h) * s.pixel_scale(), image_px_most)
-          s.image_ready(k, px) |> ignore
           Some((k, "", px.to_int()))
         }
       }))
