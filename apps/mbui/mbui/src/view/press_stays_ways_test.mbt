@@ -3,7 +3,9 @@
 // it was till 2026-11-12: the button went down with what opened over it). Looked at at moments it declares (rc_walk,
 // list_rows_come_test's), the press told at its moment, in one jump and at 60, 120, 24 and 7 a second. A press while the
 // list holds a block so (its scroll put each layout) finds what it reaches where it is drawn (Tree::bring_to: what the
-// event's layout told laid out in it too; a second press of the button reached the row four under it, 2026-11-12).
+// event's layout told laid out in it too; a second press of the button reached the row four under it, 2026-11-12). The
+// last two, an input 88 or 150 ms after the last frame (a phone's frames hang 40 to 90 ms), are red: that input's
+// layout lays the list's blocks out lower than the frame at that moment draws them (2026-11-12, not mended yet).
 
 ///|
 /// How tall what opens over each row's button.
@@ -169,5 +171,56 @@ test "a page's list holding a pressed block as what it opened over it grows: a p
   for i, rate in rc_rates {
     assert_eq(by_rate[i].length(), 15, msg="at \{rate} a second")
     assert_true(by_rate[i].iter().all(fn(r) { r.1 }), msg="at \{rate} a second: \{Repr(by_rate[i])}")
+  }
+}
+
+///|
+test "a page's list holding a pressed block as what it opened over it grows, no frame drawn for 88 ms or 150 ms: an input then at the button's drawn middle reaches it, and the frame then and every one after shows it where it was" {
+  for gap in [88.0, 150.0] {
+    let (tree, buttons) = ps_ways_list(ps_long_open, true)
+    let reached = Ref(false)
+    let ask = fn() {
+      match tree.drawn().filter(fn(d) { d.words == "行3" }) {
+        [d, ..] => {
+          tree.bring_to(rc_at + gap)
+          reached.val = tree.target_at(d.x + d.w / 2.0, d.y + d.h / 2.0) is Pressed(id) && id == buttons[3].id()
+        }
+        _ => ()
+      }
+    }
+    // (a frame at the press, none then till the input `gap` later, then one every rc_look_ms)
+    let looks = [rc_at]
+    let mut at = rc_at + gap
+    while at <= rc_at + ps_ways_look_ms {
+      looks.push(at)
+      at = at + rc_look_ms
+    }
+    let got = rc_walk(tree, [(rc_at, fn() { ps_ways_press(tree, buttons, 3) }), (rc_at + gap, ask)], looks, 0.0, fn() {
+      rc_y(tree, "行3")
+    })
+    assert_true(reached.val, msg="after \{gap} ms")
+    assert_true(got.iter().all(fn(y) { (y - 120.0).abs() < 1.0e-6 }), msg="after \{gap} ms: \{Repr(got)}")
+  }
+}
+
+///|
+test "a page's list holding a pressed block as what it opened over it grows, no frame drawn for 88 ms or 150 ms: each row in sight laid out by an input's bring then where the frame then draws it" {
+  for gap in [88.0, 150.0] {
+    let (tree, buttons) = ps_ways_list(ps_long_open, true)
+    let laid : Array[Double] = []
+    let ask = fn() {
+      tree.bring_to(rc_at + gap)
+      for k in 3..<8 {
+        laid.push(buttons[k].rect().1)
+      }
+    }
+    let drawn = rc_walk(tree, [(rc_at, fn() { ps_ways_press(tree, buttons, 3) }), (rc_at + gap, ask)], [rc_at, rc_at + gap], 0.0, fn() {
+      Array::makei(5, fn(i) { rc_y(tree, "行\{i + 3}") })
+    })
+    let then = drawn[1]
+    assert_eq(laid.length(), 5, msg="after \{gap} ms")
+    for i in 0..<5 {
+      assert_true((laid[i] - then[i]).abs() < 1.0e-6, msg="after \{gap} ms, 行\{i + 3}: laid \{laid[i]}, drawn \{then[i]}")
+    }
   }
 }
