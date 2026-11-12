@@ -228,6 +228,17 @@ test("a watched session's usage is what the counter recorded, told again as it r
   await hub.idle();
   assert.deepEqual(asked, ["s"], "working on: the counter is asked to count it");
   assert.deepEqual([got.at(-1).entries.map((e: any) => e.text), got.at(-1).usage], [["two"], counted], "what it gained, with what was recorded so far");
+  asked.length = 0;
+  const beforeUsageLine = got.length;
+  appendFileSync(path, `${JSON.stringify({ time: 1, type: "usage", run: "u1", usage: { inputTokens: 10, outputTokens: 2 } })}\n`);
+  (hub as any).soon("s");
+  await settle();
+  await hub.idle();
+  await time.adjust(40);
+  await settle();
+  await hub.idle();
+  assert.deepEqual(asked, ["s"], "a usage-only line asks the counter to count too");
+  assert.equal(got.length, beforeUsageLine, "no empty timeline message before the counter records it");
   rmSync(dir, { recursive: true, force: true });
 });
 

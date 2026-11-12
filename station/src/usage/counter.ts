@@ -107,8 +107,8 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       });
     } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
-      // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
-      // calls it made, the context it ended with and the model's window where Devin said them.
+      // from the cache's, the whole run's (no context); of each Devin call (or an earlier turn told at once,
+      // agents/devin.ts), with how many calls it counts, the context it left and the model's window where Devin said them.
       const usage = get(r, "usage");
       const id = str(get(r, "run"));
       if (str(get(r, "type")) !== "usage" || usage === undefined || usage === null || id === null) continue;

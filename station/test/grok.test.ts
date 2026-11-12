@@ -310,11 +310,12 @@ describe("the Grok Build driver", { concurrency: true }, () => {
   });
 
   for (const crashed of [false, true]) {
-    test(`a next driver takes the session up ${crashed ? "after a crash (no snapshot)" : "from its snapshot"}: the turn ends once, no live event twice`, async () => {
+    test(`a next driver takes the session up ${crashed ? "after a crash (no snapshot)" : "from its snapshot"}: the turn ends once, no live event twice, retuned model kept`, async () => {
       const first = driver();
       const o = options();
       const a = listen();
       const session = await first.open(o, a.push);
+      assert.equal(session.retune?.({ ...o, model: "grok-4.6" }), true);
       await session.prompt("hold");
       await a.until((e) => deltas(e).join("").includes("holding"));
       let snapshot: unknown = null;
@@ -325,8 +326,9 @@ describe("the Grok Build driver", { concurrency: true }, () => {
       await allLeft();
       const next = driver();
       const b = listen();
-      const taken: AgentSession = await next.adopt(o, snapshot, b.push);
+      const taken = await next.adopt({ ...o, model: "grok-4.6" }, snapshot, b.push);
       assert.equal(taken.id(), session.id());
+      assert.equal(taken.model, "grok-4.6");
       assert.equal(taken.busy(), true);
       assert.equal(await taken.steer("go on"), true);
       await b.until(ended(1));

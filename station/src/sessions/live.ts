@@ -428,10 +428,11 @@ export class LiveHub {
         this.stopFollow(watched);
         await this.followSoon(watched, key);
       }
+      const before = watched.tail.readBytes;
       const [start, entries] = await watched.tail.readSoon();
       if (this.watched.get(key) !== watched) return;
       this.noteLength(key, watched.tail);
-      this.gained(key, start, entries);
+      this.gained(key, start, entries, watched.tail.readBytes !== before);
     });
   }
 
@@ -461,9 +462,13 @@ export class LiveHub {
     }
   }
 
-  /// What a watched transcript gained, told; the usage counter is asked to count it (what it spent comes after).
-  private gained(key: string, start: number, entries: TimelineEntry[]) {
-    if (entries.length === 0) return;
+  /// What a watched transcript gained, told; the usage counter is asked to count it (what it spent comes after, a line
+  /// that is only usage included).
+  private gained(key: string, start: number, entries: TimelineEntry[], grew = false) {
+    if (entries.length === 0) {
+      if (grew) this.count?.ask(key);
+      return;
+    }
     this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
     this.count?.ask(key);
     this.readForPlan(key, start, entries);
@@ -580,9 +585,10 @@ export class LiveHub {
     // What the transcript left has is read first: its entries come before the new one's.
     void this.inRead(watched, async () => {
       if (this.watched.get(key) !== watched || watched.tail === null) return;
+      const before = watched.tail.readBytes;
       const [start, entries] = await watched.tail.readSoon();
       if (this.watched.get(key) !== watched) return;
-      this.gained(key, start, entries);
+      this.gained(key, start, entries, watched.tail.readBytes !== before);
       // The new one is usually not written yet: it is looked for on each read until it is.
       watched.behind = true;
       this.stopFollow(watched);
@@ -965,11 +971,12 @@ export class LiveHub {
       }
       void this.inRead(now, async () => {
         if (this.watched.get(key) !== now || now.tail === null) return;
+        const before = now.tail.readBytes;
         const [start, entries] = await now.tail.readSoon();
         if (this.watched.get(key) !== now) return;
         this.noteLength(key, now.tail);
-        if (entries.length > 0) this.gained(key, start, entries);
-        else if (announce) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
+        this.gained(key, start, entries, now.tail.readBytes !== before);
+        if (entries.length === 0 && announce) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
       });
     });
   }
