@@ -1184,26 +1184,36 @@ fn account_list(
     fn() {
       c.box(style=account_list_room, fn() {
         c.box(style=account_note_room, fn() { c.text(tr("android-chat.run.account.note"), style=account_note_words) |> ignore }) |> ignore
-        @sf.choice_row(c, key + "/auto", picked.is_empty(), tr("android-chat.run.account.auto"), trail?=auto_trail, on_press=fn() {
-          if !picked.is_empty() {
-            pick([])
-          }
-        })
+        @sf.choice_row(
+          c,
+          key + "/auto",
+          picked.is_empty(),
+          tr("android-chat.run.account.auto"),
+          disabled=accounts.length() <= 1 && picked.is_empty(),
+          trail?=auto_trail,
+          on_press=fn() {
+            if !picked.is_empty() {
+              pick([])
+            }
+          },
+        )
         for a in accounts {
           let av = Some(a)
           let id = text(av, "id")
           let own = text(av, "runtime")
           let checked = picked.is_empty() || picked.contains(id)
           let sole = picked.length() == 1 && picked[0] == id
+          let locked = accounts.length() <= 1 || sole
           @sf.choice_row(
             c,
             key + "/" + id,
             checked,
             text(av, "name"),
+            disabled=locked,
             lead=fn() { @sf.provider_logo(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
             tag=fn() { @sf.quota_chips(c, field(av, "quota"), marked=false, gap=6.0, key=key + "/" + id) },
             on_press=fn() {
-              if sole {
+              if locked {
                 return
               }
               if picked.is_empty() {

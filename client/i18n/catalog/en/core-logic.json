@@ -62,6 +62,7 @@
   "core-logic.choose.error.no_stations_yet": "Stations not loaded yet",
   "core-logic.choose.error.no_such": "No such choice: {of}",
   "core-logic.choose.error.none_online": "No station is online",
+  "core-logic.choose.error.station_account_subsets": "Update this station before selecting multiple accounts",
   "core-logic.choose.force.dropped": "Account “{account}” can't run {model}; switched to auto",
   "core-logic.choose.force.moves_off": "Account “{account}” can't run {model}; will switch to one that can",
   "core-logic.choose.pick_model": "Choose a model",

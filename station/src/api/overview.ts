@@ -161,6 +161,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     profiles,
     sessionRuntimeChange: true,
     connectRuntimeChange: true,
+    accountSubsets: true,
     // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
     // clients group and mark models by them, and by the names alone where it says none.
     modelMakers: modelMakers(profiles),

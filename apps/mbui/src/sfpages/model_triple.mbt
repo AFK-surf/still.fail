@@ -1324,9 +1324,9 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
     @sf.t("web-main.model.account"),
     words,
     look=if level == "amber" {
-      triple_amber_sm
+      triple_who_amber
     } else if level == "red" {
-      triple_red_sm
+      triple_who_red
     } else {
       triple_who_name
     },
@@ -1886,7 +1886,8 @@ fn triple_accounts_node(n : @view.View, src : Source, station : String, of : Str
     fn() { false },
     note=fn() { text(v(), "autoNote") },
     trail_middle=true,
-    lead=fn(l) { @sf.check_mark_node(l, all_on) },
+    disabled=fn() { accounts().length() <= 1 && all_on() },
+    lead=fn(l) { @sf.check_mark_node(l, all_on, dimmed=fn() { accounts().length() <= 1 && all_on() }) },
     trail?=if of.has_prefix("session:") {
       Some(fn(e) {
         e.show(fn() { text(v(), "repick") != "" }, fn(r) {
@@ -1926,7 +1927,7 @@ fn triple_accounts_node(n : @view.View, src : Source, station : String, of : Str
       let sel = triple_selected_accounts(draft())
       sel.length() == 1 && sel[0] == id
     }
-    let locked = fn() { accounts().length() > 1 && sole() }
+    let locked = fn() { accounts().length() <= 1 || sole() }
     @sf.choice_row_node(
       row,
       fn() { text(av(), "name") },
@@ -2193,10 +2194,6 @@ let triple_amber_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_red_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
-
-///|
-// kept across runs: a value (no field of it changes)
 let triple_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
@@ -2385,7 +2382,15 @@ let triple_who_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wr
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_who_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
+let triple_who_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_who_amber : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=WarnInk, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_who_red : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Danger, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

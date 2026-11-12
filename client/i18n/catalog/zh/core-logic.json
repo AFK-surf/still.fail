@@ -56,6 +56,7 @@
   "core-logic.choose.error.no_stations_yet": "station 列表尚未加载",
   "core-logic.choose.error.no_such": "无效的选项：{of}",
   "core-logic.choose.error.none_online": "没有在线的 station",
+  "core-logic.choose.error.station_account_subsets": "该机器的 Station 版本较旧，请先更新后再多选账号",
   "core-logic.choose.force.dropped": "所选账号「{account}」无法运行 {model}，已改为自动分配",
   "core-logic.choose.force.moves_off": "当前账号「{account}」无法运行 {model}，将自动切换到能运行它的账号",
   "core-logic.choose.pick_model": "选择模型",

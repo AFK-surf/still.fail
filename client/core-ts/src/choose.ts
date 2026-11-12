@@ -104,7 +104,7 @@ function resolveAccounts(accounts: J[], asked: string[], multi: boolean): { prof
 /// A choice as the station has it now.
 export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; context: number | null; profile: string | null; profiles: string[] | null; efforts: J[]; contexts: number[]; accounts: J[] };
 
-export function resolve(options: J[], choice: J): Resolved {
+export function resolve(options: J[], choice: J, subsets = true): Resolved {
   const entry = optionOf(options, typeof get(choice, "model") === "string" ? choice.model : null) ?? options[0];
   const runtimes = entry !== undefined ? arr(entry.runtimes) : [];
   const rt = runtimes.find((r) => equal(r, get(choice, "runtime"))) ?? runtimes[0];
@@ -113,7 +113,11 @@ export function resolve(options: J[], choice: J): Resolved {
   let efforts = at("efforts");
   const accounts = at("accounts");
   const { asked, multi } = choiceAccounts(choice);
-  const { profile, profiles } = resolveAccounts(accounts, asked, multi);
+  let { profile, profiles } = resolveAccounts(accounts, asked, multi);
+  if (!subsets && profiles !== null) {
+    profile = profiles[0] ?? null;
+    profiles = null;
+  }
   if (profile !== null) {
     const levels = get(accounts.find((a) => a.id === profile), "efforts");
     if (Array.isArray(levels)) efforts = levels;
@@ -278,6 +282,7 @@ export class Choose implements Owner {
   readonly #hand = new Map<string, Record<string, J>>();
   /// What `#hand` held before the last save asked of the station, put back if that fails (`unsaved`).
   readonly #handWas = new Map<string, Record<string, J> | null>();
+  readonly #saving = new Map<string, number>();
   /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
   readonly #next = new Map<string, string>();
 
@@ -460,7 +465,8 @@ export class Choose implements Owner {
   #onStation(addr: string): [J[], Resolved] {
     const overview = this.#env.store.get({ topic: "overview", station: addr });
     const options = models(overview, this.#env.now());
-    return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
+    const subsets = overview === undefined || get(overview, "accountSubsets") === true;
+    return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)), subsets)];
   }
 
   /// A new chat's model control as its page draws it closed (NewChatPick), on `station` of `options` (its models as
@@ -472,7 +478,7 @@ export class Choose implements Owner {
   #face(station: string, options: J[]): J {
     const overview = this.#env.store.get({ topic: "overview", station });
     if (overview === undefined) return null;
-    const r = resolve(options, this.#choice(ofAddress(station), stationId(station)));
+    const r = resolve(options, this.#choice(ofAddress(station), stationId(station)), get(overview, "accountSubsets") === true);
     const value = picked(r);
     return { value, valueOption: r.entry, efforts: r.efforts, account: named(value, r.entry, null, true).account, fastText: runsFast(overview, value, null) ? "Fast" : null };
   }
@@ -539,7 +545,13 @@ export class Choose implements Owner {
     if (typeof preset === "string") this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: text(get(params, "presetStation")) ?? "" }, false);
     if (FIELDS.some((f) => get(params, f) !== undefined)) {
       const id = station ?? this.#shown(scope);
-      const [options, now] = this.#onStation(address(scope, id));
+      const addr = address(scope, id);
+      const ps = normProfiles(get(params, "profiles"));
+      if (ps !== null && ps.length > 1) {
+        const ov = this.#env.store.get({ topic: "overview", station: addr });
+        if (ov !== undefined && get(ov, "accountSubsets") !== true) throw CoreError.invalid(t("core-logic.choose.error.station_account_subsets"));
+      }
+      const [options, now] = this.#onStation(addr);
       const next: J = { runtime: now.runtime, model: now.entry !== null ? now.entry.model : null, effort: now.effort, fast: now.fast, context: now.context, profile: now.profile, profiles: now.profiles };
       const m = text(get(params, "model"));
       if (m !== null) {
@@ -830,8 +842,8 @@ export class Choose implements Owner {
         : current !== null && profile === null && kept === null && keptProfiles === null && on === value.runtime
           ? t("core-logic.choose.account.now", { name: currentName })
           : t("core-logic.choose.account.auto_note");
-    // A chat's account picked again now (`pick.repick`), beside 全选: when another could take it.
-    const repick = current !== null && Math.max(runnable, accounts.length) > 1 && on === value.runtime ? t("core-logic.choose.account.repick") : null;
+    // A chat's account picked again now (`pick.repick`), beside 全选: when at least two checked accounts can take it.
+    const repick = current !== null && profile === null && Math.max(runnable, accounts.length) > 1 && on === value.runtime ? t("core-logic.choose.account.repick") : null;
     const optionName = option !== undefined && typeof option.name === "string" ? option.name : null;
     const nameOf = (x: string | null): string | null => {
       if (x === null) return null;
@@ -1101,21 +1113,27 @@ export class Choose implements Owner {
     if ("err" in view) throw view.err;
     const v = view.ok as J;
     const next = v.next;
+    const overview = this.#env.store.get({ topic: "overview", station });
+    if (Array.isArray(next.profiles) && next.profiles.length > 1 && overview !== undefined && get(overview, "accountSubsets") !== true) {
+      this.unsaved(station, oName);
+      throw CoreError.invalid(t("core-logic.choose.error.station_account_subsets"));
+    }
     // Not run here till its account is borrowed (`pick.borrow`).
     if (v.borrow !== null && v.borrow !== undefined) throw CoreError.invalid(t("core-logic.choose.borrow.first"));
     // How it runs set with no model: set by hand in the panel, kept for the model picked in it next (`#hand`); set
     // to what it already was, still set.
+    const key = topicKey(topic);
     const set = get(params, "model") === undefined ? HOW.filter((f) => get(params, f) !== undefined) : [];
     if (set.length > 0) {
-      const key = topicKey(topic);
       const was = this.#hand.get(key);
       this.#handWas.set(key, was ?? null);
       this.#hand.set(key, { ...was, ...Object.fromEntries(set.map((f) => [f, params[f]])) });
     } else {
-      this.#handWas.delete(topicKey(topic));
+      this.#handWas.delete(key);
     }
-    if (v.changed !== true || v.option === null) {
-      this.#drafts.delete(topicKey(topic));
+    const inFlight = (this.#saving.get(key) ?? 0) > 0;
+    if ((!inFlight && v.changed !== true) || v.option === null) {
+      this.#drafts.delete(key);
       this.#env.store.invalidate(topic);
       return { done: { saved: false } };
     }
@@ -1163,7 +1181,8 @@ export class Choose implements Owner {
     }
     // (one asked of the station: what was picked shown until it is answered, the panel open as it is; dropped if it
     // fails, `unsaved`)
-    if ("done" in saved) this.#drafts.delete(topicKey(topic));
+    if ("done" in saved) this.#drafts.delete(key);
+    else this.#saving.set(key, (this.#saving.get(key) ?? 0) + 1);
     this.#changed();
     return saved;
   }
@@ -1171,6 +1190,7 @@ export class Choose implements Owner {
   /// A pick asked of the station that failed: the panel back to what it runs on.
   unsaved(station: string, oName: string): void {
     const key = topicKey({ topic: "pick", station, of: oName });
+    if ((this.#saving.get(key) ?? 0) > 1) return;
     this.#drafts.delete(key);
     // (what was set by hand as it was before what failed)
     const was = this.#handWas.get(key);
@@ -1180,6 +1200,13 @@ export class Choose implements Owner {
       this.#handWas.delete(key);
     }
     this.#changed();
+  }
+
+  settled(station: string, oName: string): void {
+    const key = topicKey({ topic: "pick", station, of: oName });
+    const n = (this.#saving.get(key) ?? 0) - 1;
+    if (n > 0) this.#saving.set(key, n);
+    else this.#saving.delete(key);
   }
 
   /// `pick.repick`: a chat's account given back to the station and picked again now, as a new chat's would be (the
@@ -1193,7 +1220,11 @@ export class Choose implements Owner {
     if ("err" in view) throw view.err;
     const v = view.ok as J;
     if (o.kind !== "session" || v.repick === null) throw CoreError.invalid(t("core-logic.choose.repick.none"));
-    const subset = normProfiles(get(v.draft, "profiles")) ?? normProfiles(get(v.value, "profiles"));
+    const subset = normProfiles(get(v.draft, "profiles"));
+    const overview = this.#env.store.get({ topic: "overview", station });
+    if (subset !== null && subset.length > 1 && overview !== undefined && get(overview, "accountSubsets") !== true) {
+      throw CoreError.invalid(t("core-logic.choose.error.station_account_subsets"));
+    }
     const repickParams: J =
       subset !== null && subset.length > 1
         ? { station, key: o.key, profiles: subset, repick: true }
@@ -1206,9 +1237,14 @@ export class Choose implements Owner {
       [...arr(get(agent, "profiles")), ...arr(v.accounts)].map((p) => [p.id, typeof p.name === "string" ? p.name : p.id]),
     );
     const draft = this.#drafts.get(topicKey(topic));
-    if (draft !== undefined && (subset === null || subset.length <= 1) && ("profile" in draft || "profiles" in draft)) {
-      delete draft.profile;
-      delete draft.profiles;
+    if (draft !== undefined && subset === null) {
+      if (v.value.profile === null && get(v.value, "profiles") === undefined) {
+        delete draft.profile;
+        delete draft.profiles;
+      } else {
+        draft.profile = null;
+        draft.profiles = null;
+      }
       this.#changed();
     }
     const said = (answer: J): J => {
