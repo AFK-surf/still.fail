@@ -1518,6 +1518,8 @@ pub fn send_sharing(Source, String, String, String, () -> Unit) -> Unit
 
 pub fn sending_of(String) -> Array[LocalSent]
 
+pub fn sending_now(String) -> Array[LocalSent]
+
 pub let sent_down_ms : Double
 
 pub fn sent_down_of(String) -> Double

@@ -85,28 +85,31 @@ fn outbox_said_node(
         w.show(fn() { o().text != "" }, fn(b) { mine_bubble_node(b, here, said, fn() { [] }) })
       })
       |> ignore
-      col.pick(fn() { outbox_under(o()) }, fn(u, under) {
-        match under {
-          OutUnsent => outbox_unsent_node(u, src, here, o)
-          OutTime => message_time_node(u, here.tips, fn() { o().time })
-          OutSending =>
-            sending_line_node(
-              u,
-              fn() {
-                let now = o()
-                if now.waits != "" {
-                  now.waits
-                } else {
-                  @sf.t("web-main.chat.sending")
-                }
-              },
-              fn() { o().progress },
-              since,
-              flying,
-            )
-            |> ignore
-          OutNothing => ()
-        }
+      // (nothing under it at all while it is followed: no box of nothing in its column, its gap with it)
+      col.show(fn() { outbox_under(o()) != OutNothing }, fn(n) {
+        n.pick(fn() { outbox_under(o()) }, fn(u, under) {
+          match under {
+            OutUnsent => outbox_unsent_node(u, src, here, o)
+            OutTime => message_time_node(u, here.tips, fn() { o().time })
+            OutSending =>
+              sending_line_node(
+                u,
+                fn() {
+                  let now = o()
+                  if now.waits != "" {
+                    now.waits
+                  } else {
+                    @sf.t("web-main.chat.sending")
+                  }
+                },
+                fn() { o().progress },
+                since,
+                flying,
+              )
+              |> ignore
+            OutNothing => ()
+          }
+        })
       })
     })
     |> ignore

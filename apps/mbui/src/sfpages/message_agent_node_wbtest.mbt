@@ -140,7 +140,8 @@ test "what an agent said, made once as nodes, is drawn as the old view drew it: 
   for c in ag_cases() {
     for w in [760.0, 390.0] {
       let at = "\{c.0} at \{w}"
-      let old = said_old_row(w, c.1, src?=c.2, h=ag_high(c.0))
+      // (in a chat's list, as the nodes' rows are: its words and its files one piece there, pickable's)
+      let old = said_old_row(w, c.1, src?=c.2, h=ag_high(c.0), listed=true)
       old.run_for(@ui.move_most_ms)
       let was = ag_drawn(old)
       let t = ag_new_row(w, fn() { c.1 }, src?=c.2, h=ag_high(c.0))
@@ -182,7 +183,7 @@ fn ag_high(name : String) -> Double {
 test "what an agent said at the system's words set to 1.3 is drawn as the old view drew it: its Markdown, its links, a file it places and its others, still.fail's own" {
   for c in ag_cases() {
     guard c.0 != "screens" else { continue }
-    let old = said_old_row(390.0, c.1, src?=c.2, h=ag_high(c.0))
+    let old = said_old_row(390.0, c.1, src?=c.2, h=ag_high(c.0), listed=true)
     old.set_font_scale(1.3)
     old.run_for(@ui.move_most_ms)
     let was = ag_drawn(old)

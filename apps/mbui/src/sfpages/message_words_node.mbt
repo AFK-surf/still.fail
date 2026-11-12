@@ -4,8 +4,9 @@
 // menu; the viewer's own in their bubble at the column's end, its time under it; someone else's under their picture,
 // name and time; what each quotes ahead of its words (message_quotes_node). Each read through what it is given, as
 // that changes.
-// Each link's card while a mouse rests on it (message_link_card: a web link's, a chat's). Not here yet: its files, the
-// viewer's words flying in from the composer (flight.mbt) and its time faded in as they land.
+// Each link's card while a mouse rests on it (message_link_card: a web link's, a chat's); its files (message_files_node:
+// the viewer's between what it quotes and its words, someone else's under their words). Not here yet: the viewer's
+// words flying in from the composer (flight.mbt) and its time faded in as they land.
 
 ///|
 /// What a person wrote (person_words') in `v`, as `m` says it as it changes: in the face for what people wrote (the
@@ -106,23 +107,40 @@ fn mine_said_node(
   message_row_frame_node(v, key, side, top, over~, fn(r) {
     r.box(fn(col) {
       @sf.style_node(col, fn() { mine_column })
-      // (what it quotes ahead of its words, in the order the composer held them: mine_message's)
-      message_quotes_node(col, src, here, fn() { m().quotes }, fn() { m().attachments }, true, message_place(@signals.untracked(m)))
+      // (what it quotes ahead of its files and words, in the order the composer held them: mine_message's)
+      let at = message_place(@signals.untracked(m))
+      message_quotes_node(col, src, here, fn() { m().quotes }, fn() { m().attachments }, true, at)
+      message_files_node(
+        col,
+        src,
+        here.tips,
+        message_files_at(here),
+        fn() {
+          let now = m()
+          beside_quotes(now.quotes, now.attachments)
+        },
+        fn() { true },
+        fn() { Some((@sf.t("web-main.chat.you"), "person", m().ts)) },
+        at + "/f",
+      )
       col.show(fn() { m().text != "" }, fn(b) {
         mine_bubble_node(b, here, m, found, cards=(here.tips, message_link_card(src, here.station, "", m)))
       })
-      col.pick(fn() { mine_under(m()) }, fn(u, under) {
-        match under {
-          MineBlocked =>
-            blocked_line_node(u, src, here.tips, fn() { here.station }, fn() {
-              // (as it is while it is: what took its place is made once it is not)
-              m().blocked.unwrap_or(mine_installed)
-            })
-            |> ignore
-          MineWaiting => agent_waiting_node(u) |> ignore
-          MineTime => message_time_node(u, here.tips, fn() { m().time })
-          MineNothing => ()
-        }
+      // (nothing under it at all while it is followed: no box of nothing in its column, its gap with it)
+      col.show(fn() { mine_under(m()) != MineNothing }, fn(n) {
+        n.pick(fn() { mine_under(m()) }, fn(u, under) {
+          match under {
+            MineBlocked =>
+              blocked_line_node(u, src, here.tips, fn() { here.station }, fn() {
+                // (as it is while it is: what took its place is made once it is not)
+                m().blocked.unwrap_or(mine_installed)
+              })
+              |> ignore
+            MineWaiting => agent_waiting_node(u) |> ignore
+            MineTime => message_time_node(u, here.tips, fn() { m().time })
+            MineNothing => ()
+          }
+        })
       })
     })
     |> ignore
@@ -202,11 +220,25 @@ fn person_said_node(
       },
       None,
       fn(b) {
-        // (what it quotes ahead of its words, as the old body's)
-        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)))
+        // (what it quotes ahead of its words, its other files under them, as the old body's)
+        let at = message_place(@signals.untracked(m))
+        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, at)
         b.show(fn() { m().text != "" }, fn(w) {
           person_words_node(w, m, found~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
         })
+        message_files_node(
+          b,
+          src,
+          here.tips,
+          message_files_at(here),
+          fn() {
+            let now = m()
+            beside_quotes(now.quotes, now.attachments)
+          },
+          fn() { false },
+          fn() { Some((m().by.name, "person", m().ts)) },
+          at + "/f",
+        )
       },
       share~,
     )
@@ -231,4 +263,10 @@ fn message_share_of(src : Source, here : MessageNodeHere, m : () -> Message) -> 
       })
     None => None
   }
+}
+
+///|
+/// Where a message's files are (MessageFilesAt) in the chat `here` is: its station, its session, its view as it changes.
+fn message_files_at(here : MessageNodeHere) -> MessageFilesAt {
+  { station: fn() { here.station }, session: fn() { here.session }, view: here.view }
 }

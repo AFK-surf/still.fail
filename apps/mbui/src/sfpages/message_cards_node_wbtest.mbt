@@ -800,3 +800,106 @@ test "a phone's request decided as its card shows: the card goes, the line sayin
   t.run_for(@ui.move_most_ms)
   assert_false(@sf.presenting())
 }
+
+///|
+/// Post `m` as the old view draws it whole in a list's row `list` (message_row: its card in its words' place, what it
+/// asks under it), answered with the settings' core over `src`, `w` wide.
+fn card_row_old(w : Double, src : Source, m : Message, list : String) -> @ui.Tester {
+  @settings.reset()
+  @sf.set_words(@sfbase.fill)
+  absolute_times.set(false)
+  let view = card_view()
+  @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      let here : MessageHere = {
+        station: "ws1/st1",
+        session: "s-c1",
+        view,
+        go: None,
+        inline: w <= chat_narrow_w,
+        gutter: 0.0,
+        list: Some({ rk: list, turns: @sfbase.turns_of(list), emits: @sfbase.emits_of(list), flight: None }),
+        core: Some(@sfbase.settings_core(src, card_ws)),
+      }
+      c.with_theme(@sf.ui_theme(), fn() {
+        c.box(style=head_frame, fn() { row_box(c, row_side(w), 0.0, fn() { message_row(c, src, here, m) }) |> ignore })
+        |> ignore
+      })
+    },
+    w~,
+    h=420.0,
+  )
+}
+
+///|
+/// The same post as the nodes draw it whole in its row (agent_said_node, answered with the core over `src`), `w` wide.
+fn card_row_new(w : Double, src : Source, m : Message) -> @ui.Tester {
+  @settings.reset()
+  @sf.set_words(@sfbase.fill)
+  absolute_times.set(false)
+  @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
+    tree=fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      let tips = @sf.TipLayer::new(fn() { Some(root) })
+      let here : MessageNodeHere = {
+        station: "ws1/st1",
+        session: "s-c1",
+        view: card_view,
+        width: fn() { w },
+        tips,
+        stint: fn() { 0 },
+        jump: None,
+      }
+      root.box(fn(f) {
+        @sf.style_node(f, fn() { head_frame })
+        // (offering itself as the old list's row does: message_row's share)
+        agent_said_node(f, src, here, "m:" + m.ts, fn() { row_side(w) }, fn() { 0.0 }, fn() { m }, share=message_share_of(
+          src,
+          here,
+          fn() { m },
+        ), core=Some(@sfbase.settings_core(src, card_ws)))
+        |> ignore
+      })
+      |> ignore
+      @sf.presented_nodes(root)
+    },
+    w~,
+    h=420.0,
+  )
+}
+
+///|
+test "an agent's post whole in its row, made once as nodes, is drawn as the old view drew it: a rig's request in its words' place, a login's card under its words, wide and narrow" {
+  let cases = [
+    ("rig", card_src("chat-rig"), card_rig("")),
+    ("rig granted", card_src("chat-rig"), card_rig("granted")),
+    // (its words' Markdown as the core reads it: no word asked of a core this test does not keep)
+    ("login", card_login_src(Some(card_login(true, "browser"))), {
+      ..card_login_post(),
+      md: Some([["p", ["在 Willow 上登录一下 gh，我再接着推。"]]]),
+    }),
+  ]
+  for c in cases {
+    for w in [760.0, 390.0] {
+      let at = "\{c.0} at \{w}"
+      let old = card_row_old(w, c.1, c.2, at)
+      old.run_for(@ui.move_most_ms)
+      let was = head_drawn(old)
+      let t = card_row_new(w, c.1, c.2)
+      t.run_for(@ui.move_most_ms)
+      let now = head_drawn(t)
+      // (where they differ, each line one has that the other has not)
+      let olds = was.split("\n").map(fn(l) { l.to_owned() }).collect()
+      let news = now.split("\n").map(fn(l) { l.to_owned() }).collect()
+      let only_old = olds.filter(fn(l) { !news.contains(l) })
+      let only_new = news.filter(fn(l) { !olds.contains(l) })
+      assert_true(only_old.is_empty() && only_new.is_empty(), msg=at + ": \{only_old.length()}/\{only_new.length()} NEW " + only_new.iter().take(3).collect().join(" | ") + " OLD " + only_old.iter().take(3).collect().join(" | "))
+      assert_eq(now, was, msg=at)
+    }
+  }
+}

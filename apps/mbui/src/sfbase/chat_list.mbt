@@ -1451,9 +1451,14 @@ pub fn row_keys(
       _ => ()
     }
   }
+  // (what its core's rows took over gone from it: told, what follows it read again)
+  let taken_over = still.length() != sending.length()
   sending.clear()
   for l in still {
     sending.push(l)
+  }
+  if taken_over {
+    sending_changed()
   }
   // (after the outbox, before the agents' lines and the room under them)
   let all = all.copy()
