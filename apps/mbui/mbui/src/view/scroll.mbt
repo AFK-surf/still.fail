@@ -113,6 +113,10 @@ pub struct Scroll {
   /// under its last block: View::scrolls_window's), what a part brought into sight comes to rest over (View::scrolls'
   /// `shows`)
   priv mut foot_covered : () -> Double
+  /// the logic's moment it was last put at once (Scroll::put: a page's list brought to a block or to its foot, the
+  /// app's put), for the Tester's judges: what it moves by its offset alone (its bar's thumb) goes there with it in the
+  /// frame that takes it (Tree::scroll_put_at)
+  priv mut put_at : Double
 }
 
 ///|
@@ -175,6 +179,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     pressed_said: fn(_) { fn() {  } },
     at_foot_said: None,
     foot_covered: fn() { 0.0 },
+    put_at: -1.0e9,
   }
 }
 
@@ -450,7 +455,11 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
 /// there, no scroll of the hand's (nothing told as scrolled: its bar). Not scrolling in a node yet, there as it comes to.
 pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
   match self.host {
-    Some(v) if v.alive() => self.stopped(v.tree.logic_said()) |> ignore
+    Some(v) if v.alive() => {
+      let t = v.tree.logic_said()
+      self.put_at = t
+      self.stopped(t) |> ignore
+    }
     _ => ()
   }
   self.x.set(dmax(to, 0.0))
@@ -1433,3 +1442,14 @@ pub fn Tree::in_scroller(self : Tree, id : NodeId) -> Bool {
   false
 }
 
+///|
+/// The logic's moment column `at` (View::scrolls) was last put at once (Scroll::put): what its bar's thumb, moved by its
+/// offset alone, does in the frame that takes it is the put's (the Tester's judges: ui's sizes_steady.mbt); -1e9 where
+/// it never was, or scrolls nothing.
+pub fn Tree::scroll_put_at(self : Tree, at : Int) -> Double {
+  guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return -1.0e9 }
+  match self.scrolls_at.get(at) {
+    Some(s) => s.put_at
+    None => -1.0e9
+  }
+}

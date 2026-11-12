@@ -661,10 +661,7 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: a message 
     let t = place_long_open(l, s)
     let last = "第\{long_count}条："
     guard t.rect_of(last) is Some((_, end, _, _)) else { fail("\{name}: its last message not drawn as it opens") }
-    // (read up more than a screen: the wheel's. On 大屏 at 120 frames a second a box drawn with no words steps 6.4 in
-    // height in a frame at 5016.7 as it is read up (sizes steady, judged): not the composer's, not yet found; what shows
-    // is held here as a result)
-    t.motion_unjudged(true)
+    // (read up more than a screen: the wheel's)
     t.move_to(w / 2.0, h / 2.0)
     for _ in 0..<3 {
       t.wheel(w / 2.0, h / 2.0, -600.0)
