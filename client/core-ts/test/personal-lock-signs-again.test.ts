@@ -158,3 +158,47 @@ test("lost with no seed in hand (a read moved the chain pinned off this device's
   await w.a.runner.run(w.a.lock.signGrant(SUB, grantBody, "why"));
   assert.equal(w.st.brought.length, n, "nothing more signed");
 });
+
+/// Whether the device of `key` is on the chain: the last entry about it puts it on.
+const isOn = (chain: Entry[], key: string) => chain.filter((e) => (e.body as { key?: string })?.key === key).at(-1)?.kind === "device";
+
+/// This device's `acts` (each a device of `others` put on, or taken off), pinned after X; then a read moves the chain
+/// pinned to the stations' `theirs` (Y winning at P, X and the acts aside together) with no seed in hand, and the next
+/// act with one (a grant) signs them again. What it signed again, in order, and the chain pinned then.
+async function lostTogether(acts: ["on" | "off", string][], theirs: (w: Awaited<ReturnType<typeof setUp>>) => Entry[] = (w) => [w.g, w.P, w.Y, w.Z]) {
+  const w = await setUp();
+  for (const [how, n] of acts) await w.a.runner.run(Effect.asVoid<unknown, CoreError, never>(how === "on" ? w.a.lock.addDevice(SUB, other(n), "why") : w.a.lock.removeDevice(SUB, other(n).key, "why")));
+  const mine = w.a.lock.entries(SUB).slice(3);
+  assert.equal(mine.length, acts.length, "each act pinned after X");
+  const chain = theirs(w);
+  w.st.say.follow = false;
+  w.st.say.chains = [chain];
+  await w.a.runner.run(w.a.lock.refresh(SUB));
+  await w.a.host.time.pass(1_000);
+  assert.deepEqual(w.a.lock.entries(SUB).map(entryHash), chain.map(entryHash), "the branch pinned, X and the acts aside");
+  w.st.say.follow = true;
+  await w.a.runner.run(w.a.lock.signGrant(SUB, grantBody, "why"));
+  const pinned = w.a.lock.entries(SUB);
+  assert.deepEqual(pinned.slice(0, chain.length).map(entryHash), chain.map(entryHash), "after their head");
+  const again = pinned.slice(chain.length).filter((e) => e.kind === "device" || e.kind === "device.remove");
+  return { w, pinned, again };
+}
+
+test("lost together with no seed in hand, c put on (X) then taken off by this device: both signed again in that order, c off at the end", async () => {
+  const { pinned, again } = await lostTogether([["off", "33"]]);
+  assert.deepEqual(again.map((e) => e.kind), ["device", "device.remove"], "both signed again, in the order made");
+  assert.ok(!isOn(pinned, other("33").key), "c off");
+});
+
+test("lost together with no seed in hand, c on (X), off, on again: all three signed again in that order (an earlier one signed again does not make the third done), c on", async () => {
+  const { pinned, again } = await lostTogether([["off", "33"], ["on", "33"]]);
+  assert.deepEqual(again.map((e) => e.kind), ["device", "device.remove", "device"], "all three signed again, in the order made");
+  assert.ok(isOn(pinned, other("33").key), "c on");
+});
+
+test("lost (X puts c on), then c named otherwise by this device on the branch that won, later: X is not signed again", async () => {
+  const W = (w: Awaited<ReturnType<typeof setUp>>) => signed([w.g, w.P, w.Y, w.Z], "a", "device", { ...other("33"), label: "renamed" }, 1_800_000_900);
+  const { pinned, again } = await lostTogether([], (w) => [w.g, w.P, w.Y, w.Z, W(w)]);
+  assert.deepEqual(again, [], "nothing signed again");
+  assert.equal((pinned.filter(isPut("33")).at(-1)!.body as { label: string }).label, "renamed");
+});

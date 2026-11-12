@@ -151,7 +151,8 @@ another; the accounts' list's merge across stations and its refills.
   first outside it, sign after the head held as it begins, give it up once the entry is held, refused or pending.
   Nothing waits for one turn while holding the other. An entry of its own that lost its place is signed again
   only by the rules of `lock-keep.ts` `againOf`, at most `AGAIN_MOST` times, a person's lock's only with a seed in hand,
-  never by asking for one.
+  never by asking for one; those that lost their place together in the order made, what it signed again of them no
+  decision against a later one (`againOf`'s `before`).
 - The cloud's taking an entry never counts (2026-11-12): what no station took nor refused by the call's wait
   (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
   held and never on it, shown on the lock's topic as not in effect, and brought to the stations as one is next read
