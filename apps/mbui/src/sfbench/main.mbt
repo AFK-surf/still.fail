@@ -27,7 +27,8 @@ fn main {
     match src.val {
       Some(s) => s
       None => {
-        let s = @sfapp.fixture_app(mode)
+        // (switch-real:<ms>: a workspace picked over a late core, switch_scene.mbt)
+        let s = if mode.has_prefix("switch-real") { switch_real_source(mode) } else { @sfapp.fixture_app(mode) }
         // MBUI_FIX_PACE, MBUI_FIX_CORE: the made-up station's pace (@sffixture.fix_pace_said), said in APPBENCH below
         @sffixture.fix_pace_said(@film.arg("MBUI_FIX_PACE"), @film.arg("MBUI_FIX_CORE"))
         if dark {

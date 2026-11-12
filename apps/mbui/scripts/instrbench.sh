@@ -30,7 +30,12 @@ send send chat-done-live 390x844
 list30 list list:30 390x844
 list1500 list list:1500 390x844
 col17 col col:17 390x844
-col170 col col:170 390x844"
+col170 col col:170 390x844
+switch15 switch-ws switch-real:15 390x844
+switch25 switch-ws switch-real:25 390x844
+switch40 switch-ws switch-real:40 390x844
+switch100 switch-ws switch-real:100 390x844
+switchclose switch-ws-close switch-real:25 390x844"
 gas() { "$MBUI_DIR/scripts/wasmgas" "$@"; }
 if [ "${1:-run}" = compare ]; then
   [ $# = 3 ] || { echo 'instrbench.sh compare BEFORE_OUT AFTER_OUT' >&2; exit 2; }
@@ -54,9 +59,14 @@ cp "$A/$(pkg_build sfbench wasm release)/sfbench.wasm" "$O/program.wasm"
 # driver's looking for what a step waits for or presses (drive.mbt's on_screen, reachable, the fields' words: every
 # node of the window's tree read for its words, a few times a frame, ~4% of Home's), which a device's driver does from
 # outside the app; its input, given to the app as a host gives it, counted
+# (and the switch scenes' made-up core, sffixture's round_trip_again, its made-up station's acts (fix_now) and what
+# follows its store as that changes (fixture_changed): what a device's core works out on its own thread; what it posts
+# the client, taken between frames, is the app's, counted: made_core_post)
 gas profile "$O/program.wasm" "$O/profiled.wasm" _M0IP24mbui2ui8FakeHostP24mbui7hostapi4Host \
   _M0FP24mbui2ui10on__screen _M0FP24mbui2ui17on__screen__nodes _M0FP24mbui2ui16tree__on__screen \
   _M0FP24mbui2ui9reachable _M0FP24mbui2ui14not__reachable _M0FP24mbui2ui12field__words _M0FP24mbui2ui12fields__hold \
+  _M0FP29stillfail9sffixture26round__trip__again_2einner \
+  _M0FP29stillfail9sffixture7fix__now _M0FP39stillfail5sfapp8settings16fixture__changed \
   ${MBUI_PROFILE_FOCUS:+"focus=$MBUI_PROFILE_FOCUS"} ${MBUI_PROFILE_CALLERS:+"callers=$MBUI_PROFILE_CALLERS"}
 git rev-parse --short HEAD > "$O/commit" 2>/dev/null || true
 moon version 2>/dev/null | head -1 > "$O/moon"

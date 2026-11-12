@@ -1,0 +1,12 @@
+# 小屏, a finger, on the workspace of real size over a late core (src/sfbench/switch_scene.mbt): the workspaces' sheet
+# opened by the switcher, then the other workspace's row pressed, measured from that press: the sheet closing as the
+# switch is done.
+timeout 20000
+until 星火工作室
+wait 1500
+tap1 星火工作室
+wait 700
+log measure
+tap 个人
+wait 900
+exit

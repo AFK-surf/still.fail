@@ -1522,6 +1522,30 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
 }
 
 ///|
+/// `f` done `ms` from now by the made-up core of round_trip_again, as fix_later does it but told as no change of the
+/// made-up station's (fix_now's fixture_changed): what it does is answer the client, which the client is told itself.
+fn made_core_later(ms : Double, f : () -> Unit) -> Unit {
+  match (fix_clock.val, fix_ctx.val) {
+    (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), f)
+    _ => fix_later(ms, f)
+  }
+}
+
+///|
+/// What the made-up core says to the client (`text`, one of its messages) posted as a core's is, taken by the client at
+/// its moment between frames (a timer of the window's runtime, or the test's clock), while `live` says it is the core
+/// still: told to `heard` then. Outside what the made-up core works out itself, so a count of what the app runs can set
+/// that apart (scripts/instrbench.sh: round_trip_again's own).
+fn made_core_post(text : String, heard : (String) -> Unit, live : () -> Bool) -> Unit {
+  made_core_later(0.0, fn() {
+    if live() {
+      heard("in " + text)
+      @core.receive(text, None)
+    }
+  })
+}
+
+///|
 /// `base` answering through the app's own client of its core (src/core's Client), as a core across its thread does: a
 /// topic's first value `ms` late each time the client subscribes to it, what changes of it after told as it changes,
 /// and none of it after the client lets it go (its unsubscribe, sent once no reader of it is left anywhere); so what is
@@ -1543,17 +1567,17 @@ pub fn round_trip_again(
   // (whether this one is the core still: one another took the core's place from (a test after, a kept conversation)
   // says nothing more, all it answers stopped)
   let mine = Ref(0)
-  let give = fn(m : Json) {
-    if mine.val == 0 || @core.served() != mine.val {
-      for _, stop in live {
-        stop()
+  let give = fn(text : String) {
+    made_core_post(text, heard, fn() {
+      if mine.val == 0 || @core.served() != mine.val {
+        for _, stop in live {
+          stop()
+        }
+        live.clear()
+        return false
       }
-      live.clear()
-      return
-    }
-    let text = m.stringify()
-    heard("in " + text)
-    @core.receive(text, None)
+      true
+    })
   }
   let send = fn(text : String) {
     heard("out " + text)
@@ -1584,12 +1608,14 @@ pub fn round_trip_again(
           Some(by) => by(name, params)
           None => ms
         }
-        fix_later(due, fn() {
+        made_core_later(due, fn() {
           guard on.val else { return }
           // (owned by nothing: what follows the topic is the client's subscription, let go only by its unsubscribe.
           // Made so as it is made where nothing reads and no owner is set: a timer of the window's runtime, run
           // outside the frame's reading (ui's fx_frame_start), or a test's fix_clock_set between frames. One made as a
           // frame is read would be that frame's, and is a fault: @signals.effect_in_watch)
+          // (what it gave last: a value worked out again the same is no change, and a core sends none for it)
+          let last : Ref[String] = Ref("")
           stop.val = @signals.effect(fn() {
             let now = base.topic(name, params).get().snapshot()
             let m : Json? = match (now.value, now.error) {
@@ -1598,7 +1624,13 @@ pub fn round_trip_again(
               _ => None
             }
             match m {
-              Some(m) => @signals.after_flush(fn() { if on.val { give(m) } })
+              Some(m) => {
+                let text = m.stringify()
+                if text != last.val {
+                  last.val = text
+                  @signals.after_flush(fn() { if on.val { give(text) } })
+                }
+              }
               None => ()
             }
           })
@@ -1614,12 +1646,11 @@ pub fn round_trip_again(
         }
       (_, _, Some(String(call))) =>
         (base.call)(call, m.get("params").unwrap_or(Json::null()), fn(r) {
-          give(
-            match r {
-              Ok(v) => { "id": Json::number(id.to_double()), "ok": v }
-              Err(e) => { "id": Json::number(id.to_double()), "error": e }
-            },
-          )
+          let answer : Json = match r {
+            Ok(v) => { "id": Json::number(id.to_double()), "ok": v }
+            Err(e) => { "id": Json::number(id.to_double()), "error": e }
+          }
+          give(answer.stringify())
         })
       _ => ()
     }
