@@ -72,6 +72,11 @@ export class TranscriptTail {
     return this.keeps ? this.entries.length : this.count;
   }
 
+  /// How many bytes of complete lines it has read.
+  get readBytes(): number {
+    return this.offset - this.partial.length;
+  }
+
   /// Where its reading stands, to go on from in another thread.
   snapshot(): TailState {
     return { path: this.path, runtime: this.runtime, offset: this.offset, partial: this.partial.toString("base64"), count: this.length, inner: [...this.state.inner], packedStamp: this.packedStamp };
@@ -318,6 +323,13 @@ export class ChainTail {
   get length(): number {
     let n = 0;
     for (const t of this.tails) n += t.length;
+    return n;
+  }
+
+  /// How many bytes of complete lines it has read across its transcripts.
+  get readBytes(): number {
+    let n = 0;
+    for (const t of this.tails) n += t.readBytes;
     return n;
   }
 

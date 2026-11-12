@@ -404,12 +404,16 @@ export abstract class AcpSession extends OwnProcessSession {
       if (message.id === OPEN) {
         open = true;
         if (typeof message.result?.sessionId === "string") this.sessionId = message.result.sessionId;
+        if (message.result !== undefined) this.opened(message.result);
       } else if (open && message.method === "session/update" && (this.sessionId === "" || message.params?.sessionId === this.sessionId)) {
         const update = this.normalized(message.params?.update);
-        if (!turnStep(update)) continue;
-        this.turn.busy = true;
-        this.live.feed(update);
-        partial.push(update);
+        if (turnStep(update)) {
+          this.turn.busy = true;
+          this.live.feed(update);
+          partial.push(update);
+        } else if (this.turn.busy) {
+          partial.push(update);
+        }
       } else if (this.endsTurn(message.id)) {
         this.turn.busy = false;
         this.live.ended();
@@ -417,11 +421,12 @@ export abstract class AcpSession extends OwnProcessSession {
       }
     }
     this.loading = false;
-    // What the running turn had said and called, as if heard now, nothing of it written again.
+    // What the running turn had said, called and used, as if heard now, nothing of it written again.
     const again = () => {
       for (const update of partial) {
         const done = this.track(update);
         this.transcript?.take(this.sessionId, update, done);
+        this.updated(update);
       }
     };
     if (this.transcript !== null) this.transcript.quietly(again);
