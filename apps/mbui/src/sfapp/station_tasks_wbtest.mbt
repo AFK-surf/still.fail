@@ -70,6 +70,7 @@ test "添加 station: its mode chosen as it is named; 只执行任务 makes a co
   assert_eq(text(Some(made[0].params), "name"), "build-box-2")
   assert_eq(calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).count(), 0)
   assert_true(t.find("curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b rig:9d2e6a41c07b") is Some(_))
+  assert_true(t.find("& ([scriptblock]::Create((irm https://still.fail/install.ps1))) 4f7c2a9e1b rig:9d2e6a41c07b") is Some(_))
 }
 
 ///|

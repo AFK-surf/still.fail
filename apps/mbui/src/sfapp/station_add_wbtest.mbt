@@ -161,8 +161,13 @@ test "添加 station: named, 生成命令 makes the command (workspace.enroll) a
     // the field done with: the keys and the input method let go of
     assert_false(t.focus_said().has_prefix("TextField"), msg="\{at}: \{t.focus_said()}")
     assert_false(t.ime().0, msg=at)
-    // the command to run there, what runs it, the wait; the choices gone, 取消 alone at its foot
-    for w in ["在该机器的终端中执行：", "curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b", "等待机器加入… 执行命令后将自动继续 · 命令 1 小时内有效", "取消"] {
+    // the commands to run there, macOS's and Linux's and Windows' each under its system's name, what runs them, the
+    // wait; the choices gone, 取消 alone at its foot
+    for w in [
+      "在该机器的终端中执行：", "macOS、Linux", "curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b", "Windows（PowerShell）",
+      "& ([scriptblock]::Create((irm https://still.fail/install.ps1))) 4f7c2a9e1b", "等待机器加入… 执行命令后将自动继续 · 命令 1 小时内有效",
+      "取消",
+    ] {
       assert_true(sa_drawn(t, w), msg="\{at}: \{w}")
     }
     for w in ["新机器", "完整", "名称", "生成命令"] {

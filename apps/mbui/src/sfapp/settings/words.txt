@@ -736,6 +736,8 @@ android-settings.station.renameTitle
 android-settings.station.renameWhat
 android-settings.station.run
 android-settings.station.runNote
+android-settings.station.runUnix
+android-settings.station.runWindows
 android-settings.station.wait
 android-settings.station.waiting
 android-settings.stations.offline
