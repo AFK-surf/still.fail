@@ -253,8 +253,6 @@ priv struct ChatBodyKeeps {
 /// its top, as list_after puts it once); a chat too short to fill what shows at its foot, over the composer (the old
 /// list's from_end); the page before asked as it nears its top. `made`, told each row's key and what holds it as its row
 /// is made (a block made, or made again as its key comes to be another kind of row).
-// the chat's page as nodes: held by its tests, not used by the app yet
-#warnings("-unused_value")
 fn chat_body_node(
   v : @view.View,
   src : Source,

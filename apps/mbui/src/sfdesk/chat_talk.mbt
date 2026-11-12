@@ -98,10 +98,44 @@ fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
 
 ///|
 /// How tall the chat's bar over the list is (pageBar: 45; in a panel of its own as much taller as puts its buttons in
-/// the panel's corner concentric with it: chat_bar_box_tape), and the list's room under it over its first row (24).
-fn chat_bar_room() -> Double {
-  @sf.wide_bar_h + (if @sf.in_pane() { @sf.tape_bar_over() } else { 0.0 })
+/// the panel's corner concentric with it: chat_bar_box_tape; `in_pane` as the page built now is), and the list's room
+/// under it over its first row (24).
+fn chat_bar_room(in_pane? : Bool = @sf.in_pane()) -> Double {
+  @sf.wide_bar_h + (if in_pane { @sf.tape_bar_over() } else { 0.0 })
 }
 
 ///|
 let list_head_gap : Double = 24.0
+
+///|
+/// Chat `r`'s messages where its page is made with its inside nodes (sfbase's chat_page_nodes: chat_page_made's
+/// `body`), in `v`, as wide as it is given: under the bar's room, `in_pane` the page a panel of its own (chat_bar_room).
+/// What the page's old view hands the system's bars said here as nodes (chat_bar_handed_node).
+fn chat_body_nodes(
+  v : @view.View,
+  src : Source,
+  r : ChatRef,
+  tips : @sf.TipLayer,
+  stint : () -> Int,
+  in_pane? : Bool = false,
+) -> Unit {
+  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, top=fn() { chat_bar_room(in_pane~) + list_head_gap })
+  chat_bar_handed_node(v, src, r)
+}
+
+///|
+/// Chat `r`'s composer under its messages where its page is made with its inside nodes (sfbase's chat_page_nodes:
+/// chat_page_made's `foot`), at its own height, `apart` as chat_composer's; nothing over it or let go into it yet
+/// (chat_talk's layers).
+fn chat_composer_nodes(c : @ui.Ctx, src : Source, r : ChatRef, apart : Bool) -> Unit {
+  guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
+  let foot = c.box(style=chat_composer_under, fn() {
+    @sfpages.chat_composer(c, src, w, r, view_of_chat(src, r).0, apart~)
+  })
+  @motion.scope(c, foot, bottom=true)
+}
+
+///|
+/// The composer's box under a chat's messages made as nodes (chat_composer_nodes): as wide as the pane.
+// kept across runs: a value (no field of it changes)
+let chat_composer_under : @ui.Style = @ui.css("w=Full")

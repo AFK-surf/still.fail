@@ -40,10 +40,22 @@ pub fn felt_change_node(v : @view.View, now : () -> Bool, kind : @ui.Haptic) -> 
 /// The chat open as `v` coming to need the viewer (a card waiting for them, `asks`, or its agent saying it needs them:
 /// the state's `need`), felt as something done.
 pub fn feel_needed(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
-  let needs = v.asks.length() > 0 ||
-    (match v.state {
-      Some((_, lead, _)) => lead == "need"
-      None => false
-    })
-  felt_change(c, "needed/" + r.station + "/" + r.session, needs, Confirm)
+  felt_change(c, "needed/" + r.station + "/" + r.session, chat_needs(v), Confirm)
+}
+
+///|
+/// feel_needed's where chat `r`'s page is made as nodes (chat_page_made's, chat_page_nodes on), in node `n`: its view
+/// as source `src` reads it.
+fn feel_needed_node(n : @view.View, src : Source, r : ChatRef) -> Unit {
+  felt_change_node(n, fn() { view_of_chat(src, r).0.map(chat_needs).unwrap_or(false) }, Confirm)
+}
+
+///|
+/// Whether chat `v` needs its viewer: a card waits for them, or its agent says it needs them.
+fn chat_needs(v : ChatView) -> Bool {
+  v.asks.length() > 0 ||
+  (match v.state {
+    Some((_, lead, _)) => lead == "need"
+    None => false
+  })
 }

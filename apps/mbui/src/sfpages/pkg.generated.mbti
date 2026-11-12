@@ -27,7 +27,7 @@ pub fn agent_avatar(@ui.Ctx, @sfbase.Source, MessageHere, String, String, String
 
 pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
 
-pub fn agent_badge_node(@view.View, String, Double) -> Unit
+pub fn agent_badge_node(@view.View, String, Double, ground? : () -> Int64) -> Unit
 
 pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @json.Json, across? : Bool) -> Unit
 
@@ -90,6 +90,8 @@ pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
 pub let chat_narrow_w : Double
+
+pub fn chat_page_body_node(@view.View, @sfbase.Source, @sfbase.ChatRef, tips~ : @sf.TipLayer, stint~ : () -> Int32, top? : () -> Double, foot? : () -> Double, lead? : Double) -> Unit
 
 pub fn chat_row(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, on? : Bool, list_ground? : Int64, more? : Bool, lifted? : Double, found? : Bool, opened? : (@sfbase.ChatRef) -> Unit, unghost? : (Bool) -> Unit, at? : @sf.ListAt) -> Int32
 
@@ -491,6 +493,8 @@ pub let publish_viz_settle_ms : Double
 
 pub fn pull_mark(@ui.Ctx, @json.Json?, Double) -> Unit
 
+pub fn pull_mark_node(@view.View, () -> @json.Json?, Double) -> Unit
+
 pub fn pull_title(@json.Json?) -> String
 
 pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool, at? : String) -> Unit
@@ -650,6 +654,8 @@ pub let steps_marked_ms : Double
 pub fn switch_workspace(@sfbase.Source, String) -> Unit
 
 pub fn thing_menu(@ui.Ctx, Int32, Double, String, (Double) -> Unit) -> Unit
+
+pub fn thing_menu_node_at(Double, Double, Double, String, (Double) -> Unit) -> Unit
 
 pub fn things_body(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Double, Bool, (Double) -> Unit) -> Unit
 

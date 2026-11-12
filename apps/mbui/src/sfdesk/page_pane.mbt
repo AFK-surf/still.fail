@@ -364,7 +364,7 @@ fn pane_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) {
+          fn(v, _page, _under, stint, k) {
             // (beside it its side panel, the tree's, reading by the page's source, let go with it: side_panel_node)
             v.row(Is(true)).grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             let page_src : Ref[Source] = Ref(src)
@@ -381,6 +381,9 @@ fn pane_made(
                 over=fn(o, src, page, stint) {
                   chat_bar_wide_node(o, src, page, pane_chat_bar_ends(src, o), tips, stint)
                 },
+                // (with chat_page_nodes on: its messages nodes, its composer under them its old view)
+                body=fn(col, s, r) { chat_body_nodes(col, s, r, tips, stint) },
+                foot=fn(c, s, r) { chat_composer_nodes(c, s, r, wide.tape.get()) },
               )
             })
             |> ignore

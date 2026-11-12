@@ -1585,6 +1585,8 @@ pub fn panel_text(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn panel_tip_node(@view.View, () -> String) -> Unit
 
+pub fn panel_tips_of(@view.View) -> TipLayer?
+
 pub let panel_w : Double
 
 pub fn panel_whole() -> Bool
@@ -1756,6 +1758,8 @@ pub fn presented_drawn_of(Int32) -> Bool
 pub fn presented_from(Anchor) -> Bool
 
 pub fn presented_nodes(@view.View) -> Unit
+
+pub fn presented_open_now(Int32) -> Bool
 
 pub fn presented_open_of(Int32) -> Bool
 

@@ -29,6 +29,8 @@ fn chat_page_reset() -> Unit {
   chat_own.jobs_open.set(false)
   chat_bar_from.info_node = None
   chat_bar_from.jobs_node = None
+  chat_pops.info = 0
+  chat_pops.jobs = 0
 }
 
 ///|
@@ -262,6 +264,69 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
 /// bar_chat), the actions of the chat before kept there till its own come (bar_chat_waiting); archiving it asked to
 /// confirm where it keeps watch (in the core's words).
 fn chat_bar_handed(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : Json?) -> Unit {
+  chat_bar_hand(src, w, r, v, chat, fn(key) { bar_menu_from(c, c.id(key)) })
+}
+
+///|
+/// What chat_bar_handed hands where the chat's page is made as nodes (sfbase's chat_page_nodes: its messages'
+/// chat_body_nodes), said at node `v`: as the page comes on top, and again as what the actions show changes while it
+/// is (its view, its row, its services, ⌘F's bar in it, the column's room), not each frame; the actions handed for
+/// another page let go first, as a frame lets them go as the page on top changes (nav_page_for). What opens from them
+/// beside the item chosen (bar_menu_from_node).
+fn chat_bar_handed_node(v : @view.View, src : Source, r : ChatRef) -> Unit {
+  let page : Page = Chat(r)
+  v.reacts(fn() { chat_bar_said(src, r, app.nav.top() == page) }, fn(said) {
+    guard said.0 else { return }
+    @signals.untracked(fn() {
+      guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
+      nav_page_for(page)
+      chat_bar_hand(src, w, r, view_of_chat(src, r).0, src.topic("chat", chat_params(r)).get().value, fn(_) {
+        bar_menu_from_node(v)
+      })
+    })
+  })
+}
+
+///|
+/// What chat_bar_hand reads of chat `r` (`top` its page on top), as a value: changed, what it hands changes.
+fn chat_bar_said(
+  src : Source,
+  r : ChatRef,
+  top : Bool,
+) -> (Bool, (Bool, Bool, Bool), (String, Double?, Bool, Bool, Bool, String, String)?, (Json?, Json?, Json?)) {
+  let whole = @sfbase.chat_whole_held(src, r)
+  let view = view_of_chat(src, r).0
+  let chat = src.topic("chat", chat_params(r)).get().value
+  let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().value
+  (
+    top,
+    (@sf.native_on(), column_short.get(), find_chat() == chat_key(r)),
+    view.map(fn(v) {
+      (
+        v.title,
+        v.thread,
+        v.archivable,
+        v.archived,
+        v.offline,
+        v.agents.map(fn(a) { a.key }).join(" "),
+        v.screens.map(fn(s) { s.id + (if s.agent { "*" } else { "" }) }).join(" "),
+      )
+    }),
+    (chat, whole.value, jobs),
+  )
+}
+
+///|
+/// chat_bar_handed's, what opens from its "…" and its screens beside where `beside` says (given the page's own id's key
+/// for it).
+fn chat_bar_hand(
+  src : Source,
+  w : Workspace,
+  r : ChatRef,
+  v : ChatView?,
+  chat : Json?,
+  beside : (String) -> (@sf.Beside, @ui.Along),
+) -> Unit {
   // (its "…" is its chat's whole row's: held while its page is open, asked as it opens, @sfpages.chat_menu_of)
   @sfbase.chat_whole_held(src, r) |> ignore
   match v {
@@ -273,11 +338,11 @@ fn chat_bar_handed(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Ch
       let info = fn() { chat_own.info_open.set(!chat_own.info_open.untracked()) }
       let extra = @sfpages.chat_extra_items(src, r, chat)
       let more = fn() {
-        let (from, along) = bar_menu_from(c, c.id("chat-more"))
+        let (from, along) = beside("chat-more")
         @sfpages.open_chat_menu(src, w.id, r, extra, from~, along~)
       }
       let rows = if @sf.native_on() {
-        @sfpages.chat_menu_of(src, w.id, r, extra, share_from=fn() { bar_menu_from(c, c.id("chat-more")).0 })
+        @sfpages.chat_menu_of(src, w.id, r, extra, share_from=fn() { beside("chat-more").0 })
       } else {
         []
       }
@@ -286,7 +351,7 @@ fn chat_bar_handed(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Ch
         Some(
           (
             fn() {
-              let (from, along) = bar_menu_from(c, c.id("chat-screen"))
+              let (from, along) = beside("chat-screen")
               chat_screens_open(r, screens, from~, along~)
             },
             chat_screens_driven(screens),

@@ -2,9 +2,15 @@
 
 ///|
 /// The badge at the corner of an agent's mark `side` across (sfpages' agent_badge, as nodes): a dot ringed in the
-/// page's ground, blue waiting on a person, red failed; yellow spokes at work. A chat's bar's on every screen (小屏's
-/// chat_bar_node, 中屏's and 大屏's chat_bar_wide_node).
-pub fn agent_badge_node(v : @view.View, badge : String, side : Double) -> Unit {
+/// page's ground (or `ground`: what the mark stands on, as agent_badge's), blue waiting on a person, red failed; yellow
+/// spokes at work. A chat's bar's on every screen (小屏's chat_bar_node, 中屏's and 大屏's chat_bar_wide_node), a chat's
+/// info's (its panel's ground).
+pub fn agent_badge_node(
+  v : @view.View,
+  badge : String,
+  side : Double,
+  ground? : () -> Int64 = fn() { @sf.theme().p.bg },
+) -> Unit {
   let k = if side / 20.0 < 1.0 { side / 20.0 } else { 1.0 }
   match badge {
     "block" | "failed" => {
@@ -18,7 +24,7 @@ pub fn agent_badge_node(v : @view.View, badge : String, side : Double) -> Unit {
         .offset(Is((at, at)))
         .radius(Is(d / 2.0))
         .padding(Is((2.0 * k, 2.0 * k, 2.0 * k, 2.0 * k)))
-        .ground(By(fn() { @sf.theme().p.bg }))
+        .ground(By(ground))
         |> ignore
         r.box(fn(dot) {
           let ink = if badge == "block" { @sf.mark_blue } else { @sf.mark_red }
