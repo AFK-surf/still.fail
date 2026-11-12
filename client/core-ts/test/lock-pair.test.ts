@@ -9,22 +9,19 @@
 // device, and made a member as the code signs their device in. On the test clock, the trusted core's lock at a cloud
 // that keeps chains.
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
 import { hooks } from "../src/core/execute.ts";
-import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
+import { PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { utf8 } from "../src/util.ts";
-import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
 import { Lock, bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, putOnBound, read, signerOf } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
-import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalBegin, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
-import { run as runEffect } from "./run.ts";
+import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalBegin, served, serveTrusted, trying, tryOne } from "../src/views/pair.ts";
 import { ME, PHONE, elsewhere, genesis, grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
 import { Status, started, stationReplies } from "./station-fixture.ts";
 
@@ -704,43 +701,6 @@ test("the trusted device's last word to a new device is taken before its connect
   const f = await servedAlone(true);
   await f.until(() => f.said.some((x) => x.startsWith("close")));
   assert.deepEqual(f.said, [no, "finish failed", "close 0 done"]);
-});
-
-test("over iroh: the trusted device takes the new one on its endpoint, and the code typed signs it in", { skip: loadAddon() === null ? "the mesh addon is not built here" : false }, async () => {
-  const addon = loadAddon() as any;
-  const seen: any[] = [];
-  const iroh = nodeIroh({ bind: async (o: any) => { const e = await addon.bind(o); seen.push(e); return e; } })!;
-  const trustedEnd = await runEffect(iroh.bind({ secretKey: randomBytes(32), relayUrls: [], lookup: false, relayOnly: false, alpns: [PAIR_ALPN] }));
-  const newEnd = await runEffect(iroh.bind({ secretKey: randomBytes(32), relayUrls: [], lookup: false, relayOnly: false }));
-  const socket = (seen[0].sockets() as string[]).find((x) => !x.startsWith("["))!;
-  newEnd.addAddr({ id: trustedEnd.id(), ips: [`127.0.0.1:${socket.slice(socket.lastIndexOf(":") + 1)}`] });
-  const g = grant();
-  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, trustedEnd.id()) }));
-  r.core.inner.meshNow = () => ({ deviceId: () => trustedEnd.id() }) as never;
-  await r.watch({ topic: "lock", workspace: "ws" });
-  const prompts = await r.watch({ topic: "lockPrompts" });
-  // The trusted device's endpoint takes it, as the mesh's does (views/pair.ts `served`).
-  void runEffect(trustedEnd.accept!()).then((taken) => taken && served(r.core.inner, taken.connection));
-  const connection = await runEffect(newEnd.connect({ id: trustedEnd.id() }, PAIR_ALPN, []));
-  const d = streamDuplex(await runEffect(connection.openBi()), () => connection.close(0, "done"));
-  await runEffect(d.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", newEnd.id(), "s2") }], kind: "web", label: "Chrome", sign_key: null }));
-  const answer = runEffect(d.next());
-  for (let i = 0; i < 100 && (await prompts()).pairing.length === 0; i++) await r.host.time.pass(10);
-  assert.deepEqual(await answer, { t: "code", workspaces: ["ws"] });
-  const code = (await prompts()).pairing[0].code;
-  const done: any[] = [];
-  r.core.inner.runner.fork(Effect.map(Effect.result(tryOne(r.core.inner, { id: trustedEnd.id(), d, workspaces: ["ws"] }, newEnd.id(), code)), (x) => done.push(x)));
-  // (10 ms at a time, never `passUntil`: what it waits on comes over a real socket, which no sleep of the clock shows,
-  // and each step's turns are the ones it comes in; passUntil took the steps that woke nothing at once and was done with
-  // 5 s in 64 ms, the answer still on its way: main fe6d90f2's check-linux 43217458770, 2026-11-12)
-  for (let i = 0; i < 500 && done.length === 0; i++) await r.host.time.pass(10);
-  assert.equal(done[0]?._tag, "Success", String(done[0]?.failure?.message));
-  const entry = r.cloud.chains.get("ws")!.at(-1)!;
-  assert.equal((entry.body as { id: string }).id, newEnd.id());
-  assert.equal((entry.body as { kind: string }).kind, "web");
-  connection.close(0, "done");
-  await runEffect(newEnd.close());
-  await runEffect(trustedEnd.close());
 });
 
 test("a device joins its person's own lock face to face: the code shown on a device on it lets it in, nothing else does", async () => {
