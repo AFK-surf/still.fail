@@ -42,7 +42,8 @@ test("the status page's numbers: what the cron found of each service, a failure 
     const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: string): Promise<unknown> };
     await bucket.put("station.json", "{}");
     await cron();
-    assert.deepEqual(asked, ["HEAD https://site.test/", "HEAD https://share.test/"]);
+    // The page checks run in parallel; either request can reach the mock first.
+    assert.deepEqual([...asked].sort(), ["HEAD https://share.test/", "HEAD https://site.test/"]);
     // The first of a relay's failures is not counted as down either.
     // still.fail's own relay's counters come from the same cron; Beijing's have not come.
     const own = new URL(h.origin).host;
