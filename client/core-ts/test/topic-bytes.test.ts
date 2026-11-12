@@ -27,11 +27,11 @@ import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
 import { SHAPES } from "../src/shapes/schema.ts";
 import { equal, isObject } from "../src/util.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, OUTLINED, OUTLINED_ENTRIES, hostReading, liveOf, messageAdded, quotaChanged } from "./real-size.ts";
+import { OUTLINED, OUTLINED_ENTRIES, liveOf } from "./real-size.ts";
 import { base, started } from "./station-fixture.ts";
 import { applyKeyed } from "../src/collections.ts";
-import { hostOf, overview, setup } from "./views-rig.ts";
-import { ASKED, CHANGELOG_PAGE, LONG, causesOfAll, topicOf, held, firstOfAll } from "./real-size-asked.ts";
+import { setup } from "./views-rig.ts";
+import { ASKED, CAUSES, CHANGELOG_PAGE, LONG, causesOfAll, topicOf, held, firstOfAll } from "./real-size-asked.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -41,9 +41,6 @@ type J = any;
 const DELTA_BAR_KB = 4;
 /// What a value sent whole may weigh, in KB.
 const BAR_KB = 32;
-
-const station = CHAT.station;
-
 
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
 const OVER: Record<string, number> = {
@@ -760,18 +757,11 @@ test("what a topic the app keeps is sent as it is asked again after something ch
   const rows: { name: string; whole: number; now: number; how: string }[] = [];
   const faults: string[] = [];
   for (const long of [false, true]) {
-    const { t, base, chat } = await held(long);
+    const h = await held(long);
+    const { t } = h;
     try {
       const names = Object.keys(ASKED).filter((name) => KEPT.has(ASKED[name]!.topic) && LONG.has(name) === long);
-      const st = 0;
-      const causes: [string, () => void, number][] = [
-        ["host", () => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000],
-        ["quota", () => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000],
-        ["message", () => {
-          for (const [topic, value] of messageAdded(base, t.host.nowMs(), chat)) t.set(topic, value);
-        }, 1000],
-        ["minute", () => {}, 60_000],
-      ];
+      const causes: [string, () => void, number][] = ["host", "quota", "message", "minute"].map((n) => [n, () => CAUSES[n]!.run(h), CAUSES[n]!.ms ?? 1000]);
       /// The first message to `id` once `f` was done.
       const firstTo = async (id: number, f: () => void): Promise<J> => {
         t.host.takeEmitted();

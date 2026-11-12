@@ -78,8 +78,9 @@ held in the places of before takes these once, is that row's place written alone
 looks at no other row: every `glanced` counter stays 0 there but the marks' lists of threads the older path reads
 (kept, hidden, muted, suggested, dismissed), walked where a scoped read or what was said puts its own in them, in the
 test's `SHARED_MARKS_WALKED` (they go with that path); the older path's (rowsMade) are in its `OLDER_GLANCED`. Both
-only fall. `CAUSES` give a chat list whole as new rows, which the sync does only the first time it makes a list in a
-run: their `OVER_WRITE` entries for chats measure that giving, until those causes are told as the sync's events.
+only fall. `CAUSES` tell a change of one item of a station's list by its key, as the sync takes the station's event
+(real-size-asked.ts `listTold`: a chat's row put at its place or dropped, a thread put, a session's summary put), a list
+written whole only as the rig is first given it; one told otherwise, as so it would send otherwise, is in its `UNTOLD`.
 
 ## The chat table is read by what a view shows
 

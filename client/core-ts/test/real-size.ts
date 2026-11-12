@@ -875,12 +875,9 @@ export function fixture(now: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
     out.push([link(at), up ? { state: "online" } : { state: "offline", message: "连不上这台 station：它可能关机了", last: "offline" }]);
     out.push([overview(at), overviewOf(now - (up ? 0 : 3 * DAY), st)]);
     if (up) out.push([hostOf(at), hostReading(now, st)], [{ topic: "way", station: at }, { via: st % 2 === 0 ? "direct" : "relay", rttMs: 18 + st * 9 }]);
-    const n = rowsCount(st);
-    const keys = Array.from({ length: n }, (_, i) => keyOf(st, i));
-    if (st === 0) keys.push(CHAT.keys[1]);
-    out.push([sessions(at), keys.map((k, i) => sessionOf(now, st, k, i))]);
-    out.push([threads(at), Array.from({ length: n }, (_, i) => threadOf(now, st, i))]);
-    out.push([rows(at), Array.from({ length: n }, (_, i) => rowOf(now, st, i))]);
+    out.push([sessions(at), sessionsAt(now, st)]);
+    out.push([threads(at), threadsAt(now, st)]);
+    out.push([rows(at), rowsWith(now, st, (r) => r)]);
     out.push([{ topic: "archivedRows", station: at }, Array.from({ length: ARCHIVED }, (_, i) => rowOf(now, st, i, true))]);
     if (up) {
       out.push([{ topic: "stationUsage", station: at }, usageOf(now, st)]);
@@ -1055,6 +1052,23 @@ export function thingSaid(at: number): J {
 /// Station `st`'s chat rows (made at `base`), each as `f` makes it of the fixture's (null: gone from the list).
 function rowsWith(base: number, st: number, f: (row: J, i: number) => J | null): J[] {
   return Array.from({ length: rowsCount(st) }, (_, i) => f(rowOf(base, st, i), i)).filter((r) => r !== null);
+}
+
+/// Station `st`'s sessions and threads as it lists them (made at `now`).
+function sessionsAt(now: number, st: number): J[] {
+  const keys = Array.from({ length: rowsCount(st) }, (_, i) => keyOf(st, i));
+  if (st === 0) keys.push(CHAT.keys[1]);
+  return keys.map((k, i) => sessionOf(now, st, k, i));
+}
+function threadsAt(now: number, st: number): J[] {
+  return Array.from({ length: rowsCount(st) }, (_, i) => threadOf(now, st, i));
+}
+
+/// What the station at `station` lists as the workspace was made at `base` (the fixture's): its chat rows, threads and
+/// sessions, by the topic of each.
+export function listedOf(base: number, station: string, topic: "chatRows" | "threads" | "sessions"): J[] {
+  const st = STATIONS.findIndex((s) => `ws/${s.id}` === station);
+  return topic === "chatRows" ? rowsWith(base, st, (r) => r) : topic === "threads" ? threadsAt(base, st) : sessionsAt(base, st);
 }
 
 /// A chat of the viewer's on Maple (not the open one) whose agent came to wait on a card at `at`: its rows, and the row
