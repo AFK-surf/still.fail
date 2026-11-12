@@ -187,6 +187,66 @@ test("a station that refuses this device though the lock names it has not heard 
   assert.equal(woke.length, BEHIND_TRIES, "as often as BEHIND_TRIES");
 });
 
+// The real-station end-to-end's round 6 (2026-11-12, twice in seven runs): a device taken off its person's own lock,
+// the cloud frozen, refused by the station for that lock 5 ms before the station took the entry that takes it out of
+// the workspace's lock; its held workspace lock still named it, and nothing tried that station again, so it never heard.
+async function offItsOwnLock() {
+  const owner = elsewhere();
+  const OWNER = "ef".repeat(32);
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], {}, ME, [{ id: OWNER, sub: "s1", kind: "app", label: "owner's", sign_key: owner.id }]) }));
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  const vaults = await r.watch({ topic: "vaults", workspace: "ws" });
+  const signedOn = (kind: string, body: unknown): Entry => {
+    const e = next("ws", r.cloud.head("ws"), r.host.nowMs() / 1000, kind, body);
+    const s = { ...e, sig: { key: owner.id, alg: "Ed25519" as const, sig: owner.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } } as Entry;
+    r.cloud.chains.set("ws", [...r.cloud.chains.get("ws")!, s]);
+    return s;
+  };
+  // Its person bound a lock of their own here that this device is not on.
+  signedOn("person", { sub: "s1", person: "ab".repeat(32) });
+  r.core.inner.runner.fork(Effect.ignore(read(r.core.inner, "ws")));
+  await r.host.time.pass(1_000);
+  assert.equal(held(r.core.inner, "ws")!.entries.at(-1)!.kind, "person");
+  const woke: string[] = [];
+  r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
+  return { r, lock, vaults, signedOn, woke };
+}
+
+test("refused for its person's own lock while the workspace's lock held here still names it: tried again shortly, and hears the entry that takes it out", async () => {
+  const w = await offItsOwnLock();
+  const said = hooks.lockRefused!(w.r.core.inner, "ws", "st", null);
+  assert.equal(said?.code, "lock_unconfirmed");
+  assert.equal(hooks.lockWaiting!(w.r.core.inner, "ws", "st"), null, "asked again");
+  await w.r.host.time.pass(BEHIND_MS + 10);
+  assert.deepEqual(w.woke, ["ws/st"], "tried again within BEHIND_MS");
+  // Meanwhile the station took the entry taking it out; its refusal now tells it.
+  const out = w.signedOn("device.remove", { id: ME });
+  hooks.lockRefused!(w.r.core.inner, "ws", "st", null, { entries: [out] });
+  await w.r.host.time.pass(500);
+  assert.equal(entryHash(held(w.r.core.inner, "ws")!.entries.at(-1)!), entryHash(out), "heard");
+  const l = await w.lock();
+  assert.ok(!l.signs && !(l.members ?? []).some((m: any) => (m.groups ?? []).some((g: any) => (g.devices ?? []).some((d: any) => d.mine && d.signs))), JSON.stringify(l.me));
+  assert.equal((await w.vaults()).canSign, false, "its vault says it is out");
+  // Not named any more: refused again (as the try already set going is), held until the lock moves on, no more tries.
+  await w.r.host.time.pass(BEHIND_MS * 2 + 10);
+  hooks.lockRefused!(w.r.core.inner, "ws", "st", null);
+  assert.equal(hooks.lockWaiting!(w.r.core.inner, "ws", "st")?.code, "lock_unconfirmed", "held");
+  const tries = w.woke.length;
+  assert.ok(tries <= 2, `${tries} tries`);
+  await w.r.host.time.pass(BEHIND_MS * (BEHIND_TRIES + 2));
+  assert.equal(w.woke.length, tries, "no more");
+});
+
+test("refused for its person's own lock and nothing changes: tried again BEHIND_TRIES times, then not asked until the lock moves on", async () => {
+  const w = await offItsOwnLock();
+  for (let i = 0; i < 8; i++) {
+    hooks.lockRefused!(w.r.core.inner, "ws", "st", null);
+    await w.r.host.time.pass(BEHIND_MS * (i + 1) + 10);
+  }
+  assert.equal(w.woke.length, BEHIND_TRIES, "as often as BEHIND_TRIES");
+  assert.equal(hooks.lockWaiting!(w.r.core.inner, "ws", "st")?.code, "lock_unconfirmed", "then held until the lock moves on");
+});
+
 test("a device the lock names without its signing key signs nothing: the cloud gets no entry the stations would refuse", async () => {
   // This app is in the lock without its key (put in before it kept one), and keeps one now; an older device signed so,
   // the cloud kept it, and every station refused it and all after it (2026-10-24).

@@ -10,7 +10,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
+import { Core } from "../src/core.ts";
+import { apply as applyOps } from "../src/delta.ts";
 import { CoreError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
@@ -18,7 +20,9 @@ import { keep } from "../src/lock-keep.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { lockChain } from "../src/vault/lock-check.ts";
 import { ASKED_MS, Lock, TAKEN_MS, asked, held, lockView, read } from "../src/views/lock.ts";
-import { ME, genesis, grant, rig, unhex } from "./lock-rig.ts";
+import { HostWire } from "../src/station/wire.ts";
+import { subscribe } from "./helpers.ts";
+import { ME, genesis, grant, rig, unhex, withoutMesh } from "./lock-rig.ts";
 import { Status, stationReplies } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
@@ -80,7 +84,11 @@ function station(g0: Entry) {
     }
     return kept.entries.some((e) => entryHash(e) === last) ? Effect.succeed({ taken: 1, head: headOf(kept.entries) }) : fork();
   };
-  const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
+  // (frozen: what it is asked waits, no answer and no error, until it is thawed, then answered as it keeps the lock then)
+  let frozen: Deferred.Deferred<void> | null = null;
+  const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> =>
+    Effect.suspend(() => (frozen === null ? answerNow(method, path, body) : Effect.andThen(Deferred.await(frozen), Effect.suspend(() => answerNow(method, path, body)))));
+  const answerNow = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (say.down) return Effect.fail(new CoreError("network", "unreachable"));
     const serves = { takes: ["person"], serves: ["person", "devices", "told", ...(say.forks ? ["forks"] : [])] };
     if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after=")) && say.none) return Effect.succeed({ head: null, entries: [], ...serves });
@@ -117,6 +125,16 @@ function station(g0: Entry) {
     chain: () => kept.entries,
     set: (chain: Entry[]) => void (kept = { entries: chain, aside: [] }),
     add: (e: Entry) => void (kept = { entries: [...kept.entries, e], aside: kept.aside }),
+    /// What another keeper took, kept by the rules' fork choice (station/src/mesh/lock-sync.ts: stations level).
+    keeps: (es: Entry[]) => void (kept = keep(kept, es, rules).kept),
+    aside: () => kept.aside,
+    /// Stopped where it is (`e2e-local.sh freeze`, SIGSTOP), and started again.
+    freeze: () => void (frozen = Deferred.makeUnsafe<void>()),
+    thaw: () => {
+      const f = frozen;
+      frozen = null;
+      if (f !== null) Deferred.doneUnsafe(f, Effect.void);
+    },
   };
 }
 
@@ -135,13 +153,17 @@ async function setUp(ids: string[], another: string[] = []) {
   const g0 = r.cloud.chains.get("ws")![0]!;
   const other = genesis("ws", keyOf(5), false);
   const stations = new Map(ids.map((id) => [id, station(another.includes(id) ? other : g0)]));
-  const original = inner.stations.requests.call.bind(inner.stations.requests);
-  inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
-    const [ws, id] = addr.toString().split("/");
-    const st = ws === "ws" ? stations.get(id!) : undefined;
-    if (st !== undefined && path.startsWith("/lock")) return st.answer(method, path, body);
-    return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
-  }) as typeof inner.stations.requests.call;
+  /// `ws`'s stations reached by `inner`'s requests as these simulated ones (each core's: the app quit and started again).
+  const reach = (inner: typeof r.core.inner) => {
+    const original = inner.stations.requests.call.bind(inner.stations.requests);
+    inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+      const [ws, id] = addr.toString().split("/");
+      const st = ws === "ws" ? stations.get(id!) : undefined;
+      if (st !== undefined && path.startsWith("/lock")) return st.answer(method, path, body);
+      return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
+    }) as typeof inner.stations.requests.call;
+  };
+  reach(inner);
   const run = async <X>(e: Effect.Effect<X, any>, limit = 5_000): Promise<X> => {
     let done = false;
     let failed: unknown;
@@ -172,7 +194,7 @@ async function setUp(ids: string[], another: string[] = []) {
     for (const e of fresh()) by.set(e.prev!, [...(by.get(e.prev!) ?? []), e]);
     return [...by.values()].filter((es) => es.length > 1).map((es) => es.map((e) => `${e.kind} ${JSON.stringify(e.body)}`).join(" and "));
   };
-  return { r, inner, signer, g0, stations, st, run, settle, fresh, twins };
+  return { r, inner, signer, g0, stations, st, run, settle, fresh, twins, reach };
 }
 
 const s3 = { sub: "s3", email: "c@x.com", role: "member" };
@@ -268,6 +290,74 @@ test("a read moves the chain held off this device's entry (two stations, another
   await w.settle();
   assert.equal(w.fresh().filter((e) => e.kind === "member").length, 2, "no third");
 });
+
+// The real-station end-to-end's round 7b (apps/mbui/e2e/locks.ts) as the side run of 2026-11-12 (run 43182403308) had
+// it: this device's entry taken by one station alone, that station frozen (no answer, no error), the other taking
+// another device's entry at its place, both up again on one chain with this device's entry aside.
+for (const how of ["running all along", "closed meanwhile and started again"] as const)
+  test(`a station that took this device's entry frozen, another taking another device's at its place, both up again on one chain with it aside (this device ${how}): it reads it, signs its entry again after the head, both take it, and its lock topic answers throughout`, async () => {
+    const w = await setUp([A, S]);
+    const a = w.st(A);
+    const s = w.st(S);
+    s.say.down = true;
+    await w.run(new Lock(w.inner, "ws", "s1", null).append("member", s3));
+    const X = held(w.inner, "ws")!.entries[1]!;
+    assert.deepEqual(a.chain().map(entryHash), [w.g0, X].map(entryHash), "A took X");
+    a.freeze();
+    let inner = w.inner;
+    let lock = await w.r.watch({ topic: "lock", workspace: "ws" });
+    assert.ok((await lock())?.locked, "the lock topic answers before");
+    if (how === "closed meanwhile and started again") {
+      await Effect.runPromise(w.inner.data.written);
+      w.r.core.close();
+      w.r.host.takeEmitted();
+    }
+    // Y, another device's removal of THIRD, taken by S (it wins over X at the genesis: a removal of a device that signs).
+    const Y = signedBy(oldKey, [w.g0], 1002, "device.remove", { id: THIRD });
+    s.set([w.g0, Y]);
+    s.say.down = false;
+    if (how === "running all along") {
+      // S up: its link opens and it is read (A asked too, and not answering)
+      inner.runner.fork(Effect.ignore(read(inner, "ws")));
+      await w.settle();
+      assert.ok((await lock())?.locked, "the lock topic answers while A is frozen");
+    }
+    // A thawed, level with S: Y on its chain, X aside.
+    a.keeps([w.g0, Y]);
+    assert.deepEqual(a.chain().map(entryHash), [w.g0, Y].map(entryHash), "A on Y's branch");
+    assert.deepEqual(a.aside().map(entryHash), [entryHash(X)], "X aside at A");
+    a.thaw();
+    if (how === "closed meanwhile and started again") {
+      const again = await Core.create(w.r.host, { clock: w.r.host.time.clock, sample: 0, wire: () => new HostWire(w.r.host) });
+      again.inner.mesh = () => withoutMesh(ME);
+      w.reach(again.inner);
+      inner = again.inner;
+      const ui = again.connect();
+      const values = new Map<number, unknown>();
+      subscribe(again, ui, 7, { topic: "lock", workspace: "ws" } as never);
+      lock = async () => {
+        await w.r.host.time.pass(200);
+        for (const [, m] of w.r.host.takeEmitted()) {
+          const msg = m as Record<string, unknown>;
+          if ("value" in msg) values.set(msg.id as number, msg.value);
+          else if ("delta" in msg) values.set(msg.id as number, applyOps(values.get(msg.id as number), msg.delta as never));
+        }
+        return values.get(7) as any;
+      };
+      assert.ok((await lock())?.locked, "the lock topic answers as it starts");
+    }
+    // Both told (A's lock moved; S as it is reached again): read.
+    inner.runner.fork(Effect.ignore(read(inner, "ws")));
+    for (let n = 0; n < 5_000; n += 10) await w.r.host.time.pass(10);
+    const members = w.fresh().filter((e) => e.kind === "member");
+    assert.equal(members.length, 2, `X, and X signed again: ${members.length}`);
+    const XX = members.find((e) => entryHash(e) !== entryHash(X))!;
+    assert.equal(XX.prev, entryHash(Y), "signed again after Y");
+    for (const [id, st] of [[A, a], [S, s]] as const) assert.deepEqual(st.chain().map(entryHash), [w.g0, Y, XX].map(entryHash), `${id === A ? "A" : "S"} took it`);
+    assert.deepEqual(held(inner, "ws")!.entries.map(entryHash), [w.g0, Y, XX].map(entryHash), "held");
+    const l = await lock();
+    assert.ok(l?.locked, "the lock topic answers after");
+  });
 
 test("taken by hash: a station whose answer's head is as far but another entry took none of it (the cloud refusing, the entry fails)", async () => {
   const w = await setUp([A]);

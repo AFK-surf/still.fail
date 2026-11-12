@@ -869,13 +869,22 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   // In the lock as this device holds it: the station has not heard of it yet (from the cloud, or the device that
   // signed it), and is tried again shortly rather than once the lock moves on, which it may not again for long.
   // A few times, each a little later (each try asks the station anew); after that, as any station not reached.
-  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined && !offOwnLock(inner, ws)) {
+  // Refused for its person's own lock too (off it, as far as it knows): the station may hold an entry that changes
+  // what the workspace's lock says of it which came just after it refused, and each try's refusal tells it
+  // (`heardTail`); else, nobody telling a device it refuses, it never heard (2026-11-12: the entry taking it out landed
+  // 5 ms after the refusal, the cloud frozen). Tried as long as the lock held names it, then held as before.
+  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined) {
     const tries = p.behind.get(station) ?? 0;
+    const off = offOwnLock(inner, ws);
     if (tries < BEHIND_TRIES) {
       p.behind.set(station, tries + 1);
-      inner.runner.fork(Effect.andThen(Effect.sleep(BEHIND_MS * (tries + 1)), Effect.sync(() => inner.stations?.cameOnline(`${ws}/${station}`))));
+      inner.runner.fork(Effect.andThen(Effect.sleep(BEHIND_MS * (tries + 1)), Effect.sync(() => inner.stations?.cameOnline(`${ws}/${station}`)))); // timer: a retry after a failure (a refusal), BEHIND_TRIES at most
+      if (off) {
+        touch(inner, ws);
+        return unconfirmed(inner, ws);
+      }
     }
-    return new CoreError("lock_unconfirmed", t("core-misc.lock.behind"));
+    if (!off) return new CoreError("lock_unconfirmed", t("core-misc.lock.behind"));
   }
   p.refused.set(station, h?.head?.hash ?? null);
   touch(inner, ws);

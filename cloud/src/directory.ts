@@ -27,7 +27,7 @@ import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./r
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
 import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, FeedbackReply, WorkspaceFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, RigView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
-import { apply, asEntry, entryHash, extendLock, genesis, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
+import { apply, asEntry, entryHash, genesis, keepLockAt, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -150,6 +150,7 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS lock_entries (workspace TEXT NOT NULL, seq INTEGER NOT NULL, hash TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, seq));
       CREATE TABLE IF NOT EXISTS devices (workspace TEXT NOT NULL, sub TEXT NOT NULL, device TEXT NOT NULL, base TEXT, kind TEXT, label TEXT, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (workspace, sub, device));
+      CREATE TABLE IF NOT EXISTS lock_aside (workspace TEXT NOT NULL, hash TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, hash));
       CREATE TABLE IF NOT EXISTS lock_turned_off (workspace TEXT NOT NULL, genesis TEXT NOT NULL, seq INTEGER NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, genesis, seq));
       CREATE TABLE IF NOT EXISTS lock_requests (workspace TEXT NOT NULL, base TEXT NOT NULL, sub TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace, base));
       CREATE INDEX IF NOT EXISTS users_by_email ON users (lower(email));
@@ -861,49 +862,65 @@ export class Directory extends DurableObject<Env> {
    * Entries that follow the kept chain (those it has are skipped; one that disagrees is refused, with the rest). A
    * genesis starts a chain where there is none, or where the last one was turned off. Stations and members' devices
    * bring them; each is checked as a station checks it (signed by whom it may be), and one a station would refuse is
-   * refused here, with the rest: kept, it would leave every entry after it refused at the stations.
+   * refused here, with the rest: kept, it would leave every entry after it refused at the stations. `fork`: what
+   * another keeper took (a station of the lock, a device saying `keep`), kept by the rules' fork choice among all kept
+   * (lock.ts `keepLockAt`): the chain gone by (`lock_entries`, what every reader reads) is their active chain, the rest
+   * kept beside it (`lock_aside`, none in a record from before).
    */
-  async #appendLock(workspace: string, raw: unknown): Promise<LockHead | null> {
+  async #appendLock(workspace: string, raw: unknown, fork = false): Promise<LockHead | null> {
     const entries = (Array.isArray(raw) ? raw : []).map(asEntry);
     if (entries.length === 0 || entries.length > 256 || entries.some((e) => e === null || e.ws !== workspace)) fail(400, "invalid_lock_entries");
     // Nothing else runs on this object between the reads and the writes below (no await between them), so they are
     // one step. What is refused throws before anything is written.
     this.#lockChecked(workspace);
-    const kept = this.#rows("SELECT entry FROM lock_entries WHERE workspace = ? ORDER BY seq", workspace).map((r) => JSON.parse(r.entry as string) as LockEntry);
-    let plan: ReturnType<typeof extendLock>;
+    const parse = (r: Record<string, unknown>) => JSON.parse(r.entry as string) as LockEntry;
+    const kept = {
+      entries: this.#rows("SELECT entry FROM lock_entries WHERE workspace = ? ORDER BY seq", workspace).map(parse),
+      aside: this.#rows("SELECT entry FROM lock_aside WHERE workspace = ? ORDER BY rowid", workspace).map(parse),
+    };
+    let plan: ReturnType<typeof keepLockAt>;
     try {
-      plan = extendLock(kept, entries as LockEntry[], nowSeconds());
+      plan = keepLockAt(kept, entries as LockEntry[], nowSeconds(), fork);
     } catch (e) {
       if (e instanceof LockAppendRefused) fail(e.status, e.code);
       throw e;
     }
-    const { restart, adding } = plan!;
-    if (adding.length > 0) {
+    const { restart, changed, moved, kept: now } = plan!;
+    if (changed) {
       this.ctx.storage.transactionSync(() => {
         if (restart) {
           // A chain turned off, kept for the stations that missed its end (lockTurnedOff).
           const genesisHash = this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = 0", workspace)?.hash;
           if (typeof genesisHash === "string") this.#run("INSERT OR IGNORE INTO lock_turned_off (workspace, genesis, seq, entry) SELECT workspace, ?, seq, entry FROM lock_entries WHERE workspace = ?", genesisHash, workspace);
-          this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
         }
-        for (const { e, hash } of adding) this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));
+        // (from where the chain now parts from the one kept: a branch that won replaces it from there)
+        const hashes = kept.entries.map(entryHash);
+        let from = 0;
+        while (!restart && from < now.entries.length && from < hashes.length && entryHash(now.entries[from]!) === hashes[from]) from++;
+        this.#run("DELETE FROM lock_entries WHERE workspace = ? AND seq >= ?", workspace, from);
+        for (const e of now.entries.slice(from)) this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, entryHash(e), JSON.stringify(e));
+        const aside = new Set(now.aside.map(entryHash));
+        const had = new Set(kept.aside.map(entryHash));
+        for (const h of had) if (!aside.has(h)) this.#run("DELETE FROM lock_aside WHERE workspace = ? AND hash = ?", workspace, h);
+        for (const e of now.aside) if (!had.has(entryHash(e))) this.#run("INSERT INTO lock_aside (workspace, hash, entry) VALUES (?, ?, ?)", workspace, entryHash(e), JSON.stringify(e));
       });
       // (its lock alone moved on: said in the event, so the members' devices need not ask for the workspace again)
-      this.#changed(workspace, false, [], true);
+      if (moved) this.#changed(workspace, false, [], true);
     }
     return this.#lockHead(workspace);
   }
 
-  /** A member's device brings entries (its own signer's, or what a station had more). */
-  async appendLock(sub: string, workspace: string, entries: unknown): Promise<{ head: LockHead | null }> {
+  /** A member's device brings entries (its own signer's, or what a station had more: `keep`, what a station took). */
+  async appendLock(sub: string, workspace: string, entries: unknown, keep = false): Promise<{ head: LockHead | null }> {
     this.#role(sub, workspace);
-    return { head: await this.#appendLock(workspace, entries) };
+    return { head: await this.#appendLock(workspace, entries, keep) };
   }
 
   /** The owner lets the kept lock go (its signers lost: each station is reset on its own machine). */
   clearLock(sub: string, workspace: string): void {
     this.#role(sub, workspace, ["owner"]);
     this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
+    this.#run("DELETE FROM lock_aside WHERE workspace = ?", workspace);
     this.#changed(workspace, false);
   }
 
@@ -1050,7 +1067,7 @@ export class Directory extends DurableObject<Env> {
     const told = [...this.#members(id), ...this.#invitees(id)];
     const stations = this.#stationsIn(id).map((station) => ({ station, home: this.#memberships(station)[0] }));
     this.ctx.storage.transactionSync(() => {
-      for (const table of ["members", "invitations", "added", "station_members", "enrollments", "lock_entries", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
+      for (const table of ["members", "invitations", "added", "station_members", "enrollments", "lock_entries", "lock_aside", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
       this.#run("DELETE FROM workspaces WHERE id = ?", id);
     });
     this.#tell(told, LIST, { type: "workspace", id });
@@ -2180,7 +2197,7 @@ export class Directory extends DurableObject<Env> {
 
   /** What a station said (here or on its object), answered with `send`. */
   async #said(station: string, message: string, send: (frame: string) => void): Promise<void> {
-    let body: { type?: unknown; after?: unknown; entries?: unknown; workspace?: unknown; genesis?: unknown };
+    let body: { type?: unknown; after?: unknown; entries?: unknown; workspace?: unknown; genesis?: unknown; keep?: unknown };
     try {
       body = JSON.parse(message);
     } catch {
@@ -2197,8 +2214,10 @@ export class Directory extends DurableObject<Env> {
       const off = typeof body.genesis === "string" ? this.#lockTurnedOff(workspace, body.genesis, after) : [];
       send(JSON.stringify({ type: "lock", entries: off.length > 0 ? off : this.#lockAfter(workspace, after), ...(named === null ? {} : { workspace }) }));
     } else if (body.type === "lock.put") {
-      // Refused when it does not follow: the station hears the cloud's head in the state frame and asks again.
-      await this.#appendLock(workspace, body.entries).catch(() => this.#sendState(station));
+      // Refused when it does not follow: the station hears the cloud's head in the state frame and asks again. `keep`:
+      // what the station keeps of the lock that the cloud's chain parted from (its head an entry that lost), kept by
+      // the fork choice (a station from before says none, and is answered as before).
+      await this.#appendLock(workspace, body.entries, body.keep === true).catch(() => this.#sendState(station));
     }
   }
 

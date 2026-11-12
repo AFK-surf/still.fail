@@ -141,7 +141,10 @@ head, or is refused as before), so it never moves off an entry for one that came
 give each other all they keep and come to one chain. The core keeps what the stations showed it and goes by the same
 fork choice (`client/core-ts/src/lock-keep.ts`), so a device follows them off an entry that lost, and the device that
 signed it signs it again after the head where that still says what was meant (`againOf`), carrying to each station
-what it lacks of what the stations showed (`client/core-ts/src/views/lock.ts` `carry`). What it is built to (the user,
+what it lacks of what the stations showed (`client/core-ts/src/views/lock.ts` `carry`). The cloud's copy, for the
+stations and devices from before, is kept the same way: what a station gives it as another keeper's goes by the fork
+choice (`cloud/src/lock.ts` `keepLockAt`), each station giving it its chain where the cloud's parts from it
+(`station/src/cloud/presence.ts` `planeParted`), so it names the stations' head again. What it is built to (the user,
 2026-11-12):
 
 - The lock's adversary is the cloud and every station but the one asked (`rules/protocol/lock.spthy`): only signatures

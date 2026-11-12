@@ -378,10 +378,11 @@ export class Cloud {
   /// The same of each joined workspace's lock.
   planeLockSeqs = new Map<string, number | null>();
   /// The hash of the control plane's head of each lock (`""` the home one's), as its last `state` frame said (none: it
-  /// said none). The plane keeps one chain and only extends it: where it parted from the one this station goes by
-  /// (it kept the entry that lost), it is left as it is (presence.ts `syncLock`).
+  /// said none). Where it parted from the one this station goes by (it kept the entry that lost), it is given this
+  /// station's as another keeper's (presence.ts `syncLock`, `planeParted`).
   planeLockHashes = new Map<string, string>();
-  /// The plane's heads said to have parted from the chain gone by here (each once), by lock (`""` the home one's).
+  /// The plane's head found parted from the chain gone by here and this station's head then (`<plane>><here>`), each
+  /// pair given this station's chain once, by lock (`""` the home one's).
   planeParted = new Map<string, string>();
   /// Which of a locked workspace's rigs its person signed for (rigs/adds.ts sets it): until then none of them is
   /// taken, the control plane's word counting for nothing there.

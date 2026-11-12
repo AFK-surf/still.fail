@@ -253,6 +253,31 @@ test("a read that succeeds but is still behind the known lock does not use old p
   assert.deepEqual((await m.prompts()).pairing, []);
 });
 
+// The real-station end-to-end's round 8 after round 7b's B lost its renewal (2026-11-12): the cloud, frozen while the
+// stations forked, took B's entry as it came back (it appends at its head only) and refused the one B signed again
+// after the head that won; the cloud's view went on naming B's entry, which B holds aside, and B never showed bob's
+// first device a code.
+test("the cloud's view names an entry this device holds aside (it lost the fork, the cloud appending at its head only): not a newer lock to wait for, the code shown", async () => {
+  const old = elsewhere();
+  const OLD = "dd".repeat(32);
+  const m = await met(undefined, [{ id: OLD, sub: "s1", kind: "app", label: "old", sign_key: old.id }]);
+  const signer = Effect.runSync(Signer.make(m.host));
+  const g0 = m.cloud.chains.get("ws")![0]!;
+  const after = { seq: 0, hash: entryHash(g0), genesis: entryHash(g0) };
+  const at = m.host.nowMs() / 1000;
+  // X: this device's entry, which lost; Y: the entry that won at its place (a removal of a device that signs).
+  const X = signer.sign(next("ws", after, at, "device", { id: "ef".repeat(32), sub: "s1", kind: "web", label: "page" }));
+  const Y = signer.sign(next("ws", after, at + 1, "device.remove", { id: OLD }));
+  m.cloud.chains.set("ws", [g0, X]);
+  m.core.inner.data.put("lock", "ws", { head: { seq: 1, hash: entryHash(Y), genesis: entryHash(g0) }, entries: [g0, Y], aside: [X] });
+  const topic = { topic: "workspace", workspace: "ws" };
+  m.core.inner.data.set(topic, { ...(m.core.inner.data.shared(topic) as object), lock: m.cloud.head("ws") });
+  await m.host.time.pass(500);
+  assert.deepEqual(held(m.core.inner, "ws")!.entries.map(entryHash), [g0, Y].map(entryHash), "Y held");
+  assert.deepEqual(await m.hello(), { ok: { t: "code", workspaces: ["ws"] } });
+  assert.equal((await m.prompts()).pairing.length, 1);
+});
+
 test("one workspace's lock is updating: another ready workspace can show a code immediately", async () => {
   const g = grant();
   const r = await rig((me) => ({

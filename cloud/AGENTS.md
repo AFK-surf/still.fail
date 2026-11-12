@@ -22,7 +22,8 @@
   objects. Whether a station is up is not the cloud's to say: devices find out over the mesh.
 - A member's credential is a JWT the cloud signs (Ed25519, 30 days, bound to the device's key); stations check it
   offline with the key the presence socket's `state` frame gives, so a signed-in device works with the cloud down.
-  A workspace in safe mode (the lock, `src/lock.ts` over `station/src/cloud/lock.ts` and `rules/`) is decided by
+  A workspace in safe mode (the lock, `src/lock.ts` over `station/src/cloud/lock.ts` and `rules/`, kept as a station
+  keeps it by `station/src/cloud/log-keep.ts`) is decided by
   what its owners signed, not by the cloud: the cloud cannot add people or stations to it. It and the personal lock
   are kept here only for the stations and devices from before the stations carried them (the root AGENTS.md, The
   cloud is the account system): nothing new that is not the account system comes here.
