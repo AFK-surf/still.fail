@@ -327,6 +327,7 @@ fn chat_body_node(
       fn() { keys.get() },
       est=chat_row_est,
       bar=@ui.tree_scroll_bar(),
+      bar_clear=fn() { (top(), 0.0) },
       // (its Top, the chat's bar's room, the list's head; its Foot, the list's foot: the room under its rows, then the
       // composer (`composer`), the room under the last row as tall as both are laid out)
       head=fn(h) {

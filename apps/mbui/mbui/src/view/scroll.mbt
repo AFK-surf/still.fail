@@ -1308,19 +1308,21 @@ pub fn View::scrolls(
   .shows(fn(top, foot) {
     let t = self.tree.logic_said()
     // (across: its start and its end, as wide as it is)
-    // (down, less what is pinned over its foot: what is brought comes to rest over that, not under it)
+    // (down, less what is pinned over its foot: what is brought comes to rest over that, not under it; and under what
+    // floats over its top, as its bar keeps clear of it (`bar_clear`'s top end, what its page says lies there))
     let vh = if across {
       self.tree.nodes[self.at].flex.width
     } else {
       self.tree.nodes[self.at].flex.height - dmax(0.0, @signals.untracked(s.foot_covered))
     }
+    let tc = if across { 0.0 } else { dmax(0.0, @signals.untracked(fn() { bar_clear().0 })) }
     // (where it is, read: stopped and sent only where something of it has to move. In sight already, it is left as it
     // is, on its way or at its foot following it, nothing written of it)
     let x = @signals.untracked(fn() { s.where_at(t) })
-    if top < 0.0 {
-      s.sent(t, x + top)
+    if top < tc {
+      s.sent(t, x + top - tc)
     } else if foot > vh {
-      s.sent(t, x + dmin(top, foot - vh))
+      s.sent(t, x + dmin(top - tc, foot - vh))
     } else {
       return 0.0
     }
