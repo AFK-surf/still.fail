@@ -436,7 +436,13 @@ fn[K] Places::first_past(self : Places[K], y : Double) -> Int {
 /// now), else it is simply there (one caught up); one change may hold both. `goes`: asked of a key that showed as it
 /// goes (once, then, untracked; a key no longer among them, so not one its data has still): whether it closes its way,
 /// else it is simply gone. A list that says neither (`fn(_) { false }` both) is as it was before any came along its
-/// way. Its counts are how it all ends; where a
+/// way. `at_once`: its keys there and gone at once whatever `comes` and `goes` say, and what its blocks hold going its
+/// own way down each block, as a column's, joined to nothing of the list's (below): a list as it was before either
+/// (the lists the app ships, till each is switched on with before and after shown: detlint's list-comes-off).
+/// What a block holds that comes or goes down a column in it (a show, a pick, an each) makes its way in the list's one
+/// way, the group of its held column (Tree::come_group_join): a row come or gone at that moment, another block's
+/// inside, all of it one way. So too what changes in a box of a said height in a block, which moves nothing of the
+/// list: known and taken. Its counts are how it all ends; where a
 /// block is while a way goes is read through Places alone, at the moment it is read (as it is laid out, where flex has
 /// each way then), and what shows is made from where it showed as the way set out to where it ends, those that show
 /// no more at its end let go then.
@@ -455,6 +461,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   from_end? : Bool = false,
   comes? : (K) -> Bool = fn(_) { true },
   goes? : (K) -> Bool = fn(_) { true },
+  at_once? : Bool = false,
   place? : ListPlace[K],
   near_foot? : (Double, () -> Bool, () -> Unit),
   near_top? : (Double, () -> Bool, () -> Unit),
@@ -565,7 +572,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       (anchor_again.val)(column)
       // (where each that showed was as it was read till now, against the top of what showed, and where it was among
       // them: what of them goes closes its way only where it showed, under what was read)
-      let showed_at = (seen_before.val)(column)
+      let showed_at = if at_once { [] } else { (seen_before.val)(column) }
       laid_keys.val = ks
       // (kept as it was up to the first key that is another: from there its keys found and their heights put again; the
       // heights told of those kept told as ever)
@@ -579,7 +586,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         let k = ks[i]
         // (come by this change: not among them before (one moved among them still is, at where it was); its page asked
         // once, now, whether it comes. Not before it was first laid out: what it is made with is there at once)
-        if laid_once && !laid_at.contains(k) && @signals.untracked(fn() { comes(k) }) {
+        if laid_once && !at_once && !laid_at.contains(k) && @signals.untracked(fn() { comes(k) }) {
           came_by_data.val[k] = true
         }
         laid_at[k] = i
@@ -601,7 +608,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       for e in showed_at {
         let (k, j, off) = e
-        guard !laid_at.contains(k) && @signals.untracked(fn() { goes(k) }) else { continue }
+        guard !at_once && !laid_at.contains(k) && @signals.untracked(fn() { goes(k) }) else { continue }
         let mut b = j + 1
         while b < was.length() && !laid_at.contains(was[b]) {
           b = b + 1
@@ -1823,7 +1830,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // there or gone at once. One that makes its way kept among its ways (Places) till that ends.
   let way_of = fn(k : K, row : View, coming : Bool) -> Bool {
     let ok = @signals.untracked(fn() {
-      guard s.seen.get() is Some((_, vh)) && vh > 0.0 else { return false }
+      guard !at_once && s.seen.get() is Some((_, vh)) && vh > 0.0 else { return false }
       if coming {
         let col = laid.get()
         guard came_by_data.val.contains(k) && laid_at.get(k) is Some(i) && i < col.length() else {
@@ -1862,6 +1869,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room() + s.tuck_room.get() + press_room.get()) })) |> ignore
+    // (what its blocks hold that comes or goes down a column in them: in its one way, unless it is said at once)
+    if !at_once {
+      held.list_joins_inner(held.at)
+    }
     // (short of what shows, its blocks at its foot: at least as tall as the room it shows them in, they at its end)
     if from_end {
       held.min_height_share(Is(Some(1.0))).lies_along(Is(Lies::End)) |> ignore

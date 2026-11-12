@@ -484,16 +484,14 @@ fn lint_mbt(
     if c.name == "list" && c.kind == "method" && app && !in_t && c.args.length() >= 4 {
       add("old-list", c.at, f.line_text(c.at))
     }
-    // a page's list whose keys are all simply there as they come, or simply gone as they go, none making its way
-    // (View::scrolls_window said `comes=fn(_) { false }` or `goes=fn(_) { false }`; a call once whichever it says): a
-    // debt of 方案 A each list leaves one at a time, shown to the owner, which only goes
+    // a page's list said at once (View::scrolls_window's `at_once=true`): its keys there and gone at once, what its
+    // blocks hold each its own way, none of it the list's one way: a debt of 方案 A each list leaves one at a time,
+    // shown to the owner, which only goes
     if c.name == "scrolls_window" &&
       c.kind == "method" &&
       app &&
       !in_t &&
-      c.args.iter().any(fn(a) {
-        (a.0 == Some("comes") || a.0 == Some("goes")) && a.1.map(fn(i) { f.toks[i].text }).join("") == "fn(_){false}"
-      }) {
+      c.args.iter().any(fn(a) { a.0 == Some("at_once") && a.1.map(fn(i) { f.toks[i].text }).join("") == "true" }) {
       add("list-comes-off", c.at, f.line_text(c.at))
     }
     // an old view hosted in a node of the window's tree (`@ui.old(v, build)`): what of the old view is left inside

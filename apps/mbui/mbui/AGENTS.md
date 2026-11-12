@@ -41,10 +41,11 @@ yet and you can add one, add it.
   those its keys bring or take by data make their way as an each's rows do, one way with all else in its column then,
   where they are seen (at its foot what is above going up with them; scrolled up, what is read staying), each key its
   page says `comes` as it appears and `goes` as it goes (View::scrolls_window; its counts how it all ends, where a block
-  is meanwhile read through Places alone); every list that says none comes or none goes is a debt of 方案 A, counted
-  (detlint's `list-comes-off`) and only falling,
-  each switched on with before and after shown to the owner (the coordinator of the migration, 2026-11-12);
-  what a block holds makes its way as anywhere, but what it makes or lets go because it was given another key (a block
+  is meanwhile read through Places alone); what a block holds makes its way in the list's one way, its held column's
+  group, with what comes or goes down the list then (Tree::come_group_join); every list said `at_once` (keys there and
+  gone at once, its blocks' insides each their own way) is a debt of 方案 A, counted (detlint's `list-comes-off`) and
+  only falling, each switched on with before and after shown to the owner (the coordinator of the migration,
+  2026-11-12); but what a block makes or lets go because it was given another key (a block
   put by and taken: `reused`) is so at once, as were it made anew (`src/view/key_taken.mbt`; the coordinator of the
   migration, 2026-11-11). What holds a scroller makes its way as anything does, what it holds
   laid out once at the size it comes to (a panel's capped list in a pick); a page or a pane comes and goes at once by

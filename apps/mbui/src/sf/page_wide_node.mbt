@@ -58,8 +58,8 @@ fn wide_page_node(
   }
   v.box(made_for=loc, fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    // (its keys there and gone as they change: a debt of 方案 A, given their way list by list, shown to the owner: list-comes-off)
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, comes=fn(_) { false }, goes=fn(_) { false }, near_foot?, fn(s, item) {
+    // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, at_once=true, near_foot?, fn(s, item) {
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
