@@ -165,6 +165,10 @@
   "station.cli.badChannel": "channel must be stable or beta, not {channel}",
   "station.cli.held": "Another still.fail station is running on this data directory ({dir}); only one station can run on a data directory on one machine",
   "station.cli.joined": "Joined workspace “{workspace}” as station “{name}” ({id})",
+  "station.cli.lock.aside": {
+    "one": ", and {n} record kept off the chain in use",
+    "other": ", and {n} records kept off the chain in use"
+  },
   "station.cli.lock.broken": "Security mode: this station's lock.json is invalid, so all connections are refused. Run `stillfail lock reset` to let still.fail's servers manage access again",
   "station.cli.lock.none": "Security mode: off (still.fail's servers manage access)",
   "station.cli.lock.pending": "This station enters security mode once it receives the workspace's trusted list. Verify the station in still.fail with security code {code}",

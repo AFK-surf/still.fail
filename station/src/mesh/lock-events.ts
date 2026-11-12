@@ -1,6 +1,7 @@
-// What a station tells its members' devices of the locks, on their event streams (GET /events): `lock`, a workspace's
-// lock went on (`{workspace, head}`, to that workspace's members), and `person`, a person's own lock did (`{genesis,
-// length}`, to that person's devices). A device reads the lock of the station when told, as it reads anything it is
+// What a station tells its members' devices of the locks, on their event streams (GET /events): `lock`, the head of a
+// workspace's lock moved (`{workspace, head}`, to that workspace's members), and `person`, a person's own lock's did
+// (`{genesis, length}`, to that person's devices): on, or to another branch the fork choice gives
+// (cloud/log-keep.ts). A device reads the lock of the station when told, as it reads anything it is
 // told changed; it does not ask the cloud (the root AGENTS.md, The cloud is the account system).
 import type { Cloud } from "../cloud/state.ts";
 import type { To } from "../api/events.ts";

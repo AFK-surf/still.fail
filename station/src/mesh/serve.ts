@@ -15,10 +15,12 @@ import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
 import { PersonChains } from "./person-chains.ts";
 import { SeenDevices } from "./seen-devices.ts";
-import { checkChain } from "./person-sync.ts";
+import { foldChain, takeChain } from "./person-sync.ts";
+import { AT_ODDS } from "./person-chains.ts";
 import { WaysRefusal, setRelays, setWay, waysOf as workspaceWaysOf } from "./ways.ts";
 import { join } from "node:path";
-import { meshDir } from "../cloud/state.ts";
+import { FORK, meshDir } from "../cloud/state.ts";
+import { hashOf } from "../cloud/log-keep.ts";
 import { type Entry, LockRefusal, admit, admitPerson, asEntry, endpointProof, fold, lowerRole, personFold } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
@@ -222,11 +224,21 @@ export function lockHead(cloud: Cloud, ws: string | null = null): { seq: number;
   return s ? { seq: s.seq, hash: s.head, genesis: s.genesis } : null;
 }
 
-/// GET /lock?after=<seq>: how far this station's lock goes and its entries after `after` (any member). POST /lock
-/// {entries}: more of the pinned lock, checked entry by entry; or, unpinned, a lock to pin, from its genesis: brought by
-/// its owner, on a device the genesis names (until then the control plane's word is what this station goes by, and the
-/// owner it names is who may turn the lock on).
+/// GET /lock?after=<seq>: how far this station's lock goes and its entries after `after` (any member): its active chain,
+/// with the hash of its entry at `after` (`after_hash`), for a device that holds another there to see it parted. POST
+/// /lock {entries}: more of the pinned lock, what goes on from its head; with `keep` (entries a station took already,
+/// `serves` says `forks`), each the rules take after a parent kept, also off the chain gone by (cloud/state.ts
+/// `keepLock`); or, unpinned, a lock to pin, from its genesis: brought by its owner, on a device the genesis names (until
+/// then the control plane's word is what this station goes by, and the owner it names is who may turn the lock on).
 /// The lock is the asker's workspace's (each workspace the station is in has its own).
+///
+/// What a POST is answered (an app from before calls an answer "taken" whose head is as far as its entry): the last entry
+/// brought on the active chain once taken, 200 `{taken, head}` as before; not going on from the head (not kept), or kept
+/// with `keep` but not on the chain (it lost at its parent, or hangs below one that did), 409 with the words of a fork
+/// as before; refused by the rules, as before (200 where others were taken, else 409 with why). `head` is the active
+/// chain's; `off`, for the core of next, says of each entry brought not on it why (`why`: `not on the head`, `refused`
+/// with the rules' `refusal`, `beaten` by `winner` at `step`, `below` one beaten, `under`, `no parent`), and whether it
+/// is kept aside (`kept`).
 export function lockRoute(cloud: Cloud, method: string, query: [string, string][], body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
   const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
   if (method === "GET") {
@@ -235,15 +247,22 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     // entry it did not know, it would refuse, and every entry after)
     // (`serves`: what a device has of this station rather than of the cloud: the person's own lock (/lock/person), the
     // devices that came (/lock/devices), and the locks' changes told on its event stream (lock-events.ts))
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1, ws), takes: ["person"], serves: ["person", "devices", "told"] }];
+    const from = Number.isSafeInteger(after) ? after : -1;
+    const at = from >= 0 ? cloud.lockAfter(from - 1, ws)[0] : undefined;
+    const atHash = at !== undefined && at.seq === from ? { after_hash: hashOf(at) } : {};
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks"] }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
+  let keep = false;
   try {
     const said = JSON.parse(body.toString("utf8") || "{}");
+    // (`keep`: what is brought was taken by another keeper already, a station the device read it of: kept as a station's
+    // would be, also off the chain gone by; else only what goes on from its head, cloud/state.ts `keepLock`)
+    keep = said?.keep === true;
     // A person's own lock as it stands now (a device taken off it), told by their device: the longest heard is what a
     // chain brought later is judged by.
-    if (Array.isArray(said?.person)) return personTold(cloud, ws, viewer, said.person);
+    if (Array.isArray(said?.person)) return personTold(cloud, ws, viewer, said.person, keep);
     const raw = said?.entries;
     entries = Array.isArray(raw) ? raw.map(asEntry) : [];
   } catch {
@@ -259,8 +278,16 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
       admit(brought, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, nowSecs());
       if (brought.members.get(viewer.sub)?.role !== "owner") return [403, { error: "the lock is brought by its owner" }];
     }
-    const taken = cloud.takeLock(entries as Entry[], ws);
-    return [200, { taken, head: lockHead(cloud, ws) }];
+    const t = cloud.keepLock(entries as Entry[], ws, keep);
+    const head = lockHead(cloud, ws);
+    const off = t.off.length > 0 ? { off: t.off } : {};
+    const h = hashOf(entries.at(-1)!);
+    if (cloud.lockAfter(-1, ws).some((e) => hashOf(e) === h)) return [200, { taken: t.taken, head, ...off }];
+    const why = t.off.find((o) => o.hash === h)?.why;
+    // Kept, or the bound reached (cloud/log-keep.ts), but not on the chain: it lost its place.
+    if (why === "beaten" || why === "below" || why === "again") return [409, { error: FORK, head, ...off }];
+    if (t.taken > 0) return [200, { taken: t.taken, head, ...off }];
+    return [409, { error: t.refusal?.message ?? FORK, head, ...off }];
   } catch (e) {
     return [409, { error: (e as Error).message, head: lockHead(cloud, ws) }];
   }
@@ -292,23 +319,29 @@ export function waysRoute(cloud: Cloud, method: string, body: Buffer, viewer: Ad
   }
 }
 
-function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"], chain: unknown[]): [number, unknown] {
+function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"], chain: unknown[], keep = false): [number, unknown] {
   const pin = cloud.locked(ws)?.state?.persons.get(viewer.sub);
   if (pin === undefined) return [409, { error: "no lock of their own bound here" }];
   try {
     if (personFold(chain, viewer.sub).genesis !== pin) return [409, { error: "not the lock bound here" }];
-    const chains = personChainsOf(cloud);
-    chains.keep(pin, chains.newest(pin, viewer.sub, chain), viewer.workspace);
-    return [200, {}];
+    const t = takeChain(personChainsOf(cloud), chain, viewer.sub, viewer.workspace, keep);
+    const off = t.off.length > 0 ? { off: t.off } : {};
+    if (!t.on) return [409, { error: AT_ODDS, head: personHead(t.chain), ...off }];
+    return [200, { ...off }];
   } catch (e) {
     return [409, { error: (e as Error).message }];
   }
 }
 
-/// GET /lock/person: the chains of the asker's own lock this station has (each begun anew, by its genesis), for the
-/// device to go on from the one it pinned. POST /lock/person {chain}: the chain as it stands now on the device (a
-/// device added or taken off), kept as it goes on from the one kept, and so told to the person's other devices and
-/// stations (person-sync.ts). GET /lock/devices: the members' devices that came to this station in the asker's
+/// How far a person's chain gone by goes: its last entry's place and hash.
+const personHead = (chain: unknown[]) => ({ seq: chain.length - 1, hash: chain.length === 0 ? null : hashOf(chain.at(-1) as Entry) });
+
+/// GET /lock/person: the chains of the asker's own lock this station has (each begun anew, by its genesis, the chain it
+/// goes by), for the device to go on from the one it pinned. POST /lock/person {chain}: the chain as it stands now on the
+/// device (a device added or taken off), what goes on from the chain gone by (with `keep`, each entry the rules take
+/// after a parent kept, as POST /lock), and so told to the person's other devices and stations (person-sync.ts):
+/// answered `{genesis, length}` as before where its last entry is on the chain gone by; else 409 with the words of being
+/// at odds as before, `head` the chain gone by's and `off` why for each entry not on it (as POST /lock says them). GET /lock/devices: the members' devices that came to this station in the asker's
 /// workspace (everyone's for its owners and admins, else their own), as the cloud's GET /devices said them.
 export function lockPartRoute(cloud: Cloud, part: string, method: string, body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
   if (part === "person") {
@@ -322,9 +355,10 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
       return [400, { error: "invalid JSON" }];
     }
     try {
-      const { genesis, chain } = checkChain(chains, said?.chain, viewer.sub);
-      chains.keep(genesis, chain, viewer.workspace);
-      return [200, { genesis, length: chain.length }];
+      const t = takeChain(chains, said?.chain, viewer.sub, viewer.workspace, said?.keep === true);
+      const off = t.off.length > 0 ? { off: t.off } : {};
+      if (!t.on) return [409, { error: AT_ODDS, head: personHead(t.chain), ...off }];
+      return [200, { genesis: t.genesis, length: t.chain.length, ...off }];
     } catch (e) {
       return [409, { error: (e as Error).message }];
     }
@@ -404,10 +438,22 @@ function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoin
   const who = { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof };
   const chains = personChainsOf(cloud);
   const pin = state.persons.get(v.sub)!;
-  const newest = raw === undefined ? chains.kept(pin) : chains.newest(pin, v.sub, raw);
+  // Let in as the chain the rules choose among what is kept and what it brought says; what it brought is kept once it
+  // is in (a chain at odds that lost where it parts from the one kept, aside). A chain the rules find none in (not of
+  // the lock bound here) is judged as brought.
+  let newest: unknown[] | null = raw === undefined ? chains.kept(pin) : raw;
+  if (raw !== undefined) {
+    try {
+      foldChain(raw, v.sub);
+      const chosen = chains.chosen(pin, v.sub, raw);
+      if (chosen.length > 0) newest = chosen;
+    } catch {
+      // (judged as brought)
+    }
+  }
   if (newest === null) return null;
   const { role } = admitPerson(state, who, newest);
-  chains.keep(pin, newest, v.workspace);
+  chains.keep(pin, raw ?? newest, v.workspace);
   return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
 }
 
