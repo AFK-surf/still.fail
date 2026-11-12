@@ -391,7 +391,7 @@ test "the vault's page's request where it is not this device's to answer, or dec
 /// The vault page's card of request r1 in ws1, from the vaults topic.
 fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
   let w : Workspace = { id: "ws1", name: "", emoji: "", icon: "", email: "" }
-  let asked : @settings.Asked = { name: "GitHub token", reason: "", timeout_kind: "", timeout_seconds: 0, approved_timeout_kind: "", approved_timeout_seconds: 0, mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, station: "", describe: false }
+  let asked : @settings.Asked = { name: "GitHub token", reason: "", timeout_kind: "", timeout_seconds: 0, approved_timeout_kind: "", approved_timeout_seconds: 0, mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, station: "", describe: false, new_name: "", new_about: "", was_about: "" }
   c.box(w=Fill(1.0), fn() { @settings.vault_ask(c, settings_core(src, w), "ws1", "r1", asked, true) }) |> ignore
 }
 
@@ -647,4 +647,38 @@ test "授权时限 on every screen, closed by 完成: on its way out as high as 
     vt_press(t, "仅这一次")
     vt_leaving(t, at + " once", fn() { t.tap_text("完成") }, seen=["时长"], unseen=["失效方式"])
   }
+}
+
+///|
+/// A request to rename an item and say what it is (chat-vault-describe), as its card in its chat on a phone's window:
+/// what changes a part each (名称: as it is crossed out, then as it would be; 说明: as it would be, in words as plain as
+/// the title's), the agent's reason under the title, 确认修改 / 保持不变 at its foot, nothing of how a use is given; 确认修改 writes
+/// it (`vault.approve` once).
+test "a request to rename an item: what changes a part each, 确认修改 writes it" {
+  new_run()
+  @sf.presenters_reset()
+  let calls : Array[String] = []
+  let base = fixture("chat-vault-describe")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push(name + " " + params.stringify())
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  for w in ["修改密钥的名称与说明", "名称", "说明", "确认修改", "保持不变"] {
+    assert_true(vt_seen(t, w) is Some(_), msg="\{w}: \{Repr(t.words().filter(fn(x) { x.5 > 0.0 }).map(fn(x) { x.0 }))}")
+  }
+  // (what it would be told apart from what it was: under 名字, over 说明)
+  guard vt_seen(t, "名称") is Some(n) && vt_seen(t, "说明") is Some(a) else { fail("parts") }
+  assert_true(n.1 < a.1, msg="名称 over 说明")
+  assert_true(vt_seen(t, "名称改为：UniFi 管理后台登录状态（经 Studio 转发至 127.0.0.1:8443）") is None, msg="how it is given said in its place")
+  // (nothing the screen's rules find in the card: its words', its parts')
+  let card_faults = t.audit().filter(fn(f) { f.contains("名称") || f.contains("说明") || f.contains("UniFi") || f.contains("修改") })
+  assert_eq(card_faults, [])
+  vt_press(t, "确认修改")
+  assert_eq(vt_vault_calls(calls), ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r-demo\",\"scope\":\"once\"}"])
 }

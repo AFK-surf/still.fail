@@ -97,8 +97,8 @@ const SAVE_WORDS = {
 };
 /// The words on the card of a request to rename an item or say what it is.
 const DESCRIBE_WORDS = {
-  yes: { label: "修改", detail: "按上面改名字和说明" },
-  no: { label: "不改", detail: "保持原样，通知 agent" },
+  yes: { label: "确认修改", detail: "按以上内容修改名称与说明" },
+  no: { label: "保持不变", detail: "不作修改，通知 agent" },
 };
 const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥", file: "文件", browser: "登录态" };
 const howWords = (mode: Mode, hosts: string[]): string =>
@@ -1289,9 +1289,9 @@ export class Secrets {
     const d = r.describe!;
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const text = [
-      `申请修改「${d.was.name}」：${r.reason}`,
-      ...(d.name !== d.was.name ? [`名字改为：${d.name}`] : []),
-      ...(d.about !== d.was.about ? [d.about === "" ? "删去说明" : `说明改为：${d.about}`] : []),
+      `申请修改密钥「${d.was.name}」的${d.name !== d.was.name && d.about !== d.was.about ? "名称与说明" : d.name !== d.was.name ? "名称" : "说明"}：${r.reason}`,
+      ...(d.name !== d.was.name ? [`名称改为：${d.name}`] : []),
+      ...(d.about !== d.was.about ? [d.about === "" ? "清除说明" : `说明改为：${d.about}`] : []),
       ...(stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"]),
     ].join("\n\n");
     const card = stillfail
