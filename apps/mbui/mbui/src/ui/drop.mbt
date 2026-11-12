@@ -140,8 +140,8 @@ fn tree_paths_at(c : Ctx, x : Double, y : Double, paths : Array[DroppedPath], pi
     Some((_, None)) => Shut
     Some((on, Some(at))) => {
       let on_field = fn(f : Field) { match on { Some(st) => physical_equal(st, f.st); None => true } }
-      match tree_drops_on(at, fn(d) { d.paths is Some((f, _)) && on_field(f) }) {
-        Some({ paths: Some((_, take)), .. }) => {
+      match tree_drops_on(at, fn(d) { d.paths is Some((f, _, takes)) && on_field(f) && takes() }) {
+        Some({ paths: Some((_, take, _)), .. }) => {
           take(paths)
           Took
         }
@@ -215,7 +215,7 @@ fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) 
 /// `words` (words_into), files with their paths for `paths`' field and its taker (paths_into).
 priv struct TreeDrops {
   mut words : Field?
-  mut paths : (Field, (Array[DroppedPath]) -> Unit)?
+  mut paths : (Field, (Array[DroppedPath]) -> Unit, () -> Bool)?
 }
 
 ///|
@@ -294,9 +294,16 @@ pub fn words_into(v : @view.View, field : Field) -> @view.View {
 /// Files from outside let go with their paths (the Finder's) on node `v` or what it holds, on `field` or beside any field
 /// (one let go on another field is that field's): given to `take` at the moment they are let go, as where they are,
 /// not read (a chat's composer naming them by the station they are on). The innermost of what takes them first; an old
-/// view's box, Ctx::paths_into. `v`.
-pub fn paths_into(v : @view.View, field : Field, take : (Array[DroppedPath]) -> Unit) -> @view.View {
-  tree_drops_of(v).paths = Some((field, take))
+/// view's box, Ctx::paths_into. Only while `takes` says so, asked as they are let go (a chat's page takes them by where
+/// they are only where this machine is a station): where it does not, they are what holds it's, or its words
+/// (words_into: their paths, a line each), as were this not said. `v`.
+pub fn paths_into(
+  v : @view.View,
+  field : Field,
+  take : (Array[DroppedPath]) -> Unit,
+  takes? : () -> Bool = fn() { true },
+) -> @view.View {
+  tree_drops_of(v).paths = Some((field, take, takes))
   v
 }
 

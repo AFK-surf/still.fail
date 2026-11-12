@@ -122,8 +122,83 @@ fn chat_body_nodes(
   shows : () -> Bool,
   in_pane? : Bool = false,
 ) -> Unit {
-  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, shows~, top=fn() { chat_bar_room(in_pane~) + list_head_gap }, composer~)
+  // (the composer's node: what is carried over it is its own to show, chat_drop_node)
+  let held : Ref[@view.View?] = Ref(None)
+  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, shows~, top=fn() { chat_bar_room(in_pane~) + list_head_gap }, composer=fn(
+    n,
+  ) {
+    held.val = Some(n)
+    composer(n)
+  })
   chat_bar_handed_node(v, src, r)
+  chat_drop_node(v, src, r, fn() { held.val }, shows)
+}
+
+///|
+/// A row of the 文件 tab carried over chat `r`'s page made with its inside nodes (`v`; chat_body_nodes), as the old pane
+/// had it (drop_hint, chat_drop): while it is over the page but the composer (`composer`'s node, which marks itself
+/// then), frosted over all of it with 松开以添加到消息 under the row's mark, drawn only; let go on the page, into the
+/// chat's draft (composer.add), named by its path or sent as a file as the chat takes what is dragged in. Where it was
+/// let go is the page's as a drop from outside is (mbui's Tree::drop_at): the node drawn there, the page's node holding
+/// it (what is drawn over the page there, a panel or another page, keeps it).
+fn chat_drop_node(
+  v : @view.View,
+  src : Source,
+  r : ChatRef,
+  composer : () -> @view.View?,
+  shows : () -> Bool,
+) -> Unit {
+  let draft = r.station + ":" + r.session
+  v.box(fn(h) {
+    h.over(Is(true)).presses(Is(false)) |> ignore
+    h.show(
+      fn() {
+        dragged() is Some(_) &&
+        v.pointed_in() &&
+        !(match composer() {
+          Some(n) => n.pointed_in()
+          None => false
+        })
+      },
+      fn(o) {
+        o.grow(Is(1.0)).glass(By(fn() { Some(@sf.glass_floating()) })) |> ignore
+        @sf.style_node(o, fn() { drop_hint_box })
+        @sf.icon_node(
+          o,
+          "file",
+          drop_folder * 2.0,
+          By(fn() { @sf.theme().p.muted }),
+          name_now=fn() { if dragged().map(fn(i) { i.dir }).unwrap_or(false) { "folder" } else { "file" } },
+        )
+        |> ignore
+        o.box(fn(s) {
+          s
+          .words(By(fn() { @sf.t("web-main.composer.dropHere") }))
+          .words_look(By(fn() { @ui.style_words(drop_hint_words) }))
+          .ink(By(fn() { @sf.theme().p.text }))
+          |> ignore
+        })
+        |> ignore
+      },
+      at_once=true,
+    )
+  })
+  |> ignore
+  // (let go off the tab: where, tab_take_drop's; on a node of the page's, its messages or its composer's old view)
+  v.reacts(
+    fn() { dragged() is Some(_) },
+    fn(carried) {
+      guard !carried && shows() && ftab.let_go is Some((item, x, y)) else { return }
+      let on = match v.tree.drop_at(x, y) {
+        Some(OnNode(id)) | Some(OnOld(id)) => v.tree.holds(v.id(), id)
+        _ => false
+      }
+      guard on else { return }
+      ftab.let_go = None
+      writing_drop(src, writing(src, draft), r.station, [@sfpages.dropped_of(item)], @sfpages.drops_as_files(src, draft))
+    },
+    at_start=false,
+  )
 }
 
 ///|
