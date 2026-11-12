@@ -107,11 +107,22 @@ export const work = {
 export type Work = typeof work;
 
 /// What was only looked at, to find it as it was: one comparison an item, so it follows how much is held, as a change's
-/// `work` must not (test/work.test.ts holds that the same at every size). Counted apart, for tests to hold.
+/// `work` must not. Counted apart, for tests to hold: a change of one chat told by a station that makes its list looks
+/// at none of it (test/rows-changed.test.ts).
 export const glanced = {
   /// Chat rows a station's list was given that were the row written there before, at the same place: taken as written,
   /// neither serialised nor compared (db/account.ts `setChats`).
   chatRowsSame: 0,
+  /// Chat rows a station's list was given whole (db/account.ts `setChats`): each looked at for its place and whether it
+  /// is the one written.
+  chatRowsWalked: 0,
+  /// Chat rows put in this device's words as a list given whole (data.ts `inWords`).
+  chatRowsWorded: 0,
+  /// Chat rows a station's sidebar was made of as a whole (station/rows-made.ts `rowsShared`, `rowsMade`): each made, or
+  /// taken as made before.
+  chatRowsMapped: 0,
+  /// Entries of a station's marks walked to make the viewer's own of them (station/rows-made.ts `OwnHeld`).
+  marksWalked: 0,
 };
 
 /// What was counted since `from` (a copy taken before).

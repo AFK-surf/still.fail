@@ -70,9 +70,16 @@ rows are made through a memo on its link (`src/station/rows-made.ts` `RowsMemo`:
 were is the row made before, frozen) and written as the list was last written (`src/db/account.ts` `#chatsHeld`: a row's
 object and place, never its JSON), so one change of one chat makes and serialises 1-2 rows and reads no more chats'
 JSON than it serialises, the same with three times the chats, and what is stored is what a core started anew makes of
-the same records. `CAUSES` give a chat list whole as new rows, which the sync does only the first time it makes a
-list in a run: their `OVER_WRITE` entries for chats measure that giving, until those causes are told as the sync's
-events.
+the same records. Of a station that makes its list (`link.shared`, every one since build 7143) a change is by key end to
+end: `#remake` names its rows (an id, a thread's, none; whole only for the list or the marks read whole, whose rows
+they are, the words), each made alone (rows-made.ts `rowShared`, the viewer's own of the marks kept as sets and maps,
+`OwnHeld`) and written by its key at a place of its own (`sharedPlace`, ties by id; a place alone changed, as a list
+held in the places of before takes these once, is that row's place written alone, account.ts `#placeChatRow`), so it
+looks at no other row: every `glanced` counter stays 0 there but the marks' lists of threads the older path reads
+(kept, hidden, muted, suggested, dismissed), walked where a scoped read or what was said puts its own in them, in the
+test's `SHARED_MARKS_WALKED` (they go with that path); the older path's (rowsMade) are in its `OLDER_GLANCED`. Both
+only fall. `CAUSES` give a chat list whole as new rows, which the sync does only the first time it makes a list in a
+run: their `OVER_WRITE` entries for chats measure that giving, until those causes are told as the sync's events.
 
 ## The chat table is read by what a view shows
 

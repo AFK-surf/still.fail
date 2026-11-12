@@ -20,6 +20,7 @@ import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
 import { worded, type Words } from "./chat-row.ts";
 import { rowWords } from "./station/rows-made.ts";
 import { ofAddress } from "./workspace.ts";
+import { glanced } from "./work.ts";
 
 export { frozen };
 export type { ListKind, RowChange };
@@ -847,9 +848,9 @@ export class Data {
     const list = Array.isArray(value) ? value : [];
     switch (topic.topic) {
       case "chatRows":
-        return db.setChats(station, false, list.map(inWords), at);
       case "archivedRows":
-        return db.setChats(station, true, list.map(inWords), at);
+        glanced.chatRowsWorded += list.length;
+        return db.setChats(station, topic.topic === "archivedRows", list.map(inWords), at);
       case "sessions":
         return db.setSessions(station, list, at, changed);
       case "threads":
@@ -1087,9 +1088,16 @@ export class Data {
     return known;
   }
 
-  /// A sidebar row as an event has it.
-  putChat(station: string, row: unknown): void {
-    this.of(station)?.putChat(station, inWords(row));
+  /// A sidebar row as an event has it; at `place` where its list says each row's (rows-made.ts `sharedPlace`).
+  putChat(station: string, row: unknown, place?: number): void {
+    this.of(station)?.putChat(station, inWords(row), place);
+  }
+
+  /// A station's sidebar as it was made whole, each row at the place `places` says (rows-made.ts `sharedPlace`): what
+  /// `set` does of a `chatRows`, but where the list says each row's place.
+  setChatsAt(station: string, rows: readonly unknown[], places: readonly number[]): void {
+    glanced.chatRowsWorded += rows.length;
+    this.of(station)?.setChats(station, false, rows.map(inWords) as Record<string, any>[], this.#host.nowMs(), places);
   }
 
   dropChat(station: string, id: string): void {

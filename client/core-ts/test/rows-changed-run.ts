@@ -2,13 +2,16 @@
 // everyone, and marks of them all) answering a core started on it, and what rows-changed.test.ts holds of what the core
 // makes of it: its chat list as stored, against what is made of what it holds anew (rows-made.ts with an empty memo);
 // and what one change makes the core do (work.ts), measured in a worker thread a size (`workerData.rowsChanged`).
+import assert from "node:assert/strict";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { worded } from "../src/chat-row.ts";
-import { rowWords, rowsMade, rowsShared } from "../src/station/rows-made.ts";
+import { rowWords, rowsMade, rowsShared, sharedPlace } from "../src/station/rows-made.ts";
 import { glanced, work } from "../src/work.ts";
 import type { HttpRequest } from "../src/host.ts";
 import { CHAT, SIZE, address, fixture } from "./real-size.ts";
 import { base, stationReplies, started, status } from "./station-fixture.ts";
+import { Core } from "../src/core.ts";
+import { HostWire } from "../src/station/wire.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -114,21 +117,27 @@ export async function startedOn(station: Station, shared = false) {
 }
 export type Started = Awaited<ReturnType<typeof startedOn>>;
 
+/// A row as the chat table keeps it: its id, its JSON (`unread` apart), `unread`, and its place where it is a function of
+/// the row (a list its station makes: rows-made.ts `sharedPlace`).
+export type Row = { id: string; json: string; unread: number | null; ord?: number };
+
 /// A row as the chat table keeps it: its JSON (`unread` apart) and `unread`.
 const asStored = (row: J): { json: string; unread: number | null } => {
   const { unread, ...rest } = row;
   return { json: JSON.stringify(rest), unread: typeof unread === "boolean" ? (unread ? 1 : 0) : null };
 };
 
-/// The station's chat list as the core stored it, in its order.
-export function stored(s: Started): { id: string; json: string; unread: number | null }[] {
-  return s.core.inner.data.of(ST)!.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 ORDER BY ord", [ST])
-    .map((r) => ({ id: String(r[0]), json: String(r[1]), unread: r[2] as number | null }));
+/// The station's chat list as the core stored it, in the order every read reads it in (`ORDER BY ord, id`), with its
+/// places where they are a function of the row.
+export function stored(s: Started): Row[] {
+  const shared = s.core.inner.stations.link(ST)!.shared;
+  return s.core.inner.data.of(ST)!.sql.all("SELECT id, json, unread, ord FROM chat WHERE station = ? AND archived = 0 ORDER BY ord, id", [ST])
+    .map((r) => ({ id: String(r[0]), json: String(r[1]), unread: r[2] as number | null, ...(shared ? { ord: r[3] as number } : {}) }));
 }
 
 /// What a core started anew makes of what this one holds (its sessions, threads, its list made for everyone, the
 /// marks): rows-made.ts with an empty memo, in the viewer's words, each id once.
-export function madeAnew(s: Started): { id: string; json: string; unread: number | null }[] {
+export function madeAnew(s: Started): Row[] {
   const link = s.core.inner.stations.link(ST)!;
   const data = s.core.inner.data;
   const words = rowWords();
@@ -139,12 +148,12 @@ export function madeAnew(s: Started): { id: string; json: string; unread: number
   return rows.flatMap((r) => {
     if (seen.has(r.id)) return [];
     seen.add(r.id);
-    return [{ id: r.id, ...asStored(worded(r, words)) }];
+    return [{ id: r.id, ...asStored(worded(r, words)), ...(link.shared ? { ord: sharedPlace(r) } : {}) }];
   });
 }
 
 /// Where two lists of rows differ: an id at a place, or a field of a row (none: the same).
-export function differences(stored: { id: string; json: string; unread: number | null }[], made: { id: string; json: string; unread: number | null }[]): string[] {
+export function differences(stored: Row[], made: Row[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < Math.max(stored.length, made.length); i++) {
     const a = stored[i];
@@ -154,6 +163,7 @@ export function differences(stored: { id: string; json: string; unread: number |
       continue;
     }
     if (a!.unread !== b!.unread) out.push(`${a!.id} unread: stored ${a!.unread}, made ${b!.unread}`);
+    if (a!.ord !== b!.ord) out.push(`${a!.id} place: stored ${a!.ord}, made ${b!.ord}`);
     if (a!.json === b!.json) continue;
     const x = JSON.parse(a!.json) as J;
     const y = JSON.parse(b!.json) as J;
@@ -300,18 +310,44 @@ export function anyChange(station: Station, s: Started, r: () => number): string
   return kind;
 }
 
-/// One of the changes a station that makes its chat list for everyone tells, picked by `r`.
-export function anySharedChange(station: Station, s: Started, r: () => number): string {
+/// A message said in the chat of row `row` of a station that makes its list, as it tells it: what was said (`thread`,
+/// `said`) and the row it makes of it, on top (`at`: when, else now).
+export function sharedSaid(station: Station, s: Started, row: J, person: boolean, at = s.host.nowMs()): void {
+  const t = station.threads.get(row.thread);
+  if (t !== undefined) said(station, s, t, person, person ? "这个先别合" : "好的");
+  const seq = (t?.last ?? row.last.seq) + 1;
+  const now = { ...row, lastActiveAt: at, last: { ...row.last, seq, text: `第 ${seq} 条`, createdAt: at }, said: { n: seq, other: person ? seq - 1 : seq } };
+  station.shared.set(row.id, now);
+  s.push("chat-shared", now);
+}
+
+/// One of the changes a station that makes its chat list for everyone tells, picked by `r`: each kind the sync takes
+/// by key, and those it takes whole (the marks read whole, whose rows they are, a reconnect).
+export const SHARED_KINDS = ["row", "row", "top", "tie", "new", "new", "removed", "read", "pin", "kept", "hidden", "muted", "dismiss", "said", "marked", "renamed", "summary", "turn", "whole", "reconnect"] as const;
+export function anySharedChange(station: Station, s: Started, r: () => number, which?: (typeof SHARED_KINDS)[number]): string {
   const rows = [...station.shared.values()];
   const row = pick(r, rows);
   const m = station.marks;
-  const kind = pick(r, ["row", "row", "row", "removed", "read", "pin", "kept", "hidden", "dismiss", "marked", "whole"] as const);
+  const kind = which ?? pick(r, SHARED_KINDS);
   switch (kind) {
     case "row": {
-      const at = s.host.nowMs();
-      const seq = row.last.seq + 1;
-      const now = { ...row, lastActiveAt: at, last: { ...row.last, seq, text: `第 ${seq} 条`, createdAt: at }, said: { n: seq, other: r() < 0.5 ? seq : seq - 1 } };
+      // (what it says changed, where it is not)
+      const now = { ...row, title: `改了 ${Math.floor(r() * 1000)}`, said: { n: row.said.n, other: r() < 0.5 ? row.said.n : row.said.n - 1 } };
       station.shared.set(row.id, now);
+      s.push("chat-shared", now);
+      break;
+    }
+    case "top":
+      sharedSaid(station, s, row, r() < 0.5);
+      break;
+    case "tie":
+      // (active at the very time another is: their ids say which is first)
+      sharedSaid(station, s, row, false, pick(r, rows).lastActiveAt);
+      break;
+    case "new": {
+      const id = `k-new-${Math.floor(r() * 1e9)}`;
+      const now = { ...row, id, session: id, thread: 900_000 + Math.floor(r() * 1e5), lastActiveAt: s.host.nowMs() };
+      station.shared.set(id, now);
       s.push("chat-shared", now);
       break;
     }
@@ -320,7 +356,7 @@ export function anySharedChange(station: Station, s: Started, r: () => number): 
       s.push("chat-shared-removed", { id: row.id });
       break;
     case "read":
-      m.reads[String(row.thread)] = row.last.seq;
+      m.reads[String(row.thread)] = Math.max(m.reads[String(row.thread)] ?? 0, row.last.seq);
       s.push("read", { thread: row.thread, n: row.last.seq });
       break;
     case "pin": {
@@ -331,26 +367,54 @@ export function anySharedChange(station: Station, s: Started, r: () => number): 
       break;
     }
     case "kept":
-    case "hidden": {
+    case "hidden":
+    case "muted": {
       const on = r() < 0.5;
       m[kind] = [...m[kind].filter((x: number) => x !== row.thread), ...(on ? [row.thread] : [])];
       s.push(kind, { thread: row.thread, [kind]: on });
       break;
     }
     case "dismiss": {
+      const waits = rows.filter((x) => (x.card ?? x.need) !== undefined);
+      if (waits.length === 0) return anySharedChange(station, s, r);
+      const row = pick(r, waits);
       const c = row.card ?? row.need;
-      if (c === undefined) return anySharedChange(station, s, r);
       if (!m.dismissed.includes(`${row.thread}:${c.seq}`)) m.dismissed.push(`${row.thread}:${c.seq}`);
       s.push("dismiss", { thread: row.thread, n: c.seq });
       break;
     }
+    case "said": {
+      // (what was said, told before its row is: the marks of its chat read again)
+      const t = station.threads.get(row.thread);
+      if (t === undefined) return anySharedChange(station, s, r);
+      m.reads[String(row.thread)] = Math.max(0, (m.reads[String(row.thread)] ?? 0) - 1);
+      said(station, s, t, true, "我看看");
+      break;
+    }
     case "marked":
       m.reads[String(row.thread)] = row.last.seq - 1;
+      if (r() < 0.5) m.pins[row.id] = s.host.nowMs();
       s.push("chat-mark", { session: row.id, thread: row.thread });
       break;
+    case "renamed":
+      m.kept = r() < 0.5 ? [...m.kept.filter((x: number) => x !== row.thread), row.thread] : m.kept.filter((x: number) => x !== row.thread);
+      s.push("chat-changed", { thread: row.thread });
+      break;
+    case "summary":
+    case "turn": {
+      const key = station.sessions.has(row.id) ? row.id : pick(r, [...station.sessions.keys()]);
+      summary(station, s, key, kind === "summary" ? { process: pick(r, ["cold", "warm", "running"]) } : { lastTurn: { id: `turn-${Math.floor(r() * 1e6)}`, kind: "chat", outcome: "done", declared: "block", ending: "need_help", need: "要你看一下", detail: null, startedAt: s.host.nowMs() - 60_000, endedAt: s.host.nowMs() } });
+      if (kind === "turn" && key === row.id) m.dismissed = m.dismissed.filter((d: string) => !d.startsWith(`${row.thread}:`));
+      break;
+    }
     case "whole":
       m.selves = r() < 0.5 ? ["U04A1B2C3D4"] : ["U04A1B2C3D4", "U05J9K0L1M2"];
+      if (r() < 0.5) m.hidden = m.hidden.slice(1);
       s.push("chat-changed", { thread: null });
+      break;
+    case "reconnect":
+      // (its stream ends, and the next is not one that goes on from it: the station read again)
+      s.end();
       break;
   }
   return kind;
@@ -358,8 +422,9 @@ export function anySharedChange(station: Station, s: Started, r: () => number): 
 
 // ── what one change makes the core do ──
 
-/// What a change made the core do: rows made, serialised, and taken as written; chat records' JSON read.
-export type Did = { made: number; serialised: number; same: number; chatJson: number };
+/// What a change made the core do: rows made, serialised; chat records' JSON read; and what it only looked at
+/// (work.ts `glanced`, each by its name).
+export type Did = { made: number; serialised: number; chatJson: number; glanced: Record<keyof typeof glanced, number> };
 
 /// Counts the rows of the chat table's JSON the core's database reads.
 function counting(s: Started): () => number {
@@ -375,7 +440,8 @@ function counting(s: Started): () => number {
 }
 
 /// The changes measured one at a time, each of one chat of the list (the same chats at every size: real-size.ts keeps
-/// a station's first rows as they are), and what each made the core do.
+/// a station's first rows as they are), and what each made the core do. Of a station that leaves its list to the device
+/// (rowsMade).
 export const PROBES: Record<string, (station: Station, s: Started, r: () => number) => void> = {
   // (an agent's message in a chat of its own, row 6; a person's, row 10, which reads that chat's marks again)
   "message": (station, s) => said(station, s, station.threads.get(2006)!, false),
@@ -400,19 +466,97 @@ export const PROBES: Record<string, (station: Station, s: Started, r: () => numb
 /// Those whose rows are made again as the station's chats are many: none but a whole read of the marks.
 export const GROWING = new Set(["whole"]);
 
+/// The `i`th row of the list a station makes (the same at every size).
+const nth = (station: Station, i: number): J => [...station.shared.values()][i];
+
+/// The changes a station that makes its list tells, measured one at a time as PROBES are: each of one row.
+export const SHARED_PROBES: Record<string, (station: Station, s: Started, r: () => number) => void> = {
+  // (what a row says changed, where it is)
+  "row changed": (station, s) => {
+    const row = { ...nth(station, 6), title: "迁移演练" };
+    station.shared.set(row.id, row);
+    s.push("chat-shared", row);
+  },
+  // (a new message: what was said, then its row on top)
+  "row on top": (station, s) => sharedSaid(station, s, nth(station, 8), false),
+  "row new": (station, s) => {
+    const row = { ...nth(station, 3), id: "k-probe-new", session: "k-probe-new", thread: 990_001, lastActiveAt: s.host.nowMs() };
+    station.shared.set(row.id, row);
+    s.push("chat-shared", row);
+  },
+  "row removed": (station, s) => {
+    const id = nth(station, 12).id;
+    station.shared.delete(id);
+    s.push("chat-shared-removed", { id });
+  },
+  "read": (station, s) => {
+    const row = nth(station, 10);
+    station.marks.reads[String(row.thread)] = row.last.seq;
+    s.push("read", { thread: row.thread, n: row.last.seq });
+  },
+  "pin": (station, s) => {
+    const id = nth(station, 14).id;
+    station.marks.pins[id] = s.host.nowMs();
+    s.push("pin", { session: id, at: s.host.nowMs() });
+  },
+  "hidden": (station, s) => {
+    const thread = nth(station, 15).thread;
+    station.marks.hidden.push(thread);
+    s.push("hidden", { thread, hidden: true });
+  },
+  "muted": (station, s) => {
+    const thread = nth(station, 16).thread;
+    station.marks.muted.push(thread);
+    s.push("muted", { thread, muted: true });
+  },
+  "kept": (station, s) => {
+    const thread = nth(station, 17).thread;
+    station.marks.kept.push(thread);
+    s.push("kept", { thread, kept: true });
+  },
+  "dismiss": (station, s) => {
+    const row = [...station.shared.values()].find((x) => x.card !== undefined)!;
+    station.marks.dismissed.push(`${row.thread}:${row.card.seq}`);
+    s.push("dismiss", { thread: row.thread, n: row.card.seq });
+  },
+  // (a person's message told before its row: the marks of its chat read again)
+  "said": (station, s) => said(station, s, station.threads.get(nth(station, 20).thread)!, true),
+  "marked": (station, s) => {
+    const row = nth(station, 22);
+    station.marks.reads[String(row.thread)] = row.last.seq - 1;
+    s.push("chat-mark", { session: row.id, thread: row.thread });
+  },
+  "renamed": (station, s) => s.push("chat-changed", { thread: nth(station, 24).thread }),
+  // (a session's summary: no row of the list reads it)
+  "summary": (station, s) => summary(station, s, nth(station, 26).id, { process: "running" }),
+  "turn": (station, s) => summary(station, s, nth(station, 27).id, { lastTurn: { id: "turn-new", kind: "chat", outcome: "done", declared: "block", ending: "need_help", detail: null, startedAt: 1, endedAt: 2 } }),
+  // (whole: all the marks read again, whose rows they are changed; the station read again)
+  "whole": (station, s) => {
+    station.marks.selves = ["U04A1B2C3D4", "U05J9K0L1M2"];
+    s.push("chat-changed", { thread: null });
+  },
+  "reconnect": (_, s) => s.end(),
+};
+/// Of those, what is read whole, and so looks at the whole list.
+export const SHARED_WHOLE = new Set(["whole", "reconnect"]);
+/// How long a change is given to be taken: a stream ended opens again after its retry (3 s) and reads all again.
+export const settled = (kind: string): number => (kind === "reconnect" ? 6000 : 1500);
+
 /// Each probe on one core, in turn, with what it did, and whether the list stored was what is made anew after each.
-export async function probed(): Promise<{ chats: number; did: Record<string, Did>; differ: string[] }> {
+export async function probed(shared = false): Promise<{ chats: number; did: Record<string, Did>; differ: string[] }> {
   const station = new Station();
-  const s = await startedOn(station);
+  const s = await startedOn(station, shared);
   const chatJson = counting(s);
   const differ: string[] = [];
   const did: Record<string, Did> = {};
   const r = seeded(7);
-  for (const [name, probe] of Object.entries(PROBES)) {
-    const from = { made: work.chatRowsMade, serialised: work.chatRowsSerialised, same: glanced.chatRowsSame, chatJson: chatJson() };
+  for (const [name, probe] of Object.entries(shared ? SHARED_PROBES : PROBES)) {
+    const from = { made: work.chatRowsMade, serialised: work.chatRowsSerialised, chatJson: chatJson(), glanced: { ...glanced } };
     probe(station, s, r);
-    await s.host.time.pass(1500, 100);
-    did[name] = { made: work.chatRowsMade - from.made, serialised: work.chatRowsSerialised - from.serialised, same: glanced.chatRowsSame - from.same, chatJson: chatJson() - from.chatJson };
+    // (the station read again: all of it)
+    await s.host.time.pass(shared ? settled(name) : 1500, 100);
+    const looked = Object.fromEntries(Object.entries(glanced).map(([k, n]) => [k, n - from.glanced[k as keyof typeof glanced]])) as Did["glanced"];
+    did[name] = { made: work.chatRowsMade - from.made, serialised: work.chatRowsSerialised - from.serialised, chatJson: chatJson() - from.chatJson, glanced: looked };
     for (const d of differences(stored(s), madeAnew(s))) differ.push(`${name}: ${d}`);
   }
   const chats = stored(s).length;
@@ -420,6 +564,48 @@ export async function probed(): Promise<{ chats: number; did: Record<string, Did
   return { chats, did, differ };
 }
 
+/// What the first whole write of a list its station makes did to a device that held it in the places of before (as
+/// placesFor gave them: its rows' order as numbers), on a core started anew there after an update: the records put
+/// whole, the places written alone, the rows kept beside them that went, the chats' JSON read; and whether what is
+/// stored is then what is made anew (its places as sharedPlace says).
+export async function movedOnce(): Promise<{ chats: number; put: number; placed: number; keptBefore: number; keptAfter: number; chatJson: number; differ: string[] }> {
+  const station = new Station();
+  const s = await startedOn(station, true);
+  const sql = s.core.inner.data.of(ST)!.sql as J;
+  const ids = stored(s).map((r) => r.id);
+  // (the places of before, and a row kept beside each record as a list keeps the rows it shows: db/kept.ts listRow)
+  ids.forEach((id, i) => sql.run("UPDATE chat SET ord = ? WHERE station = ? AND archived = 0 AND id = ?", [i, ST, id]));
+  sql.run("INSERT OR REPLACE INTO chat_row (station, id, key, state, whole, sent) SELECT station, id, 'k', NULL, '{}', '{}' FROM chat WHERE station = ? AND archived = 0", [ST]);
+  const kept = () => sql.all("SELECT count(*) FROM chat_row WHERE station = ?", [ST])[0][0] as number;
+  const keptBefore = kept();
+  s.core.close();
+  assert(differences(stored(s), madeAnew(s)).length > 0, "held in the places of before");
+  let put = 0;
+  let placed = 0;
+  let chatJson = 0;
+  // (the device's databases as the host keeps them: what a core started anew opens)
+  for (const db of s.host.sqls.values() as Iterable<J>) {
+    const run = db.run.bind(db);
+    const all = db.all.bind(db);
+    db.run = (q: string, params?: unknown[]) => {
+      if (/^INSERT OR REPLACE INTO chat \(/.test(q)) put++;
+      if (/^UPDATE chat SET ord = /.test(q)) placed++;
+      return run(q, params);
+    };
+    db.all = (q: string, params?: unknown[]) => {
+      const out = all(q, params);
+      if (/^\s*SELECT\b/i.test(q) && /\b(FROM|JOIN) chat\b/.test(q) && /\bjson\b/.test(q)) chatJson += out.length;
+      return out;
+    };
+  }
+  const core = await Core.create(s.host, { clock: s.host.time.clock, sample: 0, wire: () => new HostWire(s.host) });
+  await s.host.time.pass(3000, 100);
+  const again = { ...s, core };
+  const out = { chats: ids.length, put, placed, keptBefore, keptAfter: kept(), chatJson, differ: differences(stored(again), madeAnew(again)) };
+  core.close();
+  return out;
+}
+
 if (!isMainThread && (workerData as J)?.rowsChanged === true) {
-  probed().then((found) => parentPort!.postMessage({ size: SIZE, ...found }), (e) => parentPort!.postMessage({ error: String(e?.stack ?? e) }));
+  ((workerData as J).moved === true ? movedOnce() : probed((workerData as J).shared === true)).then((found) => parentPort!.postMessage({ size: SIZE, ...found }), (e) => parentPort!.postMessage({ error: String(e?.stack ?? e) }));
 }
