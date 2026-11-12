@@ -583,7 +583,19 @@ export class SimEndpoint {
 
   // ── what the core calls (BoundEndpoint) ──
 
-  async connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[] = []): Promise<SimConnection> {
+  /// As the addon's: given up once `givenUp` resolves (iroh drops its handshake), counted in `SimNet.dialing` till then.
+  async connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[] = [], givenUp?: Promise<void>): Promise<SimConnection> {
+    this.net.dialing++;
+    const done = () => void this.net.dialing--;
+    // Given up, its handshake is dropped: it makes no connection at either end from then on.
+    const dial = { givenUp: false };
+    const dialled = this.#dial(addr, alpn, additional, dial);
+    const raced = givenUp === undefined ? dialled : Promise.race([dialled, givenUp.then(() => ((dial.givenUp = true), Promise.reject(new Error("given up"))))]);
+    raced.then(done, done);
+    return raced;
+  }
+
+  async #dial(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[], dial: { givenUp: boolean }): Promise<SimConnection> {
     const there = this.net.endpoint(addr.id);
     if (!there || this.#closed) return NEVER;
     const known = this.#known.get(addr.id);
@@ -620,7 +632,7 @@ export class SimEndpoint {
     const loss = way.loss();
     for (let pto = 1000; loss > 0 && this.net.rng.next() < 1 - (1 - loss) ** 2; pto *= 2) handshake += pto;
     await this.net.sleep(handshake);
-    if (way.downUntil() > this.net.now() || this.#closed || there.#closed) return NEVER;
+    if (dial.givenUp || way.downUntil() > this.net.now() || this.#closed || there.#closed) return NEVER;
     if (there.#held > 0) {
       there.#held--;
       return NEVER;
@@ -769,6 +781,8 @@ export class SimNet {
   oneWay = false;
   /// Every dial, in order: whom to, and whether at addresses it was given.
   readonly tries: { to: string; ips: boolean }[] = [];
+  /// Dials whose handshake is still going: neither done nor given up (`SimEndpoint.connect`).
+  dialing = 0;
   readonly #relays = new Map<string, { device: Leg; station: Leg }>();
   /// Entries (cloud relays.ts RELAY_ENTRIES): a URL on one relay's machine taking what comes to it on to another relay.
   readonly #entries = new Map<string, string>();

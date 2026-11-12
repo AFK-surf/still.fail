@@ -130,13 +130,29 @@ impl Endpoint {
         hex::encode(self.inner.id().as_bytes())
     }
 
-    /// A connection to a station offering `alpn` and, for one from before a rename, the `additional` ones.
-    pub fn connect(&self, addr: JsValue, alpn: Uint8Array, additional: Vec<Uint8Array>) -> Promise {
+    /// A connection to a station offering `alpn` and, for one from before a rename, the `additional` ones. Once
+    /// `given_up` resolves (its caller stopped waiting) the handshake is given up, its connection dropped and so closed,
+    /// as the station's addon gives a dial up (station/native/mesh `dial`).
+    pub fn connect(&self, addr: JsValue, alpn: Uint8Array, additional: Vec<Uint8Array>, given_up: Option<Promise>) -> Promise {
         let endpoint = self.inner.clone();
         future_to_promise(async move {
             let options = iroh::endpoint::ConnectOptions::new().with_additional_alpns(additional.iter().map(Uint8Array::to_vec).collect());
-            let connecting = endpoint.connect_with_opts(endpoint_addr(addr)?, &alpn.to_vec(), options).await.map_err(failed)?;
-            let conn = connecting.await.map_err(failed)?;
+            let addr = endpoint_addr(addr)?;
+            let handshake = async {
+                let connecting = endpoint.connect_with_opts(addr, &alpn.to_vec(), options).await.map_err(failed)?;
+                connecting.await.map_err(failed)
+            };
+            let given_up = async {
+                match given_up {
+                    Some(promise) => drop(wasm_bindgen_futures::JsFuture::from(promise).await),
+                    None => std::future::pending().await,
+                }
+            };
+            futures::pin_mut!(handshake, given_up);
+            let conn = match futures::future::select(handshake, given_up).await {
+                futures::future::Either::Left((conn, _)) => conn?,
+                futures::future::Either::Right(_) => return Err(failed("given up")),
+            };
             Ok(Connection { inner: conn }.into())
         })
     }

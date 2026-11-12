@@ -190,8 +190,9 @@ sim("a_failed_credential_releases_a_connection_that_arrives_later", async (s) =>
   const result = await s.run(Effect.result(mesh.link(station.id(), () => Effect.fail(failure))));
   assert.equal(result._tag, "Failure");
   await s.time.pass(1_000);
-  assert.equal(station.conns.length, 1);
-  assert.notEqual(station.conns[0].closeReason(), null);
+  // Its dial given up as the opening ended (`a_try_not_answered_gives_its_dial_up`); one that came first, closed.
+  assert.equal(s.net.dialing, 0);
+  assert.ok(station.conns.every((c) => c.closeReason() !== null));
   await close(s, station, mesh);
 });
 
@@ -744,6 +745,21 @@ sim("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", async (s) 
   link.close();
   await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.equal(mesh.endpoint(), now);
+  await close(s, station, mesh);
+});
+
+/// A dial whose opening ended unanswered is given up (iroh.ts `connect`'s `givenUp`): left going, it retransmitted its
+/// Initial to every way to the station for the connection's idle timeout, ten minutes, beside every dial after it.
+sim("a_try_not_answered_gives_its_dial_up", async (s) => {
+  const { mesh, station } = await setup(s);
+  station.unanswered(1);
+  const error = await s.run(mesh.link(station.id(), grants("ok", { n: 0 }))).then(
+    () => null,
+    (e) => e as CoreError,
+  );
+  assert.ok(error !== null);
+  await s.time.pass(1);
+  assert.equal(s.net.dialing, 0, "a dial its opening gave up on goes on");
   await close(s, station, mesh);
 });
 

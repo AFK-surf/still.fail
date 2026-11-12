@@ -56,8 +56,11 @@ export interface IrohConnection {
 export interface IrohEndpoint {
   /// Its id (hex): the public half of its key.
   id(): string;
-  /// A connection offering `alpn` (and the `additional` ones, for a station from before a rename).
-  connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[]): Effect.Effect<IrohConnection, HostError>;
+  /// A connection offering `alpn` (and the `additional` ones, for a station from before a rename). Once `givenUp`
+  /// succeeds (its caller stopped waiting) the host gives the handshake up, its connection closed: left going, a dial
+  /// retransmitted its Initial for the connection's whole idle timeout (station/native/mesh `dial`). It still answers,
+  /// failing, or with the connection when that came first.
+  connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[], givenUp?: Effect.Effect<void>): Effect.Effect<IrohConnection, HostError>;
   /// The next connection another endpoint opened to this one, on one of the ALPNs it was bound to take (`alpns`), with
   /// the one agreed; null once the endpoint is closed. A host that takes none (the browser's) has no `accept`.
   accept?(): Effect.Effect<{ connection: IrohConnection; alpn: Uint8Array } | null>;
