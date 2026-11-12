@@ -55,8 +55,22 @@ export const MeshLive = Layer.effectDiscard(
       }
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
+      const bind = () => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) });
+      // (a front the launcher started at this handover, the process before having bound the endpoint itself: what the
+      // front binds that process still holds (its IPv4 socket, 0.0.0.0:4770), so the front's bind fails until it is
+      // gone; then once more. A station renewed in place from one without the front (#5824) lost its mesh for good
+      // there: ccvm, 0.1.8772 to 8774, 2026-11-12 18:50 UTC, "Failed to bind sockets", nothing bound again for 3.5 h)
+      const bound = async () => {
+        try { return await bind(); }
+        catch (e) {
+          if (!process.env.STILLFAIL_MESH_FRONT || previous.pid === null) throw e;
+          log.warn("mesh", "the front could not bind while the process before held the endpoint: again once it is gone", { error: (e as Error).message });
+          await previous.gone;
+          return await bind();
+        }
+      };
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
+        Effect.promise(bound),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
