@@ -621,8 +621,14 @@ export class PersonalLock {
 
   /// What is pending of `sub`'s lock, as rows of a topic (`AdbPersonal` `pending`): what a person did, not the core's own.
   pending(sub: string): PendingRow[] {
+    return this.pendingShown(sub).map((x) => x.row);
+  }
+
+  /// The same, each with what it is (`item`): a workspace's `lock` topic says them beside its own (views/lock.ts
+  /// `ownPendingRows`), one done in both once.
+  pendingShown(sub: string): { item: Pending; row: PendingRow }[] {
     const names = this.#env.stations?.names?.(sub) ?? [];
-    return (this.#pending.get(sub) ?? []).filter((x) => x.act !== null).map((x) => pendingRow(x, names));
+    return (this.#pending.get(sub) ?? []).filter((x) => x.act !== null).map((item) => ({ item, row: pendingRow(item, names) }));
   }
 
   /// A failed one the person read (`adb.personalPendingDismiss`): dropped.

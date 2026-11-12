@@ -1908,7 +1908,7 @@ export const SHAPES: Record<string, Shape> = {
     ["pair", opt("LockPair"), { doc: "Its try to be approved face to face (or made one that signs), once it began (`lock.pair`)." }],
   ], { doc: "This device in the workspace's lock." }),
   LockPending: struct([
-    ["id", "String", { doc: "Which one (`lock.pendingDismiss`, `adb.personalPendingDismiss`)." }],
+    ["id", "String", { doc: "Which one (`lock.pendingDismiss`, `adb.personalPendingDismiss`); in a workspace's `lock`, one of the person's own lock begins `own:`." }],
     ["text", "String", { said: true, doc: "Its sentence: what it does and what it waits for, or that it did not take effect and why." }],
     ["state", "String", { doc: "`waiting` for a station of the lock to take it; `failed` (`dismissText` drops it)." }],
     ["stations", vec("String"), { said: true, doc: "The stations it waits for, by name (three at most)." }],
@@ -1931,7 +1931,7 @@ export const SHAPES: Record<string, Shape> = {
     ["protected", "u32"],
     ["renew", vec("LockDevice"), { doc: "The viewer's own web devices running out soon." }],
     ["attention", "u32"],
-    ["pending", vec("LockPending"), { default: true, doc: "The changes this device made that no station of the lock took yet, oldest first; none from a core of before." }],
+    ["pending", vec("LockPending"), { default: true, doc: "The changes this device made that no station of the lock took yet, oldest first, then those to its person's own lock\n(one made in both once); none from a core of before." }],
     ["pendingText", opt("String"), { said: true, doc: "Their heading (以下改动还没有生效), while there are any." }],
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts)." }),
   LockPromptWorkspace: struct([

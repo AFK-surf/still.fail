@@ -6,6 +6,7 @@ import { Changelog } from "../src/changelog.ts";
 import { Choose } from "../src/choose.ts";
 import { Devices } from "../src/devices.ts";
 import type { PersonalLock } from "../src/personal-lock.ts";
+import { pendingRow } from "../src/lock-pending.ts";
 import type { Rigs } from "../src/rigs.ts";
 import { parseTopic, type Topic } from "../src/protocol.ts";
 import { isObject } from "../src/util.ts";
@@ -13,7 +14,7 @@ import {
   CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, PEOPLE, CHAT_MESSAGES, DRIVE, LETTERS_COUNT, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, PEEKS, SEARCH, UP, VAULT_ITEM, cardCame, changelogFeed, changelogReleased,
   chatArchived, chatRenamed, devicesAdded, devicesSaid, driveAdded, fixture, hostReading, jobLogOf, jobsMoved, lettersHeld, liveStepped, lockApproved, memberJoined, messageAdded, more,
   netOf, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, overviewMoved, presetsChanged, quotaChanged, records, resourcesOf, screensMoved, screensOf, sessionMade, thingSaid, transcriptOf,
-  usageRead, vaultAdded, vaultUsed,
+  usageRead, vaultAdded, vaultUsed, ownPendingOf, STATIONS,
 } from "./real-size.ts";
 import { logged } from "../src/log-lines.ts";
 import type { Inner } from "../src/core.ts";
@@ -169,11 +170,17 @@ export const topicOf = (name: string): Topic => {
 function innerOf(parts: { host: FakeHost; store: Store; data: Data; views?: Views }): Inner {
   const workspaces = new Workspaces(parts.host, parts.store.runner);
   workspaces.setOwners(new Map([["ws", "s1"], [OTHER_WORKSPACE.id, "s1"], ["ws-friends", "s1"]]));
+  // (the person's own lock as the lock's page reads it: what is pending of it, as many as are kept)
+  const personal = {
+    standing: () => "member",
+    chain: () => null,
+    pendingShown: () => ownPendingOf(parts.host.nowMs()).map((item) => ({ item, row: pendingRow(item, STATIONS.map((s) => s.name)) })),
+  };
   return {
     host: parts.host, store: parts.store, runner: parts.store.runner, data: parts.data, views: parts.views, workspaces,
     accounts: { list: () => [{ sub: "s1", email: "me@x.com", name: "左子健" }] },
     stations: { seen: { read: () => {} }, link: () => ({ state: { state: "online" } }) },
-    provider: { kind: "stillfail" }, adb: { personal: () => ({ standing: () => "member" }) }, meshNow: () => null,
+    provider: { kind: "stillfail" }, adb: { personal: () => personal }, meshNow: () => null,
   } as unknown as Inner;
 }
 

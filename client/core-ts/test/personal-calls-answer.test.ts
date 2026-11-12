@@ -53,14 +53,15 @@ type Rig = Awaited<ReturnType<typeof rig>>;
 /// person's own lock too (GET/POST /lock/person); `silent`: asked, it never answers; `personLate`: its reads of the
 /// person's lock answered that many ms late; `refused`: how many entries it refused (409), one at a place it holds
 /// another at, as `takeLock` does; `lateUntil`: till then (the clock's ms, `now`) what it is asked is held, and
-/// answered then (its link coming back, as a station just started anew: the tests of stations late, at the end).
+/// answered then (its link coming back, as a station just started anew: the tests of stations late, at the end);
+/// `personSilent`: what it is asked of the person's lock never answered, the workspace's answered.
 function station(first: Entry, now: () => number) {
   const chain: Entry[] = [first];
   const kept = { person: [] as Entry[] };
-  const say = { silent: false, personLate: 0, refused: 0, lateUntil: 0 };
+  const say = { silent: false, personSilent: false, personLate: 0, refused: 0, lateUntil: 0 };
   const head = (): Head => ({ seq: chain.length - 1, hash: entryHash(chain.at(-1)!), genesis: entryHash(chain[0]!) });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
-    if (say.silent) return Effect.never;
+    if (say.silent || (say.personSilent && path === "/lock/person")) return Effect.never;
     if (now() < say.lateUntil) return Effect.andThen(Effect.sleep(say.lateUntil - now()), Effect.suspend(() => answer(method, path, body)));
     const serves = { takes: ["person"], serves: ["person", "devices", "told"] };
     if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) {
@@ -631,5 +632,72 @@ test("a person's lock: the head moved while pending, no seed in hand: failed, sa
   assert.match(rows[0]!.text, /没有生效/);
   assert.ok(!s.st.kept.person.some(isRemove(LAPTOP_KEY)), "nothing brought");
   await timedCall(s.r, "adb.personalPendingDismiss", { sub: "s1", id: rows[0]!.id });
+  assert.deepEqual(s.personal.view("s1").pending, []);
+});
+
+// ── one safe mode ──
+// To people there is one safe mode (the root AGENTS.md): what is pending of the person's own lock is said on the
+// workspace's `lock` topic too (设置 › 安全, the one page that shows what is pending), its id saying whose
+// (`own:`), one done in both once. 2026-11-12: an own device removed there with only the person's lock's station
+// silent was pending on that lock alone, said only on `adbShare`, which that page does not read. (The topic is watched
+// after a `timedCall`, which takes every message the core sent, its changes too.)
+
+type Row = { id: string; state: string; text: string; stations: string[] };
+
+test("an own device removed, only its own lock's entry pending: the workspace's lock topic lists it, waiting, its stations named; taken, gone", async () => {
+  const s = await setUp();
+  cloudAs(s.r, "all");
+  s.st.say.personSilent = true;
+  const out = await timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: LAPTOP });
+  answeredWithin("lock.removeDevice, the person's lock silent", out, 2 * ASKED_MS + SLACK_MS);
+  const lock = await s.r.watch({ topic: "lock", workspace: "ws" });
+  assert.ok(s.st.chain.some(isOut(LAPTOP)), "out of the workspace's lock: the station took it");
+  assert.equal(pendingHeld(s.inner, "ws").length, 0, "nothing pending in the workspace's");
+  assert.deepEqual(s.personal.view("s1").pending.map((p: Row) => p.state), ["waiting"], "pending on the person's");
+  const rows = (await lock()).pending as Row[];
+  assert.deepEqual(rows.map((r) => [r.id.startsWith("own:"), r.state, r.stations]), [[true, "waiting", ["studio"]]], JSON.stringify(rows));
+  assert.match(rows[0]!.text, /laptop/);
+  assert.equal((out.said as { pending?: Row }).pending?.id, rows[0]!.id, "the call answers with the row the topic shows");
+  // Its station answering again: taken, gone from the topic.
+  s.st.say.personSilent = false;
+  await s.run(s.personal.refresh("s1"));
+  await s.r.host.time.pass(1_000);
+  assert.ok(isRemove(LAPTOP_KEY)(s.st.kept.person.at(-1)!), "the station took it");
+  assert.deepEqual((await lock()).pending, []);
+});
+
+test("an own device removed, pending in both locks: one row on the workspace's lock topic, the workspace's", async () => {
+  const s = await setUp();
+  cloudAs(s.r, "all");
+  s.st.say.silent = true;
+  const out = await timedCall(s.r, "lock.removeDevice", { workspace: "ws", device: LAPTOP });
+  answeredWithin("lock.removeDevice, silent", out, 2 * ASKED_MS + SLACK_MS);
+  const lock = await s.r.watch({ topic: "lock", workspace: "ws" });
+  assert.equal(s.personal.view("s1").pending.length, 1);
+  const rows = (await lock()).pending as Row[];
+  assert.deepEqual(rows.map((r) => [r.id, r.state]), [[pendingHeld(s.inner, "ws")[0]!.id, "waiting"]], JSON.stringify(rows));
+});
+
+test("a failed change to the person's own lock, on the workspace's lock topic: dismissed through lock.pendingDismiss", async () => {
+  const s = await setUp();
+  cloudAs(s.r, "all");
+  s.st.say.silent = true;
+  await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: LAPTOP_KEY });
+  const lock = await s.r.watch({ topic: "lock", workspace: "ws" });
+  // Another device of theirs put a tablet on meanwhile: the head moved, and with no seed in hand it fails.
+  const pinned = s.personal.entries("s1");
+  const seed = s.r.host.secure.get("personal-signer")!.value;
+  const key = `ed25519:${hex(ed25519.getPublicKey(seed))}`;
+  const e = { v: 1 as const, ws: personOf("s1"), seq: pinned.length, prev: entryHash(pinned.at(-1)!), at: Math.floor(s.r.host.nowMs() / 1000), kind: "device", body: { key: `ed25519:${"66".repeat(32)}`, id: "66".repeat(32), label: "tablet" } };
+  s.st.kept.person = [...pinned, { ...e, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } }];
+  s.st.say.silent = false;
+  await s.run(s.personal.refresh("s1"));
+  await s.run(read(s.inner, "ws"));
+  await s.r.host.time.pass(1_000);
+  assert.equal(pendingHeld(s.inner, "ws").length, 0, "the workspace's taken");
+  const rows = (await lock()).pending as Row[];
+  assert.deepEqual(rows.map((r) => [r.id.startsWith("own:"), r.state]), [[true, "failed"]], JSON.stringify(rows));
+  await s.r.ask("lock.pendingDismiss", { workspace: "ws", id: rows[0]!.id });
+  assert.deepEqual((await lock()).pending, []);
   assert.deepEqual(s.personal.view("s1").pending, []);
 });

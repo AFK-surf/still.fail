@@ -46,7 +46,7 @@ import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, personOf } from "../personal-lock.ts";
-import { type Act, PENDING_MOST, type Pending, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
+import { type Act, PENDING_MOST, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -865,8 +865,9 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
       const left = pending.filter((x) => !on.has(hashOf(x.entry)));
       if (left.length !== pending.length) {
         putPending(inner, ws, left);
-        const taken = pending.filter((x) => on.has(hashOf(x.entry))).map((x) => x.entry);
-        inner.runner.fork(Effect.ignore(inner.provider.request(sub, "POST", `/v1/workspaces/${encodeURIComponent(ws)}/lock`, { entries: taken }, null), { log: "Unhandled", message: "lock entries a station took sent to the cloud" }));
+        // (not one the cloud was sent as it was signed, `viaCloud`: read of it, perhaps, which put it on)
+        const taken = pending.filter((x) => on.has(hashOf(x.entry)) && x.sent !== true).map((x) => x.entry);
+        if (taken.length > 0) inner.runner.fork(Effect.ignore(inner.provider.request(sub, "POST", `/v1/workspaces/${encodeURIComponent(ws)}/lock`, { entries: taken }, null), { log: "Unhandled", message: "lock entries a station took sent to the cloud" }));
       }
     }
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
@@ -2038,8 +2039,41 @@ export function lockView(inner: Inner, ws: string): J {
     renew,
     attention: renew.length,
     // What this device did that no station took yet: not in effect, and nothing above shows it as if it were.
-    ...pendingFields(pendingHeld(inner, ws).filter((x) => x.act !== null).map((x) => pendingRowOf(inner, ws, x))),
+    // (and of their own lock: to people there is one safe mode, and this is the page that says what is not in effect)
+    ...pendingFields(pendingRows(inner, ws)),
   };
+}
+
+/// A workspace's `lock` topic's `pending`: what this device did in the workspace's lock that no station took yet, then
+/// what it did in its person's own lock (`ownPendingRows`).
+function pendingRows(inner: Inner, ws: string): PendingRow[] {
+  const mine = pendingHeld(inner, ws).filter((x) => x.act !== null);
+  return [...mine.map((x) => pendingRowOf(inner, ws, x)), ...ownPendingRows(inner, ws, mine)];
+}
+
+/// Of a row of the person's own lock in a workspace's `lock` topic, what its id begins with: `lock.pendingDismiss`
+/// drops it of that lock.
+const OWN_PENDING = "own:";
+
+/// What is pending of the signed-in person's own lock (the one they bound here; where this lock is off, still theirs),
+/// as rows of a workspace's `lock` topic, its id saying whose (`OWN_PENDING`). To people there is one safe mode (the
+/// root AGENTS.md): an own device taken off on 设置 › 安全 is taken off that lock first, and that removal pending there
+/// alone was said nowhere the person looks. One done in both (`mine`: the same kind on the same device, as taking an
+/// own device off signs it in both) is one row, the workspace's.
+function ownPendingRows(inner: Inner, ws: string, mine: readonly Pending[]): PendingRow[] {
+  const sub = inner.workspaces.owner(ws);
+  if (sub === null) return [];
+  const personal = inner.adb.personal();
+  const shown = personal.pendingShown(sub);
+  if (shown.length === 0) return [];
+  const ids = new Map([...(personal.chain(sub)?.devices.values() ?? [])].map((d) => [d.key, d.id]));
+  const idOf = (e: Entry) => str(get(e.body, "id")) ?? ids.get(str(get(e.body, "key")) ?? "") ?? null;
+  return shown
+    .filter(({ item }) => {
+      const id = idOf(item.entry);
+      return id === null || !mine.some((w) => w.entry.kind === item.entry.kind && get(w.entry.body, "id") === id);
+    })
+    .map(({ row }) => ({ ...row, id: `${OWN_PENDING}${row.id}` }));
 }
 
 /// The `lockPrompts` topic: the new devices showing a code of this one's to type (views/pair.ts), and the members'
@@ -2185,6 +2219,11 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         return null;
       // A failed pending change, read: dropped (a waiting one stays: it is still to take effect).
       case "pendingDismiss": {
+        // (one of the person's own lock, as this topic shows it: dropped of that lock)
+        if (param("id").startsWith(OWN_PENDING)) {
+          inner.adb.personal().dismissPending(sub, param("id").slice(OWN_PENDING.length));
+          return null;
+        }
         const items = pendingHeld(inner, c.workspace);
         if (items.some((x) => x.id === param("id") && x.state === "failed")) putPending(inner, c.workspace, items.filter((x) => x.id !== param("id")));
         return null;
@@ -2232,7 +2271,9 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
           // (pending on their own lock, or, taken there by a station of another workspace of theirs, in this one's:
           // said so either way, as this workspace's page shows it)
           const here = pendingHeld(inner, c.workspace).find((x) => x.state === "waiting" && x.entry.kind === "device.remove" && get(x.entry.body, "id") === param("device"));
-          return here !== undefined ? { pending: pendingRowOf(inner, c.workspace, here) } : off;
+          if (here !== undefined) return { pending: pendingRowOf(inner, c.workspace, here) };
+          // (pending on their own lock alone: its row as this workspace's topic shows it, `ownPendingRows`)
+          return off === null ? null : { pending: { ...off.pending, id: `${OWN_PENDING}${off.pending.id}` } };
         }
         result = yield* lock.append("device.remove", { id: param("device") });
         break;
@@ -2872,7 +2913,7 @@ export class Lock {
       // The stations still answering are listened to: one taking it then, it is held (and pending no more); one refusing
       // it, that station is read and what is pending decided again (`deliver`). (2026-11-12: with the one station asleep
       // and the cloud up, 移除设备 answered as done though no station would act on it; with both silent, never.)
-      const row = self.#pend(entry, chain, tries, of, head.genesis);
+      const row = self.#pend(entry, chain, tries, of, head.genesis, viaCloud);
       // (`viaCloud`: a station that pins what the lock says of it from the cloud alone, which no device reaches,
       // `joinStation`: the cloud carries it there, its taking it still counting for nothing here)
       if (viaCloud) yield* self.#toCloud([entry], true);
@@ -2903,15 +2944,16 @@ export class Lock {
   }
 
   /// In the turn: `entry` (of `chain`) kept pending (`pendingHeld`), or, signed again (`of` the id of the one first
-  /// signed), in that one's place; its row of the `lock` topic, which the call answers with.
-  #pend(entry: Entry, chain: Entry[], tries: number, of: string | null, genesis: string) {
+  /// signed), in that one's place; its row of the `lock` topic, which the call answers with. `sent`: the cloud is sent
+  /// it now (`viaCloud`), and not again as it is held (`hold`).
+  #pend(entry: Entry, chain: Entry[], tries: number, of: string | null, genesis: string, sent = false) {
     const inner = this.#inner;
     const items = pendingHeld(inner, this.ws);
     const id = of ?? entryHash(entry);
     const had = items.find((x) => x.id === id);
     const made: Pending = had !== undefined
-      ? { ...had, entry, state: "waiting", ...(tries > 0 ? { tries } : {}) }
-      : { id, entry, ...actOf(inner, this.ws, entry, this.#within !== null), at: inner.host.nowMs(), state: "waiting", ...(tries > 0 ? { tries } : {}) };
+      ? { ...had, entry, state: "waiting", ...(tries > 0 ? { tries } : {}), ...(sent ? { sent } : {}) }
+      : { id, entry, ...actOf(inner, this.ws, entry, this.#within !== null), at: inner.host.nowMs(), state: "waiting", ...(tries > 0 ? { tries } : {}), ...(sent ? { sent } : {}) };
     putPending(inner, this.ws, had !== undefined ? items.map((x) => (x.id === id ? made : x)) : [...items, made]);
     this.#mine = { head: { seq: entry.seq, hash: entryHash(entry), genesis }, entries: chain };
     return pendingRowOf(inner, this.ws, made);
@@ -2974,7 +3016,12 @@ export class Lock {
             continue;
           }
           entry = again;
-          putPending(inner, ws, pendingHeld(inner, ws).map((x) => (x.id === item.id ? { ...x, entry: again, tries: tries + 1 } : x)));
+          // (a new entry: the cloud not sent it, `sent` no more)
+          putPending(inner, ws, pendingHeld(inner, ws).map((x) => {
+            if (x.id !== item.id) return x;
+            const { sent: _sent, ...rest } = x;
+            return { ...rest, entry: again, tries: tries + 1 };
+          }));
         }
         const chain = [...h.entries, entry];
         const signed: Head = { seq: entry.seq, hash: entryHash(entry), genesis: h.head.genesis };

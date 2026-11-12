@@ -22,7 +22,8 @@ export type Act = "removeDevice" | "renew" | "approve" | "addMember" | "setRole"
 /// One pending entry. `id`: the hash of the entry as first signed, the same while it is signed again (`entry` the one
 /// brought now). `name`: what it is about, as the person knows it then; `role` a role given, in words. `at` when it was
 /// signed first (ms). `state`: `waiting` for a station, or `failed`: `what` was changed meanwhile by another device
-/// (`core-misc.lock.pending.failed`), or `why` says what else refused it. `tries`: signings again of it.
+/// (`core-misc.lock.pending.failed`), or `why` says what else refused it. `tries`: signings again of it. `sent`: the
+/// cloud was sent it as it was signed (a station that pins what the lock says of it from the cloud alone).
 export type Pending = {
   id: string;
   entry: Entry;
@@ -34,6 +35,7 @@ export type Pending = {
   what?: string;
   why?: string;
   tries?: number;
+  sent?: boolean;
 };
 
 /// What a lock's topic says of one (the page draws it): its sentence (`text`, made here), its state, the stations it
