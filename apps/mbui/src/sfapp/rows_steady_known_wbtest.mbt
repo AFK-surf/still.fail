@@ -6,6 +6,9 @@
 ///|
 fn init {
   @ui.rows_steady_known([
+    // (大屏 at 1.3, the chat's panel opened and closed: a row of the chat goes 14 one way, stands 217 ms and comes back
+    // 2.8, at 60 and 120)
+    ("src/sfapp/daily_paths_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
   ])
 }
