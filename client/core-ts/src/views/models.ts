@@ -66,7 +66,10 @@ export function attention(overview: J, session: J, now: number): J[] {
     }
     const quota = quotaFor(get(p, "quota"), str(get(session, "model")) ?? str(get(p, "model")));
     if (get(quota, "state") === "ok") {
-      for (const w of arr(get(quota, "windows"))) {
+      const wins = arr(get(quota, "windows"));
+      const marks = format.windowMarks(wins.map((w) => format.windowName(str(get(w, "label")) ?? "")));
+      for (let i = 0; i < wins.length; i++) {
+        const w = wins[i]!;
         const used = typeof get(w, "usedPercent") === "number" ? w.usedPercent : 0;
         const left0 = 100 - used;
         if (left0 > LOW_LEFT) continue;
@@ -78,7 +81,7 @@ export function attention(overview: J, session: J, now: number): J[] {
           kind: "quota",
           text: t("core-views.attention.quota_left", { label, left }),
           more: until !== null ? format.refillsIn(until, now) : null,
-          quota: { left, mark: format.windowMark(label)[0], level: left <= 10 ? "red" : "amber", until },
+          quota: { left, mark: marks[i]![0], level: left <= 10 ? "red" : "amber", until },
         });
       }
     }
@@ -307,11 +310,25 @@ export function spentView(until: number, now: number): J {
 /// the other models' left out, so one of them used up or running low is said of that model alone; `m` not known, the
 /// account's alone.
 export function quotaFor(quota: J, m: string | null): J {
-  if (!Array.isArray(get(quota, "scoped"))) return quota;
+  if (quota === null || typeof quota !== "object" || Array.isArray(quota)) return quota;
+  const baseWins = arr(get(quota, "windows"));
+  const hasGroupScope = m !== null && baseWins.some((w) => {
+    const s = str(get(w, "scope"));
+    return s === "gemini" || s === "3p";
+  });
+  const groupKey = m !== null ? model.key(m) : "";
+  const groupWant = groupKey.startsWith("gemini") || groupKey.startsWith("gemma") ? "gemini" : "3p";
+  const groupFiltered = hasGroupScope ? baseWins.filter((w) => {
+    const s = str(get(w, "scope"));
+    return s === undefined || s === null || s === groupWant;
+  }) : baseWins;
+  if (!Array.isArray(get(quota, "scoped"))) {
+    return groupFiltered.length !== baseWins.length ? { ...quota, windows: groupFiltered } : quota;
+  }
   const { scoped, ...rest } = quota;
   const family = m !== null ? model.family(m)?.toLowerCase() : undefined;
   const own = family === undefined ? [] : scoped.filter((w: J) => str(get(w, "scope"))?.toLowerCase() === family);
-  return { ...rest, windows: [...arr(get(quota, "windows")), ...own] };
+  return { ...rest, windows: [...groupFiltered, ...own] };
 }
 
 /// When an allowance (quotaFor's, of the model asked about) with a window used up can be run on again; null when

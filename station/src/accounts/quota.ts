@@ -7,6 +7,8 @@
 //   profile's home (renewed first when about to run out, and once more when the provider says it is not good: oauth.ts);
 //   a model's own week under the account's (Fable's) apart from the account's windows, in `scoped`; the limit resets it
 //   holds (Claude Code's /limit-reset), asked as the installed Claude Code asks them: claude-reset.ts;
+// - Antigravity CLI (Google account): `agy -p /usage --output-format json` in the profile's Antigravity home (Gemini
+//   and Claude / GPT 5-hour and weekly windows): agy-quota.ts;
 // - Anthropic API keys and other providers bill per use and have no allowance to show.
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -24,6 +26,7 @@ import { profileFetch } from "../ops/agent-env.ts";
 import { codexQuotaFailure } from "../../../client/core-ts/src/codex-quota.ts";
 import { claudeHeaders, claudeResets, type QuotaReset, USAGE_PATH } from "./claude-reset.ts";
 import { unanswered } from "../ops/unanswered.ts";
+import { agyQuota } from "./agy-quota.ts";
 
 type Json = any;
 
@@ -32,7 +35,7 @@ const TIMEOUT_MS = 15_000;
 /// `checkedAt`: stamped by whoever keeps it, on its clock (Accounts, MachineLogins).
 const quota = (state: string, windows: QuotaWindow[], detail: string | null): ProfileQuota => ({ state, windows, detail, checkedAt: 0 });
 
-const okOrUnavailable = (windows: QuotaWindow[], empty: string) => (windows.length === 0 ? quota("unavailable", [], empty) : quota("ok", windows, null));
+export const okOrUnavailable = (windows: QuotaWindow[], empty: string) => (windows.length === 0 ? quota("unavailable", [], empty) : quota("ok", windows, null));
 
 /// transcript.rs parse_iso: an RFC 3339 time, as epoch ms.
 function parseIso(text: string): number | null {
@@ -48,7 +51,7 @@ export function at(value: unknown): number | null {
   return null;
 }
 
-function percent(value: unknown): number {
+export function percent(value: unknown): number {
   let n = 0;
   if (typeof value === "number") n = value;
   else if (typeof value === "string") {
@@ -95,7 +98,7 @@ function message(text: string): string | undefined {
 }
 
 /// A provider's refusal as a quota: the account refused (blocked), or its sign-in no longer good.
-async function refused(provider: string, response: Response, lang: Lang): Promise<ProfileQuota> {
+export async function refused(provider: string, response: Response, lang: Lang): Promise<ProfileQuota> {
   const status = response.status;
   let text = "";
   try {
@@ -279,8 +282,7 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     if (profile.runtime === "cursor") return quota("unsupported", [], tr(lang, "station.quota.cursorUnsupported"));
     // Nor does the Devin CLI say its account's quota to a program (only its own /usage shows it).
     if (profile.runtime === "devin") return quota("unsupported", [], tr(lang, "station.quota.devinUnsupported"));
-    // Nor the Antigravity CLI.
-    if (profile.runtime === "agy") return quota("unsupported", [], tr(lang, "station.quota.agyUnsupported"));
+    if (profile.runtime === "agy") return await agyQuota(profile.home, { ...env, ...(isObject(profile.env) ? profile.env : {}) }, urls, lang);
     if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang, claudeVersion);
     try {
       if (!codexRateLimits) throw new Error("no codex app-server to ask");

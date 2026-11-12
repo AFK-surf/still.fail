@@ -129,10 +129,11 @@ export function leftLevel(used: number): [number, string] {
 
 function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
   byMinute();
-  const out = list.map((w) => {
+  const marks = format.windowMarks(list.map((w) => str(w.label) ?? ""));
+  const out = list.map((w, i) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
-    const [mark, order] = format.windowMark(label);
+    const [mark, order] = marks[i]!;
     const [left, level] = leftLevel(used);
     return { ...w, label: format.windowName(label), mark, order, left, level, refills: typeof w.resetsAt === "number" ? format.refillsIn(w.resetsAt, c.now) : null };
   });

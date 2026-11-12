@@ -11,6 +11,8 @@ import { profileRuntimes } from "../src/agents/profiles.ts";
 import { accessKinds, checkProfile, loginCommand } from "../src/accounts/profiles.ts";
 import { LoginManager, type LoginState } from "../src/accounts/login.ts";
 import { checkQuota } from "../src/accounts/quota.ts";
+import { Accounts as SessionAccounts } from "../src/sessions/accounts.ts";
+import { hubConfig } from "../src/sessions/config.ts";
 import { tr } from "../src/ops/i18n.ts";
 import { platform } from "../src/platform/index.ts";
 import { transcriptPath, readTimeline, isPosting } from "../src/read/transcript.ts";
@@ -212,7 +214,7 @@ test("a Google account: signed in in its terminal interface (the way chosen, Goo
   await s.dispose();
 });
 
-test("a Google account's sign-in: refused at once where there is no terminal; its allowance not said; its login command", async () => {
+test("a Google account's sign-in: refused at once where there is no terminal; without a sign-in its allowance says signed out; its login command", async () => {
   const terminal = platform.terminal;
   platform.terminal = () => null;
   const logins = new LoginManager(data, { claude: "claude", codex: "codex", agy: "agy" });
@@ -223,7 +225,71 @@ test("a Google account's sign-in: refused at once where there is no terminal; it
     platform.terminal = terminal;
     await logins.close();
   }
-  const q = await checkQuota({ id: "p", runtime: "agy", home: "/h", access: { kind: "subscription" } } as never, {}, undefined, undefined, "en");
-  assert.deepEqual([q.state, q.detail], ["unsupported", tr("en", "station.quota.agyUnsupported")]);
+  const q = await checkQuota({ id: "p", runtime: "agy", home: join(data, "no-signin"), access: { kind: "subscription" } } as never, {}, undefined, undefined, "en");
+  assert.deepEqual([q.state, q.detail], ["unavailable", tr("en", "station.quota.signInExpired")]);
   assert.equal(loginCommand("agy", "/h"), "HOME=/h/agy agy");
+});
+
+test("an Antigravity CLI account's Gemini and Claude / GPT windows weigh only on their own models in the pool", () => {
+  const cfg = hubConfig(
+    {
+      profiles: [
+        { id: "ag1", name: "AG1", runtime: "agy", home: "/h1", access: { kind: "subscription" }, model: "gemini-4-carbon-medium", models: ["gemini-4-carbon-medium", "claude-opus-5-5-medium"] },
+        { id: "ag2", name: "AG2", runtime: "agy", home: "/h2", access: { kind: "subscription" }, model: "gemini-4-carbon-medium", models: ["gemini-4-carbon-medium", "claude-opus-5-5-medium"] },
+      ],
+    },
+    "/x",
+  );
+  const sessions = new Map<string, any>([
+    ["s-gemini", { key: "s-gemini", runtime: "agy", profile: "ag1", profilePinned: false, model: "gemini-4-carbon-medium", effort: null }],
+    ["s-claude", { key: "s-claude", runtime: "agy", profile: "ag1", profilePinned: false, model: "claude-opus-5-5-medium", effort: null }],
+  ]);
+  const pool = new SessionAccounts({
+    config: () => cfg,
+    store: {
+      getSession: (k: string) => sessions.get(k),
+      setSessionProfile: (k: string, id: string, pinned: boolean) => {
+        const s = sessions.get(k);
+        if (s) {
+          s.profile = id;
+          s.profilePinned = pinned;
+        }
+      },
+      lastTurn: () => ({ endedAt: 1000 }),
+      recentlyCompacted: () => false,
+      compactionsReady: () => false,
+      lastContexts: () => [],
+      compactionPoints: () => new Map(),
+    } as never,
+    running: () => [],
+    clock: { currentTimeMillisUnsafe: () => 2000 } as never,
+  });
+  const ag1Quota = {
+    state: "ok",
+    checkedAt: 1500,
+    windows: [
+      { label: "5 小时 · Gemini", usedPercent: 15, resetsAt: 5000, scope: "gemini" },
+      { label: "每周 · Gemini", usedPercent: 25, resetsAt: 9000, scope: "gemini" },
+      { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: 6000, scope: "3p" },
+      { label: "每周 · Claude / GPT", usedPercent: 40, resetsAt: 9000, scope: "3p" },
+    ],
+  };
+  const ag2Quota = {
+    state: "ok",
+    checkedAt: 1500,
+    windows: [
+      { label: "5 小时 · Gemini", usedPercent: 100, resetsAt: 7000, scope: "gemini" },
+      { label: "每周 · Gemini", usedPercent: 100, resetsAt: 8000, scope: "gemini" },
+      { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: 8500, scope: "3p" },
+      { label: "每周 · Claude / GPT", usedPercent: 50, resetsAt: 9000, scope: "3p" },
+    ],
+  };
+  pool.setHealth((id) => ({
+    check: { state: "ok", detail: "ok", models: ["gemini-4-carbon-medium", "claude-opus-5-5-medium"], checkedAt: 1500 },
+    quota: id === "ag1" ? ag1Quota : ag2Quota,
+  }));
+  // Gemini on ag1 is still healthy even though ag1's Claude / GPT 5h window is at 100%.
+  assert.equal(pool.runOn("s-gemini").id, "ag1");
+  // Claude on ag1 sees only the 3P window (refills at 6000), while ag2's 3P window is also full (8500): stays on ag1 and refills at 6000.
+  assert.equal(pool.refillsAt("s-claude"), 6000);
 });

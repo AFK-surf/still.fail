@@ -2,11 +2,15 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { devNull } from "node:os";
+import { delimiter, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { agyScopeForModel } from "../src/accounts/agy-quota.ts";
 import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
 import { readClaudeCredentials } from "../src/agents/machine-logins.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { at, checkQuota, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, machineUsage, windowLabel } from "../src/accounts/quota.ts";
+import { SESSIONS, agyHome, agyToken, geminiDir } from "../src/agents/agy.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { machine, provider, script, temp, until } from "./accounts-fakes.ts";
 
@@ -64,6 +68,79 @@ describe("allowances and renewing", { concurrency: true }, () => {
     const none = await provider(() => ({ status: 200, body: { seven_day: week, limits: [limits[0]] } }));
     assert.equal("scoped" in (await claudeUsage(none.base, "t", "zh")), false);
     await none.close();
+  });
+
+  test("an Antigravity CLI Google sign-in's allowance is read via `agy -p /usage` in its profile files", async () => {
+    const home = temp("agy-quota");
+    const dump = join(home, "dump");
+    const fakePath = `${fileURLToPath(new URL("./fake", import.meta.url))}${delimiter}${process.env.PATH ?? ""}`;
+    const tokenPath = agyToken(home);
+    mkdirSync(join(home, "agy", ".gemini", "antigravity-cli"), { recursive: true });
+    writeFileSync(
+      tokenPath,
+      JSON.stringify({
+        token: { access_token: "ya29.ok", token_type: "Bearer", refresh_token: "1//refresh" },
+        auth_method: "oauth",
+        id_token_email: "me@gmail.com",
+      }),
+    );
+    const profile = hubConfig({ profiles: [{ id: "ag", home, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+    const env = { PATH: fakePath, FAKE_DUMP: dump, GEMINI_API_KEY: "machine-key" };
+    const urls = { ...URLS, agyQuota: "https://aicode.example.test" };
+    const q = await checkQuota(profile, env, undefined, urls, "zh");
+    assert.equal(q.state, "ok");
+    assert.deepEqual(q.windows, [
+      { label: "每周 · Gemini", usedPercent: 25, resetsAt: Date.parse("2026-11-19T09:14:38Z"), minutes: 10080, scope: "gemini" },
+      { label: "5 小时 · Gemini", usedPercent: 10, resetsAt: Date.parse("2026-11-12T14:14:38Z"), minutes: 300, scope: "gemini" },
+      { label: "每周 · Claude / GPT", usedPercent: 60, resetsAt: Date.parse("2026-11-19T09:14:38Z"), minutes: 10080, scope: "3p" },
+      { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: Date.parse("2026-11-12T14:14:38Z"), minutes: 300, scope: "3p" },
+    ]);
+    const ran = JSON.parse(readFileSync(dump, "utf8").trim().split("\n")[0]!);
+    assert.deepEqual(ran.args, ["--log-file", devNull, "-p", "/usage", "--output-format", "json"]);
+    assert.equal(ran.home, agyHome(home));
+    assert.equal(ran.geminiDir, geminiDir(home));
+    assert.equal(ran.cloudCodeUrl, "https://aicode.example.test");
+    assert.equal(ran.key, null, "scrubs inherited GEMINI_API_KEY");
+    assert.equal(ran.updates, "1");
+
+    // Keychain-backed macOS profile (sessions dir exists, no token file on disk): preserves real HOME so `/usr/bin/security`
+    // can reach the login keychain, while an unsigned profile (even with a cancelled `agy` home) does not read the keychain.
+    const realHome = temp("agy-real-home");
+    const keyringHome = temp("agy-quota-keyring");
+    const keyringDump = join(keyringHome, "dump");
+    mkdirSync(join(agyHome(keyringHome), SESSIONS), { recursive: true });
+    const keyringProfile = hubConfig({ profiles: [{ id: "ag-k", home: keyringHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+    const kq = await checkQuota(keyringProfile, { HOME: realHome, PATH: fakePath, FAKE_DUMP: keyringDump, FAKE_AGY_KEYRING: "1", FAKE_KEYCHAIN_HOME: realHome }, undefined, URLS, "zh");
+    if (process.platform === "darwin") {
+      assert.equal(kq.state, "ok");
+      const kran = JSON.parse(readFileSync(keyringDump, "utf8").trim().split("\n")[0]!);
+      assert.equal(kran.home, realHome, "preserves user HOME for macOS keychain lookup");
+      assert.equal(kran.geminiDir, geminiDir(keyringHome));
+    }
+
+    const unsignedHome = temp("agy-quota-unsigned");
+    const unsignedDump = join(unsignedHome, "dump");
+    mkdirSync(join(unsignedHome, "agy", ".gemini", "antigravity-cli"), { recursive: true });
+    const unsignedProfile = hubConfig({ profiles: [{ id: "ag-u", home: unsignedHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+    const uq = await checkQuota(unsignedProfile, { HOME: realHome, PATH: fakePath, FAKE_DUMP: unsignedDump, FAKE_AGY_KEYRING: "1", FAKE_KEYCHAIN_HOME: realHome }, undefined, URLS, "zh");
+    assert.deepEqual([uq.state, uq.signedOut, uq.detail], ["unavailable", undefined, "登录已过期或失效"]);
+    assert.equal(existsSync(unsignedDump), false, "unsigned profile does not spawn agy or read machine keychain");
+
+    // Expired sign-in prompting interactive OAuth marks signedOut without hanging 60s.
+    const sq = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_SIGNED_OUT: "1" }, undefined, URLS, "zh");
+    assert.deepEqual([sq.state, sq.signedOut, sq.detail], ["unavailable", true, "登录已过期或失效"]);
+
+    // Network failure (including whole-word EOF, but not substrings like `typeof`) marks unanswered so previous quota stands.
+    const nq = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_USAGE_ERROR: "dial tcp 127.0.0.1:1: connect: connection refused" }, undefined, URLS, "zh");
+    assert.deepEqual([nq.state, nq.unanswered, nq.detail], ["unavailable", true, "无法连接服务商，请检查此 station 的网络或代理"]);
+    const eofQ = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_USAGE_ERROR: "Post https://cloudcode-pa.googleapis.com: unexpected EOF" }, undefined, URLS, "zh");
+    assert.equal(eofQ.unanswered, true);
+    const blockedQ = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_USAGE_ERROR: "Your account has been suspended (typeof check)" }, undefined, URLS, "zh");
+    assert.deepEqual([blockedQ.state, blockedQ.unanswered], ["blocked", undefined]);
+
+    assert.equal(agyScopeForModel("google/gemini-3.1-pro"), "gemini");
+    assert.equal(agyScopeForModel("us.google.gemma-3-27b"), "gemini");
+    assert.equal(agyScopeForModel("anthropic/claude-opus-4-6"), "3p");
   });
 
   test("a codex login's allowance is read with its auth.json's tokens", async () => {

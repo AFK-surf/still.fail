@@ -664,6 +664,24 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.deepEqual(own.quota.windows.map((w: J) => [w.label, w.mark, w.left, w.level, w.scope]), [["5 小时", "5H", 100, "ok", undefined], ["每周", "W", 90, "ok", undefined], ["每周 · Fable", "Fable", 8, "red", "Fable"]]);
   assert.equal("scoped" in own.quota, false);
   assert.deepEqual((p.times(own, c) as J).quota.windows.map((w: J) => w.mark), ["5H", "W", "Fable"], "put again, the same");
+  const agy: J = p.times({
+    quota: {
+      state: "ok",
+      windows: [
+        { label: "每周 · Gemini", usedPercent: 25, resetsAt: null },
+        { label: "5 小时 · Gemini", usedPercent: 10, resetsAt: null },
+        { label: "每周 · Claude / GPT", usedPercent: 60, resetsAt: null },
+        { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: null },
+      ],
+    },
+  }, c);
+  assert.deepEqual(agy.quota.windows.map((w: J) => [w.label, w.mark, w.left]), [
+    ["5 小时 · Gemini", "Gemini 5H", 90],
+    ["5 小时 · Claude / GPT", "Claude / GPT 5H", 0],
+    ["每周 · Gemini", "Gemini W", 75],
+    ["每周 · Claude / GPT", "Claude / GPT W", 40],
+  ]);
+  assert.deepEqual((p.times(agy, c) as J).quota.windows.map((w: J) => w.mark), ["Gemini 5H", "Claude / GPT 5H", "Gemini W", "Claude / GPT W"]);
   const members = [{ email: "a@x.com", name: "阿一", picture: "https://p/a" }];
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"]], members), "@ds-ember 和 @U9 看下");
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"], ["U9", "Mia"]], members), "@ds-ember 和 @Mia 看下");

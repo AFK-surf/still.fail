@@ -11,6 +11,7 @@ import type { SessionRow } from "../store/rows.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
 import { modelKey } from "../read/usage.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, reportedEfforts, serves, signsIn, urgency, usable, windowsOf } from "./pool.ts";
+import { agyScopeForModel } from "../accounts/agy-quota.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { billedPerUse, FAST_RUNTIMES } from "../agents/profiles.ts";
 
@@ -128,10 +129,22 @@ export class Accounts {
   }
 
   /// How profile `id` is doing for running `model` (null: its own default): spent as well while that model is passed
-  /// over on its account, having run into its own limit there.
+  /// over on its account, having run into its own limit there; where windows are split by model group (Antigravity's
+  /// Gemini vs Claude / GPT), only that group's windows weigh on `model`.
   private healthFor(id: string, model: string | null | undefined): ProfileHealth {
     const health = this.healthOf(id);
-    return this.modelSpentAt(id, model) !== undefined ? { ...health, spent: true } : health;
+    const quota = this.quotaForModel(id, health.quota, model);
+    const scoped = quota !== health.quota ? { ...health, quota } : health;
+    return this.modelSpentAt(id, model) !== undefined ? { ...scoped, spent: true } : scoped;
+  }
+
+  private quotaForModel(id: string, quota: any, model: string | null | undefined): any {
+    const wins = windowsOf(quota);
+    if (wins.length === 0 || !wins.some((w) => w?.scope === "gemini" || w?.scope === "3p")) return quota;
+    const chosen = model ?? this.deps.config().profiles.find((p) => p.id === id)?.model ?? null;
+    const want = agyScopeForModel(chosen);
+    const filtered = wins.filter((w) => w?.scope === undefined || w.scope === want);
+    return filtered.length > 0 && filtered.length !== wins.length ? { ...quota, windows: filtered } : quota;
   }
 
   /// Whether profile `id` can run `model` now (pool.ts `usable`).
@@ -328,7 +341,8 @@ export class Accounts {
   /// known, when it stops being passed over (`since`: when it ran into its allowance, where that is not kept).
   private refillOf(id: string, model: string | null, since: number): number {
     const now = this.deps.clock.currentTimeMillisUnsafe();
-    const full = windowsOf(this.healthOf(id).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
+    const quota = this.quotaForModel(id, this.healthOf(id).quota, model);
+    const full = windowsOf(quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
     if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
     return (this.spent.get(this.accountKey(id)) ?? this.modelSpentAt(id, model) ?? since) + SPENT_FOR_MS;
   }

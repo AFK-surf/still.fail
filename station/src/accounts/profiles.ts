@@ -98,6 +98,8 @@ export type Urls = {
   /// ones when not given.
   kimi?: string;
   kimiApi?: string;
+  /// Google AI Code (an Antigravity CLI profile's allowance: agy-quota.ts); the real one when not given.
+  agyQuota?: string;
 };
 
 export const URLS: Urls = {
