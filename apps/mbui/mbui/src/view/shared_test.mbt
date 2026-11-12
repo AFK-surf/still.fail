@@ -310,3 +310,183 @@ test "two of an id made at once: a fault, told, the change still ended whole" {
   assert_eq(told, ["shared: x let go of or made more than once in one change"])
   assert_eq(@signals.batch_depth(), 0, msg="the change it faulted in ended")
 }
+
+///|
+/// What of what `t` draws now is drawn not as it is laid out (Tree::placed_against_laid, as the Tester's
+/// tester_placed.mbt holds it): each its words, and whether it flies.
+fn sh_unplaced(t : @view.Tree) -> Array[String] {
+  let out = []
+  for d in t.drawn() {
+    match t.placed_against_laid(d.id) {
+      Some((placed, pw, ph, lw, lh)) =>
+        if !placed || (pw - lw).abs() > 0.5 || (ph - lh).abs() > 0.5 {
+          out.push("\{d.words} placed=\{placed} \{pw}×\{ph} laid \{lw}×\{lh}")
+        }
+      None => ()
+    }
+  }
+  out
+}
+
+///|
+test "one of an id made and let go of in one change before any layout placed it, another of it made then: nothing flies, nothing of the first kept or drawn, all that is drawn placed as laid out, at every rate" {
+  for rate in rc_rates {
+    let first = @signals.signal(false, same=fn(a, b) { a == b })
+    let second = @signals.signal(false, same=fn(a, b) { a == b })
+    let got : Ref[@view.View?] = Ref(None)
+    let first_made = Ref(0)
+    let tree = @view.Tree::new(fn(root) {
+      root.box(fn(p) {
+        p.show(fn() { first.get() }, fn(a) {
+          first_made.val = first_made.val + 1
+          a.width(Is(Some(40.0))).height(Is(Some(40.0))).ground(Is(red)).words(Is("一")).shared(Is("x"), straight)
+          |> ignore
+        })
+        p.show(fn() { second.get() }, fn(b) {
+          got.val = Some(b)
+          b.width(Is(Some(80.0))).height(Is(Some(60.0))).ground(Is(blue)).words(Is("二")).shared(Is("x"), straight)
+          |> ignore
+        })
+      })
+      |> ignore
+    })
+    tree.frame(390.0, 844.0) |> ignore
+    // (in one change, told in two parts (Tree::event_said: its facts, then what it does): the first made as the first
+    // part is told, let go of and the second made in the second; no layout between)
+    rc_walk(tree, [], [rc_at - 1.0], rate, fn() { () }) |> ignore
+    tree.event_said(rc_at, fn() { first.set(true) }, fn() {
+      first.set(false)
+      second.set(true)
+    })
+    let looks = rc_looks(rc_at + 300.0)
+    let seen = rc_walk(
+      tree,
+      [],
+      looks,
+      rate,
+      from=rc_at,
+      fn() {
+        let firsts = tree.drawn().filter(fn(d) { d.words == "一" }).length()
+        let flies = match got.val {
+          Some(b) => b.flies()
+          None => false
+        }
+        (sh_unplaced(tree), firsts, flies)
+      },
+    )
+    // (that the scene is what it says: the first was made in that change)
+    assert_true(first_made.val > 0, msg="at \{rate} a second: the first never made")
+    for i, s in seen {
+      assert_eq(s, ([], 0, false), msg="at \{rate} a second, at \{looks[i]}")
+    }
+  }
+}
+
+///|
+test "one of an id made in one change inside a box placed before it, the box let go of later in that change, another of it made then: nothing flies, nothing of the first kept or drawn, all that is drawn placed as laid out, at every rate" {
+  // (the holder let go of was placed by a layout; the shared node in it, made in the same change, never was: it is the
+  // node that would fly that is asked)
+  for rate in rc_rates {
+    let holder_on = @signals.signal(true, same=fn(a, b) { a == b })
+    let inner_on = @signals.signal(false, same=fn(a, b) { a == b })
+    let other_on = @signals.signal(false, same=fn(a, b) { a == b })
+    let got : Ref[@view.View?] = Ref(None)
+    let inner_made = Ref(0)
+    let tree = @view.Tree::new(fn(root) {
+      root.box(fn(p) {
+        p.show(fn() { holder_on.get() }, fn(h) {
+          h.width(Is(Some(100.0))).height(Is(Some(50.0))) |> ignore
+          h.show(fn() { inner_on.get() }, fn(a) {
+            inner_made.val = inner_made.val + 1
+            a.width(Is(Some(40.0))).height(Is(Some(40.0))).ground(Is(red)).words(Is("三")).shared(Is("z"), straight)
+            |> ignore
+          })
+        })
+        p.show(fn() { other_on.get() }, fn(b) {
+          got.val = Some(b)
+          b.width(Is(Some(80.0))).height(Is(Some(60.0))).ground(Is(blue)).words(Is("四")).shared(Is("z"), straight)
+          |> ignore
+        })
+      })
+      |> ignore
+    })
+    tree.frame(390.0, 844.0) |> ignore
+    // (the box placed by the frames before; then one change told in two parts: the shared node made in the box as its
+    // first part is told, the box let go of and the other made in the second)
+    rc_walk(tree, [], [rc_at - 1.0], rate, fn() { () }) |> ignore
+    tree.event_said(rc_at, fn() { inner_on.set(true) }, fn() {
+      holder_on.set(false)
+      other_on.set(true)
+    })
+    let looks = rc_looks(rc_at + 300.0)
+    let seen = rc_walk(
+      tree,
+      [],
+      looks,
+      rate,
+      from=rc_at,
+      fn() {
+        let inners = tree.drawn().filter(fn(d) { d.words == "三" }).length()
+        let flies = match got.val {
+          Some(b) => b.flies()
+          None => false
+        }
+        (sh_unplaced(tree), inners, flies)
+      },
+    )
+    // (that the scene is what it says: the one in the box was made in that change)
+    assert_true(inner_made.val > 0, msg="at \{rate} a second: the one in the box never made")
+    for i, s in seen {
+      assert_eq(s, ([], 0, false), msg="at \{rate} a second, at \{looks[i]}")
+    }
+  }
+}
+
+///|
+test "one of an id made in one pass of a layout and let go of in a later pass of the same layout, another of it made then (a room given two widths in one layout): nothing flies from the first, all that is drawn placed as laid out, at every rate" {
+  // (a room in a row, measured at the row's whole width before its share is known (View::by_room's): the wide one made
+  // at the first, let go of at its share, the narrow one made then, by the same id. A guard: it held before
+  // Tree::departs took one never placed as no departure as well; the change whose passes it is, a page's list's fill
+  // (one change told in parts), is the test before's)
+  for rate in rc_rates {
+    let narrow : Ref[@view.View?] = Ref(None)
+    let wide_made = Ref(0)
+    let tree = @view.Tree::new(fn(root) {
+      root.box(fn(row) {
+        row.row(Is(true)).width(Is(Some(300.0))) |> ignore
+        row.box(fn(side) { side.width(Is(Some(200.0))).height(Is(Some(10.0))).shrink(Is(0.0)) |> ignore }) |> ignore
+        row.box(fn(cell) {
+          cell.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          cell.by_room(fn(held, room) {
+            held.show(fn() { room.width() >= 200.0 }, fn(a) {
+              wide_made.val = wide_made.val + 1
+              a.height(Is(Some(40.0))).ground(Is(red)).words(Is("宽")).shared(Is("y"), straight) |> ignore
+            })
+            held.show(fn() { room.width() < 200.0 }, fn(b) {
+              narrow.val = Some(b)
+              b.height(Is(Some(60.0))).ground(Is(blue)).words(Is("窄")).shared(Is("y"), straight) |> ignore
+            })
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    tree.frame(390.0, 844.0) |> ignore
+    let looks = rc_looks(rc_at + 300.0)
+    let seen = rc_walk(tree, [], looks, rate, fn() {
+      let wides = tree.drawn().filter(fn(d) { d.words == "宽" }).length()
+      let flies = match narrow.val {
+        Some(b) => b.flies()
+        None => true
+      }
+      (sh_unplaced(tree), wides, flies)
+    })
+    // (that the scene is what it says: the wide one was made in that layout)
+    assert_true(wide_made.val > 0, msg="at \{rate} a second: the wide one never made")
+    for i, s in seen {
+      assert_eq(s, ([], 0, false), msg="at \{rate} a second, at \{looks[i]}")
+    }
+  }
+}
