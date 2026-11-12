@@ -28,7 +28,10 @@ import { type Key, Rng, WS, key } from "./lock-world-sim.ts";
 
 const HEX32 = /^[0-9a-f]{64}$/;
 const SALT = /^[0-9a-f]{32}$/;
-const ROLES = new Set(["owner", "admin", "member"]);
+/// D1 as revised (2026-11-13): the product's four roles; a viewer is given and taken out as a member is, managing nothing.
+const ROLES = new Set(["owner", "admin", "member", "viewer"]);
+/// D2 as revised: how far ahead of a keeper's clock a web device's `at` may be and still count.
+export const SKEW = 600;
 /// The second workspace (M3): alice owns it too; mallory is its member; its own two stations.
 export const WS2 = "01HWORLDWORLDWORLDWORLDWO2";
 const w2Keys = [0, 1].map((i) => key(3950 + i));
@@ -54,13 +57,15 @@ const stName = (hex: unknown) => {
   return i >= 0 ? `s${i}` : `w${w2Keys.findIndex((k) => k.hex === hex)}`;
 };
 
-/// Why a body is not one D1 names, or null.
+/// Why a body is not one D1 names, or null. Every body names the statement of its workspace before it in its log
+/// (`prev`: that one's `h`, null for the first: D1 as revised).
 export function bodyWhy(b: any): string | null {
   if (b === null || typeof b !== "object" || typeof b.ws !== "string" || typeof b.salt !== "string" || !SALT.test(b.salt)) return "a body is {ws, kind, …, salt}";
-  const keys = Object.keys(b).sort().join(",");
+  if (!("prev" in b) || !(b.prev === null || (typeof b.prev === "string" && HEX32.test(b.prev)))) return "a body names the statement before it";
+  const keys = Object.keys(b).filter((k) => k !== "prev").sort().join(",");
   const hexes = (x: unknown) => Array.isArray(x) && x.every((c) => typeof c === "string" && HEX32.test(c));
   switch (b.kind) {
-    case "member": return keys === "kind,lock,role,salt,sub,ws" && typeof b.sub === "string" && HEX32.test(b.lock) && ROLES.has(b.role) ? null : "an admit names a person, a lock and a role";
+    case "member": return keys === "email,kind,lock,role,salt,sub,ws" && typeof b.sub === "string" && typeof b.email === "string" && HEX32.test(b.lock) && ROLES.has(b.role) ? null : "an admit names a person, their email, a lock and a role";
     case "member.remove": return keys === "cancels,kind,salt,sub,ws" && typeof b.sub === "string" && hexes(b.cancels) ? null : "a removal names whom and what it cancels";
     case "station": return keys === "key,kind,salt,ws" && HEX32.test(b.key) ? null : "a station is named by its key";
     case "station.remove": return keys === "cancels,key,kind,salt,ws" && HEX32.test(b.key) && hexes(b.cancels) ? null : "a removal names whom and what it cancels";
@@ -180,7 +185,7 @@ export class OldRules implements LogRules<LockState> {
 
 // ── D4: one state ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type D4Member = { role: string; lock: string; apps: string[]; webs: string[] };
+export type D4Member = { role: string; email: string; lock: string; apps: string[]; webs: string[] };
 export type D4 = { on: string; settings: string; members: Map<string, D4Member>; stations: string[] };
 export const d4Said = (d: D4 | string): string => {
   if (typeof d === "string") return d;
@@ -199,6 +204,7 @@ export function d4Diff(a: D4 | string, b: D4 | string): string[] {
     if (!x || !y) out.push(`member ${sub}`);
     else {
       if (x.role !== y.role) out.push(`role ${sub}`);
+      if (x.email !== y.email) out.push(`email ${sub}`);
       if (x.lock !== y.lock) out.push(`log ${sub}`);
       if (x.apps.join() !== y.apps.join()) out.push(`apps ${sub}`);
       if (x.webs.join() !== y.webs.join()) out.push(`web ${sub}`);
@@ -213,7 +219,7 @@ export function d4Old(s: LockState, root: string, now: number): D4 {
   for (const [sub, m] of s.members) {
     const devs = [...s.devices.values()].filter((d) => d.sub === sub);
     members.set(sub, {
-      role: m.role, lock: sub === "alice" ? root : s.persons.get(sub) ?? "none",
+      role: m.role, email: m.email, lock: sub === "alice" ? root : s.persons.get(sub) ?? "none",
       apps: devs.filter((d) => d.kind === "app" && d.sign_key).map((d) => d.sign_key!).sort(),
       webs: devs.filter((d) => d.kind === "web" && (d.exp ?? 0) > now).map((d) => d.id).sort(),
     });
@@ -231,6 +237,15 @@ export type W4Options = World3Options & {
   w2?: boolean;
   /// M1: the `nth` body made after the setup is never given to station `station` (by anyone).
   holdBack?: { station: number; nth: number };
+  /// The first readings, kept beside the revised design (2026-11-13) to compare: `order: false`, a statement counts
+  /// whatever lacks before it in its log; `gate: false`, every keeper of the world is given every body; `offFinal`, a
+  /// keeper that sees the workspace off lets it go for good; `webAt`, a web device counts by its `at` alone.
+  order?: boolean;
+  gate?: boolean;
+  offFinal?: boolean;
+  webAt?: boolean;
+  /// M1: when each statement first was ready at a keeper (on the active chain, its body kept) and first in force.
+  track?: boolean;
 };
 
 /// What a world of this round keeps beside round three's (made when first asked: round three's constructor already
@@ -251,7 +266,10 @@ type X = {
   skew: Map<Holder, number>;
   /// Bodies a keeper did not take, by why (from messages and M2's offers, not from levelling).
   refused: Record<string, number>;
-  commits: Map<Holder, { ver: number; by: Map<string, Set<string>> }>;
+  commits: Map<Holder, { ver: number; by: Map<string, Entry[]> }>;
+  gates: Map<Holder, { ver: number; ws: string; keys: Set<string> }>;
+  ready: Map<string, number>;
+  inAt: Map<string, number>;
   letGo: { at: string; ws: string; step: number }[];
   /// D5: each keeper's copy of the old chain, its rules, the reading of "takes nothing more" (B: the root follows the
   /// fork choice; A: the first `moved` a keeper had on its active chain is kept for good) and what A froze.
@@ -266,7 +284,7 @@ export class World4 extends World3 {
   get x(): X {
     let x = XS.get(this);
     if (x === undefined) {
-      x = { o: {}, bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map() };
+      x = { o: {}, bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map() };
       XS.set(this, x);
     }
     return x;
@@ -279,9 +297,11 @@ export class World4 extends World3 {
     if (o.bare) {
       for (const h of this.holders) x.pins.set(h, new Map<string, string | null>([[WS, null]]));
     } else if (o.w1 !== false) {
-      // Round three gave its setup to everyone: the bodies too. Then alice's app opens the workspace (D3).
-      for (const h of this.holders) this.giveBodies(h, [...x.bodies.values()]);
-      this.setup(this.dev("alice's app"), [["ws.open", { ws: WS, ...SETTINGS }]], this.holders);
+      // Round three gave its setup to everyone: the bodies too, to those alice's app's state lets in (D1 as revised).
+      // Then alice's app opens the workspace (D3).
+      const A = this.dev("alice's app");
+      for (const h of this.holders) if (this.admits(A.h, h, WS)) this.giveBodies(h, [...x.bodies.values()]);
+      this.setup(A, [["ws.open", { ws: WS, ...SETTINGS }]], this.holders);
     }
     if (o.two) this.second();
     x.base = x.order.length;
@@ -299,7 +319,9 @@ export class World4 extends World3 {
     }
     for (const h of to) {
       this.receive(h, out);
-      this.giveBodies(h, out.filter((e) => e.kind === "ws").map((e) => this.x.bodies.get(e.body.h)!));
+      for (const ws of new Set(out.filter((e) => e.kind === "ws").map((e) => this.x.bodies.get(e.body.h)!.ws))) {
+        if (this.admits(d.h, h, ws)) this.giveBodies(h, [...this.keptOf(d.h).values()].filter((b) => b.ws === ws));
+      }
     }
   }
 
@@ -337,9 +359,18 @@ export class World4 extends World3 {
   make(parent: Entry, kind: string, body: unknown, by: Key, at?: number): Entry {
     if (!kind.startsWith("ws.")) return super.make(parent, kind, body, by, at);
     const g = this.logOf.get(hashOf(parent))!;
-    const { ws, ...rest } = body as { ws: string };
+    const { ws, ...rest } = body as { ws: string; sub?: string; email?: string };
     const salt = sha(`salt\n${hashOf(parent)}\n${by.id}\n${kind}\n${canonical(body)}`).slice(0, 32);
-    const b: Body = { ws, kind: kind.slice(3), ...rest, salt };
+    const t = tagOf(ws, g);
+    let prev: string | null = null;
+    for (let y: Entry = parent; y.prev !== null; y = this.entry(y.prev)) {
+      if (y.kind === "ws" && y.body.t === t) {
+        prev = y.body.h;
+        break;
+      }
+    }
+    if (kind === "ws.member" && rest.email === undefined) rest.email = `${rest.sub}@x`;
+    const b: Body = { ws, kind: kind.slice(3), ...rest, prev, salt };
     const hb = bodyHash(b);
     const x = this.x;
     if (!x.bodies.has(hb)) {
@@ -348,7 +379,7 @@ export class World4 extends World3 {
       const hold = x.o.holdBack;
       if (hold && x.base >= 0 && x.order.length === x.base + hold.nth) x.withheld.add(`${hb}>s${hold.station}`);
     }
-    return super.make(parent, "ws", { t: tagOf(ws, g), h: hb }, by, at);
+    return super.make(parent, "ws", { t, h: hb }, by, at);
   }
 
   said(e: Entry): string {
@@ -380,23 +411,56 @@ export class World4 extends World3 {
     const a = this.x.allowed.get(h);
     return a === undefined || a.has(this.logOf.get(hashOf(e)) ?? "");
   }
-  /// The tags of the `ws` entries a keeper stores, by their `h`.
-  private commitsOf(h: Holder): Map<string, Set<string>> {
+  /// The `ws` entries a keeper stores, by their `h`.
+  private commitsOf(h: Holder): Map<string, Entry[]> {
     const c = this.x.commits.get(h);
     if (c && c.ver === h.ver) return c.by;
-    const by = new Map<string, Set<string>>();
-    for (const e of h.stored()) if (e.kind === "ws") by.set(e.body.h, (by.get(e.body.h) ?? new Set()).add(e.body.t));
+    const by = new Map<string, Entry[]>();
+    for (const e of h.stored()) if (e.kind === "ws") by.set(e.body.h, [...(by.get(e.body.h) ?? []), e]);
     this.x.commits.set(h, { ver: h.ver, by });
     return by;
+  }
+  /// The `h` of the statement of the same tag before `e` in its log (null: none).
+  prevOf(e: Entry): string | null {
+    for (let y = e.prev; y !== null; ) {
+      const p = this.entry(y);
+      if (p.kind === "ws" && p.body.t === e.body.t) return p.body.h;
+      y = p.prev;
+    }
+    return null;
+  }
+  /// Whether `from`'s own state lets `to` be given the bodies of `ws` (D1 as revised): a station of it, or a device on
+  /// the log a member is bound by. Before a chain moved (D5: no root yet), every keeper of the old chain.
+  admits(from: Holder, to: Holder, ws: string): boolean {
+    if (this.x.o.gate === false) return true;
+    const root = this.pinsOf(from).get(ws);
+    if (root === null) return true;
+    if (root === undefined) return false;
+    let g = this.x.gates.get(from);
+    if (!g || g.ver !== from.ver || g.ws !== ws) {
+      const r = this.rosterOf(from, ws);
+      g = { ver: from.ver, ws, keys: new Set([...r.stations, ...r.letIn.keys()]) };
+      this.x.gates.set(from, g);
+    }
+    return g.keys.has(this.keyOfHolder(to));
+  }
+  keyOfHolder(h: Holder): string {
+    const d = this.devOf.get(h);
+    if (d) return d.signer.id;
+    const i = Number(h.name.slice(1));
+    return (h.name.startsWith("w") ? w2Keys : stationKeys3)[i]?.hex ?? "";
   }
   /// Why `h` does not take body `b` (D1), or null.
   bodyRefusal(h: Holder, b: Body): string | null {
     if (typeof b?.ws !== "string" || !this.pinsOf(h).has(b.ws)) return "it names no workspace this keeper keeps";
-    const ts = this.commitsOf(h).get(bodyHash(b));
-    if (ts === undefined) return "no entry it keeps commits to it";
-    if (![...h.logs.keys()].some((g) => ts.has(tagOf(b.ws, g)))) return "its entry's tag is not its workspace's in that log";
+    const es = this.commitsOf(h).get(bodyHash(b));
+    if (es === undefined) return "no entry it keeps commits to it";
+    const mine = es.filter((e) => e.body.t === tagOf(b.ws, this.logOf.get(hashOf(e))!));
+    if (mine.length === 0) return "its entry's tag is not its workspace's in that log";
     const shape = bodyWhy(b);
-    return shape === null ? null : `its shape: ${shape}`;
+    if (shape !== null) return `its shape: ${shape}`;
+    if (!mine.some((e) => this.prevOf(e) === b.prev)) return "its prev is not the statement before it in that log";
+    return null;
   }
   takeBody(h: Holder, b: Body, count: boolean): boolean {
     const hb = bodyHash(b), kept = this.keptOf(h);
@@ -418,7 +482,12 @@ export class World4 extends World3 {
   /// What `from` gives `to` of the bodies of the workspaces both keep.
   bodiesFor(from: Holder, to: Holder): Body[] {
     const pf = this.pinsOf(from), pt = this.pinsOf(to), have = this.keptOf(to), out: Body[] = [];
-    for (const [hb, b] of this.keptOf(from)) if (pf.has(b.ws) && pt.has(b.ws) && !have.has(hb) && !this.x.withheld.has(`${hb}>${to.name}`)) out.push(b);
+    const ok = new Map<string, boolean>();
+    for (const [hb, b] of this.keptOf(from)) {
+      if (!pf.has(b.ws) || !pt.has(b.ws) || have.has(hb) || this.x.withheld.has(`${hb}>${to.name}`)) continue;
+      if (!ok.has(b.ws)) ok.set(b.ws, this.admits(from, to, b.ws));
+      if (ok.get(b.ws)) out.push(b);
+    }
     return out;
   }
 
@@ -471,12 +540,19 @@ export class World4 extends World3 {
     return false;
   }
 
-  /// D3: a keeper that sees its workspace off lets go of it: its pin and every body of it.
+  /// D3 as revised: off is a state (`d4`), nothing is let go. `offFinal`, the first reading: a keeper that sees its
+  /// workspace off lets go of it, its pin and every body of it. `track`: when each statement was first ready, first in force.
   refresh(h: Holder, changed: Set<Keeper<PersonState>>) {
     super.refresh(h, changed);
+    const x = this.x;
     for (const [ws, root] of [...this.pinsOf(h)]) {
       if (root === null || !h.logs.has(root)) continue;
-      if (this.openOff(h, root, this.inForce(h, ws)).newest === "off") this.letGo(h, ws);
+      const f = this.inForce(h, ws);
+      if (x.o.track) {
+        for (const y of f.ready) if (!x.ready.has(`${h.name}|${y}`)) x.ready.set(`${h.name}|${y}`, this.step);
+        for (const y of f.stmts.keys()) if (!x.inAt.has(`${h.name}|${y}`)) x.inAt.set(`${h.name}|${y}`, this.step);
+      }
+      if (x.o.offFinal && this.openOff(h, root, f).newest === "off") this.letGo(h, ws);
     }
   }
   letGo(h: Holder, ws: string) {
@@ -499,19 +575,27 @@ export class World4 extends World3 {
 
   /// The statements of `ws` in force at `h` (D1), by their entry's hash, and the entries of its tag whose body is not
   /// kept there (`lacking`). `all`: as if it kept every body the world made (the model's own check).
-  inForce(h: Holder, ws: string, all = false): { stmts: Map<string, Body>; lacking: string[] } {
-    const kept = this.keptOf(h), stmts = new Map<string, Body>(), lacking: string[] = [];
+  /// D1 as revised: in its log a statement counts only after every one of its tag before it on the active chain has its
+  /// body kept (`order: false`, the first reading: each by itself). `ready`: those on the active chain with their body.
+  inForce(h: Holder, ws: string, all = false): { stmts: Map<string, Body>; lacking: string[]; ready: string[] } {
+    const kept = this.keptOf(h), stmts = new Map<string, Body>(), lacking: string[] = [], ready: string[] = [];
+    const order = this.x.o.order !== false;
     for (const [g, k] of h.logs) {
       const t = tagOf(ws, g);
+      let stopped = false;
       for (const x of k.active) {
         const e = k.store.get(x)!;
         if (e.kind !== "ws" || e.body.t !== t) continue;
         const b = all ? this.x.bodies.get(e.body.h) : kept.get(e.body.h);
-        if (b !== undefined && b.ws === ws && (!all || bodyWhy(b) === null)) stmts.set(x, b);
-        else lacking.push(x);
+        const has = b !== undefined && b.ws === ws && (!all || bodyWhy(b) === null);
+        if (!has) lacking.push(x), (stopped ||= order);
+        else {
+          ready.push(x);
+          if (!stopped) stmts.set(x, b);
+        }
       }
     }
-    return { stmts, lacking };
+    return { stmts, lacking, ready };
   }
   /// The newest of `open`/`off` in force on the root's active chain, and the newest `open`'s settings (D3).
   openOff(h: Holder, root: string, f: { stmts: Map<string, Body> }): { newest: "open" | "off" | null; settings: Body | null } {
@@ -554,14 +638,16 @@ export class World4 extends World3 {
   websAt(h: Holder, lock: string): string[] {
     const k = h.logs.get(lock);
     if (!k) return [];
-    const exp = new Map<string, number>();
+    const exp = new Map<string, [number, number]>();
     for (const x of k.active) {
       const e = k.store.get(x)!;
-      if (e.kind === "web") exp.set(e.body.id, e.body.exp);
+      if (e.kind === "web") exp.set(e.body.id, [e.at, e.body.exp]);
       else if (e.kind === "web.remove") exp.delete(e.body.id);
     }
-    const now = this.clock(h);
-    return [...exp].filter(([, t]) => t > now).map(([id]) => id).sort();
+    // D2 as revised: dated no further ahead of this keeper's clock than SKEW, not run out by it (`exp <= at + 31 days`
+    // the log's rules hold); `webAt`, the first reading: by `exp` alone
+    const now = this.clock(h), atOnly = this.x.o.webAt === true;
+    return [...exp].filter(([, [at, t]]) => t > now && (atOnly || at <= now + SKEW)).map(([id]) => id).sort();
   }
   /// D4 at `h` for `ws`: off (or let go), not rooted, or the state.
   d4(h: Holder, ws = WS, all = false): D4 | string {
@@ -577,13 +663,25 @@ export class World4 extends World3 {
     for (const [sub, m] of r.members) {
       const k = h.logs.get(m.lock);
       const apps = k && k.rules.state(m.lock).sub === sub ? [...k.headState().devices.keys()].sort() : [];
-      members.set(sub, { role: m.role, lock: m.lock, apps, webs: apps.length > 0 ? this.websAt(h, m.lock) : [] });
+      // (the root has no admit: no statement says its person's email)
+      members.set(sub, { role: m.role, email: f.stmts.get(m.admit)?.email ?? "-", lock: m.lock, apps, webs: apps.length > 0 ? this.websAt(h, m.lock) : [] });
     }
     const s = oo.settings;
     return { on: oo.newest === "open" ? "on" : "not on", settings: s ? canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys }) : "-", members, stations: [...r.stations].sort() };
   }
   stateSaid(h: Holder): string {
     return d4Said(this.d4(h));
+  }
+  /// The keepers the workspace has, as any of its stations' state says them (its stations, the devices on its members'
+  /// bound logs): those given its bodies, and so those whose states are compared.
+  comparable(): Holder[] {
+    const keys = new Set<string>();
+    for (const s of this.stations) {
+      if (!this.pinsOf(s).get(WS)) continue;
+      const r = this.ros(s);
+      for (const k of [...r.stations, ...r.letIn.keys()]) keys.add(k);
+    }
+    return this.holders.filter((h) => keys.has(this.keyOfHolder(h)));
   }
   lacking(h: Holder, ws = WS): string[] {
     return this.pinsOf(h).has(ws) ? this.inForce(h, ws).lacking : [];
@@ -739,25 +837,56 @@ const VON = V3[1];
 
 export type M1Out = {
   runs: number; rested: number; agree: number; same: number; sameChecks: number;
-  /// Held back: the body was of a statement on K's active chain; K's state differed from another station's; K listed
-  /// it as lacking; K came level the moment it was given; K let in a device no other station did, or the reverse.
-  heldOnChain: number; differ: number; listed: number; level: number; letInDiff: number;
+  /// Held back: the body was of a statement on K's active chain; K's state differed from another station's; K let in
+  /// other keys; K listed it as lacking; how many statements of K the order rule held up behind it; K came level the
+  /// moment it was given.
+  heldOnChain: number; differ: number; letInDiff: number; listed: number; heldUp: number; level: number;
+  /// What the order rule costs with nothing held back: (keeper, statement) pairs ready (on the active chain, body kept)
+  /// before they were in force, and by how many steps; pairs ready and never in force at the end.
+  readyPairs: number; delayed: number; delaySteps: number[]; neverIn: number;
+  /// Gating (D1 as revised), at the end with every body given: lacking bodies at a keeper the workspace has, that some
+  /// other keeper keeps (it could not be given them), and that no keeper keeps.
+  stuckHeld: number; stuckNone: number; stuckLog: string[] | null;
   /// The model's check: where nothing is lacking, the state from the kept bodies is the state from every body made.
   oracle: number; oracleBad: number;
   refused: Record<string, number>; letGo: number;
   smallest: string[] | null;
 };
-export function m1(family: Family, runs: number, steps: number): M1Out {
-  const out: M1Out = { runs, rested: 0, agree: 0, same: 0, sameChecks: 0, heldOnChain: 0, differ: 0, listed: 0, level: 0, letInDiff: 0, oracle: 0, oracleBad: 0, refused: {}, letGo: 0, smallest: null };
+export function m1(family: Family, runs: number, steps: number, more: W4Options = {}): M1Out {
+  const out: M1Out = { runs, rested: 0, agree: 0, same: 0, sameChecks: 0, heldOnChain: 0, differ: 0, letInDiff: 0, listed: 0, heldUp: 0, level: 0, readyPairs: 0, delayed: 0, delaySteps: [], neverIn: 0, stuckHeld: 0, stuckNone: 0, stuckLog: null, oracle: 0, oracleBad: 0, refused: {}, letGo: 0, smallest: null };
   for (let seed = 1; seed <= runs; seed++) {
+    // the same world with nothing held back: what the order rule costs, what gating leaves out
+    const free = new World4(seed, VON, family, { ...more, track: true });
+    free.run(drawSteps3(seed, steps));
+    free.finish();
+    const x = free.x;
+    for (const [k, at] of x.ready) {
+      out.readyPairs++;
+      const inAt = x.inAt.get(k);
+      if (inAt === undefined) continue;
+      if (inAt > at) out.delayed++, out.delaySteps.push(inAt - at);
+    }
+    const listed = free.comparable();
+    for (const h of listed) {
+      for (const y of free.lacking(h)) {
+        const hb = free.entry(y).body.h;
+        const who = free.holders.filter((o) => o !== h && free.keptOf(o).has(hb));
+        if (who.length > 0) {
+          out.stuckHeld++;
+          out.stuckLog ??= [`seed ${seed} (${family}): ${h.name} lacks the body of ${free.said(free.entry(y))}, kept by ${who.map((o) => o.name).join(", ")}`, ...free.log.slice(-12)];
+        } else out.stuckNone++;
+      }
+      const f = free.inForce(h, WS);
+      out.neverIn += f.ready.filter((y) => !f.stmts.has(y)).length;
+    }
     const station = seed % 3, nth = 1 + ((seed * 7) % 5);
-    const w = new World4(seed, VON, family, { holdBack: { station, nth } });
+    const w = new World4(seed, VON, family, { ...more, holdBack: { station, nth } });
     w.run(drawSteps3(seed, steps));
     if (w.finish()) out.rested++;
     const s = w.sameEntries();
     out.same += s.mismatch;
     out.sameChecks += s.checks;
-    const K = w.stations[station], others = w.holders.filter((h) => h !== K);
+    const K = w.stations[station], others = w.comparable().filter((h) => h !== K);
     if (new Set(others.map((h) => w.stateSaid(h))).size === 1) out.agree++;
     for (const h of w.holders) {
       if (w.lacking(h).length > 0) continue;
@@ -778,6 +907,8 @@ export function m1(family: Family, runs: number, steps: number): M1Out {
     const keysK = keys(K), keysO = keys(other);
     if (keysK !== keysO) out.letInDiff++;
     if (w.lacking(K).includes(held[0])) out.listed++;
+    const f = w.inForce(K, WS);
+    out.heldUp += f.ready.filter((y) => !f.stmts.has(y)).length;
     w.x.withheld.clear();
     w.giveBodies(K, [w.x.bodies.get(hb)!]);
     if (w.stateSaid(K) === stateO) out.level++;
@@ -786,19 +917,44 @@ export function m1(family: Family, runs: number, steps: number): M1Out {
   return out;
 }
 
+/// A body lost with its device: alice's app signs xena's admit and gives the stations the entry, not the body (its
+/// message dropped); then the app is lost. Her phone, on her log, goes on: admits xena as an admin and takes the third
+/// station out. At how many stations each of the phone's statements is in force, and what each lists as lacking.
+export function lostBody(seed: number, order: boolean): { later: number; inForce: number; xena: number; lacking: number; log: string[] } {
+  const w = new World4(seed, VON, "free", { order });
+  const A = w.dev("alice's app"), P = w.dev("alice's phone");
+  w.sign(A, "device", personDevice(P));
+  w.level();
+  const e = w.sign(A, "ws.member", { ws: WS, sub: "xena", lock: w.home.get("xena"), role: "member" }, { bring: false }) as Entry;
+  for (const st of w.stations) w.receive(st, [e]);
+  w.note("alice's app is lost, with the body of its last statement");
+  w.keptOf(A.h).delete(e.body.h);
+  w.holders = w.holders.filter((h) => h !== A.h);
+  w.level();
+  const st = stationKeys3[2].hex;
+  const later = [
+    w.sign(P, "ws.member", { ws: WS, sub: "xena", lock: w.home.get("xena"), role: "admin" }) as Entry,
+    w.sign(P, "ws.station.remove", { ws: WS, key: st, cancels: w.seenStations(P.h, st) }) as Entry,
+  ];
+  w.level();
+  let inForce = 0;
+  for (const h of w.stations) for (const x of later) if (w.inForce(h, WS).stmts.has(hashOf(x))) inForce++;
+  return { later: later.length * w.stations.length, inForce, xena: w.stations.filter((h) => w.ros(h).members.has("xena")).length, lacking: w.stations.reduce((n, h) => n + w.lacking(h).length, 0), log: w.log };
+}
+
 // ── M2: a body is only its commitment's ─────────────────────────────────────────────────────────────────────────────
 
 export type M2Out = { offered: Record<string, number>; taken: number; control: number; controlTaken: number; why: Record<string, number> };
 /// Every keeper of both workspaces offered: a body changed after it was committed to; a body whose hash a commitment
 /// under the other workspace's tag holds; a body naming the other workspace committed under this one's tag; a copy of
-/// a body of the other workspace with its `ws` changed. The commitments of the second and third are alice's app's.
+/// a body of the other workspace with its `ws` changed; a body committed to under this one's tag whose `prev` is not
+/// the statement before it. The commitments of the second, third and fifth are alice's app's.
 export function m2(seed: number): M2Out {
   const w = new World4(seed, VON, "free", { two: true });
   const A = w.dev("alice's app");
   w.level();
   const out: M2Out = { offered: {}, taken: 0, control: 0, controlTaken: 0, why: {} };
   const salt = (n: number) => sha(`m2|${seed}|${n}`).slice(0, 32);
-  // the commitments that do not match: made by hand after alice's head and given to every keeper that keeps her log
   const head = () => w.entry(A.h.logs.get(A.log)!.head());
   const commit = (t: string, b: Body) => {
     const e = w.make(head(), "ws", { t, h: bodyHash(b) }, A.signer);
@@ -806,11 +962,18 @@ export function m2(seed: number): M2Out {
     w.level();
     return e;
   };
-  const w1Body: Body = { ws: WS, kind: "member", sub: "xena", lock: w.home.get("xena")!, role: "member", salt: salt(1) };
-  const crossed = { ...w1Body, salt: salt(2) };
+  const admit = (ws: string, n: number, prev: string | null): Body => ({ ws, kind: "member", sub: "xena", email: "xena@x", lock: w.home.get("xena")!, role: "member", prev, salt: salt(n) });
+  const last = (ws: string) => {
+    const k = A.h.logs.get(A.log)!;
+    const e = k.active.map((y) => k.store.get(y)!).filter((y) => y.kind === "ws" && y.body.t === tagOf(ws, w.root)).at(-1);
+    return e === undefined ? null : (e.body.h as string);
+  };
+  const crossed = admit(WS, 2, last(WS2));
   commit(tagOf(WS2, w.root), crossed);
-  const inside: Body = { ws: WS2, kind: "member", sub: "xena", lock: w.home.get("xena")!, role: "member", salt: salt(3) };
+  const inside = admit(WS2, 3, last(WS));
   commit(tagOf(WS, w.root), inside);
+  const badPrev = admit(WS, 4, sha("not the one before"));
+  commit(tagOf(WS, w.root), badPrev);
   const w2any = [...w.x.bodies.values()].find((b) => b.ws === WS2)!;
   const w1any = [...w.x.bodies.values()].find((b) => b.ws === WS && b.kind === "member")!;
   const offers: [string, Body][] = [
@@ -818,6 +981,7 @@ export function m2(seed: number): M2Out {
     ["under the other workspace's tag", crossed],
     ["naming the other workspace inside", inside],
     ["the other workspace's, its ws changed", { ...w2any, ws: WS }],
+    ["its prev not the statement before it", badPrev],
   ];
   const before = w.x.refused;
   w.x.refused = {};
@@ -896,12 +1060,18 @@ export function m3(family: Family, runs: number, steps: number): M3Out {
 
 // ── M5: web devices ─────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type M5Clock = { skew: number; at: [number, number][]; tooLong: string | null; removed: number; signerGone: number; lifeDays: number; farTaken: boolean; farYears: number };
+export type M5Clock = {
+  skew: number; webAt: boolean; at: [number, number][]; tooLong: string | null; removed: number; signerGone: number; lifeDays: number;
+  /// An entry dated ten years ahead: taken by the rules; stations letting it in now; for how long of a keeper's own time
+  /// it counts in all (in days).
+  farTaken: boolean; farNow: number; farDays: number;
+};
 /// alice's app puts a web device on for 31 days; the stations' clocks are -skew, 0, +skew. How many stations let it in
 /// at times around its `exp`; one of 31 days and a second refused; one taken off by `web.remove` (by her phone); one
-/// put on by her phone, which her app then takes off the log; one put on with an `at` ten years ahead.
-export function m5Clock(seed: number, skew: number): M5Clock {
-  const w = new World4(seed, VON, "free");
+/// put on by her phone, which her app then takes off the log; one put on with an `at` ten years ahead (a clock that
+/// is wrong, or a key in other hands). `webAt`: the first reading of D2.
+export function m5Clock(seed: number, skew: number, webAt: boolean): M5Clock {
+  const w = new World4(seed, VON, "free", { webAt });
   const A = w.dev("alice's app"), P = w.dev("alice's phone");
   w.stations.forEach((h, i) => w.x.skew.set(h, (i - 1) * skew));
   w.sign(A, "device", personDevice(P));
@@ -927,30 +1097,38 @@ export function m5Clock(seed: number, skew: number): M5Clock {
   w.sign(A, "device.remove", { key: P.signer.id });
   w.level();
   const signerGone = lets(bob);
-  // the latest time a station still lets it in, after the phone went
   const lifeDays = (e.body.exp - e.at) / DAY;
   const far = w.t + 10 * 365 * DAY;
   const fe = w.make(w.entry(k.head()), "web", { id: webKey("dan").hex, label: "a clock ten years ahead", exp: far + WEB_DEVICE_SECS }, A.signer, far);
   const farTaken = w.rulesOf(k.head()).why(fe) === null;
   if (farTaken) w.receive(A.h, [fe]), w.level();
-  w.t = far;
-  const farYears = lets(webKey("dan").hex) > 0 ? (far + WEB_DEVICE_SECS - now) / (365 * DAY) : 0;
-  return { skew, at, tooLong, removed, signerGone, lifeDays, farTaken, farYears };
+  const start = w.t;
+  const farNow = lets(webKey("dan").hex);
+  // a station at the middle clock, sampled every day from now until it ran out: the days it counted
+  const mid = w.stations[1];
+  let farDays = 0;
+  for (let t = start; t <= far + WEB_DEVICE_SECS + DAY; t += DAY) {
+    w.t = t;
+    if (w.websAt(mid, A.log).includes(webKey("dan").hex)) farDays++;
+  }
+  w.t = start;
+  return { skew, webAt, at, tooLong, removed, signerGone, lifeDays, farTaken, farNow, farDays };
 }
 
 export type RevokedOut = {
   /// Stations (of 3) at which it was in force before every keeper synced, and at the end; whether keepers' states
-  /// differ at the end; `off`: the stations that let go; the root's person's steps to have it on again, and whether
-  /// every keeper is on with the list it had before after them.
+  /// differ at the end; `off`: the stations that let go (`offFinal`); the root's person's steps to have it on again,
+  /// and whether every keeper the workspace has is on with the list it had before after them.
   before: number; end: number; differ: boolean; letGo: number; steps: number; recovered: boolean; log: string[];
 };
 /// alice's app takes her phone off her log (the root's) while one station is cut off; the phone's key signs `kind` (a
 /// web device for 31 days; `off`) after the removal's parent (`same`) or after a parent it was on the log at (`any`),
 /// and brings it to the cut station (and, odd seeds, one device); every keeper syncs. For `off`, then, what alice's app
-/// does to have the workspace on again: pins it again itself, signs `open` (where its own chain has it off), signs again
-/// each statement whose body went as it let go, gives the root to each keeper that let go.
-export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any"): RevokedOut {
-  const w = new World4(seed, VON, "free");
+/// does to have the workspace on again: as revised, an `open` after its head where its own state is off; `offFinal`,
+/// also pins it again itself, signs again each statement whose body went as it let go, gives the root to each keeper
+/// that let go.
+export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any", offFinal = false): RevokedOut {
+  const w = new World4(seed, VON, "free", { offFinal });
   const A = w.dev("alice's app"), P = w.dev("alice's phone");
   w.sign(A, "device", personDevice(P));
   w.level();
@@ -976,32 +1154,38 @@ export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any
   w.note(`${cut.name} is back: every keeper syncs with every other`);
   w.level();
   const end = w.stations.filter(inForce).length;
-  const differ = new Set(w.holders.map((h) => w.stateSaid(h))).size > 1;
+  const differ = new Set(w.comparable().map((h) => w.stateSaid(h))).size > 1;
   const letGo = w.stations.filter((h) => !w.pinsOf(h).has(WS)).length;
   let steps = 0;
-  if (kind === "off" && w.holders.some((h) => !w.pinsOf(h).has(WS))) {
+  if (kind === "off" && !offFinal && w.d4(A.h) === "off") {
+    w.note("alice's app has the workspace on again");
+    w.sign(A, "ws.open", { ws: WS, ...SETTINGS }, { bring: false }), steps++;
+    w.level();
+  }
+  if (kind === "off" && offFinal && w.holders.some((h) => !w.pinsOf(h).has(WS))) {
     w.note("alice's app has the workspace on again");
     if (!w.pinsOf(A.h).has(WS)) w.pinsOf(A.h).set(WS, w.root), steps++;
     if (w.d4(A.h) === "off" || w.openOff(A.h, w.root, w.inForce(A.h, WS)).newest !== "open") w.sign(A, "ws.open", { ws: WS, ...SETTINGS }, { bring: false }), steps++;
     // what its list had, said again where its bodies went
     const now = w.ros(A.h);
-    for (const sub of ["bob", "dan", "carol"]) if (!now.members.has(sub)) w.sign(A, "ws.member", { ws: WS, sub, lock: w.home.get(sub), role: sub === "carol" ? "member" : "admin" }, { bring: false }), steps++;
+    for (const [sub, m] of baseList.members) if (sub !== "alice" && !now.members.has(sub)) w.sign(A, "ws.member", { ws: WS, sub, lock: m.lock, role: m.role }, { bring: false }), steps++;
     for (const k of baseList.stations) if (!now.stations.has(k)) w.sign(A, "ws.station", { ws: WS, key: k }, { bring: false }), steps++;
     for (const h of w.holders) if (h !== A.h && !w.pinsOf(h).has(WS)) w.regive(A, h), steps++;
     w.level();
   }
-  const recovered = kind === "web" || w.holders.every((h) => w.stateSaid(h) === base.replace(/^not on/, "on"));
+  const recovered = kind === "web" || w.comparable().every((h) => w.stateSaid(h) === base);
   return { before, end, differ, letGo, steps, recovered, log: w.log };
 }
 
 // ── M6: on and off ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type M6Out = { keepers: number; letGo: number; backBySync: number; steps: number; onAgain: number; sameList: boolean; notRootChanged: number; log: string[] };
-/// alice's app signs `off`: who lets go, who comes back by syncing alone, and what her app does to have it on again
-/// (as `revoked`). Then bob's app (an admin, not the root) signs `open` with other settings and `off`: whose state
-/// changed.
-export function m6(seed: number): M6Out {
-  const w = new World4(seed, VON, "free");
+export type M6Out = { keepers: number; offAt: number; letGo: number; steps: number; onAgain: number; sameList: boolean; notRootChanged: number; log: string[] };
+/// bob's app (an admin, not the root) signs `open` with other settings and `off`: whose state changed. Then alice's app
+/// signs `off`: who says off, who lets go (`offFinal`); then what her app does to have it on again: as revised, an
+/// `open` after its head, then syncs alone; `offFinal`, pinning it again itself, the open, every admit and station
+/// signed again, the root given to each keeper.
+export function m6(seed: number, offFinal = false): M6Out {
+  const w = new World4(seed, VON, "free", { offFinal });
   const A = w.dev("alice's app"), B = w.dev("bob's app");
   w.level();
   const base = w.stateSaid(w.stations[0]);
@@ -1010,30 +1194,32 @@ export function m6(seed: number): M6Out {
   w.sign(B, "ws.off", { ws: WS });
   w.level();
   const notRootChanged = w.holders.filter((h, i) => w.stateSaid(h) !== before[i]).length;
+  const keepers = w.comparable();
   w.sign(A, "ws.off", { ws: WS });
   w.level();
-  const letGo = w.holders.filter((h) => !w.pinsOf(h).has(WS)).length;
-  w.level();
+  const offAt = keepers.filter((h) => w.d4(h) === "off").length;
+  const letGo = keepers.filter((h) => !w.pinsOf(h).has(WS)).length;
   for (let i = 0; i < 20; i++) w.send(w.holders[w.rng.int(w.holders.length)], w.holders[w.rng.int(w.holders.length)]);
   w.finish();
-  const backBySync = w.holders.filter((h) => w.pinsOf(h).has(WS)).length;
   let steps = 0;
   w.note("alice's app has the workspace on again");
-  w.pinsOf(A.h).set(WS, w.root), steps++;
+  if (offFinal) w.pinsOf(A.h).set(WS, w.root), steps++;
   w.sign(A, "ws.open", { ws: WS, ...SETTINGS }, { bring: false }), steps++;
-  for (const [sub, role] of [["bob", "admin"], ["dan", "admin"], ["carol", "member"]]) w.sign(A, "ws.member", { ws: WS, sub, lock: w.home.get(sub), role }, { bring: false }), steps++;
-  for (const k of stationKeys3) w.sign(A, "ws.station", { ws: WS, key: k.hex }, { bring: false }), steps++;
-  for (const h of w.holders) if (h !== A.h) w.regive(A, h), steps++;
+  if (offFinal) {
+    for (const [sub, role] of [["bob", "admin"], ["dan", "admin"], ["carol", "member"]]) w.sign(A, "ws.member", { ws: WS, sub, lock: w.home.get(sub), role }, { bring: false }), steps++;
+    for (const k of stationKeys3) w.sign(A, "ws.station", { ws: WS, key: k.hex }, { bring: false }), steps++;
+    for (const h of w.holders) if (h !== A.h) w.regive(A, h), steps++;
+  }
   w.level();
-  const onAgain = w.holders.filter((h) => w.d4(h) !== "off" && (w.d4(h) as D4).on === "on").length;
-  return { keepers: w.holders.length, letGo, backBySync, steps, onAgain, sameList: w.holders.every((h) => w.stateSaid(h) === base), notRootChanged, log: w.log };
+  const onAgain = keepers.filter((h) => w.d4(h) !== "off" && (w.d4(h) as D4).on === "on").length;
+  return { keepers: keepers.length, offAt, letGo, steps, onAgain, sameList: keepers.every((h) => w.stateSaid(h) === base), notRootChanged, log: w.log };
 }
 
 // ── M7: the handover ────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type M7Out = {
   /// Keepers, how many end rooted in alice's log, in another, in none; all on one root; every keeper's state.
-  keepers: number; atAlice: number; atOther: number; atNone: number; oneRoot: boolean;
+  keepers: number; compared: number; atAlice: number; atOther: number; atNone: number; oneRoot: boolean; behind: string[];
   /// The fields that differ between the old chain's state just before and each keeper's after, with the reasons the
   /// handover gave for leaving something out; those differences no reason covers.
   diffs: Record<string, number>; lost: string[]; unexplained: string[];
@@ -1109,14 +1295,15 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
   // the handover
   const S = rules.state(hashOf(head));
   const A = app("alice");
-  const lost: string[] = [];
+  // (the root's person has no admit, so no statement says their email: D1 does not give the root one)
+  const lost: string[] = ["email alice: no statement says the root's own email"];
   w.sign(A, "ws.open", { ws: WS, origins: S.origins, rp_id: S.rp_id, cloud_keys: S.cloud_keys }, { bring: false });
   for (const [sub, m] of S.members) {
     if (sub === "alice") continue;
     const lock = S.persons.get(sub);
     if (lock === undefined) lost.push(`member ${sub}: bound no person log`);
     else if (!ROLES.has(m.role)) lost.push(`member ${sub}: ${m.role}, a role no admit gives`);
-    else w.sign(A, "ws.member", { ws: WS, sub, lock, role: m.role }, { bring: false });
+    else w.sign(A, "ws.member", { ws: WS, sub, lock, role: m.role, email: m.email }, { bring: false });
   }
   for (const k of S.stations.keys()) w.sign(A, "ws.station", { ws: WS, key: k }, { bring: false });
   for (const d of S.devices.values()) {
@@ -1154,22 +1341,25 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
   }
   w.t = now + 2;
   const roots = w.holders.map((h) => w.pinsOf(h).get(WS) ?? null);
+  // compared: the keepers the workspace has after it (its stations, its members' devices: who is given its bodies)
+  const listed = new Set(w.comparable());
   const states = w.holders.map((h) => w.d4(h));
   const diffs: Record<string, number> = {};
   const unexplained: string[] = [];
   for (const [i, s] of states.entries()) {
-    if (roots[i] !== A.log) continue;
+    if (roots[i] !== A.log || !listed.has(w.holders[i])) continue;
     for (const d of d4Diff(before, s)) {
-      const kind = d.split(" ")[0];
+      const [kind, sub] = d.split(" ");
       diffs[kind] = (diffs[kind] ?? 0) + 1;
-      const sub = d.split(" ")[1];
-      const why = lost.some((l) => (kind === "member" || kind === "apps" || kind === "web") && l.startsWith(kind === "web" ? `web ${sub}` : `member ${sub}`));
-      if (!why && !unexplained.includes(d)) unexplained.push(d);
+      if (!lost.some((l) => l.startsWith(`member ${sub}:`) || l.startsWith(`${kind} ${sub}:`)) && !unexplained.includes(d)) unexplained.push(d);
     }
   }
+  // left behind on purpose (the lead, 2026-11-13): gateways and passkeys (nothing in the product writes either into a
+  // lock today), the `own`/`signed` flags (devices put under another's name cannot be said in a person's own log)
+  const behind = [`gateways ${S.gateways.size}`, `passkeys ${S.passkeys.size}`, `devices not their person's own ${[...S.devices.values()].filter((d) => !d.own).length}`];
   return {
-    keepers: w.holders.length, atAlice: roots.filter((x) => x === A.log).length, atOther: roots.filter((x) => x !== null && x !== A.log).length, atNone: roots.filter((x) => x === null).length,
-    oneRoot: new Set(roots).size === 1, diffs, lost, unexplained, folds: w.holders.every((h) => w.oldFolds(h)),
+    keepers: w.holders.length, compared: listed.size, atAlice: roots.filter((x) => x === A.log).length, atOther: roots.filter((x) => x !== null && x !== A.log).length, atNone: roots.filter((x) => x === null).length,
+    oneRoot: new Set(roots).size === 1, diffs, lost, unexplained, behind, folds: w.holders.every((h) => w.oldFolds(h)),
     before: d4Said(before), after: d4Said(states[0]), log: w.log,
   };
 }
@@ -1177,16 +1367,17 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
 // ── jobs, in worker threads ─────────────────────────────────────────────────────────────────────────────────────────
 
 export type Job4 =
-  | { t: "m1"; family: Family; runs: number; steps: number }
+  | { t: "m1"; family: Family; runs: number; steps: number; order: boolean }
   | { t: "m2"; n: number }
   | { t: "m3"; family: Family; runs: number; steps: number }
   /// Round three's job, in its world (`round: 3`) or this one's.
   | { t: "r3"; job: Job3; round: 3 | 4 }
-  | { t: "m5clock"; skew: number }
-  | { t: "revoked"; kind: "web" | "off"; parent: "same" | "any"; n: number }
-  | { t: "m6"; n: number }
+  | { t: "m5clock"; skew: number; webAt: boolean }
+  | { t: "revoked"; kind: "web" | "off"; parent: "same" | "any"; n: number; offFinal: boolean }
+  | { t: "m6"; n: number; offFinal: boolean }
   | { t: "m7"; n: number; away?: boolean; attack?: "same" | "any"; reading?: "A" | "B" }
-  | { t: "again"; steps: number };
+  | { t: "again"; steps: number }
+  | { t: "lost"; order: boolean };
 
 const tally = (into: Record<string, number>, k: string, n = 1) => {
   into[k] = (into[k] ?? 0) + n;
@@ -1195,7 +1386,7 @@ const tally = (into: Record<string, number>, k: string, n = 1) => {
 export function runJob4(j: Job4): unknown {
   switch (j.t) {
     case "m1":
-      return m1(j.family, j.runs, j.steps);
+      return m1(j.family, j.runs, j.steps, { order: j.order });
     case "m2": {
       const out = { offered: {} as Record<string, number>, taken: 0, control: 0, controlTaken: 0, why: {} as Record<string, number> };
       for (let seed = 1; seed <= j.n; seed++) {
@@ -1211,11 +1402,11 @@ export function runJob4(j: Job4): unknown {
     case "r3":
       return runJob3(j.job, j.round === 4 ? make4() : undefined);
     case "m5clock":
-      return m5Clock(1, j.skew);
+      return m5Clock(1, j.skew, j.webAt);
     case "revoked": {
       const out = { n: j.n, before: 0, anyEnd: 0, allEnd: 0, differ: 0, letGo: 0, steps: [] as number[], recovered: 0, smallest: null as string[] | null };
       for (let seed = 1; seed <= j.n; seed++) {
-        const o = revoked(seed, j.kind, j.parent);
+        const o = revoked(seed, j.kind, j.parent, j.offFinal);
         out.before += o.before;
         if (o.end > 0) out.anyEnd++;
         if (o.end === 3) out.allEnd++;
@@ -1228,20 +1419,21 @@ export function runJob4(j: Job4): unknown {
       return out;
     }
     case "m6": {
-      const out = { n: j.n, keepers: 0, letGo: 0, backBySync: 0, steps: 0, onAgain: 0, sameList: 0, notRootChanged: 0, log: [] as string[] };
+      const out = { n: j.n, keepers: 0, offAt: 0, letGo: 0, steps: 0, onAgain: 0, sameList: 0, notRootChanged: 0, log: [] as string[] };
       for (let seed = 1; seed <= j.n; seed++) {
-        const o = m6(seed);
-        out.keepers += o.keepers, out.letGo += o.letGo, out.backBySync += o.backBySync, out.steps = Math.max(out.steps, o.steps), out.onAgain += o.onAgain, out.notRootChanged += o.notRootChanged;
+        const o = m6(seed, j.offFinal);
+        out.keepers += o.keepers, out.offAt += o.offAt, out.letGo += o.letGo, out.steps = Math.max(out.steps, o.steps), out.onAgain += o.onAgain, out.notRootChanged += o.notRootChanged;
         if (o.sameList) out.sameList++;
         if (seed === 1) out.log = o.log;
       }
       return out;
     }
     case "m7": {
-      const out = { n: j.n, keepers: 0, atAlice: 0, atOther: 0, atNone: 0, oneRoot: 0, otherWorlds: 0, diffs: {} as Record<string, number>, lost: {} as Record<string, number>, unexplained: [] as string[], folds: true, example: null as string[] | null, otherLog: null as string[] | null };
+      const out = { n: j.n, keepers: 0, compared: 0, behind: {} as Record<string, number>, atAlice: 0, atOther: 0, atNone: 0, oneRoot: 0, otherWorlds: 0, diffs: {} as Record<string, number>, lost: {} as Record<string, number>, unexplained: [] as string[], folds: true, example: null as string[] | null, otherLog: null as string[] | null };
       for (let seed = 1; seed <= j.n; seed++) {
         const o = m7(seed, j);
-        out.keepers += o.keepers, out.atAlice += o.atAlice, out.atOther += o.atOther, out.atNone += o.atNone;
+        for (const b of o.behind) tally(out.behind, b.replace(/ \d+$/, ""), Number(b.split(" ").at(-1)));
+        out.keepers += o.keepers, out.compared += o.compared, out.atAlice += o.atAlice, out.atOther += o.atOther, out.atNone += o.atNone;
         if (o.oneRoot) out.oneRoot++;
         if (o.atOther > 0) out.otherWorlds++, (out.otherLog ??= o.log);
         for (const [k, n] of Object.entries(o.diffs)) tally(out.diffs, k, n);
@@ -1252,6 +1444,8 @@ export function runJob4(j: Job4): unknown {
       }
       return out;
     }
+    case "lost":
+      return lostBody(1, j.order);
     case "again": {
       // the same seed, the same world: twice, every line of what happened
       const one = () => {

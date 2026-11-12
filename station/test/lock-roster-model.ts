@@ -840,6 +840,10 @@ export class World3 {
   stateSaid(h: Holder): string {
     return rosterSaid(this.ros(h));
   }
+  /// The keepers whose lists are compared for agreement: every holder (lock-roster4-model.ts: those the workspace has).
+  comparable(): Holder[] {
+    return this.holders;
+  }
   /// The list at every holder compared with a fresh holder's given the same entries, shuffled (A1).
   sameEntries(): { checks: number; mismatch: number } {
     return sameEntries(this);
@@ -1048,7 +1052,7 @@ export function drawn3(seed: number, v: V3v, family: Family, steps: Step[], mk: 
   checks += s.checks;
   mismatch += s.mismatch;
   const rosters = w.holders.map((h) => w.ros(h));
-  const agree = new Set(w.holders.map((h) => w.stateSaid(h))).size === 1;
+  const agree = new Set(w.comparable().map((h) => w.stateSaid(h))).size === 1;
   const heads = [...w.logs.keys()].every((g) => new Set(w.holders.filter((h) => h.logs.has(g)).map((h) => h.logs.get(g)!.head())).size <= 1);
   const accKeys = new Set(ACCOMPLICE.map((a) => a.signer.id));
   const removedIn = rosters.some((r) => [...r.letIn.keys()].some((k) => w.removedKeys.has(k)));
@@ -1279,7 +1283,7 @@ export function a3(seed: number, v: V3v, which: (typeof A3_NAMES)[number], mk: M
   const xk = spec("xena's app").signer.id;
   const end = w.holders.map((h) => `${h.name}: ${rosterSaid(w.ros(h))}`);
   return {
-    end, agree: new Set(w.holders.map((h) => w.stateSaid(h))).size === 1,
+    end, agree: new Set(w.comparable().map((h) => w.stateSaid(h))).size === 1,
     xenaFlap: w.turned.some((t) => t.key === xk), xenaBack: w.log.some((l) => l.includes("lets xena's app in again")),
     xenaInEnd: w.stations.every((s) => w.ros(s).letIn.has(xk)),
     otherFlap: [...new Set(w.turned.filter((t) => t.key !== xk).map((t) => nameOfKey(t.key)))],
