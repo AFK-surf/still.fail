@@ -137,3 +137,8 @@
 - A test waits for what the station set going with `settle()` (`test/hub-fakes.ts`): turns of the loop with no file
   request out, since the station reads off its main thread and how many turns the disk takes is the machine's. A count
   of turns of a test's own before it looks is that race again.
+- The lock's world tests (`test/lock-world-sim.ts`, run by `test/lock-world-1.test.ts` to `-3`) pass when exactly what
+  `KNOWN_SEEDS` and `KNOWN_TOLD` say fails on the product (2026-11-12): anything else failing fails them, and a known
+  failure that holds now must be taken out of the table, which only shrinks. The fork-choice models' runners
+  (`test/lock-fork-choice.test.ts`, `test/lock-roster.test.ts`) print what they measure and assert only the models'
+  soundness; their envs (`LOCK_FORK_*`, `LOCK_ROSTER_*`) give the full counts.

@@ -76,6 +76,8 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
   workspace of theirs who rewrites its lock with a changed app can get a device of their own taken as that member's
   (`vouchersIn` says how); the entries that did it stay in the lock. Do not widen it (never by a device id, never the
   device that approved one already on the lock), and do not narrow it without the owner.
+- Every error, refusal and wait tells the person what to do next to get done what they set out to do; none is a dead
+  end (the user, 2026-11-12).
 
 ## No polling between still.fail's own parts
 
@@ -129,3 +131,14 @@ they changed on their event streams (`station/src/mesh/lock-events.ts`) and brin
 each other level (`station/src/mesh/lock-sync.ts`, `station/src/mesh/person-sync.ts`). The cloud is asked only where
 no station answers (one from before, all offline), and is sent what is signed for the stations and devices from
 before, never waited on; that goes 7 days after these stations ship.
+
+That sync is being replaced (2026-11-12): stations that took different entries at one place never come back to one
+chain today (`station/test/lock-world-sim.ts` lists what that breaks). What replaces it is modelled, not built, in
+`station/test/lock-fork-choice-model.ts` (each log's fork choice) and `station/test/lock-roster-model.ts` (a workspace
+said in its people's own logs); product code does not follow them yet. What it is built to (the user, 2026-11-12):
+
+- The lock's adversary is the cloud and every station but the one asked (`rules/protocol/lock.spthy`): only signatures
+  of devices on a lock decide. No cloud and no station orders entries, arbitrates between them, or is the one to follow.
+- What can be settled by rule is: a fork by the fork choice, an entry that lost its place signed again by its device.
+  What cannot (two devices removing each other, a device fully taken over, every signer lost) gets no more machinery:
+  it is recognised and handed to the person with a way out.
