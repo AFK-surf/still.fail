@@ -1,14 +1,19 @@
 // feishu_api (「agent 看到的」): any Feishu OpenAPI call as the bot of one of the session's Feishu chats.
 // Messages are not sent through it (chat_post answers a chat, and keeps what was said), nor is the app itself managed.
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { extname, join } from "node:path";
+import { iso } from "../read/transcript.ts";
 import { jsString } from "../sessions/args.ts";
 import { target } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Tool } from "../tools/mcp.ts";
+import { FeishuFile } from "./web.ts";
 
 export const FEISHU_API = {
   name: "feishu_api",
   description:
-    "Call a Feishu (Lark) OpenAPI method as your Feishu bot, e.g. GET /open-apis/im/v1/chats/:chat_id, GET /open-apis/docx/v1/documents/:id/raw_content, POST /open-apis/im/v1/messages/:message_id/reactions. What it may read and change is what the app's permissions allow. Send and answer messages with chat_post, not this.",
+    "Call a Feishu (Lark) OpenAPI method as your Feishu bot, e.g. GET /open-apis/im/v1/chats/:chat_id, GET /open-apis/docx/v1/documents/:id/raw_content, POST /open-apis/im/v1/messages/:message_id/reactions. Getting a message's image or file with GET /open-apis/im/v1/messages/:message_id/resources/:file_key (params type: image or file) saves it in your workspace and returns its local path, content type and size; other non-JSON answers are saved the same way. What it may read and change is what the app's permissions allow. Send and answer messages with chat_post, not this.",
   inputSchema: {
     type: "object",
     properties: {
@@ -27,6 +32,24 @@ export const FEISHU_API = {
 
 /// Paths that are not for agents: the app's credentials and settings.
 const MANAGING = ["/open-apis/auth/", "/open-apis/application/", "/open-apis/app_engine/"];
+
+/// A suggested name is untrusted: keep it within uploads, short enough for a filesystem, and preserve its extension.
+function fileName(file: FeishuFile): string {
+  const encoded = /(?:^|;)\s*filename\*\s*=\s*UTF-8''([^;]*)/i.exec(file.disposition)?.[1];
+  const plain = /(?:^|;)\s*filename\s*=\s*(?:"((?:\\.|[^"])*)"|([^;]*))/i.exec(file.disposition);
+  let name = plain ? (plain[1]?.replace(/\\(.)/g, "$1") ?? plain[2] ?? "").trim() : "";
+  if (encoded) {
+    try { name = decodeURIComponent(encoded.trim()); } catch { /* use filename instead */ }
+  }
+  name = name.replace(/[\\/\x00-\x1f\x7f<>:"|?*]/g, "_").replace(/[. ]+$/g, "").trim();
+  const extensions: Record<string, string> = {
+    "image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp", "image/svg+xml": ".svg",
+    "application/pdf": ".pdf", "text/html": ".html", "text/plain": ".txt", "text/csv": ".csv", "application/zip": ".zip",
+  };
+  const ext = Array.from(extname(name)).slice(0, 16).join("") || extensions[file.contentType.split(";", 1)[0]!.trim().toLowerCase()] || "";
+  const stem = extname(name) ? name.slice(0, -extname(name).length) : name;
+  return `${Array.from(stem || "file").slice(0, 32).join("")}${ext}`;
+}
 
 export function feishuTools(hub: () => Hub | undefined, isFeishu: (connect: string) => boolean): Tool[] {
   return [
@@ -53,6 +76,16 @@ export function feishuTools(hub: () => Hub | undefined, isFeishu: (connect: stri
         const chat = h.chat(connect);
         if (!chat.api) throw new Error("this Feishu connect is not connected");
         const result = await chat.api(method, params);
+        if (result instanceof FeishuFile) {
+          const row = h.store.getSession(key);
+          if (!row) throw new Error("this session no longer exists");
+          const dir = join(row.workspace, "uploads");
+          await mkdir(dir, { recursive: true });
+          const stamp = iso(h.now()).slice(0, 19).replace(/[:.]/g, "-");
+          const path = join(dir, `${stamp}-${randomUUID()}-${fileName(result)}`);
+          await writeFile(path, result.bytes, { flag: "wx" });
+          return JSON.stringify({ path, content_type: result.contentType, size: result.bytes.byteLength });
+        }
         const text = JSON.stringify(result);
         const chars = Array.from(text);
         return chars.length > 60_000 ? `${chars.slice(0, 60_000).join("")}… (cut at 60000 characters; ask for less, e.g. a smaller page_size)` : text;

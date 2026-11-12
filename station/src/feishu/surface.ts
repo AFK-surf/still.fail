@@ -567,10 +567,10 @@ export class FeishuSurface extends ConnectedSurface {
     if (verb === "GET") {
       const query: Record<string, string> = {};
       for (const [k, v] of Object.entries(params)) if (v !== null && v !== undefined) query[k] = typeof v === "string" ? v : JSON.stringify(v);
-      return this.client.api(verb, path, null, query);
+      return this.client.api(verb, path, null, query, undefined, true);
     }
     const { query, ...body } = params as { query?: Record<string, string> };
-    return this.client.api(verb, path, body, query);
+    return this.client.api(verb, path, body, query, undefined, true);
   }
 
   protected statusLine(thread: ThreadRef) {
