@@ -50,7 +50,8 @@ permissions:
 jobs:
   # Which packages main's push makes: those whose app changed since the build their feed names (beta.sh changed: its
   # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21). iOS has no
-  # feed: every matching main push builds a downloadable unsigned artifact. A run by hand builds them all;
+  # feed: every matching main push builds a downloadable unsigned artifact, once its shell is prebuilt (ios-shell). A
+  # run by hand builds them all;
   # a branch's push only Windows and Linux: its iOS build puts nothing and took one of the organization's 5 macOS
   # jobs for each push (2026-10-21).
   what:
@@ -208,12 +209,46 @@ jobs:
             .ci/hbc
           key: ${{ env.STORE_KEY }}
 
+  # Whether the iOS app's shell (shell-apple ios-arm64) is prebuilt for this push. main's pipeline publishes it (its
+  # natives job, from macos-ci's cache), behind the runs before it, and this workflow waits for no pipeline: the push
+  # that changed the shell, and each after it until that is out, came to the ios job first, which then builds the shell
+  # with cargo, ~4.5 min of its 5: cancelled at its limit each time, nothing made and nothing kept for the next (six
+  # of main's pushes on 2026-11-12, each after a change to client/shell: b57eff00's after #5802's). Such a push makes
+  # no iOS app: the ios job is skipped, and the next push that finds the shell builds one. A run by hand builds with
+  # the shell as it finds it, built there when not prebuilt, as before.
+  ios-shell:
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      have: ${{ steps.have.outputs.have }}
+    steps:
+      - if: github.event_name == 'push'
+        uses: actions/checkout@v5
+      - if: github.event_name == 'push'
+        uses: ./.github/actions/node
+      - id: have
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          have=yes
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            missing=$(node scripts/native.ts missing shell-apple:ios-arm64)
+            if [ -n "$missing" ]; then
+              have=no
+              echo "::notice::No iOS app for this push: its shell ($missing, key $(node scripts/native.ts key shell-apple ios-arm64)) is not published yet (main's pipeline, the natives job). The next push that finds it builds one."
+            fi
+          fi
+          echo "have=$have" >> "$GITHUB_OUTPUT"
+          echo "have: $have"
+
   # Built with iOS 27.1's SDK: an app built with an older one runs on an iPhone Duo's inner screen letterboxed, black
   # bars either side, and is told nothing of its hinge (UIHingeInteraction, its fold's reserved regions: ios_app.m).
   # GitHub's xcode-27 image has Xcode 27.1 beside its default 27.0 (2026-10-23); the SDK is checked, not trusted.
   ios:
-    needs: what
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
+    needs: [what, ios-shell]
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes' && needs.ios-shell.outputs.have == 'yes'
     runs-on: xcode-27
     timeout-minutes: 5
     env:
@@ -261,8 +296,8 @@ jobs:
           path: apps/mbui/out/ios-assets-*
           key: mbui-ios-icon-${{ hashFiles('apps/mbui/scripts/mac-icon.swift', 'apps/mbui/scripts/ios.sh') }}
       # (shell-apple ios-arm64 in the native cache by its key, as the other jobs keep their engine and shell: a shell not
-      # prebuilt yet is built here with cargo, ~4.5 min, and was built again by each run of main until the pipeline's
-      # natives job published it, main 9d59e567 and 1c0b2ca0, 2026-10-29)
+      # prebuilt yet is built here with cargo, ~4.5 min, in a run by hand alone: a push without it does not come here,
+      # ios-shell)
       - name: The iOS shell's key
         id: native-keys
         run: echo "key=natives-shell-apple-ios-arm64-$(node scripts/native.ts key shell-apple ios-arm64)" >> "$GITHUB_OUTPUT"
