@@ -520,3 +520,26 @@ test "a new chat's first words: the room under its rows goes down to where the c
 ///|
 /// The most the room under a new chat's rows may change in a frame on its way (points): a line's at once is a step.
 let newchat_foot_step : Double = 8.0
+
+///|
+test "unfolded: a new chat's long first words sent: the room under the chat's rows never below 0" {
+  // (a foldable opened, laid out Medium with touch: the chat's list keeps the composer's room as it comes to stand,
+  // composer_room's `settled`, from the frame the new chat becomes the chat; that room measured the new chat's tall
+  // composer against a foot never measured on a chat's page, -200 under 0: 0.1.8569's crash, chat_list's Foot row
+  // `Exact(<0>)`)
+  let src = @sffixture.round_trip(fixture_app("chat"), 60.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=864.0, h=954.0, platform=2)
+  // (what is held here is that it is drawn at all; how the composer opens at this width is not this test's)
+  t.motion_unjudged(true)
+  let words = "把发布说明写一下，" + "先列出这次改了什么、为什么改、谁会注意到，再按页面分组，每组写清楚旧的和新的样子。".repeat(6)
+  t.drive("timeout 20000\nuntil 新建对话\ntap 新建对话\nuntil 做任何事\ntap 做任何事\n") |> ignore
+  t.type_text(words)
+  t.draw()
+  tap_send(t)
+  t.draw()
+  let till = t.time() + @sfbase.flight_desk_ms + new_leave_ms + @sfbase.sent_down_ms
+  while t.time() < till {
+    t.frame()
+  }
+  assert_true(app.nav.top() is Chat(_))
+}
