@@ -5,7 +5,7 @@
 // something else. What comes on it and what is read as it opens is the sync's (sync.ts), told here as `Told`: a stream
 // opens either afresh (nothing says what the device missed: the station is read again) or going on from where the
 // device was in the station's log of events (cursor.ts: what changed meanwhile is told first).
-import type { Marks } from "./rows-made.ts";
+import { type Marks, type RowsMemo, rowsMemo } from "./rows-made.ts";
 import { record, said, stationTag } from "../record.ts";
 import { Deferred, Effect, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
@@ -174,6 +174,8 @@ export class Link {
   /// stream said; and that list as read and told since, by row id (null till read).
   shared = false;
   sharedRows: Map<string, Record<string, any>> | null = null;
+  /// What its sidebar's rows were last made of (rows-made.ts RowsMemo), so a remake makes again only those that changed.
+  readonly rows: RowsMemo = rowsMemo();
   /// The marks to read again: those of some chats, or all of them (`whole`).
   readonly marksWanted = { sessions: new Set<string>(), threads: new Set<number>(), whole: false };
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.

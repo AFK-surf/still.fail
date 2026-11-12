@@ -20,6 +20,12 @@ export const work = {
   /// Rows (chats, sessions' summaries, threads, jobs) whose JSON was read from the database for a row kept by its key
   /// (db/account.ts `#cached`, `#byKey`): parsed, or read for nothing where the row was kept already.
   rowJson: 0,
+  /// A station's chat rows made of what they are made of (station/rows-made.ts, through its RowsMemo): those whose
+  /// parts changed, the rest kept as made before.
+  chatRowsMade: 0,
+  /// Chat rows serialised as they are written or compared with what is written (db/account.ts `#chatCols`): those given
+  /// that are not the row written there before.
+  chatRowsSerialised: 0,
   /// Numbers of a log's items read from the database (which it holds, to find what to read).
   logNumbers: 0,
   /// Items a log's span (its first, its last, how many) was counted over in the database rather than kept.
@@ -99,6 +105,14 @@ export const work = {
 };
 
 export type Work = typeof work;
+
+/// What was only looked at, to find it as it was: one comparison an item, so it follows how much is held, as a change's
+/// `work` must not (test/work.test.ts holds that the same at every size). Counted apart, for tests to hold.
+export const glanced = {
+  /// Chat rows a station's list was given that were the row written there before, at the same place: taken as written,
+  /// neither serialised nor compared (db/account.ts `setChats`).
+  chatRowsSame: 0,
+};
 
 /// What was counted since `from` (a copy taken before).
 export function workSince(from: Work): Work {

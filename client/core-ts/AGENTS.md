@@ -65,6 +65,14 @@ the statements that read most. What the sync writes is held the same way: each c
 of each setting, from its run to the core at rest, alone (a core started anew, nothing asked) and held (everything the
 app asks held), reads at most twice what it writes (text bound to statements that write) and sends, or 8 KB, growing
 no faster; `OVER_WRITE` and `GROWS_WRITE` there, which only fall. A new cause is measured by being in `CAUSES`.
+What the sync makes of an event of a chat is held on the sync's own path (`test/rows-changed.test.ts`): a station's
+rows are made through a memo on its link (`src/station/rows-made.ts` `RowsMemo`: a row whose parts are the objects they
+were is the row made before, frozen) and written as the list was last written (`src/db/account.ts` `#chatsHeld`: a row's
+object and place, never its JSON), so one change of one chat makes and serialises 1-2 rows and reads no more chats'
+JSON than it serialises, the same with three times the chats, and what is stored is what a core started anew makes of
+the same records. `CAUSES` give a chat list whole as new rows, which the sync does only the first time it makes a
+list in a run: their `OVER_WRITE` entries for chats measure that giving, until those causes are told as the sync's
+events.
 
 ## The chat table is read by what a view shows
 
