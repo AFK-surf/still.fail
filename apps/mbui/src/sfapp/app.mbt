@@ -812,8 +812,17 @@ fn page_view(
 ///|
 /// A place from the bottom bar (AppState.place): its page takes the stack's root, in place (nothing to go back to),
 /// coming in from the side the ball goes to; the same place again changes nothing. `sets`, `cur`:
-/// the bar it is chosen in (none: from no side).
+/// the bar it is chosen in (none: from no side). The page left kept and the one come to taken back where it was kept
+/// (go_place_by's `kept`).
 fn go_place(at : Double, place : String, sets : Array[Array[String]], cur : Int) -> Unit {
+  go_place_by(at, place, sets, cur, true)
+}
+
+///|
+/// go_place's, the page that leaves the stack's root put on its shelf and the one come to taken back from it where it is
+/// there (`kept`: sfbase's nav_root_kept), or let go and made anew (not `kept`: what a test compares a page kept with,
+/// bar_places_kept_wbtest.mbt).
+fn go_place_by(at : Double, place : String, sets : Array[Array[String]], cur : Int, kept : Bool) -> Unit {
   let from = match place_of(app.nav.top()) {
     Some(p) => p
     None => ""
@@ -830,8 +839,9 @@ fn go_place(at : Double, place : String, sets : Array[Array[String]], cur : Int)
     -1
   }
   // the shell's (sfbase's shell.mbt), then the bar's own: timed from here (BarTiming), the page coming in from its side
-  // (Arrive), from this moment
-  if !@sfbase.go_place(place, way~) {
+  // (Arrive), from this moment; the page left kept on the stack's shelf, the one come to taken back from it where it is
+  // there (sfbase's nav_root_kept)
+  if !@sfbase.go_place(place, way~, kept~) {
     return
   }
   bar_placed(from, place)

@@ -945,6 +945,8 @@ fn ug_grid_row_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
 /// core's view once read (usage_body_node), what failed while it is not, a wait till then (the view made up, in its
 /// bones, nothing of the core's asked for it). What it says of itself told `said`; what is said of what the pointer
 /// rests on in the frame's layer of tips over the window where it gives one (`tips`), else in its own over the page.
+/// `anew`: given what puts it as a page made now would be (its list at its top: its days are kept apart, usage_pick),
+/// for a holder that keeps it as it goes (a place of the bar's on 小屏) to call as it puts it back.
 pub fn usage_node(
   v : @view.View,
   core : Core,
@@ -955,7 +957,14 @@ pub fn usage_node(
   width? : () -> Double,
   tips? : @sf.TipLayer,
   bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
+  anew? : (() -> Unit) -> Unit,
 ) -> Unit {
+  // (where its list is scrolled to: its own, as page_node's would be, put at its top by `anew`)
+  let scroll = @view.Scroll::list()
+  match anew {
+    Some(f) => f(fn() { scroll.put(0.0) })
+    None => ()
+  }
   // (what is said of what the pointer rests on: the frame's, over the window; else in a layer of its own past the
   // page's list, which cuts what it holds to it)
   let tips_at : Ref[@view.View?] = Ref(None)
@@ -998,6 +1007,7 @@ pub fn usage_node(
   }
   @sf.page_node(
     v,
+    scroll~,
     fn() { @sf.t("web-pages.settings.usage.title") },
     fn() { ["body"] },
     fn(b, _) {

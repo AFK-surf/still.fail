@@ -681,6 +681,66 @@ fn page_entry_left(serial : Int, p : Page) -> Unit {
 }
 
 ///|
+/// Whether a place put back from the stack's shelf (Nav::replace_kept: the bottom bar's on 小屏, its nodes kept as it
+/// was switched away from) has anew, as it is put back, what it had anew when its page was made again each time it was
+/// switched to (till 2026-11-12): 用量's and 连接's lists at their top and 连接's 我的 as @settings.left left it (left as
+/// it went, as then); Home's list, filter and search, and 用量's days, were kept apart from its page then and are as
+/// they were. One switch, as it is today (2026-11-12): what a kept place keeps as it comes back is a decision pending
+/// with the owner.
+pub let places_back_as_made : Bool = true
+
+///|
+/// What puts each place on the stack's shelf as a page made now would be (place_anew_said), by its entry's serial.
+// kept across runs: emptied by reset, each let go with the page that said it
+let places_anew : Map[Int, () -> Unit] = Map([])
+
+///|
+/// The page of entry `serial`, made as nodes in `v` at a place of the bar, says what puts it as a page made now would be
+/// (a page's `anew`): done as it is put back from the shelf (nav_root_kept), forgotten as `v` is let go.
+pub fn place_anew_said(v : @view.View, serial : Int, anew : () -> Unit) -> Unit {
+  places_anew[serial] = anew
+  v.owns(fn() {
+    match places_anew.get(serial) {
+      Some(f) if physical_equal(f, anew) => places_anew.remove(serial)
+      _ => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The stack's root made `page`'s, the one there put on its shelf and `page`'s entry taken back from it where it is
+/// there (Nav::replace_kept: where what holds the stack keeps pages so, the narrow shell; else as Nav::replace): what a
+/// place of the bar switched to is on 小屏, from the bar, back or the history. What a place had anew as its page was
+/// made again (places_back_as_made): the one leaving left as a page leaving the stack is (@settings.left, as
+/// page_entry_left does), the one put back as made now, both while it rests, before it wakes.
+pub fn nav_root_kept(page : Page) -> Unit {
+  let was = app.nav.top()
+  let back = app.nav.shelved(page)
+  if places_back_as_made {
+    match back {
+      Some(serial) =>
+        match places_anew.get(serial) {
+          Some(f) => f()
+          None => ()
+        }
+      None => ()
+    }
+  }
+  app.nav.replace_kept(page)
+  if places_back_as_made && app.nav.shelved(was) is Some(_) {
+    match was {
+      Place(name) =>
+        match @settings.route_of(name) {
+          Some(r) => @settings.left(r)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+}
+
+///|
 pub fn new_nav() -> @ui.Nav[Page] {
   // what its own back comes to, back's in the history (app_history.mbt went_back); settings' gear is at the right of
   // every top bar, so it comes in from the right like any page
@@ -835,6 +895,7 @@ pub fn reset() -> Unit {
   // (none said; which saying was last kept: the next a new one, as ever)
   app.toast.set({ ..toast_none, n: @signals.untracked(fn() { app.toast.get().n }) })
   left_pages.clear()
+  places_anew.clear()
   let pending = pending_chat_readers.values().collect()
   pending_chat_readers.clear()
   for reader in pending { stop_pending_chat(reader) }

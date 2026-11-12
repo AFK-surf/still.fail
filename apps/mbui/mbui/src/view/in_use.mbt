@@ -82,8 +82,8 @@ fn Tree::keys_at(self : Tree, at : Int) -> Bool {
 }
 
 ///|
-/// Whether node `id` (living) may have the keyboard's focus, or what an old view it hosts holds may (Tree::keys_at): what
-/// Tab's order, what gives the focus and what gives it back ask.
+/// Whether node `id` (living, held from the root: not put by, View::park) may have the keyboard's focus, or what an old
+/// view it hosts holds may (Tree::keys_at): what Tab's order, what gives the focus and what gives it back ask.
 pub fn Tree::takes_keys(self : Tree, id : NodeId) -> Bool {
-  self.alive_id(id) && self.keys_at(id.at)
+  self.alive_id(id) && self.held_from_root(id.at) && self.keys_at(id.at)
 }
