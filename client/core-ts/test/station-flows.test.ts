@@ -1336,6 +1336,40 @@ test("a_chat_not_in_the_threads_held_waits_for_its_station_and_only_one_it_says_
   core.close();
 });
 
+test("a_chat_asked_by_a_session_its_station_does_not_know_says_so_and_never_waits_for_good", async () => {
+  // A chat opened by a reference the station has no chat for (a job's chat named by another station, a session a
+  // list put in the wrong field): the page waited for good, 「一直 loading」 (2026-11-12). The session is read as the
+  // page asks for it, as a thread's summary is, and the station's no is the page's error.
+  const answers: J = {
+    ...base(),
+    "GET /sessions/nope": status(404, { error: "unknown session nope" }),
+    "GET /sessions/remote%3Aws%3Aother%3Ak1": status(404, { error: "unknown session" }),
+  };
+  const { host, core, ui: id, values, read } = await ui(answers);
+  const errors = new Map<number, J>();
+  const take = host.takeEmitted.bind(host);
+  host.takeEmitted = () => {
+    const out = take();
+    for (const [, m] of out as [number, J][]) if ("error" in m) errors.set(m.id, m.error);
+    return out;
+  };
+  await read();
+  subscribe(core, id, 1, { topic: "chat", station: ST, session: "k1" });
+  subscribe(core, id, 2, { topic: "chat", station: ST, session: "nope" });
+  subscribe(core, id, 3, { topic: "chat", station: ST, session: "remote:ws:other:k1" });
+  await read();
+  await coalesce(host);
+  await read();
+  assert.equal(errors.get(1), undefined, "a chat it knows opens");
+  assert.notEqual(v(values, 1), undefined);
+  for (const n of [2, 3]) {
+    assert.equal(errors.get(n)?.code, "http_404", `chat ${n}: the station's no, not a wait`);
+    assert.equal(errors.get(n)?.message, t("core-views.error.no_chat"));
+    assert.equal(v(values, n), undefined);
+  }
+  core.close();
+});
+
 test("a_thread_its_summary_is_made_of_what_is_said_in_it_is_not_read_again", async () => {
   const { host, core, push, read } = await ui({ ...base(), "GET /threads": [threadView(7, 3)], "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) } });
   await read();

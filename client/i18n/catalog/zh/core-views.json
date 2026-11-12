@@ -129,7 +129,6 @@
   "core-views.connect.turns": "{n} 轮",
   "core-views.direct_message": "私信",
   "core-views.error.chat_needs_thread": "chat 需要 thread 或 session",
-  "core-views.error.no_agent": "agent 不存在",
   "core-views.error.no_chat": "对话不存在",
   "core-views.file": "（文件）",
   "core-views.flow.add": "添加",

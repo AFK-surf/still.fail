@@ -165,7 +165,6 @@
   },
   "core-views.direct_message": "DM",
   "core-views.error.chat_needs_thread": "A chat needs a thread or session",
-  "core-views.error.no_agent": "No such agent",
   "core-views.error.no_chat": "No such chat",
   "core-views.file": "(File)",
   "core-views.flow.add": "Add",

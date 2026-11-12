@@ -690,6 +690,7 @@ export class StationsSync {
         this.#core.data.set(topic, shape ? shape(answer.success) : answer.success);
         this.#retell(address, read);
         if (topic.topic === "sessions" || topic.topic === "threads") this.#remake(address);
+        if (topic.topic === "sessions") this.unlisted(address);
         return;
       }
       // Not answered (a station's no is how it stands, read again or not).
@@ -1970,6 +1971,20 @@ export class StationsSync {
   /// link): its summary read at once, as its entries are (topics.ts `start`).
   summaryOf(address: string, id: number): void {
     if (this.#links.has(address)) this.#enqueue(address, `thread/${id}`, Priority.shown, this.#threadSummary(address, id));
+  }
+
+  /// An agent's session asked for (a chat opened by it) that the station's list read has not, with nothing held of it:
+  /// made since, or a reference the station has no chat for. Read at once, so the page has it or the station's no as
+  /// its error: the sweep reads only what the list has, so the page would wait for good (2026-11-12). Asked as the
+  /// topic starts (topics.ts `start`) and as the list comes, of those shown then.
+  unlisted(address: string, key: string | null = null): void {
+    const data = this.#core.data;
+    if (!this.#links.has(address) || !data.listed(address, "sessions")) return;
+    const keys = key !== null ? [key] : this.#core.store.liveTopics().filter((t) => t.topic === "session" && t.station === address).map((t) => t.key as string);
+    for (const k of keys) {
+      if (data.listedSummary(address, k) !== undefined || data.shared({ topic: "session", station: address, key: k }) !== undefined) continue;
+      this.#enqueue(address, `session/${k}`, Priority.shown, this.#session(address, k));
+    }
   }
 
   #threadSummary(address: string, id: number): Effect.Effect<void, CoreError> {

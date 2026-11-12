@@ -155,6 +155,9 @@ export class StationTopics implements Owner {
       // Used now: its agents' histories are brought whole, behind the rest (channel-kinds.ts `whole`).
       for (const key of membersOf(this.summary(station, id))) this.#wholeHistory(station, key);
     }
+    // An agent's session its station's list has not: read now, what it is or that the station has none (sync.ts
+    // `unlisted`).
+    if (topic.topic === "session") this.#sync.unlisted(station, topic.key as string);
     // Shown: what the sync would bring of it next (its latest page, what came after what is held, a hole) comes first,
     // nothing it would not read anyway; let go for room before, it is the sync's again from now on.
     if (topic.topic === "live") {

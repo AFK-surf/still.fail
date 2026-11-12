@@ -3925,7 +3925,9 @@ export class Views implements Owner {
     if (agent === null) {
       const detail = this.value({ topic: "session", station, key });
       if (detail === undefined) return undefined;
-      return { err: "err" in detail ? detail.err : new CoreError("http_404", t("core-views.error.no_agent"), 404) };
+      // (the station has no such session: the chat is not there, said so, whatever the station's words for it)
+      const none = new CoreError("http_404", t("core-views.error.no_chat"), 404);
+      return { err: "err" in detail && detail.err.status !== 404 ? detail.err : none };
     }
     const found = this.#row(station, { session: key });
     if (found === undefined && this.value({ topic: "chatRows", station }) === undefined) return undefined;

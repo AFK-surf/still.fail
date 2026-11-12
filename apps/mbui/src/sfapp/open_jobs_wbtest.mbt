@@ -66,6 +66,25 @@ test "what is left up long, a row tapped: its chat, the service's page over it" 
 }
 
 ///|
+test "what is left up long, a task run here for another station's chat: that chat, on its own station" {
+  // (Studio running a task for a chat of another station: its row opened Studio's chat by that one's id, a chat Studio
+  // has not, and the page waited for good; 2026-11-12)
+  let job = match @sffixture.long_job() {
+    Object(m) => m.copy()
+    _ => {}
+  }
+  job["service"] = Json::boolean(false)
+  job["chat"] = { "id": "s-elsewhere", "title": "修登录", "archived": false, "station": "ws1/st2" }
+  job["whereText"] = Json::string("Studio · 修登录 · 来自 Willow")
+  let t = open_jobs_tester({ "groups": [{ "key": "jobs", "head": "长时间运行的后台任务 · 1", "jobs": [Json::object(job)] }], "lit": false, "ids": [] })
+  t.tap_text("Studio · 修登录 · 来自 Willow · 3 小时")
+  match app.nav.top() {
+    Chat(r) => assert_eq((r.station, r.session, r.title), ("ws1/st2", "s-elsewhere", "修登录"))
+    _ => fail("no chat")
+  }
+}
+
+///|
 test "what is left up long, a row's stop: the core asked, its row not opened" {
   let calls = []
   let t = open_jobs_tester(@sffixture.long_screens_view(), calls~)

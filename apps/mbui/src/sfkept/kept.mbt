@@ -335,6 +335,7 @@ let kept_answers : String =
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c7\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c7\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c8\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c8\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c9\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c9\"}",{"open":[]}]
+  #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-elsewhere\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-elsewhere\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-k1\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-k1\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-x\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-x\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":{\"tabs\":[\"adb:[\\\"ws1/st1\\\"]\"],\"active\":\"adb:[\\\"ws1/st1\\\"]\"},\"agents\":[{\"session\":{\"key\":\"s-c1\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c1\",\"change\":{\"action\":\"open\",\"tab\":\"adb:[\\\"ws1/st1\\\"]\",\"auto\":true}}",{"next":{"tabs":["adb:[\"ws1/st1\"]"],"active":"adb:[\"ws1/st1\"]"},"tabs":{"open":["adb:[\"ws1/st1\"]"],"shown":"adb:[\"ws1/st1\"]"}}]
