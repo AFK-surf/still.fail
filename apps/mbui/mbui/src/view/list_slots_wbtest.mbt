@@ -36,7 +36,7 @@ fn slots_case(
   n : Int,
   grid? : Double = 0.0,
   follows? : Bool = false,
-  foot_room? : () -> Double = fn() { 0.0 },
+  foot_room? : () -> Double,
   first? : (ListPlace[Int]) -> Unit = fn(_) {  },
   // (its keys there and gone as they change by data: its clock stands at 0 here, where no way would go on, and what is
   // held is what the slots cost, not a way's; a way's frames as many keys as it holds, list_blocks_way_test)
@@ -57,7 +57,7 @@ fn slots_case(
           est=30.0,
           place~,
           follows=fn() { follows },
-          foot_room~,
+          foot?=foot_room.map(fn(room) { fn(f : View) { f.height(By(fn() { Some(room()) })) |> ignore } }),
           comes~,
           goes~,
           fn(b, k) {

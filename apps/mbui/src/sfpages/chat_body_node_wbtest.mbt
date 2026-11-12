@@ -292,6 +292,8 @@ fn body_keys(v : ChatView, read : Array[Entry]) -> Array[String] {
   for e in read {
     if e is Foot {
       out.push("foot")
+    } else if e is Top {
+      out.push("top")
     } else {
       out.push(keys[j])
       j += 1
@@ -417,7 +419,12 @@ fn body_both(mode : String, s : (String, Double, Double, Int), at : String, scal
   t.set_font_scale(scale)
   t.run_for(rest)
   if at != "end" {
-    place.bring(put, offset=-put_y)
+    // (its top's room the list's head: at its top, its first row under it)
+    if put == "top" {
+      place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap(), offset=-put_y - list_top)
+    } else {
+      place.bring(put, offset=-put_y)
+    }
     t.run_for(@ui.move_most_ms)
   }
   if paged {
@@ -709,6 +716,12 @@ fn body_cmp(c : BodyCase, known : Map[String, Int], said : Array[String]) -> Uni
       }
     }
     let moved = news[i].top - o.top
+    // (its top's room the list's head now: a chat too short to fill what shows has it at the top of what shows, its
+    // rows at the foot, the room between them, where the old list had it over its rows (decided, 2026-11-12:
+    // View::scrolls_window's head with from_end))
+    if o.key == "top" && news[i].top == 0.0 && o.top > 0.0 {
+      continue
+    }
     if body_r(moved) != body_r(want) {
       said.push(c.name + " " + o.key + ": its top \{body_r(o.top)} / \{body_r(news[i].top)}, moved \{body_r(want)} by the rows' heights")
     }
@@ -1193,7 +1206,7 @@ test "what was sent from here goes on by the key it was sent as: the core's outb
 
 ///|
 ///|
-test "the page before read in over a chat's list as nodes at its top: what was read at the top as it came" {
+test "the page before read in over a chat's list as nodes at its top: what is read does not move" {
   @sfbase.reset()
   reset()
   let src = @sffixture.fixture("chat-working")
@@ -1221,9 +1234,10 @@ test "the page before read in over a chat's list as nodes at its top: what was r
   let place : @view.ListPlace[String] = @view.ListPlace::new()
   let t = body_new(src, s.1, s.2, s.3, view, entries, place~, made=fn(k, p) { views[k] = p })
   t.run_for(@ui.move_most_ms)
-  place.bring("top")
-  t.run_for(@ui.move_most_ms)
   let keys0 = body_keys(v0, read0)
+  // (at its very top: its first row under its head, the chat's bar's room)
+  place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap(), offset=-list_top)
+  t.run_for(@ui.move_most_ms)
   let read_key = keys0.iter().find_first(fn(k) { k.has_prefix("m:") }).unwrap()
   let before = views[read_key].placed_window_now().1
   // (the core's answer to the page before, asked as the list came to its top: the chat's view as it says it then)
@@ -1231,16 +1245,13 @@ test "the page before read in over a chat's list as nodes at its top: what was r
   view.set(v1)
   entries.set(read1)
   t.run_for(@ui.move_most_ms)
-  // what is so now: the list holds its first block (the room over its rows, `top`) where it was, the page in under
-  // it, and the message that was read at the top is pushed out of the window, its block let go. The list's line's (the
-  // anchor it takes is a block of room, not a row read: xfer/l1-plan.md §5); once it holds what is read, this says the
-  // message is where it was (`before`), as the old list holds it.
-  let top = views["top"]
-  assert_true(top.alive() && body_r(top.placed_window_now().1) == 0.0, msg="its top's room where it was")
-  assert_true(
-    !(views.get(read_key) is Some(p) && p.alive()),
-    msg="\{read_key}, at \{body_r(before)} before, pushed out of the window",
-  )
+  // (what is read does not move: the page in over it, its head gone up with what comes in, the message read at its
+  // top where it was, as the old list holds it)
+  match views.get(read_key) {
+    Some(p) if p.alive() =>
+      assert_eq(body_r(p.placed_window_now().1), body_r(before), msg="\{read_key} where it was")
+    _ => fail("\{read_key}, at \{body_r(before)} before, let go")
+  }
   assert_eq(t.audit().filter(fn(f) { !body_time_short(f) }), [])
 }
 

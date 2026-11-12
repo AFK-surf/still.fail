@@ -1577,8 +1577,8 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
       est=job_code_line,
       slop=@ui.touch_slop(),
       bar=@ui.tree_scroll_bar(),
-      // (under its last line the room its first has over it)
-      foot_room=fn() { job_output_end },
+      // (under its last line the room its first has over it: its foot, drawing nothing)
+      foot=fn(f) { f.height(Is(Some(job_output_end))) |> ignore },
       // (Ctx::list's stick_end, the old one's: made at its end, kept there as lines come while it is there, not once
       // scrolled off it; followed again once scrolled back to it)
       follows=fn() { true },
