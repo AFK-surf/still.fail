@@ -461,6 +461,9 @@ fn view_forget() -> Unit {
   for id in tree_fields.keys().collect() {
     tree_field_gone(id)
   }
+  // (the native views of the tree's the run before's: what opened them closes them, a new run's host none of theirs)
+  tree_natives.clear()
+  tree_natives_rev.val = tree_natives_rev.val + 1
   c.back = None
   c.back_node = -1
   c.back_island = None
@@ -1230,6 +1233,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (the frame's input targets, the old views' and what the old frame put over all of it, found before anything is
   // drawn (Ctx::view_targets); what a still pointer is over told as they say, the tree brought so: drawn as it is now)
   let layers_from = self.view_targets(root, tree)
+  tree_hits_passed.val = 0
   match view_point.val {
     Some((x, y)) => {
       let k = hit_at(
@@ -1578,6 +1582,14 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (what it draws itself, and where its edge was composed among the frame's instances (-1: none), drawn after what it
     // holds, composed as the rest of it was (moved, turned, faded, cut, its own): taken out where it was drawn, held till
     // what it holds is drawn, as the last of what it does here)
+    // (an old view come to: its targets, found before (Ctx::view_targets), under what is drawn after it, a native view
+    // of the tree's among them: tree_hits_passed)
+    if c.hosted {
+      match next_old_hits.iter().find_first(fn(o) { o.id == c.id }) {
+        Some(o) => tree_hits_passed.val = o.to
+        None => ()
+      }
+    }
     let ring_at = if c.hosted && c.bones != 0L {
       // (an old view hosted in its bones: its box a bone, as an old view's view of another app is, bones.mbt)
       self.emit_bone(x, y, c.w * s, c.h * s, bone_shape_r(c.radius * s, c.w * s, c.h * s), c.bones, a)
@@ -1709,7 +1721,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       rings.push((c.id, held, by))
     }
     false
-  }, draws=view_draws, offsets~, draws_rev=tree_fields_rev.val)
+  }, draws=view_draws, offsets~, draws_rev=tree_fields_rev.val + tree_natives_rev.val)
   while riding_now() is Some(r) {
     close_down(r.clips0, r.rings0)
     self.ride_end()
@@ -1771,7 +1783,8 @@ fn Ctx::view_drawn(
       !c.shapes.is_empty() ||
       !c.lines.is_empty() ||
       c.hosted ||
-      (!tree_fields.is_empty() && tree_fields.contains(c.id))
+      (!tree_fields.is_empty() && tree_fields.contains(c.id)) ||
+      (!tree_natives.is_empty() && tree_natives.contains(c.id))
     )
   let block = match view_blocks.get(c.id) {
     // (made as glass was drawn then: solid or not; a picture for the pixels it is drawn at now; its edge where it was)
@@ -1817,6 +1830,17 @@ fn Ctx::view_drawn(
       ride_spoil()
       list_drawn_anew()
       self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
+    }
+    _ => ()
+  }
+  // (a native view in it (ui's native): its hole where it is drawn and as big, each frame it is drawn, over what its
+  // block draws, under what is drawn after it; drawn anew each time, as a field is (no row it is in kept, nor the list
+  // drawn whole as one it is in): where it went said by each frame that moved it. In its bones, none: hidden)
+  match (if tree_natives.is_empty() { None } else { tree_natives.get(c.id) }) {
+    Some(tn) if c.bones == 0L => {
+      ride_spoil()
+      list_drawn_anew()
+      self.paint_tree_native(c.id, tn, x, y, c.w * s, c.h * s, s)
     }
     _ => ()
   }
@@ -6266,7 +6290,8 @@ fn Ctx::view_unseen(self : Ctx, c : @view.Content, s : Double) -> Unit {
 /// nothing that does passed over): what the tree says it draws, its words set in runs or as drawn, a field of its own.
 fn view_draws(c : @view.Content) -> Bool {
   c.draws_any ||
-  (!tree_fields.is_empty() && tree_fields.contains(c.id))
+  (!tree_fields.is_empty() && tree_fields.contains(c.id)) ||
+  (!tree_natives.is_empty() && tree_natives.contains(c.id))
 }
 
 ///|
