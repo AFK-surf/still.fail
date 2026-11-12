@@ -27,8 +27,10 @@ pub(all) enum Along {
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in a window `vw` by `vh`), Radix's Popper: on `side`,
 /// `offset` away, lined up `along` it (moved `along_offset` further), kept `padding` inside the window (`flip`: to the
 /// other side when it does not fit on its own and fits better there; moved along the side to stay in, and over the
-/// anchor where it fits on neither: Radix's shift on both axes); `rtl`: right to left, a start the right. Its top left,
-/// and the side it went on.
+/// anchor where it fits on neither: Radix's shift on both axes); `rtl`: right to left, a start the right; `clear`: how
+/// far in from the window's top, right, foot and left the system's bars reach (their safe area: the status bar, an
+/// iPhone Duo's bars of the app's actions and tabs, the home indicator), kept clear as the window's own edges are. Its
+/// top left, and the side it went on.
 pub fn place_beside(
   anchor : (Double, Double, Double, Double),
   w : Double,
@@ -42,15 +44,17 @@ pub fn place_beside(
   padding? : Double = 8.0,
   flip? : Bool = true,
   rtl? : Bool = false,
+  clear? : (Double, Double, Double, Double) = (0.0, 0.0, 0.0, 0.0),
 ) -> (Double, Double, Side) {
   let (ax, ay, aw, ah) = anchor
+  let (top, right, foot, left) = clear
   // the room on each side
   let room = fn(s : Side) {
     match s {
-      Top => ay - offset - padding
-      Bottom => vh - (ay + ah) - offset - padding
-      Left => ax - offset - padding
-      Right => vw - (ax + aw) - offset - padding
+      Top => ay - top - offset - padding
+      Bottom => vh - foot - (ay + ah) - offset - padding
+      Left => ax - left - offset - padding
+      Right => vw - right - (ax + aw) - offset - padding
     }
   }
   let opposite = fn(s : Side) {
@@ -99,16 +103,16 @@ pub fn place_beside(
   }
   // moved along to stay in the window, and across where neither side has the room for it: over its anchor rather
   // than out of the window (never past its start)
-  let keep = fn(v : Double, len : Double, max : Double) {
+  let keep = fn(v : Double, len : Double, lo : Double, max : Double) {
     let hi = max - padding - len
     let v = if v < hi { v } else { hi }
-    if v > padding {
+    if v > lo + padding {
       v
     } else {
-      padding
+      lo + padding
     }
   }
-  (keep(x, w, vw), keep(y, h, vh), side)
+  (keep(x, w, left, vw - right), keep(y, h, top, vh - foot), side)
 }
 
 ///|
@@ -341,6 +345,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       offset=b.offset,
       along_offset=b.along_offset * hs,
       padding=b.padding,
+      clear=self.clear.untracked(),
     )
     // (where it grows from, where it is drawn bigger or smaller about the side it went on: View::scale's FromBeside)
     if n.went != Some(went) {

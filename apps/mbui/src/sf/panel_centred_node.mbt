@@ -48,7 +48,7 @@ fn panel_centred_node(
         title == "" && step == "" && x.title_row is None
       }
     }
-    let w = fn() { dmin(if x.wide { dialog_wide_w } else { dialog_w }, layer.window().0 - dialog_margin) }
+    let w = fn() { dmin(if x.wide { dialog_wide_w } else { dialog_w }, over_room(layer).0 - dialog_margin) }
     // (its old views' words as far in as its look says, as kit's dialog's look gives them: read as they are painted)
     let words_look = fn(c : @ui.Ctx, held : Int) {
       c.look_by(held, fn() {
@@ -96,7 +96,7 @@ fn panel_centred_node(
       d
       .width(By(fn() { Some(w()) }))
       // (no taller than the window leaves it, dialog_room: what it holds scrolls in itself past that)
-      .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - dialog_room)) }))
+      .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - dialog_room)) }))
       // (dialog_box: 24 over its title, 24 in at its sides; each part out to them, the padding inside it)
       .padding(Is((dialog_pad, dialog_pad, dialog_pad, 0.0)))
       .radius(Is(dialog_r))
@@ -307,7 +307,7 @@ fn panel_centred_node(
             // (what it holds, together in one box as the old body's measured box held it (none of the body's gap
             // between its parts): its share tall; one as tall as what it holds up to that share (`hugs`), no taller)
             col.box(fn(held) {
-              let share = fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }
+              let share = fn() { Some(dmax(0.0, x.tall * over_room(layer).1 - dialog_frame_h)) }
               if n.hugs {
                 held.max_height(By(share)) |> ignore
               } else {

@@ -261,8 +261,8 @@ pub fn menu_node(
         p
         .beside(at.id(), side~, along=view_along(along), offset~, padding=8.0)
         .min_width(Is(Some(min_w)))
-        .max_width(By(fn() { Some(layer.window().0 - 16.0) }))
-        .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
+        .max_width(By(fn() { Some(over_room(layer).0 - 16.0) }))
+        .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - 16.0)) }))
         // (small_panel: its padding, its rows reaching past it to stand concentric with its corners)
         .padding(
           By(fn() {

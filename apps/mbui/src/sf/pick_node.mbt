@@ -78,7 +78,7 @@ pub fn pick_node(
       p
       .beside(at.id(), side=Bottom, along=view_along(along), offset~, padding=8.0)
       .width(Is(Some(chooser_menu_w)))
-      .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
+      .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - 16.0)) }))
       // (small_panel: its padding; its search and rows reaching past it to stand concentric with its corners)
       // (small_panel's padding: its search and rows reaching past it at its sides and top to stand concentric with its
       // corners, its last row at its foot, menu_item's at_foot)

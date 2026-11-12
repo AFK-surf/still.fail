@@ -882,6 +882,10 @@ pub fn Ctx::place(
     padding~,
     flip~,
     rtl=self.direction == Rtl,
+    clear={
+      let b = system_bars_now.untracked()
+      (b.top, b.right, b.bottom, b.left)
+    },
   )
 }
 

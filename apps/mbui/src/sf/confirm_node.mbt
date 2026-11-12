@@ -151,7 +151,12 @@ fn dialog_layer_node(
         }
       })
       |> ignore
-      // (in its middle by its size as laid out: centered's)
+      // (in its middle by its size as laid out: centered's; the middle of the room the system's bars leave, over_room's)
+      layer.padding(By(fn() {
+        let (top, right, foot, left) = layer.clear()
+        (left, top, right, foot)
+      }))
+      |> ignore
       layer.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       layer.box(fn(across) {
         across.row(Is(true)) |> ignore
@@ -195,7 +200,7 @@ fn confirm_panel(
   let cancel_at : Ref[@view.View?] = Ref(None)
   parent.box(made_for=loc, fn(d) {
     d
-    .width(By(fn() { Some(dmin(confirm_w, layer.window().0 - dialog_margin)) }))
+    .width(By(fn() { Some(dmin(confirm_w, over_room(layer).0 - dialog_margin)) }))
     // (confirm_box: 24 in at its sides, 28 over its title, 8 between its title, its words and its foot)
     .padding(Is((dialog_pad, confirm_top, dialog_pad, 0.0)))
     .gap(Is(@ui.Space::px(S2)))

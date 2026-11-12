@@ -47,10 +47,10 @@ pub fn ask_node(
     let field : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
       d
-      .width(By(fn() { Some(dmin(dialog_w, layer.window().0 - dialog_margin)) }))
+      .width(By(fn() { Some(dmin(dialog_w, over_room(layer).0 - dialog_margin)) }))
       // (no taller than the window leaves it, dialog_room: what it holds scrolls in itself past that, its title and its
       // buttons staying)
-      .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - dialog_room)) }))
+      .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - dialog_room)) }))
       // (dialog_box: 24 over its title; 24 in at its sides, each part's own, what it holds scrolling out to them)
       .padding(Is((0.0, dialog_pad, 0.0, 0.0)))
       .radius(Is(dialog_r))
