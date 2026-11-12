@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2e2fd4a7d](https://github.com/AFK-surf/still.fail/commit/2e2fd4a7d021777f3973ff9121767738dd04cdec) core: a station's chat list made again only where  | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.19 | 51.92 | 94.42 | 178.9 |
 | [c9847417a](https://github.com/AFK-surf/still.fail/commit/c9847417a98223dfe0fc08b1854e36b6ca51a911) core: a document written reads none of itself back | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.47 | 157.59 |
 | [5ea6ac79f](https://github.com/AFK-surf/still.fail/commit/5ea6ac79f724b7a7404ef70355f84a9d1cbd3b11) mbui: measure only scroll_held from its top in siz | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.54 | 165.21 |
 | [604538288](https://github.com/AFK-surf/still.fail/commit/6045382883fe5cc156a9b957eac3a0c13314df1d) core tests: what each change the sync writes makes | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.54 | 151.85 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1916c2b23](https://github.com/AFK-surf/still.fail/commit/1916c2b23a0070b62aec34280763fa475d0ee580) core: a lock's entries are signed one at a time, t | 1.88 | 2.51 | 10.74 | 29.71 | 37.97 | 26.44 | 49.57 | 94.29 | 180.06 |
 | [4c4afd5c0](https://github.com/AFK-surf/still.fail/commit/4c4afd5c0c57c40f35e8f258924d0d499c1d7f7b) app fixture: a chat's outline is of all its device | 1.88 | 2.51 | 10.74 | 29.7 | 37.97 | 26.43 | 49.57 | 94.88 | 187.13 |
 | [568c44c5d](https://github.com/AFK-surf/still.fail/commit/568c44c5dfe2236d6718e478fe4f8b62f8b3be4c) app: what changed in Home's chats' list while it r | 1.88 | 2.51 | 10.74 | 29.69 | 37.98 | 26.42 | 49.57 | 94.7 | 191.35 |
-| [d1a62d3cd](https://github.com/AFK-surf/still.fail/commit/d1a62d3cd8eee3463b2bb4006a1bf2f74f899662) mbui: at_cause says where key_taking held in turn  | 1.88 | 2.51 | 10.74 | 29.7 | 37.97 | 26.42 | 49.57 | 94.27 | 172.83 |
