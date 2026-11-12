@@ -8,6 +8,10 @@ fn init {
     // (the same as send_steady_wbtest's, from #5256 on, in each file that sends twice in a chat)
     ("src/sfapp/again_wbtest.mbt", 1),
     ("src/sfapp/composer_wbtest.mbt", 1),
+    // (send_steady_wbtest's, 中屏 and 大屏 words sent in a chat, the core answering at any moment: 94→117→115, at 60
+    // and 120)
+    ("src/sfapp/core_pace_rows_wbtest.mbt", 1),
+    ("src/sfapp/core_pace_wbtest.mbt", 1),
     // (send_steady_wbtest's, 小屏 words sent in a chat: the agent's row over them opens 100→104 and closes to 100, at 60)
     ("src/sfapp/daily_paths_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 2),
