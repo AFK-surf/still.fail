@@ -15,3 +15,8 @@
   rest yet, and `fold_person` refuses the `ws.*` kinds until every
   station takes them. They are held to the models they were written from (`station/test/lock-fork-choice-model.ts`,
   `station/test/lock-roster-model.ts`) by `station/test/rules-fork.test.ts`: a change to either changes both.
+  `roster.mbt` and `fold_person_ws` take a workspace's statements in the clear, which the stations of a person's
+  other workspaces would read; the model's fourth round (`station/test/lock-roster4-model.ts`, 2026-11-13) says what
+  they are to become before anything calls them: a statement a commitment in the log (`ws {t, h}`) with its body kept
+  by its workspace alone, bodies in the order their signer held them (`prev`), removals naming bodies not entries,
+  web devices in their person's log held to the keeper's clock, the settings and `off` the root's, `off` a state.

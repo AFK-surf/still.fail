@@ -160,5 +160,6 @@
 - The lock's world tests (`test/lock-world-sim.ts`, run by `test/lock-world-1.test.ts` to `-3`) pass when exactly what
   `KNOWN_SEEDS` and `KNOWN_TOLD` say fails on the product (2026-11-12): anything else failing fails them, and a known
   failure that holds now must be taken out of the table, which only shrinks. The fork-choice models' runners
-  (`test/lock-fork-choice.test.ts`, `test/lock-roster.test.ts`) print what they measure and assert only the models'
-  soundness; their envs (`LOCK_FORK_*`, `LOCK_ROSTER_*`) give the full counts.
+  (`test/lock-fork-choice.test.ts`, `test/lock-roster.test.ts`, `test/lock-roster4.test.ts`) print what they measure
+  and assert only the models' soundness; their envs (`LOCK_FORK_*`, `LOCK_ROSTER_*`, `LOCK_ROSTER4_*`) give the full
+  counts.
