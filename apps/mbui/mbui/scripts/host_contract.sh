@@ -211,6 +211,10 @@ run() {
       # the system's events over the run (its activities stopped, destroyed, relaunched, its configuration changed, a
       # dialog over it): kept beside the run's log, what says why when the system disturbed it
       $ADB logcat -b events -d > "${2%.log}.events.log" 2>/dev/null || true
+      # a crash the run ended on (FATAL EXCEPTION is an end above, so android_end says nothing of it): what was thrown
+      # and where, kept beside the log and said here
+      $ADB logcat -b crash -d -v brief > "${2%.log}.crash.log" 2>/dev/null || true
+      if [ -s "${2%.log}.crash.log" ]; then echo "the run's crash:"; head -30 "${2%.log}.crash.log"; fi
       return $r ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -441,7 +445,16 @@ case $CMD in
     # begun by what the page said before it: a script and its answer, the cookies (where the host keeps them), an event
     # stream's events as they are sent (the next sent once the page has the first), what the page shows grabbed, a
     # page of HTML the same; the run ends itself (SITECHECK done)
-    run "MBUI_SITECHECK=1" $O/site.log || true
+    # (Android: then a page of 3/10 of the app's Java heap, which must open and be read to its end: one the host holds
+    # a few times over, as loadDataWithBaseURL's base64 of all of it did, stops the app, OutOfMemoryError: #5737)
+    BIG=
+    if [ "$H" = android ]; then
+      heap=$($ADB shell getprop dalvik.vm.heapgrowthlimit | tr -d '\r')
+      case $heap in *m) heap=$(( ${heap%m} * 1024 * 1024 )) ;; *g) heap=$(( ${heap%g} * 1024 * 1024 * 1024 )) ;; *) heap= ;; esac
+      [ -n "$heap" ] || { echo "site contract ($H): the app's Java heap not told (dalvik.vm.heapgrowthlimit)"; exit 1; }
+      BIG=" MBUI_SITECHECK_BIG=$(( heap * 3 / 10 ))"
+    fi
+    run "MBUI_SITECHECK=1$BIG" $O/site.log || true
     grep -aq "SITECHECK done" $O/site.log || { echo "site contract ($H): the run did not end its check"; grep -a "SITECHECK\|view " $O/site.log | tail -20; exit 1; }
     scripts/chk site "$O/site.log" "$H"
     ;;
