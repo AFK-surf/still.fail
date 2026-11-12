@@ -285,6 +285,8 @@ type X = {
   oldRules: OldRules | null;
   reading: "A" | "B";
   frozen: Map<Holder, string>;
+  /// The next statement made names this `prev`, whatever its signer holds (a signer leaving its own out on purpose).
+  forcePrev: string | null | undefined;
 };
 const XS = new WeakMap<World3, X>();
 
@@ -292,7 +294,7 @@ export class World4 extends World3 {
   get x(): X {
     let x = XS.get(this);
     if (x === undefined) {
-      x = { o: {}, bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map() };
+      x = { o: {}, bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map(), forcePrev: undefined };
       XS.set(this, x);
     }
     return x;
@@ -389,6 +391,7 @@ export class World4 extends World3 {
         break;
       }
     }
+    if (this.x.forcePrev !== undefined) (prev = this.x.forcePrev), (this.x.forcePrev = undefined);
     if (kind === "ws.member" && rest.email === undefined) rest.email = `${rest.sub}@x`;
     const b: Body = { ws, kind: kind.slice(3), ...rest, prev, salt };
     const hb = bodyHash(b);
@@ -991,6 +994,30 @@ export function lostBody(seed: number, order: Order): { later: number; inForce: 
   return { later: later.length * w.stations.length, inForce, through, xena: w.stations.filter((h) => w.ros(h).members.has("xena")).length, lacking: w.stations.reduce((n, h) => n + w.lacking(h).length, 0), log: w.log };
 }
 
+/// A signer leaving its own statement out of the chain: bob's app removes carol (X), whose body s0 is never given;
+/// then it admits xena (Y), naming as `prev` the statement before X (`skip`) or X (as it holds it). At s0 and s1: carol
+/// in the list, Y in force. And the world where bob never signed X.
+export function skipOwn(order: Order): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const how of ["honest", "skip", "no X"] as const) {
+    const w = new World4(1, VON, "free", { order });
+    const B = w.dev("bob's app");
+    w.level();
+    let before: string | null = null;
+    if (how !== "no X") {
+      const k = B.h.logs.get(B.log)!;
+      before = k.active.map((y) => k.store.get(y)!).filter((e) => e.kind === "ws" && e.body.t === tagOf(WS, B.log)).at(-1)?.body.h ?? null;
+      const x = w.sign(B, "ws.member.remove", { ws: WS, sub: "carol", cancels: w.seen(B.h, "carol") }, { bring: false }) as Entry;
+      w.x.withheld.add(`${x.body.h}>s0`);
+    }
+    if (how === "skip") w.x.forcePrev = before;
+    const y = w.sign(B, "ws.member", { ws: WS, sub: "xena", lock: w.home.get("xena"), role: "member" }, { bring: false }) as Entry;
+    w.level();
+    for (const st of w.stations.slice(0, 2)) out[`${how} ${st.name}`] = `carol ${w.ros(st).members.has("carol") ? "in" : "out"}, Y ${w.inForce(st, WS).stmts.has(hashOf(y)) ? "in force" : "not"}`;
+  }
+  return out;
+}
+
 // ── M2: a body is only its commitment's ─────────────────────────────────────────────────────────────────────────────
 
 export type M2Out = { offered: Record<string, number>; taken: number; control: number; controlTaken: number; why: Record<string, number> };
@@ -1425,7 +1452,8 @@ export type Job4 =
   | { t: "m6"; n: number; offFinal: boolean }
   | { t: "m7"; n: number; away?: boolean; attack?: "same" | "any"; reading?: "A" | "B" }
   | { t: "again"; steps: number }
-  | { t: "lost"; order: Order };
+  | { t: "lost"; order: Order }
+  | { t: "skip"; order: Order };
 
 const tally = (into: Record<string, number>, k: string, n = 1) => {
   into[k] = (into[k] ?? 0) + n;
@@ -1492,6 +1520,8 @@ export function runJob4(j: Job4): unknown {
       }
       return out;
     }
+    case "skip":
+      return skipOwn(j.order);
     case "lost":
       return lostBody(1, j.order);
     case "again": {

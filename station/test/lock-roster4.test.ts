@@ -37,6 +37,7 @@ type Any = Record<string, any>;
 const ORDERS = ["prev", "whole", "all", "off"] as const;
 const m1Rows = FAMILIES.map((family) => ORDERS.map((order) => ask<M1Out>({ t: "m1", family, runs: RUNS, steps: STEPS, order })));
 const lostRows = ORDERS.map((order) => ask<Any>({ t: "lost", order }));
+const skipRows = ORDERS.map((order) => ask<Record<string, string>>({ t: "skip", order }));
 const m2Row = ask<Any>({ t: "m2", n: CASES });
 const m3Rows = FAMILIES.map((family) => ask<M3Out>({ t: "m3", family, runs: RUNS, steps: STEPS }));
 /// M4: round three's jobs, in its world and in this one.
@@ -89,6 +90,11 @@ test("M1: a body lost with its device", async () => {
     print(`order=${order}: alice's app lost with the body of an admit it gave the stations the entry of; its own next statement (signed knowing it) in force at ${r.through}/3 stations; her phone's two statements after it in force at ${r.inForce}/${r.later} (station, statement) pairs; xena in the list at ${r.xena}/3 stations; lacking listed ${r.lacking}`);
     if (i === 0) toldLines("lost body", r.log.slice(-14));
   }
+});
+
+test("M1: a signer leaving its own statement out of the chain", async () => {
+  print("bob removes carol (X, its body never given to s0), then admits xena (Y) naming X as prev (honest), naming the one before X (skip), or never signing X:");
+  for (const [i, order] of ORDERS.entries()) print(`  order=${order}: ${Object.entries(await skipRows[i]).map(([k, v]) => `${k}: ${v}`).join("; ")}`);
 });
 
 test("M2: a body is only its commitment's", async () => {
