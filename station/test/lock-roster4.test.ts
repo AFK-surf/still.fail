@@ -7,8 +7,9 @@
 // old chain is the product's `fold` of it, and the same seed gives the same world.
 //
 // The design as revised by the lead (2026-11-13) is the default; each first reading is a variant beside it, measured
-// the same way (as round three kept `rule=steps`): `order=off` (a statement counts whatever lacks before it in its
-// log), `off=final` (a keeper that sees the workspace off lets it go for good), `web=at` (a web device counts by its
+// the same way (as round three kept `rule=steps`): `order=all` (a statement counts only after every earlier one of its
+// workspace in its log has its body) and `order=off` (each by itself) beside `order=prev`, and `order=whole` (the model's: `prev` names the latest statement whose chain is whole at
+// its signer), `off=final` (a keeper that sees the workspace off lets it go for good), `web=at` (a web device counts by its
 // `at` alone), reading A of the handover.
 //
 // LOCK_ROSTER4_RUNS=<n> drawn worlds a row (6 by default), LOCK_ROSTER4_CASES=<n> worlds a scripted row (6),
@@ -33,7 +34,7 @@ const VON = V3[1];
 // ── everything asked at once ────────────────────────────────────────────────────────────────────────────────────────
 
 type Any = Record<string, any>;
-const ORDERS = [true, false];
+const ORDERS = ["prev", "whole", "all", "off"] as const;
 const m1Rows = FAMILIES.map((family) => ORDERS.map((order) => ask<M1Out>({ t: "m1", family, runs: RUNS, steps: STEPS, order })));
 const lostRows = ORDERS.map((order) => ask<Any>({ t: "lost", order }));
 const m2Row = ask<Any>({ t: "m2", n: CASES });
@@ -68,12 +69,12 @@ test("M1: agreement with bodies delayed, reordered, and one held back for good",
     for (const [k, order] of ORDERS.entries()) {
       const r = await m1Rows[i][k];
       const d = [...r.delaySteps].sort((a, b) => a - b);
-      print(`\n== M1, ${family}, order=${order ? "on" : "off"}: ${RUNS} drawn worlds, ${STEPS} steps, the nth body after the setup never given to one station ==`);
+      print(`\n== M1, ${family}, order=${order}: ${RUNS} drawn worlds, ${STEPS} steps, the nth body after the setup never given to one station ==`);
       print(`came to rest ${pct(r.rested, r.runs)}; every keeper the workspace has but the held-back one in one state (D4) ${pct(r.agree, r.runs)}; a fresh keeper given the same entries and bodies shuffled differs ${r.same}/${r.sameChecks}`);
       print(`held-back body's statement on that station's active chain in ${r.heldOnChain} worlds: its state differs ${r.differ}, lets in other keys ${r.letInDiff}, lists the entry as lacking ${r.listed}, statements after it held up there ${r.heldUp}, level the moment the body is given ${r.level}`);
       print(`with nothing held back: (keeper, statement) pairs ready ${r.readyPairs}, in force only later ${r.delayed} (steps late: median ${d[Math.floor(d.length / 2)] ?? 0}, p90 ${d[Math.floor(0.9 * d.length)] ?? 0}, max ${d.at(-1) ?? 0}); ready and not in force at the end ${r.neverIn}`);
       print(`gating at the end: bodies a keeper the workspace has lacks while another keeper keeps them ${r.stuckHeld}, that no keeper keeps ${r.stuckNone}`);
-      if (r.stuckLog) toldLines(`M1 ${family} order=${order ? "on" : "off"}, a body not given`, r.stuckLog);
+      if (r.stuckLog) toldLines(`M1 ${family} order=${order}, a body not given`, r.stuckLog);
       print(`bodies not taken from messages: ${said(r.refused)}; keepers that let go: ${r.letGo}`);
       if (r.smallest) for (const l of r.smallest) print(`  ${l}`);
       assert.equal(r.oracleBad, 0, "with nothing lacking, the kept bodies and every body made give different states");
@@ -85,7 +86,7 @@ test("M1: agreement with bodies delayed, reordered, and one held back for good",
 test("M1: a body lost with its device", async () => {
   for (const [i, order] of ORDERS.entries()) {
     const r = await lostRows[i];
-    print(`order=${order ? "on" : "off"}: alice's app lost with the body of an admit it gave the stations the entry of; her phone's two statements after it in force at ${r.inForce}/${r.later} (station, statement) pairs; xena in the list at ${r.xena}/3 stations; lacking listed ${r.lacking}`);
+    print(`order=${order}: alice's app lost with the body of an admit it gave the stations the entry of; its own next statement (signed knowing it) in force at ${r.through}/3 stations; her phone's two statements after it in force at ${r.inForce}/${r.later} (station, statement) pairs; xena in the list at ${r.xena}/3 stations; lacking listed ${r.lacking}`);
     if (i === 0) toldLines("lost body", r.log.slice(-14));
   }
 });

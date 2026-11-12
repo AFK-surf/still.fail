@@ -39,6 +39,15 @@ const w2Keys = [0, 1].map((i) => key(3950 + i));
 const webKey = (sub: string) => key(4200 + ["alice", "bob", "dan", "carol", "xena", "mallory"].indexOf(sub));
 const ROGUE_WEB = key(4300);
 export const SETTINGS = { origins: ["https://app.still.fail"], rp_id: "app.still.fail", cloud_keys: { keys: [] } };
+/// What the root's `open` says: the settings and the root's person's email (D3 as revised: no admit names the root).
+export const OPEN = { ...SETTINGS, email: "alice@x" };
+/// How a log's statements of a workspace count (D1): `prev`, the revised rule (a statement stands on the chain of
+/// bodies its signer held, named by `prev`); `all`, the first revision (every earlier statement of the tag in the log);
+/// `off`, the first reading (each by itself); `whole`, `prev` with the signer naming the latest statement whose body
+/// and whole `prev` chain it holds (the model's: with `prev` as said, a device that got a body signed knowing a lost one
+/// points through the loss).
+export type Order = "prev" | "whole" | "all" | "off";
+const byPrev = (o: Order | undefined) => o === undefined || o === "prev" || o === "whole";
 const DAY = 86400;
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -69,7 +78,7 @@ export function bodyWhy(b: any): string | null {
     case "member.remove": return keys === "cancels,kind,salt,sub,ws" && typeof b.sub === "string" && hexes(b.cancels) ? null : "a removal names whom and what it cancels";
     case "station": return keys === "key,kind,salt,ws" && HEX32.test(b.key) ? null : "a station is named by its key";
     case "station.remove": return keys === "cancels,key,kind,salt,ws" && HEX32.test(b.key) && hexes(b.cancels) ? null : "a removal names whom and what it cancels";
-    case "open": return keys === "cloud_keys,kind,origins,rp_id,salt,ws" && Array.isArray(b.origins) && b.origins.every((o: unknown) => typeof o === "string") && typeof b.rp_id === "string" ? null : "open names the settings";
+    case "open": return keys === "cloud_keys,email,kind,origins,rp_id,salt,ws" && typeof b.email === "string" && Array.isArray(b.origins) && b.origins.every((o: unknown) => typeof o === "string") && typeof b.rp_id === "string" ? null : "open names the settings";
     case "off": return keys === "kind,salt,ws" ? null : "off says nothing more";
     default: return "no such statement";
   }
@@ -237,10 +246,9 @@ export type W4Options = World3Options & {
   w2?: boolean;
   /// M1: the `nth` body made after the setup is never given to station `station` (by anyone).
   holdBack?: { station: number; nth: number };
-  /// The first readings, kept beside the revised design (2026-11-13) to compare: `order: false`, a statement counts
-  /// whatever lacks before it in its log; `gate: false`, every keeper of the world is given every body; `offFinal`, a
+  /// The first readings, kept beside the revised design (2026-11-13) to compare: `order` (`Order`); `gate: false`, every keeper of the world is given every body; `offFinal`, a
   /// keeper that sees the workspace off lets it go for good; `webAt`, a web device counts by its `at` alone.
-  order?: boolean;
+  order?: Order;
   gate?: boolean;
   offFinal?: boolean;
   webAt?: boolean;
@@ -301,7 +309,7 @@ export class World4 extends World3 {
       // Then alice's app opens the workspace (D3).
       const A = this.dev("alice's app");
       for (const h of this.holders) if (this.admits(A.h, h, WS)) this.giveBodies(h, [...x.bodies.values()]);
-      this.setup(A, [["ws.open", { ws: WS, ...SETTINGS }]], this.holders);
+      this.setup(A, [["ws.open", { ws: WS, ...OPEN }]], this.holders);
     }
     if (o.two) this.second();
     x.base = x.order.length;
@@ -343,7 +351,7 @@ export class World4 extends World3 {
     for (const d of alices) this.pinsOf(d.h).set(WS2, this.root), this.receive(d.h, [mal]);
     if (x.o.w2 === false) return;
     this.setup(this.dev("alice's app"), [
-      ["ws.open", { ws: WS2, ...SETTINGS }],
+      ["ws.open", { ws: WS2, ...OPEN }],
       ["ws.member", { ws: WS2, sub: "mallory", lock: this.home.get("mallory"), role: "member" }],
       ...w2Keys.map((k) => ["ws.station", { ws: WS2, key: k.hex }] as [string, unknown]),
     ], [...ws2, ...alices.map((d) => d.h)]);
@@ -362,9 +370,21 @@ export class World4 extends World3 {
     const { ws, ...rest } = body as { ws: string; sub?: string; email?: string };
     const salt = sha(`salt\n${hashOf(parent)}\n${by.id}\n${kind}\n${canonical(body)}`).slice(0, 32);
     const t = tagOf(ws, g);
+    // `prev`: the latest statement of the tag before it in the log, under `prev` the latest whose body the signing
+    // device holds (a key no device of the world holds, a forger's, names the latest)
+    const holder = byPrev(this.x.o.order) ? this.devs?.find((d) => d.signer.id === by.id)?.h : undefined;
+    const held = holder ? this.keptOf(holder) : undefined;
+    const whole = (hb: string) => {
+      for (let p: string | null = hb, n = 0; p !== null && n < 10_000; n++) {
+        const q = held!.get(p);
+        if (q === undefined) return false;
+        p = q.prev;
+      }
+      return true;
+    };
     let prev: string | null = null;
     for (let y: Entry = parent; y.prev !== null; y = this.entry(y.prev)) {
-      if (y.kind === "ws" && y.body.t === t) {
+      if (y.kind === "ws" && y.body.t === t && (held === undefined || (this.x.o.order === "whole" ? whole(y.body.h) : held.has(y.body.h)))) {
         prev = y.body.h;
         break;
       }
@@ -420,6 +440,16 @@ export class World4 extends World3 {
     this.x.commits.set(h, { ver: h.ver, by });
     return by;
   }
+  /// The `h` of every statement of the same tag before `e` in its log.
+  earlier(e: Entry): Set<string> {
+    const out = new Set<string>();
+    for (let y = e.prev; y !== null; ) {
+      const p = this.entry(y);
+      if (p.kind === "ws" && p.body.t === e.body.t) out.add(p.body.h);
+      y = p.prev;
+    }
+    return out;
+  }
   /// The `h` of the statement of the same tag before `e` in its log (null: none).
   prevOf(e: Entry): string | null {
     for (let y = e.prev; y !== null; ) {
@@ -459,7 +489,9 @@ export class World4 extends World3 {
     if (mine.length === 0) return "its entry's tag is not its workspace's in that log";
     const shape = bodyWhy(b);
     if (shape !== null) return `its shape: ${shape}`;
-    if (!mine.some((e) => this.prevOf(e) === b.prev)) return "its prev is not the statement before it in that log";
+    // (under `prev` any earlier statement of the tag in the entry's log, or none; its body need not be here yet)
+    const prevOk = byPrev(this.x.o.order) ? (e: Entry) => b.prev === null || this.earlier(e).has(b.prev) : (e: Entry) => this.prevOf(e) === b.prev;
+    if (!mine.some(prevOk)) return "its prev is not a statement before it in that log";
     return null;
   }
   takeBody(h: Holder, b: Body, count: boolean): boolean {
@@ -575,11 +607,21 @@ export class World4 extends World3 {
 
   /// The statements of `ws` in force at `h` (D1), by their entry's hash, and the entries of its tag whose body is not
   /// kept there (`lacking`). `all`: as if it kept every body the world made (the model's own check).
-  /// D1 as revised: in its log a statement counts only after every one of its tag before it on the active chain has its
-  /// body kept (`order: false`, the first reading: each by itself). `ready`: those on the active chain with their body.
+  /// D1 as revised: a statement counts where its body and every body along its `prev` chain are kept (`order`: `all`,
+  /// only after every one of its tag before it on the active chain has its body kept; `off`, each by itself). `ready`:
+  /// those on the active chain with their body.
   inForce(h: Holder, ws: string, all = false): { stmts: Map<string, Body>; lacking: string[]; ready: string[] } {
     const kept = this.keptOf(h), stmts = new Map<string, Body>(), lacking: string[] = [], ready: string[] = [];
-    const order = this.x.o.order !== false;
+    const order = this.x.o.order ?? "prev";
+    const src = all ? this.x.bodies : kept;
+    const whole = (b: Body): boolean => {
+      for (let p = b.prev, n = 0; p !== null && n < 10_000; n++) {
+        const q = src.get(p);
+        if (q === undefined) return false;
+        p = q.prev;
+      }
+      return true;
+    };
     for (const [g, k] of h.logs) {
       const t = tagOf(ws, g);
       let stopped = false;
@@ -588,10 +630,10 @@ export class World4 extends World3 {
         if (e.kind !== "ws" || e.body.t !== t) continue;
         const b = all ? this.x.bodies.get(e.body.h) : kept.get(e.body.h);
         const has = b !== undefined && b.ws === ws && (!all || bodyWhy(b) === null);
-        if (!has) lacking.push(x), (stopped ||= order);
+        if (!has) lacking.push(x), (stopped ||= order === "all");
         else {
           ready.push(x);
-          if (!stopped) stmts.set(x, b);
+          if (!stopped && (!byPrev(order) || whole(b!))) stmts.set(x, b!);
         }
       }
     }
@@ -659,12 +701,13 @@ export class World4 extends World3 {
     const oo = this.openOff(h, root, f);
     if (oo.newest === "off") return "off";
     const r = this.rosterIn(h, root, ws, f);
+    // (the root's member: its email is the `open` in force's)
     const members = new Map<string, D4Member>();
     for (const [sub, m] of r.members) {
       const k = h.logs.get(m.lock);
       const apps = k && k.rules.state(m.lock).sub === sub ? [...k.headState().devices.keys()].sort() : [];
       // (the root has no admit: no statement says its person's email)
-      members.set(sub, { role: m.role, email: f.stmts.get(m.admit)?.email ?? "-", lock: m.lock, apps, webs: apps.length > 0 ? this.websAt(h, m.lock) : [] });
+      members.set(sub, { role: m.role, email: (m.admit === "" ? oo.settings?.email : f.stmts.get(m.admit)?.email) ?? "-", lock: m.lock, apps, webs: apps.length > 0 ? this.websAt(h, m.lock) : [] });
     }
     const s = oo.settings;
     return { on: oo.newest === "open" ? "on" : "not on", settings: s ? canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys }) : "-", members, stations: [...r.stations].sort() };
@@ -715,7 +758,7 @@ export class World4 extends World3 {
       if (c % 3 === 0) return { kind: "ws.member", body: { ws: WS2, sub: "mallory", lock: this.home.get("mallory"), role: r.members.get("mallory")?.role === "member" ? "admin" : "member" } };
       const st = w2Keys[1].hex;
       if (c % 3 === 1) return r.stations.has(st) ? { kind: "ws.station.remove", body: { ws: WS2, key: st, cancels: this.seenStations(d.h, st, WS2) } } : { kind: "ws.station", body: { ws: WS2, key: st } };
-      return { kind: "ws.open", body: { ws: WS2, ...SETTINGS, rp_id: `w2-${c % 7}.still.fail` } };
+      return { kind: "ws.open", body: { ws: WS2, ...OPEN, rp_id: `w2-${c % 7}.still.fail` } };
     }
     const op = super.honestOp(d, b, c);
     if (op && o.w1 === false && op.kind.startsWith("ws.")) return null;
@@ -920,13 +963,15 @@ export function m1(family: Family, runs: number, steps: number, more: W4Options 
 /// A body lost with its device: alice's app signs xena's admit and gives the stations the entry, not the body (its
 /// message dropped); then the app is lost. Her phone, on her log, goes on: admits xena as an admin and takes the third
 /// station out. At how many stations each of the phone's statements is in force, and what each lists as lacking.
-export function lostBody(seed: number, order: boolean): { later: number; inForce: number; xena: number; lacking: number; log: string[] } {
+export function lostBody(seed: number, order: Order): { later: number; inForce: number; through: number; xena: number; lacking: number; log: string[] } {
   const w = new World4(seed, VON, "free", { order });
   const A = w.dev("alice's app"), P = w.dev("alice's phone");
   w.sign(A, "device", personDevice(P));
   w.level();
   const e = w.sign(A, "ws.member", { ws: WS, sub: "xena", lock: w.home.get("xena"), role: "member" }, { bring: false }) as Entry;
-  for (const st of w.stations) w.receive(st, [e]);
+  // (and one more of the app's, signed knowing it: its body reaches the stations, the first's does not)
+  const e2 = w.sign(A, "ws.station", { ws: WS, key: w2Keys[0].hex }, { bring: false }) as Entry;
+  for (const st of w.stations) w.receive(st, [e, e2]), w.giveBodies(st, [w.x.bodies.get(e2.body.h)!]);
   w.note("alice's app is lost, with the body of its last statement");
   w.keptOf(A.h).delete(e.body.h);
   w.holders = w.holders.filter((h) => h !== A.h);
@@ -937,9 +982,13 @@ export function lostBody(seed: number, order: boolean): { later: number; inForce
     w.sign(P, "ws.station.remove", { ws: WS, key: st, cancels: w.seenStations(P.h, st) }) as Entry,
   ];
   w.level();
-  let inForce = 0;
-  for (const h of w.stations) for (const x of later) if (w.inForce(h, WS).stmts.has(hashOf(x))) inForce++;
-  return { later: later.length * w.stations.length, inForce, xena: w.stations.filter((h) => w.ros(h).members.has("xena")).length, lacking: w.stations.reduce((n, h) => n + w.lacking(h).length, 0), log: w.log };
+  let inForce = 0, through = 0;
+  for (const h of w.stations) {
+    const f = w.inForce(h, WS);
+    for (const x of later) if (f.stmts.has(hashOf(x))) inForce++;
+    if (f.stmts.has(hashOf(e2))) through++;
+  }
+  return { later: later.length * w.stations.length, inForce, through, xena: w.stations.filter((h) => w.ros(h).members.has("xena")).length, lacking: w.stations.reduce((n, h) => n + w.lacking(h).length, 0), log: w.log };
 }
 
 // ── M2: a body is only its commitment's ─────────────────────────────────────────────────────────────────────────────
@@ -1159,13 +1208,13 @@ export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any
   let steps = 0;
   if (kind === "off" && !offFinal && w.d4(A.h) === "off") {
     w.note("alice's app has the workspace on again");
-    w.sign(A, "ws.open", { ws: WS, ...SETTINGS }, { bring: false }), steps++;
+    w.sign(A, "ws.open", { ws: WS, ...OPEN }, { bring: false }), steps++;
     w.level();
   }
   if (kind === "off" && offFinal && w.holders.some((h) => !w.pinsOf(h).has(WS))) {
     w.note("alice's app has the workspace on again");
     if (!w.pinsOf(A.h).has(WS)) w.pinsOf(A.h).set(WS, w.root), steps++;
-    if (w.d4(A.h) === "off" || w.openOff(A.h, w.root, w.inForce(A.h, WS)).newest !== "open") w.sign(A, "ws.open", { ws: WS, ...SETTINGS }, { bring: false }), steps++;
+    if (w.d4(A.h) === "off" || w.openOff(A.h, w.root, w.inForce(A.h, WS)).newest !== "open") w.sign(A, "ws.open", { ws: WS, ...OPEN }, { bring: false }), steps++;
     // what its list had, said again where its bodies went
     const now = w.ros(A.h);
     for (const [sub, m] of baseList.members) if (sub !== "alice" && !now.members.has(sub)) w.sign(A, "ws.member", { ws: WS, sub, lock: m.lock, role: m.role }, { bring: false }), steps++;
@@ -1190,7 +1239,7 @@ export function m6(seed: number, offFinal = false): M6Out {
   w.level();
   const base = w.stateSaid(w.stations[0]);
   const before = w.holders.map((h) => w.stateSaid(h));
-  w.sign(B, "ws.open", { ws: WS, ...SETTINGS, rp_id: "evil.example" });
+  w.sign(B, "ws.open", { ws: WS, ...OPEN, email: "bob@x", rp_id: "evil.example" });
   w.sign(B, "ws.off", { ws: WS });
   w.level();
   const notRootChanged = w.holders.filter((h, i) => w.stateSaid(h) !== before[i]).length;
@@ -1204,7 +1253,7 @@ export function m6(seed: number, offFinal = false): M6Out {
   let steps = 0;
   w.note("alice's app has the workspace on again");
   if (offFinal) w.pinsOf(A.h).set(WS, w.root), steps++;
-  w.sign(A, "ws.open", { ws: WS, ...SETTINGS }, { bring: false }), steps++;
+  w.sign(A, "ws.open", { ws: WS, ...OPEN }, { bring: false }), steps++;
   if (offFinal) {
     for (const [sub, role] of [["bob", "admin"], ["dan", "admin"], ["carol", "member"]]) w.sign(A, "ws.member", { ws: WS, sub, lock: w.home.get(sub), role }, { bring: false }), steps++;
     for (const k of stationKeys3) w.sign(A, "ws.station", { ws: WS, key: k.hex }, { bring: false }), steps++;
@@ -1295,9 +1344,8 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
   // the handover
   const S = rules.state(hashOf(head));
   const A = app("alice");
-  // (the root's person has no admit, so no statement says their email: D1 does not give the root one)
-  const lost: string[] = ["email alice: no statement says the root's own email"];
-  w.sign(A, "ws.open", { ws: WS, origins: S.origins, rp_id: S.rp_id, cloud_keys: S.cloud_keys }, { bring: false });
+  const lost: string[] = [];
+  w.sign(A, "ws.open", { ws: WS, origins: S.origins, rp_id: S.rp_id, cloud_keys: S.cloud_keys, email: S.members.get("alice")!.email }, { bring: false });
   for (const [sub, m] of S.members) {
     if (sub === "alice") continue;
     const lock = S.persons.get(sub);
@@ -1321,7 +1369,7 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
     const P = phone("alice");
     const fake = w.genesis({ ...ACCOMPLICE[0], sub: "alice", name: "a log of the revoked key's" });
     const fakeLog = hashOf(fake);
-    const opened = w.make(fake, "ws.open", { ws: WS, ...SETTINGS, rp_id: "taken.example" }, ACCOMPLICE[0].signer);
+    const opened = w.make(fake, "ws.open", { ws: WS, ...OPEN, rp_id: "taken.example" }, ACCOMPLICE[0].signer);
     const at = [...rules.states.keys()].filter((h) => rules.states.get(h)!.devices.has(P.base.hex) && rules.depth(h) <= rules.depth(removal!.prev!) && !rules.moved.has(h));
     const p = o.attack === "same" ? removal.prev! : at.sort((a, b) => rules.depth(a) - rules.depth(b) || (a < b ? -1 : 1))[r.int(at.length)];
     const second = old(P, "moved", () => ({ root: fakeLog }), made.get(p)!)!;
@@ -1367,7 +1415,7 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
 // ── jobs, in worker threads ─────────────────────────────────────────────────────────────────────────────────────────
 
 export type Job4 =
-  | { t: "m1"; family: Family; runs: number; steps: number; order: boolean }
+  | { t: "m1"; family: Family; runs: number; steps: number; order: Order }
   | { t: "m2"; n: number }
   | { t: "m3"; family: Family; runs: number; steps: number }
   /// Round three's job, in its world (`round: 3`) or this one's.
@@ -1377,7 +1425,7 @@ export type Job4 =
   | { t: "m6"; n: number; offFinal: boolean }
   | { t: "m7"; n: number; away?: boolean; attack?: "same" | "any"; reading?: "A" | "B" }
   | { t: "again"; steps: number }
-  | { t: "lost"; order: boolean };
+  | { t: "lost"; order: Order };
 
 const tally = (into: Record<string, number>, k: string, n = 1) => {
   into[k] = (into[k] ?? 0) + n;
