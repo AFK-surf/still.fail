@@ -858,12 +858,16 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
     const head = now.head;
     inner.data.put("lock", ws, { head, entries: now.entries, ...(now.aside.length > 0 ? { aside: now.aside } : {}), ...(seen ? { seen } : {}) });
     // What was pending and is on the chain now (a station took it, from this device or from another that carried it):
-    // pending no more.
+    // pending no more, and the cloud sent it now, as what a station took is (`Lock.append`).
     const pending = pendingHeld(inner, ws);
     if (pending.length > 0) {
       const on = new Set(now.entries.map(hashOf));
       const left = pending.filter((x) => !on.has(hashOf(x.entry)));
-      if (left.length !== pending.length) putPending(inner, ws, left);
+      if (left.length !== pending.length) {
+        putPending(inner, ws, left);
+        const taken = pending.filter((x) => on.has(hashOf(x.entry))).map((x) => x.entry);
+        inner.runner.fork(Effect.ignore(inner.provider.request(sub, "POST", `/v1/workspaces/${encodeURIComponent(ws)}/lock`, { entries: taken }, null), { log: "Unhandled", message: "lock entries a station took sent to the cloud" }));
+      }
     }
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
@@ -2902,14 +2906,14 @@ export class Lock {
   }
 
   /// Stations' answers to what was brought them past waiting (`said`, by station): one that took `entry` (`takenBy`),
-  /// it is held (pending no more, `hold`) and the cloud sent it; nothing where it is on the chain held already.
+  /// it is held (pending no more and the cloud sent it, `hold`); nothing where it is on the chain held already.
   #tookLate(said: Record<string, unknown>, takenBy: (id: string, said: unknown) => Effect.Effect<boolean>, signed: Head, chain: Entry[], entry: Entry): Effect.Effect<void> {
     const self = this;
     return Effect.gen(function* () {
       const took = (yield* Effect.forEach(Object.entries(said), ([id, s]) => takenBy(id, s))).some((x) => x);
       if (!took || held(self.#inner, self.ws)?.entries.some((e) => hashOf(e) === signed.hash)) return;
+      // (pending no more as it is held, and the cloud sent it then: `hold`)
       yield* self.#taken(signed, chain);
-      yield* Effect.ignore(self.#toCloud([entry], true));
     });
   }
 
@@ -2970,8 +2974,8 @@ export class Lock {
         const first = yield* self.#firstTaken(chain, stations.filter((s) => serving.has(s)), takenBy, h.head.genesis);
         const b: Brought = "now" in first ? first.now : { took: false, refused: first.refused() };
         if (b.took) {
+          // (held, pending no more, the cloud sent it: `hold`)
           yield* self.#taken(signed, chain);
-          yield* Effect.ignore(self.#toCloud([entry], true));
           continue;
         }
         if (b.refused !== null) {

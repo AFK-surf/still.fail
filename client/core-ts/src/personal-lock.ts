@@ -423,9 +423,13 @@ export class PersonalLock {
     const off = aside ?? (same ? had.filter((e) => !on.has(hashOf(e))) : []);
     this.#pinned.set(sub, entries);
     this.#aside.set(sub, off);
-    // (what was pending and is on the chain now: a station took it)
+    // (what was pending and is on the chain now: a station took it; the cloud sent it then, never waited on)
     const pending = this.#pending.get(sub) ?? [];
-    if (pending.some((x) => on.has(hashOf(x.entry)))) this.#putPending(sub, pending.filter((x) => !on.has(hashOf(x.entry))));
+    if (pending.some((x) => on.has(hashOf(x.entry)))) {
+      this.#putPending(sub, pending.filter((x) => !on.has(hashOf(x.entry))));
+      const taken = pending.filter((x) => on.has(hashOf(x.entry))).map((x) => x.entry);
+      this.#env.runner.fork(Effect.ignore(this.#env.cloud(sub, "POST", PATH, { entries: taken })));
+    }
     const keptAside = off.length === had.length && off.every((e, i) => e === had[i]) ? Effect.void : Effect.mapError(off.length === 0 ? this.#env.host.storageDelete(asideAs(sub)) : this.#env.host.storageSet(asideAs(sub), utf8(JSON.stringify(off))), asCoreError);
     return Effect.andThen(keptAside, Effect.mapError(this.#env.host.storageSet(keptAs(sub), utf8(JSON.stringify(entries))), asCoreError));
   }
@@ -642,7 +646,7 @@ export class PersonalLock {
   }
 
   /// In a turn: `e` (of `chain`), pending, taken by a station past waiting: pinned where it goes on from the chain
-  /// pinned (else the next read or delivery decides), pending no more, the cloud sent it.
+  /// pinned (else the next read or delivery decides), pending no more and the cloud sent it as it is pinned (`#pin`).
   #tookLate(sub: string, e: Entry, chain: Entry[]): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const now = this.#pinned.get(sub) ?? [];
@@ -651,8 +655,8 @@ export class PersonalLock {
         const t = this.#chosen(sub, chain);
         if (t !== null && t.changed) yield* this.#pin(sub, t.kept.entries, t.kept.aside);
       }
-      this.#putPending(sub, (this.#pending.get(sub) ?? []).filter((x) => hashOf(x.entry) !== hashOf(e)));
-      this.#env.runner.fork(Effect.ignore(this.#env.cloud(sub, "POST", PATH, { entries: [e] })));
+      // (pending no more as it is pinned, and the cloud sent it then: `#pin`; not pinned, it stays pending, the next read
+      // or delivery deciding)
       this.#seen.delete(sub);
       this.#env.changed();
     });
