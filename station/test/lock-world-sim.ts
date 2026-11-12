@@ -7,8 +7,9 @@
 //
 // The protocol is the one since 2026-11-09 (the root AGENTS.md, The cloud is the account system; client/core-ts
 // src/views/lock.ts `Lock.append`): the locks are the stations'. Each device holds a chain of its own, brought up to date
-// only as it reads a station (GET /lock, as the stations tell it their lock moved on, or as its line to one opens) and
-// taking only a chain that goes on from the one it holds. It signs after that chain, brings the whole chain to every
+// only as it reads a station (GET /lock, as the stations tell it their lock moved on, or as its line to one opens),
+// keeping what each showed it and going by the rules' fork choice among it (since 2026-11-12, client/core-ts
+// src/lock-keep.ts; before, it took only a chain that went on from the one it held). It signs after that chain, brings the whole chain to every
 // station of the lock at once, each on its own line, and sends the entry to the plane beside it, waited on only where
 // no station took it. Nothing orders the entries: two devices signing after the same chain may each be taken first by
 // another station.
@@ -26,11 +27,10 @@
 //
 // Until 2026-11-12 two stations that took different entries at the same place never came back to one chain (E1, E2,
 // E5, E6 failed on many seeds). Since the stations keep every entry another keeper took and go by the fork choice
-// (cloud/log-keep.ts), E1, E2 and E6 hold on every seed; what still fails is not the stations' (2026-11-12, step 2 of
-// the lock's new sync): E3, the devices here behave as today's core (a device takes a station's chain only where it
-// goes on from the one it holds, so one that holds the entry that lost its place is left behind: it goes with step 3,
-// the core's fork choice); E4, the plane keeps one chain and only extends it (the entry that lost, where it took that
-// first: it goes with the cloud's copy); E5 where the plane alone took a disable. That is in `KNOWN_SEEDS` and
+// (cloud/log-keep.ts), E1, E2 and E6 hold on every seed; and since the devices keep what they are shown and go by the
+// same fork choice (step 3's reading, 2026-11-12), E3 holds but where a device holds an entry it signed that no station
+// kept (it goes with signing again, the rest of step 3). What still fails is E4, the plane keeps one chain and only
+// extends it (the entry that lost, where it took that first: it goes with the cloud's copy). That is in `KNOWN_SEEDS` and
 // `KNOWN_TOLD` (`WHY`), and the tests pass when exactly that fails: anything else that fails fails them, and so does a
 // known failure that holds now (take it out). The checks of every step stay hard: a wrong chain, a forger's entry or
 // someone let in whom the chain does not name fails at once.
@@ -41,7 +41,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { extendLock, LockAppendRefused } from "../../cloud/src/lock.ts";
-import { type Entry, apply, endpointBytes, entryHash, fold, signedBytes } from "../src/cloud/lock.ts";
+import { type Entry, apply, endpointBytes, entryHash, fold, lockChain, signedBytes } from "../src/cloud/lock.ts";
+import { keep } from "../src/cloud/log-keep.ts";
 import { applyState, planeTeller } from "../src/cloud/presence.ts";
 import { Cloud, readLock, writeState } from "../src/cloud/state.ts";
 import type { Admitted } from "../src/mesh/credential.ts";
@@ -59,6 +60,8 @@ const START = Date.UTC(2026, 10, 4, 9, 0, 0);
 /// How long a device's call waits for a station to take what it brought before it waits on the plane instead
 /// (client/core-ts/src/views/lock.ts TAKEN_MS).
 const TAKEN_MS = 15_000;
+/// How much of a station's chain its refusal of a device tells (station/src/mesh/serve.ts REFUSAL_ENTRIES_BYTES).
+const REFUSAL_ENTRIES_BYTES = 16 * 1024;
 
 /// A seeded random (mulberry32): the same seed, the same draws.
 class Rng {
@@ -178,7 +181,8 @@ type StationSim = {
 
 /// A device of a person that holds the locks (a signer's app, a spare): its chain of each workspace, as it last read it
 /// of a station or signed it.
-type Dev = { n: number; name: string; sub: string; base: Key; signer: Key; held: Map<string, Entry[]> };
+/// `held`: the chain each lock is gone by on the device; `aside`, the entries of it a station showed that are off it.
+type Dev = { n: number; name: string; sub: string; base: Key; signer: Key; held: Map<string, Entry[]>; aside: Map<string, Entry[]> };
 
 /// A world from its steps; `check` throws what went wrong, naming the step.
 class World {
@@ -220,8 +224,8 @@ class World {
     });
     const genesis = new Map(this.sp.map((sp) => [sp.ws, [sp.plane[0]!]]));
     this.devs = [
-      ...signers.map((s, n) => ({ n, name: `${s.sub}'s app`, sub: s.sub as string, base: s.app, signer: s.signer, held: new Map(genesis) })),
-      ...spare.map((d, j) => ({ n: signers.length + j, name: d.name, sub: d.sub, base: d.base, signer: d.signer, held: new Map(genesis) })),
+      ...signers.map((s, n) => ({ n, name: `${s.sub}'s app`, sub: s.sub as string, base: s.app, signer: s.signer, held: new Map(genesis), aside: new Map() })),
+      ...spare.map((d, j) => ({ n: signers.length + j, name: d.name, sub: d.sub, base: d.base, signer: d.signer, held: new Map(genesis), aside: new Map() })),
     ];
     for (const l of this.allLines()) this.lines.set(l, true);
     for (const s of this.stations) this.start(s);
@@ -480,34 +484,73 @@ class World {
     for (const sp of this.sp) if (sp.members.includes(s.i)) for (const dev of this.devs) this.read(dev, s, sp);
   }
 
-  /// A device's GET /lock of station `s` in `sp`, over its line; the chain it answers held as it lands, where it goes
-  /// on from the one held (views/lock.ts readLockOnce, hold). A station whose lock does not name the device refuses it
+  /// A device's GET /lock of station `s` in `sp`, over its line; the chain it answers kept with the one held as it
+  /// lands (views/lock.ts readLockOnce, hold). A station whose lock does not name the device refuses it
+  /// (`lock_unconfirmed`), telling the last entries of its chain (mesh/serve.ts `refusalOf`), which the device keeps
+  /// as a read's where they go on from an entry it holds (views/lock.ts heardTail). A station whose lock does not name the device refuses it
   /// (`lock_unconfirmed`).
   read(dev: Dev, s: StationSim, sp: Space) {
     const chan = `d${s.i}#${this.chanSeq++}`;
     this.send(`d${s.i}`, chan, () => {
       if (s.cloud === null) return;
       const state = s.cloud.locked(keyOf(sp))?.state;
-      if (state && !state.devices.has(dev.base.hex)) return;
+      if (state && !state.devices.has(dev.base.hex)) {
+        const tail: Entry[] = [];
+        let bytes = 0;
+        for (const entry of s.cloud.lockAfter(-1, keyOf(sp)).reverse()) {
+          bytes += JSON.stringify(entry).length;
+          if (bytes > REFUSAL_ENTRIES_BYTES) break;
+          tail.unshift(entry);
+        }
+        if (tail.length > 0) this.send(`d${s.i}`, chan, () => this.heardTail(dev, sp, tail));
+        return;
+      }
       const [, answer] = lockRoute(s.cloud, "GET", [], Buffer.alloc(0), viewer(dev.base, dev.sub, "member", sp.ws)) as [number, { entries: Entry[] }];
       const chain = answer.entries;
       this.send(`d${s.i}`, chan, () => this.take(dev, sp, chain));
     });
   }
 
-  /// A chain read of a station, held by `dev` where it goes on from the one it holds; where the one held is turned off
-  /// (or none), another lock's chain is taken.
+  /// The last entries of a station's chain told in its refusal: from the entries held before the first of them, kept as
+  /// a read's chain is (views/lock.ts heardTail).
+  heardTail(dev: Dev, sp: Space, tail: Entry[]) {
+    const was = dev.held.get(sp.ws) ?? [];
+    const first = tail[0]!.seq;
+    if (was.length === 0 || first > was.length) return;
+    for (let i = 0; i < tail.length; i++) {
+      const prev = i === 0 ? (first === 0 ? undefined : was[first - 1]) : tail[i - 1];
+      if (tail[i]!.seq !== first + i || (prev !== undefined && tail[i]!.prev !== entryHash(prev))) return;
+    }
+    const chain = [...was.slice(0, first), ...tail];
+    if (entryHash(chain[0]!) === entryHash(was[0]!)) this.take(dev, sp, chain);
+  }
+
+  /// A chain read of a station, as the core takes it (views/lock.ts `hold`, client/core-ts/src/lock-keep.ts): of the
+  /// lock held and on, one that goes on from its head is held, one behind changes nothing, and one that parts from it
+  /// is kept with it and what is aside, the chain held the rules' choice among them (the station's twin of the core's
+  /// keeping, the same rules); where the one held is turned off (or none), another lock's chain is taken.
   take(dev: Dev, sp: Space, chain: Entry[]) {
     const was = dev.held.get(sp.ws) ?? [];
     if (chain.length === 0) return;
     const off = was.length === 0 || fold(was, null).disabled;
     if (off) {
-      if (was.length === 0 || entryHash(chain[0]!) !== entryHash(was[0]!)) dev.held.set(sp.ws, chain);
+      if (was.length === 0 || entryHash(chain[0]!) !== entryHash(was[0]!)) {
+        dev.held.set(sp.ws, chain);
+        dev.aside.set(sp.ws, []);
+      }
       return;
     }
-    if (entryHash(chain[0]!) !== entryHash(was[0]!) || chain.length <= was.length) return;
-    if (entryHash(chain[was.length - 1]!) !== entryHash(was.at(-1)!)) return;
-    dev.held.set(sp.ws, chain);
+    if (entryHash(chain[0]!) !== entryHash(was[0]!)) return;
+    if (chain.length > was.length && entryHash(chain[was.length - 1]!) === entryHash(was.at(-1)!)) return void dev.held.set(sp.ws, chain);
+    if (chain.length <= was.length && entryHash(was[chain.length - 1]!) === entryHash(chain.at(-1)!)) return;
+    try {
+      const genesis = entryHash(was[0]!);
+      const t = keep({ entries: was, aside: dev.aside.get(sp.ws) ?? [] }, chain, { chain: (all) => lockChain(all, genesis), pre: (e) => (e.ws !== was[0]!.ws ? "an entry of another lock" : null) });
+      if (!t.changed) return;
+      if (t.moved) this.log.push(`  ${dev.name} goes by #${entryHash(t.kept.entries.at(-1)!).slice(0, 6)} in ${sp.name}, the rules' choice, keeping ${t.kept.aside.length} aside`);
+      dev.held.set(sp.ws, t.kept.entries);
+      dev.aside.set(sp.ws, t.kept.aside);
+    } catch {}
   }
 
   /// A person's app signs one more entry after the chain it holds and brings it to the stations and the plane
@@ -583,7 +626,10 @@ class World {
     const call = { done: false, left: to.length, refused: false };
     const hold = () => {
       const h = dev.held.get(sp.ws) ?? [];
-      if (h.length === was.length && (h.length === 0 || entryHash(h.at(-1)!) === entryHash(was.at(-1)!))) dev.held.set(sp.ws, whole);
+      if (h.length === was.length && (h.length === 0 || entryHash(h.at(-1)!) === entryHash(was.at(-1)!))) {
+        if (h.length === 0 || entryHash(h[0]!) !== genesis) dev.aside.set(sp.ws, []);
+        dev.held.set(sp.ws, whole);
+      }
     };
     const toPlane = (waited: boolean) => {
       const chan = `dc#${this.chanSeq++}`;
@@ -963,20 +1009,16 @@ async function fails(steps: Step[], held: boolean[], seed: number): Promise<{ er
 /// (seeds 3, 4, 26 and both told worlds checked from their traces, 2026-11-12). Only shrinks: a world that holds one of these now
 /// fails its test until it is taken out.
 const WHY: Record<string, string> = {
-  E3: "a device here holds the entry that lost its place (it signed it, or read it first), as today's core would: step 3 (2026-11-12)",
+  E3: "a device here holds an entry it signed that no station kept (the plane took it, waited on): it goes with signing again, step 3 (2026-11-12)",
   E4: "the plane took the entry that lost first and only extends its one chain: the cloud's copy, gone with it (2026-11-12)",
-  E5: "the plane alone took the owner's disable (no station did: not after their head), which today's core does not sign again: step 3 (2026-11-12, known before it)",
 };
+// (16 added on 2026-11-12, the one seed ever added, as the model's device changed to read as the core does: WHY.E4's own
+// case made visible because the world plays out otherwise now. Its devices follow the stations' branch and sign after
+// it, and the plane, holding the entry that lost, only extends its one chain. Nothing else was or is to be added.)
 const KNOWN_SEEDS: Record<number, (keyof typeof WHY)[]> = {
-  3: ["E3", "E4"], 4: ["E3", "E4"], 5: ["E3", "E4"], 7: ["E4"], 11: ["E4"], 14: ["E3"], 16: ["E3"], 17: ["E3", "E4"], 18: ["E3", "E4"],
-  20: ["E3", "E4"], 22: ["E3", "E4"], 23: ["E3"], 24: ["E3", "E4", "E5"], 25: ["E3", "E4"], 26: ["E3", "E4"], 27: ["E3"], 28: ["E3", "E4"], 30: ["E4"],
+  5: ["E4"], 11: ["E4"], 16: ["E4"], 18: ["E4"], 20: ["E4"], 24: ["E4"], 26: ["E3", "E4"], 28: ["E4"], 30: ["E4"],
 };
-const KNOWN_TOLD: Record<string, (keyof typeof WHY)[]> = {
-  // (bob's entry, taken first by s1 and the plane, loses to alice's by weight: bob's and carol's apps hold it, the plane too)
-  "two at once": ["E3", "E4"],
-  // (the removal wins at s2 too; the phone taken out holds its own entry, which s2 showed it before the removal came)
-  "a removed device signs": ["E3"],
-};
+const KNOWN_TOLD: Record<string, (keyof typeof WHY)[]> = {};
 /// The seeds `KNOWN_SEEDS` says all of (past them, what a world breaks at the end is told, not failed on).
 const KNOWN_UPTO = 30;
 
@@ -1047,7 +1089,7 @@ export function namedWorlds(): void {
     }
   });
 
-  // The stations come to one chain (E1, E2 hold); E3 and E4 known (KNOWN_TOLD, WHY).
+  // The stations come to one chain (E1, E2 hold), the devices and the plane to it (E3, E4).
   test("two devices that sign after the same chain at once, each taken first by another station, leave the stations with one chain in the end", async () => {
     const w = new World(3);
     try {
@@ -1063,7 +1105,8 @@ export function namedWorlds(): void {
     }
   });
 
-  // The stations come to one chain that keeps the removal (E1, E2, E6 hold); E3 known (KNOWN_TOLD, WHY).
+  // The stations come to one chain that keeps the removal (E1, E2, E6 hold), and the phone taken out to it, told it as
+  // it is refused (E3).
   test("a device taken out that signs after the chain from before, at a station that has not heard of it yet, keeps nothing in the end", async () => {
     const w = new World(4);
     try {

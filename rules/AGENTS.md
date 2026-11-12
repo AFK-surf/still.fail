@@ -10,7 +10,8 @@
   (`protocol/check.sh`); a change to what they sign changes the model too.
 - `src/lock/chain.mbt` (a log's active chain by the fork choice of `src/fork`), `src/lock/roster.mbt` (a workspace's
   list from its people's own logs) and `fold_person_ws` are the rules the lock's next sync is built to (the root
-  AGENTS.md, 2026-11-12): the station goes by `lock_chain_js` and `person_chain_js` (`station/src/cloud/log-keep.ts`,
-  leaving out the `ws.*` kinds), nothing calls the rest yet, and `fold_person` refuses the `ws.*` kinds until every
+  AGENTS.md, 2026-11-12): the station and the core go by `lock_chain_js` and `person_chain_js`
+  (`station/src/cloud/log-keep.ts`, `client/core-ts/src/lock-keep.ts`, leaving out the `ws.*` kinds), nothing calls the
+  rest yet, and `fold_person` refuses the `ws.*` kinds until every
   station takes them. They are held to the models they were written from (`station/test/lock-fork-choice-model.ts`,
   `station/test/lock-roster-model.ts`) by `station/test/rules-fork.test.ts`: a change to either changes both.

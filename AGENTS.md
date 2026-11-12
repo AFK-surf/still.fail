@@ -138,8 +138,9 @@ chain (`station/test/lock-world-sim.ts` lists what that broke and what still doe
 said in its people's own logs). The stations go by the fork choice now (`station/src/cloud/log-keep.ts`), keeping a
 branch only for what another keeper took: a station never makes a fork itself (what a device brings goes on from its
 head, or is refused as before), so it never moves off an entry for one that came to it alone; stations of a lock still
-give each other all they keep and come to one chain. Until the core follows (step 3), a device of today's that read an
-entry the stations moved off stays on it. What it is built to (the user, 2026-11-12):
+give each other all they keep and come to one chain. The core keeps what the stations showed it and goes by the same
+fork choice (`client/core-ts/src/lock-keep.ts`), so a device follows them off an entry that lost; one that signed that
+entry does not sign it again yet (step 3). What it is built to (the user, 2026-11-12):
 
 - The lock's adversary is the cloud and every station but the one asked (`rules/protocol/lock.spthy`): only signatures
   of devices on a lock decide. No cloud and no station orders entries, arbitrates between them, or is the one to follow.
