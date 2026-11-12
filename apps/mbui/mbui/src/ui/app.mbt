@@ -948,7 +948,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   // takes it (the tree's nodes, what they take presses by bound to it, or the old view) this one: view_host.mbt)
   view_event_said(fn() { pointing_said_by_host(by) }, fn() {
     pointer_in_now(kind, x, y, button, mods, by~)
-  }, what="pointer")
+  }, what="pointer", input=true)
 }
 
 ///|
@@ -1764,7 +1764,7 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
   rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_back_now(kind, x, progress, edge) }, what="back")
+  view_event(fn() { on_back_now(kind, x, progress, edge) }, what="back", input=true)
 }
 
 ///|
@@ -1831,7 +1831,7 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
   rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   zoom_wheel_kept.val = false
-  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) }, what="wheel")
+  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) }, what="wheel", input=true)
   h_wheel_kept(zoom_wheel_kept.val)
 }
 

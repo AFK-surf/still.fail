@@ -9238,11 +9238,24 @@ pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
 }
 
 ///|
+/// An input from outside (a press, a wheel, a back gesture) handled at `at` by `f`, as Tree::event takes an event, the
+/// tree brought to its moment first outside its batch (Tree::event_said's `brings`): what `f` reaches is where the frame
+/// of that moment draws it.
+pub fn Tree::input(self : Tree, at : Double, f : () -> Unit) -> Unit {
+  self.event_said(at, fn() {  }, f, brings=true)
+}
+
+///|
 /// One event at `at` whose own facts (`said`: what it came by, as a host says it) are so as of its moment: what was due
 /// by then done first (seeing what was so before it), then `said` committed and told (what follows it brought to it,
 /// the event's moment their cause), then `f` taken as Tree::event takes it, finding things as they are with it. Inside
 /// another event, both in that one's, as one change.
-pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
+///
+/// An input (`brings`: a press, a wheel, a key, words typed) finds the tree brought to its moment between `said` and
+/// `f`, outside both batches (Tree::bring_to), as a frame lays it out: what that layout tells (a list's slots set, read
+/// by bindings through what is worked out of them) is told and laid out in it, not marked in `f`'s batch and left there
+/// while `f` finds what it reaches (a row 120 lower than drawn, an input 88 ms after the last frame, 2026-11-12).
+pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> Unit, brings? : Bool = false) -> Unit {
   // (in an event already: its moment, settled as it began)
   if self.cause_at >= 0.0 {
     @signals.start_batch()
@@ -9259,6 +9272,9 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   @signals.start_batch()
   @signals.untracked(said)
   @signals.end_batch()
+  if brings {
+    self.bring_to(at)
+  }
   @signals.start_batch()
   @signals.untracked(f)
   @signals.end_batch()

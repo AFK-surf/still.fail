@@ -125,7 +125,8 @@ fn RcCase::off_foot(self : RcCase) -> Double {
 ///|
 /// `tree` walked to each of `looks` (in order), `events` told at their moments on the way (each between frames: before
 /// the frame of a look at the same moment), frames drawn between at `rate` a second (on its grid from 0; none at 0 nor
-/// at `from` or before, where it was walked to already), a frame at each look; what `read` says at each.
+/// at `from` or before, where it was walked to already), a frame at each look; what `read` says at each. `inputs`: the
+/// events told as inputs from outside are (Tree::input).
 fn[T] rc_walk(
   tree : @view.Tree,
   events : Array[(Double, () -> Unit)],
@@ -133,6 +134,7 @@ fn[T] rc_walk(
   rate : Double,
   read : () -> T,
   from? : Double = 0.0,
+  inputs? : Bool = false,
 ) -> Array[T] {
   let out = []
   let step = if rate > 0.0 { rc_second / rate } else { 0.0 }
@@ -155,7 +157,11 @@ fn[T] rc_walk(
   for at in looks {
     while e < events.length() && events[e].0 <= at {
       frames_to(events[e].0)
-      tree.event(events[e].0, events[e].1)
+      if inputs {
+        tree.input(events[e].0, events[e].1)
+      } else {
+        tree.event(events[e].0, events[e].1)
+      }
       e = e + 1
     }
     frames_to(at)

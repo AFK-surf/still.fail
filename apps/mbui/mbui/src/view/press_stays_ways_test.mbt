@@ -4,8 +4,9 @@
 // list_rows_come_test's), the press told at its moment, in one jump and at 60, 120, 24 and 7 a second. A press while the
 // list holds a block so (its scroll put each layout) finds what it reaches where it is drawn (Tree::bring_to: what the
 // event's layout told laid out in it too; a second press of the button reached the row four under it, 2026-11-12). The
-// last two, an input 88 or 150 ms after the last frame (a phone's frames hang 40 to 90 ms), are red: that input's
-// layout lays the list's blocks out lower than the frame at that moment draws them (2026-11-12, not mended yet).
+// last two, an input 88 or 150 ms after the last frame (a phone's frames hang 40 to 90 ms), told as inputs are
+// (Tree::input): its layout outside its event's batch, what it sets of the slots told to the spacers' bound heights in
+// it; inside the batch it laid the list's blocks out 120 lower than the frame at that moment draws them (2026-11-12).
 
 ///|
 /// How tall what opens over each row's button.
@@ -197,7 +198,7 @@ test "a page's list holding a pressed block as what it opened over it grows, no 
     }
     let got = rc_walk(tree, [(rc_at, fn() { ps_ways_press(tree, buttons, 3) }), (rc_at + gap, ask)], looks, 0.0, fn() {
       rc_y(tree, "行3")
-    })
+    }, inputs=true)
     assert_true(reached.val, msg="after \{gap} ms")
     assert_true(got.iter().all(fn(y) { (y - 120.0).abs() < 1.0e-6 }), msg="after \{gap} ms: \{Repr(got)}")
   }
@@ -216,7 +217,7 @@ test "a page's list holding a pressed block as what it opened over it grows, no 
     }
     let drawn = rc_walk(tree, [(rc_at, fn() { ps_ways_press(tree, buttons, 3) }), (rc_at + gap, ask)], [rc_at, rc_at + gap], 0.0, fn() {
       Array::makei(5, fn(i) { rc_y(tree, "行\{i + 3}") })
-    })
+    }, inputs=true)
     let then = drawn[1]
     assert_eq(laid.length(), 5, msg="after \{gap} ms")
     for i in 0..<5 {
