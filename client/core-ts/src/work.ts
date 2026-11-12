@@ -38,15 +38,27 @@ export const work = {
   /// Records cloned whole into a row (views.ts #chatRow `whole`: a chat's own row, made for one chat at a time). A list's
   /// rows clone none (#listRow takes of its record what it holds, the values shared).
   rowsCloned: 0,
-  /// Rows a chat list took as kept beside their records (db/account.ts `chat_row`, views.ts listRowKey): neither made
-  /// nor their records read.
-  rowsKept: 0,
-  /// Rows of a list kept beside their records as these are written (db/account.ts #keepListRow) or after a list made
-  /// them (views.ts #keepMade).
-  rowsWritten: 0,
+  /// What is kept beside its record (db/kept.ts KEPT), each declaration's: values read back as kept (`<name>Kept`:
+  /// neither made nor their records read), put beside their records (`Written`: as these are written, or after a reader
+  /// made them as it read them), and made by the views as their records were written (`Made`).
+  listRowKept: 0,
+  listRowWritten: 0,
+  listRowMade: 0,
+  overviewFitKept: 0,
+  overviewFitWritten: 0,
+  overviewFitMade: 0,
+  profileRowKept: 0,
+  profileRowWritten: 0,
+  profileRowMade: 0,
   /// Items of keyed lists put through their shape as they go out (output.ts), not taken as made beside them
   /// (conform.ts shapedBeside).
   conformed: 0,
+  /// Stations' accounts' rows made of their parts (views.ts #profileRowsMade), as read or as written: each profile
+  /// decorated.
+  profileRows: 0,
+  /// Values copied, decorated and put through their shape whole as they go out (output.ts), not taken as made beside
+  /// them (conform.ts shapedBeside: the accounts' rows, views.ts `profiles`).
+  wholeShaped: 0,
   /// What a chat's row offers only as it is pressed, held, swiped or pointed at, made of its record (views.ts #chatRow
   /// whole, #rowMenu): its menu's (who may share it, publish it, its links in Slack and Feishu), its swipe's question, its
   /// watch's words. A list's rows make none: a chat's whole row (`chatRow`) does, made for one chat at a time.

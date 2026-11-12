@@ -85,8 +85,8 @@ test("a_chat_list_is_made_with_no_rows_menu_swipe_question_or_watch", async () =
   const { u } = await listed();
   const made = workSince(before);
   assert.equal(items(u.value).length, 8);
-  // (made as their records were written and kept beside them, db/account.ts `chat_row`, or as the list read them)
-  assert.ok(made.rows + made.rowsWritten >= 8, `${made.rows} rows made as read, ${made.rowsWritten} as written`);
+  // (made as their records were written and kept beside them, db/kept.ts KEPT.listRow, or as the list read them)
+  assert.ok(made.rows + made.listRowWritten >= 8, `${made.rows} rows made as read, ${made.listRowWritten} as written`);
   // (main: 8 menus, 8 swipes' questions, 1 watch: every row's, the list's)
   assert.deepEqual([made.rowMenus, made.swipeAsks, made.watches], [0, 0, 0]);
   // Nor what a row's whole row says besides: none of it goes out on the list.

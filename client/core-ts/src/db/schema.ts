@@ -257,8 +257,7 @@ export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overvie
 const partInsert = (j: string, address: string) =>
   `INSERT INTO station_part (address, ${PART_COLUMNS.map(([c]) => c).join(", ")}) SELECT ${address}, ${PART_COLUMNS.map(([, of]) => of(j)).join(", ")}`;
 
-/// The triggers keeping each overview's part (station_part) and dropping its readers' verdicts (station_fit) as it
-/// changes or goes, whoever writes it, by name, as sqlite_master keeps them (no `IF NOT EXISTS`: SQLite keeps the
+/// The triggers keeping each overview's part (station_part) as it changes or goes, whoever writes it, by name, as sqlite_master keeps them (no `IF NOT EXISTS`: SQLite keeps the
 /// statement without it).
 const overviewTriggers = (): [string, string][] => [
   ["station_part_put", `CREATE TRIGGER station_part_put AFTER INSERT ON station WHEN new.kind = 'overview'
@@ -275,18 +274,6 @@ const overviewTriggers = (): [string, string][] => [
       BEGIN
         DELETE FROM station_part WHERE address = old.address;
       END`],
-  ["station_fit_put", `CREATE TRIGGER station_fit_put AFTER INSERT ON station WHEN new.kind = 'overview'
-      BEGIN
-        DELETE FROM station_fit WHERE address = new.address;
-      END`],
-  ["station_fit_set", `CREATE TRIGGER station_fit_set AFTER UPDATE OF json ON station WHEN new.kind = 'overview' AND old.json IS NOT new.json
-      BEGIN
-        DELETE FROM station_fit WHERE address = new.address;
-      END`],
-  ["station_fit_drop", `CREATE TRIGGER station_fit_drop AFTER DELETE ON station WHEN old.kind = 'overview'
-      BEGIN
-        DELETE FROM station_fit WHERE address = old.address;
-      END`],
 ];
 
 /// A statement as compared with sqlite_master's: its spaces and line breaks one space.
@@ -299,9 +286,7 @@ const spaced = (s: string) => s.replace(/\s+/g, " ").trim();
 /// read a few hundred bytes, or a chat's page some of the overview, not an overview of some 150 KB (nor walk its pages
 /// to a column after it). Kept by triggers on `station`, as `said` is, so a core that knows nothing of it (a web page
 /// still open from before, an app put back to an older one) keeps it too: nothing it holds is older than its overview.
-/// And whether this core can read each overview (`station_fit`), judged as it is written (account.ts #overviewWritten)
-/// by the id of the shapes that judged it (views.ts OVERVIEW_FIT), dropped by triggers as the overview changes or goes,
-/// whoever writes it, so a core that knows nothing of it leaves no verdict on an overview it wrote. Made where missing
+/// (What is made of an overview and kept beside it, whether this core can read it, is db/kept.ts's.) Made where missing
 /// at every open, as `said`; a trigger whose statement is not this core's (an earlier core's, without a column of
 /// these) made again, the columns added where they are not there, and every part made again with them; overviews
 /// from before get theirs at once, SQLite reading them itself (no overview crosses to the core). An older core opening
@@ -314,7 +299,6 @@ export function ensureOverviewParts(sql: Sql): void {
   try {
     sql.exec(`
       CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL, row TEXT, chat TEXT, formerly TEXT, profiles TEXT);
-      CREATE TABLE IF NOT EXISTS station_fit (address TEXT NOT NULL, shapes TEXT NOT NULL, readable INTEGER NOT NULL, PRIMARY KEY (address, shapes)) WITHOUT ROWID;
     `);
     const had = new Map(sql.all("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'station'").map((r) => [String(r[0]), String(r[1])]));
     let remade = false;
@@ -330,7 +314,7 @@ export function ensureOverviewParts(sql: Sql): void {
       if (was !== undefined && spaced(was) === spaced(statement)) continue;
       if (was !== undefined) {
         sql.exec(`DROP TRIGGER ${name}`);
-        if (name.startsWith("station_part_")) remade = true;
+        remade = true;
       }
       sql.exec(statement);
     }
@@ -341,60 +325,6 @@ export function ensureOverviewParts(sql: Sql): void {
     for (const [address] of missing) {
       sql.run(`${partInsert("st.json", "st.address")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [address]);
     }
-    sql.exec("COMMIT");
-  } catch (e) {
-    try {
-      sql.exec("ROLLBACK");
-    } catch {
-      // Rolled back already.
-    }
-    throw e;
-  }
-}
-
-/// The triggers dropping a chat's list row kept beside it (`chat_row`) as its record is written or goes, whoever writes
-/// it: a record put (an INSERT OR REPLACE runs no DELETE trigger), changed in any column (its JSON, its `unread`, its
-/// place) or deleted. By name, as sqlite_master keeps them.
-const listRowTriggers = (): [string, string][] => [
-  ["chat_row_put", `CREATE TRIGGER chat_row_put AFTER INSERT ON chat
-      BEGIN
-        DELETE FROM chat_row WHERE station = new.station AND id = new.id;
-      END`],
-  ["chat_row_set", `CREATE TRIGGER chat_row_set AFTER UPDATE ON chat
-      BEGIN
-        DELETE FROM chat_row WHERE station = old.station AND id = old.id;
-        DELETE FROM chat_row WHERE station = new.station AND id = new.id;
-      END`],
-  ["chat_row_drop", `CREATE TRIGGER chat_row_drop AFTER DELETE ON chat
-      BEGIN
-        DELETE FROM chat_row WHERE station = old.station AND id = old.id;
-      END`],
-];
-
-/// Each listed chat's row as its list shows it (views.ts #listRow), kept beside its record: what the list reads of
-/// it whole (`whole`, what the core's own readers read too) and as it goes out (`sent`, ListedChat), what its stand-in
-/// says of it before it is made (`state`), and the key of what else it was made with (`key`: views.ts listKey, the
-/// language, the viewer, the workspace's members, its station, the prefs it reads, the maker and the shapes). A list
-/// reads a kept row whose key is the one in force, and no record. Kept by triggers on `chat` (listRowTriggers), as
-/// `station_fit` is on `station`: whoever writes a record (an older core too, which knows nothing of this table), its
-/// kept row goes with it, in the same statement; this core's writer puts the new one after it (account.ts #putChatRow),
-/// for a chat that had one: a row is first kept as a list reads its chat, so the table holds the chats lists showed.
-/// Made where missing at every open; where a trigger was missing or not this core's (an older core made the table
-/// `chat` again, its triggers with it), every kept row goes, nothing left that a record outlived.
-export function ensureListRows(sql: Sql): void {
-  sql.exec("BEGIN IMMEDIATE");
-  try {
-    sql.exec("CREATE TABLE IF NOT EXISTS chat_row (station TEXT NOT NULL, id TEXT NOT NULL, key TEXT NOT NULL, state TEXT, whole TEXT NOT NULL, sent TEXT NOT NULL, PRIMARY KEY (station, id))");
-    const had = new Map(sql.all("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'chat'").map((r) => [String(r[0]), String(r[1])]));
-    let remade = false;
-    for (const [name, statement] of listRowTriggers()) {
-      const was = had.get(name);
-      if (was !== undefined && spaced(was) === spaced(statement)) continue;
-      if (was !== undefined) sql.exec(`DROP TRIGGER ${name}`);
-      sql.exec(statement);
-      remade = true;
-    }
-    if (remade) sql.exec("DELETE FROM chat_row");
     sql.exec("COMMIT");
   } catch (e) {
     try {

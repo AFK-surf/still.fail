@@ -70,8 +70,14 @@ export class Output {
       const keep = observe(() => {
         const input = topic.topic === "chat" && topic.compact === true ? compactChat(raw) : raw;
         const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", next) : input;
-        const v = present.decorate(topic, copy(skeleton), c);
-        out = ty === undefined ? { ok: v } : conformTy(ty, v);
+        // (as it was made beside it, where it was: the accounts' rows beside their whole value, views.ts `profiles`)
+        const made = ty === undefined ? undefined : keptShape(skeleton, ty);
+        if (made !== undefined) out = { ok: made };
+        else {
+          work.wholeShaped++;
+          const v = present.decorate(topic, copy(skeleton), c);
+          out = ty === undefined ? { ok: v } : conformTy(ty, v);
+        }
       }, () => {
         this.#fresh = false;
         this.#again();

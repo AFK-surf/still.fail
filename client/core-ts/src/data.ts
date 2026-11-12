@@ -7,7 +7,8 @@
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
 import { OVERVIEW_CHAT, OVERVIEW_PROFILED } from "./db/schema.ts";
-import { AccountDb, LIST_OF, foundOf, type ChatFound, type Changes, type Derive, type HeadRow, type ListKind, type ListRow, type ListRowMaker, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
+import { AccountDb, LIST_OF, foundOf, type ChatFound, type Changes, type Derive, type HeadRow, type ListKind, type LogTable, type RowChange, frozen } from "./db/account.ts";
+import { KEPT as BESIDE, type AnyKept, type Kept, type Maker, type Owner } from "./db/kept.ts";
 import { CHAT_READS, chatKeys, type ChatRead, type ReadKey } from "./db/chat-reads.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
@@ -313,10 +314,8 @@ export class Data {
   readonly #listReads = new Map<string, { signal: ReactiveSource<boolean>; station: string; kind: ListKind }>();
   readonly #slackNamesReads = new Map<string, { signal: ReactiveSource<number>; revision: number; names: [string, string][]; sawDifferent: boolean }>();
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
-  /// How the views judge whether this core can read an overview (judgeOverviews).
-  #fit: OverviewFit | null = null;
-  /// How the views make a listed chat's row (keepListRows).
-  #listRows: ListRowMaker | null = null;
+  /// How the views make what is kept beside a record (makes; db/kept.ts).
+  readonly #makers = new Map<AnyKept, Maker<unknown>>();
   /// Sign-ins for new profiles as their station answered a step of them (`login.new`, `login.code`), by station and
   /// login: shown in its overview's `logins` while the overview still has the login where the step found it (`from`: the
   /// state it moved on from; null, not listed yet). A code sent showed its field again, empty, until the station's next
@@ -425,8 +424,7 @@ export class Data {
       }
       if (db.readOnly) note = { kind: "newer", detail: null };
       db.onCommit = (changes) => this.#committed(changes);
-      db.fit = this.#fit;
-      db.listRows = this.#listRows;
+      for (const [d, maker] of this.#makers) db.kept.made(d, maker);
       db.onFull = (full, error) => this.#setNote(sub, full ? { kind: "full", detail: error } : null);
       this.#dbs.set(sub, db);
       if (note) this.#setNote(sub, note);
@@ -1316,18 +1314,38 @@ export class Data {
     return this.of(station)?.overviewFormerly(station);
   }
 
-  /// How the views judge whether this core can read an overview, for each database to judge one as it is written and
-  /// keep the verdict beside it (account.ts #overviewWritten).
-  judgeOverviews(fit: OverviewFit | null): void {
-    this.#fit = fit;
-    for (const db of this.#dbs.values()) db.fit = fit;
+  /// How the views make a declaration's values (db/kept.ts), for each database to make them as their records are
+  /// written and keep them beside them.
+  makes<V>(d: Kept<V>, maker: Maker<V> | null): void {
+    if (maker === null) this.#makers.delete(d as AnyKept);
+    else this.#makers.set(d as AnyKept, maker as Maker<unknown>);
+    for (const db of this.#dbs.values()) db.kept.made(d, maker);
   }
 
-  /// How the views make a listed chat's row, for each database to make it as its record is written and keep it beside it
-  /// (account.ts #keepListRow, `chat_row`).
-  keepListRows(maker: ListRowMaker | null): void {
-    this.#listRows = maker;
-    for (const db of this.#dbs.values()) db.listRows = maker;
+  /// An owner's value kept beside its record under `key` (the key in force where none is given), across the databases
+  /// (db/kept.ts `one`): undefined where none is, or its record is shown otherwise than it is held (`overlaid`). Read in
+  /// a computed, it is made again as its record's writer tells (`told`).
+  kept<V>(d: Kept<V>, owner: Owner, key?: string): V | undefined {
+    if (d.told !== undefined) this.#readQuery({ topic: d.told, station: owner[0] });
+    if (d.overlaid === true && this.#overlaid(owner[0])) return undefined;
+    return this.of(owner[0])?.kept.one(d, owner, key);
+  }
+
+  /// The values of `owners` kept under their keys (`keys`), across their databases (db/kept.ts `many`).
+  keptMany<V>(d: Kept<V>, owners: readonly Owner[], keys: readonly string[]): (V | undefined)[] {
+    const out: (V | undefined)[] = owners.map(() => undefined);
+    const by = new Map<AccountDb, number[]>();
+    owners.forEach((o, i) => {
+      const db = this.of(o[0]);
+      if (db) by.set(db, [...(by.get(db) ?? []), i]);
+    });
+    for (const [db, at] of by) db.kept.many(d, at.map((i) => owners[i]), at.map((i) => keys[i])).forEach((v, j) => (out[at[j]] = v));
+    return out;
+  }
+
+  /// A value a reader made of `record` as it read it, kept beside it while that is the record held (db/kept.ts `keep`).
+  keep<V>(d: Kept<V>, owner: Owner, record: unknown, key: string, value: V): void {
+    this.of(owner[0])?.kept.keep(d, owner, record, key, value);
   }
 
   /// The rows of these stations a list shows first, each its row kept beside it under its station's key (`keys`), else
@@ -1342,45 +1360,13 @@ export class Data {
     return [...by].flatMap(([db, list]) => db.listHead(list, limit, mine, keys));
   }
 
-  /// The rows kept beside listed chats' records (station, id) under their stations' keys in force (`keys`), across their
-  /// databases (account.ts keptListRows): undefined where none is kept under it.
-  keptListRows(found: [string, string][], keys: Map<string, string>): (ListRow | undefined)[] {
-    const out: (ListRow | undefined)[] = found.map(() => undefined);
-    const by = new Map<AccountDb, number[]>();
-    found.forEach(([s], i) => {
-      const db = this.of(s);
-      if (db) by.set(db, [...(by.get(db) ?? []), i]);
-    });
-    for (const [db, at] of by) db.keptListRows(at.map((i) => found[i]), keys).forEach((row, j) => (out[at[j]] = row));
-    return out;
-  }
-
-  /// The row kept beside a listed chat's record under `key`, where it was read or kept this run (account.ts).
-  keptListRow(station: string, id: string, key: string): ListRow | undefined {
-    return this.of(station)?.keptListRow(station, id, key);
-  }
-
-  /// A row a list made as it read it, kept beside its record while that is the one held (account.ts keepListRow).
-  keepListRow(station: string, id: string, record: unknown, row: ListRow): void {
-    this.of(station)?.keepListRow(station, id, record, row);
-  }
-
-  /// Whether this core can read a station's overview as kept beside it (account.ts overviewFit): undefined, none held;
-  /// null, nothing kept for this core's shapes, or what is shown is not what is held (overlaid): to be judged as it is
-  /// read (and kept: keepOverviewFit). Read in a computed, it is made again as the overview changes.
+  /// Whether this core can read a station's overview as kept beside it (db/kept.ts KEPT.overviewFit): undefined, none held; null,
+  /// nothing kept for this core's shapes, or what is shown is not what is held (overlaid): to be judged as it is read
+  /// (and kept). Read in a computed, it is made again as the overview changes.
   overviewFit(station: string): boolean | null | undefined {
-    this.#readQuery({ topic: "$overview-fit", station });
-    const db = this.of(station);
-    if (!db) return undefined;
-    const fit = db.overviewFit(station);
-    return fit !== undefined && this.#overlaid(station) ? null : fit;
-  }
-
-  /// A verdict on a station's overview as it is held, judged as it was read (none was kept), kept beside it; none
-  /// where what was judged is not what is held (overlaid).
-  keepOverviewFit(station: string, readable: boolean): void {
-    if (this.#overlaid(station)) return;
-    this.of(station)?.keepOverviewFit(station, readable);
+    const fit = this.kept(BESIDE.overviewFit, [station]);
+    if (fit !== undefined) return fit;
+    return this.of(station)?.overviewHeld(station) === true ? null : undefined;
   }
 
   /// How many sidebar rows these stations have.

@@ -13,7 +13,8 @@ import { EVICT_AFTER_MS } from "../src/store.ts";
 import { attention, choices, models, quotaFor, runnableOn } from "../src/views/models.ts";
 import { OVERVIEW_FIT, answeredAt, betaOffered, blockedUnder, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
-import { installView, profile as presentProfile } from "../src/present.ts";
+import { decorate, installView, profile as presentProfile } from "../src/present.ts";
+import { conformTy } from "../src/conform.ts";
 import { markdown } from "../src/markdown.ts";
 import { work, workSince } from "../src/work.ts";
 import { hostOf, link, overview, prefs, rows, sessions, setup, sorted, threads, ui, workspace, type Ui } from "./views-rig.ts";
@@ -222,6 +223,31 @@ test("an_accounts_row_is_what_the_list_draws_and_its_pages_ask_it_whole", async 
   assert.deepEqual(byKey.value, byStation.value, "the same account by its key or by a station's profile of it");
   assert.deepEqual([byKey.value.key, byKey.value.members.length, byKey.value.profile.check.detail], ["sub:claude:ada@x.com", 2, "可用"]);
   assert.equal(none.value, null, "a profile no station has: none");
+});
+
+test("the_accounts_rows_go_out_as_made_beside_their_whole_value_as_they_went_out_shaped_whole", async () => {
+  // What `profiles` sends is its rows, shaped beside the whole value the core's readers read (views.ts `profiles`):
+  // taken so as it goes out, neither copied, decorated again nor walked by its shape there (output.ts), and the same as
+  // what the whole value went out as when it was.
+  const t = setup();
+  const u = ui();
+  const now = t.host.nowMs();
+  const quota = { state: "ok", windows: [{ label: "5h", usedPercent: 20, resetsAt: now + 3 * 3_600_000 }, { label: "week", usedPercent: 91, resetsAt: now + 50 * 3_600_000 }], resetCount: 1, resetExpiries: [now + 86_400_000], checkedAt: now - 60_000 };
+  t.set(workspace(), { id: "ws", stations: [{ id: "a", name: "alpha", last_seen: null, version: null }, { id: "b", name: "beta", last_seen: null, version: null }] });
+  t.set(overview("ws/a"), overviewOf([], [profile("pa", { email: "ada@x.com", usedBy: ["k1"], quota, check: { state: "ok", detail: "可用", checkedAt: now - 120_000 } }), profile("solo", { access: { kind: "anthropic-api", key: "sk-ant…abcd" } })]));
+  t.set(overview("ws/b"), overviewOf([], [profile("pb", { email: "ada@x.com", quota })]));
+  const before = { ...work };
+  t.subscribe(1, { topic: "profiles", scope: "ws" });
+  await t.read(u, 1);
+  assert.equal(workSince(before).wholeShaped, 0, "taken as made beside its whole value");
+  const topic: Topic = { topic: "profiles", scope: "ws" };
+  const whole = t.store.value(topic);
+  assert.ok(whole !== undefined && "ok" in whole);
+  const c = { now: t.host.nowMs(), offsetMin: t.host.utcOffsetMin(t.host.nowMs()) };
+  const shapedWhole = conformTy("ProfilesView", decorate(topic, structuredClone(whole.ok), c));
+  assert.ok("ok" in shapedWhole);
+  assert.equal(JSON.stringify(u.value), JSON.stringify(shapedWhole.ok), "what it went out as shaped whole at output");
+  assert.equal(u.value.items.length, 2);
 });
 
 test("profiles_follow_the_data_they_read_without_manual_invalidation", async () => {
@@ -856,17 +882,17 @@ test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
   assert.equal(madeItems(page.value).length, 100);
   assert.ok(work.rows - from <= 50, `scrolling made ${work.rows - from} rows`);
   // One far down the list changes: no row made, as it is written or read (no list read it). Then one in the page: its
-  // row alone made, as its record is written (and kept beside it: db/account.ts `chat_row`), none as the list reads it.
+  // row alone made, as its record is written (and kept beside it: db/kept.ts KEPT.listRow), none as the list reads it.
   from = work.rows;
-  let written = work.rowsWritten;
+  let written = work.listRowWritten;
   t.set(rows("ws/e"), records(4, { e80: { title: "改了" } }));
   await t.read(page, 1);
-  assert.deepEqual([work.rows - from, work.rowsWritten - written], [0, 0], "a chat outside the page");
+  assert.deepEqual([work.rows - from, work.listRowWritten - written], [0, 0], "a chat outside the page");
   from = work.rows;
-  written = work.rowsWritten;
+  written = work.listRowWritten;
   t.set(rows("ws/e"), records(4, { e80: { title: "改了" }, e1: { title: "也改了" } }));
   await t.read(page, 1);
-  assert.deepEqual([work.rows - from, work.rowsWritten - written], [0, 1], "a chat in the page");
+  assert.deepEqual([work.rows - from, work.listRowWritten - written], [0, 1], "a chat in the page");
   assert.ok(madeItems(page.value).some((i: J) => i.title === "也改了"));
   // The page is the whole list's first rows, its days and `more`; the whole list, a search, the `@` menu and the rail's
   // card have made rows.

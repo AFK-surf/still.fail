@@ -6,7 +6,8 @@ import { Effect } from "effect";
 import { work } from "../work.ts";
 import type { Inner } from "../core.ts";
 import type { Data } from "../data.ts";
-import type { ChatFound, Derive, HeadRow, ListRow } from "../db/account.ts";
+import type { ChatFound, Derive, HeadRow } from "../db/account.ts";
+import { KEPT, type ListRow } from "../db/kept.ts";
 import { CHAT_READS } from "../db/chat-reads.ts";
 import type { Host, SqlValue } from "../host.ts";
 import type { Runner } from "../runtime.ts";
@@ -86,7 +87,7 @@ export const WINDOW_UNTOLD = 50;
 /// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
 /// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
 /// does not offer it.)
-const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "profilesWhole", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, what its agents are doing as its list's row says it.
@@ -254,21 +255,16 @@ export const LIST_ROW_KEYS: ReadonlySet<string> = new Set([...LISTED_CHAT, ...Ob
 /// Of those, what a row takes of its record as it is (its values shared, frozen), before what it works out of it is put.
 const LIST_ROW_TAKEN = [...LIST_ROW_KEYS].filter((k) => !["agents", "last", "people", "creator", "pinned", "opener", "station", "stationName"].includes(k));
 
-/// How #listRow makes a chat list's row of its record and what else it reads (listRowKey): another number whenever a
-/// row it makes of the same could differ, so that no row kept beside its record (db/account.ts `chat_row`) by the maker
-/// before is read as this one's. test/list-rows.test.ts holds it: the rows of the workspace of real size, in each
-/// language, made as their digest says (its MADE), which a change to how a row is made changes.
-export const LIST_ROW_MAKING = 1;
 let listRowShapes: string | null = null;
 
 /// What a chat list's row is made with besides its record (#listRow), as the key its row is kept by beside its record
-/// (db/account.ts `chat_row`): the maker (LIST_ROW_MAKING) and the shape it goes out as (`ListedChat` and every shape
+/// (db/kept.ts KEPT.listRow): how it is made (its `making`, which test/list-rows.test.ts's digest holds) and the shape it goes out as (`ListedChat` and every shape
 /// it reaches, conform.ts shapeKey), the language and the product it says itself in, its station (its address, its
 /// name, its mark where there are several), the viewer, the workspace's members, who the viewer is in Slack there (its
 /// overview's part, `slackUsers`) and the viewer's `archiveHint`. A row is taken as kept only under the key in force;
 /// test/list-rows.test.ts holds that a row made otherwise under another of any of these has another key.
 export function listRowKey(s: StationInfo, mark: { emoji: string | null; icon: string | null } | null, me: J, slackUsers: string[], members: J[], hint: ArchiveHint): string {
-  return textKey(JSON.stringify([LIST_ROW_MAKING, (listRowShapes ??= shapeKey("ListedChat")), lang(), brand.name(), s.address, s.name, mark, me, slackUsers, membersKey(members), hint]));
+  return textKey(JSON.stringify([KEPT.listRow.making, (listRowShapes ??= shapeKey("ListedChat")), lang(), brand.name(), s.address, s.name, mark, me, slackUsers, membersKey(members), hint]));
 }
 
 /// A workspace's members as a key (conform.ts textKey), once for each list of them (a workspace's is shared and never
@@ -283,10 +279,61 @@ function membersKey(members: J[]): string {
 /// A row read back from its column beside its record (`whole`, and as it goes out, `sent`), made what a row #listRow
 /// made is: frozen all through, what it goes out as beside it (conform.ts shapedBeside), so that it is neither made nor
 /// shaped again.
-export function listRowTaken(whole: J, sent: J): void {
-  deepFreeze(whole);
-  deepFreeze(sent);
-  shapedBeside(whole, "ListedChat", sent);
+export function listRowTaken(row: ListRow): void {
+  deepFreeze(row);
+  shapedBeside(row.whole, "ListedChat", row.sent);
+}
+
+let profileRowShapes: string | null = null;
+
+/// What a station's accounts' rows are made with besides its part (#profileRowsMade), as the key they are kept by
+/// beside it (db/kept.ts KEPT.profileRow): how they are made (its `making`, which test/profile-rows.test.ts's digest
+/// holds), the shapes they are made through (the
+/// overview's, whose `Profile` each is decorated as, and the row's, `ProfileRow`), the language and the product they
+/// are said in. Nothing of the station (its name, whether it is up) nor of the others: that is the list's merge across
+/// stations (profiles.ts workspaceProfiles), made as it is read. test/profile-rows.test.ts holds that rows made
+/// otherwise have another key, and that a station renamed or gone down changes only what the merge makes.
+export function profileRowKey(): string {
+  return textKey(JSON.stringify([KEPT.profileRow.making, (profileRowShapes ??= `${shapeKey("Overview")}/${shapeKey("ProfileRow")}`), lang(), brand.name()]));
+}
+
+/// What the list's merge (profiles.ts workspaceProfiles) and an account's row (ProfileRow, RowProfile) read of a
+/// station's decorated profile: what a station's rows keep of each (#profileRowsMade).
+const PROFILE_ROW_FIELDS = [
+  "id", "name", "email", "runtime", "access", "enabled", "share", "trouble", "checkText", "checkTone", "usedBy", "serves", "workspaces", "machine",
+  "providerMark", "usesText", "kindText", "planText", "quota",
+] as const;
+/// Of an allowance, what a row draws (RowQuota), its windows' `resetsAt` beside (what its refills are said of at read).
+const ROW_QUOTA_FIELDS = ["state", "creditsText", "windows"] as const;
+const ROW_WINDOW_FIELDS = ["label", "scope", "mark", "left", "level", "resetsAt"] as const;
+
+const picked = (v: J, keys: readonly string[]): J => {
+  const out: J = {};
+  for (const k of keys) if (isObject(v) && k in v) out[k] = v[k];
+  return out;
+};
+
+/// A station's accounts' rows of its decorated part (`shown`, the overview's shape): its profiles each as kept, what
+/// its sharing and its reach say (what the merge reads of the part), no time in words and no window's refills.
+function profileRowsOf(shown: J): J {
+  const profiles = arr(get(shown, "profiles")).map((p) => {
+    const row = picked(p, PROFILE_ROW_FIELDS);
+    if (isObject(row.trouble)) row.trouble = picked(row.trouble, ["title", "action"]);
+    if (isObject(row.quota)) {
+      const q = picked(row.quota, ROW_QUOTA_FIELDS);
+      if (Array.isArray(q.windows)) q.windows = q.windows.map((w: J) => picked(w, ROW_WINDOW_FIELDS));
+      row.quota = q;
+    }
+    return row;
+  });
+  return { profiles, sharing: get(shown, "sharing") ?? null, mesh: isObject(get(shown, "mesh")) ? { reached: get(shown, "mesh").reached ?? null } : null };
+}
+
+/// What a window of a kept row says as it goes out: its refills in words, made of its `resetsAt` and now alone (present.ts
+/// refillsOf), nothing else of it walked.
+function windowShown(w: J, c: present.Clock): J {
+  const { resetsAt, ...rest } = w;
+  return { ...rest, refills: typeof resetsAt === "number" ? present.refillsOf(resetsAt, c) : null };
 }
 
 /// Where a row's chat came from, for one from a connect (`connect`): its mark's kind and its words (Slack · team ·
@@ -409,16 +456,14 @@ const wholeRows = (chats: J): J => firstRows(chats, Infinity);
 /// these change, not with each of its profiles' quota or its decisions.
 const rowOf = (o: J): J => ({ viewer: o.viewer, counts: o.counts, ...(o.disk != null ? { disk: o.disk } : {}), ...(o.drive != null ? { drive: o.drive } : {}) });
 
-/// How an overview's verdict is judged (`unreadable`: decorated, then put through `Overview`): another number whenever
-/// what decorating one makes could fit otherwise with the shapes as they are (present.ts decorate).
-const FIT_READING = 1;
-/// The id of what judges whether this core can read a station's overview, its verdicts kept by it (db/schema.ts
-/// `station_fit`): the reading's and the `Overview` shape's as declared, with every shape it reaches (conform.ts
+/// The id of what judges whether this core can read a station's overview, its verdicts kept by it (db/kept.ts
+/// KEPT.overviewFit): how an overview is judged (its `making`: `unreadable`, decorated, then put through `Overview`;
+/// another whenever what decorating one makes could fit otherwise with the shapes as they are) and the `Overview` shape's as declared, with every shape it reaches (conform.ts
 /// shapeKey). Made once, as it is first needed (0.6 ms in Node for its 17.7 KB). Not the app's build: the core does not
 /// know it until the device tells it, a development build keeps one through many changes, and a new build that changed
 /// no shape keeps its verdicts.
 let overviewFit: string | null = null;
-export const OVERVIEW_FIT = (): string => (overviewFit ??= `${FIT_READING}.${shapeKey("Overview")}`);
+export const OVERVIEW_FIT = (): string => (overviewFit ??= `${KEPT.overviewFit.making}.${shapeKey("Overview")}`);
 
 /// Whether a station's versions offer the 测试版 switch.
 export function betaOffered(overview: J, accountInBeta: () => boolean): boolean {
@@ -941,13 +986,30 @@ export class Views implements Owner {
     // Whether this core can read an overview, judged as it is written (#stationShownOf `judge`) and kept beside it:
     // `stations` reads the verdict, not the overview.
     // (its shapes' id made as it is first read, not at the start)
-    core.data.judgeOverviews({ get shapes() { return OVERVIEW_FIT(); }, judge: (station, o) => this.#stationShownOf(station).judge(o) });
+    core.data.makes(KEPT.overviewFit, {
+      key: () => OVERVIEW_FIT(),
+      make: ([station], o) => {
+        try {
+          return this.#stationShownOf(station).judge(o);
+        } catch {
+          // (not judged: judged again as it is read)
+          return null;
+        }
+      },
+    });
     // A chat list's row kept beside its record (`chat_row`), made again as that is written once a list read it: a list
     // reads it, not the record.
-    core.data.keepListRows({
-      key: (station) => untracked(() => this.#aroundOf(station)?.key ?? null),
-      make: (station, record) => untracked(() => this.#keptMade(station, record)),
+    core.data.makes(KEPT.listRow, {
+      key: ([station]) => untracked(() => this.#aroundOf(station)?.key ?? null),
+      make: ([station], record) => untracked(() => this.#keptMade(station, record)),
       taken: listRowTaken,
+    });
+    // A station's accounts' rows kept beside its overview's part (`profile_row`), made again as that is written once a
+    // list read them: the list reads them, not the part, and decorates no profile.
+    core.data.makes(KEPT.profileRow, {
+      key: () => untracked(profileRowKey),
+      make: ([station], profiled) => untracked(() => this.#profileRowsMade(station, profiled)),
+      taken: deepFreeze,
     });
   }
 
@@ -1156,6 +1218,7 @@ export class Views implements Owner {
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }];
         break;
       case "profiles":
+      case "profilesWhole":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }];
         break;
@@ -1221,7 +1284,7 @@ export class Views implements Owner {
         return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) }];
       // (one account: of the workspace's profiles, which follow its stations)
       case "profile":
-        return [{ topic: "profiles", scope: view.scope }];
+        return [{ topic: "profilesWhole", scope: view.scope }];
       // (an image of a chat steps through all of its, as far as it is on the device: its `letters`, all its entries)
       case "imageNear":
         return [
@@ -1675,8 +1738,22 @@ export class Views implements Owner {
         return { ok: get(this.#stationShownOf(view.station as string).full.get(), view.part as string) ?? null };
       }
       case "profiles": {
-        return this.#profilesView(view.scope as string);
+        // What goes out is the rows (ProfileRow), shaped here beside the value the list made (conform.ts shapedBeside, as
+        // a chat list's kept row goes out): taken as they are where `profiles` goes out (output.ts), neither copied,
+        // decorated again nor walked by its shape there. Copying, decorating and shaping the whole value at output was
+        // 4.7 ms of the 17 that `profiles` took after a workspace was switched to on 小屏 (Hermes, Mac Studio,
+        // 2026-11-12). The list is made of each station's rows kept beside its part (#profileRowsView), not of its
+        // profiles decorated: what the core's readers read whole is `profilesWhole`'s.
+        const listed = this.#profileRowsView(view.scope as string);
+        if (listed !== undefined && "ok" in listed && isObject(listed.ok)) {
+          const rows = conformTy("ProfilesView", listed.ok);
+          if ("ok" in rows && isObject(rows.ok)) shapedBeside(listed.ok, "ProfilesView", sharedValue(rows.ok) as object);
+        }
+        return listed;
       }
+      // (the workspace's accounts whole: what an account's page (`profile`) reads, made only as something asks it)
+      case "profilesWhole":
+        return this.#profilesView(view.scope as string);
       case "profile":
         return this.#profileOf(view);
       case "settings": {
@@ -2081,7 +2158,7 @@ export class Views implements Owner {
           const row = (): J => {
             // (kept beside its record under the key in force, where it was read or kept this run; else made, and kept)
             const keeps = key !== null && shown === raw && this.#keepable(s.address, raw);
-            const kept = keeps ? data.keptListRow(s.address, String(raw.id), key) : undefined;
+            const kept = keeps ? data.kept(KEPT.listRow, [s.address, String(raw.id)], key) : undefined;
             const made = kept !== undefined ? kept.whole : this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is). What it took of
             // its record as it is was frozen all through with it (db/account.ts `frozen` freezes a part after all of
@@ -2275,7 +2352,7 @@ export class Views implements Owner {
     }).slice(0, first);
     for (const f of shown) f.record = data.heldChat(f.station, f.id);
     const notHeld = shown.filter((f) => f.record === undefined);
-    const kept = data.keptListRows(notHeld.map((f) => [f.station, f.id]), keys);
+    const kept = data.keptMany(KEPT.listRow, notHeld.map((f) => [f.station, f.id]), notHeld.map((f) => keys.get(f.station) ?? ""));
     data.chatRecords(notHeld.filter((_, i) => kept[i] === undefined));
     const keptOf = new Map(notHeld.map((f, i) => [f, kept[i]]));
     for (const f of shown) {
@@ -2397,18 +2474,19 @@ export class Views implements Owner {
     return !this.local.beingArchived(station, record) && this.local.asChanging(station, record) === record;
   }
 
-  /// A record's list row as it is written (db/account.ts #keepListRow): what #chats makes of it (#listRow, frozen), as it
+  /// A record's list row as it is written (db/kept.ts `wrote`): what #chats makes of it (#listRow, frozen), as it
   /// goes out (`ListedChat`, beside it), what its stand-in says; null where it is not kept (#keepable) or its station's
   /// surroundings are not read.
-  #keptMade(station: string, record: J): { state: string | null; whole: J; sent: J } | null {
+  #keptMade(station: string, record: J): ListRow | null {
     const a = this.#aroundOf(station);
     if (a === null || !this.#keepable(station, record)) return null;
     const whole = this.#listRow(a.s, record, a.me, a.slackUsers, a.members, a.mark, a.hint);
     deepFreeze(whole);
     const sent = conformTy("ListedChat", whole);
     if (!("ok" in sent) || !isObject(sent.ok)) return null;
-    listRowTaken(whole, sent.ok);
-    return { state: present.rowState(arr(get(record, "agents"))), whole, sent: sent.ok };
+    const row = { state: present.rowState(arr(get(record, "agents"))), whole, sent: sent.ok };
+    listRowTaken(row);
+    return row;
   }
 
   /// A row a list made as it read it (`whole`), or one it read the record of and did not make (null: made then, as it
@@ -2426,18 +2504,18 @@ export class Views implements Owner {
         this.#toKeep = [];
         for (const k of kept) {
           const id = String(k.record.id);
-          if (this.#core.data.keptListRow(k.station, id, k.key) !== undefined) continue;
+          if (this.#core.data.kept(KEPT.listRow, [k.station, id], k.key) !== undefined) continue;
           if (k.whole === null) {
             // (made as a list makes it, under the key in force then: where that is another, by the next list)
             const made = untracked(() => (this.#aroundOf(k.station)?.key === k.key ? this.#keptMade(k.station, k.record) : null));
-            if (made !== null) this.#core.data.keepListRow(k.station, id, k.record, { key: k.key, ...made });
+            if (made !== null) this.#core.data.keep(KEPT.listRow, [k.station, id], k.record, k.key, made);
             continue;
           }
           const sent = conformTy("ListedChat", k.whole);
           if (!("ok" in sent) || !isObject(sent.ok)) continue;
           deepFreeze(sent.ok);
           shapedBeside(k.whole, "ListedChat", sent.ok);
-          this.#core.data.keepListRow(k.station, id, k.record, { key: k.key, state: present.rowState(arr(get(k.record, "agents"))), whole: k.whole, sent: sent.ok });
+          this.#core.data.keep(KEPT.listRow, [k.station, id], k.record, k.key, { state: present.rowState(arr(get(k.record, "agents"))), whole: k.whole, sent: sent.ok });
         }
       }),
     );
@@ -2907,11 +2985,100 @@ export class Views implements Owner {
     return { ok: { ...listed, machineLogins } };
   }
 
+  /// The workspace's accounts' list (`profiles`): each station's accounts' rows as kept beside its overview's part
+  /// (db/kept.ts KEPT.profileRow, under profileRowKey), else made of that part and kept so, merged across the
+  /// stations (profiles.ts workspaceProfiles: their names, whether each is up, an account's copies on several) as it is
+  /// read, its windows' refills said of now; what each up station's own logins offer beside, as before. The list
+  /// decorates no profile where its stations' rows are kept.
+  #profileRowsView(scope: string): Value | undefined {
+    const stations = this.#stationsOr(scope);
+    if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+    const key = profileRowKey();
+    const ins = stations.map((s) => ({ station: s.address, id: s.id, name: s.name, online: s.online, joined: s.joined, overview: this.#profileRowsOfStation(s.address, key) }));
+    const listed = workspaceProfiles(ins);
+    const c = this.#clock();
+    const items = arr(listed.items).map((e) => {
+      const q = get(get(e, "profile"), "quota");
+      if (!isObject(q) || !Array.isArray(q.windows) || q.windows.length === 0) return e;
+      return { ...e, profile: { ...e.profile, quota: { ...q, windows: q.windows.map((w: J) => windowShown(w, c)) } } };
+    });
+    const machineLogins = stations.flatMap((s, i) => {
+      const logins = s.online ? this.#offeredOf(ins[i]!.overview, c) : [];
+      return logins.length > 0 ? [{ station: s.address, stationName: s.name, logins }] : [];
+    });
+    return { ok: { ...listed, items, machineLogins } };
+  }
+
+  /// A station's own logins offered for a profile, as the list shows them beside its rows (#profileRowsView): its
+  /// overview's `machineLogins` as its rows keep them (#profileRowsMade), decorated as the overview's are (their
+  /// allowances in words) and put through its shape, the profiles not touched; kept for the logins read while their
+  /// words hold (present.ts `made`).
+  #offeredOf(rows: J, c: present.Clock): J[] {
+    const logins = get(rows, "machineLogins");
+    if (!Array.isArray(logins) || logins.length === 0) return [];
+    const made = present.made(this.#offeredShown, logins, c, () => {
+      // (offered as the overview's decoration says it, of its profiles as the station's rows keep them)
+      const shown = present.times({ machineLogins: present.loginsOffered(structuredClone(logins), arr(get(rows, "profiles"))) }, c);
+      const shaped = asShaped("Overview", { ...overviewDefaults(), ...(shown as J) });
+      return arr(get(shaped, "machineLogins")).filter((l) => get(l, "offered") === true);
+    });
+    return present.taken(made);
+  }
+
+  #offeredShown = new WeakMap<object, present.Made<J[]>>();
+
+  /// A station's accounts' rows (#profileRowsView): kept beside its part under `key`, else made of the part it holds
+  /// (none while its overview is not read) and kept beside it.
+  #profileRowsOfStation(station: string, key: string): J {
+    const kept = this.#core.data.kept(KEPT.profileRow, [station], key);
+    if (kept !== undefined) return kept;
+    const profiled = this.#core.data.overviewProfiled(station);
+    if (!isObject(profiled)) return undefined;
+    let made = this.#profileRowsKept.get(profiled);
+    if (made === undefined || made.key !== key) {
+      const rows = this.#profileRowsMade(station, profiled);
+      if (rows === null) return undefined;
+      made = { key, rows };
+      this.#profileRowsKept.set(profiled, made);
+      const keep = made;
+      untracked(() => this.#core.data.keep(KEPT.profileRow, [station], profiled, key, keep.rows));
+    }
+    return made.rows;
+  }
+
+  /// A station's accounts' rows as the list would make them of its part now, and the key they would be kept by (tests:
+  /// test/profile-rows.test.ts holds that rows made otherwise are kept by another key).
+  profileRowsNow(station: string): { key: string; rows: J } | null {
+    const rows = untracked(() => this.#profileRowsMade(station, this.#core.data.overviewProfiled(station)));
+    return rows === null ? null : { key: profileRowKey(), rows };
+  }
+
+  /// Rows made of a part read (#profileRowsOfStation), by that part, while it is not kept (the overview shown with
+  /// what is being done to it here, a database that keeps none).
+  #profileRowsKept = new WeakMap<object, { key: string; rows: J }>();
+
+  /// A station's accounts' rows of its overview's part `profiled` (the overview's `profiles`, `sharing`, `mesh`): each
+  /// profile decorated as its page has it (present.ts profile, its allowance's windows in words), shaped as the
+  /// overview's, then what the list reads of it kept (profileRowsOf): no time in words, no window's refills, nothing of
+  /// the station but its part, and its machine's own logins as the part has them (what #offeredOf offers beside the rows,
+  /// of these). What #stationShownOf's `profile` decorates for the whole list, made here once for the rows as the part
+  /// is written (db/kept.ts `wrote`) or first read.
+  #profileRowsMade(station: string, profiled: J): J | null {
+    if (!isObject(profiled)) return null;
+    work.profileRows++;
+    const shown = present.decorate({ topic: "overview", station }, structuredClone(profiled), this.#clock());
+    const shaped = asShaped("Overview", isObject(shown) ? { ...overviewDefaults(), ...shown } : shown);
+    if (shaped === null) return null;
+    const rows = { ...profileRowsOf(shaped), machineLogins: get(profiled, "machineLogins") ?? null };
+    deepFreeze(rows);
+    return rows;
+  }
+
   /// One account of a workspace (`profile`): its entry of the workspace's profiles as the core holds them whole (the
   /// list sends each its row, ProfileRow), found by its key, or by a profile of it on a station (any of its members);
   /// null where none is.
   #profileOf(view: Topic): Value | undefined {
-    const all = this.value({ topic: "profiles", scope: view.scope });
+    const all = this.value({ topic: "profilesWhole", scope: view.scope });
     if (all === undefined || "err" in all) return all;
     const key = str(view.key);
     const station = str(view.station);
@@ -3095,7 +3262,7 @@ export class Views implements Owner {
         if (o === undefined) return false;
         if (!isObject(o)) return kept!.full.get() === null;
         const fits = kept!.judge(o);
-        untracked(() => this.#core.data.keepOverviewFit(station, fits));
+        untracked(() => this.#core.data.keep(KEPT.overviewFit, [station], o, OVERVIEW_FIT(), fits));
         return !fits;
       }),
       // Its machine's own logins offered for a profile, as its page has them (the same list while they are equal: the

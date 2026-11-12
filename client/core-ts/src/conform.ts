@@ -113,7 +113,7 @@ export function keptShape(v: unknown, ty: Ty): unknown {
 }
 
 /// `out`, what `v` goes out as through struct `ty`, made beside it (views.ts: a chat list's row, as it was kept beside
-/// its record, db/account.ts `chat_row`): taken as it is where `v` goes out as `ty` (output.ts), neither shaped nor
+/// its record, db/kept.ts KEPT.listRow): taken as it is where `v` goes out as `ty` (output.ts), neither shaped nor
 /// walked again, and marked as gone out. `v` itself is not marked: it goes out otherwise elsewhere (a search's ChatItem).
 export function shapedBeside(v: object, ty: string, out: object): void {
   let by = beside.get(v);

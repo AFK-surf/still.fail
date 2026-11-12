@@ -40,29 +40,39 @@ for (const lang of ["zh", "en"] as const) {
   test(`the workspace's profiles made of each station's kept part are the ones its whole overview made, in ${lang}`, async () => {
     setCurrent(lang);
     try {
-      const { t } = await held(false);
+      const { t: was } = await held(false);
       const topic = topicOf("profiles");
+      // (the accounts whole, as an account's page and usage read them, `profilesWhole`, made by a core of its own on the
+      // same database, at the moment this one makes them)
+      was.store.runner.shutdown();
+      const t = setup({ all: true, host: was.host });
+      const wholeTopic: Topic = { topic: "profilesWhole", scope: topic.scope };
+      t.store.subscribe(9, 9, wholeTopic, true);
+      t.store.subscribe(8, 8, topic, true);
+      await t.host.time.pass(100);
       const now = t.host.nowMs();
       const c: present.Clock = { now, offsetMin: t.host.utcOffsetMin(now) };
-      const kept = t.store.value(topic);
-      assert.ok(kept !== undefined && "ok" in kept, "the store holds the profiles");
+      const kept = t.store.value(wholeTopic);
+      assert.ok(kept !== undefined && "ok" in kept, "the store holds the profiles whole");
       const before = madeOfWholes(t, String(topic.scope), c);
       assert.ok((before.items as J[]).length > 0);
       assert.deepEqual(kept.ok, before);
-      // (and what goes out, byte for byte)
+      // (and what the list sends, its rows, byte for byte what the whole went out as)
       const out = (v: J) => {
         const o = new Output().shape(topic, v, c, true);
         assert.ok("ok" in o);
         return JSON.stringify(o.ok);
       };
-      assert.equal(out(kept.ok), out(before));
+      const listed = t.store.value(topic);
+      assert.ok(listed !== undefined && "ok" in listed);
+      assert.equal(out(listed.ok), out(before));
     } finally {
       setCurrent("zh");
     }
   });
 }
 
-test("a core opened anew on a written database makes the workspace's profiles of the stations' kept parts, no overview read whole or decorated", async () => {
+test("a core opened anew on a written database makes the workspace's profiles of the stations' kept rows, no overview read whole nor a part decorated", async () => {
   const { t } = await held(false);
   // (the same database, a core of its own: nothing parsed or made of it yet)
   const fresh = setup({ all: true, host: t.host });
@@ -75,5 +85,8 @@ test("a core opened anew on a written database makes the workspace's profiles of
   const spent = workSince(before);
   assert.equal(spent.overviewsRead, 0, "no station's whole overview read");
   assert.equal(spent.overviews, 0, "no station's whole overview decorated");
-  assert.ok(spent.profiledParts > 0 && spent.profiledParts <= (fresh.views.stations("ws") as J[]).length, `each station's part decorated once (${spent.profiledParts})`);
+  // (each station's accounts' rows kept beside its part as the core before read the list: none decorated)
+  assert.equal(spent.profiledParts, 0, "no station's part decorated");
+  assert.equal(spent.profileRows, 0, "no station's rows made");
+  assert.equal(spent.profileRowKept, (fresh.views.stations("ws") as J[]).length, "each station's rows taken as kept");
 });
