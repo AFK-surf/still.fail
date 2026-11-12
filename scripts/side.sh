@@ -14,7 +14,8 @@ for part in $parts; do
   echo "· side: $part"
   case $part in
     # The mesh on the real addon and iroh-relay (side/mesh-real.test.ts), and on simulated networks made up at random
-    # (side/mesh-explore.test.ts, SIM_EXPLORE of them).
+    # (side/mesh-explore.test.ts, SIM_EXPLORE of them); a new device approved face to face over two real endpoints
+    # (side/lock-pair-iroh.test.ts).
     core-ts) (cd client/core-ts && pnpm side) || status=1 ;;
     # The station's of real processes and the file system as they take their time (station/side): a lock across
     # processes, logs followed by fs.watch.
