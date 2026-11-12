@@ -9,6 +9,11 @@ The person's vault keeps their secrets encrypted to their own devices (in a work
 library on the station). You never see a value: you ask to keep one (`secret_save`), ask to use one (`secret_use`) and
 run a command with it (`secret_run`). Each is approved by the person on a card in the still.fail app.
 
+Whose vault: whoever started the chat, unless you name another with `person` (their email) on `secret_list`,
+`secret_use` and `secret_save`: someone who wrote in this chat from the still.fail app. Name the one who asked for the
+secret when that is not the starter, and always where the chat was started in Slack and the person now writes from
+still.fail (a card for a Slack starter cannot be approved in the app).
+
 ## When to offer it
 
 As soon as you see a credential will be needed more than once, before using it another way:

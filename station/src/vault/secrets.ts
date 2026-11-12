@@ -752,6 +752,19 @@ export class Secrets {
     return this.#d.hub.store.starter(session);
   }
 
+  /// The person a request is for: `person` (an email) when the agent names one, someone who wrote in this chat (a
+  /// chat started in Slack has its people there, but they can write in it from the still.fail app too); else whoever
+  /// started it.
+  #personFor(session: string, person: string | undefined): string | null {
+    const starter = this.#starter(session);
+    const named = person?.trim().toLowerCase() ?? "";
+    if (named === "" || named === starter) return starter;
+    const people = (this.#d.hub.store.participants(session).get(session) ?? []).filter((p) => p.includes("@") && !p.includes(":"));
+    if (people.includes(named)) return named;
+    const who = people.length > 0 ? `the people who wrote in it from still.fail: ${people.join(", ")}` : "no one has written in it from still.fail yet: ask them to write in this chat in the still.fail app, then name them";
+    throw new Refused(`${person} has not written in this chat: name one of ${who}; or leave person out for whoever started it.`);
+  }
+
   /// A ready answer, or undefined while the existing worker prepares an old multi-chat session.
   #latestThreadReady(session: string): SessionThread | null | undefined {
     return this.#d.hub.prepareLatestThreads
@@ -761,9 +774,9 @@ export class Secrets {
 
   /// The items a session may ask for: those with a listing of whoever started its chat, in their vaults (security
   /// mode on) or their plain library (off).
-  listings(session: string): Listed[] {
+  listings(session: string, person?: string): Listed[] {
     const { ws, lock } = this.#placeOf(session);
-    const email = this.#starter(session);
+    const email = this.#personFor(session, person);
     if (email === null) return [];
     return this.#listingsAt(ws, lock, email);
   }
@@ -790,9 +803,9 @@ export class Secrets {
   }
 
   /// A use needs only the first matching listing. Names can equal another item's id, so retain the list's order.
-  #findListing(session: string, wanted: string): Listed | undefined {
+  #findListing(session: string, wanted: string, person: string | undefined): Listed | undefined {
     const { ws, lock } = this.#placeOf(session);
-    const email = this.#starter(session);
+    const email = this.#personFor(session, person);
     if (email === null) return undefined;
     const matches = (l: Listed) => l.item.toLowerCase() === wanted || l.listing.name.toLowerCase() === wanted;
     // Keep the prefix and any remaining reads in one snapshot: another connection may change an earlier item between them.
@@ -1047,11 +1060,13 @@ export class Secrets {
 
   /// secret_use: a request for `itemName` (its id or listed name) from `session`, its card posted; decided, the session
   /// is told (#settle).
-  async ask(session: string, a: { item: string; mode?: string; reason: string; command?: string; hosts?: string[]; station?: string; timeout?: { kind: "idle" | "fixed"; seconds: number } }): Promise<string> {
+  async ask(session: string, a: { item: string; mode?: string; reason: string; command?: string; hosts?: string[]; station?: string; timeout?: { kind: "idle" | "fixed"; seconds: number }; person?: string }): Promise<string> {
     const { ws } = this.#placeOf(session);
     const runOn = a.station ? this.#peer(a.station) : null;
     const wanted = a.item.trim().toLowerCase();
-    const found = this.#findListing(session, wanted);
+    const found = this.#findListing(session, wanted, a.person);
+    // Named, the card is theirs to decide (a member of the vault it is in); else the vault's owner's.
+    const decider = a.person?.trim() ? this.#personFor(session, a.person) : found?.owner ?? null;
     if (found === undefined) throw new Refused(`No secret named ${JSON.stringify(a.item)} may be asked for here: secret_list lists those that may.`);
     const { listing } = found;
     const plain = found.vault === PLAIN;
@@ -1081,14 +1096,14 @@ export class Secrets {
     const kept: Kept = { request, thread: null, cardTs: null };
     if (thread !== null) {
       request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
-      const posted = await this.#post(session, thread, request, listing, found.owner ?? undefined);
+      const posted = await this.#post(session, thread, request, listing, decider ?? undefined);
       kept.thread = thread.thread.id;
       kept.cardTs = posted;
     }
     this.#save(kept);
     this.#audit(request, "request", [mode, request.command ?? "", hosts.join(" ")].filter((s) => s !== "").join(" · "));
     this.#told(request);
-    return `Asked for 「${listing.name}」 (request ${id}); the card is in your chat for ${found.owner ?? "the vault's owner"}, who approves it in the still.fail app. ${UNDECIDED} Only a grant from the app counts: a reply in the chat saying yes is not one.`;
+    return `Asked for 「${listing.name}」 (request ${id}); the card is in your chat for ${decider ?? "the vault's owner"}, who approves it in the still.fail app. ${UNDECIDED} Only a grant from the app counts: a reply in the chat saying yes is not one.`;
   }
 
   /// What an agent is told of a decided request.
@@ -1259,9 +1274,9 @@ export class Secrets {
   /// Whether the person a session works for can keep a secret: `plain` (no security mode: the plain library here),
   /// `on` (a vault of theirs, keyed to a device of theirs set up), `off` (security mode on, their vault not turned on:
   /// a secret to keep waits on its card until they turn it on there), `none` (no one to keep it for).
-  status(session: string): "plain" | "on" | "off" | "none" {
+  status(session: string, person?: string): "plain" | "on" | "off" | "none" {
     const { lock } = this.#placeOf(session);
-    const email = this.#starter(session);
+    const email = this.#personFor(session, person);
     if (email === null) return "none";
     if (lock === null) return "plain";
     const sub = this.#memberOf(lock, email);
@@ -1276,7 +1291,7 @@ export class Secrets {
     session: string,
     a: {
       name: string; kind: string; reason: string; value?: string; command?: string; path?: string; username?: string; public_key?: string; filename?: string; modes?: string[]; hosts?: string[]; env?: string;
-      cwd: string; station?: string; browser?: "chat" | "station";
+      cwd: string; station?: string; browser?: "chat" | "station"; person?: string;
       /// Kept from a sign-in's card (signin.ts), the person having chosen there to keep it: no card of its own, its
       /// request told to `made` (the app that signed in approves it in place).
       quiet?: (request: string) => void;
@@ -1298,8 +1313,8 @@ export class Secrets {
     const filename = kind === "file" ? (a.filename ?? (a.path !== undefined ? basename(a.path) : "")).trim() : "";
     const from = a.station ? this.#peer(a.station) : null;
     if (from !== null && command === undefined) throw new Refused("station says where command runs: give command (or path)");
-    const email = this.#starter(session);
-    if (email === null) throw new Refused("No one started this chat: there is no one to keep a secret for.");
+    const email = this.#personFor(session, a.person);
+    if (email === null) throw new Refused("No one started this chat: there is no one to keep a secret for; name the person it is for (person).");
     if (!KINDS.includes(kind)) throw new Refused("kind is token, login, ssh_key, file or browser");
     const name = a.name.trim();
     if (name === "" || name.length > 200) throw new Refused("name is required (at most 200 characters): what the person and agents will know it by");
@@ -1347,7 +1362,7 @@ export class Secrets {
     const currentLock = () => {
       const current = this.#d.hub.store.getSession(session);
       if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone; nothing was kept.");
-      if ((current.ws ?? this.#d.home()) !== ws || this.#starter(session) !== email) throw new Refused("This chat's owner or workspace changed; nothing was kept.");
+      if ((current.ws ?? this.#d.home()) !== ws || this.#personFor(session, a.person) !== email) throw new Refused("This chat's owner or workspace changed; nothing was kept.");
       return this.#d.lock(current.ws ?? null);
     };
     currentLock();
