@@ -4,6 +4,7 @@
 # time differs by the runner and by what runs beside it: the most seen, of one run or a few, dealt app 1/4 at 120 fps
 # 904 s of pages where it was told 697, 251 s of its 5 minutes, main 5d06cf01 42935951988, 2026-11-11). Its head (the
 # lines of #) is kept.
+# (A run before #5844 said its line without a package: its packages' programs said none, so all of it is sfapp's.)
 # Needs gh. What no run measured (a file, a rate) keeps its old time.
 set -e
 [ $# -gt 0 ] || { echo "usage: $0 RUN..." >&2; exit 2; }
@@ -16,7 +17,7 @@ for run in "$@"; do
     while read -r job name; do
       case "$name" in *"at 60 fps"*) col=3 ;; *"at 120 fps"*) col=4 ;; *" fps"*) col=5 ;; *) col=2 ;; esac
       gh api --allow-escape-sequences "repos/AFK-surf/still.fail/actions/jobs/$job/logs" 2>/dev/null |
-        sed -n "s|.*testexe: each file's seconds of stillfail/sfapp: ||p" | tr ',' '\n' |
+        sed -n "s|.*testexe: each file's seconds\( of stillfail/sfapp\)\{0,1\}: ||p" | tr ',' '\n' |
         awk -v c=$col 'NF == 2 { print $1, c, $2 }'
     done
 done > "$T/seen"
