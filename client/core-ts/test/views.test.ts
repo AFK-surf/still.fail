@@ -807,13 +807,13 @@ test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
   await t.read(page, 1);
   assert.equal(madeItems(page.value).length, 100);
   assert.ok(work.rows - from <= 50, `scrolling made ${work.rows - from} rows`);
-  // One far down the list changes, then one in the page: its row alone made, as its record is written (and kept beside
-  // it: db/account.ts `chat_row`), none as the list reads it.
+  // One far down the list changes: no row made, as it is written or read (no list read it). Then one in the page: its
+  // row alone made, as its record is written (and kept beside it: db/account.ts `chat_row`), none as the list reads it.
   from = work.rows;
   let written = work.rowsWritten;
   t.set(rows("ws/e"), records(4, { e80: { title: "改了" } }));
   await t.read(page, 1);
-  assert.deepEqual([work.rows - from, work.rowsWritten - written], [0, 1], "a chat outside the page");
+  assert.deepEqual([work.rows - from, work.rowsWritten - written], [0, 0], "a chat outside the page");
   from = work.rows;
   written = work.rowsWritten;
   t.set(rows("ws/e"), records(4, { e80: { title: "改了" }, e1: { title: "也改了" } }));

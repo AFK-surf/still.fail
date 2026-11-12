@@ -361,7 +361,8 @@ const listRowTriggers = (): [string, string][] => [
 /// language, the viewer, the workspace's members, its station, the prefs it reads, the maker and the shapes). A list
 /// reads a kept row whose key is the one in force, and no record. Kept by triggers on `chat` (listRowTriggers), as
 /// `station_fit` is on `station`: whoever writes a record (an older core too, which knows nothing of this table), its
-/// kept row goes with it, in the same statement; this core's writer puts the new one after it (account.ts #putChatRow).
+/// kept row goes with it, in the same statement; this core's writer puts the new one after it (account.ts #putChatRow),
+/// for a chat that had one: a row is first kept as a list reads its chat, so the table holds the chats lists showed.
 /// Made where missing at every open; where a trigger was missing or not this core's (an older core made the table
 /// `chat` again, its triggers with it), every kept row goes, nothing left that a record outlived.
 export function ensureListRows(sql: Sql): void {

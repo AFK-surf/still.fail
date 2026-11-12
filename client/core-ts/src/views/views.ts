@@ -916,7 +916,8 @@ export class Views implements Owner {
     // `stations` reads the verdict, not the overview.
     // (its shapes' id made as it is first read, not at the start)
     core.data.judgeOverviews({ get shapes() { return OVERVIEW_FIT(); }, judge: (station, o) => this.#stationShownOf(station).judge(o) });
-    // A chat list's row made as its record is written and kept beside it (`chat_row`): a list reads it, not the record.
+    // A chat list's row kept beside its record (`chat_row`), made again as that is written once a list read it: a list
+    // reads it, not the record.
     core.data.keepListRows({
       key: (station) => untracked(() => this.#aroundOf(station)?.key ?? null),
       make: (station, record) => untracked(() => this.#keptMade(station, record)),

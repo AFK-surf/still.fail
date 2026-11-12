@@ -343,6 +343,11 @@ export class AccountDb {
   /// Whether rows are kept beside their records (`chat_row` is there; it could not be made without room, or the
   /// database is a newer core's).
   #listRowsKept = false;
+  /// The chats of each station that have a row kept beside their record (`chat_row` as it was when the station's first
+  /// record of this run was written, and what was kept since): the ones a list read. A record written has its row made
+  /// with it only if it is one of these (#keepListRow), so what a write costs follows what lists showed, not how many
+  /// chats a station has.
+  readonly #listRowsHeld = new Map<string, Set<string>>();
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
   readonly #runner: Runner;
@@ -504,6 +509,7 @@ export class AccountDb {
       changes.firstChats.clear();
       // What was read is not what is kept any more.
       this.#cache.clear();
+      this.#listRowsHeld.clear();
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#logSpans.clear();
@@ -1100,6 +1106,8 @@ export class AccountDb {
 
   #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined): void {
     const c = this.#chatCols(row);
+    // (asked before the record is put: its triggers take the row kept beside it)
+    const listed = !archived && this.#listRowHeld(station, id);
     this.#run(
       "INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.json],
@@ -1108,7 +1116,7 @@ export class AccountDb {
     this.#cache.set(K("chat", station, archived, id), kept);
     // (its row kept beside it went with it, by the triggers: made again of it, where it is listed)
     this.#cache.delete(K("lrow", station, id));
-    if (!archived) this.#keepListRow(station, id, kept);
+    if (listed) this.#keepListRow(station, id, kept);
     this.#loadedList(station, archived ? "archived" : "chats")?.set(id, kept, [ord]);
     this.#tellChatRead(station, archived, id, before, kept);
     if (!archived) this.#tellChat(station, id, before, kept);
@@ -1151,6 +1159,7 @@ export class AccountDb {
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
     this.#cache.delete(K("chat", station, archived, id));
     this.#cache.delete(K("lrow", station, id));
+    if (!archived) this.#listRowsHeld.get(station)?.delete(id);
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
     this.#tellChatRead(station, archived, id, before, undefined);
     if (!archived) this.#tellChat(station, id, before, undefined);
@@ -1239,9 +1248,22 @@ export class AccountDb {
     return found.flatMap((r, i): [string, J][] => (made[i] === undefined ? [] : [[String(r[0]), made[i]]]));
   }
 
-  /// A listed chat's row made of `record` as it is written, kept beside it (`chat_row`), where its list's key can be said
-  /// now and its row is one a list keeps (ListRowMaker). In the burst writing the record, after it (whose triggers took
-  /// the one kept before).
+  /// Whether a chat of `station` has a row kept beside its record: one a list read (#listRowsHeld, read of `chat_row`
+  /// once a station a run, before its first record of the run is written).
+  #listRowHeld(station: string, id: string): boolean {
+    if (!this.#listRowsKept || this.listRows === null) return false;
+    let held = this.#listRowsHeld.get(station);
+    if (held === undefined) {
+      held = new Set(this.sql.all("SELECT id FROM chat_row WHERE station = ?", [station]).map((r) => String(r[0])));
+      this.#listRowsHeld.set(station, held);
+    }
+    return held.has(id);
+  }
+
+  /// A listed chat's row made of `record` as it is written, kept beside it (`chat_row`), for a chat a list read (its
+  /// row was kept: #listRowHeld; one no list read yet is made as a list first reads it, and kept then: keepListRow),
+  /// where its list's key can be said now and its row is one a list keeps (ListRowMaker). In the burst writing the
+  /// record, after it (whose triggers took the one kept before).
   #keepListRow(station: string, id: string, record: J): void {
     if (!this.#listRowsKept || this.listRows === null) return;
     const key = this.listRows.key(station);
@@ -1255,6 +1277,7 @@ export class AccountDb {
     work.rowsWritten++;
     this.#run("INSERT OR REPLACE INTO chat_row (station, id, key, state, whole, sent) VALUES (?, ?, ?, ?, ?, ?)", [station, id, row.key, row.state, JSON.stringify(row.whole), JSON.stringify(row.sent)]);
     this.#cache.set(K("lrow", station, id), row);
+    this.#listRowsHeld.get(station)?.add(id);
   }
 
   /// A row a list made as it read it (`made`, of `record` under `key`), kept beside its record: only while that is still
@@ -2466,6 +2489,7 @@ export class AccountDb {
       }
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
+      this.#listRowsHeld.clear();
       this.#logPutsForgotten();
       this.#logCache.clear();
       this.#logIndices.clear();

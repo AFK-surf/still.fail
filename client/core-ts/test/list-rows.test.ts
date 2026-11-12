@@ -115,6 +115,48 @@ test("a_record_written_keeps_its_row_made_as_it_is_written_and_the_list_makes_no
   assert.ok(rowsOf(anew.value).some((r: J) => r.last?.preview === "已经合并，CI 全绿。"), "the list says it");
 });
 
+test("a_record_no_list_read_is_written_with_no_row_made_and_a_whole_station_written_makes_none", async () => {
+  const { host, base } = await written();
+  const station = UP[0];
+  const sql = sqlOf(host);
+  const rows = fixture(base, OPENS).find(([topic]) => topic.topic === "chatRows" && topic.station === station)![1] as J[];
+  const flipped = rows.map((r) => ({ ...r, unread: !r.unread }));
+  // (as a device that has synced the workspace and shown no list of it yet: what `written` asked, every way the app
+  // asks, kept every chat's row, the whole lists' too)
+  sql.exec("DELETE FROM chat_row");
+  // A station's records all written again before any list read one (as its first sync writes them): no row is made.
+  {
+    const t = setup({ all: true, host });
+    for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
+    await t.host.time.pass(100);
+    const before = { ...work };
+    t.set({ topic: "chatRows", station }, flipped);
+    await t.host.time.pass(100);
+    const wrote = workSince(before);
+    t.store.runner.shutdown();
+    assert.deepEqual([wrote.rowsWritten, wrote.rows, wrote.listed], [0, 0, 0], "no list read them: none made as they were written");
+    assert.equal(sql.all("SELECT count(*) FROM chat_row")[0]![0], 0);
+  }
+  // A list read its window: those are kept, and a record outside it written makes no row still.
+  const warm = await listAnew(host, base);
+  const shown = new Set(rowsOf(warm.value).filter((r: J) => r.station === station).map((r: J) => r.id));
+  const kept = new Set(sql.all("SELECT id FROM chat_row WHERE station = ?", [station]).map((r) => String(r[0])));
+  const out = flipped.find((r) => !kept.has(String(r.id)))!;
+  const inside = flipped.find((r) => shown.has(String(r.id)))!;
+  assert.ok(out !== undefined && inside !== undefined, "the station has a chat the list showed and one it did not");
+  const t = setup({ all: true, host });
+  for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
+  await t.host.time.pass(100);
+  const before = { ...work };
+  t.set({ topic: "chatRows", station }, flipped.map((r) => (r === out || r === inside ? { ...r, unread: !r.unread } : r)));
+  await t.host.time.pass(100);
+  const wrote = workSince(before);
+  t.store.runner.shutdown();
+  assert.equal(wrote.rowsWritten, 1, "the one the list showed, not the one it did not");
+  assert.equal(sql.all("SELECT count(*) FROM chat_row WHERE station = ? AND id = ?", [station, String(out.id)])[0]![0], 0);
+  assert.equal(sql.all("SELECT count(*) FROM chat_row WHERE station = ? AND id = ?", [station, String(inside.id)])[0]![0], 1);
+});
+
 test("a_record_a_core_from_before_writes_takes_its_row_with_it_and_the_list_makes_that_one_alone", async () => {
   const { host, base } = await written();
   const warm = await listAnew(host, base);
