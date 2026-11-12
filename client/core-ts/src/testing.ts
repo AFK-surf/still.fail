@@ -37,33 +37,80 @@ export class TestTime implements HostTime {
     const test = this.#test;
     const base = start;
     const sleeps = this.sleeps;
+    const due = this.#due;
+    const self = this;
     this.clock = {
       ...test,
       currentTimeMillisUnsafe: () => base + test.currentTimeMillisUnsafe(),
       currentTimeMillis: Effect.sync(() => base + test.currentTimeMillisUnsafe()),
       sleep(duration: Duration.Duration) {
-        sleeps.push(Duration.toMillis(duration));
-        return test.sleep(duration);
+        const ms = Duration.toMillis(duration);
+        sleeps.push(ms);
+        if (!Number.isFinite(ms)) return test.sleep(duration);
+        // (when it falls due, noted as it starts and let go of as it ends, woken or interrupted: what `pass` skips to)
+        return Effect.suspend(() => {
+          const at = test.currentTimeMillisUnsafe() + Math.max(0, ms);
+          due.set(at, (due.get(at) ?? 0) + 1);
+          self.#changes++;
+          return test.sleep(duration).pipe(Effect.ensuring(Effect.sync(() => {
+            const n = due.get(at)! - 1;
+            if (n > 0) due.set(at, n);
+            else due.delete(at);
+            self.#changes++;
+          })));
+        });
       },
     } as Clock.Clock;
   }
+
+  /// When each sleep under way falls due (the TestClock's own ms), how many at each.
+  readonly #due = new Map<number, number>();
+  /// Each sleep that started or ended adds one.
+  #changes = 0;
 
   now(): number {
     return this.#base + this.#test.currentTimeMillisUnsafe();
   }
 
   /// Lets `ms` of the core's time pass, in small steps, so what each step wakes runs (and sleeps again) before the next.
+  /// Once two steps in a row woke nothing, no sleep started or ended in them and nothing was left to run after them
+  /// (`busy`), the steps up to the one in which the next sleep falls due are taken at once: they would wake nothing, and
+  /// nothing was going on to run in their turns.
+  /// What is woken is so at the same step as one at a time, so at the same moment; only fewer empty turns are run (a
+  /// pairing code's five minutes in 10 ms steps were 30,000 of them, most of lock-pair.test.ts's 21 s, 2026-11-12).
   async pass(ms: number, step = 10): Promise<void> {
     await flush();
     let left = ms;
+    let quiet = 0;
     while (left > 0) {
+      const now = this.#test.currentTimeMillisUnsafe();
+      if (quiet >= 2) {
+        let next = Infinity;
+        for (const at of this.#due.keys()) if (at < next) next = at;
+        // (the steps from now that end before the next is due: each wakes nothing)
+        const empty = Math.min(Math.floor(left / step), Number.isFinite(next) ? Math.ceil((next - now) / step) - 1 : Infinity);
+        if (empty > 0) {
+          await Effect.runPromise(this.#test.adjust(empty * step));
+          left -= empty * step;
+          await flush();
+          continue;
+        }
+      }
       const d = Math.min(step, left);
+      let wakes = false;
+      for (const at of this.#due.keys()) if (at <= now + d) { wakes = true; break; }
+      const changes = this.#changes;
       await Effect.runPromise(this.#test.adjust(d));
       left -= d;
       await flush();
+      quiet = wakes || this.#changes !== changes || busy() ? 0 : quiet + 1;
     }
   }
 }
+
+/// Whether something is still to run in this process's next turns (an immediate or a timer waiting): work going on
+/// that no sleep of the clock shows, which `pass` gives its turns rather than skip them.
+const busy = () => process.getActiveResourcesInfo().some((r) => r === "Immediate" || r === "Timeout");
 
 /// Lets what is ready run: promise continuations and the runtime's scheduled fibers.
 export async function flush(rounds = 6): Promise<void> {
