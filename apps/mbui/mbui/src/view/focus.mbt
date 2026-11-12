@@ -258,7 +258,8 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
   }
   // (come to one: brought into sight by what holds it, once laid out: Tree::show_in_sight)
   match id {
-    Some(to) if was != id => self.show_in_sight(to)
+    // (kept in sight by what brings it as its room changes, while the focus stays on it: Tree::holds_now)
+    Some(to) if was != id => self.show_in_sight(to, holds=fn() { self.focused == Some(to) })
     _ => ()
   }
   @signals.end_batch()
@@ -268,11 +269,18 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
 /// What brings a part of what it holds into its sight (Tree::show_in_sight: the focus come to it): `f` given where that
 /// is in its own terms (its top, its foot; `across`, its start, its end), answering how far it moved what it holds to
 /// (down, or `across` along it: a column that scrolls, a row that scrolls sideways, View::scrolls), all of it laid out,
-/// before it is drawn.
-pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool = false) -> View {
+/// before it is drawn. `room`: down a column, how tall it is and how much of that what lies over its top and its foot
+/// covers, as it is now: what it keeps the focus in sight in as that changes (Tree::holds_now).
+pub fn View::shows(
+  self : View,
+  f : (Double, Double) -> Double,
+  across? : Bool = false,
+  room? : () -> (Double, Double, Double),
+) -> View {
   guard self.live() is Some(n) else { return self }
   n.shows = Some(f)
   n.shows_across = across
+  n.shows_room = room
   self
 }
 

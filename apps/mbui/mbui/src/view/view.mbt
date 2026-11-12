@@ -491,6 +491,9 @@ struct Node {
   mut shows : ((Double, Double) -> Double)?
   /// whether what it brings into sight it brings across (View::shows' `across`): a row that scrolls sideways
   mut shows_across : Bool
+  /// down a column, the room it shows what it holds in, as it is now (View::shows' `room`): how tall it is, and how
+  /// much of that what lies over its top and its foot covers
+  mut shows_room : (() -> (Double, Double, Double))?
   /// whether it takes over a hold that began on what it holds, moved so far from where it went down (View::claims)
   mut claims : ((Double, Double) -> Bool)?
   /// where a hold it takes over may have gone down, in its own terms (View::claims' `from`): none, anywhere
@@ -822,7 +825,10 @@ pub struct Tree {
   mut sizes_due : Bool
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
-  shows_due : Array[(NodeId, () -> (Double, Double)?)]
+  shows_due : Array[(NodeId, () -> (Double, Double)?, (() -> Bool)?)]
+  /// what each column (its node) keeps in sight for the focus as its room changes (Tree::holds_now), since it brought
+  /// it into sight for the focus
+  focus_holds : Map[Int, (NodeId, () -> (Double, Double)?, () -> Bool, Ref[(Double, Double, Double)])]
   /// the nodes left out in this layout or back in, as it is done: what those left out held, their focus and their back
   /// let go of; whether what each holds takes input told anew
   outs_gone : Array[Int]
@@ -1254,6 +1260,7 @@ pub fn Tree::new(
     sizes_due: false,
     sized: [],
     shows_due: [],
+    focus_holds: Map([]),
     outs_gone: [],
     time,
     cause_at: -1.0,
@@ -1651,6 +1658,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.inputs_in = 0
       n.shows = None
       n.shows_across = false
+      n.shows_room = None
       n.claims = None
       n.claims_from = None
       n.claims_said = 0
@@ -1777,6 +1785,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         inputs_in: 0,
         shows: None,
         shows_across: false,
+        shows_room: None,
         claims: None,
         claims_from: None,
         claims_said: 0,
@@ -2329,6 +2338,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.free.shrink_to_fit()
   self.scrolls_at.clear()
   self.shows_due.clear()
+  self.focus_holds.clear()
   self.laid_waits.clear()
   self.afters.clear()
   self.held_tracks.clear()
@@ -7446,6 +7456,7 @@ fn View::let_go(self : View) -> Unit {
   n.size_cell = None
   n.shows = None
   n.shows_across = false
+  n.shows_room = None
   n.claims = None
   n.claims_from = None
   n.bounds_input = false
@@ -10033,6 +10044,11 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       self.laid_out(upto)
     }
   }
+  // (what the focus has kept in sight by the column it was brought into sight by, where that column's room came out
+  // another: placed so it is, in this same pass)
+  if self.focus_holds.length() > 0 && self.holds_now() && self.due {
+    self.laid_out(upto)
+  }
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
     self.drawn_due = true
   }
@@ -10101,11 +10117,67 @@ fn Tree::sizes_told(self : Tree) -> Bool {
 /// Node `id` (`within`: that part of it, its top and its foot in its own terms, asked once all is laid out; none there,
 /// all of it) brought into sight by what holds it that shows what it holds (View::shows: a column that scrolls), once
 /// all of it is laid out as it is next, before that is drawn: the innermost first, each that holds it then told where
-/// it is as the ones inside it moved it. Once, at this cause (the focus come to it): nothing brings it back of itself
+/// it is as the ones inside it moved it; one that holds it pinned over what it scrolls (a page's list's foot) asked
+/// nothing, it being in sight by that. Once, at this cause (the focus come to it): nothing brings it back of itself
 /// after.
-pub fn Tree::show_in_sight(self : Tree, id : NodeId, within? : () -> (Double, Double)?) -> Unit {
-  self.shows_due.push((id, within.unwrap_or(fn() { None })))
+pub fn Tree::show_in_sight(
+  self : Tree,
+  id : NodeId,
+  within? : () -> (Double, Double)?,
+  holds? : () -> Bool,
+) -> Unit {
+  self.shows_due.push((id, within.unwrap_or(fn() { None }), holds))
   self.marked()
+}
+
+///|
+/// What each column keeps in sight for the focus (Tree's focus_holds), where its room came out another than it last
+/// kept it in (how tall it is, what lies over its top and its foot: the keyboard, its foot grown, the window), and then
+/// only: the part, not whole between what covers its ends, brought into sight by the column, as little as does it, its
+/// top winning, at once in this layout (no way of its own: what took the room is no motion of the column's). A column
+/// whose rows come or go, its room the same, keeps nothing: at its foot it follows its foot, what is kept going up with
+/// its rows. Let go of as the focus leaves the part, the part or the column is let go of, or the hand scrolls the
+/// column (View::scrolls). Whether it moved any.
+fn Tree::holds_now(self : Tree) -> Bool {
+  let mut moved = false
+  for col in self.focus_holds.keys().to_array() {
+    // (the part brought into sight by it, where in it, whether the focus is still there, the room it last kept it in)
+    let (part, within, still, kept) = match self.focus_holds.get(col) {
+      Some(h) => h
+      None => continue
+    }
+    let n = self.nodes[col]
+    guard n.live &&
+      self.alive_id(part) &&
+      @signals.untracked(still) &&
+      n.shows is Some(f) &&
+      n.shows_room is Some(r) else {
+      self.focus_holds.remove(col)
+      continue
+    }
+    let room = @signals.untracked(r)
+    if room == kept.val {
+      continue
+    }
+    kept.val = room
+    let (vh, top_cover, foot_cover) = room
+    let (_, ty, ts) = self.placed(part.at)
+    let (a, b) = match @signals.untracked(within) {
+      Some(w) => w
+      None => (0.0, self.nodes[part.at].flex.height)
+    }
+    let (_, vy, vs) = self.placed(col)
+    let s = if vs > 0.0 { vs } else { 1.0 }
+    let top = (ty + a * ts - vy) / s
+    let foot = (ty + b * ts - vy) / s
+    if top >= top_cover - 0.5 && foot <= vh - foot_cover + 0.5 {
+      continue
+    }
+    if @signals.untracked(fn() { f(top, foot) }) != 0.0 {
+      moved = true
+    }
+  }
+  moved
 }
 
 ///|
@@ -10115,7 +10187,7 @@ fn Tree::shown_now(self : Tree) -> Unit {
   self.shows_due.clear()
   @signals.start_batch()
   for e in due {
-    let (id, within) = e
+    let (id, within, holds) = e
     guard self.alive_id(id) else { continue }
     let (tx, ty, ts) = self.placed(id.at)
     let (a, b) = match within() {
@@ -10129,9 +10201,13 @@ fn Tree::shown_now(self : Tree) -> Unit {
     let mut x0 = tx
     let mut x1 = tx + self.nodes[id.at].flex.width * ts
     let mut i = self.nodes[id.at].parent
+    // (the one it was reached from: what a column holds pinned over what it scrolls (a page's list's foot, its bar) is
+    // in sight by being pinned, so nothing of the column is asked for it, its place kept (at its foot, following it))
+    let mut came = id.at
     while i >= 0 {
       let n = self.nodes[i]
       match n.shows {
+        Some(_) if n.scroll_held >= 0 && came != n.scroll_held => ()
         Some(f) => {
           let (vx, vy, vs) = self.placed(i)
           if n.shows_across {
@@ -10142,10 +10218,18 @@ fn Tree::shown_now(self : Tree) -> Unit {
             let moved = @signals.untracked(fn() { f((y0 - vy) / vs, (y1 - vy) / vs) })
             y0 = y0 - moved * vs
             y1 = y1 - moved * vs
+            // (brought for the focus by a column down which it scrolls: kept in sight by it as its room changes, from
+            // the room it is in now: Tree::holds_now)
+            match (holds, n.shows_room) {
+              (Some(still), Some(room)) if n.scroll_held >= 0 =>
+                self.focus_holds[i] = (id, within, still, Ref(@signals.untracked(room)))
+              _ => ()
+            }
           }
         }
         None => ()
       }
+      came = i
       i = n.parent
     }
   }

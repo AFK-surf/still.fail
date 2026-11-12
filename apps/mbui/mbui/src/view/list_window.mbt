@@ -957,6 +957,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     top_now(all, at()) >= foot_top(all, vh) - 0.5
   }, same=fn(a, b) { a == b })
   s.at_foot_said = Some(fn() { at_foot_now.get() })
+  // (what its foot covers of what shows, for what is brought into sight: the room it keeps under its last block)
+  s.foot_covered = fn() { foot_h.get() }
   self.reacts(fn() { at_most.get() }, fn(foot) {
     if foot && @signals.untracked(follows) && !s.at_foot() {
       // (back at its foot, having left it: followed again, whatever held it where it was, Scroll::holds_here)

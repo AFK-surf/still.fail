@@ -109,6 +109,10 @@ pub struct Scroll {
   /// whether it is at its foot, followed, told only as that changes (Scroll::at_foot_now): a page's list's by its own
   /// blocks and anchor (View::scrolls_window), else by how far it goes as last laid out (View::scrolls)
   priv mut at_foot_said : (() -> Bool)?
+  /// how tall what is pinned over its foot covers what it shows (a page's list's foot, as tall as the room it keeps
+  /// under its last block: View::scrolls_window's), what a part brought into sight comes to rest over (View::scrolls'
+  /// `shows`)
+  priv mut foot_covered : () -> Double
 }
 
 ///|
@@ -170,6 +174,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     held_said: fn() {  },
     pressed_said: fn(_) { fn() {  } },
     at_foot_said: None,
+    foot_covered: fn() { 0.0 },
   }
 }
 
@@ -1191,6 +1196,7 @@ pub fn View::scrolls(
     s.whole = None
     s.seen.set(None)
     s.tall = fn() { 0.0 }
+    s.foot_covered = fn() { 0.0 }
     s.host = None
     match self.tree.scrolls_at.get(self.at) {
       Some(o) if physical_equal(o, s) => self.tree.scrolls_at.remove(self.at)
@@ -1214,6 +1220,8 @@ pub fn View::scrolls(
       return s.moved(w.at, w.dx)
     }
     guard w.dy != 0.0 && w.dy.abs() >= w.dx.abs() else { return false }
+    // (the hand on it: what it kept in sight for the focus kept no more, Tree::holds_now)
+    self.tree.focus_holds.remove(self.at) |> ignore
     // (a page's list's fling stopped as the wheel comes, what shows past an end going on back as it was)
     // (a wheel's notch eased in, as an old view's list's is: Ctx::ease_list)
     if s.as_list {
@@ -1248,6 +1256,8 @@ pub fn View::scrolls(
     let (hy, hwy) = if across { (d.x, d.wx) } else { (d.y, d.wy) }
     match d.kind {
       Down => {
+        // (the hand on it: what it kept in sight for the focus kept no more, Tree::holds_now)
+        self.tree.focus_holds.remove(self.at) |> ignore
         // (what shows past an end of a page's list caught where it shows: held by the finger from there)
         if s.as_list {
           s.past_held(d.at)
@@ -1302,15 +1312,36 @@ pub fn View::scrolls(
   .shows(fn(top, foot) {
     let t = self.tree.logic_said()
     // (across: its start and its end, as wide as it is)
-    let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
-    let x = s.stopped(t)
-    if top < 0.0 {
-      s.sent(t, x + top)
+    // (down, less what is pinned over its foot: what is brought comes to rest over that, not under it; and under what
+    // floats over its top, as its bar keeps clear of it (`bar_clear`'s top end, what its page says lies there))
+    let vh = if across {
+      self.tree.nodes[self.at].flex.width
+    } else {
+      self.tree.nodes[self.at].flex.height - dmax(0.0, @signals.untracked(s.foot_covered))
+    }
+    let tc = if across { 0.0 } else { dmax(0.0, @signals.untracked(fn() { bar_clear().0 })) }
+    // (where it is, read: stopped and sent only where something of it has to move. In sight already, it is left as it
+    // is, on its way or at its foot following it, nothing written of it)
+    let x = @signals.untracked(fn() { s.where_at(t) })
+    if top < tc {
+      s.sent(t, x + top - tc)
     } else if foot > vh {
-      s.sent(t, x + dmin(top, foot - vh))
+      s.sent(t, x + dmin(top - tc, foot - vh))
+    } else {
+      return 0.0
     }
     s.at(self.tree) - x
-  }, across~)
+  }, across~, room?=if across {
+    None
+  } else {
+    Some(fn() {
+      (
+        self.tree.nodes[self.at].flex.height,
+        dmax(0.0, bar_clear().0),
+        dmax(0.0, (s.foot_covered)()),
+      )
+    })
+  })
 }
 
 ///|
