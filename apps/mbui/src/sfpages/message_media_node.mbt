@@ -233,16 +233,28 @@ fn image_coming_node(
   parent.box(fn(room) {
     room.over(Is(true)) |> ignore
     // (in a corner other than a message's file's, as far in as makes it concentric with that: image_coming's)
+    // (as high as its words' line where the system's size of words draws it higher than said, concentric with its
+    // corner so: coming_pill_high)
     @sf.style_node(room, fn() {
-      if corner == @sf.message_file_corner {
+      let h = coming_pill_high(room.words_scale())
+      if corner == @sf.message_file_corner && h == coming_pill_h {
         coming_room
+      } else if corner == @sf.message_file_corner {
+        coming_room.then(@ui.style(p=@sf.room_of(@ui.capsule_in(@sf.message_file_corner, h))))
       } else {
-        coming_room.then(@ui.style(p=@sf.capsule_fit_room(corner, coming_pill_h, coming_alone_in)))
+        coming_room.then(@ui.style(p=@sf.capsule_fit_room(corner, h, coming_alone_in)))
       }
     })
     room.show(at_once=true, fn() { shown.get() && how_far() is Some(_) }, fn(s) {
       s.box(fn(pill) {
-        @sf.style_node(pill, fn() { coming_pill })
+        @sf.style_node(pill, fn() {
+          let h = coming_pill_high(pill.words_scale())
+          if h == coming_pill_h {
+            coming_pill
+          } else {
+            coming_pill.then(@ui.style(h=Fixed(h)))
+          }
+        })
         pill.alpha(By(fn() { fade.shown(pill) })) |> ignore
         pill.pick(at_once=true, fn() { how_far().map_or(false, fn(c) { c.1 is Some(_) }) }, fn(q, known) {
           // (its ring and its words along the pill, as the pill lays them)
@@ -279,6 +291,20 @@ fn download_key(place : MessageFilesAt, a : () -> Attachment) -> String {
     let a = a()
     "download\u{1}" + @sfbase.file_image_id((place.station)(), owner_of(place.here(), a), stored_name(a.path))
   })
+}
+
+///|
+/// How high a picture's pill of how far is drawn at the system's size of words `scale`: as high as its words' line
+/// where that is higher than said (coming_pill_h), as the library's box_at has a video's capsule; the old view's kept
+/// it as said, its words over its foot.
+fn coming_pill_high(scale : Double) -> Double {
+  let look = @ui.style_words(coming_words)
+  let line = if look.line < 0.0 { -look.line * @ui.sp_at(scale, look.size) } else { @ui.sp_at(scale, look.line) }
+  if line > coming_pill_h {
+    line
+  } else {
+    coming_pill_h
+  }
 }
 
 ///|

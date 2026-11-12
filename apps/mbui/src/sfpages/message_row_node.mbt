@@ -32,7 +32,9 @@ fn message_row_frame_node(
 ) -> MessageRowNode {
   let node = parent.box(fn(root) {
     @sf.style_node(root, fn() { row_column })
-    root.box(fn(gap) { gap.height(By(fn() { Some(top()) })) |> ignore }) |> ignore
+    // (the room over it, as the row before it says: one room in the other's place as that changes, the row's own
+    // structure, its way the column's; the list's way of it with its neighbours' once it holds a block's)
+    root.pick(top, fn(gap, room) { gap.height(Is(Some(room))) |> ignore })
     root.box(fn(line) {
       @sf.style_node(line, fn() { row_line })
       line.box(fn(s) { s.width(By(fn() { Some(side()) })) |> ignore }) |> ignore

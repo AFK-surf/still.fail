@@ -212,13 +212,8 @@ pub fn video_capsule_node(parent : @view.View, duration : Double, corner? : Doub
   let length = if duration > 0.0 { clock(duration) } else { "" }
   parent.box(made_for=loc, fn(foot) {
     foot.over(Is(true)) |> ignore
-    style_node(foot, fn() {
-      if corner == message_file_corner {
-        video_capsule_foot
-      } else {
-        video_capsule_foot.then(@ui.style(p=room_of(capsule_fit(corner, video_capsule_h, video_capsule_alone_in))))
-      }
-    })
+    // (concentric with its corner as high as it is drawn: higher than said where its words' line is, box_at)
+    style_node(foot, fn() { video_capsule_foot_at(corner, words_box_high(video_capsule_h, video_capsule_words, foot.words_scale())) })
     foot.box(fn(b) {
       // (as high as its words' line where the system's size of words draws it higher than the capsule: box_at)
       style_node(b, fn() { box_at(video_capsule_kept, video_capsule_box, video_capsule_h, video_capsule_words, b.words_scale()) })
@@ -234,6 +229,19 @@ pub fn video_capsule_node(parent : @view.View, duration : Double, corner? : Doub
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// Where a video's capsule `h` high stands over its video in its foot's start corner, `corner` round (a message's
+/// file's, or a quote's picture's): concentric with it (video_capsule_foot where it is as high as said).
+fn video_capsule_foot_at(corner : Double, h : Double) -> @ui.Style {
+  if corner == message_file_corner && h == video_capsule_h {
+    video_capsule_foot
+  } else if corner == message_file_corner {
+    video_capsule_foot.then(@ui.style(p=room_of(@ui.capsule_in(message_file_corner, h))))
+  } else {
+    video_capsule_foot.then(@ui.style(p=room_of(capsule_fit(corner, h, video_capsule_alone_in))))
+  }
 }
 
 ///|

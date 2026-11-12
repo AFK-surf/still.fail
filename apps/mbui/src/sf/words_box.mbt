@@ -26,9 +26,21 @@ fn box_at(
     Some(k) if physical_equal(k.theme, th) && k.scale == scale => return k.style
     _ => ()
   }
-  let look = @ui.style_words(words)
-  let line = if look.line < 0.0 { -look.line * @ui.sp_at(scale, look.size) } else { @ui.sp_at(scale, look.line) }
+  let line = words_box_high(h, words, scale)
   let style = if line > h { box.then(@ui.style(h=Fixed(line))) } else { box }
   kept.val = Some({ theme: th, scale, style })
   style
+}
+
+///|
+/// How high box_at has a box `h` high holding a line of `words` at the system's size of words `scale`: that line's
+/// height where it is higher, else `h`.
+fn words_box_high(h : Double, words : @ui.TextStyle, scale : Double) -> Double {
+  let look = @ui.style_words(words)
+  let line = if look.line < 0.0 { -look.line * @ui.sp_at(scale, look.size) } else { @ui.sp_at(scale, look.line) }
+  if line > h {
+    line
+  } else {
+    h
+  }
 }
