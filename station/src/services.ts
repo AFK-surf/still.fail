@@ -275,7 +275,7 @@ export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/Adm
   static readonly layer = Layer.effect(
     AdminHost,
     Effect.gen(function* () {
-      const host = new Host(yield* Readers);
+      const host = new Host((yield* Readers).data);
       yield* Effect.acquireRelease(Effect.sync(() => host.follow()), (stop) => Effect.sync(stop));
       return host;
     }),

@@ -1,13 +1,83 @@
-// The machine's state, read in a reader and kept here: given again within ten seconds, and the CPU
-// ticks last seen kept across reads (readers come and go). GET /host, the events' `host` samples and what other stations
-// are told of this one's load (station_list, jobs/load.ts) share it.
+// What the machine a station runs on looks like (GET /host), ported from the Rust station's host.rs: for people deciding
+// where work goes and whether a station is struggling. How each machine is read (memory, CPU time, uptime, its OS) is
+// the platform's (platform/: macOS's sysctl and vm_stat, Linux's /proc, what Node's os says on Windows), its commands and
+// files not waited on; disk is the file system holding the station's data directory. Read on the main thread (the
+// station's own memory is this process's) and kept here: given again within ten seconds, the CPU ticks last seen kept
+// across reads. GET /host, the events' `host` samples and what other stations are told of this one's load
+// (station_list, jobs/load.ts) share it.
+import { statfs } from "node:fs/promises";
+import { availableParallelism, hostname as osHostname, loadavg } from "node:os";
 import type { Lang } from "../ops/i18n.ts";
-import type { Seen, Ticks } from "../read/host.ts";
-import type { Readers } from "../read/pool.ts";
 import { wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
-import { cpuShare } from "../platform/cpu-share.ts";
+import { cpuShare, type Ticks } from "../platform/cpu-share.ts";
 import { Gpus } from "../jobs/gpu.ts";
+
+export type { Ticks };
+/// The ticks last seen, and when.
+export type Seen = { at: number; ticks: Ticks } | null;
+
+/// hostname, without a `.local`.
+function hostname(): string {
+  const name = osHostname();
+  return name.endsWith(".local") ? name.slice(0, -".local".length) : name;
+}
+
+/// cpu_busy: how busy the CPUs have been since the last look, if that was within a minute; otherwise over the next
+/// moment. If they have not moved yet, return the first sample and let the caller ask again later.
+function cpuBusy(last: Seen): [busy: number | null, seen: Seen, needsTicks: boolean] {
+  const before = last !== null && wall.now() - last.at < 60_000 ? last.ticks : null;
+  const now = platform.host.cpuTicks();
+  if (now === null) return [null, last, false];
+  const busy = before === null ? null : cpuShare(before, now);
+  return [busy === null ? null : Math.round(busy * 100) / 100, { at: wall.now(), ticks: now }, busy === null];
+}
+
+/// disk: the file system holding `path`: its size and what is free for the station.
+async function disk(path: string) {
+  try {
+    const st = await statfs(path);
+    return { path, totalBytes: st.blocks * st.bsize, freeBytes: st.bavail * st.bsize };
+  } catch {
+    return { path, totalBytes: 0, freeBytes: 0 };
+  }
+}
+
+/// host_info (without its ten-second cache, which the caller keeps): the machine's state now, and the ticks seen.
+export async function hostInfo(dataDir: string, last: Seen): Promise<{ info: any; seen: Seen; needsTicks: boolean }> {
+  // The isolated app recording station must not put its host machine's identity and resource state in fixtures.
+  if (process.env.STILLFAIL_TEST_HOST === "1") {
+    return { info: {
+      hostname: "test-station", os: "Test OS", arch: "arm64", cpus: 4, cpuModel: "Test CPU", load: 0.25,
+      loadAvg: [1, 1, 1], cpuBusy: 0.25, uptimeSec: 3600,
+      memory: { totalBytes: 8_000_000_000, usedBytes: 4_000_000_000, swapUsedBytes: 0 },
+      disk: { path: "/test-station/data", totalBytes: 100_000_000_000, freeBytes: 50_000_000_000 },
+      stationRssBytes: 100_000_000, checkedAt: wall.now(),
+    }, seen: null, needsTicks: false };
+  }
+  const [sample, space] = await Promise.all([platform.host.sample(), disk(dataDir)]);
+  const [busy, seen, needsTicks] = cpuBusy(last);
+  const n = availableParallelism();
+  const info = {
+    hostname: hostname(),
+    os: sample.osName,
+    arch: process.arch,
+    cpus: n,
+    cpuModel: sample.cpuModel,
+    load: Math.round((loadavg()[0]! / Math.max(n, 1)) * 100) / 100,
+    // The run queue over 1, 5 and 15 minutes as `uptime` says it (Windows has none: Node says zeros).
+    loadAvg: platform.os === "windows" ? null : loadavg().map((l) => Math.round(l * 100) / 100),
+    cpuBusy: busy,
+    uptimeSec: sample.uptimeSec,
+    memory: sample.memory,
+    disk: space,
+    stationRssBytes: sample.ownRss,
+    // Clients from before the name need this field, and refuse the whole station list without it.
+    emberRssBytes: sample.ownRss,
+    checkedAt: wall.now(),
+  };
+  return { info, seen, needsTicks };
+}
 
 /// How often the CPUs' ticks are noted for their recent average, and over how long that is.
 export const CPU_EVERY_MS = 15_000;
@@ -43,7 +113,7 @@ export class CpuWindow {
 }
 
 export class Host {
-  private readers: Readers;
+  private dataDir: string;
   readonly gpus: Pick<Gpus, "read">;
   private cached: { at: number; info: any } | null = null;
   private seen: Seen = null;
@@ -51,9 +121,13 @@ export class Host {
   private sampling: Promise<any> | null = null;
   private cpu = new CpuWindow();
 
-  constructor(readers: Readers, gpus: Pick<Gpus, "read"> = new Gpus()) {
-    this.readers = readers;
+  private read: typeof hostInfo;
+
+  /// `dataDir`: where the station keeps its data (the disk it is on is said); `read`, how the machine is read.
+  constructor(dataDir: string, gpus: Pick<Gpus, "read"> = new Gpus(), read: typeof hostInfo = hostInfo) {
+    this.dataDir = dataDir;
     this.gpus = gpus;
+    this.read = read;
   }
 
   /// Notes the CPUs' ticks now and every CPU_EVERY_MS after, until the returned function is called.
@@ -87,20 +161,18 @@ export class Host {
     if (this.cached !== null && wall.now() - this.cached.at < 10_000) return Promise.resolve(this.cached.info);
     // Ticks the last read saw over a minute ago would make it wait a moment for them to move: those followed are newer.
     const last = this.seen !== null && wall.now() - this.seen.at < 60_000 ? this.seen : (this.cpu.latest() ?? this.seen);
-    this.reading ??= this.readers
-      .read("host", { seen: last }, lang)
-      .then(async (text) => {
-        const parsed: { info: any; seen: Seen; needsTicks: boolean } = JSON.parse(text);
+    this.reading ??= this.read(this.dataDir, last)
+      .then(async (parsed) => {
         const { info, needsTicks } = parsed;
         let { seen } = parsed;
         if (needsTicks && seen !== null) {
-          // macOS can leave ticks unchanged for 500 ms or more. Wait outside the reader, then ask for ticks alone;
-          // the reader can serve other requests between samples. As before, give up after two seconds.
+          // macOS can leave ticks unchanged for 500 ms or more: wait, then look at the ticks alone. As before, give up
+          // after two seconds.
           const first = seen.ticks;
           const start = wall.now();
           await wall.sleep(500);
           for (;;) {
-            const ticks: Ticks | null = JSON.parse(await this.readers.read("hostTicks", {}, lang));
+            const ticks = platform.host.cpuTicks();
             if (ticks === null) { seen = last; break; }
             const busy = cpuShare(first, ticks);
             if (busy !== null) {

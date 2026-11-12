@@ -4,7 +4,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CPU_EVERY_MS, CPU_SPAN_MS, CpuWindow, Host } from "../src/api/host.ts";
-import type { Readers } from "../src/read/pool.ts";
 import { Gpus, type Run, appleGpu, macDiscreteGpus, nvidiaGpus, windowsAmdGpus } from "../src/jobs/gpu.ts";
 import { Net, OLDER, detailed, measure, summary } from "../src/jobs/load.ts";
 
@@ -95,16 +94,16 @@ test("GPUs: Apple's chip and cores once, NVIDIA's as nvidia-smi says them, kept 
 test("host samples include fresh GPU readings even while the rest of the host sample is cached", async () => {
   let reads = 0;
   let gpu = [{ name: "NVIDIA A10", busy: 0.25 }];
-  const readers = { read: async () => {
+  const read = async () => {
     reads++;
-    return JSON.stringify({ info: { checkedAt: Number.MAX_SAFE_INTEGER, cpus: 4 }, seen: null });
-  } } as unknown as Readers;
-  const host = new Host(readers, { read: async () => gpu });
+    return { info: { checkedAt: Number.MAX_SAFE_INTEGER, cpus: 4 }, seen: null, needsTicks: false };
+  };
+  const host = new Host("/data", { read: async () => gpu }, read);
   assert.deepEqual((await host.sample()).gpus, [{ name: "NVIDIA A10", busy: 0.25 }]);
   gpu = [{ name: "NVIDIA A10", busy: 0.8 }];
   assert.deepEqual((await host.sample()).gpus, [{ name: "NVIDIA A10", busy: 0.8 }]);
   assert.equal(reads, 1);
-  const unavailable = new Host(readers, { read: async () => { throw new Error("GPU unavailable"); } });
+  const unavailable = new Host("/data", { read: async () => { throw new Error("GPU unavailable"); } }, read);
   assert.deepEqual(await unavailable.sample(), { checkedAt: Number.MAX_SAFE_INTEGER, cpus: 4, gpus: null });
 });
 

@@ -1,4 +1,4 @@
-// Reading what a machine's commands and files say (read/host.ts's, for every machine): Rust's str methods as host.rs
+// Reading what a machine's commands and files say (api/host.ts's, for every machine): Rust's str methods as host.rs
 // uses them.
 import { spawnSync } from "node:child_process";
 

@@ -28,16 +28,22 @@ export function treeOf(table: readonly ProcessInfo[]): { byPid: Map<number, Proc
   return { byPid, children };
 }
 
+/// What the host page says of the machine besides its CPUs' time (api/host.ts `hostInfo`).
+export type HostSample = {
+  memory: { totalBytes: number; usedBytes: number; swapUsedBytes: number | null; known?: boolean };
+  cpuModel: string;
+  uptimeSec: number;
+  osName: string;
+  /// This process's memory: its footprint on macOS, resident memory elsewhere.
+  ownRss: number;
+};
+
 /// How the host page says the machine (GET /host): memory, CPU, uptime, the OS.
 export type Host = {
   /// CPU time since boot, all CPUs together: (busy, total); none when it cannot be read.
   cpuTicks(): [busy: number, total: number] | null;
-  memory(): { totalBytes: number; usedBytes: number; swapUsedBytes: number | null; known?: boolean };
-  cpuModel(): string;
-  uptimeSec(): number;
-  osName(): string;
-  /// This process's memory: its footprint on macOS, resident memory elsewhere.
-  ownRss(): number;
+  /// The rest, read with commands and files not waited on: it is read on the main thread (api/host.ts).
+  sample(): Promise<HostSample>;
 };
 
 /// A Node release's build for one machine, as nodejs.org has it: `dist` (node-v<version>-<os>-<arch>), its `archive` in
@@ -148,7 +154,7 @@ export type Platform = {
   /// Whether the station says `leave` before letting go of a runner (a pipe has no closing of one side).
   runnerSaysLeave: boolean;
 
-  // The machine (read/host.ts).
+  // The machine (api/host.ts).
   host: Host;
 
   // The launcher (native/launcher), as the CLI and the station's own update reach it.

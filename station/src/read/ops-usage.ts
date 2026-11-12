@@ -1,10 +1,8 @@
-// The reads of usage, the machine's own sessions, the agents' memory and the host (src/api/routes/usage.ts asks them).
+// The reads of usage, the machine's own sessions and the agents' memory (src/api/routes/usage.ts asks them).
 // The request's language comes in the args (`lang`), as these words are said outside views.ts.
 import type { ReadOp } from "./ops.ts";
-import { hostInfo } from "./host.ts";
 import { machineSession, machineSessions } from "./machine.ts";
 import { memory } from "./memory.ts";
-import { platform } from "../platform/index.ts";
 import { HttpError } from "./views.ts";
 import { resourceChats, usage } from "./usage.ts";
 import { usageCallsPage } from "./store.ts";
@@ -48,6 +46,4 @@ export const usageOps: Record<string, ReadOp> = {
       throw error;
     }
   },
-  host: (store, a) => hostInfo(store.dataDir, a.seen),
-  hostTicks: () => platform.host.cpuTicks(),
 };

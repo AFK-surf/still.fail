@@ -162,7 +162,7 @@ test("a stretch of a history filled in brief is read behind the rest; one read w
   assert.equal(Atomics.load(state, 0), 4);
 });
 
-test("the sidebar, a session's detail, the machine's sample and the jobs up are read beside a slow bulk read, before another waiting", { timeout: 30_000 }, async () => {
+test("the sidebar, a session's detail and the jobs up are read beside a slow bulk read, before another waiting", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
   // A slow usage read holds one reader, another waits for the one left.
   const asked = [readers.read("usage", args(true), "en"), readers.read("usage", args(true), "en")];
@@ -170,11 +170,9 @@ test("the sidebar, a session's detail, the machine's sample and the jobs up are 
     await started(1);
     assert.equal(await readers.read("chats", args(false), "en"), "{}");
     assert.equal(await readers.read("session", args(false), "en"), "{}");
-    // A machine sample is interactive too.
-    assert.equal(await readers.read("host", args(false), "en"), "{}");
     // So are the jobs up without their chats; with their chats, they are a bulk read (below).
     assert.equal(await readers.read("openJobs", { ...args(false), chats: false }, "en"), "{}");
-    assert.equal(Atomics.load(state, 0), 5, "the usage read waiting still waits");
+    assert.equal(Atomics.load(state, 0), 4, "the usage read waiting still waits");
   } finally {
     const settled = await open(asked);
     assert.ok(settled.every((s) => s.status === "fulfilled"));
