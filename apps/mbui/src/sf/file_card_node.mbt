@@ -28,7 +28,11 @@ pub fn file_card_node(
 ) -> @view.View {
   parent.box(made_for=loc, fn(card) {
     style_node(card, fn() {
-      let ground = if retry() || remove() { card_box.then(card_end_justified) } else { card_box }
+      let ground = if retry() || remove() {
+        card_box.then(card_box_round).then(card_end_justified)
+      } else {
+        card_box.then(card_box_round)
+      }
       if hovered_node(card) {
         ground.then(card_hot)
       } else {
@@ -145,3 +149,7 @@ fn card_end_node(
 /// room (as the old view's name_stem comes out, laid out by the old view: a node's `Hug` gives no way).
 // kept across runs: a value (no field of it changes)
 let name_stem_cut : @ui.Style = @ui.css("w=Cut")
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_box_round : @ui.Style = @ui.css("radius=Full")

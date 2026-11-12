@@ -61,7 +61,7 @@ fn jobs_pop_node(v : @view.View, src : Source, station : String, view : () -> Js
       @sf.style_node(foot, fn() { jobs_foot })
       let words = fn() { text(view(), "allText") + " · " + @sf.t("web-main.jobs.inPanel") }
       foot.box(fn(b) {
-        @sf.style_node(b, fn() { jobs_all }, in_row=true)
+        @sf.style_node(b, fn() { jobs_all.then(jobs_pop_round) }, in_row=true)
         b.ground(By(fn() { if @sf.lit_node(b) { @sf.theme().p.hover } else { 0L } })).says(By(fn() { Some(@view.said(Button, label=words())) }))
         |> ignore
         @sf.presses_node(b, fn() { tab("") })
@@ -90,7 +90,7 @@ fn jobs_pop_head(g : @view.View, name : String, note : () -> String) -> Unit {
 /// while `open` (the ground the pointer's), on the ground of the fold it heads then; `press` as it is pressed.
 fn jobs_pop_row(row : @view.View, job : () -> Json?, end : () -> String, open : () -> Bool, press : () -> Unit) -> Unit {
   row.box(fn(b) {
-    @sf.style_node(b, fn() { if open() { job_row_static_inset } else { job_row_inset } })
+    @sf.style_node(b, fn() { (if open() { job_row_static_inset } else { job_row_inset }).then(jobs_pop_round) })
     b
     .ground(By(fn() { if !open() && @sf.lit_node(b) { @sf.theme().p.hover } else { 0L } }))
     .says(By(fn() { Some(@view.said(Button, label=text(job(), "name"))) }))
@@ -218,7 +218,7 @@ fn jobs_pop_fold(
 ) -> Unit {
   let open = fn() { jobs_own.open.get() == id }
   row.box(fn(f) {
-    @sf.style_node(f, fn() { if open() { jobs_fold_open } else { jobs_fold } })
+    @sf.style_node(f, fn() { if open() { jobs_fold_open.then(jobs_pop_round) } else { jobs_fold } })
     jobs_pop_row(f, job, fn() { if open() { "chevron-down" } else { "chevron-right" } }, open, fn() {
       jobs_own.open.set(if jobs_own.open.get() == id { "" } else { id })
     })
@@ -351,3 +351,7 @@ fn jobs_pop_action(parent : @view.View, words : String, on : () -> Bool, mark : 
 /// How wide a notice's time is at least (job_notice_ago's S16).
 // kept across runs: a value
 let job_notice_ago_w : Double = 64.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let jobs_pop_round : @ui.Style = @ui.style(radius=@sf.panel_in)

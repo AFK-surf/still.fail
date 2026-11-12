@@ -994,11 +994,11 @@ fn size_option_node(
 ) -> Unit {
   parent.box(fn(o) {
     @sf.style_node(o, fn() {
-      size_option.then(@sf.panel_words_in_node(o)).then(@ui.style(min_h=Fixed(@sf.theme().items.least)))
+      size_option.then(@sf.panel_row_in_node(o)).then(@ui.style(min_h=Fixed(@sf.theme().items.least)))
     })
     o.ground(By(fn() { if @sf.lit_node(o) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
     // (read out by its name and its size, as the old row was)
-    @sf.rippled_node(o, press, size_option_corner, fn() { name() + " " + note() })
+    @sf.rippled_node(o, press, @sf.row_corner, fn() { name() + " " + note() })
     // (its check's column, the check in its middle while chosen: along the row, at once)
     o.box(fn(k) {
       k.width(By(fn() { Some(@sf.theme().rows.check) })).row(Is(true)).lies_along(Is(Middle)) |> ignore
@@ -1017,17 +1017,14 @@ fn size_option_node(
 
 ///|
 /// The sizes' room (under them the presenter's foot); a size's row: at the panel's rows' edge, its check's column on
-/// its words' line (@sf.panel_row_in), 8 apart, concentric with the panel; its name a row's title (500 chosen), its
-/// note a row's note (Rows); the check 16.
+/// its words' line (@sf.panel_row_in_node), 8 apart, concentric with the panel; its name a row's title (500 chosen),
+/// its note a row's note (Rows); the check 16.
 // kept across runs: a value (no field of it changes)
 let sizes_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let size_option : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 radius=Inner align=ACenter")
-
-///|
-let size_option_corner : Double = 12.0
+let size_option : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 
 ///|
 let size_check_icon : Double = 16.0

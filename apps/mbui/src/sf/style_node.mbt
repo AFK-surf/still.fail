@@ -171,6 +171,18 @@ fn style_of(q : @ui.Patch, in_row : Bool, loc : SourceLoc) -> StyleSet {
     },
     margin: style_sides(true, q.m, q.mx, q.my, q.ml, q.mt, q.mr, q.mb),
     corner: match q.radius {
+      Some(Inner) => {
+        @view.fault("style_node at \{loc}: radius=Inner is laid on no node")
+        0.0
+      }
+      Some(InnerOr(_)) => {
+        @view.fault("style_node at \{loc}: radius=InnerOr is laid on no node")
+        0.0
+      }
+      Some(Around) => {
+        @view.fault("style_node at \{loc}: radius=Around is laid on no node")
+        0.0
+      }
       Some(r) => @ui.tree_theme().corner(r)
       None => 0.0
     },

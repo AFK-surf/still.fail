@@ -58,7 +58,11 @@ fn message_image_node(
   // the menu up by a finger's hold (its serial among what is presented: lifted while it is drawn)
   let held_menu : @signals.Signal[Int?] = @signals.signal(None)
   parent.box(fn(f) {
-    @sf.style_node(f, fn() { image_box_style(w, h, key() != "!" || letterbox(), corner) })
+    @sf.style_node(f, fn() {
+      (if key() != "!" || letterbox() { image_frame } else { image_frame_waiting })
+      .then(@ui.style(w=Fixed(w), h=Fixed(h)))
+      .then(frame_corner_node(corner))
+    })
     f.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.file.view", args=[("name", a().name)]))) })) |> ignore
     let open_menu = fn(x : Double, y : Double, finger : Bool) {
       let here = place.here()

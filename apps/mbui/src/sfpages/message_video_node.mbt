@@ -32,7 +32,7 @@ fn message_video_node(
   }
   let held_menu : @signals.Signal[Int?] = @signals.signal(None)
   parent.box(fn(f) {
-    @sf.style_node(f, fn() { video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))).then(frame_corner(corner)) })
+    @sf.style_node(f, fn() { video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))).then(frame_corner_node(corner)) })
     f.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.file.play", args=[("name", a().name)]))) })) |> ignore
     // (its name, which nothing over its picture says, whole by it while what it shows shows cut short: video_item's tip)
     @sf.tip_node(tips, f, fn() { a().name }, repeats=true) |> ignore

@@ -87,8 +87,9 @@ pub fn rail_card_node(
           None => ()
         }
       })
-      // (its ground the hover's as the hand is on it: rc_share's hovered)
+      // (its ground the hover's as the hand is on it: rc_share's hovered; its corner concentric with the card's)
       .ground(By(fn() { if @sf.lit_node(k) { @sf.theme().p.hover } else { @sf.alpha(@sf.theme().p.text, 0.05) } }))
+      .radius(By(fn() { rc_stat_corner() }))
       |> ignore
       @sf.icon_node(k, "share", 16.0, By(fn() { @sf.theme().p.text })) |> ignore
       @sf.words_node(k, label, fn() { rc_share_words }) |> ignore
@@ -259,7 +260,7 @@ let rc_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold,
 /// its edges), 36 high, a small panel's row: a capsule concentric with its corners there (6 and 18, 24; login_card's lc_open);
 /// on the words' colour at 5%, the hover's as the hand is on it (rail_card_node).
 // kept across runs: a value (no field of it changes)
-let rc_share : @ui.Style = @ui.css("row w=Full h=S9 mt=S1 px=S3 gap=S1_5 radius=Inner align=ACenter justify=JCenter").then(
+let rc_share : @ui.Style = @ui.css("row w=Full h=S9 mt=S1 px=S3 gap=S1_5 align=ACenter justify=JCenter").then(
   @ui.style(mx=@sf.room_of(-hover_words_in), mb=@sf.room_of(-hover_words_in)),
 )
 

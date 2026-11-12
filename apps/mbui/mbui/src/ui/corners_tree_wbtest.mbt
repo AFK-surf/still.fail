@@ -788,3 +788,68 @@ test "corners: an old view's boxes made where the window's tree's nodes were hel
   let faults = old_beside_lit_faults()
   assert_eq(faults, [])
 }
+
+///|
+/// A row 18 round in the window's tree holding a dot 8×8 near its top left (10 and 12 in), with a halo 16×16 laid over
+/// the dot (`halo`: View::over and offset (-4, -4), else laid in the row itself at (6, 8)): the corner rule's faults.
+fn tree_dot_halo_faults(hung : Bool) -> Array[String] {
+  let t = Tester::new(
+    fn(_) {  },
+    tree=fn(root) {
+      root.box(fn(page) {
+        page.pad(Is(40.0)) |> ignore
+        page.box(fn(row) {
+          row
+          .width(Is(Some(240.0)))
+          .height(Is(Some(48.0)))
+          .padding(Is((10.0, 12.0, 10.0, 12.0)))
+          .radius(Is(18.0))
+          .ground(Is(0x222222FFL))
+          |> ignore
+          if hung {
+            row.box(fn(dot) {
+              dot.width(Is(Some(8.0))).height(Is(Some(8.0))).radius(Is(4.0)).ground(Is(0x4ADE80FFL)) |> ignore
+              dot.box(fn(halo) {
+                halo
+                .over(Is(true))
+                .offset(Is((-4.0, -4.0)))
+                .width(Is(Some(16.0)))
+                .height(Is(Some(16.0)))
+                .radius(Is(8.0))
+                .ground(Is(0x4ADE8033L))
+                |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+          } else {
+            row.box(fn(halo) {
+              halo
+              .margin(Is((-4.0, -4.0, 0.0, 0.0)))
+              .width(Is(Some(16.0)))
+              .height(Is(Some(16.0)))
+              .radius(Is(8.0))
+              .ground(Is(0x4ADE8033L))
+              |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  t.draw()
+  t.corner_faults()
+}
+
+///|
+test "corners: a mark hung over a small dot in a tree row's corner (over + offset) is exempt as an old view's is; the same circle laid in the row's flow is checked" {
+  assert_eq(tree_dot_halo_faults(true), [])
+  assert_eq(tree_dot_halo_faults(false).length(), 1)
+}

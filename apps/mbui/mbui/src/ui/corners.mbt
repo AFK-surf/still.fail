@@ -371,6 +371,19 @@ fn[T] Ctx::with_tree_nodes(
     }
     if facts {
       self.tree_facts(i, n, d, if holder >= 0 { Some(held[holder].0) } else { None }, contents, tree)
+    } else if !laid {
+      // (a mark hung on something small or on a corner, Ctx::corner_exempt, Ctx::hung_marks: moved off its place by an
+      // offset, or placed out of the flow in what holds it, View::over / View::beside / insets)
+      match tree.laid_facts(d.id) {
+        Some(f) => {
+          if f.apart >= 1 {
+            n.at_l = 0.0
+          }
+          n.tx = f.off.0
+          n.ty = f.off.1
+        }
+        None => ()
+      }
     }
     if !laid {
       tree_frame_ids[i] = d.id

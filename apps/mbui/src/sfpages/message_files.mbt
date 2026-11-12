@@ -1030,6 +1030,13 @@ fn frame_corner(corner : Double) -> @ui.Style {
 }
 
 ///|
+/// A picture's box's corner `corner` on a node (message_image_node, message_video_node: a message's file's, or a
+/// quote's own picture's concentric with its card: @sf.quote_picture_corner).
+fn frame_corner_node(corner : Double) -> @ui.Style {
+  @ui.style(radius=@sf.file_radius(corner))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let image_frame_waiting : @ui.Style = image_frame.then(@ui.css("bg=Neutral"))
 
