@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a62811514](https://github.com/AFK-surf/still.fail/commit/a62811514cbead15878fbdbbd908acd4a0caa143) screens: what is pressed over the picture is its o | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.37 | 176.97 |
 | [6fe90476a](https://github.com/AFK-surf/still.fail/commit/6fe90476a02cd1fb756a50eccf72a166682807f5) core: a lock's chain is the rules' fork choice amo | 1.88 | 2.51 | 10.73 | 29.68 | 37.92 | 26.42 | 49.54 | 94.64 | 184.83 |
 | [33ffbb39f](https://github.com/AFK-surf/still.fail/commit/33ffbb39f0814ad4933e78856088d8da8b1d762b) mbui: what a page's list's block holds comes and g | 1.88 | 2.51 | 10.73 | 29.66 | 37.92 | 26.4 | 49.54 | 94.39 | 170.72 |
 | [022ba7280](https://github.com/AFK-surf/still.fail/commit/022ba728003387d92bfa4daec6f5b38a1dd5a273) core: a test's time passes without a flush after t | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.06 | 176.2 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7424a775e](https://github.com/AFK-surf/still.fail/commit/7424a775eeac80dcd46f9e46b7a3f1f7cc5d0228) mbui, app: 22 bars of how what moves goes fall to  | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.59 | 183.02 |
 | [f7367fe43](https://github.com/AFK-surf/still.fail/commit/f7367fe4394881588af6ad328a401f9d941916e9) core, app: a workspace's first open on 大屏 landing  | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.75 | 113.72 |
 | [e39116f76](https://github.com/AFK-surf/still.fail/commit/e39116f76d1349b37fa5dd49082fe565bb497070) core: past a call's 3 s the cloud is asked too, an | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94.01 | 190.1 |
-| [9414759c2](https://github.com/AFK-surf/still.fail/commit/9414759c2fdec23894aee9864bf012b4042cdc48) core: an entry a station of the lock refuses fails | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94.21 | 152.68 |
