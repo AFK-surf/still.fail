@@ -286,6 +286,20 @@ pub fn Field::focused(self : Field) -> Bool {
 }
 
 ///|
+/// Whether `self` had the keyboard's focus when an open modal layer took it, and will get it back as that layer goes.
+pub fn Field::parked(self : Field) -> Bool {
+  let c = g()
+  let id = match self.st.tree_node {
+    Some(n) if tree_fields.contains(n) => tree_said_of.get(n).unwrap_or(0)
+    _ if c.editors.get(self.st.built_id).map_or(false, fn(e) { physical_equal(e, self.st) }) => self.st.built_id
+    _ => 0
+  }
+  hand.focus_id.get() |> ignore
+  c.has_focus(id) |> ignore
+  c.focus_parked(id)
+}
+
+///|
 /// The keyboard's focus given field `field` by what holds it now: a field of the window's tree, at once (where it can
 /// take it); an old view's editor drawn now, that one (where the old view it is in takes input); none, asked of the one
 /// that comes to hold it, given as it does (a field of the tree's as it is made; an old view's editor as it is built),

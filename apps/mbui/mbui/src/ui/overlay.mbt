@@ -175,7 +175,7 @@ pub fn Ctx::overlay(
     initial_focus
   }
   // what to give the focus back to, as it opened
-  if !self.layer_return.contains(id) {
+  if !self.layer_return.contains(id) || (!inert && !self.layer_gen.contains(id)) {
     self.layer_return[id] = if return_focus != 0 { return_focus } else { self.focus }
   } else if return_focus != 0 {
     self.layer_return[id] = return_focus
@@ -292,6 +292,32 @@ pub fn Ctx::passes(self : Ctx, i : Int) -> Unit {
 pub fn Ctx::dismiss(self : Ctx, id : Int, why? : Dismiss = Escape) -> Unit {
   self.dismissals[id] = why
   self.read_changed("a layer dismissed")
+}
+
+///|
+/// Whether layer `id` has a dismissal waiting to be read by its next `overlay` call this frame.
+pub fn Ctx::will_dismiss(self : Ctx, id : Int) -> Bool {
+  self.dismissals.contains(id)
+}
+
+///|
+/// Whether editor or key catcher `editor_id` was built inside layer `layer_id` (or a layer nested within it).
+fn Ctx::editor_in_layer(self : Ctx, editor_id : Int, layer_id : Int) -> Bool {
+  if editor_id == 0 || layer_id == 0 {
+    return false
+  }
+  if !self.editors.contains(editor_id) && !self.dev.catchers.contains(editor_id) {
+    return false
+  }
+  let at = self.editor_layer.get(editor_id).unwrap_or(0)
+  at != 0 && self.layer_built_in(at, layer_id)
+}
+
+///|
+/// Whether an editor or key catcher built inside layer `id` (or a nested layer of it) currently holds the focus.
+pub fn Ctx::focused_editor_in_layer(self : Ctx, id : Int) -> Bool {
+  hand.focus_id.get() |> ignore
+  self.editor_in_layer(self.focus, id)
 }
 
 ///|
@@ -740,7 +766,7 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
         f.id == self.focus && self.layer_within(f.layer, l.id)
       })
     if back != 0 && inside {
-      self.focus_moved(back)
+      self.focus_moved(back, returned=true)
     }
   }
   // a field given the focus this frame under the topmost modal layer (a page's composer taking the cursor as its chat
@@ -796,7 +822,7 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
         layer_back_spent.remove(g)
       }
     }
-    if !l.inert && !self.layers.iter().any(fn(x) { x.id == l.id }) {
+    if !self.layers.iter().any(fn(x) { x.id == l.id }) {
       self.layer_return.remove(l.id)
     }
   }
@@ -1053,7 +1079,7 @@ fn Ctx::layers_dismissed(self : Ctx, gone : Array[(Int, Dismiss)], tell? : Bool 
       let there = back != 0 &&
         (self.last_focusables.iter().any(fn(f) { f.id == back && !self.layer_inert(f.layer) }) ||
         tree_said_ids.contains(back))
-      self.focus_moved(if there { back } else { 0 })
+      self.focus_moved(if there { back } else { 0 }, returned=true)
     }
     match self.layer_on_dismiss.get(id) {
       Some((g, f)) if g == gen => {

@@ -77,6 +77,9 @@ priv struct SheetKept {
   mut shown : Bool
   mut asked : Double
   mut rising : Bool
+  /// whether an editor inside this sheet held the focus last frame (its foot then at the soft keyboard's top, else at
+  /// the screen's foot)
+  mut in_ime : Bool
   /// opened in another's place (sheet's `in_place`): how tall that one stood and the moment (-1: not), and how much
   /// taller than its own height it stands (shorter: less than none), from that at that moment on a Move to none
   mut placed : Double
@@ -116,8 +119,7 @@ pub fn sheet(
   let th = c.theme()
   let id = c.id(key)
   kit.val.sheet_keys[key] = id
-  let (_, total) = c.window_size()
-  let target = if h >= 0.0 { h } else { share * total }
+  let mut now = open && !c.will_dismiss(id)
   let s = match kit.val.sheets.get(id) {
     Some(s) => s
     None => {
@@ -130,6 +132,7 @@ pub fn sheet(
         shown: false,
         asked: -1.0,
         rising: false,
+        in_ime: false,
         placed: -1.0,
         placed_at: -1.0,
         lag: sheet_spring(0.0),
@@ -138,11 +141,14 @@ pub fn sheet(
       s
     }
   }
-  let mut now = open
+  let in_ime = now && (c.focused_editor_in_layer(id) || (s.in_ime && s.was_open && c.ime_inset() > 0.0))
+  let total = c.window_size().1 + (if in_ime { 0.0 } else { c.ime_inset() })
+  let target = if h >= 0.0 { h } else { share * total }
   let mut dragged : SheetDrag? = None
+  let old_hx = s.h.value_at(c) + dmax(s.lag.value_at(c), 0.0)
   // opened: from below at its height; asked another height while open (what it holds laid out another height, the
   // window another): that height at once, as it is laid out (placed by its size, not chased to it)
-  if open && !s.was_open && in_place >= 0.0 && !s.shown {
+  if now && !s.was_open && in_place >= 0.0 && !s.shown {
     // (in another's place, that one gone as this comes: its scrim whole as that one's was, at its own height drawn
     // as much taller as that one stood, on a Move to none)
     s.h.put(target)
@@ -155,7 +161,7 @@ pub fn sheet(
     s.rising = false
     s.placed = in_place
     s.placed_at = c.moment()
-  } else if open && !s.was_open {
+  } else if now && !s.was_open {
     s.placed_at = -1.0
     s.lag.put(0.0)
     if !s.shown || s.below.value_at(c) > 1.0 {
@@ -170,11 +176,11 @@ pub fn sheet(
     s.shown = true
     s.asked = target
     s.rising = true
-  } else if open && s.rising && s.below.value_at(c) < s.asked - 0.5 {
+  } else if now && s.rising && s.below.value_at(c) < s.asked - 0.5 {
     // (risen some way: what it is asked for from now on is another height while open)
     s.rising = false
   }
-  if open && s.was_open && target != s.asked {
+  if now && s.was_open && target != s.asked {
     if s.placed_at >= 0.0 && c.moment() == s.placed_at {
       // (in another's place, its height told anew at the moment it came, as what it holds is first laid out: from
       // where that one stood to this)
@@ -191,15 +197,23 @@ pub fn sheet(
     }
     s.asked = target
   }
+  if now && s.was_open && in_ime != s.in_ime && c.ime_inset() > 0.0 {
+    let df = if in_ime { -c.ime_inset() } else { c.ime_inset() }
+    let new_hx = s.h.value_at(c) + dmax(s.lag.value_at(c), 0.0)
+    let (bx0, bv0) = s.below.at(c.moment())
+    s.below.put(bx0 - df + (new_hx - old_hx))
+    s.below.go_at(c, 0.0, v=bv0)
+  }
   if !s.shown {
-    s.was_open = open
-    return { open, shown: false, dragged: None, stands: 0.0 }
+    s.was_open = now
+    s.in_ime = in_ime
+    return { open: now, shown: false, dragged: None, stands: 0.0 }
   }
   // the top's drag
   let top_id = c.id(key + "/top")
   let draggable = !detents.is_empty()
   match c.drag_of(top_id) {
-    Some(d) if open => {
+    Some(d) if now => {
       let (_, dy) = d.take_move()
       if dy != 0.0 {
         // (`held`: where the finger has it, past its top too; drawn there, past its top given way to: stretched; from
@@ -254,6 +268,7 @@ pub fn sheet(
     }
     _ => ()
   }
+  let mut eff_total = total
   // closed: it sinks away from the height it has, which stays (one still on its way to another height, told as it
   // was opened or while open, stops there: else it would sink to where it was and the rest of it stay up)
   if !now && s.was_open {
@@ -261,7 +276,15 @@ pub fn sheet(
     let at = s.h.value_at(c) + s.lag.value_at(c)
     s.lag.put(0.0)
     s.h.put(at)
-    s.below.go_at(c, dmax(at + raised, sinks))
+    let (bx0, bv0) = s.below.at(c.moment())
+    let had_ime = s.in_ime || in_ime
+    if had_ime {
+      eff_total = c.window_size().1 + c.ime_inset()
+      if c.ime_inset() > 0.0 {
+        s.below.put(bx0 - c.ime_inset())
+      }
+    }
+    s.below.go_at(c, dmax(at + raised, sinks), v=bv0)
     s.fade.animate(c, 0.0, scrim_fade())
   } else if !now && sinks > s.below.target() {
     // (told how far after it closed, as one under it closed with it: on as far as that, as fast as it goes)
@@ -289,6 +312,7 @@ pub fn sheet(
     s.shown = false
     s.fade.snap(c, 0.0)
     s.was_open = false
+    s.in_ime = false
     return { open: false, shown: false, dragged, stands: 0.0 }
   }
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
@@ -298,7 +322,7 @@ pub fn sheet(
   // (the scrim as far as it has come, as it is drawn: Ctx::bg_by on the layer's ground)
   let scrim = scrim.unwrap_or(th.scrim)
   let o = c.overlay(key, modal=true, initial_focus=@ui.layer_ground, on_escape?, scrim~, inert=!now, fn() {
-    let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx - raised, fn() {
+    let i = c.box(w=Fill(1.0), h=Px(hx), ty=eff_total - hx + bx - raised, fn() {
       // (its look given the scrim's share as it is built: the sheet's own glass drawn solid darkens with it, a colour
       // with no form read as it is drawn; the sheet is laid out again as it goes anyway, its height and place its
       // springs' as they are built)
@@ -307,7 +331,7 @@ pub fn sheet(
         // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away, nor raised under
         // another, which takes them: its top may be past the window's then; nor while what it drags by is above the
         // window, the sheet pulled past its most and giving way, springing back: nothing of it there to press)
-        if now && raised <= 0.0 && total - hx + bx - raised + drag_h > 0.0 {
+        if now && raised <= 0.0 && eff_total - hx + bx - raised + drag_h > 0.0 {
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
@@ -326,10 +350,15 @@ pub fn sheet(
     s.held = -1.0
     s.lag.put(0.0)
     s.h.put(own + lag)
-    s.below.go_at(c, dmax(own + lag + raised, sinks))
+    let (bx0, bv0) = s.below.at(c.moment())
+    if in_ime && c.ime_inset() > 0.0 {
+      s.below.put(bx0 - c.ime_inset())
+    }
+    s.below.go_at(c, dmax(own + lag + raised, sinks), v=bv0)
     s.fade.animate(c, 0.0, scrim_fade())
   }
   s.was_open = now
+  s.in_ime = now && in_ime
   { open: now, shown: true, dragged, stands: dmax(0.0, hx - bx + raised) }
 }
 
@@ -424,7 +453,8 @@ pub fn sheet_grabber(c : @ui.Ctx) -> Unit {
 /// under the window's foot), a shadow; its grabber, then what it holds.
 pub fn sheet_look(c : @ui.Ctx, s : SheetState, body : () -> Unit) -> Unit {
   let t = c.theme()
-  c.box(w=Fill(1.0), h=Px(s.h + 26.0), radius=26.0, bg=t.surface, shadow=24.0, shadow_color=t.shadow, clip=true, pb=26.0, fn() {
+  let under = 26.0 + dmax(c.ime_inset(), -s.below)
+  c.box(w=Fill(1.0), h=Px(s.h + under), radius=26.0, bg=t.surface, shadow=24.0, shadow_color=t.shadow, clip=true, pb=under, fn() {
     sheet_grabber(c)
     body()
   })

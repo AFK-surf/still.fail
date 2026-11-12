@@ -299,7 +299,7 @@ pub fn composer(
   if focused {
     composing.let_go.set(true)
   }
-  let lost_long = @kit.after(c, "composer/let-go", !focused && !choosing_cache, let_go_ms)
+  let lost_long = @kit.after(c, "composer/let-go", !focused && !w.field.parked() && !choosing_cache, let_go_ms)
   let held = composing.let_go.get() && !focused && !lost_long
   // (the box it stayed a moment after the cursor left, let go of now: a change of its own, at this moment, whatever
   // words sent from it are doing meanwhile)

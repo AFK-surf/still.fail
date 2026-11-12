@@ -116,10 +116,11 @@ let sheet_under : Double = pane_corner
 pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit) -> Unit {
   fn(c, s, body) {
     let t = theme()
+    let under = sheet_under + dmax(c.ime_inset(), -s.below)
     // (the sheet: the surface of the look it comes in by: Ctx::surface)
     let sheet = c.box(
       w=Fill(1.0),
-      h=Px(s.h + sheet_under),
+      h=Px(s.h + under),
       radius=pane_corner,
       bg=ground,
       glass?=if ground != 0L {
@@ -131,7 +132,7 @@ pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit
       shadow_y=sheet_raised.dy,
       shadow_color=sheet_raised.color,
       clip=true,
-      pb=sheet_under,
+      pb=under,
       body,
     )
     c.surface(sheet)

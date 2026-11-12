@@ -944,6 +944,7 @@ pub fn Ctx::editor(
   st.built_frame = self.build_no
   st.built_key = key
   st.built_id = id
+  self.editor_layer[id] = self.layer_cur
   // ⌘V with files or a picture on the clipboard, read for it: where it takes files (Ctx::field_files) the files, else
   // the picture as one; else the words with them put in as a paste's
   match desk.pasting {
@@ -1755,8 +1756,14 @@ fn Ctx::paint_field(
 /// window follows it, and what text surrounds it.
 fn Ctx::sync_ime(self : Ctx) -> Unit {
   // (the focus where what is typed may go into it now: one a modal layer of the window's tree keeps from input, none's,
-  // its input method put away while the layer is over it, its focus kept for it (Ctx::typing_allowed))
-  let focus = self.typing_allowed()
+  // its input method put away while the layer is over it, its focus kept for it (Ctx::typing_allowed); while a sheet
+  // sinks away over it, its input method stays put away until the sheet has gone: Ctx::ime_held_by_sheet)
+  let raw = self.typing_allowed()
+  let held = self.ime_held_by_sheet(raw)
+  if raw != 0 && !held {
+    self.focus_returned = false
+  }
+  let focus = if held { 0 } else { raw }
   // a key catcher's focus (device.mbt): the host told so before its input method is, with no text
   let catching = self.dev.catchers.contains(focus)
   if catching != self.ime_sig.has_prefix("catch ") {

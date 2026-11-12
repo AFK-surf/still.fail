@@ -512,6 +512,7 @@ fn view_forget() -> Unit {
   tree_said_ids.clear()
   tree_said_of.clear()
   layer_focus_open.clear()
+  leaving_ime_nodes.clear()
   old_hits_rects.clear()
   old_hits_clips.clear()
   old_scrolls_rects.clear()
@@ -5363,12 +5364,14 @@ fn focus_told_tree(c : Ctx) -> Unit {
     Some(nid) =>
       if !tree.focus_to(Some(nid), visible=c.focus_visible) {
         c.focus = 0
+        c.focus_returned = false
         tree.focus_to(None) |> ignore
       }
     None => {
       // (an id the tree once read out, nobody's now)
       if c.focus >= -2_000_000_000 && c.focus < tree_said_next.val {
         c.focus = 0
+        c.focus_returned = false
       }
       tree.focus_to(None) |> ignore
       // (come to an old view's own: what of the tree waited for its node to come back for the focus waits no more,
@@ -5564,6 +5567,247 @@ fn focus_node_of(id : Int) -> @view.NodeId? {
 }
 
 ///|
+/// Layers of the window's tree that hold the soft keyboard back while they sink away (sheet_node), each with whether it
+/// is still drawn (not vanished into another sheet in its place).
+// kept across runs: put back as a run begins (view_forget); each let go with its node
+let leaving_ime_nodes : Map[@view.NodeId, (@view.View, () -> Bool)] = Map([])
+
+///|
+/// Layer `layer` of the window's tree holds the soft keyboard back from any field under it while it is leaving and
+/// `active` holds (a sheet sinking away: the focus is already back on the field under it, its input method raised once
+/// the sheet has gone).
+pub fn holds_ime_leaving(layer : @view.View, active? : () -> Bool = fn() { true }) -> Unit {
+  guard layer.alive() else { return }
+  let id = layer.id()
+  leaving_ime_nodes[id] = (layer, active)
+  layer.owns(fn() { leaving_ime_nodes.remove(id) }) |> ignore
+}
+
+///|
+/// The node of the window's tree an editor or key catcher `id` belongs to (`TreeField`, or the `OldIsland` hosting it).
+fn editor_node_of(c : Ctx, id : Int) -> @view.NodeId? {
+  match tree_said_ids.get(id) {
+    Some(n) => Some(n)
+    None =>
+      match c.dev.catchers.get(id) {
+        Some(st) => st.island
+        None =>
+          match c.focusables.iter().find_first(fn(f) { f.id == id }) {
+            Some(f) => f.island
+            None =>
+              match c.last_focusables.iter().find_first(fn(f) { f.id == id }) {
+                Some(f) => f.island
+                None => c.island_of_id(id)
+              }
+          }
+      }
+  }
+}
+
+///|
+/// Whether an editor or key catcher inside `layer` currently has the keyboard's focus.
+pub fn focused_editor_in_node(layer : @view.View) -> Bool {
+  hand.focus_id.get() |> ignore
+  let c = g()
+  let focus = c.focus
+  if focus == 0 || (!c.editors.contains(focus) && !c.dev.catchers.contains(focus)) {
+    return false
+  }
+  if c.editor_layer.get(focus).unwrap_or(0) != 0 {
+    return false
+  }
+  guard view_app.val is Some(tree) && tree.holds(layer.id(), layer.id()) else { return false }
+  match editor_node_of(c, focus) {
+    Some(nid) => tree.holds(layer.id(), nid)
+    None => false
+  }
+}
+
+///|
+/// Whether a sheet still sinking away (`@kit.sheet`'s inert layer, or a `holds_ime_leaving` tree layer) lies over a
+/// `focus` automatically returned from a closing layer (`self.focus_returned`), so `sync_ime` keeps the soft keyboard
+/// down until the sheet has gone (an explicit press or focus on a field through a sinking sheet is not held back).
+fn Ctx::ime_held_by_sheet(self : Ctx, focus : Int) -> Bool {
+  if focus == 0 || !self.focus_returned {
+    return false
+  }
+  let f_layer = self.editor_layer.get(focus).unwrap_or(0)
+  let f_node = if f_layer == 0 { editor_node_of(self, focus) } else { None }
+  for l in self.last_layers {
+    if l.inert && l.modal && l.initial == layer_ground && !self.editor_in_layer(focus, l.id) {
+      let l_stack = self.last_stacks.get(l.id).unwrap_or(-1)
+      let over = match (f_layer, f_node, view_app.val) {
+        (fl, _, _) if fl != 0 => l_stack >= self.last_stacks.get(fl).unwrap_or(-1)
+        (_, Some(nid), Some(tree)) => {
+          let ns = @signals.untracked(fn() { tree.stack_of(nid) })
+          ns < 0 || l_stack >= ns
+        }
+        _ => true
+      }
+      if over {
+        return true
+      }
+    }
+  }
+  match view_app.val {
+    Some(tree) =>
+      for id, entry in leaving_ime_nodes {
+        let (v, active) = entry
+        if v.alive() && @signals.untracked(fn() { v.leaving() && active() }) {
+          let v_stack = @signals.untracked(fn() { tree.stack_of(id) })
+          let over = match (f_layer, f_node) {
+            (fl, _) if fl != 0 => v_stack > self.last_stacks.get(fl).unwrap_or(-1)
+            (_, Some(nid)) => !tree.holds(id, nid) && v_stack >= @signals.untracked(fn() { tree.stack_of(nid) })
+            _ => true
+          }
+          if over {
+            return true
+          }
+        }
+      }
+    None => ()
+  }
+  false
+}
+
+///|
+/// The direct old-frame layer `id` belongs to (`id` itself when `id` is a known layer, or the layer its editor, key
+/// catcher or focusable was built in; 0 when on the page or in the window's tree).
+fn Ctx::id_old_layer(self : Ctx, id : Int) -> Int {
+  if id == 0 {
+    return 0
+  }
+  if self.layer_gen.contains(id) {
+    return id
+  }
+  let el = self.editor_layer.get(id).unwrap_or(0)
+  if el != 0 {
+    return el
+  }
+  for f in self.focusables {
+    if f.id == id && f.layer != 0 {
+      return f.layer
+    }
+  }
+  for f in self.last_focusables {
+    if f.id == id && f.layer != 0 {
+      return f.layer
+    }
+  }
+  0
+}
+
+///|
+/// Whether `target` does not currently have `self.focus`, yet closing the open modal layers (`self.layer_return` and
+/// `layer_focus_open`) would return `self.focus` to `target`.
+fn Ctx::focus_parked(self : Ctx, target : Int) -> Bool {
+  if target == 0 || self.focus == target {
+    return false
+  }
+  let mut cur = self.focus
+  let seen : Array[Int] = [cur]
+  for _ in 0..<16 {
+    let mut next : Int? = None
+    let ol = self.id_old_layer(cur)
+    if ol != 0 {
+      let mut at = ol
+      for _ in 0..<16 {
+        if at == 0 {
+          break
+        }
+        if self.layer_gen.contains(at) &&
+          !self.layer_retired_now(at) &&
+          !self.layers_gone.contains(at) &&
+          self.layer_return.get(at) is Some(back) {
+          next = Some(back)
+          break
+        }
+        at = match self.layers.iter().find_first(fn(x) { x.id == at }) {
+          Some(x) => x.parent
+          None => self.last_layer(at).map_or(0, fn(x) { x.parent })
+        }
+      }
+    }
+    if next is None {
+      match view_app.val {
+        Some(t) if !layer_focus_open.is_empty() =>
+          next = @signals.untracked(fn() {
+            let n = layer_focus_open.length()
+            let backs : Array[Int] = []
+            let back_ins : Array[@view.NodeId?] = []
+            for l in layer_focus_open {
+              match layer_opener_back(t, l.opener) {
+                Some((k, k_in)) => {
+                  backs.push(k)
+                  back_ins.push(k_in)
+                }
+                None if l.opener_in is Some(o) && layer_focus_open.iter().any(fn(x) { x.layer == o }) => {
+                  backs.push(l.back)
+                  back_ins.push(Some(o))
+                }
+                None => {
+                  backs.push(l.back)
+                  back_ins.push(l.back_in)
+                }
+              }
+            }
+            for i in 0..<n {
+              let li = layer_focus_open[i].layer
+              for j in 0..<n {
+                if back_ins[j] == Some(li) {
+                  backs[j] = backs[i]
+                  back_ins[j] = back_ins[i]
+                }
+              }
+            }
+            let idx = if cur == 0 {
+              Some(n - 1)
+            } else {
+              let node = match focus_node_of(cur) {
+                Some(nd) => Some(nd)
+                None => editor_node_of(self, cur)
+              }
+              match node {
+                Some(nd) => {
+                  let mut hit : Int? = None
+                  for i in 0..<n {
+                    let li = layer_focus_open[i].layer
+                    if nd == li || t.holds(li, nd) || !t.holds(nd, nd) {
+                      hit = Some(i)
+                      break
+                    }
+                  }
+                  hit
+                }
+                None => None
+              }
+            }
+            match idx {
+              Some(i) if back_takes_input(t, backs[i]) => Some(backs[i])
+              _ => None
+            }
+          })
+        _ => ()
+      }
+    }
+    match next {
+      Some(b) => {
+        if b == target {
+          return true
+        }
+        if seen.contains(b) {
+          return false
+        }
+        seen.push(b)
+        cur = b
+      }
+      None => return false
+    }
+  }
+  false
+}
+
+///|
 /// What a layer of tree `t` opened by `opener` (View::opened_by) gives the focus back to as it goes, as Ctx's focus names
 /// it, and the layer of layer_focus_open that holds that: the node that opened it where it still takes the focus
 /// (Tree::focus_back_takes), something of an old view where that was built in the last frame; else none (what had it as
@@ -5641,7 +5885,7 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
   layer_focus_open.clear()
   layer_focus_open.append(left)
   match back {
-    Some(b) => c.focus_moved(b)
+    Some(b) => c.focus_moved(b, returned=true)
     None => ()
   }
   if opened.is_empty() {
@@ -5711,6 +5955,7 @@ fn view_focus_lost(n : @view.NodeId) -> Unit {
   match tree_said_of.get(n) {
     Some(k) if c.focus == k => {
       c.focus = 0
+      c.focus_returned = false
       // (what of the old views reads it told in the same change, in a build too: Ctx::focus_moved's)
       hand_focus_said(c)
       h_frame_owed()
@@ -5743,7 +5988,7 @@ fn view_press_unfocused(c : Ctx) -> Unit {
   if focus != 0 && !c.editors.contains(focus) && !c.dev.catchers.contains(focus) {
     c.focus_moved(0, visible=false)
   } else {
-    c.focus_moved(c.focus, visible=false)
+    c.focus_moved(c.focus, visible=false, returned=c.focus_returned)
   }
 }
 
