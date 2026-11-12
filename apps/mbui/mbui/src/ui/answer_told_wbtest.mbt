@@ -296,3 +296,65 @@ test "what the test's pickers give told at the moment of the ask, or of the answ
   assert_eq(runtime().awaiting(), 0)
   t.assert_idle()
 }
+
+///|
+test "a pick and pick_photos asked by a press: on_got given what was picked in order, once, at the moment the last host event comes" {
+  let got : Array[(String, Array[String], Double)] = []
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n
+      .width(Is(Some(120.0)))
+      .height(Is(Some(44.0)))
+      .says(Is(Some(@view.said(Button, label="Pick"))))
+      .on_press(fn() {
+        pick(Files, on_got=fn(files) { got.push(("files", files.map(fn(f) { f.name }), view_moment())) }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(n) {
+      n
+      .width(Is(Some(120.0)))
+      .height(Is(Some(44.0)))
+      .says(Is(Some(@view.said(Button, label="Gallery"))))
+      .on_press(fn() {
+        pick_photos(
+          ["content://media/1", "content://media/2"],
+          on_got=fn(files) { got.push(("photos", files.map(fn(f) { f.name }), view_moment())) },
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.run_for(told_before)
+  t.picks_by_hand()
+  t.tap(20.0, 20.0)
+  t.run_for(told_before)
+  waits_quietly(t)
+  t.picks([("one.png", b"1")])
+  let first = t.time()
+  t.pick_answer(1)
+  t.run_for(told_between)
+  assert_eq(got, [("files", ["one.png"], first)])
+  // pick_photos asks two gallery reads: on_got waits until both are answered, then gives them in order
+  t.tap(20.0, 60.0)
+  t.run_for(told_before)
+  waits_quietly(t)
+  t.picks([("second.jpg", b"2")])
+  t.pick_answer(3)
+  t.run_for(told_between)
+  assert_eq(got.length(), 1)
+  t.picks([("first.jpg", b"1")])
+  let both = t.time()
+  t.pick_answer(2)
+  t.run_for(told_between)
+  assert_eq(got, [("files", ["one.png"], first), ("photos", ["first.jpg", "second.jpg"], both)])
+  on_outside(outside_pick, 2, 1)
+  t.run_for(told_between)
+  assert_eq(got.length(), 2)
+  assert_eq(runtime().awaiting(), 0)
+  t.assert_idle()
+}

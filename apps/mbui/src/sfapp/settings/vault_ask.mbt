@@ -191,11 +191,8 @@ let vault_typed : @sf.LiveMap[String, @ui.Field] = @sf.LiveMap::new()
 
 ///|
 /// The file picked for each request whose secret is a file the person picks: its bytes in base64 and its name, kept
-/// only till it went with `vault.approve`; and the system's picker while it asks. Put back by `reset`.
+/// only till it went with `vault.approve`. Put back by `reset`.
 let vault_files : @sf.LiveMap[String, (String, String)] = @sf.LiveMap::new()
-
-///|
-let vault_file_picks : Map[String, @ui.Pick] = Map([])
 
 ///|
 fn vault_ask_reset() -> Unit {
@@ -205,7 +202,6 @@ fn vault_ask_reset() -> Unit {
   vault_pending.clear()
   vault_typed.clear()
   vault_files.clear()
-  vault_file_picks.clear()
 }
 
 ///|
@@ -666,22 +662,11 @@ pub fn vault_foot(
           }
           let words = tr("android-settings.vault.ask.typed." + ty.kind)
           if ty.kind == "file" {
-            // the system's picker answered: the file it gave (one too big said so, and none kept)
-            match vault_file_picks.get(request) {
-              Some(p) =>
-                if take_picked_file(core, p, fn(content, name) { vault_files[request] = (content, name) }) {
-                  vault_file_picks.remove(request)
-                }
-              None => ()
-            }
             // (the button the same before and after, the card as wide (it fills its column): what was picked fades in
             // beside it, the row no higher)
             c.box(style=ask_file, fn() {
               @sf.button(c, words, key="vault/" + request + "/file", tone=Plain, disabled=under, on_press=fn() {
-                match @ui.pick(Files) {
-                  Some(p) => vault_file_picks[request] = p
-                  None => ()
-                }
+                pick_vault_file(core, fn(content, name) { vault_files[request] = (content, name) })
               })
               match vault_files.get(request) {
                 Some((content, name)) => {

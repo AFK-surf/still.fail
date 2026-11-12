@@ -169,3 +169,61 @@ test "a JPEG's size as it is shown: its frame's, turned a quarter where its EXIF
   assert_eq(@pixels.image_size(noted(exif_note(3, true))), Some((20, 9)))
   assert_eq(@pixels.image_size(noted(exif_note(1, false))), Some((20, 9)))
 }
+
+///|
+fn isobmff_box(tag : String, body : Array[Byte], full? : Int = -1) -> Array[Byte] {
+  let head = if full >= 0 {
+    [(full >> 24).to_byte(), ((full >> 16) & 255).to_byte(), ((full >> 8) & 255).to_byte(), (full & 255).to_byte()]
+  } else {
+    []
+  }
+  let n = 8 + head.length() + body.length()
+  let b32 = fn(v : Int) -> Array[Byte] {
+    [(v >> 24).to_byte(), ((v >> 16) & 255).to_byte(), ((v >> 8) & 255).to_byte(), (v & 255).to_byte()]
+  }
+  let t = tag.to_array().map(fn(c) { c.to_int().to_byte() })
+  b32(n) + t + head + body
+}
+
+///|
+fn heic_sample(brand : String, w : Int, h : Int, rot? : Int = -1, thumb? : (Int, Int)) -> Bytes {
+  let b32 = fn(v : Int) -> Array[Byte] {
+    [(v >> 24).to_byte(), ((v >> 16) & 255).to_byte(), ((v >> 8) & 255).to_byte(), (v & 255).to_byte()]
+  }
+  let b16 = fn(v : Int) -> Array[Byte] { [((v >> 8) & 255).to_byte(), (v & 255).to_byte()] }
+  let tag = fn(s : String) -> Array[Byte] { s.to_array().map(fn(c) { c.to_int().to_byte() }) }
+  let ftyp = isobmff_box("ftyp", tag(brand) + b32(0) + tag("mif1") + tag(brand))
+  let mut props : Array[Byte] = []
+  let mut main_idx = 1
+  match thumb {
+    Some((tw, th)) => {
+      // thumbnail property #1 comes before primary image property #2
+      props = props + isobmff_box("ispe", b32(tw) + b32(th), full=0)
+      main_idx = 2
+    }
+    None => ()
+  }
+  props = props + isobmff_box("ispe", b32(w) + b32(h), full=0)
+  let assoc = if rot >= 0 {
+    props = props + isobmff_box("irot", [(rot & 3).to_byte()])
+    [main_idx.to_byte(), (0x80 | (main_idx + 1)).to_byte()]
+  } else {
+    [main_idx.to_byte()]
+  }
+  let ipco = isobmff_box("ipco", props)
+  // primary item id = 2 (after thumbnail item 1), ipma v0 flags 0: entry_count=1, item_id=2, assoc_count, indices
+  let ipma = isobmff_box("ipma", b32(1) + b16(2) + [assoc.length().to_byte()] + assoc, full=0)
+  let pitm = isobmff_box("pitm", b16(2), full=0)
+  let iprp = isobmff_box("iprp", ipco + ipma)
+  let meta = isobmff_box("meta", pitm + iprp, full=0)
+  Bytes::from_array(ftyp + meta)
+}
+
+///|
+test "a HEIC or AVIF picture's size as it is shown: its primary item's ispe, turned a quarter where its irot says" {
+  assert_eq(@pixels.image_size(heic_sample("heic", 4032, 3024)), Some((4032, 3024)))
+  assert_eq(@pixels.image_size(heic_sample("heic", 4032, 3024, rot=1)), Some((3024, 4032)))
+  assert_eq(@pixels.image_size(heic_sample("heic", 4032, 3024, rot=2)), Some((4032, 3024)))
+  assert_eq(@pixels.image_size(heic_sample("heic", 4032, 3024, rot=3, thumb=(512, 384))), Some((3024, 4032)))
+  assert_eq(@pixels.image_size(heic_sample("avif", 1920, 1080)), Some((1920, 1080)))
+}

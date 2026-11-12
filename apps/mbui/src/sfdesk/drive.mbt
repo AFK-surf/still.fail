@@ -400,8 +400,6 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
   if f.front {
     keep_files_page(f.ws, at)
   }
-  // the files picked to go up
-  dv_take_picked(src, at, entries)
   let b_ref : Ref[Browse?] = Ref(None)
   let open_row = fn(in_ : DriveAt, e : DvEntry) {
     let near = match b_ref.val {
@@ -447,7 +445,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
   if f.front && !c.field_focused() {
     b.keys(c, src)
     if write && c.shortcut('u') {
-      dv_upload(c, at)
+      dv_upload(c, src, at)
     }
     if write && c.shortcut('n', shift=true) {
       b.new_folder(c, src, at.path)
@@ -467,7 +465,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     !(u.state.get() == "done" && entries.iter().any(fn(e) { e.name == u.name.get() }))
   })
   let empty = fn() {
-    folder_empty(c, if write { Some(fn() { dv_upload(c, at) }) } else { None })
+    folder_empty(c, if write { Some(fn() { dv_upload(c, src, at) }) } else { None })
   }
   // a right click where there is no row: what can be done to the folder
   let folder_menu = fn() -> Array[@sf.MenuItem?] {
@@ -475,7 +473,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     let menu : Array[@sf.MenuItem?] = []
     if write {
       menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.mkdir"), icon="folder-plus", fn() { b.new_folder(c, src, at.path) })))
-      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.upload"), icon="upload", fn() { dv_upload(c, at) })))
+      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.upload"), icon="upload", fn() { dv_upload(c, src, at) })))
     }
     for by in ["name", "time", "size", "kind"] {
       menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), chosen=a.by == by, fn() {
@@ -777,8 +775,8 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   // (putting files up and a new folder in the system's column where it has the rail's places, the rest here:
   // rail_native.mbt bar_action)
   if f.rights.write &&
-    !bar_action("files/upload", @sf.t("web-pages.drive.upload"), "upload", fn() { dv_upload(c, at) }) {
-    tools.push(@sf.tool_button(c, "files/upload", "upload", @sf.t("web-pages.drive.upload"), on_press=fn() { dv_upload(c, at) }, drop=folder_drop_upload))
+    !bar_action("files/upload", @sf.t("web-pages.drive.upload"), "upload", fn() { dv_upload(c, src, at) }) {
+    tools.push(@sf.tool_button(c, "files/upload", "upload", @sf.t("web-pages.drive.upload"), on_press=fn() { dv_upload(c, src, at) }, drop=folder_drop_upload))
   }
   if f.rights.write &&
     !bar_action("files/mkdir", @sf.t("web-pages.drive.mkdir"), "folder-plus", fn() { b.new_folder(c, src, at.path) }) {

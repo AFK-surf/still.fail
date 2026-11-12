@@ -163,20 +163,23 @@ pub fn recent_frame(src : Source) -> Unit {
 
 ///|
 /// While photos are chosen in the strip, in the room of the tiles under it (as high, so the sheet stays as it is):
-/// 添加 n 个; pressed, the photos chosen read whole as one pick of them, in the order chosen, given to `add`. Whether
-/// some are chosen (the tiles are not drawn then).
-pub fn recent_adding(c : @ui.Ctx, add : (@ui.Pick) -> Unit) -> Bool {
+/// 添加 n 个; pressed, `close` shuts the sheet and the photos chosen are read whole as one pick of them, in the order
+/// chosen, given to `add` as the last is answered. Whether some are chosen (the tiles are not drawn then).
+pub fn recent_adding(
+  c : @ui.Ctx,
+  add : (Array[@hostapi.Picked]) -> Unit,
+  close? : () -> Unit = fn() {  },
+) -> Bool {
   let n = recent.chosen.length()
   if n == 0 {
     return false
   }
   let id = c.id("attach/add")
   c.on_press(id, fn() {
-    match @ui.pick_photos(recent.chosen.copy()) {
-      Some(pick) => add(pick)
-      None => ()
-    }
+    close()
+    let chosen = recent.chosen.copy()
     recent.chosen.clear()
+    @ui.pick_photos(chosen, on_got=add) |> ignore
   })
   let words = @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   let corner = attach_block_corner()

@@ -23,13 +23,11 @@ pub(all) struct DvUpload {
 
 
 ///|
-/// The files going up, the serial of the last, whether one is going now; a file being picked to go up, and where to.
+/// The files going up, the serial of the last, whether one is going now.
 pub(all) struct DriveUploads {
   uploads : @sf.LiveArray[DvUpload]
   mut serial : Int
   pumping : @signals.Signal[Bool]
-  mut picking : @ui.Pick?
-  mut picking_for : DriveAt
 }
 
 ///|
@@ -37,8 +35,6 @@ pub let ups : DriveUploads = {
   uploads: @sf.LiveArray::new(),
   serial: 0,
   pumping: @signals.signal(false, same=fn(a, b) { a == b }),
-  picking: None,
-  picking_for: { station: "", root: None, path: "" },
 }
 
 ///|
@@ -46,8 +42,6 @@ fn ups_reset() -> Unit {
   ups.uploads.clear()
   ups.serial = 0
   ups.pumping.set(false)
-  ups.picking = None
-  ups.picking_for = { station: "", root: None, path: "" }
 }
 
 ///|
@@ -59,50 +53,38 @@ pub let dv_part_first : Int = 256 * 1024
 pub let dv_part_max : Int = 4 * 1024 * 1024
 
 ///|
-/// The system's file picker, for files to go up into `at`.
-pub fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
-  // det-ok(build-effect): its pages call it only under the press that asks for it
-  match @ui.pick(Files) {
-    Some(p) => {
-      ups.picking = Some(p)
-      ups.picking_for = at
-    }
-    None => say(c, @sf.t("android-chat.composer.noFiles"))
-  }
-}
-
-///|
-/// The files picked, once the system has answered: each a row of the folder, going up one after another.
-pub fn dv_take_picked(src : Source, at : DriveAt, entries : Array[DvEntry]) -> Unit {
-  ignore(entries)
-  match ups.picking {
-    Some(p) if ups.picking_for == at =>
-      match p.files() {
-        Some(files) => {
-          ups.picking = None
-          let root = at.root.unwrap_or("")
-          for f in files {
-            ups.serial += 1
-            ups.uploads.push({
-              serial: ups.serial,
-              station: at.station,
-              root,
-              dir: at.path,
-              name: @signals.signal(f.name),
-              bytes: f.bytes,
-              sent: @signals.signal(0),
-              state: @signals.signal("waiting"),
-              error: @signals.signal(""),
-              replace: false,
-              id: "",
-            })
-          }
-          dv_pump(src)
+/// The system's file picker, for files to go up into `at`: each answered file pushed onto `ups.uploads` (waking the
+/// folder's view) and going up one after another.
+pub fn dv_upload(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
+  let root = at.root.unwrap_or("")
+  c.tell("drive-upload/" + at.station + ":" + root + ":" + at.path, fn() {
+    match
+      @ui.pick(Files, on_got=fn(files) {
+        if files.is_empty() {
+          return
         }
-        None => ()
-      }
-    _ => ()
-  }
+        for f in files {
+          ups.serial += 1
+          ups.uploads.push({
+            serial: ups.serial,
+            station: at.station,
+            root,
+            dir: at.path,
+            name: @signals.signal(f.name),
+            bytes: f.bytes,
+            sent: @signals.signal(0),
+            state: @signals.signal("waiting"),
+            error: @signals.signal(""),
+            replace: false,
+            id: "",
+          })
+        }
+        dv_pump(src)
+      }) {
+      Some(_) => ()
+      None => say(c, @sf.t("android-chat.composer.noFiles"))
+    }
+  })
 }
 
 ///|

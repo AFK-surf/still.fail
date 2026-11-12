@@ -173,7 +173,7 @@ using @settings {
   first_text,
   type VaultEditing,
   file_size,
-  take_picked_file,
+  pick_vault_file,
   lasts_choice,
   mode_name,
   profile_groups,

@@ -1026,7 +1026,6 @@ pub fn reset() -> Unit {
   flash_held.val = false
   at_end_env.val = -1
   // what the settings' core keeps (settings_core.mbt, notices.mbt, faces.mbt, bars.mbt)
-  picture_pick.val = None
   reporting_host.set(None)
   reporting_said.set(None)
   notices_reset()

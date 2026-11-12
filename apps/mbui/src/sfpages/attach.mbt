@@ -18,10 +18,8 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   let p = @sf.theme().p
   let ask = fn(kind : @hostapi.PickKind) {
     close()
-    match @ui.pick(kind, hold=true) {
-      Some(pick) => composing.picking = Some((key, pick))
-      None =>
-        say(c, @sf.t(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }))
+    if @ui.pick(kind, hold=true, on_got=fn(files) { picked_into(key, files) }) is None {
+      say(c, @sf.t(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }))
     }
   }
   // the gallery's recent photos, read as the panel opened (attach_open), taken once read
@@ -31,9 +29,9 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
       ask(Camera)
     } else if i > 0 {
       close()
-      match recent_photo(i - 1).map(fn(photo) { @ui.pick_photos([photo.src]) }) {
-        Some(Some(pick)) => composing.picking = Some((key, pick))
-        _ => ()
+      match recent_photo(i - 1) {
+        Some(photo) => @ui.pick_photos([photo.src], on_got=fn(files) { picked_into(key, files) }) |> ignore
+        None => ()
       }
     } else {
       match recent_access() {
@@ -61,10 +59,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   })
   recent_strip(c, tapped)
   // photos chosen in the strip: 添加 n 个 where the tiles were
-  let adding = recent_adding(c, fn(pick) {
-    close()
-    composing.picking = Some((key, pick))
-  })
+  let adding = recent_adding(c, fn(files) { picked_into(key, files) }, close~)
   if adding {
     return
   }

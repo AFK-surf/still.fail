@@ -32,13 +32,11 @@ pub(all) struct ComposerSpec {
 }
 
 ///|
-/// What the composer keeps of its own: the system's picker asked for files (for which draft), when the cursor left it
-/// (it stays a box a moment, LET_GO_MS), when typing last warmed the agent's runtime, each quote's comment field, how
-/// it was laid out as it was last drawn (a new chat's roomy, or a chat's: another, it has moved between the pages),
-/// which chat it was for (another: switched to, the cursor put in it), the archived chats being restored and why
-/// restoring one failed (by their drafts).
+/// What the composer keeps of its own: when the cursor left it (it stays a box a moment, LET_GO_MS), when typing last
+/// warmed the agent's runtime, each quote's comment field, how it was laid out as it was last drawn (a new chat's
+/// roomy, or a chat's: another, it has moved between the pages), which chat it was for (another: switched to, the
+/// cursor put in it), the archived chats being restored and why restoring one failed (by their drafts).
 priv struct Composing {
-  mut picking : (String, @ui.Pick)?
   let_go : @signals.Signal[Bool]
   /// the moment the box it stayed after the cursor left was last let go of (let_go's end): a change of its own then
   mut let_go_at : Double
@@ -128,7 +126,6 @@ pub fn composer_take_focus() -> Unit {
 
 ///|
 let composing : Composing = {
-  picking: None,
   let_go: @signals.signal(false, same=fn(a, b) { a == b }),
   let_go_at: @double.neg_infinity,
   warmed: {},
@@ -172,7 +169,7 @@ let composing : Composing = {
 fn composing_reset() -> Unit {
   composer_foot_way.val = None
   composer_set_off.val = ("", 0.0)
-  composing.picking = None
+  picked_waiting.clear()
   composing.let_go.set(false)
   composing.let_go_at = @double.neg_infinity
   composing.warmed.clear()
@@ -599,19 +596,17 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String, shaped : (String, @motion.S
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
   // (what was put into the draft from elsewhere: built again as it is)
   @sfbase.drafts_given_read(w.key)
-  match composing.picking {
-    Some((key, picker)) =>
-      match picker.files() {
-        Some(files) => {
-          composing.picking = None
-          if key == w.key && !no_files {
-            for f in files {
-              writing_add_picked(src, w, spec.station, f)
-            }
+  match picked_waiting.get(w.key) {
+    Some(list) => {
+      picked_waiting.remove(w.key)
+      if !no_files {
+        @signals.untracked(fn() {
+          for f in list {
+            writing_add_picked(src, w, spec.station, f)
           }
-        }
-        None => ()
+        })
       }
+    }
     None => ()
   }
   // files shared into the app from another, for this draft (share.mbt)
@@ -988,12 +983,27 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
 }
 
 ///|
-/// The system's file picker for draft `w`: what is picked comes in as the composer is next drawn (take_in).
-pub fn pick_files(w : Writing) -> Unit {
-  match @ui.pick(Files) {
-    Some(p) => composing.picking = Some((w.key, p))
-    None => ()
+/// Files the system's picker answered for each draft, waiting for its composer (`take_in`).
+// kept across runs: cleared by composing_reset
+let picked_waiting : Map[String, Array[@hostapi.Picked]] = Map([])
+
+///|
+/// Files the system's picker answered for draft `key`, put where its composer takes them (`take_in`) and told (`draft_given`).
+fn picked_into(key : String, files : Array[@hostapi.Picked]) -> Unit {
+  if files.is_empty() {
+    return
   }
+  let list = picked_waiting.get(key).unwrap_or([])
+  list.push_iter(files.iter())
+  picked_waiting[key] = list
+  @sfbase.draft_given(key)
+}
+
+///|
+/// The system's file picker for draft `w`: what is picked wakes its composer as the host's event tells it (`picked_into`).
+pub fn pick_files(w : Writing) -> Unit {
+  let key = w.key
+  @ui.pick(Files, on_got=fn(files) { picked_into(key, files) }) |> ignore
 }
 
 ///|

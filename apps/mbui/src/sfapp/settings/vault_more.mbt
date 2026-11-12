@@ -21,20 +21,17 @@ fn vault_fields(kind : String) -> Array[String] {
 pub let file_most : Int = 64 * 1024
 
 ///|
-/// A file picked to be kept, once the system's picker (`pick`) answered: `got` its bytes in base64 and its name; one
-/// bigger than a file kept may be said so, and not taken. Whether it answered (the pick is then done with).
-pub fn take_picked_file(core : Core, pick : @ui.Pick, got : (String, String) -> Unit) -> Bool {
-  match pick.files() {
-    None => false
-    Some(files) => {
-      match files.get(0) {
-        Some(f) if f.bytes.length() > file_most || f.held != 0 => (core.say)(tr("android-settings.vault.fileTooBig"))
-        Some(f) => got(@codec.base64(f.bytes), f.name)
-        None => ()
-      }
-      true
+/// Asks the system's picker for a file to be kept: `got` its bytes in base64 and its name once answered; one bigger
+/// than a file kept may be said so, and not taken.
+pub fn pick_vault_file(core : Core, got : (String, String) -> Unit) -> Unit {
+  @ui.pick(Files, on_got=fn(files) {
+    match files.get(0) {
+      Some(f) if f.bytes.length() > file_most || f.held != 0 => (core.say)(tr("android-settings.vault.fileTooBig"))
+      Some(f) => got(@codec.base64(f.bytes), f.name)
+      None => ()
     }
-  }
+  })
+  |> ignore
 }
 
 ///|
@@ -218,10 +215,8 @@ pub(all) struct VaultEditing {
   /// the fields shown in the clear (by field)
   reveal : Map[String, Bool]
   serial : Int
-  /// a file's: its bytes in base64 and its name, as picked (or as it was); the system's picker while it asks
-  mut file_content : String
-  mut file_name : String
-  mut file_pick : @ui.Pick?
+  /// a file's: its bytes in base64 and its name, as picked (or as it was)
+  file : @signals.Signal[(String, String)]
 }
 
 ///|

@@ -193,11 +193,24 @@
     ]
   },
   "run_first": {
-    "starts": ["new_run", "fresh_app", "reset", "@sfbase.reset"],
-    "reads": ["@sf.t", "@sf.t_around", "@sf.language", "tr", "@sfbase.tr"]
+    "starts": [
+      "new_run",
+      "fresh_app",
+      "reset",
+      "@sfbase.reset"
+    ],
+    "reads": [
+      "@sf.t",
+      "@sf.t_around",
+      "@sf.language",
+      "tr",
+      "@sfbase.tr"
+    ]
   },
   "reset_by_hand": {
-    "names": ["new_run"]
+    "names": [
+      "new_run"
+    ]
   },
   "counts": {
     "frame-request": {},
@@ -457,15 +470,6 @@
       "src/sfpages/recent.mbt": 4,
       "src/sfpages/search.mbt": 1
     },
-    "list-comes-off": {
-      "src/sf/page_node.mbt": 1,
-      "src/sf/page_wide_node.mbt": 1,
-      "src/sf/panel_list_node.mbt": 1,
-      "src/sfapp/sheets.mbt": 1,
-      "src/sfpages/history_steps_node.mbt": 1,
-      "src/sfpages/sidebar_node.mbt": 1,
-      "src/sfpages/things.mbt": 1
-    },
     "old-list": {
       "src/sf/page.mbt": 3,
       "src/sf/player.mbt": 2,
@@ -488,6 +492,15 @@
       "src/sfpages/publish.mbt": 1,
       "src/sfpages/screen_debug.mbt": 2,
       "src/sfpages/switcher.mbt": 1,
+      "src/sfpages/things.mbt": 1
+    },
+    "list-comes-off": {
+      "src/sf/page_node.mbt": 1,
+      "src/sf/page_wide_node.mbt": 1,
+      "src/sf/panel_list_node.mbt": 1,
+      "src/sfapp/sheets.mbt": 1,
+      "src/sfpages/history_steps_node.mbt": 1,
+      "src/sfpages/sidebar_node.mbt": 1,
       "src/sfpages/things.mbt": 1
     },
     "old-island": {
@@ -571,9 +584,7 @@
     },
     "style-exact": {},
     "style-text": {},
-    "build-effect": {
-      "src/sfbase/drive_upload.mbt": 1
-    },
+    "build-effect": {},
     "after-build-input": {},
     "unsettled-ok": {},
     "host-delay": {},
@@ -610,8 +621,8 @@
     "ui-current": {},
     "build-clock": {},
     "build-motion": {},
-    "list-comes-off": {},
     "old-list": {},
+    "list-comes-off": {},
     "old-island": {},
     "old-panel": {},
     "click-read": {},
@@ -619,6 +630,9 @@
     "part-place": {},
     "layout-told": {},
     "abort-unsaid": {},
-    "empty-on-done": {}
+    "empty-on-done": {},
+    "panic-test": {},
+    "read-before-run": {},
+    "reset-by-hand": {}
   }
 }

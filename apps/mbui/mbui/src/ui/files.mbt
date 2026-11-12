@@ -16,10 +16,15 @@ pub struct Pick {
 
 ///|
 /// Asks the system for files of `kind` (@hostapi.pick; `hold`: one too big to be read whole may be held by the host):
-/// None when this host cannot.
-pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
+/// None when this host cannot. `on_got`: given what was picked once (empty: called off), in the event that takes the
+/// answer, outside any tracking, to write state where no node waits on `Pick::files`.
+pub fn pick(
+  kind : @hostapi.PickKind,
+  hold? : Bool = false,
+  on_got? : (Array[@hostapi.Picked]) -> Unit,
+) -> Pick? {
   match @hostapi.pick(kind, hold~) {
-    Some(h) => Some(Pick::waits([h], "a pick"))
+    Some(h) => Some(Pick::waits([h], "a pick", on_got?))
     None => None
   }
 }
@@ -27,19 +32,26 @@ pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
 ///|
 /// An ask of `hosts`, waited on until the system answers each (hostcall.mbt's outside, by its id as the host's event
 /// names it: outside_pick), each taken as its event comes (outside_takes).
-fn Pick::waits(hosts : Array[@hostapi.Pick], what : String) -> Pick {
+fn Pick::waits(
+  hosts : Array[@hostapi.Pick],
+  what : String,
+  on_got? : (Array[@hostapi.Picked]) -> Unit,
+) -> Pick {
   let p : Pick = { hosts, got: hosts.map(fn(_) { None }), said: @signals.signal(None) }
   for i, h in hosts {
     outside_start(outside_pick, h.id(), what + " \{h.id()}")
-    outside_takes(outside_pick, h.id(), fn() { p.take(i) })
+    outside_takes(outside_pick, h.id(), fn() { p.take(i, on_got) })
   }
   p
 }
 
 ///|
 /// Photos of the gallery (`srcs`) read whole, as one pick of them in that order (@hostapi.pick_photo, each): None
-/// where the host has no gallery (a Tester's has none).
-pub fn pick_photos(srcs : Array[String]) -> Pick? {
+/// where the host has no gallery. `on_got`: given all of them once in `srcs`'s order, as the last is answered.
+pub fn pick_photos(
+  srcs : Array[String],
+  on_got? : (Array[@hostapi.Picked]) -> Unit,
+) -> Pick? {
   let hosts = []
   for src in srcs {
     match @hostapi.pick_photo(src) {
@@ -50,15 +62,19 @@ pub fn pick_photos(srcs : Array[String]) -> Pick? {
   if hosts.is_empty() {
     None
   } else {
-    Some(Pick::waits(hosts, "a gallery photo read"))
+    Some(Pick::waits(hosts, "a gallery photo read", on_got?))
   }
 }
 
 ///|
 /// The host's answer for `hosts[i]` taken, as its event says it came (or, a host answering by the frame, as a frame
-/// begins): what it gave kept, the ask's wait over; all of them answered, what was picked said (Pick::files). Whether
-/// it was there to take.
-fn Pick::take(self : Pick, i : Int) -> Bool {
+/// begins): what it gave kept, the ask's wait over; all of them answered, what was picked said (Pick::files) and given
+/// to `on_got`. Whether it was there to take.
+fn Pick::take(
+  self : Pick,
+  i : Int,
+  on_got : ((Array[@hostapi.Picked]) -> Unit)?,
+) -> Bool {
   let h = self.hosts[i]
   guard self.got[i] is None && h.files() is Some(files) else { return false }
   self.got[i] = Some(files)
@@ -71,6 +87,10 @@ fn Pick::take(self : Pick, i : Int) -> Bool {
     }
   }
   self.said.set(Some(out))
+  match on_got {
+    Some(f) => @signals.untracked(fn() { f(out) })
+    None => ()
+  }
   true
 }
 
