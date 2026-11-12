@@ -378,3 +378,77 @@ test "ListPlace::follow_from: its foot followed no further than the block's top;
   tree.frame(390.0, 844.0) |> ignore
   assert_eq((followed, y10, held, scroll.at(tree)), (true, 0.0, 400.0, 400.0))
 }
+
+///|
+/// Twenty blocks of 40 (100 one of 60) in 100, as they are counted, following its foot or not, put at its foot and
+/// moved up to 300 by `by` ("put", or "the wheel"): moved there nothing is laid out, the anchor still its foot's. The
+/// tree, its keys, and where each block's top is.
+fn in_sight_case(
+  follows : Bool,
+  by : String,
+) -> (@view.Tree, @view.Scroll, @signals.Signal[Array[Int]], (Int) -> Double?) {
+  let scroll = @view.Scroll::list()
+  let keys = @signals.signal(Array::makei(20, fn(i) { i }), same=fn(a, b) { a == b })
+  let live : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      o.scrolls_window(scroll, fn() { keys.get() }, est=40.0, follows=fn() { follows }, fn(b, k) {
+        live[k] = b
+        b.owns(fn() { live.remove(k) }) |> ignore
+        b.height(Is(Some(if k == 100 { 60.0 } else { 40.0 }))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0) |> ignore
+  scroll.put(700.0)
+  tree.frame(390.0, 844.0) |> ignore
+  if by == "put" {
+    scroll.put(300.0)
+  } else {
+    tree.wheel_at(150.0, 50.0, 0.0, -400.0, 0, 10.0) |> ignore
+  }
+  tree.frame(390.0, 844.0) |> ignore
+  (tree, scroll, keys, fn(k : Int) { live.get(k).map(fn(v) { v.rect().1 }) })
+}
+
+///|
+test "scrolls_window: scrolled up off its foot by the hand or put there, nothing laid out since, a key put in among what shows: what is over it stays where it was, to the bit, what is under it pushed down by it" {
+  for follows in [true, false] {
+    for by in ["put", "the wheel"] {
+      let (tree, scroll, keys, y) = in_sight_case(follows, by)
+      // (at 300: 7 from 20 over the top, 8 at 20, 9 at 60)
+      let was = (scroll.at(tree), y(7), y(8), y(9))
+      // (one 60 tall put in after 7: 7 where it was, it at 20, 8 under it at 80)
+      let put_in = Array::makei(8, fn(i) { i })
+      put_in.push(100)
+      put_in.append(Array::makei(12, fn(i) { i + 8 }))
+      keys.set(put_in)
+      tree.frame(390.0, 844.0) |> ignore
+      assert_eq(
+        (was, (scroll.at(tree), y(7), y(100), y(8))),
+        ((300.0, Some(-20.0), Some(20.0), Some(60.0)), (300.0, Some(-20.0), Some(20.0), Some(80.0))),
+        msg="moved by \{by}, following its foot \{follows}",
+      )
+    }
+  }
+}
+
+///|
+test "scrolls_window: scrolled up off its foot by the hand or put there, nothing laid out since, a key taken out under what shows: what shows stays where it was, to the bit" {
+  for follows in [true, false] {
+    for by in ["put", "the wheel"] {
+      let (tree, scroll, keys, y) = in_sight_case(follows, by)
+      // (12, out of sight under what shows, over the foot it was opened at, taken out)
+      keys.set(Array::makei(20, fn(i) { i }).filter(fn(k) { k != 12 }))
+      tree.frame(390.0, 844.0) |> ignore
+      assert_eq(
+        (scroll.at(tree), y(7), y(8), y(9)),
+        (300.0, Some(-20.0), Some(20.0), Some(60.0)),
+        msg="moved by \{by}, following its foot \{follows}",
+      )
+    }
+  }
+}
