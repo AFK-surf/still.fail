@@ -52,6 +52,8 @@ priv struct Column[K] {
   /// and up to (Column::summed)
   mut from : Int
   mut upto : Int
+  /// how many times it was filled again (Column::refill): its keys as they were while this is the same
+  mut refills : Int
 }
 
 ///|
@@ -68,6 +70,7 @@ fn[K] Column::new() -> Column[K] {
     grid: 0.0,
     from: 0,
     upto: 0,
+    refills: 0,
   }
 }
 
@@ -101,6 +104,7 @@ fn[K : Eq] Column::refill(self : Column[K], keys : Array[K], g : Double, whole? 
     }
   }
   self.keys = keys
+  self.refills = self.refills + 1
   self.grid = g
   // (every top kept read again: none of them read at this count)
   self.told = self.told + 1
@@ -605,9 +609,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
   }
   // (those of a kind another may take put by as they no more show (`reused`), each with what says its key now, what
-  // wakes what it binds (View::rests) and the slot it is still in: so many at most of each, the rest let go; all let go
-  // with the list)
-  let spare : Map[Int, Array[(View, @signals.Signal[K], () -> Unit, View)]] = Map([])
+  // wakes what it binds (View::rests) and the slot it is still in, none once that slot left what has slots and it was
+  // taken out of it, held by no node (View::park): so many at most of each, the rest let go; all let go with the list)
+  let spare : Map[Int, Array[(View, @signals.Signal[K], () -> Unit, View?)]] = Map([])
   let spare_let_go = fn() {
     for _, all in spare {
       for b in all {
@@ -766,6 +770,147 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     anchor_put(all, top_now(all, x), vh, x)
   }
+  // (the keys that have slots, in order: those that meet where it shows and `slots_margin` of its heights over and
+  // under it, found again only as what shows comes within `slots_near` of their ends or is more than `slots_far` from
+  // them (a wheel going back and forth over where they end makes and lets go nothing), and as the keys change among
+  // them; the rest have no node, the column holding a spacer over them and one under, as tall as they are counted)
+  let slot_keys : @signals.Signal[Array[K]] = @signals.signal([], same=fn(a, b) { physical_equal(a, b) })
+  // (where the slots' first key was found, in which column and at how many of its fillings: while it is filled no
+  // more, the slots are where they were found and what covers what shows is told by places alone, no key looked up)
+  let slots_found : Ref[(Column[K], Int, Int)?] = Ref(None)
+  // (what the window last found shows, and the places it found it from and to: window)
+  let window_found : Ref[(Array[K], Int, Int)] = Ref(([], 0, -1))
+  // (the slots that hold `need` (what shows) and as much round it as where the column shows from `top`, `vh` tall,
+  // asks; a block put by in a slot that leaves them taken out of it first, held by no node (View::park), kept)
+  let slots_cover = fn(all : Column[K], need : Array[K], top : Double, vh : Double) {
+    let n = all.length()
+    if n == 0 {
+      if slot_keys.untracked().length() > 0 {
+        slot_keys.set([])
+      }
+      return
+    }
+    // (where what shows is: by the places the window found it at, where it is what the window found; else by its keys)
+    let mut lo = n
+    let mut hi = -1
+    let (wnow, wlo, whi) = window_found.val
+    if physical_equal(wnow, need) {
+      if wlo <= whi {
+        lo = wlo
+        hi = whi.min(n - 1)
+      }
+    } else {
+      for k in need {
+        match laid_at.get(k) {
+          Some(i) if i < n => {
+            lo = lo.min(i)
+            hi = hi.max(i)
+          }
+          _ => ()
+        }
+      }
+    }
+    let cur = slot_keys.untracked()
+    let holds = fn(i : Int) {
+      let j = i + cur.length() - 1
+      i <= lo &&
+      hi <= j &&
+      (vh <= 0.0 ||
+      (
+        (i == 0 || all.top(i) <= top - slots_near * vh) &&
+        (j == n - 1 || all.top(j) + all.h(j) >= top + vh + slots_near * vh) &&
+        (i == lo || all.top(i) + all.h(i) >= top - slots_far * vh) &&
+        (j == hi || all.top(j) <= top + vh + slots_far * vh)
+      ))
+    }
+    // (the column filled no more since the slots were found: where they are, its places alone)
+    let found_at = match slots_found.val {
+      Some((col, at, i)) if physical_equal(col, all) && at == all.refills && i + cur.length() <= n => Some(i)
+      _ => None
+    }
+    let covered = match found_at {
+      Some(i) => cur.length() > 0 && holds(i)
+      None =>
+        match cur.get(0) {
+          Some(a) =>
+            match laid_at.get(a) {
+              Some(i) if i + cur.length() <= n => {
+                let mut same = true
+                for t in 0..<cur.length() {
+                  if all.key(i + t) != cur[t] {
+                    same = false
+                    break
+                  }
+                }
+                if same {
+                  slots_found.val = Some((all, all.refills, i))
+                }
+                same && holds(i)
+              }
+              _ => false
+            }
+          None => false
+        }
+    }
+    if covered {
+      return
+    }
+    let (a, b) = if vh > 0.0 {
+      (
+        first_past(all, top - slots_margin * vh).min(n - 1),
+        first_past(all, top + vh + slots_margin * vh).min(n - 1),
+      )
+    } else if hi >= 0 {
+      (lo, hi)
+    } else {
+      (0, -1)
+    }
+    let a = if hi >= 0 { a.min(lo) } else { a }
+    let b = if hi >= 0 { b.max(hi) } else { b }
+    // (found again as its keys changed (the column filled again since they were found): an end of the slots that still
+    // holds as it is kept where it was, so a key come or gone costs its own slot alone, not those at an end found anew
+    // a screen round what shows; each end as `covered` holds it. Found again as it was scrolled, both ends found anew
+    // round what shows, as narrow as the margin)
+    let (a, b) = match (cur.get(0), cur.last()) {
+      (Some(f), Some(l)) if vh > 0.0 && hi >= 0 && found_at is None =>
+        match (laid_at.get(f), laid_at.get(l)) {
+          (Some(i), Some(j)) if i <= j && j < n => {
+            let top_holds = i <= lo &&
+              (i == 0 || all.top(i) <= top - slots_near * vh) &&
+              (i == lo || all.top(i) + all.h(i) >= top - slots_far * vh)
+            let foot_holds = hi <= j &&
+              (j == n - 1 || all.top(j) + all.h(j) >= top + vh + slots_near * vh) &&
+              (j == hi || all.top(j) <= top + vh + slots_far * vh)
+            (if top_holds { i } else { a }, if foot_holds { j } else { b })
+          }
+          _ => (a, b)
+        }
+      _ => (a, b)
+    }
+    // (a block put by in a slot that leaves them: taken out of it, held by no node, as it is let go)
+    for _, those in spare {
+      for i, sp in those {
+        match sp {
+          (v, key, wake, Some(was_in)) => {
+            // (its key still among the keys and out of those kept: parked; gone from the list, let go with its slot,
+            // as were every slot kept)
+            let at = laid_at.get(key.untracked())
+            if at is Some(j) && (j < a || j > b) && v.alive() {
+              was_in.park(v) |> ignore
+              those[i] = (v, key, wake, None)
+            }
+          }
+          _ => ()
+        }
+      }
+    }
+    let ks = []
+    for i in a..=b {
+      ks.push(all.key(i))
+    }
+    slots_found.val = if a <= b { Some((all, all.refills, a)) } else { None }
+    slot_keys.set(ks)
+  }
   // (what is made, the stretch it covers, as `shown_now` says)
   let made_now = fn(all : Column[K]) {
     match (shown_now.get(0), shown_now.last()) {
@@ -795,17 +940,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let now = []
     // (showing none of it, a page under another: none made, the one it is held by neither, what it reads let go)
     if vh <= 0.0 {
+      window_found.val = (now, 0, -1)
       return now
     }
     if lo > hi {
-      let mut i = first_past(all, top)
+      let first = first_past(all, top)
+      let mut i = first
+      let mut last = first - 1
       while i < all.length() && all.top(i) < top + vh {
         now.push(all.key(i))
+        last = i
         if !all.known(i) {
           break
         }
         i = i + 1
       }
+      window_found.val = (now, first, last)
       return now
     }
     let mut a = lo
@@ -836,15 +986,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (past one never measured, come in among those that show: those made under it that meet where it shows as they
     // are counted kept made, not let go to be made again once it is measured; where they are is worked out then, and
     // they go only if it puts them out of sight)
+    let mut last = b
     if !all.known(b) {
       let mut i = b + 1
       while i < all.length() && all.top(i) < top + vh {
         if showing.contains(all.key(i)) {
           now.push(all.key(i))
+          last = i
         }
         i = i + 1
       }
     }
+    window_found.val = (now, a, last)
     now
   }
   // Scrolled so that one more meets where it shows, or the first or the last made no more does, or the blocks counted
@@ -876,6 +1029,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     guard self.tree.rooming != self.at && s.seen.untracked() is Some((_, vh)) else { return }
     // (put at its foot: where that is the column's layout says, its fill making what shows there)
     if s.at_foot() {
+      // (and where the keys changed under its slots (one come at its end, put in or taken among them): its slots
+      // brought up to them now, as the change is taken, by where what shows is at its foot, before the column is laid
+      // out, so that one layout lays out what comes and its fill measures it there; else a key come among what shows had
+      // no slot, none drawn)
+      let all = laid.untracked()
+      let stale = match slots_found.val {
+        Some((col, at, _)) => !physical_equal(col, all) || at != all.refills
+        None => slot_keys.untracked().length() > 0
+      }
+      if stale {
+        let top = foot_top(all, vh)
+        slots_cover(all, window(all, top, vh, all.length(), -1, true), top, vh)
+      }
       if out {
         laid_again()
       }
@@ -895,6 +1061,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     let now = window(all, x, vh, lo, hi, true)
     show_only(now)
+    slots_cover(all, now, x, vh)
     made_now(all)
     // (those come in not seen yet: seen as they are laid out, Tree::alone_asks)
     let still = seen_rows.keys().filter(fn(k) { !now.contains(k) }).collect()
@@ -1126,6 +1293,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
         show_only(kept)
       }
+      slots_cover(all, now, top, vh)
       self.tree.room_bindings_run()
       // (each that shows measured, once in this fill, its height counted where it came out otherwise)
       for b in blocks.filter(fn(b) { b.0.alive() }) {
@@ -1150,6 +1318,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     // (what the last pass found, alone: what showed before and shows no more let go now, in this layout)
     show_only(found)
+    slots_cover(laid.untracked(), found, top, vh)
     let live = blocks.filter(fn(b) { b.0.alive() })
     blocks.clear()
     blocks.append(live)
@@ -1197,7 +1366,25 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if from_end {
       held.min_height_share(Is(Some(1.0))).lies_along(Is(Lies::End)) |> ignore
     }
-    held.each(keys, fn(k) { k }, fn(slot, item) {
+    // (over the slots, as tall as the blocks over them are counted: on the grid, as their tops are)
+    held.box(fn(o) {
+      o
+      .height(By(fn() {
+        let all = laid.get()
+        match slot_keys.get().get(0) {
+          Some(k) =>
+            match laid_at.get(k) {
+              Some(i) if i < all.length() => Some(all.top(i))
+              _ => Some(0.0)
+            }
+          None => Some(0.0)
+        }
+      }))
+      .shrink(Is(0.0))
+      |> ignore
+    })
+    |> ignore
+    held.each(fn() { slot_keys.get() }, fn(k) { k }, fn(slot, item) {
       let k = item.untracked()
       let cell = @signals.signal(shown_now.contains(k), same=fn(a, b) { a == b })
       shown[k] = cell
@@ -1280,7 +1467,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 }
                 match taken {
                   // (still in this slot, out of sight: as it was, what it binds read again)
-                  Some((v, key, wake, was_in)) if v.alive() && physical_equal(was_in, slot) => {
+                  Some((v, key, wake, Some(was_in))) if v.alive() && physical_equal(was_in, slot) => {
                     showing[k] = true
                     // (a block given another key: what that makes or lets go in it so at once, key_taken.mbt)
                     key_taking_set(slot.tree, v.id())
@@ -1288,9 +1475,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     wake()
                     mine.val = Some((v, key))
                   }
-                  // (in another's slot, out of sight there: moved into this one, made this one's)
+                  // (in another's slot, out of sight there, or held by no node since that slot left what has slots: taken
+                  // into this one, made this one's)
                   Some((v, key, wake, was_in)) if v.alive() => {
-                    was_in.park(v) |> ignore
+                    match was_in {
+                      Some(w) => w.park(v) |> ignore
+                      None => ()
+                    }
                     slot.take_in(v)
                     showing[k] = true
                     // (a block given another key: what that makes or lets go in it so at once, key_taken.mbt)
@@ -1321,7 +1512,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 // (left where it is, in its slot out of sight, what it binds at rest: nothing drawn changes as it goes,
                 // so it is drawn again for nothing; moved only as the next to show takes it)
                 if all.length() < spare_most && v.alive() {
-                  all.push((v, key, v.rests(), slot))
+                  let wake = v.rests()
+                  // (its key gone from the list: let go with its slot, as were every slot kept)
+                  if slot_keys.untracked().contains(k) || !laid_at.contains(k) {
+                    all.push((v, key, wake, Some(slot)))
+                  } else {
+                    // (its slot no more among those kept (found anew in the same change, let go as it is told): taken
+                    // out of it first, held by no node, so the slot's going lets go none of it)
+                    slot.park(v) |> ignore
+                    all.push((v, key, wake, None))
+                  }
                 } else {
                   slot.drop(v)
                 }
@@ -1339,7 +1539,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             // (what was put by in it let go with it)
             match spare.get(kind) {
               Some(all) =>
-                match all.search_by(fn(b) { physical_equal(b.3, slot) }) {
+                match all.search_by(fn(b) { b.3 is Some(w) && physical_equal(w, slot) }) {
                   Some(i) => all.remove(i) |> ignore
                   None => ()
                 }
@@ -1354,11 +1554,48 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           slot.show(shows, fn(v) { block(v, fn() { k }, fn(v) { make(v, k) }) }, at_once=true)
       }
     }, at_once=true)
+    // (under the slots, as tall as the blocks under them are counted)
+    held.box(fn(o) {
+      o
+      .height(By(fn() {
+        let all = laid.get()
+        let foot = match all.last() {
+          Some(b) => b.top + b.h
+          None => 0.0
+        }
+        match slot_keys.get().last() {
+          Some(k) =>
+            match laid_at.get(k) {
+              Some(i) if i < all.length() => Some(dmax(0.0, foot - (all.top(i) + all.h(i))))
+              _ => Some(foot)
+            }
+          None => Some(foot)
+        }
+      }))
+      .shrink(Is(0.0))
+      |> ignore
+    })
+    |> ignore
   })
   // (those put by let go with the list: held by nothing, let go by nothing else)
   self.owns(spare_let_go) |> ignore
   out
 }
+
+///|
+/// How far past where a page's list shows, in its heights, its slots reach over and under as they are found again
+/// (View::scrolls_window): a screen, so that what a hand's move or a wheel's turn brings in is there already.
+let slots_margin : Double = 1.0
+
+///|
+/// How near where a page's list shows comes to its slots' end, in its heights, before they are found again: half the
+/// margin, so they are widened before what shows reaches their end, not as it does.
+let slots_near : Double = 0.5
+
+///|
+/// How far past where a page's list shows its slots may reach, in its heights, before they are found again narrower:
+/// twice the margin, so that a wheel going back and forth over where they end widens once and narrows never.
+let slots_far : Double = 2.0
 
 ///|
 /// How many blocks of one kind a list keeps put by (View::scrolls_window's `reused`): as many as come to show at once

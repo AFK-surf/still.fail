@@ -286,3 +286,18 @@ test "scrolls_window following its foot under a head: a block come at its foot, 
   // (made: the one come alone, those over it the blocks they were; at its foot, all three showing)
   assert_eq((k.made[made:].to_owned(), shown, k.off_foot()), ([40], [38, 39, 40], 0.0))
 }
+
+///|
+test "scrolls_window following its foot: not held, a block over its last grown at rest (no block come or gone) is followed in that layout, what is over it gone up by as much" {
+  let k = foot_case(40)
+  let y37 = k.live.get(37).map(fn(v) { v.rect().1 })
+  let y39 = k.live.get(39).map(fn(v) { v.rect().1 })
+  // (block 38, 150 tall, the one over the last, comes to be 50 taller: nothing come or gone, only a height)
+  k.more[38].set(50.0)
+  k.tree.frame(600.0, 400.0) |> ignore
+  let up = fn(y : Double?) { y.map(fn(v) { v - 50.0 }) }
+  assert_eq(
+    (k.live.get(37).map(fn(v) { v.rect().1 }), k.live.get(39).map(fn(v) { v.rect().1 }), k.off_foot()),
+    (up(y37), y39, 0.0),
+  )
+}

@@ -112,3 +112,44 @@ test "spares put by, 0, 1, 8 and 64 of them: a scroll frame does the same work; 
   assert_eq(works[2], works[0], msg="8 spares")
   assert_eq(works[3], works[0], msg="64 spares")
 }
+
+///|
+test "a page's list's block put by in a slot that leaves the slots kept: parked, not let go, and taken again by the next of its kind to show" {
+  let made = Ref(0)
+  let gone = Ref(0)
+  let tree = Tree::new(
+    fn(root) {
+      root.box(fn(o) {
+        o.width(Is(Some(300.0))).height(Is(Some(200.0))) |> ignore
+        o.scrolls_window(
+          Scroll::list(),
+          fn() { Array::makei(400, fn(i) { i }) },
+          est=22.0,
+          fn(_, _) { @halt.saying("every block is of a kind another may take") },
+          reused=fn(_) { Some(0) },
+          make_reused=fn(b, key) {
+            made.val = made.val + 1
+            b.owns(fn() { gone.val = gone.val + 1 }) |> ignore
+            b.box(fn(l) { l.height(Is(Some(22.0))).words(By(fn() { "row \{key()}" })) |> ignore }) |> ignore
+          },
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.frame(390.0, 844.0) |> ignore
+  let first = made.val
+  // (down a turn at a time, far past where the first slots were: what was put by there parked as its slot went)
+  for t in Array::makei(60, fn(i) { 10.0 + i.to_double() }) {
+    tree.wheel_at(150.0, 100.0, 0.0, 66.0, 0, t) |> ignore
+    tree.frame(390.0, 844.0) |> ignore
+  }
+  // (blocks made: those that showed first, and no more than a few put by for each that came at once; none let go but
+  // past the spares kept)
+  assert_true(made.val <= first + spare_most + 2, msg="made \{made.val}, first \{first}, let go \{gone.val}")
+  // (what is drawn: its rows, each with its own key's words, one after another)
+  let rows = tree.drawn().filter(fn(d) { d.words.has_prefix("row ") && d.y + d.h > 0.0 && d.y < 200.0 })
+  assert_true(rows.length() > 0)
+}

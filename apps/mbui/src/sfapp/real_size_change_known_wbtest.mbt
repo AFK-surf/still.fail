@@ -28,7 +28,7 @@ let real_size_change_known : Map[String, (Int, Int, Int, Int, Int, Int)] = {
   "phone switcher search/archived": (0, 0, 0, 0, 0, 0),
   "phone switcher-found search/renamed": (0, 0, 0, 0, 0, 79),
   "phone switcher-found search/down": (0, 0, 0, 0, 0, 0),
-  "phone switcher-found search/card": (0, 0, 0, 0, 0, 43),
+  "phone switcher-found search/card": (0, 0, 0, 0, 0, 33),
   "phone switcher-found search/archived": (0, 0, 0, 0, 0, 0),
   "phone search-results search/renamed": (0, 0, 0, 0, 0, 94),
   "phone search-results search/down": (0, 0, 0, 0, 0, 0),
