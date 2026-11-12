@@ -90,7 +90,8 @@ fn mine_bubble_node(
 /// list's Entry::id; `side`, `top`; `over`), as `m` says it as it changes: at the column's end, its words in their
 /// bubble; under it, unless their next message soon after says it under that one (`followed`), the runtime it waits
 /// for where its station lacks it (blocked_line_node), else that its agents have yet to take it (agent_waiting_node),
-/// else its time: one in the other's place as that changes.
+/// else its time: one in the other's place as that changes. Where it offers itself (`share`), its bubble right clicked
+/// offers that (message_menu_node: the old bubble's pickable's; no ⋯, as the old row had none).
 // the chat's page as nodes: held by its tests, not used by the app yet
 #warnings("-unused_value")
 fn mine_said_node(
@@ -102,6 +103,7 @@ fn mine_said_node(
   top : () -> Double,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
+  share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
 ) -> MessageRowNode {
   message_row_frame_node(v, key, side, top, over~, fn(r) {
@@ -125,6 +127,10 @@ fn mine_said_node(
       )
       col.show(fn() { m().text != "" }, fn(b) {
         mine_bubble_node(b, here, m, found, cards=(here.tips, message_link_card(src, here.station, "", m)))
+        match share {
+          Some(s) => message_menu_node(b, s)
+          None => ()
+        }
       })
       // (nothing under it at all while it is followed: no box of nothing in its column, its gap with it)
       col.show(fn() { mine_under(m()) != MineNothing }, fn(n) {

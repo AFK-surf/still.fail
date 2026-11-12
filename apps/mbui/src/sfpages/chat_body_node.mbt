@@ -396,7 +396,7 @@ fn chat_body_row(
       KEmpty => frame(fn(b) { chat_empty_node(b) |> ignore })
       KLine => frame(fn(b) { unread_line_node(b) |> ignore })
       KNewer => frame(fn(b) { pages_coming_node(b, fn() { false }) |> ignore })
-      KMine => mine_said_node(p, src, here, k, side, top, m) |> ignore
+      KMine => mine_said_node(p, src, here, k, side, top, m, share=message_share_of(src, here, m)) |> ignore
       KNotice => notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied) |> ignore
       KPerson => person_said_node(p, src, here, k, side, top, m, share=message_share_of(src, here, m)) |> ignore
       KAgent =>
