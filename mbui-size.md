@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a7808b9dc](https://github.com/AFK-surf/still.fail/commit/a7808b9dc8996e16cb3ec3420f4093786cd9780c) docs/releases: stable 0.1.8498 (#5800) | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.21 | 138.29 |
 | [eed3184fa](https://github.com/AFK-surf/still.fail/commit/eed3184fa82fe04ff8b2ee8c2811feaa0241a01a) mbui: a chat's page made as nodes tells the core w | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.21 | 138.29 |
 | [eed3184fa](https://github.com/AFK-surf/still.fail/commit/eed3184fa82fe04ff8b2ee8c2811feaa0241a01a) mbui: a chat's page made as nodes tells the core w | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.29 | 132.58 |
 | [3e8f43a25](https://github.com/AFK-surf/still.fail/commit/3e8f43a25998ec1f2f0d867dad19e9c162cad87c) mbui: a chat's page made as nodes holds its compos | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.18 | 156.38 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a62811514](https://github.com/AFK-surf/still.fail/commit/a62811514cbead15878fbdbbd908acd4a0caa143) screens: what is pressed over the picture is its o | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.37 | 176.97 |
 | [6fe90476a](https://github.com/AFK-surf/still.fail/commit/6fe90476a02cd1fb756a50eccf72a166682807f5) core: a lock's chain is the rules' fork choice amo | 1.88 | 2.51 | 10.73 | 29.68 | 37.92 | 26.42 | 49.54 | 94.64 | 184.83 |
 | [33ffbb39f](https://github.com/AFK-surf/still.fail/commit/33ffbb39f0814ad4933e78856088d8da8b1d762b) mbui: what a page's list's block holds comes and g | 1.88 | 2.51 | 10.73 | 29.66 | 37.92 | 26.4 | 49.54 | 94.39 | 170.72 |
-| [022ba7280](https://github.com/AFK-surf/still.fail/commit/022ba728003387d92bfa4daec6f5b38a1dd5a273) core: a test's time passes without a flush after t | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.06 | 176.2 |
