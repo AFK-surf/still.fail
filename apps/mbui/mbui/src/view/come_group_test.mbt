@@ -338,3 +338,28 @@ test "rows as tall as each other coming at one moment: each as it comes alone, t
     at = 100.0 + f.to_double() * 1000.0 / 60.0
   }
 }
+
+///|
+test "a show opening down a column at the moment another opens laid out nowhere (its room shut): the one laid out goes its own way, as alone, from nothing to its height, never none on the way, the same at every rate" {
+  // (the one laid out nowhere is never measured, how tall it goes to never known: said with it, the group's way was
+  // worked out of a height that is no number, each in it laid out none all the way and whole at its end
+  // (Tree::come_group_settle, after its wait for the layout under way))
+  let looks = rc_looks(rc_at + @flex.move_most_ms + 100.0)
+  let want = looks.map(fn(at) { @flex.come_way(0.0, 0.0, 60.0, at - rc_at).0 })
+  for rate in rc_rates {
+    let on = @signals.signal(false)
+    let t = @view.Tree::new(fn(root) {
+      root.box(fn(col) {
+        col.width(Is(Some(300.0))) |> ignore
+        col.show(fn() { on.get() }, fn(s) { s.height(Is(Some(60.0))) |> ignore })
+        col.show(fn() { on.get() }, fn(s) { s.laid_nowhere(Is(true)).height(Is(Some(40.0))) |> ignore })
+        col.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    t.frame(390.0, 844.0) |> ignore
+    let under = rc_y(t, "下")
+    let got = rc_walk(t, [(rc_at, fn() { on.set(true) })], looks, rate, fn() { rc_y(t, "下") - under })
+    assert_true(rc_near(got, want), msg="at \{rate} a second: \{Repr(got)} for \{Repr(want)}")
+  }
+}
