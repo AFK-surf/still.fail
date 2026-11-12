@@ -9,7 +9,13 @@ fn init {
     // (recorded again for #2642: its run's own pairs, none of them the cards'; fewer since words sent flying and an
     // answer coming in over the end make room for what they pass, #2674 and #2689)
     ("src/sfreplay/flows/chat_audio_test.mbt", 1),
-    ("src/sfreplay/flows/pick_words_test.mbt", 2),
+    // (shown as the replay gives each message at its own moment and draws on the run's display's frames, a device's
+    // timing: the words sent leaving the old composer pass over its pasted card's 「6,000 字符」 at 1673.6. Goes as the
+    // composer and the chat's message list are made as nodes)
+    ("src/sfreplay/flows/paste_long_test.mbt", 1),
+    // (+1, the third, the same way: the quote sent passing over the old composer's 「添加说明（可选）」 at 4336.9. Goes
+    // as the composer is made as nodes)
+    ("src/sfreplay/flows/pick_words_test.mbt", 3),
     // (one more since what comes out from under a cut fades by each pixel, not by its line (2026-10-30): the failure
     // notice's 「·」 and 「上报」 meet as it comes in, faint in the fade, wholly faded before)
     // (one more since an agent's line comes in opening its room, not there at once (2026-10-30, rows_steady.mbt):

@@ -4,7 +4,12 @@
 ///|
 test "89-run-settings" {
   @sfreplay.orders(fn(seed) {
-    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-run-settings"), seed~)
+    // (the agent's card read by the chat's sheet, then by 详情: the run let it go as the sheet went (a frame took what
+    // came meanwhile) and asked again for the tab; handed over between two frames as a device's is, it is one watch all
+    // along now, what came for the second given to the first)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-run-settings"), seed~, drop=[
+      "{\"id\":34,\"unsubscribe\":true}", "{\"id\":36,\"subscribe\":{\"topic\":\"agentCard\"",
+    ])
     f.tap("端到端测试")
     f.run_to(@ui.nav_rest)
     f.see("=willow")

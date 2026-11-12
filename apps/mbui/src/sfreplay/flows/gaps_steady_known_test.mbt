@@ -10,6 +10,12 @@ fn init {
     ("src/sfreplay/flows/glass_test.mbt", 1),
     ("src/sfreplay/flows/history_test.mbt", 2),
     ("src/sfreplay/flows/markdown_test.mbt", 1),
+    // (this one and wide_answer_reply's: shown as the replay gives each message at its own moment, a device's timing,
+    // where main's gave each at a frame: the old chat page's message list sets a row's change out from the frame that
+    // builds it, so the room by the agent's line opens on one cause's way and closes on the next's ("20 to 105.04 and
+    // back to 102.39 at 2550"; wide: "104.02 to 110.59 and back to 102.53 at 1450"). Goes as the chat's message list is
+    // made as nodes)
+    ("src/sfreplay/flows/offline_retry_test.mbt", 1),
     ("src/sfreplay/flows/paste_long_test.mbt", 1),
     ("src/sfreplay/flows/send_flying_test.mbt", 1),
     ("src/sfreplay/flows/service_page_test.mbt", 1),
@@ -24,5 +30,6 @@ fn init {
     ("src/sfreplay/flows/share_test.mbt", 2),
     ("src/sfreplay/flows/sheets_sinking_test.mbt", 2),
     ("src/sfreplay/flows/viewer_test.mbt", 1),
+    ("src/sfreplay/flows/wide_answer_reply_test.mbt", 1),
   ])
 }

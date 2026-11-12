@@ -1954,3 +1954,4 @@ pub fn Replay::text(self : Replay) -> String? {
     Some(self.run_text.join("\n"))
   }
 }
+

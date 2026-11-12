@@ -15,10 +15,13 @@ fn replay_drive_download_many() -> Unit raise {
   @sfreplay.orders(fn(seed) {
     // (the run's folder opened on stations asked anew (its page's `stations` whole, after the files' with a drive), so
     // it read the operations under way (`doing`) only once they came: its watch handed over from the page before let
-    // go of and asked again. The stations' rows are one ask held all along now (MBUI_STATION_ROWS), the folder opened
-    // at once, and the watch goes on)
+    // go of and asked again, twice. The stations' rows are one ask held all along now (MBUI_STATION_ROWS), the folder
+    // opened at once, and the watch goes on: what came for it is given to it as it came, its own handing over between
+    // two frames as a device's is, not let go of while a frame took what came (the first of the two too, since the
+    // replay gives what comes at its moment: the coordinator of the migration, 2026-11-12))
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-download-many"), seed~, w=1280.0, h=800.0, drop=[
-      "{\"id\":31,\"unsubscribe\":true}", "{\"id\":40,\"subscribe\":{\"topic\":\"doing\"}",
+      "{\"id\":26,\"unsubscribe\":true}", "{\"id\":31,\"subscribe\":{\"topic\":\"doing\"}", "{\"id\":31,\"unsubscribe\":true}",
+      "{\"id\":40,\"subscribe\":{\"topic\":\"doing\"}",
     ])
     // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
     f.before("drive-big 105609")
