@@ -304,6 +304,9 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
   const unsignedHome = join(dir, "homes", "unsigned");
   const preExistingHome = join(dir, "homes", "preexisting");
   const notedHome = join(dir, "homes", "noted");
+  const noEmailHome = join(dir, "homes", "no-email");
+  const envHome = join(dir, "homes", "env");
+  const apiHome = join(dir, "homes", "api");
   // `linkTranscripts` creates `agy/sessions` even before a profile has ever signed in.
   mkdirSync(join(agyHome(unsignedHome), SESSIONS), { recursive: true });
   mkdirSync(join(geminiDir(unsignedHome), "antigravity-cli"), { recursive: true });
@@ -313,6 +316,10 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
   // A profile signed in via station (noted email), then its token file unlinked by `agy` migrating to the keychain.
   mkdirSync(join(geminiDir(notedHome), "antigravity-cli"), { recursive: true });
   writeFileSync(agyToken(notedHome), JSON.stringify({ token: { access_token: "ya29.x" }, id_token_email: "someone@gmail.com" }));
+  // A valid token file omitting `id_token_email` still keeps the sign-in marker without stale email attribution.
+  mkdirSync(join(geminiDir(noEmailHome), "antigravity-cli"), { recursive: true });
+  writeFileSync(agyAccountFile(noEmailHome), JSON.stringify({ email: "stale@gmail.com" }));
+  writeFileSync(agyToken(noEmailHome), JSON.stringify({ token: { access_token: "ya29.noemail" } }));
 
   const hadKeychain = platform.hasKeychain;
   platform.hasKeychain = true;
@@ -323,6 +330,8 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
       { id: "ag-u", name: "Unsigned", runtime: "agy", home: unsignedHome, access: { kind: "subscription" } },
       { id: "ag-p", name: "PreExisting", runtime: "agy", home: preExistingHome, access: { kind: "subscription" } },
       { id: "ag-n", name: "Noted", runtime: "agy", home: notedHome, access: { kind: "subscription" } },
+      { id: "ag-env", name: "Env", runtime: "agy", home: envHome, access: { kind: "env" } },
+      { id: "ag-api", name: "Api", runtime: "agy", home: apiHome, access: { kind: "api-provider", provider: "google", key: "bad-key" } },
     ];
   });
   let driverMode: "ok" | "auth" | "crash" = "ok";
@@ -333,6 +342,10 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
     config,
     machine: null,
     checkOnStart: false,
+    check: (req, lang) =>
+      req.kind === "api-provider"
+        ? Promise.resolve({ state: "failed", detail: "Google refused the key (401)", models: null, checkedAt: 0 })
+        : checkProfile({ ...req, env: {}, machine: false, lang }),
     quota: async () => ({ state: "ok", windows: [], detail: null, checkedAt: 0 }),
     agy: () =>
       ({
@@ -357,6 +370,14 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
     assert.equal(afterMigration.state, "ok");
     assert.match(afterMigration.detail, /someone@gmail\.com/);
 
+    // A valid token file without `id_token_email` clears any stale email while keeping the keychain sign-in marker.
+    await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: noEmailHome, env: {}, machine: false, lang: "en" });
+    rmSync(agyToken(noEmailHome));
+    assert.equal(accountEmail("agy", noEmailHome), null);
+    const noEmailAfter = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: noEmailHome, env: {}, machine: false, lang: "en" });
+    assert.equal(noEmailAfter.state, "ok");
+    assert.equal(noEmailAfter.detail, tr("en", "station.profile.signedIn"));
+
     // 2. Unsigned profile stays `login` without probing `agy acp`.
     const uCheck = await accounts.check("ag-u", "en");
     assert.equal(uCheck.state, "login");
@@ -370,14 +391,27 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
     assert.equal(nCheck.state, "ok");
     assert.deepEqual(nCheck.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
 
-    // 4. Revoked/missing keychain sign-in (`Authentication required`) flips the check back to `login` while preserving known models.
+    // 4. Revoked/missing keychain sign-in (`Authentication required`) flips a subscription check back to `login` while preserving known models.
     driverMode = "auth";
     const revoked = await accounts.check("ag-p", "en");
     assert.equal(revoked.state, "login");
     assert.equal(revoked.detail, tr("en", "station.profile.signedOut"));
     assert.deepEqual(revoked.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
 
-    // 5. Non-auth launch error still reports `failed`.
+    // 5. Non-subscription `agy` profiles (`env` and `api-provider`) never get mapped to `login`:
+    //    `env` reports `failed` (`agyFailed`), and an already-failed `api-provider` key check preserves its `keyRefused` error without spawning `agy acp`.
+    const callsBeforeEnv = driverCalls;
+    const envFailed = await accounts.check("ag-env", "en");
+    assert.equal(envFailed.state, "failed");
+    assert.match(envFailed.detail, /Authentication required/);
+    assert.equal(driverCalls, callsBeforeEnv + 1);
+
+    const apiFailed = await accounts.check("ag-api", "en");
+    assert.equal(apiFailed.state, "failed");
+    assert.equal(apiFailed.detail, "Google refused the key (401)");
+    assert.equal(driverCalls, callsBeforeEnv + 1, "already-failed api-provider check does not spawn agy acp");
+
+    // 6. Non-auth launch error still reports `failed`.
     driverMode = "crash";
     const crashed = await accounts.check("ag-n", "en");
     assert.equal(crashed.state, "failed");

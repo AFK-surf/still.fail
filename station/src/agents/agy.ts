@@ -42,10 +42,21 @@ export function agyEmailIn(text: string): string | null {
 }
 
 export async function noteAgyEmail(home: string, text: string): Promise<string | null> {
-  const email = agyEmailIn(text);
+  let parsed: Json;
   try {
-    if (email !== null) await writeFile(agyAccountFile(home), `${JSON.stringify({ email })}\n`);
-    else await rm(agyAccountFile(home), { force: true });
+    parsed = JSON.parse(text);
+  } catch {
+    await rm(agyAccountFile(home), { force: true }).catch(() => {});
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    await rm(agyAccountFile(home), { force: true }).catch(() => {});
+    return null;
+  }
+  const raw = parsed.id_token_email;
+  const email = typeof raw === "string" && raw !== "" ? raw : null;
+  try {
+    await writeFile(agyAccountFile(home), `${JSON.stringify(email !== null ? { email } : {})}\n`);
   } catch {}
   return email;
 }

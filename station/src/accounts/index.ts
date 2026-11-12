@@ -1092,9 +1092,9 @@ export class Accounts {
         check.detail = tr(lang, "station.profile.hermesModelsFailed", { error: (e as Error).message });
       }
     }
-    // (One signed out of its Google account is said so by its check: no session asked; one whose keychain sign-in was
-    // revoked or removed is found signed out here.)
-    if (profile.runtime === "agy" && check.state !== "login" && this.deps.agy?.()) {
+    // (One signed out of its Google account is said so by its check: no session asked; a subscription whose keychain
+    // sign-in was revoked or removed is found signed out here, while an already-failed key check keeps its refusal.)
+    if (profile.runtime === "agy" && (check.state === "ok" || check.state === "unknown") && this.deps.agy?.()) {
       try {
         check.models = await this.deps.agy()!.models(profile);
         check.state = "ok";
@@ -1102,7 +1102,7 @@ export class Accounts {
       } catch (e) {
         const error = (e as Error).message;
         check.models = null;
-        if (agyClassifyFailure(error) === "auth") {
+        if (kind === "subscription" && agyClassifyFailure(error) === "auth") {
           check.state = "login";
           check.detail = tr(lang, "station.profile.signedOut");
         } else {
