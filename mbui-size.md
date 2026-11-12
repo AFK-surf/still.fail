@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e02e43d2a](https://github.com/AFK-surf/still.fail/commit/e02e43d2a6b8e36ea270c769eabd1c433f7e2891) Install the Antigravity CLI from the app, by its o | 1.86 | 2.49 | 10.42 | 29.19 | 36.85 | 25.99 | 48.55 | 94.14 | 127.3 |
 | [e0220aca7](https://github.com/AFK-surf/still.fail/commit/e0220aca7876c7a632209df99c9caf77239a495a) mbui: 正在发送 counted from when the message was sent, | 1.86 | 2.49 | 10.42 | 29.19 | 36.85 | 25.99 | 48.55 | 93.6 | 174.89 |
 | [627960c24](https://github.com/AFK-surf/still.fail/commit/627960c243efddcd2134db194779e3f65e8f5dad) core: every lock call and roster write in each way | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.18 | 180.46 |
 | [b310ef4c6](https://github.com/AFK-surf/still.fail/commit/b310ef4c6e94a4c6a2e9b4e18ab67e173a632d9a) mbui: a scripted run's step comes where a device's | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 93.91 | 183.33 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [2ad95a0b4](https://github.com/AFK-surf/still.fail/commit/2ad95a0b4edde672213300c0be4d8a685b8d9717) app: a card's pictures told to the nodes that read | 1.83 | 2.44 | 10.2 | 28.94 | 36.04 | 25.78 | 47.89 | 94.13 | 176.76 |
 | [a1ccda637](https://github.com/AFK-surf/still.fail/commit/a1ccda637531afcf0305f7b740715027b052f26b) mbui: a row of ways of saying one thing as nodes ( | 1.83 | 2.44 | 10.2 | 28.94 | 36.03 | 25.79 | 47.87 | 94.49 | 188.62 |
 | [19d52998a](https://github.com/AFK-surf/still.fail/commit/19d52998ac2d6af2f0dcefb77273736cae8997b6) mbui: a right click on what has no menu of its own | 1.83 | 2.44 | 10.2 | 28.94 | 36.03 | 25.79 | 47.87 | 94.34 | 184.61 |
-| [ebbf50a92](https://github.com/AFK-surf/still.fail/commit/ebbf50a920ab55bb799d6b59bacab25689892c1c) mbui: what goes beside a link of a node's words (V | 1.83 | 2.44 | 10.19 | 28.94 | 36 | 25.78 | 47.85 | 94.96 | 177.29 |
