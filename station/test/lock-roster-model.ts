@@ -37,11 +37,11 @@ export const STEPS_RULE: V3v = { ...V3[1], rule: "steps" };
 export const v3Name = (v: V3v) => `tie=signer resign=${v.resign}${v.rule === "steps" ? " rule=steps" : ""}`;
 
 const HEX32 = /^[0-9a-f]{64}$/;
-type Role3 = "owner" | "admin" | "member";
+export type Role3 = "owner" | "admin" | "member";
 const ROLES3 = new Set(["owner", "admin", "member"]);
 /// Who may give a role: an owner any, an admin admin or member.
-const mayGive = (giver: string, role: string) => giver === "owner" || (giver === "admin" && role !== "owner");
-const manages = (role: string | undefined) => role === "owner" || role === "admin";
+export const mayGive = (giver: string, role: string) => giver === "owner" || (giver === "admin" && role !== "owner");
+export const manages = (role: string | undefined) => role === "owner" || role === "admin";
 
 // ── the people ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -49,22 +49,22 @@ const manages = (role: string | undefined) => role === "owner" || role === "admi
 /// outsider whom only a revoked key admits. Each has an app, a phone and a laptop, a base key and a signing key each.
 export const PEOPLE3 = ["alice", "bob", "dan", "carol", "xena", "mallory"] as const;
 const DEVICE_KINDS = ["app", "phone", "laptop"] as const;
-type DevSpec = { name: string; sub: string; base: Key; signer: Key; kind: (typeof DEVICE_KINDS)[number] };
-const SPECS: DevSpec[] = PEOPLE3.flatMap((sub, i) => DEVICE_KINDS.map((kind, j) => ({ name: `${sub}'s ${kind}`, sub, kind, base: key(3000 + 10 * i + 2 * j), signer: key(3001 + 10 * i + 2 * j) })));
-const spec = (name: string) => SPECS.find((s) => s.name === name)!;
+export type DevSpec = { name: string; sub: string; base: Key; signer: Key; kind: (typeof DEVICE_KINDS)[number] };
+export const SPECS: DevSpec[] = PEOPLE3.flatMap((sub, i) => DEVICE_KINDS.map((kind, j) => ({ name: `${sub}'s ${kind}`, sub, kind, base: key(3000 + 10 * i + 2 * j), signer: key(3001 + 10 * i + 2 * j) })));
+export const spec = (name: string) => SPECS.find((s) => s.name === name)!;
 /// What a revoked key puts in its log beside itself: one accomplice device a person.
-const ACCOMPLICE = PEOPLE3.map((sub, i) => ({ name: `${sub}'s accomplice`, sub, base: key(3700 + 2 * i), signer: key(3701 + 2 * i) }));
-const stationKeys3 = [0, 1, 2].map((i) => key(3900 + i));
+export const ACCOMPLICE = PEOPLE3.map((sub, i) => ({ name: `${sub}'s accomplice`, sub, base: key(3700 + 2 * i), signer: key(3701 + 2 * i) }));
+export const stationKeys3 = [0, 1, 2].map((i) => key(3900 + i));
 const keyName = new Map<string, string>([
   ...SPECS.map((s) => [s.signer.id, s.name] as [string, string]),
   ...ACCOMPLICE.map((s) => [s.signer.id, s.name] as [string, string]),
   [eveKey.id, "a forger"],
 ]);
 /// Keys only the attacker's side holds: what a station turns away of these is no one's loss.
-const THEIRS = new Set([...SPECS.filter((s) => s.sub === "mallory").map((s) => s.signer.id), ...ACCOMPLICE.map((a) => a.signer.id)]);
-const nameOfKey = (k: string) => keyName.get(k) ?? `key ${k.slice(8, 14)}`;
-const stationName = (hex: unknown) => `s${stationKeys3.findIndex((k) => k.hex === hex)}`;
-const personDevice = (s: { base: Key; signer: Key; name: string }) => ({ key: s.signer.id, id: s.base.hex, label: s.name });
+export const THEIRS = new Set([...SPECS.filter((s) => s.sub === "mallory").map((s) => s.signer.id), ...ACCOMPLICE.map((a) => a.signer.id)]);
+export const nameOfKey = (k: string) => keyName.get(k) ?? `key ${k.slice(8, 14)}`;
+export const stationName = (hex: unknown) => `s${stationKeys3.findIndex((k) => k.hex === hex)}`;
+export const personDevice = (s: { base: Key; signer: Key; name: string }) => ({ key: s.signer.id, id: s.base.hex, label: s.name });
 
 // ── a person log, by the rules ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -227,7 +227,7 @@ export class Holder {
 
 // ── the workspace's list at a keeper (steps 1-4) ────────────────────────────────────────────────────────────────────
 
-type Stmt = { h: string; e: Entry; body: any; log: string; by: string };
+export type Stmt = { h: string; e: Entry; body: any; log: string; by: string };
 export type Member = { lock: string; role: Role3; admit: string };
 export type Roster = {
   /// Whether it holds the root's log at all (else it cannot tell anything).
@@ -444,9 +444,14 @@ export const rosterSaid = (r: Roster): string => {
 // ── the world ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type Dev3 = DevSpec & { h: Holder; log: string; compromised: boolean; mine: string[]; superseded: Set<string> };
-type Msg = { to: Holder; entries: Entry[] };
+export type Msg = { to: Holder; entries: Entry[]; bodies?: unknown[] };
 export type Family = "free" | "faults";
-type Intent = { dev: Dev3; hashes: string[]; void: string | null; kind: string; body: any; log: string; step: number };
+export type Intent = { dev: Dev3; hashes: string[]; void: string | null; kind: string; body: any; log: string; step: number };
+
+export type World3Options = { laptops?: boolean; carol?: Role3; bare?: boolean };
+/// What makes a world: round three's, or another round's built on it (lock-roster4-model.ts).
+export type Make3 = (seed: number, v: V3v, family: Family, o?: World3Options) => World3;
+export const make3: Make3 = (seed, v, family, o) => new World3(seed, v, family, o);
 
 export class World3 {
   readonly v: V3v;
@@ -493,7 +498,7 @@ export class World3 {
   watch: ((h: Holder, r: Roster) => void) | null = null;
   log: string[] = [];
 
-  constructor(seed: number, v: V3v, family: Family = "free", o: { laptops?: boolean; carol?: Role3 } = {}) {
+  constructor(seed: number, v: V3v, family: Family = "free", o: World3Options = {}) {
     this.v = v;
     this.family = family;
     this.rng = new Rng(seed ^ 0x5157);
@@ -518,8 +523,9 @@ export class World3 {
       head = this.make(head, kind, body, spec("alice's app").signer);
       setup.push(head);
     };
-    for (const [sub, role] of [["bob", "admin"], ["dan", "admin"], ["carol", o.carol ?? "member"]] as const) say("ws.member", { ws: WS, sub, lock: this.home.get(sub), role });
-    for (const s of stationKeys3) say("ws.station", { ws: WS, key: s.hex });
+    // (`bare`: none of it, for a world whose workspace begins elsewhere: lock-roster4-model.ts's handover)
+    if (!o.bare) for (const [sub, role] of [["bob", "admin"], ["dan", "admin"], ["carol", o.carol ?? "member"]] as const) say("ws.member", { ws: WS, sub, lock: this.home.get(sub), role });
+    if (!o.bare) for (const s of stationKeys3) say("ws.station", { ws: WS, key: s.hex });
     for (const x of setup) this.known.add(hashOf(x));
     for (const h of this.holders) this.receive(h, setup);
   }
@@ -559,8 +565,12 @@ export class World3 {
     const h = hashOf(g);
     this.all.set(h, g);
     this.logOf.set(h, h);
-    if (!this.logs.has(h)) this.logs.set(h, new PersonRules(g));
+    if (!this.logs.has(h)) this.logs.set(h, this.rulesFor(g));
     return g;
+  }
+  /// A person log's rules (lock-roster4-model.ts takes more kinds).
+  rulesFor(g: Entry): PersonRules {
+    return new PersonRules(g);
   }
   /// An entry after `parent` in its log, signed by `by` (not checked).
   make(parent: Entry, kind: string, body: unknown, by: Key, at?: number): Entry {
@@ -663,8 +673,12 @@ export class World3 {
 
   // ── lines ────────────────────────────────────────────────────────────────────────────────────────────────────
 
+  /// What `from` gives `to` in a sync: its active chains, less what `to` has.
+  offer(from: Holder, to: Holder): Entry[] {
+    return from.offered().filter((e) => !to.has(hashOf(e)));
+  }
   send(from: Holder, to: Holder) {
-    const es = from.offered().filter((e) => !to.has(hashOf(e)));
+    const es = this.offer(from, to);
     if (es.length === 0) return;
     const m = { to, entries: es };
     this.queue.push(m);
@@ -685,7 +699,7 @@ export class World3 {
           if (a === b || skip.has(b)) continue;
           const pair = `${a.name}>${b.name}`, now = `${a.ver}|${b.ver}`;
           if (this.levelled.get(pair) === now) continue;
-          const es = a.offered().filter((e) => !b.has(hashOf(e)));
+          const es = this.offer(a, b);
           if (es.length > 0) {
             for (const e of es) this.known.add(hashOf(e));
             const { changed, any: got } = b.take(es);
@@ -818,6 +832,19 @@ export class World3 {
     }
   }
 
+  /// The admits about `sub` a revoked key of `d` can name: every one that went over a line.
+  knownAdmits(_d: Dev3, sub: string): string[] {
+    return [...this.known].filter((h) => this.entry(h).kind === "ws.member" && this.entry(h).body.sub === sub).sort();
+  }
+  /// What a keeper's list is, in words: what two keepers compare.
+  stateSaid(h: Holder): string {
+    return rosterSaid(this.ros(h));
+  }
+  /// The list at every holder compared with a fresh holder's given the same entries, shuffled (A1).
+  sameEntries(): { checks: number; mismatch: number } {
+    return sameEntries(this);
+  }
+
   // ── a drawn world ────────────────────────────────────────────────────────────────────────────────────────────
 
   run(steps: Step[]) {
@@ -875,7 +902,7 @@ export class World3 {
           if (ps.length === 0) break;
           const y = (["device", "admit", "cancel"] as const)[st.b % 3];
           const sub = (["bob", "dan", "carol"] as const)[(st.b >> 2) % 3];
-          const known = [...this.known].filter((h) => this.entry(h).kind === "ws.member" && this.entry(h).body.sub === sub).sort();
+          const known = this.knownAdmits(d, sub);
           const e = this.attackSign(d, ps[st.c % ps.length], y, { sub, cancels: known });
           if (e === null) break;
           const to = this.holders[(st.a >> 4) % this.holders.length];
@@ -1002,26 +1029,26 @@ function sameEntries(w: World3): { checks: number; mismatch: number } {
       for (const k of changed) (k.active = k.choose()), (k.on = new Set(k.active));
       if (!any) break;
     }
-    if (rosterSaid(w.ros(fresh)) !== rosterSaid(w.ros(h))) mismatch++;
+    if (w.stateSaid(fresh) !== w.stateSaid(h)) mismatch++;
   }
   return { checks: w.holders.length, mismatch };
 }
 
-export function drawn3(seed: number, v: V3v, family: Family, steps: Step[]): { w: World3; m: Measured3 } {
-  const w = new World3(seed, v, family);
+export function drawn3(seed: number, v: V3v, family: Family, steps: Step[], mk: Make3 = make3): { w: World3; m: Measured3 } {
+  const w = mk(seed, v, family);
   let checks = 0, mismatch = 0;
   for (let q = 0; q < 4; q++) {
     w.run(steps.slice(Math.floor((q * steps.length) / 4), Math.floor(((q + 1) * steps.length) / 4)));
-    const s = sameEntries(w);
+    const s = w.sameEntries();
     checks += s.checks;
     mismatch += s.mismatch;
   }
   const rested = w.finish();
-  const s = sameEntries(w);
+  const s = w.sameEntries();
   checks += s.checks;
   mismatch += s.mismatch;
   const rosters = w.holders.map((h) => w.ros(h));
-  const agree = new Set(rosters.map(rosterSaid)).size === 1;
+  const agree = new Set(w.holders.map((h) => w.stateSaid(h))).size === 1;
   const heads = [...w.logs.keys()].every((g) => new Set(w.holders.filter((h) => h.logs.has(g)).map((h) => h.logs.get(g)!.head())).size <= 1);
   const accKeys = new Set(ACCOMPLICE.map((a) => a.signer.id));
   const removedIn = rosters.some((r) => [...r.letIn.keys()].some((k) => w.removedKeys.has(k)));
@@ -1070,13 +1097,13 @@ export const PROPS3: { name: string; bad: (m: Measured3) => boolean }[] = [
   { name: "a device let in, then turned away unasked", bad: (m) => m.turnedUnasked > 0 },
 ];
 
-export function shrink3(seed: number, v: V3v, family: Family, steps: Step[], bad: (m: Measured3) => boolean): Step[] {
+export function shrink3(seed: number, v: V3v, family: Family, steps: Step[], bad: (m: Measured3) => boolean, mk: Make3 = make3): Step[] {
   let now = steps;
   let tries = 0;
   for (let size = Math.floor(now.length / 2); size >= 1; size = Math.floor(size / 2)) {
     for (let at = 0; at + size <= now.length && tries < 250; tries++) {
       const less = [...now.slice(0, at), ...now.slice(at + size)];
-      if (bad(drawn3(seed, v, family, less).m)) now = less;
+      if (bad(drawn3(seed, v, family, less, mk).m)) now = less;
       else at += size;
     }
   }
@@ -1088,10 +1115,13 @@ export function shrink3(seed: number, v: V3v, family: Family, steps: Step[], bad
 /// For every entry a world made whose chain has only the product's kinds (and for three changed copies of each: signed
 /// by a key not on the log, one place too far, its signer removing itself): whether the model's rules and `personFold`
 /// say the same (taken or not, and the devices after). Chains with a `ws.*` entry: whether `personFold` refuses them.
-export function foldCheck(seeds: number, steps: number): { compared: number; differ: string[]; wsChains: number; wsRefused: number; wsWhy: string[] } {
+/// The kinds the product's person logs take (`personFold`): every other is the model's.
+const PRODUCT_KINDS = new Set(["genesis", "device", "device.remove"]);
+
+export function foldCheck(seeds: number, steps: number, mk: Make3 = make3): { compared: number; differ: string[]; wsChains: number; wsRefused: number; wsWhy: string[] } {
   const out = { compared: 0, differ: [] as string[], wsChains: 0, wsRefused: 0, wsWhy: [] as string[] };
   for (let seed = 1; seed <= seeds; seed++) {
-    const { w } = drawn3(seed, V3[1], "faults", drawSteps3(seed, steps));
+    const { w } = drawn3(seed, V3[1], "faults", drawSteps3(seed, steps), mk);
     const entries = [...w.all.values()].filter((e) => e.prev !== null);
     for (const e of entries) {
       const parent = e.prev!;
@@ -1099,8 +1129,8 @@ export function foldCheck(seeds: number, steps: number): { compared: number; dif
       if (!rules.states.has(parent)) continue;
       const chain = w.chainTo(parent);
       const sub = rules.sub;
-      if (chain.some((x) => x.kind.startsWith("ws."))) continue;
-      if (e.kind.startsWith("ws.")) {
+      if (chain.some((x) => !PRODUCT_KINDS.has(x.kind))) continue;
+      if (!PRODUCT_KINDS.has(e.kind)) {
         if (out.wsChains < 400) {
           out.wsChains++;
           try {
@@ -1168,8 +1198,8 @@ export type A2Out = { inForceEnd: boolean; changedEnd: boolean; phoneEnd: boolea
 /// admitted as an admin; carol removed, naming alice's admit of her; or, the first round's case a, its accomplice put
 /// in) after the removal's parent (`same`) or a parent it was trusted in (`any`), and brings it to the cut station (and,
 /// on odd seeds, one device); then every keeper syncs.
-export function a2(seed: number, v: V3v, y: "admit" | "cancel" | "device", parent: "same" | "any"): A2Out {
-  const w = new World3(seed, v, "free");
+export function a2(seed: number, v: V3v, y: "admit" | "cancel" | "device", parent: "same" | "any", mk: Make3 = make3): A2Out {
+  const w = mk(seed, v, "free");
   const B = w.dev("bob's app"), P = w.dev("bob's phone");
   prefix3(w, B, w.rng.int(5));
   w.sign(B, "device", personDevice(P), { bring: false });
@@ -1204,8 +1234,8 @@ export type A3Out = { end: string[]; agree: boolean; xenaFlap: boolean; xenaBack
 /// Statements signed at once by different devices, each brought first to a station the seed draws, then deliveries and
 /// syncs the seed draws, then every keeper syncs. What each station let in and turned away on the way, the lists in
 /// the end.
-export function a3(seed: number, v: V3v, which: (typeof A3_NAMES)[number]): A3Out {
-  const w = new World3(seed, v, "free", which.startsWith("vii:") ? { carol: "admin" } : {});
+export function a3(seed: number, v: V3v, which: (typeof A3_NAMES)[number], mk: Make3 = make3): A3Out {
+  const w = mk(seed, v, "free", which.startsWith("vii:") ? { carol: "admin" } : {});
   const A = w.dev("alice's app"), B = w.dev("bob's app"), D = w.dev("dan's app"), C = w.dev("carol's app");
   const X = w.home.get("xena")!;
   const admit = (by: Dev3, sub: string, role: Role3) => w.sign(by, "ws.member", { ws: WS, sub, lock: w.home.get(sub), role }, { bring: false }) as Entry;
@@ -1249,7 +1279,7 @@ export function a3(seed: number, v: V3v, which: (typeof A3_NAMES)[number]): A3Ou
   const xk = spec("xena's app").signer.id;
   const end = w.holders.map((h) => `${h.name}: ${rosterSaid(w.ros(h))}`);
   return {
-    end, agree: new Set(w.holders.map((h) => rosterSaid(w.ros(h)))).size === 1,
+    end, agree: new Set(w.holders.map((h) => w.stateSaid(h))).size === 1,
     xenaFlap: w.turned.some((t) => t.key === xk), xenaBack: w.log.some((l) => l.includes("lets xena's app in again")),
     xenaInEnd: w.stations.every((s) => w.ros(s).letIn.has(xk)),
     otherFlap: [...new Set(w.turned.filter((t) => t.key !== xk).map((t) => nameOfKey(t.key)))],
@@ -1283,8 +1313,8 @@ export type A4Out = {
 /// log. Then carol's phone's key, revoked by that, signs `y` on the old log after its head (its accomplice; mallory as
 /// an admin; carol's removal cancelling bob's new admit; xena's removal cancelling the adopt) and brings it to the cut
 /// station and one other keeper; the cut station comes back.
-export function a4(seed: number, v: V3v, role: "member" | "admin", y: A4Y, adopt: boolean): A4Out {
-  const w = new World3(seed, v, "free", { laptops: true, carol: role });
+export function a4(seed: number, v: V3v, role: "member" | "admin", y: A4Y, adopt: boolean, mk: Make3 = make3): A4Out {
+  const w = mk(seed, v, "free", { laptops: true, carol: role });
   const C = w.dev("carol's app"), P = w.dev("carol's phone"), O = w.dev("carol's laptop"), B = w.dev("bob's app");
   w.sign(C, "device", personDevice(P));
   w.level();
@@ -1379,8 +1409,8 @@ export type B2Out = { before: string[]; view: string; approvedView: string; afte
 /// carol is bound by her app's log. Her laptop, which reached no keeper holding that log, begins a log of its own
 /// (`reach`: it then syncs with every keeper, or with none). Then carol's app approves the laptop on the bound log and
 /// it is brought to the stations.
-export function b2(seed: number, v: V3v, reach: boolean): B2Out {
-  const w = new World3(seed, v, "free", { laptops: true });
+export function b2(seed: number, v: V3v, reach: boolean, mk: Make3 = make3): B2Out {
+  const w = mk(seed, v, "free", { laptops: true });
   const C = w.dev("carol's app"), L = w.dev("carol's laptop");
   // (the laptop holds nothing yet: it never reached a keeper)
   L.h.logs.clear();
@@ -1416,14 +1446,15 @@ const add = (into: Record<string, number>, from: Record<string, number>) => {
   for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n;
 };
 
-export function runJob3(j: Job3): unknown {
+/// A job; `mk` the world it is run in (round three's, or lock-roster4-model.ts's).
+export function runJob3(j: Job3, mk: Make3 = make3): unknown {
   switch (j.t) {
     case "drawn": {
       const c = { rested: 0, agree: 0, same: 0, sameChecks: 0, sameWorlds: 0, attackInForce: 0, accomplice: 0, mallory: 0, removedIn: 0, attackAt: 0, attacks: 0, intents: 0, inact: 0, honest: 0, unasked: 0, asked: 0, turnedWorlds: 0, back: 0, forged: false, rb: [] as number[], lostWorlds: 0, noEffectWorlds: 0 };
       const o: Outcomes = { inForce: 0, noEffect: {}, void: {}, removedDev: 0, lost: 0, toldAtSigning: {} };
       const firstBad: Record<string, number> = {};
       for (let seed = 1; seed <= j.runs; seed++) {
-        const { m } = drawn3(seed, j.v, j.family, drawSteps3(seed, j.steps));
+        const { m } = drawn3(seed, j.v, j.family, drawSteps3(seed, j.steps), mk);
         if (m.rested) c.rested++;
         if (m.agree && m.heads) c.agree++;
         c.same += m.sameMismatch;
@@ -1459,17 +1490,17 @@ export function runJob3(j: Job3): unknown {
     }
     case "shrink": {
       const p = PROPS3.find((x) => x.name === j.prop)!;
-      const fewest = shrink3(j.seed, j.v, j.family, drawSteps3(j.seed, j.steps), p.bad);
-      const again = drawn3(j.seed, j.v, j.family, fewest);
+      const fewest = shrink3(j.seed, j.v, j.family, drawSteps3(j.seed, j.steps), p.bad, mk);
+      const again = drawn3(j.seed, j.v, j.family, fewest, mk);
       return { len: fewest.length, log: again.w.log, outcomes: again.m.outcomes };
     }
     case "fold":
-      return foldCheck(j.seeds, j.steps);
+      return foldCheck(j.seeds, j.steps, mk);
     case "a2": {
       let inForce = 0, changed = 0, phone = 0, before = 0, changedBefore = 0, ever = 0;
       let smallest: { entries: number; log: string[] } | null = null;
       for (let seed = 1; seed <= j.n; seed++) {
-        const o = a2(seed, j.v, j.y, j.parent);
+        const o = a2(seed, j.v, j.y, j.parent, mk);
         if (o.inForceEnd) inForce++;
         if (o.changedEnd) changed++;
         if (o.phoneEnd) phone++;
@@ -1486,7 +1517,7 @@ export function runJob3(j: Job3): unknown {
       const others = new Set<string>();
       let flapLog: string[] | null = null;
       for (let seed = 1; seed <= j.n; seed++) {
-        const o = a3(seed, j.v, j.which);
+        const o = a3(seed, j.v, j.which, mk);
         const s0 = o.end[0].replace(/^s0: /, "");
         ends.set(s0, (ends.get(s0) ?? 0) + 1);
         if (o.agree) agree++;
@@ -1495,14 +1526,14 @@ export function runJob3(j: Job3): unknown {
         if (o.xenaInEnd) inEnd++;
         for (const x of o.otherFlap) others.add(x);
       }
-      return { ends: [...ends], agree, flap, back, inEnd, others: [...others], flapLog, log: a3(1, j.v, j.which).log };
+      return { ends: [...ends], agree, flap, back, inEnd, others: [...others], flapLog, log: a3(1, j.v, j.which, mk).log };
     }
     case "a4": {
       const c = { oldWhileBoth: 0, oldEnd: 0, newEnd: 0, malloryEnd: 0, xenaEnd: 0, cutOld: 0, cutNew: 0 };
       const ends = new Map<string, number>();
       let bad: string[] | null = null;
       for (let seed = 1; seed <= j.n; seed++) {
-        const o = a4(seed, j.v, j.role, j.y, j.adopt);
+        const o = a4(seed, j.v, j.role, j.y, j.adopt, mk);
         for (const k of Object.keys(c) as (keyof typeof c)[]) if (o[k] === true) c[k]++;
         ends.set(o.end, (ends.get(o.end) ?? 0) + 1);
         if ((o.oldEnd || !o.newEnd || o.malloryEnd || (j.adopt && o.xenaEnd === false)) && bad === null) bad = o.log;
@@ -1515,13 +1546,13 @@ export function runJob3(j: Job3): unknown {
       const views = new Map<string, number>(), approved = new Map<string, number>(), before = new Map<string, number>(), after = new Map<string, number>();
       const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
       for (let seed = 1; seed <= j.n; seed++) {
-        const o = b2(seed, j.v, j.reach);
+        const o = b2(seed, j.v, j.reach, mk);
         bump(views, o.view);
         bump(approved, o.approvedView);
         bump(before, o.before.join(", "));
         bump(after, o.after.join(", "));
       }
-      return { views: [...views], approved: [...approved], before: [...before], after: [...after], log: b2(1, j.v, j.reach).log };
+      return { views: [...views], approved: [...approved], before: [...before], after: [...after], log: b2(1, j.v, j.reach, mk).log };
     }
   }
 }
