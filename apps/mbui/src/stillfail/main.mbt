@@ -407,7 +407,14 @@ fn main {
   if @ui.env("MBUI_CORE_TRACE") == "1" && local_cloud(cloud) {
     // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace make's MAX_BYTES, kept as their length alone)
     let bytes_max = @string.parse_int(@ui.env("MBUI_CORE_TRACE_BYTES")[:]) catch { _ => 16384 }
-    @core.trace_to(fn(line) { @hostapi.log("CORETRACE " + line) }, bytes_max~)
+    // (and to a scripted run, whose `answered` counts the core's answers as they come, read by the app or not)
+    @core.trace_to(
+      fn(line) {
+        @hostapi.log("CORETRACE " + line)
+        @ui.drive_heard(line)
+      },
+      bytes_max~,
+    )
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
     let started : Map[String, Json] = Map([])
@@ -433,6 +440,9 @@ fn main {
     // frame begins and again where it changes: a replay's Tester is made by it, never by defaults (src/sfreplay:
     // Flow::start)
     @ui.trace_settings(fn(m) { @core.trace_note(m) })
+    // and each frame's moment as its host gave it (`{"frame":T}`, beside the core's clock `w` as it began): where the
+    // run's display drew, for a replay's strict pass to draw there (src/sfreplay), not on a grid of its own
+    @ui.trace_frames(fn(t) { @core.trace_note({ "frame": Json::number(t) }) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
     // went to the host (`"acted":true`), at the same clock: when the run took each step and when it acted, for a replay
     // to take it when the run did (src/core/replay.mbt: Replay::step_at)

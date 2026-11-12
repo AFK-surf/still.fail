@@ -20,7 +20,7 @@ test "14-mark-read" {
     f.core()
     f.see("端到端测试")
     // the bar moved by what this did (the field focused, the chat left) at rest
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

@@ -88,6 +88,8 @@ pub struct Replay {
   priv skipped : Array[String]
   /// reports the app made that the run did not (Replay::sent: its frames had them, the run's not)
   priv unasked_reports : Array[String]
+  /// the run's unsubscriptions made again after messages the run had after them were given (Replay::late_unsubs)
+  priv late_unsubs : Array[(String, Int, Double)]
   /// the ids the app gave its watches of `ambient` topics the run did not have (let go of as well, unasked)
   priv ambient_ids : Map[Int, Bool]
   /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
@@ -95,6 +97,9 @@ pub struct Replay {
   /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
   /// a word's bounds, a picture's sizes; one a line
   priv run_text : Array[String]
+  /// when the run's display began each frame, on the run's clock (`w` of its trace's `{"frame":T}` lines: src/stillfail's
+  /// CORETRACE frame); none in a trace recorded before they were kept
+  priv run_frames : Array[Double]
   /// this machine's station as the run's host said it (its trace's `{"host":{"localStation":…}}`: src/stillfail's CORETRACE host)
   priv run_local : String
   /// what the run's host gave its frames as the run began (its trace's first `{"settings":…}`: mbui's
@@ -202,6 +207,7 @@ pub fn Replay::parse(log : String) -> Replay {
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
+  let run_frames : Array[Double] = []
   let run_local : Ref[String] = Ref("")
   let run_settings : Ref[Json?] = Ref(None)
   for v in log.split("\n") {
@@ -253,6 +259,11 @@ pub fn Replay::parse(log : String) -> Replay {
           }
         } else if m.get("settings") is Some(Object(_)) && run_settings.val is None {
           run_settings.val = Some(j)
+        } else if m.get("frame") is Some(Number(_, ..)) {
+          match m.get("w") {
+            Some(Number(w, ..)) => run_frames.push(w)
+            _ => ()
+          }
         } else if m.get("textrec") is Some(rec) {
           run_text.push(rec.stringify())
         } else if m.contains("view") ||
@@ -350,9 +361,11 @@ pub fn Replay::parse(log : String) -> Replay {
     host_said: None,
     skipped: [],
     unasked_reports: [],
+    late_unsubs: [],
     ambient_ids: {},
     run_env,
     run_text,
+    run_frames,
     run_local: run_local.val,
     run_settings: run_settings.val,
     stations_own: false,
@@ -775,6 +788,89 @@ pub fn Replay::next_step(self : Replay) -> String? {
 }
 
 ///|
+/// When the last message in given so far was given (-inf: none yet).
+pub fn Replay::last_given(self : Replay) -> Double {
+  let mut most = -@double.infinity
+  for e in self.evs {
+    if !e.out && e.at > most {
+      most = e.at
+    }
+  }
+  most
+}
+
+///|
+/// The step taken last held taken at `at` (the strict pass's first, taken once what it waited for was so): what is
+/// timed from it (the run's next steps, Replay::due_at) on from there.
+pub fn Replay::step_moved_to(self : Replay, at : Double) -> Unit {
+  let mut i = self.evs.length() - 1
+  while i >= 0 {
+    let e = self.evs[i]
+    if e.out && e.done && is_step(e.msg) {
+      e.at = at
+      return
+    }
+    i = i - 1
+  }
+}
+
+///|
+/// When the last of what the run asked before its next step not taken again, not asked here yet, was due to be asked
+/// at this pace (each on from the latest event before it that happened again, by their gap in the run; a report aside,
+/// Replay::sent): -inf where there is none, or at once.
+pub fn Replay::asks_before_step_due(self : Replay) -> Double {
+  let scale = match self.pace {
+    AtOnce => return -@double.infinity
+    AsRun(scale) => scale
+  }
+  let mut most = -@double.infinity
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if !e.out || e.done {
+      continue
+    }
+    if is_step(e.msg) {
+      break
+    }
+    if is_report(e.msg) || is_let_go(e.msg) || !e.has_wall {
+      continue
+    }
+    let mut j = i - 1
+    while j >= 0 {
+      let a = self.evs[j]
+      if a.at >= 0.0 && (a.has_wall || !a.out) {
+        let gap = e.wall - a.wall
+        let t = a.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+        if t > most {
+          most = t
+        }
+        break
+      }
+      j = j - 1
+    }
+  }
+  most
+}
+
+///|
+/// Whether the run asked something before its next step not taken again that this run has not asked yet (a report
+/// aside, Replay::sent): what comes before the step has not all happened again.
+pub fn Replay::asks_before_step(self : Replay) -> Bool {
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done {
+      if is_step(e.msg) {
+        return false
+      }
+      if !is_report(e.msg) && !is_let_go(e.msg) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
 /// The run's next step not taken again, when it is `line` (step_of: as the test says it), taken: what came after it
 /// may come. Whether it was. Another line (a test that says a step the run did not, or in another order) leaves it
 /// waiting, said by `waiting`.
@@ -923,6 +1019,43 @@ pub fn Replay::next_due(self : Replay) -> Double? {
 /// message in not given yet (what may come at once in another order: its own time stands for it), as are asks with no
 /// wall clock (an older trace: anchored to the messages in). None before it: at once.
 fn Replay::due_at(self : Replay, i : Int) -> Double {
+  let due = self.due_chained(i)
+  // (never before the run's latest step taken again before it, by their gap in the run: what came after a step in the
+  // run comes after it here, on the timeline from where it was taken (a first step taken later than the run's moment
+  // for it, its first screen later: all after it later by as much), whatever was made again sooner meanwhile (an
+  // unsubscription the run made after the step, made here before it: wide-newline's answers timed from it came 15.7 ms
+  // before the tap that asked for them, its next step's moment 9.6 ms before the tap))
+  match self.step_before(i) {
+    Some((at, wall)) if due > -@double.infinity && due < @double.infinity && self.evs[i].has_wall => {
+      let scale = match self.pace {
+        AsRun(scale) => scale
+        AtOnce => 1.0
+      }
+      let gap = self.evs[i].wall - wall
+      let from_step = at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      if from_step > due { from_step } else { due }
+    }
+    _ => due
+  }
+}
+
+///|
+/// The run's latest step before event `i` taken again here that says its moment: when here and when in the run.
+fn Replay::step_before(self : Replay, i : Int) -> (Double, Double)? {
+  let mut k = i - 1
+  while k >= 0 {
+    let e = self.evs[k]
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      return Some((e.at, e.wall))
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// When event `i` is due by the events before it alone (due_at's, before the steps are taken into account).
+fn Replay::due_chained(self : Replay, i : Int) -> Double {
   let scale = match self.pace {
     AtOnce => return -@double.infinity
     AsRun(scale) => scale
@@ -958,8 +1091,9 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
       return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
     }
     // (a step of the script's is the run's own: timed from what happened again before it, the app's asks it has not
-    // made again aside, as they may be made in that time: a draft kept while the run waited to tap)
-    if e.out && !e.done && !is_report(e.msg) && !is_step(self.evs[i].msg) {
+    // made again aside, as they may be made in that time: a draft kept while the run waited to tap; nor is anything
+    // timed from one let go of not made again yet, which holds nothing back, Replay::ready)
+    if e.out && !e.done && !is_report(e.msg) && !is_let_go(e.msg) && !is_step(self.evs[i].msg) {
       return @double.infinity
     }
     j = j - 1
@@ -1031,6 +1165,14 @@ fn is_report(m : Json) -> Bool {
 }
 
 ///|
+/// Whether `m` (an ask of the run's) lets go of one: what comes after it waits nothing of it, as a core sends one
+/// topic's values whether or not another was let go of yet (Replay::ready); it is made again all the same by the end.
+fn is_let_go(m : Json) -> Bool {
+  guard m is Object(o) else { return false }
+  kind_of(o) == "unsubscribe"
+}
+
+///|
 /// The messages in that may come whenever their time (what they came after asked again), the first of each ask's: in
 /// the run's order: up to the first ask not made again, past those that are reports; an ask's own coming
 /// once it was made (an answer to an ask not made again does not).
@@ -1042,8 +1184,10 @@ fn Replay::ready(self : Replay) -> Array[Int] {
   for i in from..<self.evs.length() {
     let e = self.evs[i]
     if e.out && !e.done {
-      // (a report waits nothing: the run's frames made it, the app's own frames may not, Replay::sent)
-      if !is_report(e.msg) {
+      // (a report waits nothing: the run's frames made it, the app's own frames may not, Replay::sent; nor does one
+      // let go of (is_let_go): no message comes of it, and a core does not hold one topic back for another not let go
+      // of yet; the coordinator of the migration, 2026-11-12)
+      if !is_report(e.msg) && !is_let_go(e.msg) {
         break
       }
       continue
@@ -1208,6 +1352,14 @@ pub fn Replay::unmade(self : Replay) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// The run's unsubscriptions this one made after messages the run had after them were given (Replay::ready gives
+/// those without waiting for it): each as made, how many came before it, and how long before it the first of them
+/// came (ms on the app's clock). Said, not held to anything: a subscription kept longer than the run kept it shows here.
+pub fn Replay::late_unsubs(self : Replay) -> Array[(String, Int, Double)] {
+  self.late_unsubs
 }
 
 ///|
@@ -1391,8 +1543,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       return
     }
     self.diverge(text)
-    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too)
-    if kind == "call" {
+    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too, unless
+    // nobody reads its answer, awaited by nothing there)
+    if kind == "call" && !(id_of(m) is Some(now) && client.call_unread(now)) {
       self.asked.push(name_of(m))
     }
     return
@@ -1400,6 +1553,23 @@ fn Replay::out(self : Replay, text : String) -> Unit {
   let e = self.evs[found]
   e.done = true
   e.at = (self.clock)()
+  // (one let go of after messages the run had after it came: how many, from how long before)
+  if kind == "unsubscribe" {
+    let mut n = 0
+    let mut earliest = @double.infinity
+    for j in (found + 1)..<self.evs.length() {
+      let a = self.evs[j]
+      if !a.out && a.done && a.at >= 0.0 {
+        n = n + 1
+        if a.at < earliest {
+          earliest = a.at
+        }
+      }
+    }
+    if n > 0 {
+      self.late_unsubs.push((text, n, e.at - earliest))
+    }
+  }
   if e.msg is Object(r) && (kind == "subscribe" || kind == "call") {
     match (id_of(r), id_of(m)) {
       (Some(then), Some(now)) => {
@@ -1408,7 +1578,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
         if kind == "subscribe" && twin_topic(name_of(m)) {
           self.twins[then] = true
         }
-        if kind == "call" && self.answers(then) {
+        // (one whose answer nobody reads awaited by nothing in a scripted run: no `answered` line for it, emit.mbt;
+        // since #5425, client.device and the start's notify.permission)
+        if kind == "call" && self.answers(then) && !client.call_unread(now) {
           self.asked.push(name_of(m))
         }
       }
@@ -1695,6 +1867,39 @@ pub fn Replay::host_frames(self : Replay) -> Array[Double] {
 }
 
 ///|
+/// The latest step of the run's script taken again here that says its moment: when here (this clock) and when in the
+/// run (its clock): what the steps after it, and the run's frames, are timed from (Replay::due_at). None before the
+/// first.
+pub fn Replay::step_anchor(self : Replay) -> (Double, Double)? {
+  let mut last : (Double, Double)? = None
+  for e in self.evs {
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      last = Some((e.at, e.wall))
+    }
+  }
+  last
+}
+
+///|
+/// The run's first step taken again here that says its moment: when here and when in the run (what the run's frames
+/// are timed from in the strict pass). None before it.
+pub fn Replay::first_step_anchor(self : Replay) -> (Double, Double)? {
+  for e in self.evs {
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      return Some((e.at, e.wall))
+    }
+  }
+  None
+}
+
+///|
+/// When the run's display began each frame, on the run's clock (its `{"frame":…}` lines); empty: a trace recorded
+/// before they were kept, its display's frames not known.
+pub fn Replay::run_frames(self : Replay) -> Array[Double] {
+  self.run_frames
+}
+
+///|
 /// The latest host line given here: when it was due on this clock, and its moment on the run's (what maps the run's
 /// frames onto this clock from then on). None while none is.
 pub fn Replay::host_given(self : Replay) -> (Double, Double)? {
@@ -1749,3 +1954,4 @@ pub fn Replay::text(self : Replay) -> String? {
     Some(self.run_text.join("\n"))
   }
 }
+

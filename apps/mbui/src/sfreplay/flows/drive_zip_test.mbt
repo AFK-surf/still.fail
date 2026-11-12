@@ -9,7 +9,7 @@ test "92-drive-zip" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-zip"), seed~)
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-105609")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.right_click("子文件夹")
     f.run_for(@kit.presence_in_ms)
     f.tap("下载为 zip")

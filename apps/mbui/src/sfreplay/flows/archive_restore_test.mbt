@@ -21,7 +21,7 @@ test "36-archive-restore" {
     f.see("已恢复到列表")
     let shown = f.t.time()
     // the bottom bar at its end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     // 已恢复到列表 said for its time (counted from the frame after it showed: @kit.toaster's `after(later=true)`), then
     // gone
     f.run_for(@sfapp.toast_ms + @sfreplay.frame_ms - (f.t.time() - shown))

@@ -26,7 +26,7 @@ test "23-dismiss" {
     for _ in 0..<4 {
       let closing = @sfapp.under_rest()
       if closing > f.t.time() && closing < @double.infinity {
-        f.run_to(closing)
+        f.run_to(fn() { closing })
       } else {
         break
       }

@@ -791,6 +791,14 @@ pub fn Client::quiet(self : Client, name : String, f : (Json) -> Bool) -> Unit {
 }
 
 ///|
+/// Whether the call this client made as `id` is one whose answer nobody reads (Client::call: no on_done, or unread):
+/// awaited by nothing, so a scripted run cannot wait for its answer (src/sfreplay/emit.mbt writes no `answered` line
+/// for it). Asked as the call goes out, before its answer.
+fn Client::call_unread(self : Client, id : Int) -> Bool {
+  self.unread_calls.contains(id)
+}
+
+///|
 /// Nobody reads the answer of a call `name` (a call told and let go: `screen.ack`): nothing awaits it (no wait of the
 /// runtime's) and it changes nothing a frame reads, so it may be taken as it comes (Client::call_said). Said once, as
 /// the app starts.

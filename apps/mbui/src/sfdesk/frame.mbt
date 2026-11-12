@@ -1095,6 +1095,15 @@ pub fn frame_opens(src : Source, ws : String, ask : (String, Map[String, Json]) 
 }
 
 ///|
+/// What the wide frame shows of workspace `ws` as it first opens on it with nothing open, asked of `ask`: the page it
+/// lands on (land_page) whether or not it has landed on it yet (frame_opens' before landing: what opens_ahead_node
+/// declared), for what waits for the first screen as it is answered, not as a frame lands the pane (sfapp's
+/// first_page_node).
+pub fn landing_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  frame_opens_on(src, ws, land_page(ws, ask), ask)
+}
+
+///|
 /// What the wide frame shows of workspace `ws` with page `landed` in its pane (None: the marks could not say which),
 /// asked of `ask`: frame_opens's, the page the pane shows given (a run that opens on a page already open, not landing).
 pub fn frame_opens_on(

@@ -363,15 +363,42 @@ pub fn Tester::come_to(self : Tester, t : Double) -> Unit {
     return
   }
   // (a host's frames: each of them up to `t` drawn, none past it; the clock then at `t` between two of them, as a
-  // host's is when an input comes)
-  while self.tick_after(self.fake.time) <= t + due_hair {
-    self.clock_frame()
+  // host's is when an input comes. And what the outside says between them (a kept message, Tester::between_frames'
+  // `due`) at its own moment, told then between frames as a device's host tells what is posted (posted_tell), not
+  // held for the next frame: with a host's frames only where it drew them, an idle app's next may be far off)
+  let mut told = 0
+  while true {
+    let next = self.tick_after(self.fake.time)
+    let said = match outside_due.val {
+      Some(f) => f()
+      None => @double.infinity
+    }
+    if said > self.fake.time && said <= t + due_hair && said < next - due_hair && told < outside_told_most {
+      told += 1
+      fake_dues_to(self.fake, said)
+      if said > self.fake.time {
+        self.fake.time = said
+      }
+      frame_ended_outside()
+      posted_tell()
+      continue
+    }
+    if next <= t + due_hair {
+      self.clock_frame()
+      continue
+    }
+    break
   }
   fake_dues_to(self.fake, t)
   if t > self.fake.time {
     self.fake.time = t
   }
 }
+
+///|
+/// How many moments of the outside's come_to tells between two of a host's frames at most: one that says the same
+/// moment again without its having come is not run on for ever.
+let outside_told_most : Int = 10000
 
 ///|
 /// Advance by exactly `ms`, drawing due wakes on the way and the requested moment itself, even when the tester is

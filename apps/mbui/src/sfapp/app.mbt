@@ -105,8 +105,9 @@ fn reset() -> Unit {
   first_held.set([])
   first_words.set("")
   first_answered.set(false)
-  first_built_tick.set(0)
   first_from.val = -1.0
+  first_top.val = None
+  first_wide.val = None
   frame_bare.val = false
   window_shown.val = false
   @sfbase.held_pictures_waiting.val = []
@@ -417,7 +418,6 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
       first_held.set(@sfbase.held_pictures_waiting.val.copy())
       first_built_ready.set(true)
     }
-    first_built_tick.set(first_built_tick.get() + 1)
     if first_page_done() {
       first_shown.set(true)
       first_waiting.val = false
@@ -618,7 +618,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
               p => Some(("wide", fn(src, ws, ask) { @sfdesk.frame_opens_on(src, ws, Some(p), ask) }))
             }
           }
-        })
+        }, first_waits=fn() { !first_shown.get() })
         // signed in, the shell it is laid out in a node picked by the window's width and what is in view
         // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; on the tape, its panels' nodes
         // (tape_shell.mbt); the ways in, the splash, a window of its own; nothing before the window has a width
@@ -708,7 +708,9 @@ fn reading_said_words(src : Source) -> (String, Bool) {
 fn reading_said(src : Source) -> Unit {
   first_waiting.val = false
   @sfbase.held_pictures_waiting.val = []
-  frame_bare.val = !splash_waited.get() && !reading_said_words(src).1
+  // (whether it failed alone: the words, the core's status read, are the splash's nodes' (reading_tree), read as they
+  // change; read by a frame, status was held till the frame after the workspace came into view, not let go of then)
+  frame_bare.val = !splash_waited.get() && src.topic("workspaces", {}).get().error is None
 }
 
 ///|
@@ -1121,8 +1123,10 @@ let first_has : Ref[Int] = Ref(0)
 
 ///|
 /// Whether the core has answered for what the app's first page shows, as a page opening waits for it, each topic asked
-/// of `ask`: laid out Small the page on top (page_ready), in the wide frame (`wide`) the sidebar's list and the page in
-/// the pane (pane_ready), the chat the pane lands on once it has (@sfdesk.landing: not the empty pane before it).
+/// of `ask`: laid out Small the page on top as the wait began (first_top: one opened over it before it is shown, a
+/// chat tapped on what shows of it, is that page's own wait, not the first page's), in the wide frame (`wide`) what it
+/// opens on, as opens_ahead_node declares it: on Home the rail, the sidebar and the page the pane lands on, whether or
+/// not a frame has landed it yet (@sfdesk.landing_opens), on another page that page in the pane.
 fn first_page_ready_by(
   src : Source,
   w : Workspace,
@@ -1130,9 +1134,15 @@ fn first_page_ready_by(
   ask : (String, Map[String, Json]) -> @sfbase.TopicState,
 ) -> Bool {
   if wide {
-    @sfbase.list_opens(src, w.id, ask) && !@sfdesk.landing(w) && @sfdesk.pane_opens(w.id, app.nav.top(), ask)
+    // (the pane landed by a frame (sfdesk's land): waited for by that, as landing(w) was till 2026-11-12, the first
+    // page was answered no sooner than the frame after what it shows was; a page opened before it lands is in the
+    // pane in its place, never landed on, so the page on top now, as opens_ahead_node has it)
+    match app.nav.top() {
+      Home => @sfdesk.landing_opens(src, w.id, ask)
+      p => @sfdesk.frame_opens_on(src, w.id, Some(p), ask)
+    }
   } else {
-    page_opens_by(src, w, app.nav.top(), ask)
+    page_opens_by(src, w, first_top.val.unwrap_or(app.nav.top()), ask)
   }
 }
 
@@ -1171,11 +1181,6 @@ let first_words : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { 
 let first_answered : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
-/// Each frame the first page waits (view_in), told: what first_page_node asks of the core as it holds it now comes to
-/// be followed once a build has asked it (read_held asks nothing).
-let first_built_tick : @signals.Signal[Int] = @signals.signal(0)
-
-///|
 /// The first page's wait in node `v` (signed in), at the moments its causes come, between frames: `first_page_ms`
 /// after the workspace came into view, the first page shown as it ends (first_expired); the first page shown at the
 /// moment it waits no more (first_page_done: its pictures decoded, the host's word's moment); and the splash's words
@@ -1187,6 +1192,7 @@ fn first_page_node(v : @view.View, src : Source) -> Unit {
   v.reacts(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(ws) {
     if ws is Some(_) && !first_shown.get() && first_from.val < 0.0 {
       first_from.val = v.cause_at()
+      first_top.val = Some(app.nav.top())
       expiry.val = v.at_moment(first_from.val + first_page_ms, fn() { first_expired.set(true) })
     }
   })
@@ -1204,14 +1210,51 @@ fn first_page_node(v : @view.View, src : Source) -> Unit {
   })
   v.reacts(
     fn() {
-      // (once answered, the core's status read no more for it, though what the first page shows comes to be another)
-      if first_shown.get() || first_answered.get() {
+      if first_shown.get() {
         return None
       }
+      // (once answered, the core's status read no more for it, though what the first page shows comes to be another)
+      let answered = first_answered.get()
       guard workspace_in_view(src).0 is Some(w) else { return None }
-      first_built_tick.get() |> ignore
-      let wide = !(@sf.layout(v.window().0) is Small) || @sf.native_able()
-      if first_page_ready_by(src, w, wide, @sfbase.read_held(src)) {
+      // (read once what its shell opens on is declared, each of it followed then: read before, none of it is, and
+      // nothing would tell this of what comes to be; a frame after was what told it, till 2026-11-12)
+      if @sfbase.opens_declared_now() != Some(w.id) {
+        return Some(if answered { None } else { Some(t_reading_workspaces(src)) })
+      }
+      // (the shell whose function was declared, as it was: a window resized across the breakpoint before it shows
+      // declares nothing again (opens_ahead_node), the page it began on waited for as it was)
+      let wide = match first_wide.val {
+        Some(wide) => wide
+        None => {
+          let wide = !(@sf.layout(v.window().0) is Small) || @sf.native_able()
+          first_wide.val = Some(wide)
+          wide
+        }
+      }
+      let held = @sfbase.read_held_found(src)
+      let ask = fn(n : String, p : Map[String, Json]) -> @sfbase.TopicState {
+        match held(n, p) {
+          Some(st) => st
+          None => {
+            // (what the first page waits for that its shell's function does not say: followed by nothing, so read
+            // as not answered, never told when it is)
+            // (one the function comes to say as this change answers what it read, declared in it too (opens_ahead_node):
+            // told again then; one still not declared as the change is told whole, a fault)
+            let params = p.copy()
+            @signals.after_flush(fn() {
+              if @sfbase.read_held_found(src)(n, params) is None {
+                @view.fault(
+                  "first_page_node (stillfail/src/sfapp/app.mbt): the first page reads \{n} \{Json::object(params).stringify()}, which the shell's function it opens by (sfapp's home_opens, sfdesk's frame_opens) does not say",
+                )
+              }
+            })
+            { value: None, error: None, version: -1, waiting: false }
+          }
+        }
+      }
+      // (what it read held on to till the first page shows, answered or not: its readers are built by then, and
+      // what was declared and read by this alone, let go of as this stops, would be asked again by them)
+      if first_page_ready_by(src, w, wide, ask) || answered {
         Some(None)
       } else {
         Some(Some(t_reading_workspaces(src)))
@@ -1249,6 +1292,19 @@ fn first_splash_node(v : @view.View) -> Unit {
 /// When the workspace came into view, the first page's wait begun (-1: not yet): first_page_node's.
 // kept across runs: put back as a run begins (new_run)
 let first_from : Ref[Double] = Ref(-1.0)
+
+///|
+/// The page on top as the first page's wait began (first_page_node), laid out Small: the first page, what its wait
+/// waits for (first_page_ready_by), whatever is opened over it meanwhile.
+// kept across runs: put back as a run begins (new_run)
+let first_top : Ref[Page?] = Ref(None)
+
+///|
+/// Whether the shell whose function was declared as the workspace came into view (opens_ahead_node) is the wide frame,
+/// as first_page_node first read it so (None: not yet): what the first page waits for is what that shell declared
+/// (first_page_ready_by), the window resized across the breakpoint before it shows or not.
+// kept across runs: put back as a run begins (new_run)
+let first_wide : Ref[Bool?] = Ref(None)
 
 ///|
 /// Whether the app's first page has shown (first_page_shown).

@@ -40,16 +40,16 @@
 /// MBUI_MARKS_ONE (2026-11-12: the workspaces' marks one topic whichever workspace is shown) off in all 81 as it came:
 /// only the replay reads it, which answers the app's marks by the run's, asked of the workspace then shown.
 let switches_known : Map[String, Int] = {
-  "MBUI_PLACES_BAR": 79,
-  "MBUI_DEVICES": 80,
-  "MBUI_STATION_ROWS": 80,
-  "MBUI_HAVE_SAME": 80,
-  "MBUI_OUTLINE": 80,
-  "MBUI_CONNECT_ROWS": 80,
-  "MBUI_KEEP_CHAT": 80,
-  "MBUI_CHAT_ROW": 81,
-  "MBUI_CHATS_WINDOW": 81,
-  "MBUI_MARKS_ONE": 81,
+  "MBUI_PLACES_BAR": 72,
+  "MBUI_DEVICES": 73,
+  "MBUI_STATION_ROWS": 73,
+  "MBUI_HAVE_SAME": 73,
+  "MBUI_OUTLINE": 73,
+  "MBUI_CONNECT_ROWS": 73,
+  "MBUI_KEEP_CHAT": 73,
+  "MBUI_CHAT_ROW": 74,
+  "MBUI_CHATS_WINDOW": 74,
+  "MBUI_MARKS_ONE": 74,
 }
 
 ///|

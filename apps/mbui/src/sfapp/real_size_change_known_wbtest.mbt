@@ -986,6 +986,7 @@ let real_size_change_known : Map[String, (Int, Int, Int, Int, Int, Int)] = {
   "wide home chats/down": (9, 5, 39, 2, 0, 15),
   "wide home chats/card": (2, 0, 17, 0, 0, 15),
   "wide home chats/archived": (1, 0, 17, 0, 0, 15),
+  "wide home longJobs/job": (0, 0, 0, 0, 0, 15),
   "wide home newChat/host": (0, 0, 0, 0, 0, 15),
   "wide home newChat/down": (0, 0, 0, 0, 0, 15),
   "wide webdemo newChat/host": (0, 0, 0, 0, 0, 15),

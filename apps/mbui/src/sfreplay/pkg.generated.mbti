@@ -87,7 +87,7 @@ pub fn Flow::resize(Self, Double, Double) -> Unit
 pub fn Flow::rest_passed(Self, String) -> Bool
 pub fn Flow::right_click(Self, String) -> Unit
 pub fn Flow::run_for(Self, Double) -> Unit
-pub fn Flow::run_to(Self, Double) -> Unit
+pub fn Flow::run_to(Self, () -> Double) -> Unit
 pub fn Flow::run_to_rest(Self, String) -> Unit
 pub fn Flow::see(Self, String) -> Unit
 pub fn Flow::see_n(Self, Int32, String) -> Unit

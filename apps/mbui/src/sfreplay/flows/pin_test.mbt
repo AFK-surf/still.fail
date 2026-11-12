@@ -16,22 +16,22 @@ test "27-pin" {
     f.see("发消息")
     f.tap("icon:more")
     // the chat's menu risen: 固定 chosen, it goes
-    f.run_to(@sf.presented_rest())
+    f.run_to(@sf.presented_rest)
     f.see("=固定")
     f.tap("=固定")
-    f.run_to(@sf.presented_rest())
+    f.run_to(@sf.presented_rest)
     // opened again, it says 取消固定 now
     f.tap("icon:more")
-    f.run_to(@sf.presented_rest())
+    f.run_to(@sf.presented_rest)
     f.see("=取消固定")
     f.tap("=取消固定")
-    f.run_to(@sf.presented_rest())
+    f.run_to(@sf.presented_rest)
     // the bottom bar at its end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     // the test chat ended all done: the bar's 归档 comes in meanwhile, to the end it sets out
     let rest = f.t.rest_of("bar-archive/")
     if rest > f.t.time() {
-      f.run_to(rest)
+      f.run_to(fn() { rest })
     }
     f.end()
   })

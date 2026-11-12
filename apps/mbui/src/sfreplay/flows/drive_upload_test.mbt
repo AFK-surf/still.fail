@@ -13,7 +13,7 @@ test "18-drive-upload" {
     f.t.picks([("e2e-photo.jpg", @sfreplay.e2e_photo()), ("e2e-data.bin", @sfreplay.e2e_data())])
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-115455")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("小说-e2e.txt")
     // (the folder's bar: what can be done to it, putting files up the last to leave it)
     f.tap("icon:upload")

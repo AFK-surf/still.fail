@@ -84,6 +84,28 @@ pub fn trace_settings(line : (Map[String, Json]) -> Unit) -> Unit {
 }
 
 ///|
+/// Who is told the moment of each frame as it begins (trace_frames): a run's record of its display's frames.
+// kept across runs: the app's own, set once as it starts
+let frames_tracer : Ref[((Double) -> Unit)?] = Ref(None)
+
+///|
+/// The moment the host gives each frame from now on (on_frame's `t`, as the host gave it, not measured after) given to
+/// `line` as the frame begins: what a core trace keeps beside its messages (`{"frame":T}`, src/stillfail's CORETRACE
+/// frame), for a replay's frames to fall where the run's display drew them (src/sfreplay: the strict pass, Tester::
+/// set_frame_times), not on a grid of its own a phase apart.
+pub fn trace_frames(line : (Double) -> Unit) -> Unit {
+  frames_tracer.val = Some(line)
+}
+
+///|
+fn frame_begun_told(t : Double) -> Unit {
+  match frames_tracer.val {
+    Some(line) => line(t)
+    None => ()
+  }
+}
+
+///|
 fn settings_at_frame(w : Double, h : Double, scale : Double) -> Unit {
   guard settings_tracer.val is Some(line) else { return }
   let m : Map[String, Json] = {

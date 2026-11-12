@@ -16,9 +16,9 @@ test "53-settings-sheet-sinking" {
     // under it, here its versions' words, which take none; the overview has its rows to go to there)
     f.tap("=软件与设备")
     f.tap("icon:more")
-    f.run_to(@sf.presented_rest())
+    f.run_to(@sf.presented_rest)
     f.tap("=重命名")
-    f.run_to(@sf.presented_rest())
+    f.run_to(@sf.presented_rest)
     f.clear()
     f.type_text("e2e-not-082939")
     // the scrim tapped: the sheet sinks, only drawn; 保存 tapped where it is drawn on its way down takes nothing
@@ -30,7 +30,7 @@ test "53-settings-sheet-sinking" {
     for dy in [0.0, 30.0, 60.0, 90.0] {
       f.tap_at(sx, sy + dy)
     }
-    f.run_to(@sf.presented_rest())
+    f.run_to(@sf.presented_rest)
     f.gone("station 名称")
     f.see("=willow")
     f.end()

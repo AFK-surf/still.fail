@@ -14,7 +14,7 @@ test "44-notice-cancel" {
     f.see_n(2, "看一眼就行 083209")
     f.no_notice("看一眼就行 083209")
     // the bottom bar at its end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

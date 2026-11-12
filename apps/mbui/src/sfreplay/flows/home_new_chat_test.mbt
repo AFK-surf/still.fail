@@ -19,7 +19,7 @@ fn flow_02_home_new_chat(seed : UInt) -> String {
   // (where the run's pace had the row come with the list's first rows, nothing of the list moved: where it rests)
   let rows_end = @sfpages.rows_rest()
   if rows_end >= 0.0 {
-    f.run_to(rows_end)
+    f.run_to(fn() { rows_end })
   }
   f.end()
 }

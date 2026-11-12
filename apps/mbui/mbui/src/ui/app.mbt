@@ -121,6 +121,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   frame_start_sets.val = @signals.sets_said()
   // (what the host gives the frame, as it gives it: kept on a core trace as it changes, envrec.mbt)
   settings_at_frame(w, h, scale)
+  // (and the frame's moment as the host gave it, kept on a core trace: envrec.mbt)
+  frame_begun_told(t)
   let z = window_zoom_wanted.get()
   if z != window_zoom_drawn.val {
     let ratio = window_zoom_drawn.val / z
