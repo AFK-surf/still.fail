@@ -91,9 +91,11 @@ fn press_look(
     late_due.val = fn() {  }
     lift(v.cause_at())
   })
-  // (the discs, over what it holds, cut to its corners)
-  v.box(made_for=loc, fn(over) {
-    over.over(Is(true)).radius(corner).clips(Is(true)) |> ignore
+  // (the discs, over what it holds, cut to its corners: made as its first press shows, nothing of them before; a row or
+  // a key that is never pressed holds none; over what it holds, no room of the column's to come into: at once)
+  let pressed_once : @signals.Signal[Bool] = @signals.signal(false)
+  v.show(fn() { pressed_once.get() }, at_once=true, fn(over) {
+    over.made_for(loc).over(Is(true)).radius(corner).clips(Is(true)) |> ignore
     over.each(fn() { ripples.get() }, fn(n) { n }, fn(d, n) {
       match made.get(n.untracked()) {
         Some(r) => ripple_disc(d, r, ink)
@@ -101,7 +103,6 @@ fn press_look(
       }
     })
   })
-  |> ignore
   v.owns(fn() {
     (late_due.val)()
     for _, r in made {
@@ -122,6 +123,7 @@ fn press_look(
     let n = next.val
     next.val = n + 1
     made[n] = { x: d.x, y: d.y, w: d.w, h: d.h, way, at, lifted: None, due: [] }
+    pressed_once.set(true)
     let now = ripples.untracked().copy()
     now.push(n)
     ripples.set(now)
@@ -186,8 +188,13 @@ fn ripple_disc(d : @view.View, r : PressRipple, ink_now : () -> Int64) -> Unit {
     let (cx, cy, radius, _) = geom()
     (cx - radius, cy - radius)
   }))
-  .width(By(fn() { Some(geom().2 * 2.0) }))
-  .height(By(fn() { Some(geom().2 * 2.0) }))
+  // (laid out once, as nothing: as big as it goes drawn so, its ground's, not laid out again each frame it grows)
+  .width(Is(Some(0.0)))
+  .height(Is(Some(0.0)))
+  .ground_drawn(By(fn() {
+    let radius = geom().2
+    { dx: 0.0, dy: 0.0, dw: radius * 2.0, dh: radius * 2.0, corners: Some((radius, radius, radius, radius)) }
+  }))
   .radius(By(fn() { geom().2 }))
   .shadow(By(fn() {
     let (_, _, radius, k) = geom()

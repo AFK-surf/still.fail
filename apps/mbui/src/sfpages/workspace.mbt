@@ -100,18 +100,42 @@ priv enum WsBlock {
 /// scrolls in it (@sf.panel_list_node), its foot staying under it: more workspaces than the share holds are reached by
 /// scrolling, not cut off. Nothing while none is in view (the prefs not read yet).
 fn workspaces_list(v : @view.View, src : Source, close : () -> Unit, compact~ : Bool) -> Unit {
-  let in_view = fn() { @sfbase.workspace_in_view(src) }
+  // (what each workspace has waiting, as the one in use's marks say it)
+  let marks_now = fn() {
+    match @sfbase.workspace_in_view(src).0 {
+      Some(_) => field(src.topic("workspaceMarks", @sfbase.marks_asked()).get().value, "workspaces")
+      None => None
+    }
+  }
+  // (a workspace pressed to switch to: the list as it was at the press held from then till the sheet is gone, the one
+  // in use, the others in their order and what they have waiting, however the switch changes them meanwhile: what the
+  // press put up is part of the screen as it was, sfbase's switch_workspace_to. Opened again, made anew: as it is then)
+  let held : @signals.Signal[(Workspace?, Array[Workspace], Json?)?] = @signals.signal(None)
+  let hold = fn() {
+    if held.untracked() is None {
+      let (now, all, _, _) = @signals.untracked(fn() { @sfbase.workspace_in_view(src) })
+      held.set(Some((now, all, @signals.untracked(marks_now))))
+    }
+  }
+  let in_view = fn() -> (Workspace?, Array[Workspace]) {
+    match held.get() {
+      Some((now, all, _)) => (now, all)
+      None => {
+        let (now, all, _, _) = @sfbase.workspace_in_view(src)
+        (now, all)
+      }
+    }
+  }
   let others = fn() {
     match in_view() {
-      (Some(w), all, _, _) => all.filter(fn(x) { x.id != w.id })
+      (Some(w), all) => all.filter(fn(x) { x.id != w.id })
       _ => []
     }
   }
-  // (what each workspace has waiting, as the one in use's marks say it)
   let marks = fn() {
-    match in_view().0 {
-      Some(_) => field(src.topic("workspaceMarks", @sfbase.marks_asked()).get().value, "workspaces")
-      None => None
+    match held.get() {
+      Some((_, _, m)) => m
+      None => marks_now()
     }
   }
   let blocks = fn() -> Array[WsBlock] {
@@ -152,8 +176,12 @@ fn workspaces_list(v : @view.View, src : Source, close : () -> Unit, compact~ : 
           fn() { w().email },
           lead=w,
           mark=fn() { field(marks(), id).unwrap_or(Json::null()) },
-          // (the sheet closed as the switch is done, with it: sfbase's switch_workspace_to)
-          fn() { switch_workspace(src, id, closes=close) },
+          // (the sheet closed as the switch is done, with it, showing till then what it showed at the press:
+          // sfbase's switch_workspace_to)
+          fn() {
+            hold()
+            switch_workspace(src, id, closes=close)
+          },
         )
       }
     }
