@@ -109,7 +109,9 @@ export interface StationWire {
 /// browser is laid out for it while the view drives it.
 /// `quality`: the 画质 chosen (none: 自动): the most the station lets its bit rate go to (a station before it lets it be).
 /// `fps`: the 帧率 chosen (none: 自动): the most frames a second the station sends (a station before it lets it be).
-export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean };
+/// `audio`: the computer's sound; `opus` with it: as Opus where the station's source encodes it (a station before it,
+/// and one whose source encodes none, sends PCM).
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; opus?: true; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean };
 export type ScreenQuality = "smooth" | "hd" | "original";
 export const SCREEN_FPS = [120, 90, 60, 30, 15] as const;
 export type ScreenFps = (typeof SCREEN_FPS)[number];

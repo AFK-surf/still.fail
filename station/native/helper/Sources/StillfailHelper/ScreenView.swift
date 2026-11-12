@@ -34,10 +34,12 @@
 //        7 region    JSON     {region: {x, y, w, h} | null}: the part of the display the frames from the next one on
 //                             show, as it was framed (0..1 of the display; null the whole), said before a frame whose
 //                             part is another than the last one's (that frame a key frame)
-//        8 audio config JSON {codec: "pcm_s16le", sampleRate: 48000, channels: 2} after the info, or {error} (no more audio)
-//        9 audio     8 bytes timestamp (µs, the frames' clock), then 3840 bytes: 960 frames of stereo PCM16 little-endian
+//        8 audio config JSON {codec: "pcm_s16le" | "opus", sampleRate: 48000, channels: 2} after the info, or {error}
+//                             (no more audio); `opus` to a view opened with `audioCodec: "opus"` where the Mac encodes it
+//        9 audio     8 bytes timestamp (µs, the frames' clock), then 3840 bytes: 960 frames of stereo PCM16 little-endian;
+//                             or one Opus packet of those 960 frames
 // The view ends when the connection does. `synthetic: "moving"|"still"` encodes made-up pictures instead of capturing
-// (the side test's measurement of the encoder and the link): never what a person sees.
+// (the side test's measurement of the encoder and the link), and with `audio` a made-up tone: never what a person sees.
 import AppKit
 import CoreGraphics
 import CoreImage
@@ -76,6 +78,8 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   let synthetic: String?
   /// The Mac's system output asked for too (`audio: true`), and what captures it once it is (never the microphone).
   let audio: Bool
+  /// Its packets as Opus (`audioCodec: "opus"`: the viewer decodes it), else PCM16.
+  let opus: Bool
   var sound: SystemAudio?
   /// "h264", "h265" (H.264 where this Mac has no encoder of it), or "jpeg": each picture a JPEG of its own (an agent's
   /// view, a client without either).
@@ -149,6 +153,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     bitrate = options["bitrate"] as? Int
     synthetic = options["synthetic"] as? String
     audio = (options["audio"] as? Bool) == true
+    opus = (options["audioCodec"] as? String) == "opus"
     jpeg = (options["codec"] as? String) == "jpeg"
     hevc = (options["codec"] as? String) == "h265"
     p3 = !jpeg && (options["gamut"] as? String) == "p3"
@@ -330,7 +335,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
         var sound: SystemAudio?
         if audio {
-          let made = SystemAudio(channel: channel)
+          let made = SystemAudio(channel: channel, opus: opus)
           do {
             try stream.addStreamOutput(made, type: .audio, sampleHandlerQueue: made.queue)
             sound = made
@@ -379,6 +384,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   }
 
   func stop() {
+    sound?.end()
     queue.sync {
       ended = true
       timer?.cancel()
@@ -437,6 +443,12 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   }
 
   func startSynthetic(_ width: Int, _ height: Int, moving: Bool) {
+    // Its sound made up too, where asked: a tone through the same packets and encoder as the Mac's own.
+    if audio {
+      let made = SystemAudio(channel: channel, opus: opus)
+      made.tone(now: now)
+      sound = made
+    }
     queue.sync {
       self.opened(width, height)
       self.took(self.picture(width, height), self.now())

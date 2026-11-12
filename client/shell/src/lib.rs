@@ -247,7 +247,8 @@ struct Halves {
 /// once as the core's progress of the view's call (`{id, value}`, the bytes beside it: what screens.ts says of them),
 /// so they go through neither the core's JS nor its thread; the rest (its state, a clipboard, what is not one of them)
 /// kept, as they came, for the core's next read, with a video frame's head alone the first time one comes after a
-/// config (what tells the core the picture is live).
+/// config (what tells the core the picture is live). Sound that comes as Opus (a view asked it: client/core-ts mesh.ts
+/// `decodesOpus`) is decoded here, each packet into the 20 ms of PCM16 the hosts play, and said to the app as PCM.
 struct ScreenTap {
     /// the app's call the view is (its progress' id)
     call: u64,
@@ -257,6 +258,10 @@ struct ScreenTap {
     out: Vec<u8>,
     /// a video frame's head given the core since the last config
     told_video: bool,
+    /// the view's sound is Opus (its config said so): what decodes it, and the capture time the next packet follows
+    /// on from (0: none decoded since it was made)
+    opus: Option<Box<opus_rs::OpusDecoder>>,
+    opus_next: u64,
 }
 
 const FRAME_CONFIG: u8 = 1;
@@ -265,8 +270,21 @@ const FRAME_AUDIO_CONFIG: u8 = 5;
 const FRAME_AUDIO: u8 = 6;
 /// A frame longer than this is no frame (screen-frames.ts MAX_FRAME): left to the core, which says so.
 const FRAME_MAX: usize = 64 * 1024 * 1024;
+/// A packet of sound as the hosts play it: 960 frames of interleaved stereo PCM16 (20 ms at 48 kHz); the longest Opus
+/// packet (RFC 6716 3.2.1).
+const PCM_PACKET: usize = 3840;
+const OPUS_MAX: usize = 1275;
+/// A packet's capture time this far (µs) from where the last one ended still follows on from it: half a packet (the
+/// sources that encode Opus give each packet of a run its time 20 ms on from the last exactly: the Helper's
+/// AudioPackets, stillfail-screen's Runs); one further is after a gap (packets left out before the round trip was
+/// known, while muted, silence not sent), decoded by a decoder made anew, as its encoder was.
+const OPUS_SLACK: u64 = 10_000;
 
 impl ScreenTap {
+    fn new(call: u64) -> Self {
+        ScreenTap { call, pending: Vec::new(), out: Vec::new(), told_video: false, opus: None, opus_next: 0 }
+    }
+
     /// What came next: its whole frames said or kept.
     fn take(&mut self, chunk: &[u8], tell: &dyn Tell) {
         // (whole frames read where they came, not copied first; what is left of one kept)
@@ -332,22 +350,66 @@ impl ScreenTap {
                 }
                 true
             }
-            FRAME_AUDIO if body.len() == 3848 => {
+            FRAME_AUDIO if body.len() > 8 && (if self.opus.is_some() { body.len() <= 8 + OPUS_MAX } else { body.len() == 8 + PCM_PACKET }) => {
                 let ts = u64::from_be_bytes(body[..8].try_into().unwrap());
+                let mut decoded = [0u8; PCM_PACKET];
+                let pcm = match &mut self.opus {
+                    None => &body[8..],
+                    Some(decoder) => {
+                        if self.opus_next != 0 && ts.abs_diff(self.opus_next) > OPUS_SLACK {
+                            match opus_rs::OpusDecoder::new(48_000, 2) {
+                                Ok(fresh) => **decoder = fresh,
+                                Err(_) => return true,
+                            }
+                            tally("tap.audio.resumed");
+                        }
+                        let mut samples = [0f32; PCM_PACKET / 2];
+                        // (one that does not decode to 20 ms is none: the sound goes on with the next, its decoder made
+                        // anew; a panic of the decoder on bytes the station sent is that too, not the end of the view)
+                        let packet = &body[8..];
+                        let decoded_n = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decoder.decode(packet, PCM_PACKET / 4, &mut samples)));
+                        match decoded_n {
+                            Ok(Ok(n)) if n * 4 == PCM_PACKET => self.opus_next = ts + 20_000,
+                            _ => {
+                                self.opus_next = 0;
+                                if let Ok(fresh) = opus_rs::OpusDecoder::new(48_000, 2) {
+                                    **decoder = fresh;
+                                }
+                                tally("tap.audio.undecoded");
+                                return true;
+                            }
+                        }
+                        for (i, v) in samples.iter().enumerate() {
+                            let v = if v.is_finite() { (v.clamp(-1.0, 1.0) * 32767.0).round() as i16 } else { 0 };
+                            decoded[i * 2..i * 2 + 2].copy_from_slice(&v.to_le_bytes());
+                        }
+                        &decoded[..]
+                    }
+                };
                 let n = MEDIA_SEQ.fetch_add(1, Ordering::Relaxed);
-                if tell.media(id, FRAME_AUDIO, false, n, ts, &body[8..]) {
+                if tell.media(id, FRAME_AUDIO, false, n, ts, pcm) {
                     tally("tap.direct.audio");
                 } else {
                     let text = format!(r#"{{"id":{id},"value":{{"audio":{{"ts":{ts},"n":{n}}}}}}}"#);
-                    tell.say(text.as_bytes(), Some(&body[8..]));
+                    tell.say(text.as_bytes(), Some(pcm));
                 }
                 tally("tap.audio");
                 true
             }
             FRAME_AUDIO_CONFIG => {
                 let Ok(c) = serde_json::from_slice::<Value>(body) else { return false };
-                if c.get("codec").and_then(Value::as_str) != Some("pcm_s16le") || c.get("sampleRate").and_then(Value::as_f64) != Some(48000.0) || c.get("channels").and_then(Value::as_f64) != Some(2.0) {
+                let codec = c.get("codec").and_then(Value::as_str);
+                if !matches!(codec, Some("pcm_s16le" | "opus")) || c.get("sampleRate").and_then(Value::as_f64) != Some(48000.0) || c.get("channels").and_then(Value::as_f64) != Some(2.0) {
                     return false;
+                }
+                // (the app is told PCM either way: what it plays is what is said from here)
+                self.opus = None;
+                self.opus_next = 0;
+                if codec == Some("opus") {
+                    match opus_rs::OpusDecoder::new(48_000, 2) {
+                        Ok(decoder) => self.opus = Some(Box::new(decoder)),
+                        Err(_) => return false,
+                    }
                 }
                 // (seen by the host first: no packet taken there until the app has taken this)
                 tell.media(id, FRAME_AUDIO_CONFIG, false, MEDIA_SEQ.fetch_add(1, Ordering::Relaxed), 0, &[]);
@@ -1090,7 +1152,7 @@ impl Inner {
                 if self.say.lock().unwrap().is_none() {
                     return Ok(Answer::json(json!({ "tapped": false })));
                 }
-                let mut tap = ScreenTap { call, pending: Vec::new(), out: Vec::new(), told_video: false };
+                let mut tap = ScreenTap::new(call);
                 tap.take(&bytes.unwrap_or_default(), &**self);
                 *halves.tap.lock().unwrap() = Some(tap);
                 tally("tap.views");
@@ -1399,6 +1461,11 @@ impl Inner {
     }
 
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
+        // Whether a screen view's Opus sound is decoded here (ScreenTap): only where its tap says to the app, so the
+        // core asks the station for Opus only then (client/core-ts hosts/bridge.ts `opus`), else PCM.
+        if op == "tap.opus" {
+            return Ok(json!(self.say.lock().unwrap().is_some()));
+        }
         if op == "fetch.cancel" {
             let pending = self.fetches.lock().unwrap().remove(&id_of(a)?);
             return Ok(json!(pending.is_some_and(|cancel| cancel.send(()).is_ok())));
@@ -2000,7 +2067,7 @@ mod tests {
     #[test]
     fn a_tapped_screen_says_its_picture_and_sound_and_keeps_the_rest_for_the_core() {
         let told = Told::default();
-        let mut tap = ScreenTap { call: 7, pending: Vec::new(), out: Vec::new(), told_video: false };
+        let mut tap = ScreenTap::new(7);
         let (wire, core) = screen_wire();
         // cut anywhere
         for piece in wire.chunks(7) {
@@ -2025,7 +2092,7 @@ mod tests {
         // as it came whole, or a frame cut across two pieces: the same
         for cut in [wire.len(), wire.len() - 3] {
             let told = Told::default();
-            let mut again = ScreenTap { call: 7, pending: Vec::new(), out: Vec::new(), told_video: false };
+            let mut again = ScreenTap::new(7);
             again.take(&wire[..cut], &told);
             again.take(&wire[cut..], &told);
             assert_eq!((told.said.lock().unwrap().len(), &again.out, again.pending.len()), (4, &core, 0));
@@ -2036,7 +2103,7 @@ mod tests {
     fn what_the_host_takes_of_a_tapped_screen_is_not_said() {
         // the host decodes and plays the frames and the sound itself: only the config said, the core's kept the same
         let told = Told { takes: vec![FRAME_VIDEO, FRAME_AUDIO], ..Told::default() };
-        let mut tap = ScreenTap { call: 3, pending: Vec::new(), out: Vec::new(), told_video: false };
+        let mut tap = ScreenTap::new(3);
         let (wire, core) = screen_wire();
         tap.take(&wire, &told);
         let said = told.said.into_inner().unwrap();
@@ -2044,6 +2111,56 @@ mod tests {
         assert!(said[0].0["value"]["config"].is_object());
         assert_eq!(told.offered.lock().unwrap().len(), 4);
         assert_eq!(tap.out, core);
+    }
+
+    /// The first 80 ms of a tone (440 Hz and 1250 Hz on the left, 660 Hz on the right, 0.3 and 0.1 of full scale) as the
+    /// Mac's helper encodes it (AudioToolbox, 64 kbit/s): one Opus packet each 20 ms.
+    const TONE_OPUS: [&str; 4] = [
+            "fc7efcfac83adf72422eb70639fd4e7994094ff81dca24140fcda72ab2837dafcb307757fd6f158807f14e5e02ba87d108d7bd98511d4749ba09a54029f42122017d75bb3f223221c5fca7b5cd5d7ea2a96148eb32fcc8e81946df99d205a49cd119fd285e189d81b698fe1eb8a4cea59aa6b594d60479250ecd7fcc39e8231dde329ac910ad059cc974b3dc9f2151d605aa2169f84ff7e1dbc00263e2c45f6243d8dad8ff115909f7c119fc6f003690930e4f7b70a549bf3fb41999da21cfa221cfa7445c5eea9f2dea8d6e4752a3a16abe4752a77619af9e3f8443068d0e8f4b3b67e429ea271c65f49d1280a1f826b8a6e4235d037e42f70b1b3def726cd85c5675900040f45954157bb1fed63d34848eb0c9061d95fa530354ab8f281430570d47f20f2e1ce4b8379de776c5758efa3b17e75eb7df13019e2eb8127e",
+            "fcf01f552abac40cb85b1b9c453ab1c5c0efde6ee2a4abc433f8c758944a04de36245ed4673c74936b45224cd6674e8e979829b7673b8ee8d5faae9dfb85461dc85db4fcfe1ca13bf53a8e7d455427f10b9283f4e3969eaca97907055f74b4f3c68af224684fcea74a70759c10ce055a78da40cfe736edb1f06af2e1516d9c9b0596688961e12b253da1eb5255a67bb07d1b5bd61e2b25abbaab1cc4eed48e12cce89ccbf893d75f050cbf06e645c0d5cc8e",
+            "fcf0533d61b4ccf9c20a05dd48d2b7a632b6b587bf7509d2330cbf4df6837f3fff1a8f72494cb696db3b4f99658c1997d9a4ad792c6ad90573eb04a8ba81ea16e73fe342e66946a731490469fd67f67cb28038aab73f603d03c51d9eba899826c31d1240e44aeb48a68649472d543c2b233cdd6908a1968506aaaa461321ac70e71855735019314fde063951e507e1f33e5883ba01f68ff0e094dde1ec8e",
+            "fced3cd57d7aa6a3555bbe8628998d7798b5f24ff8b642112c57c81112f8b2b55d3d49112fd2e45042ae08e20c311cc5d634041eb70f9edee772340f4c0c4b37067ffc0378b1e7934408b5f67f1c18a2704671798a125eadce7ee7f6372126813aa7441d008cf744241e40631cbed650ac8ed66b3172863ef769665807743a9e63409d45846a5361e3926ce68773ceb4a34ff103e65fda8b9c924ae4d77c8e",
+    ];
+
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    #[test]
+    fn a_tapped_screens_opus_sound_is_said_as_the_pcm_it_decodes_to() {
+        let told = Told::default();
+        let mut tap = ScreenTap::new(4);
+        let mut wire = frame(FRAME_AUDIO_CONFIG, br#"{"codec":"opus","sampleRate":48000,"channels":2}"#);
+        for (i, packet) in TONE_OPUS.iter().enumerate() {
+            let mut body = ((i as u64 + 1) * 20_000).to_be_bytes().to_vec();
+            body.extend(unhex(packet));
+            wire.extend(frame(FRAME_AUDIO, &body));
+        }
+        // one that is no Opus packet: left out, the sound going on with the next
+        let mut broken = 100_000u64.to_be_bytes().to_vec();
+        broken.extend_from_slice(&[0xff; 3]);
+        wire.extend(frame(FRAME_AUDIO, &broken));
+        // after a gap (and the packet not decoded): decoded by a decoder made anew
+        let mut after = 1_000_000u64.to_be_bytes().to_vec();
+        after.extend(unhex(TONE_OPUS[1]));
+        wire.extend(frame(FRAME_AUDIO, &after));
+        for piece in wire.chunks(13) {
+            tap.take(piece, &told);
+        }
+        let said = told.said.into_inner().unwrap();
+        // the app is told PCM: what it plays is the decoded sound
+        assert_eq!(said[0].0, json!({ "id": 4, "value": { "audioConfig": { "codec": "pcm_s16le", "sampleRate": 48000, "channels": 2 } } }));
+        let packets: Vec<&Vec<u8>> = said[1..].iter().map(|s| s.1.as_ref().unwrap()).collect();
+        assert_eq!(packets.iter().map(|p| p.len()).collect::<Vec<_>>(), vec![PCM_PACKET; 5]);
+        assert_eq!(said[1..].iter().map(|s| s.0["value"]["audio"]["ts"].as_u64().unwrap()).collect::<Vec<_>>(), vec![20_000, 40_000, 60_000, 80_000, 1_000_000]);
+        // past the decoder's start, the tone: the left about 0.22 of full scale (RMS), the right about 0.21
+        let rms = |p: &[u8], ch: usize| {
+            let v: Vec<f64> = p.chunks_exact(4).map(|f| i16::from_le_bytes([f[ch * 2], f[ch * 2 + 1]]) as f64 / 32768.0).collect();
+            (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64).sqrt()
+        };
+        let (left, right) = (rms(packets[3], 0), rms(packets[3], 1));
+        assert!((0.19..0.26).contains(&left) && (0.18..0.25).contains(&right), "{left} {right}");
+        assert!(tap.out.is_empty(), "nothing of it the core's");
     }
 
     static ANSWERS: StdMutex<Vec<(u64, String, String, Option<Vec<u8>>)>> = StdMutex::new(Vec::new());

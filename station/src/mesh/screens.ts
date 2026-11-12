@@ -1,8 +1,9 @@
 // A view of one of the station's screens over a member's link ("Wire"): a stream whose head
 // line has a `screen` object, answered 200 `application/x-stillfail-screen`, then frames both ways, each a kind byte,
 // its payload's length (4 bytes, big-endian) and the payload. Station → client: `config`, `video`, `state`; client →
-// station: `input`, `ack`, `keyframe`, `look` (the part of the screen it shows, zoomed in: its frames are then of that
-// part, as large as the client shows it, each config saying which part); and the screen's clipboard both ways (`clipboard`), for a view that drives it
+// station: `input`, `ack`, `keyframe`, `sound` (1 byte: 0 the client muted the sound, none goes; 1 on again), `look`
+// (the part of the screen it shows, zoomed in: its frames are then of that part, as large as the client shows it, each
+// config saying which part); and the screen's clipboard both ways (`clipboard`), for a view that drives it
 // (the station sends it as it changes, the client to set it and paste). The source is asked for a frame only while the
 // `Pacer` lets one go: as many as the link holds (a far one holds several), none while the oldest not acknowledged
 // waits longer than the link takes with no queue; and the source is asked for the bit rate the link carries
@@ -24,7 +25,7 @@ import { type Fps, FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Shar
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
-export const KIND = { config: 1, video: 2, state: 3, clipboard: 4, audioConfig: 5, audio: 6, input: 16, ack: 17, keyframe: 18, setClipboard: 19, look: 20 } as const;
+export const KIND = { config: 1, video: 2, state: 3, clipboard: 4, audioConfig: 5, audio: 6, input: 16, ack: 17, keyframe: 18, setClipboard: 19, look: 20, sound: 21 } as const;
 /// A client's frame is an input event at most: one larger ends the view.
 export const MAX_IN = 64 * 1024;
 /// A client's `clipboard` frame is its flags, its type and a picture at most.
@@ -191,14 +192,22 @@ export function parseInput(v: any): ScreenInput | null {
   }
 }
 
+/// Digital silence: a source from before that sends it (an older still.fail Helper, stillfail-screen) sends 1.5 Mbit/s
+/// of zeros while nothing plays; from QUIET packets of it in a row (200 ms) it is left out, the client's player waiting
+/// for sound as after any gap; shorter (between two sounds) it goes. Opus's is the sources' own to leave out (none from
+/// before sends Opus).
+const silent = (pcm: Uint8Array) => pcm.every((b) => b === 0);
+const QUIET = 10;
+
 /// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), the 画质
 /// chosen (`quality`: the most its bit rate goes to; none for 自动 and from a client before it), the 帧率 chosen (`fps`:
 /// 120, 90, 60, 30 or 15, the most frames a second; none for 自动 and from a client before it), and the phone it is
 /// laid out for (`fit`: 200..2000 CSS pixels a side, scale 1..4; only a view that drives it); `gamut: "p3"`: the client
 /// shows a video tagged Display P3 as such (none: sRGB's colours); `client` and `app`: the app's own name and kind, to tell
-/// its people which device a view is on; `self`: the device's main id, for it to know its own views; `taken`: its person
+/// its people which device a view is on; `audio: "pcm_s16le"` the computer's sound, with `opus` where the client
+/// decodes Opus too (a station from before sends PCM to it); `self`: the device's main id, for it to know its own views; `taken`: its person
 /// asked to drive it, over having been made to only look (hub.ts `mayDrive`).
-export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; quality?: Quality; fps?: Fps; fit?: ViewFit; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean } {
+export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; opus?: boolean; quality?: Quality; fps?: Fps; fit?: ViewFit; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean } {
   const bound = (v: unknown, otherwise: number) => (num(v) ? Math.min(8192, Math.max(16, Math.round(v))) : otherwise);
   const codecs = Array.isArray(screen.codecs) ? CODECS.filter((c) => screen.codecs.includes(c)) : [];
   // A preview (`peek`, a link's card in a chat) only looks.
@@ -209,7 +218,7 @@ export function asked(screen: any): { maxWidth: number; maxHeight: number; codec
   const fit = control && f && side(f.width) && side(f.height) && num(f.scale) && f.scale >= 1 && f.scale <= 4 ? { width: Math.round(f.width), height: Math.round(f.height), scale: f.scale } : undefined;
   const quality: Quality | undefined = ["smooth", "hd", "original"].includes(screen.quality) && !peek ? screen.quality : undefined;
   const fps: Fps | undefined = isFps(screen.fps) && !peek ? screen.fps : undefined;
-  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(screen.audio === "pcm_s16le" && !peek ? { audio: true } : {}), ...(quality ? { quality } : {}), ...(fps ? { fps } : {}), ...(fit ? { fit } : {}), ...(screen.gamut === "p3" ? { gamut: "p3" as const } : {}), ...said("client", screen.client, 80), ...said("app", screen.app, 16), ...said("self", screen.self, 64), ...(screen.taken === true ? { taken: true } : {}) };
+  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(screen.audio === "pcm_s16le" && !peek ? { audio: true, ...(screen.opus === true ? { opus: true } : {}) } : {}), ...(quality ? { quality } : {}), ...(fps ? { fps } : {}), ...(fit ? { fit } : {}), ...(screen.gamut === "p3" ? { gamut: "p3" as const } : {}), ...said("client", screen.client, 80), ...said("app", screen.app, 16), ...said("self", screen.self, 64), ...(screen.taken === true ? { taken: true } : {}) };
 }
 
 /// A word a client says of itself, as far as it is shown: a line's worth, none when it said none.
@@ -249,7 +258,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const control = ask.control && !readOnly(viewer) && hub.mayDrive(id, viewer.device, ask.taken === true);
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true, ...(ask.opus ? { opus: true } : {}) } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
@@ -296,6 +305,8 @@ class ViewSession {
   #wake: () => void = () => {};
   /// Whether the link's round trip is known (the first frame acknowledged): the sound waits for it.
   #timed = false;
+  /// The client's sound is on (`sound`: it muted it, none goes till it is on again).
+  #soundOn = true;
   #leave: () => void = () => {};
   #unwatch: () => void = () => {};
   #unclip: () => void = () => {};
@@ -518,18 +529,25 @@ class ViewSession {
   /// picture's round trip is known (sound from the start made that round trip the queue's, and nothing waited past it),
   /// what comes meanwhile taken and left out: the source keeps up to 300 ms not taken (still.fail Helper's AudioPackets,
   /// stillfail-screen's AudioQueue), which would go all at once and the sound stay that far behind. Its leaving out is
-  /// meant: the sound breaks up on a link too slow for it, the pictures going on.
+  /// meant: the sound breaks up on a link too slow for it, the pictures going on. Opus (about 64 kbit/s) is not left out
+  /// for the pictures: on 800 and 400 kbit/s left out so it went with gaps of 1–1.5 s, and sent always it came whole with
+  /// the pictures' rate and lateness as they were (2026-11-12, AUDIO=opus). Its format is said once, as the first
+  /// packet has it (Opus where the client said it decodes it and the source encodes it, else PCM). Muted on the client
+  /// (`sound` 0), what comes is taken and left out the same way, so the sound is as late as before once it is on again.
   async #audio(): Promise<void> {
     let configured = false;
+    // PCM's packets of digital silence in a row so far.
+    let zeros = 0;
     try {
       while (!this.#closed) {
         const next = await this.view.nextAudio!();
         if (this.#closed || next === null) break;
         if (!configured) {
-          await this.#send(KIND.audioConfig, Buffer.from(JSON.stringify({ codec: "pcm_s16le", sampleRate: 48000, channels: 2 })));
+          await this.#send(KIND.audioConfig, Buffer.from(JSON.stringify({ codec: next.codec, sampleRate: 48000, channels: 2 })));
           configured = true;
         }
-        if (!this.#timed || this.pacer.backlogged()) continue;
+        zeros = next.codec === "pcm_s16le" && silent(next.data) ? zeros + 1 : 0;
+        if (!this.#timed || !this.#soundOn || (next.codec === "pcm_s16le" && (this.pacer.backlogged() || zeros >= QUIET))) continue;
         const payload = Buffer.alloc(8 + next.data.length);
         payload.writeBigUInt64BE(BigInt(Math.round(next.ts)), 0);
         payload.set(next.data, 8);
@@ -645,6 +663,9 @@ class ViewSession {
           }
           case KIND.keyframe:
             this.view.keyframe();
+            break;
+          case KIND.sound:
+            if (got.payload.length === 1) this.#soundOn = got.payload[0] !== 0;
             break;
           case KIND.look: {
             const look = parseLook(got.payload, this.#own);

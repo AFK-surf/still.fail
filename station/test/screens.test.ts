@@ -27,7 +27,7 @@ import type { SimDebug } from "../src/screens/sim-debug.ts";
 import { SIMCTL, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, codecFor } from "../src/screens/source.ts";
+import { type AudioFrame, CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, codecFor } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, rateCeiling } from "../src/mesh/screen-pace.ts";
@@ -289,17 +289,18 @@ test("frames go unacknowledged while the link keeps up: two before its round tri
 /// 2026-11-11: on a link of a few hundred kbit/s the computer's sound (1.5 Mbit/s of PCM) went on the stream as fast as
 /// it was made, every picture seconds behind it. What comes before the first picture's round trip is known, and while the
 /// pictures wait in front of the link, is left out; once they go through, the sound goes again.
-test("the sound is left out while the pictures wait in front of the link", async () => {
+test("the sound is left out while the pictures wait in front of the link, and while it is silence", async () => {
   class HeldSound extends FakeView {
-    #waiting: ((frame: { ts: number; data: Uint8Array }) => void) | null = null;
+    #waiting: ((frame: AudioFrame) => void) | null = null;
     nextAudio() {
-      return new Promise<{ ts: number; data: Uint8Array }>((give) => (this.#waiting = give));
+      return new Promise<AudioFrame>((give) => (this.#waiting = give));
     }
     give(ts: number) {
       const give = this.#waiting;
       this.#waiting = null;
       assert.ok(give, "a packet of sound asked for");
-      give({ ts, data: new Uint8Array(3840) });
+      // (ts 99: digital silence)
+      give({ ts, data: new Uint8Array(3840).fill(ts === 99 ? 0 : 1), codec: "pcm_s16le" });
     }
   }
   const hub = new ScreenHub();
@@ -331,6 +332,71 @@ test("the sound is left out while the pictures wait in front of the link", async
   view.give(4);
   await settle();
   assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 4n);
+  // Digital silence (a source from before sends it while nothing plays): its first 9 packets go (a pause between two
+  // sounds), from the 10th it is left out; the sound after it goes.
+  for (let i = 0; i < 12; i++) {
+    view.give(99);
+    await settle();
+    if (i < 9) assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 99n);
+  }
+  view.give(5);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 5n);
+  await v.stream.finish();
+  await v.served;
+});
+
+/// Opus (a twentieth of PCM's bytes) is not left out for the pictures. Muted on the client (`sound` 0), the computer's
+/// sound goes no more: what the source makes meanwhile is taken and left out, so once it is on again (`sound` 1) the
+/// next packet made goes, not what was kept while muted.
+test("Opus goes while the pictures wait, and a view muted on the client is sent no sound till it is on again", async () => {
+  class HeldSound extends FakeView {
+    #waiting: ((frame: AudioFrame) => void) | null = null;
+    nextAudio() {
+      return new Promise<AudioFrame>((give) => (this.#waiting = give));
+    }
+    give(ts: number) {
+      const give = this.#waiting;
+      this.#waiting = null;
+      assert.ok(give, "a packet of sound asked for");
+      give({ ts, data: new Uint8Array(160).fill(ts), codec: "opus" });
+    }
+  }
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new HeldSound();
+  hub.add(source);
+  const time = testClock();
+  const v = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true, audio: "pcm_s16le", opus: true }, undefined, time.clock);
+  assert.equal(source.opened[0]!.opus, true, "the source is told the client decodes Opus");
+  await until(v.frames, KIND.video);
+  await v.stream.write(frame(KIND.ack, ts8(1000)));
+  await settle();
+  const view = source.views[0] as HeldSound;
+  view.give(1);
+  await settle();
+  assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "opus", sampleRate: 48000, channels: 2 });
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 1n);
+  // Opus goes while the pictures wait in front of the link too (PCM is left out then: the test before)
+  await time.adjust(QUEUE_MS + 1);
+  view.give(7);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 7n);
+  await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+  await settle();
+  await v.stream.write(frame(KIND.sound, Buffer.from([0])));
+  await settle();
+  view.give(2);
+  await settle();
+  view.give(3);
+  await settle();
+  await v.stream.write(frame(KIND.sound, Buffer.from([1])));
+  await settle();
+  view.give(4);
+  await settle();
+  const next = await until(v.frames, KIND.audio);
+  assert.equal(next.readBigUInt64BE(), 4n, "none made while muted went");
+  assert.deepEqual(next.subarray(8), Buffer.alloc(160, 4));
   await v.stream.finish();
   await v.served;
 });
@@ -1425,7 +1491,9 @@ class FakeHelperApp {
             return;
           }
           conn.write(helperMessage(1, Buffer.from(JSON.stringify({ width: 64, height: 36, encoder: "fake", ...(ask.audio === true ? { audio: true } : {}) }))));
-          if (ask.audio === true) conn.write(helperMessage(8, Buffer.from(JSON.stringify({ codec: "pcm_s16le", sampleRate: 48000, channels: 2 }))));
+          // (Opus to a view that asked it, as the Mac's helper encodes it)
+          const opus = ask.audioCodec === "opus";
+          if (ask.audio === true) conn.write(helperMessage(8, Buffer.from(JSON.stringify({ codec: opus ? "opus" : "pcm_s16le", sampleRate: 48000, channels: 2 }))));
           let sounds = 0;
           this.copy = (payload) => conn.write(helperMessage(5, payload));
           let n = 0;
@@ -1458,7 +1526,7 @@ class FakeHelperApp {
               else if (kind === 9) {
                 // A packet of system output, 20 ms on from the last; counted on the view's ask.
                 ask.audioAsked = (ask.audioAsked ?? 0) + 1;
-                const packet = Buffer.alloc(3848, ++sounds);
+                const packet = Buffer.alloc(8 + (opus ? 160 : 3840), ++sounds);
                 packet.writeBigUInt64BE(BigInt(1_000_000 + sounds * 20_000), 0);
                 conn.write(helperMessage(9, packet));
               }
@@ -1608,25 +1676,27 @@ test("the Mac's desktop sends its system output to a view that asked for it, pul
   hub.add(desktop);
   // A failure must not leave the fake helper listening (the file's tests would never end).
   try {
-    for (const requested of [true, false]) {
+    for (const requested of [true, "opus", false] as const) {
       fake.views = [];
       // (on a clock of the test's: no frame waits on the way, so none of the sound is left out)
-      const v = await open(hub, member, { codecs: ["h264"], control: true, ...(requested ? { audio: "pcm_s16le" } : {}) }, "/admin/api/screens/desktop/view", testClock().clock);
+      const v = await open(hub, member, { codecs: ["h264"], control: true, ...(requested ? { audio: "pcm_s16le" } : {}), ...(requested === "opus" ? { opus: true } : {}) }, "/admin/api/screens/desktop/view", testClock().clock);
       assert.equal(v.answer.status, 200);
       if (requested) {
-        // The helper asked for the system output too; the client told the format before the first packet. What came
-        // before the first picture's round trip was known was taken and left out: the packets go on, one after another,
-        // once it is.
+        // The helper asked for the system output too (as Opus where the client decodes it); the client told the format
+        // before the first packet. What came before the first picture's round trip was known was taken and left out:
+        // the packets go on, one after another, once it is.
         assert.equal(fake.views[0].audio, true);
+        assert.equal(fake.views[0].audioCodec, requested === "opus" ? "opus" : undefined);
+        const bytes = requested === "opus" ? 160 : 3840;
         const { config, picture } = await soundAndPicture(v.frames);
-        assert.deepEqual(json(config), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+        assert.deepEqual(json(config), { codec: requested === "opus" ? "opus" : "pcm_s16le", sampleRate: 48000, channels: 2 });
         await v.stream.write(frame(KIND.ack, picture.subarray(1, 9)));
         const first = await until(v.frames, KIND.audio);
         const n = Number((first.readBigUInt64BE() - 1_000_000n) / 20_000n);
         for (const [i, packet] of [first, await until(v.frames, KIND.audio)].entries()) {
-          assert.equal(packet.length, 8 + 3840);
+          assert.equal(packet.length, 8 + bytes);
           assert.equal(packet.readBigUInt64BE(), BigInt(1_000_000 + (n + i) * 20_000));
-          assert.deepEqual(packet.subarray(8), Buffer.alloc(3840, n + i));
+          assert.deepEqual(packet.subarray(8), Buffer.alloc(bytes, n + i));
         }
       } else {
         await until(v.frames, KIND.video);
@@ -2097,7 +2167,7 @@ test("system audio is pull driven, old helpers decline it, and close releases a 
   const payload = Buffer.alloc(3848, 1);
   payload.writeBigUInt64BE(123456789n, 0);
   say(9, payload);
-  assert.deepEqual(await packet, { ts: 123456789, data: new Uint8Array(payload.subarray(8)) });
+  assert.deepEqual(await packet, { ts: 123456789, data: new Uint8Array(payload.subarray(8)), codec: "pcm_s16le" });
   const pending = view.nextAudio();
   view.close();
   assert.equal(await pending, null);
@@ -2109,6 +2179,37 @@ test("system audio is pull driven, old helpers decline it, and close releases a 
   old.close();
 });
 
+test("a helper's Opus packets are taken of any length one may be, and its PCM only whole", async () => {
+  const listeners: Record<string, ((chunk: Buffer) => void)[]> = {};
+  const pipe = { write: () => {}, destroy: () => {}, on: (event: string, f: any) => { (listeners[event] ??= []).push(f); } };
+  const say = (kind: number, body: Buffer | object) => listeners.data!.forEach((f) => f(helperMessage(kind, Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body)))));
+  const packet = (bytes: number) => { const p = Buffer.alloc(8 + bytes, 3); p.writeBigUInt64BE(20_000n, 0); return p; };
+  const opus = new HelperView("h264", pipe, () => {}, new WinInput(), "ScreenCaptureKit", true);
+  say(1, { width: 64, height: 36, codec: "h264", audio: true });
+  await opus.ready;
+  say(8, { codec: "opus", sampleRate: 48000, channels: 2 });
+  for (const bytes of [3, 160, 1275]) {
+    const next = opus.nextAudio();
+    say(9, packet(bytes));
+    assert.deepEqual(await next, { ts: 20_000, data: new Uint8Array(bytes).fill(3), codec: "opus" });
+  }
+  // Longer than any Opus packet: no more sound.
+  const long = opus.nextAudio();
+  say(9, packet(1276));
+  assert.equal(await long, null);
+  assert.equal(opus.hasAudio(), false);
+  opus.close();
+  delete listeners.data;
+  const pcm = new HelperView("h264", pipe, () => {}, new WinInput(), "Windows.Graphics.Capture", true);
+  say(1, { width: 64, height: 36, codec: "h264", audio: true });
+  await pcm.ready;
+  say(8, { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+  const short = pcm.nextAudio();
+  say(9, packet(160));
+  assert.equal(await short, null);
+  pcm.close();
+});
+
 test("negotiated system audio flows while the picture is still, and unrequested audio is never pulled", async () => {
   class SoundView extends StillView {
     audioAsked = 0;
@@ -2118,10 +2219,10 @@ test("negotiated system audio flows while the picture is still, and unrequested 
     async nextAudio() {
       this.audioAsked++;
       // The first, made before the picture's round trip is known: taken, and left out.
-      if (this.audioAsked === 1) return { ts: 1, data: new Uint8Array(3840).fill(1) };
+      if (this.audioAsked === 1) return { ts: 1, data: new Uint8Array(3840).fill(1), codec: "pcm_s16le" as const };
       if (this.audioAsked > 2) return null;
       await this.#going;
-      return { ts: 43210, data: new Uint8Array(3840).fill(7) };
+      return { ts: 43210, data: new Uint8Array(3840).fill(7), codec: "pcm_s16le" as const };
     }
   }
   for (const requested of [false, true]) {

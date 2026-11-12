@@ -1129,6 +1129,67 @@ each("screen_audio_packets_survive_fragmentation_and_validate_the_format", (seed
   }
   assert.deepEqual(got, [{ audioConfig: { codec: "pcm_s16le", sampleRate: 48000, channels: 2 } },
     { audio: { ts: 123456789, data: payload.slice(8) } }]);
-  reader.push(wire(6, new Uint8Array(12)));
+  reader.push(wire(6, new Uint8Array(8)));
   assert.throws(() => reader.next(), /invalid screen audio packet/);
+  // Opus: its config, and packets of any length one may be.
+  const opus = new TextEncoder().encode(JSON.stringify({ codec: "opus", sampleRate: 48000, channels: 2 }));
+  const packet = new Uint8Array(8 + 160).fill(4);
+  reader.push(join([wire(5, opus), wire(6, packet)]));
+  assert.deepEqual([reader.next(), reader.next()], [{ audioConfig: { codec: "opus", sampleRate: 48000, channels: 2 } }, { audio: { ts: 0x0404040404040404, data: packet.slice(8) } }]);
+});
+
+const soundOf = (codec: string, ts: number, bytes: number) => {
+  const wire = (kind: number, payload: Uint8Array) => {
+    const out = new Uint8Array(5 + payload.length);
+    out[0] = kind;
+    new DataView(out.buffer).setUint32(1, payload.length);
+    out.set(payload, 5);
+    return out;
+  };
+  const packet = new Uint8Array(8 + bytes).fill(1);
+  new DataView(packet.buffer).setBigUint64(0, BigInt(ts));
+  return join([wire(5, new TextEncoder().encode(JSON.stringify({ codec, sampleRate: 48000, channels: 2 }))), wire(6, packet)]);
+};
+
+/// The page plays PCM: a view whose stream the core reads itself says the sound to it as PCM, and Opus (which only a
+/// shell's tap decodes) not at all.
+each("a_views_sound_the_core_reads_is_said_as_pcm_and_opus_left_to_what_taps_it", async (seed) => {
+  for (const codec of ["pcm_s16le", "opus"]) {
+    const { host, core, ui, views } = await viewing(seed);
+    const log: J[] = [];
+    call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1280, maxHeight: 720, codecs: ["h264"], audio: "pcm_s16le" });
+    await host.settle();
+    assert.equal(views[0]!.ask.audio, "pcm_s16le");
+    views[0]!.send(join([configFrame({ codec: "h264", width: 1280, height: 720, description: base64(bytesOf(38, seed)) }), videoFrame(true, 1_000, bytesOf(900, seed)), soundOf(codec, 5_000, codec === "opus" ? 160 : 3840)]));
+    await host.settle();
+    said(host, log);
+    const sound = log.filter((m) => m.id === 1 && (m.value?.audioConfig || m.value?.audio));
+    if (codec === "opus") assert.deepEqual(sound, []);
+    else assert.deepEqual(sound.map((m) => [Object.keys(m.value)[0], m.bytes?.length]), [["audioConfig", undefined], ["audio", 3840]]);
+    core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+    await host.settle();
+    core.close();
+  }
+});
+
+/// Muted on the page (`screen.sound`), the station is told so at once and sends none; a stream opened again while
+/// muted is told so as it opens.
+each("a_views_sound_switched_off_is_told_the_station_and_each_stream_after_it", async (seed) => {
+  const { host, core, ui, views, replace } = await viewing(seed);
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1280, maxHeight: 720, codecs: ["h264"], audio: "pcm_s16le" });
+  await host.settle();
+  call(core, ui, 2, "screen.sound", { view: "v", on: false });
+  call(core, ui, 3, "screen.sound", { view: "v", on: false });
+  await host.settle();
+  assert.deepEqual(views[0]!.got, [{ sound: false }], "said once");
+  replace();
+  await host.settle();
+  assert.equal(views.length, 2);
+  assert.deepEqual(views[1]!.got, [{ sound: false }]);
+  call(core, ui, 4, "screen.sound", { view: "v", on: true });
+  await host.settle();
+  assert.deepEqual(views[1]!.got, [{ sound: false }, { sound: true }]);
+  core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await host.settle();
+  core.close();
 });

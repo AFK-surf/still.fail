@@ -543,8 +543,8 @@ static long long stat_count(const char *json, const char *key) {
 
 static void *probe_loop(void *unused) {
   (void)unused;
-  static const char *keys[] = {"tap.views", "tap.video", "tap.direct.video", "tap.audio", "tap.direct.audio", "tap.acks",
-                               "istream.read", "istream.write"};
+  static const char *keys[] = {"tap.views", "tap.video", "tap.direct.video", "tap.audio", "tap.direct.audio",
+                               "tap.audio.undecoded", "tap.audio.resumed", "tap.acks", "istream.read", "istream.write"};
   enum { N = sizeof keys / sizeof keys[0] };
   long long was[N] = {0};
   for (;;) {

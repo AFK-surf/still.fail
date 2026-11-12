@@ -739,7 +739,11 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "maxHeight": Json::number(mh.to_double()),
   }
   asks_into(params, quality, fps)
-  if @ui.stream_audio_here() { params["audio"] = Json::string("pcm_s16le") }
+  if @ui.stream_audio_here() {
+    params["audio"] = Json::string("pcm_s16le")
+    // (muted here: the station sends none from the start, `screen.sound`)
+    if self.audio_muted.untracked() { params["sound"] = Json::boolean(false) }
+  }
   // Shown by the system's video layer (its frames tagged colours honoured, a wide-gamut screen's shown as wide): the
   // Mac's desktop sent in Display P3; the app's canvas (a faded or ended view's picture) has it converted to sRGB.
   if @ui.stream_layers_here() { params["gamut"] = Json::string("p3") }
@@ -1166,4 +1170,8 @@ fn ScreenSess::toggle_audio(self : ScreenSess) -> Unit {
   let muted = !self.audio_muted.untracked()
   self.audio_muted.set(muted)
   if muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
+  // Muted, the station sends the view no sound till it is on again.
+  if self.call != 0 {
+    screen_tell(self.src, "screen.sound", { "view": Json::string(self.view), "on": Json::boolean(!muted) })
+  }
 }

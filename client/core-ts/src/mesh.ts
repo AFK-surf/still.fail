@@ -1007,6 +1007,11 @@ export class Mesh {
     return this.#endpoint.id();
   }
 
+  /// Whether a view's sound may be asked as Opus: what taps it decodes it (IrohEndpoint `opus`).
+  decodesOpus(): boolean {
+    return this.#endpoint.opus?.() === true;
+  }
+
   /// This device's word, with its key, that `endpoint` (its main endpoint's or one made over for a relay) is its own
   /// in workspace `ws`: what a station with a workspace lock knows it by (lock.ts).
   lockClaim(ws: string, endpoint: string): LockClaim {
@@ -2500,8 +2505,9 @@ export class MeshWire implements StationWire {
       const status = env.status(station.workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
       const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace), "screen"));
-      // (its own main id: the link it goes over may be one made for a LAN or a relay, under another)
-      const [reply, send] = yield* link.screen(head, { ...screen, self: mesh.deviceId() });
+      // (its own main id: the link it goes over may be one made for a LAN or a relay, under another; its sound as Opus
+      // where what taps the view decodes it, a twentieth of PCM's bytes)
+      const [reply, send] = yield* link.screen(head, { ...screen, ...(screen.audio && mesh.decodesOpus() ? { opus: true } : {}), self: mesh.deviceId() });
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send, tap: reply.tap };
     });
