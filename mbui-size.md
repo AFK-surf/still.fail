@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [05dea8b40](https://github.com/AFK-surf/still.fail/commit/05dea8b40b5bb70fb9f1c14e189694816c43df75) mbui app: 添加 station gives Windows' own command (i | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 94.19 | 153.41 |
 | [0ae3596db](https://github.com/AFK-surf/still.fail/commit/0ae3596db79de3bc322c5e2b9ac8b913c8a66ffb) fix(cloud): a deploy takes away MOVING and the for | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.29 | 147.64 |
 | [8ea59093f](https://github.com/AFK-surf/still.fail/commit/8ea59093faf39dd54ef0f7ba3dbff07b7ef5f1b7) core: what the views and the store walk for one ch | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.08 | 160.53 |
 | [8a0b79570](https://github.com/AFK-surf/still.fail/commit/8a0b795707a9eea9d27486ae0387941c483355e4) app tests: chat_pictures_scrolled_wbtest's bytes b | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 93.14 | 175.17 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [13fc1ac86](https://github.com/AFK-surf/still.fail/commit/13fc1ac86a9e50ec72f2c5e03e772498843ccfd0) station tests: a mirror's clean asked again while  | 1.92 | 2.58 | 11.07 | 30.12 | 39.65 | 26.79 | 51.01 | 94.83 | 180.5 |
 | [cad8dbdff](https://github.com/AFK-surf/still.fail/commit/cad8dbdffe54ba80ae738cddc0e808e1bcc7e2a2) app: a chat's page made as nodes behind a switch t | 1.92 | 2.58 | 11.07 | 30.12 | 39.65 | 26.44 | 49.57 | 94.6 | 186.12 |
 | [b98a38608](https://github.com/AFK-surf/still.fail/commit/b98a386088b756a26bdfc673e0ff40d7ab660696) cloud: one cloud answering as the other product to | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 94.6 | 188.29 |
-| [c53c9b785](https://github.com/AFK-surf/still.fail/commit/c53c9b785a4e389ea32dd7ae069242cdc6a8028b) core tests: the test clock takes the steps that wo | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 94.6 | 188.29 |
