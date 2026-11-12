@@ -56,6 +56,7 @@ jobs:
       windows_natives: ${{ steps.plan.outputs.windows_natives }}
       mbui: ${{ steps.plan.outputs.mbui }}
       station_tests: ${{ steps.plan.outputs.station_tests }}
+      core_tests: ${{ steps.plan.outputs.core_tests }}
       release_smoke: ${{ steps.plan.outputs.release_smoke }}
     steps:
       - uses: actions/checkout@v5
@@ -351,6 +352,33 @@ jobs:
           # (exec: the runner's signal when the job's time is up reaches the check, which says what was still running)
           if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
 
+  # The core's tests (client/core-ts/test: scripts/check.sh's core-tests), a slice to a job on a Linux runner of its
+  # own, as the station's. In check-linux beside the rest of ts they ran three files at a time on its 4 vCPUs with the
+  # web's and cloud's beside them: 180 to 250 s, then past the job's five minutes as files were added (179 files; main
+  # 6045382883, 43272321433, 2026-11-12). More files: more slices (here, in `shard` and STILLFAIL_CORE_SHARD).
+  check-core:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.core_tests == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      STILLFAIL_CHECK_PART: core-tests
+      STILLFAIL_CORE_SHARD: ${{ matrix.shard }}/3
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none" }
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      - name: The core's tests, slice ${{ matrix.shard }} of 3
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
+
   # The mbui app's check and tests, on native, on Linux: mbui-check.yml, main's there on its own.
   check-mbui:
     needs: plan
@@ -413,7 +441,7 @@ jobs:
   # 2026-10-22): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
   # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
   gate:
-    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-station, check-mbui, bundle, mac-build, mbui-web, static, desktop-build, desktop]
+    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-station, check-core, check-mbui, bundle, mac-build, mbui-web, static, desktop-build, desktop]
     if: always() && github.ref != 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -431,10 +459,10 @@ jobs:
   # The API and the web wait for the checks of what they are made of, not the Android app's (2026-10-17, as asked: its
   # lint on GitHub's runners held a release's web back for minutes); the apps' releases (put) wait for all.
   api:
-    needs: [plan, check, check-linux, check-station]
+    needs: [plan, check, check-linux, check-station, check-core]
     # Not on the implicit success(): a skipped job before it (natives, when nothing native changed) would
     # skip it too (2026-10-04 to 05: the API was not deployed for a day). The checks it needs passed or were not needed.
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -480,9 +508,9 @@ jobs:
         with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui, retention-days: 7 }
 
   static:
-    needs: [plan, natives, check, check-linux, check-station, api, mbui-web]
+    needs: [plan, natives, check, check-linux, check-station, check-core, api, mbui-web]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.mbui-web.result == 'success' && ((github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result)) || needs.plan.outputs.release_smoke == 'true') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.mbui-web.result == 'success' && ((github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result)) || needs.plan.outputs.release_smoke == 'true') }}
     runs-on: ubuntu-24.04
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 5
@@ -690,8 +718,8 @@ jobs:
   # monoid's beta Android app (build.monoid.android.beta), built by android from its own build, put whole in monoid's
   # bucket once the check passed.
   monoid-android:
-    needs: [plan, check, check-linux, check-station, android]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && needs.android.result == 'success' }}
+    needs: [plan, check, check-linux, check-station, check-core, android]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && needs.android.result == 'success' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -716,8 +744,8 @@ jobs:
   # program, Hermes, bytecode and icon, its own Info.plist, program name and updater id (apps/mbui/scripts/mac-app.sh
   # MBUI_MAC_FROM), signed and notarized as monoid.zone, put in monoid's bucket.
   monoid-desktop:
-    needs: [plan, check, check-linux, check-station, desktop]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && needs.desktop.result == 'success' }}
+    needs: [plan, check, check-linux, check-station, check-core, desktop]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && needs.desktop.result == 'success' }}
     runs-on: macos-26
     environment: production
     timeout-minutes: 5
@@ -1087,8 +1115,8 @@ jobs:
   # monoid's beta Windows app (build.monoid.desktop.beta), packed by desktop-win from its own build, put whole in monoid's
   # bucket once the check passed.
   monoid-desktop-win:
-    needs: [plan, check, check-linux, check-station, desktop-win]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && needs.desktop-win.result == 'success' && needs.desktop-win.outputs.monoid == '1' }}
+    needs: [plan, check, check-linux, check-station, check-core, desktop-win]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && needs.desktop-win.result == 'success' && needs.desktop-win.outputs.monoid == '1' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1163,8 +1191,8 @@ jobs:
   # none out for over an hour and a half. A desktop failed or cancelled leaves the Mac's feed as it was, handing nothing;
   # it is main's red as any job's, and `done` waits for it, so deployed/beta stays and the next run plans the Mac again)
   put:
-    needs: [plan, check, check-linux, check-station, api, static, station, android, desktop-build, desktop, desktop-win, deltas]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
+    needs: [plan, check, check-linux, check-station, check-core, api, static, station, android, desktop-build, desktop, desktop-win, deltas]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1227,8 +1255,8 @@ jobs:
   # The changelog, when nothing was released (put, which puts it after the releases, did not run): a fix in still.fail
   # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.
   changelog:
-    needs: [plan, check, check-linux, check-station, api, static, put]
-    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
+    needs: [plan, check, check-linux, check-station, check-core, api, static, put]
+    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1243,8 +1271,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-station, api, static, monoid-api, monoid-static, station, android, desktop-build, desktop, desktop-win, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
+    needs: [plan, natives, check, check-linux, check-station, check-core, api, static, monoid-api, monoid-static, station, android, desktop-build, desktop, desktop-win, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 5
     permissions:
@@ -1269,7 +1297,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-station, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, deltas, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-station, check-core, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, deltas, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -1291,7 +1319,7 @@ jobs:
       # main: every part the plan said changed went out, or this run fails (a job skipped where it should have run went
       # unnoticed for a day: the API, 2026-10-04 to 05). Skipped is right only for a part the plan left alone, or when a
       # check before it failed (the run has failed then anyway).
-      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success')
+      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success')
         run: |
           missed=""
           planned() { [ "$1" = true ] && [ "$2" = skipped ] && missed="$missed $3"; return 0; }
