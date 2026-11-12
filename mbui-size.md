@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [8fd590a26](https://github.com/AFK-surf/still.fail/commit/8fd590a26f8a59295fc0c2a509672453074fc96e) station: fit the tools Antigravity CLI declares wi | 1.92 | 2.58 | 11.08 | 30.13 | 39.73 | 26.81 | 51.04 | 94.18 | 192.95 |
 | [46e773338](https://github.com/AFK-surf/still.fail/commit/46e7733380e2f5a373184f78049ece3b411b24f0) mbui: what is pressed in a page's list stays where | 1.92 | 2.58 | 11.08 | 30.13 | 39.73 | 26.81 | 51.04 | 94.62 | 182.54 |
 | [50871c7c6](https://github.com/AFK-surf/still.fail/commit/50871c7c6cfd8ec6c46387786423cadc5331bfff) cloud: move one cloud's accounts into another (#57 | 1.92 | 2.58 | 11.07 | 30.12 | 39.66 | 26.8 | 51.01 | 94.45 | 166.32 |
 | [13fc1ac86](https://github.com/AFK-surf/still.fail/commit/13fc1ac86a9e50ec72f2c5e03e772498843ccfd0) station tests: a mirror's clean asked again while  | 1.92 | 2.58 | 11.07 | 30.12 | 39.65 | 26.79 | 51.01 | 94.83 | 180.5 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [463705e72](https://github.com/AFK-surf/still.fail/commit/463705e72271bfe3096d07a864814e90ba9971b1) mbui app: 回放按设备的时刻给消息、按录像的时刻走步骤，分三轮判；铃的读法不再短路，相关录像 | 1.86 | 2.49 | 10.43 | 29.21 | 36.88 | 26 | 48.58 | 94.5 | 178.18 |
 | [79643b03d](https://github.com/AFK-surf/still.fail/commit/79643b03d1d8254a093a81f910740d5f1fd9d133) station: a session's usage turns and calls read by | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 94.59 | 139.17 |
 | [a70e5f3b4](https://github.com/AFK-surf/still.fail/commit/a70e5f3b4c475a4fefed4042a18942bcdf937494) station: the agents' memory and the machine's own  | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 94.05 | 189.94 |
-| [9f77c9f7d](https://github.com/AFK-surf/still.fail/commit/9f77c9f7dbc853f017a2478b71757bfd0969376f) app: the workspaces' sheet closes as the switch is | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 93.93 | 158.3 |
