@@ -3,7 +3,7 @@ import { header } from "./compat";
 import { EVENTS_PROTOCOLS, sockets, type Delivery } from "./directory";
 import type { Env } from "./env";
 import { noted, type SpanNotes } from "./tracing";
-import { extendPersonal, type PersonalEntry } from "./personal-lock";
+import { extendPersonal, extendPersonalKept, type PersonalEntry } from "./personal-lock";
 import { ACCESS_TTL_SEC, REFRESH_RETRY_SEC, SESSION_IDLE_SEC, SESSION_TTL_SEC, bearerToken, denied, digest, limited, nowSeconds, randomSecret, readJson, reply, seal, signToken, unseal, validId, verifyToken, type Claims, type Identity, type Tokens } from "./auth";
 
 const LIMITS = { sessions: 16, requestsPerMinute: 120 };
@@ -105,12 +105,17 @@ export class Account extends DurableObject<Env> {
     return this.ctx.storage.kv.get<PersonalEntry[]>("personal-lock") ?? [];
   }
 
-  /** Entries brought to it; the code it refuses them with, or the whole lock now. */
-  appendPersonalLock(sub: string, entries: unknown): { entries: PersonalEntry[] } | { refused: string } {
+  /** Entries brought to it; the code it refuses them with, or the whole lock now (its chain gone by). `keep`: what a
+   * station took, kept by the rules' fork choice, the entries off the chain beside it (`personal-lock-aside`, none in
+   * a record from before). */
+  appendPersonalLock(sub: string, entries: unknown, keep = false): { entries: PersonalEntry[] } | { refused: string } {
     try {
-      const next = extendPersonal(sub, this.personalLock(), entries);
-      this.ctx.storage.kv.put("personal-lock", next);
-      return { entries: next };
+      const aside = this.ctx.storage.kv.get<PersonalEntry[]>("personal-lock-aside") ?? [];
+      const next = keep ? extendPersonalKept(sub, { entries: this.personalLock(), aside }, entries) : { entries: extendPersonal(sub, this.personalLock(), entries), aside };
+      this.ctx.storage.kv.put("personal-lock", next.entries);
+      if (next.aside.length > 0) this.ctx.storage.kv.put("personal-lock-aside", next.aside);
+      else if (aside.length > 0) this.ctx.storage.kv.delete("personal-lock-aside");
+      return { entries: next.entries };
     } catch (error) {
       return { refused: (error as Error).message };
     }

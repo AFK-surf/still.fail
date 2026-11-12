@@ -219,7 +219,10 @@ function locksToRead(inner: Inner, hello: J): string[] {
     const h = held(inner, ws);
     if (hash === (h?.head?.hash ?? "")) continue;
     try {
-      if (hash !== "" && h?.entries.some((e) => entryHash(e) === hash)) continue;
+      // (one held aside is known too: it lost its place by the rules' fork choice, and the cloud, which goes on only
+      // from its head, may name it for good, as it did once the stations of a workspace forked while it was down and
+      // the entry signed again after the head that won was refused there, 2026-11-12)
+      if (hash !== "" && [...(h?.entries ?? []), ...(h?.aside ?? [])].some((e) => entryHash(e) === hash)) continue;
     } catch {
       // An incomplete held chain cannot prove it is ahead of the cloud view.
     }

@@ -29,8 +29,10 @@
 // E5, E6 failed on many seeds). Since the stations keep every entry another keeper took and go by the fork choice
 // (cloud/log-keep.ts), E1, E2 and E6 hold on every seed; and since the devices keep what they are shown and go by the
 // same fork choice (step 3's reading, 2026-11-12), E3 holds but where a device holds an entry it signed that no station
-// kept (it goes with signing again, the rest of step 3). What still fails is E4, the plane keeps one chain and only
-// extends it (the entry that lost, where it took that first: it goes with the cloud's copy). That is in `KNOWN_SEEDS` and
+// kept (it goes with signing again, the rest of step 3). The plane keeps what a station gives it of another branch by
+// the same fork choice, as the cloud does (cloud/src/lock.ts `keepLockAt`, the station's presence.ts `planeParted`), so
+// where it took the entry that lost first it comes to the stations' chain (2026-11-12). What still fails is E4 where the
+// plane keeps an entry no station took (a device's, waited on), and E3 with it. That is in `KNOWN_SEEDS` and
 // `KNOWN_TOLD` (`WHY`), and the tests pass when exactly that fails: anything else that fails fails them, and so does a
 // known failure that holds now (take it out). The checks of every step stay hard: a wrong chain, a forger's entry or
 // someone let in whom the chain does not name fails at once.
@@ -40,7 +42,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { extendLock, LockAppendRefused } from "../../cloud/src/lock.ts";
+import { keepLockAt, LockAppendRefused } from "../../cloud/src/lock.ts";
 import { type Entry, apply, endpointBytes, entryHash, fold, lockChain, signedBytes } from "../src/cloud/lock.ts";
 import { keep } from "../src/cloud/log-keep.ts";
 import { applyState, planeTeller } from "../src/cloud/presence.ts";
@@ -143,11 +145,11 @@ const genesisOf = (ws: string, members: number[]) => signed({
 /// off and on again, a new one starts). What the world knows of it beside the plane: the geneses the owner signed that a
 /// station took, in order (`opened`); those of a lock turned off, as a station or the plane took its `disable` (`off`);
 /// what a removed device signed after a chain from before its removal (`stale`).
-type Space = { ws: string; name: string; members: number[]; plane: Entry[]; epochs: Entry[][]; opened: string[]; off: Set<string>; stale: Set<string> };
+type Space = { ws: string; name: string; members: number[]; plane: Entry[]; planeAside: Entry[]; epochs: Entry[][]; opened: string[]; off: Set<string>; stale: Set<string> };
 const spaces = (): Space[] =>
   ([[WS, "Team", [0, 1, 2]], [WB, "B", [0, 1]]] as const).map(([ws, name, members]) => {
     const g = genesisOf(ws, [...members]);
-    return { ws, name, members: [...members], plane: [g], epochs: [[g]], opened: [entryHash(g)], off: new Set<string>(), stale: new Set<string>() };
+    return { ws, name, members: [...members], plane: [g], planeAside: [], epochs: [[g]], opened: [entryHash(g)], off: new Set<string>(), stale: new Set<string>() };
   });
 /// A station's own name for a workspace: null for its home one.
 const keyOf = (sp: Space) => (sp.ws === WS ? null : sp.ws);
@@ -440,20 +442,22 @@ class World {
       const entries = (off ?? sp.plane).filter((e) => e.seq > (frame.after ?? -1));
       const text = JSON.stringify({ type: "lock", entries, ...(sp.ws === WS ? {} : { workspace: sp.ws }) });
       this.send(`p${s.i}`, down, () => s.cloud && applyState(s.cloud, text, (f) => s.presence?.toPlane(f)));
-    } else if (frame?.type === "lock.put") this.append(sp, frame.entries);
+    } else if (frame?.type === "lock.put") this.append(sp, frame.entries, frame.keep === true);
   }
 
-  /// Entries brought to the plane: taken as the cloud takes them, every station on a socket told of the new head.
-  append(sp: Space, entries: Entry[]): boolean {
+  /// Entries brought to the plane: taken as the cloud takes them (`fork`: a station's, with `keep`, by the fork choice;
+  /// cloud/src/lock.ts keepLockAt), every station on a socket told of the new head.
+  append(sp: Space, entries: Entry[], fork = false): boolean {
     let plan;
     try {
-      plan = extendLock(sp.plane as never, entries as never, Math.floor(this.t / 1000));
+      plan = keepLockAt({ entries: sp.plane as never, aside: sp.planeAside as never }, entries as never, Math.floor(this.t / 1000), fork);
     } catch (e) {
       if (e instanceof LockAppendRefused) return false;
       throw e;
     }
-    if (plan.adding.length === 0) return true;
-    sp.plane = plan.restart ? (plan.adding.map((a) => a.e) as Entry[]) : [...sp.plane, ...(plan.adding.map((a) => a.e) as Entry[])];
+    if (!plan.changed) return true;
+    sp.plane = plan.kept.entries as unknown as Entry[];
+    sp.planeAside = plan.kept.aside as unknown as Entry[];
     if (plan.restart) sp.epochs.push(sp.plane);
     else sp.epochs[sp.epochs.length - 1] = sp.plane;
     if (sp.plane.at(-1)!.kind === "disable") sp.off.add(entryHash(sp.plane[0]!));
@@ -1010,13 +1014,13 @@ async function fails(steps: Step[], held: boolean[], seed: number): Promise<{ er
 /// fails its test until it is taken out.
 const WHY: Record<string, string> = {
   E3: "a device here holds an entry it signed that no station kept (the plane took it, waited on): it goes with signing again, step 3 (2026-11-12)",
-  E4: "the plane took the entry that lost first and only extends its one chain: the cloud's copy, gone with it (2026-11-12)",
+  E4: "the plane keeps an entry no station took (a device's, waited on), which its fork choice prefers to the stations' branch: it goes with the cloud no longer counting as taking one, step 3 (2026-11-12)",
 };
-// (16 added on 2026-11-12, the one seed ever added, as the model's device changed to read as the core does: WHY.E4's own
-// case made visible because the world plays out otherwise now. Its devices follow the stations' branch and sign after
-// it, and the plane, holding the entry that lost, only extends its one chain. Nothing else was or is to be added.)
+// (16 added on 2026-11-12, the one seed ever added, as the model's device changed to read as the core does, and gone
+// with 5, 18, 20, 24, 28 and 30 once the plane kept what a station gives it by the fork choice, as the cloud does: in
+// those the plane only held the entry that lost. In 11 and 26 it holds one no station took. Nothing is to be added.)
 const KNOWN_SEEDS: Record<number, (keyof typeof WHY)[]> = {
-  5: ["E4"], 11: ["E4"], 16: ["E4"], 18: ["E4"], 20: ["E4"], 24: ["E4"], 26: ["E3", "E4"], 28: ["E4"], 30: ["E4"],
+  11: ["E4"], 26: ["E3", "E4"],
 };
 const KNOWN_TOLD: Record<string, (keyof typeof WHY)[]> = {};
 /// The seeds `KNOWN_SEEDS` says all of (past them, what a world breaks at the end is told, not failed on).

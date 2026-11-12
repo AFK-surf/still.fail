@@ -362,6 +362,40 @@ test("what a device brings itself, its hello and the control plane are taken onl
   assert.equal(c.lockKept().length, 2, "nothing kept aside");
 });
 
+test("a control plane whose chain parted from the station's (it took the entry that lost): given, once for that head, what the station goes by from where they part, as another keeper's (`keep`); its own entries still taken only on the head", async () => {
+  const { applyState } = await import("../src/cloud/presence.ts");
+  const w = workspace();
+  const c = station(w);
+  const bobs = member(w.first, "erin", w.bob.signer);
+  const alices = member(w.first, "fay", w.alice.signer);
+  assert.deepEqual(take(c, bobs, alices), []);
+  assert.deepEqual(chainOf(c), hashes([w.first, alices]), "the owner's wins");
+  const after = member(alices, "gil", w.alice.signer);
+  assert.deepEqual(take(c, after), []);
+  const g = entryHash(w.first);
+  const state = (lock: unknown) => JSON.stringify({
+    type: "state", workspace: WS, workspace_name: "Team", name: "s0", origin: "https://app.still.fail", relay_urls: [],
+    peers: w.stations.map((s, i) => ({ id: s.hex, name: `s${i}` })), grant_keys: { keys: [] }, revocations: [], lock,
+  });
+  const sent: any[] = [];
+  const send = (f: unknown) => void sent.push(f);
+  // The plane's head the entry that lost, kept aside here: given the chain from its parent on.
+  applyState(c, state({ seq: 1, hash: entryHash(bobs), genesis: g }), send);
+  assert.deepEqual(sent.map((f) => [f.type, f.keep, hashes(f.entries)]), [["lock.put", true, hashes([alices, after])]]);
+  // The same head said again (a plane from before refusing it says its head again): nothing more.
+  applyState(c, state({ seq: 1, hash: entryHash(bobs), genesis: g }), send);
+  assert.equal(sent.length, 1, "once a head");
+  // A head this station keeps nothing of (an entry no station took): the last of its chain, from the genesis here.
+  const nobodys = member(bobs, "hal", w.bob.signer);
+  const elsewhere = member(w.first, "ivy", w.dan.signer);
+  applyState(c, state({ seq: 1, hash: entryHash(elsewhere), genesis: g }), send);
+  assert.deepEqual(sent.slice(1).map((f) => [f.type, f.keep, hashes(f.entries)]), [["lock.put", true, hashes([w.first, alices, after])]]);
+  // What the plane brings of its branch: not kept, as before.
+  applyState(c, JSON.stringify({ type: "lock", entries: [w.first, bobs, nobodys] }), send);
+  assert.deepEqual(chainOf(c), hashes([w.first, alices, after]));
+  assert.ok(!c.lockKept().some((e) => entryHash(e) === entryHash(nobodys)), "its own entry not kept");
+});
+
 test("an entry a station takes while it brings a peer level is brought to that peer too (followLock goes by what it kept as the sync began)", async () => {
   const { followLock } = await import("../src/mesh/lock-sync.ts");
   const w = workspace();

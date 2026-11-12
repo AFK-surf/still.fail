@@ -614,18 +614,38 @@ try {
       await e.call("lock.renew", { workspace, device: forkE });
       await whenChanged([second], () => stationLock("second").exp(forkE) !== "-", 60_000, () => `the second: A installed anew's expiry ${stationLock("second").exp(forkE)}`);
     });
-    await check("both stations up: one chain at both within seconds, both renewals on it (the entry that lost signed again by its device); B and A installed anew let in by both and their pages show both renewals; nobody asked", async () => {
+    // Which renewal loses is the rules' tie (of the parent's hash and the signing key, both new each run), so either
+    // device is the one to sign again: B, closed since its renewal, can only once it runs. So the stations come to one
+    // chain first, the winning renewal on it, and which lost is said (B's renewal on the chain while B is closed won:
+    // B could not have signed it again; A installed anew, running, may have signed its own again already); then B is
+    // started and the one that lost is on the chain too, signed again by its device, whichever it is. (The side run of
+    // 2026-11-12, run 43182403308: B's renewal lost, and the round waited for it signed again with B closed.)
+    let lost = "";
+    await check("both stations up: one chain at both within seconds, the renewal that won on it", async () => {
       stationDo("thaw");
       // (from when the thawed station is up: `thaw` returns once it is)
       const t1 = Date.now();
+      const renewed = (l: ReturnType<typeof stationLock>, id: string) => !["-", "none"].includes(l.exp(id));
+      const level = () => {
+        const one = stationLock();
+        const two = stationLock("second");
+        return one.head !== "" && one.head === two.head && (renewed(one, forkB) || renewed(one, forkE)) ? one : null;
+      };
+      const at = await whenChanged([first, second], level, 10_000, () => `the first: head ${stationLock().head.slice(0, 12)}, B ${stationLock().exp(forkB)}, A installed anew ${stationLock().exp(forkE)}; the second: head ${stationLock("second").head.slice(0, 12)}, B ${stationLock("second").exp(forkB)}, A installed anew ${stationLock("second").exp(forkE)}`);
+      lost = renewed(at, forkB) ? "A installed anew" : "B";
+      log(`  one chain at both stations ${Date.now() - t1} ms after the first was up again, head ${at.head.slice(0, 12)}; the renewal that lost: ${lost}'s`);
+    });
+    await check("B started: both renewals on one chain at both within seconds (the one that lost signed again by its device); B and A installed anew let in by both and their pages show both renewals; nobody asked", async () => {
+      // (B started whatever the check before found: the rounds after use it)
+      const t1 = Date.now();
+      await b.restart();
       const level = () => {
         const one = stationLock();
         const two = stationLock("second");
         return one.head !== "" && one.head === two.head && [forkB, forkE].every((id) => !["-", "none"].includes(one.exp(id))) ? one : null;
       };
-      const at = await whenChanged([first, second], level, 10_000, () => `the first: head ${stationLock().head.slice(0, 12)}, B ${stationLock().exp(forkB)}, A installed anew ${stationLock().exp(forkE)}; the second: head ${stationLock("second").head.slice(0, 12)}, B ${stationLock("second").exp(forkB)}, A installed anew ${stationLock("second").exp(forkE)}`);
-      log(`  one chain at both stations ${Date.now() - t1} ms after the first was up again, head ${at.head.slice(0, 12)}`);
-      await b.restart();
+      const at = await whenChanged([first, second], level, 10_000, () => `the renewal that lost: ${lost || "not known"}'s; the first: head ${stationLock().head.slice(0, 12)}, B ${stationLock().exp(forkB)}, A installed anew ${stationLock().exp(forkE)}; the second: head ${stationLock("second").head.slice(0, 12)}, B ${stationLock("second").exp(forkB)}, A installed anew ${stationLock("second").exp(forkE)}`);
+      log(`  both renewals on one chain at both stations ${Date.now() - t1} ms after B was started, head ${at.head.slice(0, 12)}; signed again by ${lost || "?"}`);
       // (what each device holds, as its own pages say it: both renewed, 30 days left; let in by both stations)
       const renewed = (l: J) => [forkB, forkE].every((id) => lockDevices(l).find((x) => x.id === id)?.daysLeft != null);
       for (const x of [b, e]) {

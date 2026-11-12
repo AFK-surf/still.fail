@@ -265,7 +265,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const lock = env.ACCOUNTS.getByName(sub);
     if (method === "GET") return reply({ entries: await lock.personalLock() });
     if (method === "POST") {
-      const said = await lock.appendPersonalLock(sub, input.entries);
+      const said = await lock.appendPersonalLock(sub, input.entries, input.keep === true);
       return "refused" in said ? reply({ error: said.refused }, STATUS[said.refused] ?? 409) : reply(said);
     }
   }
@@ -363,7 +363,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "lock" && !target) {
     const after = url.searchParams.has("after") ? Number(url.searchParams.get("after")) : -1;
     if (method === "GET") return directory(() => dir.lock(sub, ws, Number.isSafeInteger(after) ? after : -1));
-    if (method === "POST") return directory(() => dir.appendLock(sub, ws, input.entries));
+    if (method === "POST") return directory(() => dir.appendLock(sub, ws, input.entries, input.keep === true));
     if (method === "DELETE") return directory(() => dir.clearLock(sub, ws));
   }
   if (kind === "lock" && target === "requests") {

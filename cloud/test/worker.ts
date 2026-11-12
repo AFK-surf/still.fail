@@ -125,6 +125,10 @@ export class Directory extends ProductionDirectory {
     for (const e of entries) this.ctx.storage.sql.exec("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, e.hash, JSON.stringify(e.entry));
     this.lockSeen.delete(workspace);
   }
+  /** The hashes of the entries kept off a workspace lock's chain (lock_aside), in the order kept. */
+  lockAside(workspace: string): string[] {
+    return this.ctx.storage.sql.exec("SELECT hash FROM lock_aside WHERE workspace = ? ORDER BY rowid", workspace).toArray().map((r) => r.hash as string);
+  }
   /** An account as members were before invite codes: in a workspace, admitted by nothing on record. */
   forgetAdmission(sub: string) {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = NULL WHERE sub = ?", sub);
