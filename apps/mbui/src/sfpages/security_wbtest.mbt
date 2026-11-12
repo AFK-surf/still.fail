@@ -266,3 +266,150 @@ test "开启安全模式, at each width and with either hand: its people, the de
     assert_false(app.nav.pages().contains(Setting(SecurityOpen)), msg=at)
   }
 }
+
+///|
+/// What the fixture's `settings-security-pending` has pending (its sentences, as the core makes them).
+let pending_waiting : String = "移除设备 林的 MacBook Pro（2024 款 · 公司配的那台 · 放在办公室）：已记下，等 Willow、Maple 上线后生效"
+
+///|
+let pending_failed : String = "把 Ana 改为成员没有生效：Ana刚被另一台设备改过。请查看现在的状态，仍然需要的话再操作一次"
+
+///|
+let pending_why : String = "这台设备已不在安全模式中"
+
+///|
+test "安全, at each width and with either hand: nothing pending, no section of it" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Security, w, platform~)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("安全模式已开启") is Some(_), msg=at)
+    assert_true(t.find("以下改动还没有生效") is None, msg=at)
+    assert_true(t.find("知道了") is None, msg=at)
+  }
+}
+
+///|
+test "安全, at each width and with either hand: what is pending under the state, each sentence whole, a failed one's 知道了" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Security, w, platform~, mode="settings-security-pending")
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    let (_, state) = t.find("安全模式已开启").unwrap()
+    let (_, head) = t.find("以下改动还没有生效").unwrap()
+    let (_, waiting) = t.find(pending_waiting).unwrap()
+    let (_, failed) = t.find(pending_failed).unwrap()
+    assert_true(t.find("续期 Chrome · macOS") is Some(_), msg=at)
+    assert_true(t.find(pending_why) is Some(_), msg=at)
+    // (first after the state, before 成员; oldest first)
+    assert_true(state < head && head < waiting && waiting < failed, msg=at)
+    scrolled_to(t, w, "成员")
+    let (_, failed) = t.find(pending_failed).unwrap()
+    let (_, people) = t.find("成员").unwrap()
+    assert_true(failed < people, msg=at)
+    // (whole: no word of it cut, nothing over another)
+    let faults = t.audit()
+    assert_eq(faults.length(), 0, msg="\{at}: \{Repr(faults)}")
+    // (two failed ones' buttons; the waiting one has none)
+    let drawn = t.words().filter(fn(x) { x.0 == "知道了" && x.5 > 0.5 })
+    assert_eq(drawn.length(), 2, msg=at)
+  }
+}
+
+///|
+test "安全, at each width and with either hand: 知道了 drops its failed change by its id, the others where they were" {
+  for (w, platform) in page_cases {
+    let asked : Array[(String, Json)] = []
+    let t = setting_tester(Security, w, platform~, mode="settings-security-pending", over=fn(base) {
+      {
+        ..base,
+        call: fn(name, params, done) {
+          asked.push((name, params))
+          (base.call)(name, params, done)
+        },
+      }
+    })
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    let (_, waiting) = t.find(pending_waiting).unwrap()
+    let (_, why) = t.find(pending_why).unwrap()
+    // (the first 知道了, the failed change's that is not the last)
+    let shown = t.words().filter(fn(x) { x.0 == "知道了" && x.5 > 0.5 })
+    guard shown.length() == 2 else { fail("\{at}: \{shown.length()} 知道了 drawn") }
+    let first = if shown[0].2 < shown[1].2 { shown[0] } else { shown[1] }
+    t.tap(first.1 + first.3 / 2.0, first.2 + first.4 / 2.0)
+    t.frame()
+    let dropped = asked.filter(fn(c) { c.0 == "lock.pendingDismiss" })
+    assert_eq(dropped.length(), 1, msg=at)
+    assert_eq(dropped[0].1, { "workspace": "ws1", "id": "p2" }, msg=at)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find(pending_failed) is None, msg=at)
+    // (the one above it where it was; the heading stays while some are left)
+    assert_eq(t.find(pending_waiting).unwrap().1, waiting, msg=at)
+    assert_true(t.find(pending_why).unwrap().1 < why, msg=at)
+    assert_true(t.find("以下改动还没有生效") is Some(_), msg=at)
+    assert_eq(t.audit().length(), 0, msg=at)
+  }
+}
+
+///|
+test "安全, at each width and with either hand: a change gone as the core says so goes, the section with the last" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Security, w, platform~, mode="settings-security-pending")
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    let (_, failed) = t.find(pending_failed).unwrap()
+    // (a station took the waiting one: the core drops it)
+    @settings.fixture_pending_set(["p2", "p3"])
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find(pending_waiting) is None, msg=at)
+    assert_true(t.find(pending_failed).unwrap().1 < failed, msg=at)
+    @settings.fixture_pending_set([])
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("以下改动还没有生效") is None, msg=at)
+    assert_true(t.find(pending_failed) is None, msg=at)
+    assert_true(t.find("安全模式已开启") is Some(_), msg=at)
+    assert_eq(t.audit().length(), 0, msg=at)
+  }
+}
+
+///|
+test "安全, at each width and with either hand: a removal answered pending says its sentence, not 已移除" {
+  for (w, platform) in page_cases {
+    let said = "移除设备 林的 MacBook Pro：已记下，等 Maple 上线后生效"
+    let t = setting_tester(Security, w, platform~, over=fn(base) {
+      {
+        ..base,
+        call: fn(name, params, done) {
+          if name == "lock.removeDevice" {
+            done(Ok({ "pending": { "id": "p9", "text": said, "state": "waiting", "stations": ["Maple"] } }))
+          } else {
+            (base.call)(name, params, done)
+          }
+        },
+      }
+    })
+    let at = "\{w} platform \{platform}"
+    let name = "林的 MacBook Pro"
+    scrolled_to(t, w, name)
+    let (_, y) = t.find(name).unwrap()
+    let shown = t.words().filter(fn(x) { x.0 == "移除" && x.5 > 0.5 && x.2 + x.4 > y })
+    guard shown.length() > 0 else { fail("no 移除 drawn") }
+    let mut near = shown[0]
+    for x in shown {
+      if x.2 < near.2 {
+        near = x
+      }
+    }
+    t.tap(near.1 + near.3 / 2.0, near.2 + near.4 / 2.0)
+    t.frame()
+    assert_true(@sf.presenting(), msg=at)
+    t.run_for(@ui.move_most_ms)
+    // (the dialog's own 移除: its button, the last made)
+    let buttons = t.all(Button, label="移除")
+    guard buttons.length() > 0 else { fail("\{at}: no 移除 button in the dialog") }
+    let (x, by, bw, bh) = buttons[buttons.length() - 1].rect
+    t.tap(x + bw / 2.0, by + bh / 2.0)
+    t.frame()
+    assert_eq(@sfbase.toast_words(), said, msg=at)
+  }
+}

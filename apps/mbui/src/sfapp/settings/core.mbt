@@ -362,7 +362,9 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 
 ///|
 /// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said (felt as
-/// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run.
+/// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run. Answered
+/// with a change of a lock no station took yet (its `pending` row: lock-pending.ts), that row's sentence is said in
+/// `done`'s place, whatever the caller's words, with nothing felt: it is not done yet, and says what it waits for.
 pub fn act(
   core : Core,
   what : String,
@@ -374,9 +376,13 @@ pub fn act(
   (core.call)(name, params, fn(r) {
     match r {
       Ok(v) => {
-        if done != "" {
-          (core.say)(done)
-          @ui.haptic(Confirm)
+        match text(field(Some(v), "pending"), "text") {
+          "" =>
+            if done != "" {
+              (core.say)(done)
+              @ui.haptic(Confirm)
+            }
+          waits => (core.say)(waits)
         }
         then(v)
       }

@@ -45,6 +45,10 @@ pub fn security_node(
           if flag(me, "waiting") || flag(me, "unsigned") {
             out.push("pair")
           }
+          // (what was just done and is not in effect: first after the state)
+          if items(l, "pending").length() > 0 {
+            out.push("pending")
+          }
           out.push("people")
           out.push("stations")
           out.push("web")
@@ -54,6 +58,9 @@ pub fn security_node(
         }
         Some(_) => {
           out.push("off")
+          if items(l, "pending").length() > 0 {
+            out.push("pending")
+          }
           out.push("signing")
         }
       }
@@ -84,6 +91,7 @@ pub fn security_node(
         "signing" => signing_node(b)
         "on" => lock_on_node(b, lock)
         "pair" => pair_node(b, core, ws, lock)
+        "pending" => pending_node(b, core, ws, lock)
         "people" => people_node(b, core, ws, lock)
         "stations" => stations_node(b, core, ws, lock, stint)
         "web" =>
@@ -270,6 +278,79 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
     .margin(Is((-pad, 0.0, -pad, -pad)))
     |> ignore
   })
+}
+
+///|
+/// 以下改动还没有生效: the changes this device made that no station took yet (the core's `pending`, oldest first, of the
+/// workspace's lock and the person's own alike), a row each by its id, so one going leaves the others where they are.
+fn pending_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?) -> Unit {
+  @sf.section_node(parent, fn() { text(lock(), "pendingText") }, fn(s) {
+    sec_group_node(s, fn(g) {
+      g.each(fn() { items(lock(), "pending") }, fn(x) { text(Some(x), "id") }, fn(row, x) {
+        sec_pending_node(row, core, ws, fn() { Some(x.get()) })
+      })
+    })
+  })
+}
+
+///|
+/// A change not in effect, `pv` as it is now: its mark (waiting, the time's; failed, the warning's in amber), its
+/// sentence whole on as many lines as it takes, why it failed under it where the core says; a failed one's
+/// `dismissText` drops it (`lock.pendingDismiss`), under its words narrow, at its end wide. A waiting one does nothing
+/// pressed: it is taken by itself as a station takes it.
+fn sec_pending_node(parent : @view.View, core : Core, ws : () -> String, pv : () -> Json?) -> Unit {
+  let wide = @sf.look_node(parent) is Wide
+  let id = fn() { text(pv(), "id") }
+  let failed = fn() { text(pv(), "state") == "failed" }
+  let dismisses = fn() { failed() && text(pv(), "dismissText") != "" }
+  let dropping = fn() { is_doing(core, ["lock.pendingDismiss"], [("workspace", ws()), ("id", id())]) }
+  let dismiss = fn(x : @view.View) {
+    sec_do_node(x, fn() { text(pv(), "dismissText") }, busy=dropping, fn() {
+      @settings.act(
+        core,
+        @signals.untracked(fn() { text(pv(), "dismissText") }),
+        "lock.pendingDismiss",
+        obj([("workspace", str(@signals.untracked(ws))), ("id", str(@signals.untracked(id)))]),
+      )
+    })
+  }
+  parent.box(fn(r) {
+    @sf.style_node(r, fn() { if wide { sec_pending_row } else { @sf.pg_said_row.then(sec_narrow_round).then(sec_pending_top) } })
+    r.box(fn(m) {
+      @sf.style_node(m, fn() { sec_pending_mark }, in_row=true)
+      @sf.icon_node(m, @signals.untracked(fn() { if failed() { "info" } else { "wait" } }), sec_device_glyph, By(fn() {
+        if failed() {
+          @sf.theme().p.warn_ink
+        } else {
+          @sf.theme().p.muted
+        }
+      }), name_now=fn() { if failed() { "info" } else { "wait" } })
+      |> ignore
+    })
+    |> ignore
+    r.box(fn(w) {
+      @sf.style_node(w, fn() { sec_pending_words }, in_row=true)
+      @sf.words_node(w, fn() { text(pv(), "text") }, fn() { if wide { sec_pending_said } else { sec_pending_said_narrow } }) |> ignore
+      w.show(fn() { text(pv(), "why") != "" }, fn(n) {
+        @sf.words_node(n, fn() { text(pv(), "why") }, fn() { if wide { sec_pending_why } else { @sf.pg_link_note } }) |> ignore
+      })
+      // (narrow: what it does a line of its own under its words, as a device's 移除)
+      if !wide {
+        w.show(dismisses, fn(a) {
+          a.box(fn(ab) {
+            @sf.style_node(ab, fn() { sec_acts_under })
+            dismiss(ab)
+          })
+          |> ignore
+        })
+      }
+    })
+    |> ignore
+    if wide {
+      r.show(dismisses, dismiss)
+    }
+  })
+  |> ignore
 }
 
 ///|
@@ -1012,6 +1093,36 @@ let sec_actions_gap : Double = 10.0
 
 ///|
 let sec_open_foot_gap : Double = 12.0
+
+///|
+/// A change not in effect (pending_node's rows): wide, a card's row with its words from its top; narrow, a group's row
+/// so. Its mark beside its first line, its words the body's on as many lines as they take, why under them the meta's.
+// kept across runs: a value (no field of it changes)
+let sec_pending_row : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(sec_row_least), gap=S3, align=AStart)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_top : @ui.Style = @ui.css("align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_mark : @ui.Style = @ui.css("pt=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_words : @ui.Style = @ui.style(w=@sf.grow, gap=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_said : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_said_narrow : @ui.TextStyle = @sf.body.then(@sf.full_words)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// A narrow row's first line: its title and what is at its end (row_lines' row_first_line).

@@ -52,7 +52,7 @@ test "the pages of the stack come in the same way the first time and again" {
     "chat", "history", "files", "archived", "drive", "reader", "player-video", "service", "newchat", "screen-full",
     "direct-preview", "direct-profile-account", "direct-kept-chat", "direct-station-archiving",
     "settings-home", "settings-appearance", "settings-fonts", "settings-me", "settings-workspace", "settings-security",
-    "settings-security-open", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station",
+    "settings-security-pending", "settings-security-open", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station",
     "settings-profiles", "settings-profile", "settings-new-profile", "settings-connects", "settings-connect",
     "settings-memories", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
     "settings-adb-chats", "settings-decisions", "settings-completion", "settings-policy", "settings-bars", "settings-run",
