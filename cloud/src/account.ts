@@ -7,6 +7,8 @@ import { extendPersonal, type PersonalEntry } from "./personal-lock";
 import { ACCESS_TTL_SEC, REFRESH_RETRY_SEC, SESSION_IDLE_SEC, SESSION_TTL_SEC, bearerToken, denied, digest, limited, nowSeconds, randomSecret, readJson, reply, seal, signToken, unseal, validId, verifyToken, type Claims, type Identity, type Tokens } from "./auth";
 
 const LIMITS = { sessions: 16, requestsPerMinute: 120 };
+/** What of an account moves into another cloud (moveExport). */
+const MOVED_KEYS = ["account", "personal-lock", "beta"];
 type Retry = { hash: string; request: string; until: number; response: string };
 /** Why a session ended, kept a while (the last 32) for the span of a refresh that finds it gone. */
 type Ended = { id: string; at: number; why: "reused" | "logout" | "logout_all" | "removed" | "blocked" };
@@ -79,6 +81,23 @@ export class Account extends DurableObject<Env> {
     quota.requests++;
     this.ctx.storage.kv.put(of, quota);
     return true;
+  }
+
+  /** What moves into another cloud (move.ts): the account and its sessions, its own lock, whether it is let into the
+   * test channel; not this minute's counts. */
+  moveExport(): Record<string, unknown> {
+    return Object.fromEntries(MOVED_KEYS.flatMap((key) => {
+      const value = this.ctx.storage.kv.get(key);
+      return value === undefined ? [] : [[key, value]];
+    }));
+  }
+
+  /** What another cloud's moveExport said, in this one's place (what it does not say taken out). */
+  moveImport(kept: Record<string, unknown>): void {
+    for (const key of MOVED_KEYS) {
+      if (key in kept) this.ctx.storage.kv.put(key, kept[key]);
+      else this.ctx.storage.kv.delete(key);
+    }
   }
 
   /** The person's own lock (personal-lock.ts): kept whole, read and written by themselves. */

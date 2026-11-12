@@ -94,11 +94,14 @@ FCM_MORE = DEPLOY / "fcm-service-account-more.json"
 APNS_MORE = DEPLOY / "apns-more.json"
 REVIEW = DEPLOY / "review-accounts.json"
 FEEDBACK = DEPLOY / "feedback-token"
-# One cloud answering as the other product too (src/guests.ts): the guests it answers as (a JSON list, guests.json);
-# for a cloud that moved into another, where it forwards (forward-to: an origin); and the secret both know.
-GUESTS = DEPLOY / "guests.json"
+# One cloud answering as the other product too (src/guests.ts), once the secret both know is there (forward-secret):
+# the guests its CLOUDS entry lists, with their Google client (guest-google-oauth.json, as google-oauth.json is); for a
+# cloud that moved into another, where it forwards (forward-to: an origin).
+GUEST_GOOGLE = DEPLOY / "guest-google-oauth.json"
 FORWARD_TO = DEPLOY / "forward-to"
 FORWARD_SECRET = DEPLOY / "forward-secret"
+# Present while accounts move between clouds (src/move.ts): every other call answered 503 moving.
+MOVING = DEPLOY / "moving"
 
 
 def admin_email(dry_run: bool) -> str:
@@ -152,6 +155,9 @@ CLOUDS = {
             "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5",
             "RELEASES_UPSTREAM": "https://app.still.fail/releases",
         },
+        # Answered as still.fail too once still.fail's accounts moved in (src/guests.ts, src/move.ts; the user,
+        # 2026-11-12): still.fail's hosts stay in its account, its API Worker forwarding here.
+        "guests": [{"origin": "https://app.still.fail", "beta": "https://app.youdid.wtf"}],
     },
 }
 CLOUD = env_var("CLOUD") or ""
@@ -314,13 +320,15 @@ def feedback() -> dict:
 
 def guests() -> dict:
     value = {}
-    if GUESTS.exists():
-        listed = json.loads(GUESTS.read_text())
-        if not isinstance(listed, list) or not all(isinstance(g, dict) and str(g.get("origin", "")).startswith("https://") for g in listed):
-            sys.exit(f"{GUESTS}: expected a list of {{origin, beta?, google_client_id?, google_client_secret?}}")
-        value["GUESTS"] = json.dumps(listed)
+    listed = CLOUDS.get(CLOUD, {}).get("guests", [])
+    if listed and FORWARD_SECRET.exists():
+        google = json.loads(GUEST_GOOGLE.read_text())["web"] if GUEST_GOOGLE.exists() else {}
+        client = {"google_client_id": google["client_id"], "google_client_secret": google["client_secret"]} if google else {}
+        value["GUESTS"] = json.dumps([{**g, **client} for g in listed])
     if FORWARD_TO.exists():
         value["FORWARD_TO"] = FORWARD_TO.read_text().strip()
+    if MOVING.exists():
+        value["MOVING"] = "1"
     if FORWARD_SECRET.exists():
         secret = FORWARD_SECRET.read_text().strip()
         if len(secret) < 32:

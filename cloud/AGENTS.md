@@ -26,6 +26,10 @@
   what its owners signed, not by the cloud: the cloud cannot add people or stations to it. It and the personal lock
   are kept here only for the stations and devices from before the stations carried them (the root AGENTS.md, The
   cloud is the account system): nothing new that is not the account system comes here.
+- One cloud answers as the other product too (`src/guests.ts`; the user, 2026-11-12: still.fail's accounts move into
+  monoid's cloud, both apps staying, each its own name): still.fail's hosts stay in still.fail's account, its API
+  Worker forwarding there (`FORWARD_TO`), monoid's answering a forwarded request as still.fail's (`GUESTS`, under
+  `FORWARD_SECRET`). The move itself is `src/move.ts`, run by `.github/workflows/move-cloud.yml`.
 - The control plane's contract is shared with Comma (AFK-surf/Cue): `station/src/cloud/provider.ts` holds what differs.
   A change to a station-facing route keeps both working.
 - Tests run in Miniflare with everything outside mocked: `pnpm run types && pnpm run check && pnpm test`, one file

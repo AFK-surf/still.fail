@@ -13,6 +13,7 @@ import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import { asOrigin, forward, served } from "./guests";
+import { isMoveCall, moveApi, moving } from "./move";
 import { asProductOf } from "./here";
 import type { Env } from "./env";
 import { adminApi, api, blockAccount, FEEDBACK_REPLY_PATH, FEEDBACK_STATUS_PATH, feedbackList, liveOf, notBetaReply, onTestChannel, replyToFeedback, setFeedbackStatus } from "./api";
@@ -153,6 +154,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const onConsole = adminOrigins(env).includes(url.origin);
   if (path.startsWith("/v1/")) {
     if (!onPublic && !onConsole && !onBeta) return reply({ error: "invalid_origin" }, 421);
+    // Moving into another cloud (move.ts): only the move's own calls and the icons it copies, the rest asked to wait.
+    if (isMoveCall(path)) return moveApi(request, env, path);
+    if (env.MOVING && !path.startsWith("/v1/icons/")) return moving();
     if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
     // Signing in, refreshing and signing out stay open to it, so a login completes and the page or app can be told.
     const ofBeta = onBeta || header(request, "channel") === "beta";
