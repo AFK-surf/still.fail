@@ -542,3 +542,49 @@ test "对话目录 of a chat opened on its told window: a row said before it pre
   assert_eq(outline_reading().flash, "ts18")
   assert_true(t.find(row) is Some(_))
 }
+
+///|
+test "a chat read back a step at a time inside the rows it shows, a screen above them: no row built or laid out for a step, nothing more asked" {
+  let said : Array[String] = []
+  // (小屏, a finger's: 大屏's wheel steps lay its rows out on their own, as much with the rows' rule from before this
+  // one, first in view among the first three: the list moved by its stick to the end and its bar's watch)
+  for s in [long_screens[0]] {
+    let (name, _, _, platform) = s
+    let x = if platform == 2 { 195.0 } else { 800.0 }
+    let l = long_chat()
+    let t = long_open(l, s)
+    t.check_looks(false)
+    t.set_rows_on_pixels(true)
+    // (read back some way, its growths come and at rest)
+    for _ in 0..<4 {
+      if platform == 2 {
+        t.drag(195.0, 300.0, 195.0, 600.0, steps=20)
+      } else {
+        for _ in 0..<10 {
+          t.wheel(x, 400.0, -30.0)
+        }
+      }
+      long_run(t, l, long_rest_ms)
+    }
+    // (a finger on it, moving it: what its moving sets off built once; then steps of 3 points under the finger, each
+    // within the rows it shows)
+    t.hold_drag(x, 300.0, x, 320.0, steps=4)
+    t.hold_move(x, 323.0)
+    long_answered(l)
+    let asked = l.asked.length()
+    let mut laid = 0
+    let mut painted = ""
+    let mut y = 323.0
+    for _ in 0..<3 {
+      y += 3.0
+      t.hold_move(x, y)
+      long_answered(l)
+      laid += t.frame_perf().laid
+      painted = t.painted_why()
+    }
+    t.release(x, y)
+    long_run(t, l, long_rest_ms)
+    said.push("\{name}: away \{l.first.get() < long_count - 30}, laid \{laid}, asked \{l.asked.length() - asked}, \{painted}")
+  }
+  assert_eq(said, ["小屏: away true, laid 0, asked 0, a list scrolled without changing its rows"])
+}

@@ -2336,14 +2336,17 @@ pub fn list_after(
       }
       _ => ()
     }
-    // (read back by what the page builds from it: not at every step of a scroll, which changes none of that)
+    // (read back by what the page builds from it: not at every step of a scroll, which changes none of that; whether
+    // less than a screen is above what shows among it, a Bool, built again only as that turns)
     let ask_rows = ask_rows_of(v, list)
     let lr = c.list_reader(key)
-    let info = c.list_info_as(key, fn(i) { list_made(i, n, ask_rows, lr) })
+    let made = fn(i) { list_made(i, n, ask_rows, lr) }
+    let info = c.list_info_as(key, made)
+    let short_above = made(info).near_top
     // less than a screen laid out above what shows: as many more before it as chat_grow_rows, once for each first
     match (info, v.thread) {
       // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
-      (Some(i), Some(thread)) if v.more && v.older == "" && rd.placed && i.first >= 0 && chat_short_above(i, lr) => {
+      (Some(_), Some(thread)) if v.more && v.older == "" && rd.placed && short_above => {
         // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
         let first = match v.first_entry {
           Some(f) => f
