@@ -102,6 +102,15 @@ fn tape_pick_said(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
+/// The page's panel's corners as what is in it stands in them (pane_round): as wide as beside the column, its right
+/// corners none of what is in it while a side panel is beside it.
+fn tape_page_round() -> FixedArray[@ui.CornerOf] {
+  let side = tape_shown_side()
+  let under = if side is None { tape_room_now().under } else { 0.0 }
+  beside_column(tape_pane_corners(Page, side is Some(_)), under)
+}
+
+///|
 /// Page `page` of the stack in the page's panel, its island's (as wide as the stack is, beside the system's column): a
 /// step darker while the panel is behind the one in use, nothing of it read out then (tape_behind); what is in it as
 /// wide as beside the column, its right corners none of what is in it there (beside_column); a right click in it copying
@@ -111,14 +120,11 @@ fn tape_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   guard now is Some(w) else { return }
   // (said by this build: image_item, video_item)
   @sfbase.held_pictures_waiting.val = []
-  let side = tape_shown_side()
-  let under = if side is None { tape_room_now().under } else { 0.0 }
-  let corners = tape_pane_corners(Page, side is Some(_))
   let page_id = c.id("main-page")
   tape_behind(c, Page, fn() {
     context_page(c, page_id)
     let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
-      @sf.pane_round.val = Some(beside_column(corners, under))
+      @sf.pane_round.val = Some(tape_page_round())
       tape_bar_collected(c, fn() { page_one(c, src, w, page, c.width, c.height, 0.0) })
       @sf.pane_round.val = None
     })
@@ -512,8 +518,13 @@ fn tape_made(
               drawn=fn(serial) { tape_page_wait.draws(serial) },
               over=fn(o, src, page, stint) { chat_bar_wide_node(o, src, page, tape_chat_bar_ends(), tips, stint) },
               // (with chat_page_nodes on: its messages nodes, its composer under them its old view)
-              body=fn(col, s, r) { chat_body_nodes(col, s, r, width, tips, stint) },
-              foot=fn(c, s, r) { chat_composer_nodes(c, s, r, wide.tape.get()) },
+              // (built in the page's panel, as tape_page_one builds the page: what stands in its corners concentric with them)
+              body=fn(col, s, r) { chat_body_nodes(col, s, r, tips, stint, in_pane=true) },
+              foot=fn(c, s, r) {
+                @sf.pane_round.val = Some(tape_page_round())
+                chat_composer_nodes(c, s, r, wide.tape.get())
+                @sf.pane_round.val = None
+              },
             )
             |> ignore
           },

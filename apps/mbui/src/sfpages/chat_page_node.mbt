@@ -4,14 +4,13 @@
 
 ///|
 /// Chat `r`'s messages as `src` reads them (view_of_chat), in node `v`, growing to what the column it is in leaves
-/// them, once its view is read (till then none: its bones are the old page's); `width` the page's as it changes, `top`
-/// over its first row (its bar's room), `foot` under its last, `lead` the unread line under its top, its tips `tips`,
-/// its time on top `stint`.
+/// them, once its view is read (till then none: its bones are the old page's), laid out by the room the column gives it
+/// (View::by_room: its width what the shell gives the page, as it changes), `top` over its first row (its bar's room),
+/// `foot` under its last, `lead` the unread line under its top, its tips `tips`, its time on top `stint`.
 pub fn chat_page_body_node(
   v : @view.View,
   src : Source,
   r : ChatRef,
-  width~ : () -> Double,
   tips~ : @sf.TipLayer,
   stint~ : () -> Int,
   top? : () -> Double = fn() { list_top },
@@ -40,8 +39,10 @@ pub fn chat_page_body_node(
       }
     },
   )
-  v.box(fn(b) {
+  // (its rows by the width it is given, never one worked out of the shell's state)
+  v.by_room(fn(b, room) {
     b.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    let width = fn() { room.width() }
     b.show(fn() { read.get() is Some(_) }, fn(o) {
       o.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
       let first = @signals.untracked(fn() { read.get().unwrap() })
@@ -81,5 +82,9 @@ pub fn chat_page_body_node(
     })
     |> ignore
   })
+  .grow(Is(1.0))
+  .shrink(Is(1.0))
+  .basis(Is(Some(0.0)))
+  .min_height(Is(Some(0.0)))
   |> ignore
 }

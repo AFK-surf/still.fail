@@ -98,9 +98,10 @@ fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
 
 ///|
 /// How tall the chat's bar over the list is (pageBar: 45; in a panel of its own as much taller as puts its buttons in
-/// the panel's corner concentric with it: chat_bar_box_tape), and the list's room under it over its first row (24).
-fn chat_bar_room() -> Double {
-  @sf.wide_bar_h + (if @sf.in_pane() { @sf.tape_bar_over() } else { 0.0 })
+/// the panel's corner concentric with it: chat_bar_box_tape; `in_pane` as the page built now is), and the list's room
+/// under it over its first row (24).
+fn chat_bar_room(in_pane? : Bool = @sf.in_pane()) -> Double {
+  @sf.wide_bar_h + (if in_pane { @sf.tape_bar_over() } else { 0.0 })
 }
 
 ///|
@@ -108,16 +109,16 @@ let list_head_gap : Double = 24.0
 
 ///|
 /// Chat `r`'s messages where its page is made with its inside nodes (sfbase's chat_page_nodes: chat_page_made's
-/// `body`), in `v`: under the bar's room, the pane `width` wide as it changes.
+/// `body`), in `v`, as wide as it is given: under the bar's room, `in_pane` the page a panel of its own (chat_bar_room).
 fn chat_body_nodes(
   v : @view.View,
   src : Source,
   r : ChatRef,
-  width : () -> Double,
   tips : @sf.TipLayer,
   stint : () -> Int,
+  in_pane? : Bool = false,
 ) -> Unit {
-  @sfpages.chat_page_body_node(v, src, r, width~, tips~, stint~, top=fn() { chat_bar_room() + list_head_gap })
+  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, top=fn() { chat_bar_room(in_pane~) + list_head_gap })
 }
 
 ///|

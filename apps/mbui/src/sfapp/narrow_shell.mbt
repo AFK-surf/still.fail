@@ -554,7 +554,6 @@ fn narrow_made_as(
                   col,
                   s,
                   r,
-                  width=fn() { col.window().0 },
                   tips=@sf.TipLayer::new(fn() { None }),
                   stint~,
                   top=list_top,
