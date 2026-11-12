@@ -8,9 +8,9 @@
 // message coming out of its agent's picture, the room an agent's line leaves; the list's line's), the composer and
 // what floats over the list (the way to the newest, the bell, the outline), what is laid over a row (words picked,
 // words found marked, the flash of one gone to, the band of one whose menu is open: the overlays' line's, through each
-// row's `over`), where the list opens but at the unread line or its end (where it was left, where the core opened it)
-// and what the core is told of what is read: those the page's, whether the list is at its foot read of its scroll
-// (Scroll::at_foot_now), which rows show and how far down one is, which the list does not say yet.
+// row's `over`), where the list opens (chat_open_place, asked here once as it is made) and what the core is told of
+// what is read: those the page's, whether the list is at its foot read of its scroll (Scroll::at_foot_now), which rows
+// show and how far down one is, which the list does not say yet.
 
 ///|
 /// What a chat's list shows for each of its rows (chat_body_rows'): its key, what it is, the room over it.
@@ -256,8 +256,8 @@ priv struct ChatBodyKeeps {
 /// answered with `core` where something is (a login's card, a request's answer); `top` over its first row (list_top:
 /// the chat's bar's room), `foot` under its last, then the composer `composer` builds in the list's foot (its room
 /// under the rows as tall as the two are laid out, as the composer changes: at once as yet). In `scroll`,
-/// put where `place` asks: at its end as it opens (followed there), at its unread line where it has one (`lead` under
-/// its top, as list_after puts it once); a chat too short to fill what shows at its foot, over the composer (the old
+/// put where `place` asks: where it opens as chat_open_place says (its unread line `lead` under its top, where it was
+/// left, else at its end, followed there), and at an unread line come after while it is still at its end; a chat too short to fill what shows at its foot, over the composer (the old
 /// list's from_end); the page before asked as it nears its top. `made`, told each row's key and what holds it as its row
 /// is made (a block made, or made again as its key comes to be another kind of row). `read`, given `place` and its rows,
 /// for what is told the core of what is read (chat_read_node).
@@ -346,10 +346,28 @@ fn chat_body_node(
     |> ignore
   })
   |> ignore
-  // (put in place once: at the unread line where the chat opens with one, else at its end, where it is made)
-  if @signals.untracked(fn() { rows.get().rows.contains("line") }) {
-    place.bring("line", offset=-(@signals.untracked(top) + lead))
+  // (put in place once, as it is made: chat_open_place's; else at its end, where it is made)
+  let chat = here.station + "\u{1}" + here.session
+  let opens = @signals.untracked(fn() {
+    chat_open_place(rows.get(), (here.view)(), @sfbase.kept_places.get(chat), v.pixel_scale(), top(), lead)
+  })
+  if opens is Some((k, offset)) {
+    place.bring(k, offset~)
   }
+  // the unread line come after it was made (what came while the app was away, read after the chat opened): there once,
+  // as at a chat opened with it, while the list is still at its end and no message is asked to be gone to
+  let lined = Ref(@signals.untracked(fn() { rows.get().rows.contains("line") }))
+  v.reacts(
+    fn() { rows.get().rows.contains("line") },
+    fn(has) {
+      guard has && !lined.val else { return }
+      lined.val = true
+      if scroll.at_foot_now() && !@sfbase.go_tos.contains(chat) {
+        place.bring("line", offset=-(@signals.untracked(top) + lead))
+      }
+    },
+    at_start=false,
+  )
   read(place, fn() { rows.get() })
   v
 }

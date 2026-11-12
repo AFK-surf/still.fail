@@ -457,3 +457,162 @@ test "a chat's page made with its inside nodes tells the core what is read and w
     assert_eq(focus().length(), shown, msg="\{name}: told it shows after it was left")
   }
 }
+
+///|
+/// The long chat (chat_window_wbtest's) opened on screen `s` with its page's inside nodes, at rest (the Tester's screen:
+/// 2 pixels a point); the core saying where it was left (`at`: the message's seq, its top under the list's in pixels, if
+/// said) and its unread line at message `line` (none at 0) as it is read.
+fn place_long_open(
+  l : LongChat,
+  s : (String, Double, Double, Int),
+  at? : (Double, Double?)? = None,
+  line? : @signals.Signal[Int] = @signals.signal(0),
+) -> @ui.Tester {
+  let (_, w, h, platform) = s
+  new_run()
+  @sfbase.chat_page_nodes.set(true)
+  let base = long_source(l)
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      let got = (base.topic_read)(name, params)
+      guard name == "chat" && got.value is Some(Object(v)) else { return got }
+      let out = v.copy()
+      match at {
+        Some((seq, px)) => {
+          out["at"] = Json::number(seq)
+          match px {
+            Some(p) => out["atOffset"] = Json::number(p)
+            None => ()
+          }
+        }
+        None => ()
+      }
+      let n = line.get()
+      if n > 0 {
+        out["unreadLine"] = Json::number(n.to_double())
+      }
+      { ..got, value: Some(Json::object(out)), version: got.version + n * 1000000 }
+    },
+  }
+  open_chat(long_ref)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, begun=fn() {
+    @sfbase.window_tall.val = h
+  })
+  long_run(t, l, long_opened_ms)
+  t
+}
+
+///|
+/// The screens a chat is left and opened again on here: 大屏 alone so far. On 小屏 a chat's page made as nodes opened
+/// again after it was left (back to the chats, then the chat again; opened the first time it is not) gives a frame not
+/// built whole in its slide's second frame: the composer's old view in the list's foot is drawn again at each step of
+/// the slide where that frame is built keeping rows, and not at all where it is built whole. The page's to mend; 小屏
+/// comes in here with it.
+let place_again_screens : Array[(String, Double, Double, Int)] = [("大屏", 1280.0, 800.0, 0)]
+
+///|
+/// The long chat left (back to the chats) and opened again, at rest: each step from outside the frames, as a press's,
+/// and `meanwhile` (what the core says while it is away) between them.
+fn place_left_and_opened(t : @ui.Tester, l : LongChat, meanwhile? : () -> Unit = fn() {  }) -> Unit {
+  home()
+  @ui.came_from_outside()
+  long_run(t, l, long_opened_ms)
+  meanwhile()
+  open_chat(long_ref)
+  @ui.came_from_outside()
+  long_run(t, l, long_opened_ms)
+}
+
+///|
+test "a chat's page made with its inside nodes opens where it was left, on 大屏: left at its end, at its end, what came since too; read up, at the same messages as far down" {
+  for s in place_again_screens {
+    let (name, w, h, _) = s
+    // left at its end, with nothing come since and with a message come since
+    for came in [0, 1] {
+      let l = long_chat()
+      let t = place_long_open(l, s)
+      // (at its end as it opens: how far down its last message's words end)
+      let foot_of = fn(n : Int) { t.rect_of("第\{n}条：").map(fn(r) { r.1 + r.3 }) }
+      guard foot_of(long_count) is Some(end) else { fail("\{name}: its last message not drawn as it opens") }
+      place_left_and_opened(t, l, meanwhile=fn() { if came > 0 { l.last.set(l.last.get() + came) } })
+      let now = foot_of(long_count + came)
+      assert_true(
+        now is Some(y) && (y - end).abs() <= 1.0,
+        msg="\{name}, \{came} come since: its last message at \{Repr(now)}, its end \{end}",
+      )
+    }
+    // read up
+    let l = long_chat()
+    let t = place_long_open(l, s)
+    // (as the wheel's first frame scrolls the list, the frames' judge takes the composer, pinned in the list's foot and
+    // still where it shows, for moved as much: the list's to mend; where it opens is held here as a result)
+    t.motion_unjudged(true)
+    t.move_to(w / 2.0, h / 2.0)
+    t.wheel(w / 2.0, h / 2.0, -600.0)
+    long_run(t, l, long_rest_ms)
+    let seen : Array[(Int, Double)] = []
+    for n in l.first.get()..=l.last.get() {
+      if t.rect_of("第\{n}条：") is Some((_, y, _, _)) && y > h / 4.0 && y < h * 0.75 {
+        seen.push((n, y))
+      }
+    }
+    assert_true(seen.length() > 0, msg="\{name}: nothing read in the middle of the list")
+    place_left_and_opened(t, l)
+    let wrong = seen.filter(fn(p) { !(t.rect_of("第\{p.0}条：") is Some((_, y, _, _)) && (y - p.1).abs() <= 1.0) })
+    assert_true(
+      wrong.is_empty(),
+      msg="\{name}: read up \{Repr(seen)}, now \{Repr(wrong.map(fn(p) { t.rect_of("第\{p.0}条：").map(fn(r) { r.1 }) }))}",
+    )
+  }
+}
+
+///|
+test "a chat's page made with its inside nodes opens where the core says it was left, nothing kept this run, on 小屏 and 大屏: the first message at or after it, as far under the list's top as it says in the screen's pixels" {
+  for s in long_screens {
+    let (name, _, _, _) = s
+    // (the message in the middle of the window it opens on: room over it and under it)
+    let n = {
+      let l = long_chat()
+      place_long_open(l, s) |> ignore
+      (l.first.get() + l.last.get()) / 2
+    }
+    let words = "第\{n}条："
+    let ys : Array[Double] = []
+    // (in the screen's pixels: as many again under the list's top moves it as far again, whatever the screen's scale)
+    for px in [Some(120.0), Some(240.0), Some(360.0), None] {
+      let l = long_chat()
+      let t = place_long_open(l, s, at=Some((n.to_double() - 0.5, px)))
+      guard t.rect_of(words) is Some((_, y, _, _)) else { fail("\{name}: \{words} not drawn opened at \{Repr(px)}") }
+      ys.push(y)
+    }
+    let (h, step) = (s.2, ys[1] - ys[0])
+    // (said on one line: a runner reads a failure's first line)
+    let said = "\{name}: " + ys.map(fn(y) { y.to_string() }).join(" ")
+    // (further down each time, by as much again give or take a row's guess: the list brought to a row an offset under
+    // its top lands it up to 16.5 off where a row over it is still counted as its estimate (大屏, at 120, 240, 360 and 480
+    // pixels: 85.1, 112.1, 172.2, 199.3, the steps 27, 60.1, 27.1 where each is to be 43.6). The list's to mend: held
+    // to a point here once it does)
+    assert_true(step > 10.0 && ys[2] - ys[1] > 10.0 && (ys[2] - ys[1] - step).abs() <= 40.0, msg=said)
+    // (none said: its top just under the bar's room, in the upper half of what shows)
+    assert_true(ys[3] > 0.0 && ys[3] < h / 2.0, msg=said)
+  }
+}
+
+///|
+test "a chat's page made with its inside nodes opens at its unread line before where it was left, on 大屏" {
+  for s in place_again_screens {
+    let (name, w, h, _) = s
+    let l = long_chat()
+    let line = @signals.signal(0)
+    let t = place_long_open(l, s, line~)
+    // (read up: the wheel's, as in the test above)
+    t.motion_unjudged(true)
+    t.move_to(w / 2.0, h / 2.0)
+    t.wheel(w / 2.0, h / 2.0, -600.0)
+    long_run(t, l, long_rest_ms)
+    place_left_and_opened(t, l, meanwhile=fn() { line.set(l.first.get() + 3) })
+    let at = t.rect_of("以下是新消息")
+    assert_true(at is Some((_, y, _, _)) && y > 0.0 && y < h / 3.0, msg="\{name}: the unread line at \{Repr(at)}")
+  }
+}
