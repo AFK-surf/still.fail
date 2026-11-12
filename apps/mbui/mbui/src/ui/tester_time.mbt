@@ -700,8 +700,10 @@ pub fn Tester::key_named(self : Tester, name : String) -> Bool {
   match key_named(name) {
     Some((code, mods)) => {
       posted_tell()
+      let was = g().focus
       on_key(code, mods)
       self.draw()
+      self.focus_moved_held(code, mods, was)
       true
     }
     None => false

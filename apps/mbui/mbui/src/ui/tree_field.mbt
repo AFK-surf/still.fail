@@ -309,8 +309,14 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
       if n.kind == kind_editor && n.id == st.built_id && self.editors.get(n.id).map_or(false, fn(e) { physical_equal(e, st) }) {
         // (under a modal layer of the tree's over the old view built now, kept for the layer to give back, as
         // Ctx::focus_editor's)
-        if !view_focus_kept_for(self, st.built_id) && island_allows(self.island_of_id(st.built_id)) {
-          self.focus_moved(st.built_id)
+        if !view_focus_kept_for(self, st.built_id) {
+          let island = self.island_of_id(st.built_id)
+          if island_keys(island) {
+            self.focus_moved(st.built_id)
+          } else if island_kept_asked(island) {
+            // (in a part not in use: asked still, given as its editor is built in use again)
+            st.focus_asked = true
+          }
         }
         return
       }

@@ -929,11 +929,16 @@ pub fn Ctx::editor(
   st.looked = None
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
   // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id); under a
-  // modal layer of the tree's over that old view, kept for the layer to give back, as Ctx::focus_editor's)
+  // modal layer of the tree's over that old view, kept for the layer to give back, as Ctx::focus_editor's; in a part
+  // not in use, asked still, given as it is built in use again (island_kept_asked))
   if field is Some(_) && st.focus_asked {
     st.focus_asked = false
-    if !view_focus_kept_for(self, id) && island_allows(self.island_said()) {
-      self.focus_moved(id)
+    if !view_focus_kept_for(self, id) {
+      if island_keys(self.island_said()) {
+        self.focus_moved(id)
+      } else if island_kept_asked(self.island_said()) {
+        st.focus_asked = true
+      }
     }
   }
   st.built_frame = self.build_no

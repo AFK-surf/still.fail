@@ -2582,6 +2582,10 @@ pub fn Tester::find_last(Self, String) -> (Double, Double)?
 pub fn Tester::finish(Self, Int32, Int32, ok? : Bool) -> Unit
 pub fn Tester::finish_all(Self) -> Unit
 pub fn Tester::finished_order(Self) -> Array[(Int32, Int32)]
+pub fn Tester::focus_off_found(Self) -> Array[String]
+pub fn Tester::focus_off_left(Self) -> Array[String]
+pub fn Tester::focus_off_said(Self, judged? : String) -> String?
+pub fn Tester::focus_off_unheld(Self) -> Unit
 pub fn Tester::focus_said(Self) -> String
 pub fn Tester::focused(Self) -> SemNode?
 pub fn Tester::frame(Self, ms? : Double) -> Unit

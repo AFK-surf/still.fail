@@ -4,7 +4,10 @@
 ///|
 test "dialog: opened by its trigger, the page hidden under it, the focus in it; Escape closes it, the focus goes back" {
   let open = Ref(false)
-  let t = @ui.Tester::new(fn(c) {
+  // (a window wide enough for the dialog: it is 520 wide whatever the window, its close button past a phone's window's
+  // edge at rest, where Tab onto it stops the test, ui's tester_focus_off.mbt; a gap of the kit's dialog, not this
+  // test's)
+  let t = @ui.Tester::new(w=800.0, fn(c) {
     if @kit.button(c, "Edit profile").clicked {
       open.val = true
     }
