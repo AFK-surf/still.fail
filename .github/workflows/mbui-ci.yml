@@ -53,6 +53,8 @@ jobs:
         run: bash scripts/ios-terminate-test.sh
       - name: "Android's frame pacing (FramePacer, MBView's) on a clock of its own: each refresh a new frame while the app asks, the display's rate, a phone's recorded frames replayed (scripts/framepacer_test.sh; its known list only shortens)"
         run: sh scripts/framepacer_test.sh
+      - name: "Android's soft keyboard request in full screen and multi-window"
+        run: sh scripts/ime_request_test.sh
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | scripts/chk errs
       - name: "Check, the web's (the browser host, src/host's js files: what scripts/web.sh builds and scripts/textdiff.sh web needs)"

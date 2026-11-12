@@ -198,10 +198,9 @@ final class Host {
                 : upright(a.getResources().getConfiguration()));
     }
 
-    // The soft keyboard asked for and not shown yet (main thread). A show asked before the window has the focus, or
-    // before the keyboard's window can be moved by this one (its insets control: the IME's window made, as after the
-    // system's boot), is let go by the system; owed until both, each told as it comes (windowFocused, and the insets
-    // controller's controllable types), then asked.
+    // The soft keyboard asked for and not shown yet (main thread). A show before window focus is let go by the system;
+    // in full screen on API 30+ it also waits for IME insets control (as after boot, before the IME window is made).
+    // In multi-window the system controls the IME insets, so ask the input method directly once the window has focus.
     private static boolean imeOwed;
     /** The soft keyboard shown, as the insets last said (MainActivity; read on the GL thread too: MBView.typing). */
     static volatile boolean imeVisible;
@@ -225,9 +224,12 @@ final class Host {
     }
 
     private static void showOwedIme() {
-        if (!imeOwed || view == null) return;
-        if (android.os.Build.VERSION.SDK_INT < 30) {
-            if (!view.hasWindowFocus()) return;
+        boolean owed = imeOwed;
+        if (!owed || view == null) return;
+        int api = android.os.Build.VERSION.SDK_INT;
+        boolean multiWindow = activity.isInMultiWindowMode();
+        if (api < 30 || multiWindow) {
+            if (!ImeRequest.showNow(api, view.hasWindowFocus(), multiWindow, imeControllable, owed)) return;
             imeOwed = false;
             ((InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE)).showSoftInput(view, 0);
             return;
@@ -239,14 +241,13 @@ final class Host {
             imeControllable = false;
             c.addOnControllableInsetsChangedListener((ctl, types) -> {
                 imeControllable = (types & WindowInsets.Type.ime()) != 0;
-                boolean owed = imeOwed;
+                boolean wasOwed = imeOwed;
                 showOwedIme();
-                if (owed && !imeOwed) log("IME owed: show");
+                if (wasOwed && !imeOwed) log("IME owed: show");
             });
         }
-        if (!view.hasWindowFocus()) return;
         // (the controllable types told as they change: none told yet, the listener's first call, at once, says them)
-        if (!imeControllable) return;
+        if (!ImeRequest.showNow(api, view.hasWindowFocus(), multiWindow, imeControllable, owed)) return;
         imeOwed = false;
         c.show(WindowInsets.Type.ime());
     }
@@ -331,7 +332,7 @@ final class Host {
             } else if (active) {
                 // the field it has tapped again with no keyboard up (one that did not come, or went): asked for again,
                 // as Compose's tap on a focused field shows it (the app says its field anew on such a tap)
-                if (lifted && !imeVisible && !imeOwed) {
+                if (ImeRequest.retryOnTap(lifted, imeVisible, imeOwed, activity.isInMultiWindowMode())) {
                     imeOwed = true;
                     imeAwaited = true;
                     showOwedIme();

@@ -22,6 +22,11 @@ fn picture_said(p : @ui.ClipPicture) -> String {
 ///|
 fn main {
   let last = Ref("ready")
+  // The keyboard host's device check can start with a field that has not asked for the keyboard yet, then tap it
+  // after putting this activity in split screen (scripts/android-keyboard.sh).
+  let keyboard_field = @ui.env("MBUI_KEYBOARD_FIELD") == "1"
+  let field_ready = Ref(false)
+  let field_focused = Ref(false)
   let typed = StringBuilder()
   let read : Ref[@ui.ClipboardRead?] = Ref(None)
   let inset = Ref(-1.0)
@@ -48,7 +53,9 @@ fn main {
     say("DONE \{word} (copy shown: \{@ui.copy_shown()})")
   }
   @ui.run("devicedemo", fn(c) {
-    c.catch_keys("keys", true)
+    if !keyboard_field {
+      c.catch_keys("keys", true)
+    }
     let k = c.key_catcher("keys")
     if k.keys.length() > 0 {
       let keys = k.keys
@@ -96,7 +103,23 @@ fn main {
       None => ()
     }
     c.column(fn() {
-      c.text(if k.focused { "typing" } else { "idle" }) |> ignore
+      if keyboard_field {
+        c.editor("input", placeholder="Type here", max_lines=1) |> ignore
+        if !field_ready.val {
+          c.tell("field-ready", fn() {
+            field_ready.val = true
+            say("FIELD ready")
+          })
+        }
+        if c.editor_focused("input") && !field_focused.val {
+          c.tell("field-focused", fn() {
+            field_focused.val = true
+            say("FIELD focused")
+          })
+        }
+      } else {
+        c.text(if k.focused { "typing" } else { "idle" }) |> ignore
+      }
       c.text(last.val) |> ignore
     })
     |> ignore
