@@ -59,8 +59,25 @@ time by hand). `test/topic-work.test.ts` counts, in the database's own calls, th
 reads on a core started anew (and asked again), and each interaction the app sends (a start, a switch of workspace, a
 chat opened, a place of the bar) to its first screen and to rest: at most twice what it sends or 8 KB, and with the
 workspace's chats, messages, profiles, people or stations three times (real-size.ts `Size`, a worker thread a size), its
-reading growing no faster than what it sends. Those over now are in its `OVER_READ`, `OVER_READ_AGAIN` and `GROWS`, which
-only fall; a failure prints the statements that read most.
+reading growing no faster than what it sends. Those over now are in its `OVER_READ`, `OVER_READ_AGAIN` and `GROWS` (by
+what each reads, at its size: a ratio would rise as a fixed part of the reading goes), which only fall; a failure prints
+the statements that read most.
+
+## The chat table is read by what a view shows
+
+A view never reads a station's chats whole (2026-11-12): every read of the `chat` table is a declaration in
+`src/db/chat-reads.ts` (its statement, its bound: one row by a key, the first rows of an order, counts SQLite makes of
+columns; the keys it is told by, and those a written row tells, before and after), read through `Data.chatFound` and
+`chatCounted`, the records of what it finds taken from the cache by their keys. Its bound holds for the work SQLite does,
+not only for what it returns: `test/chat-plans.test.ts` holds every declaration's plan to it (`one`: found by its key
+through an index, no walk of a station's rows; `first`: walked in an index's order, so its LIMIT stops the walk;
+`count`: of covering indexes alone), on a database as the core opens one (it never runs ANALYZE), and its `OVER_PLAN`
+only falls; an index a read needs is made at every open (schema.ts ensureChatColumns). The chat list is a window over the index
+(views.ts `#window`), what is overlaid here (local.ts `overlaid`) read apart by its keys. A new read is a declaration
+there; `scripts/whole-lists.ts` refuses a whole list read, and its `WHOLE` says where one still is and what takes it away.
+A column a read needs is derived as the record is written (SQLite's of its JSON, schema.ts `CHAT_COLUMNS`, held to the
+JS's rule by list-rows.test.ts; the core's, `state` and `watched`, Derive: one algorithm each), and for rows an older core wrote (their `made` not `CHAT_MADE`) at the next open: every host opens its
+database alone (`locking_mode EXCLUSIVE`), so nothing an older core wrote is read before that.
 
 ## What is shared is never written
 

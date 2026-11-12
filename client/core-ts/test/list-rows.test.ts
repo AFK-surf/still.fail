@@ -71,7 +71,7 @@ test("a_core_started_anew_answers_its_list_of_rows_kept_beside_their_records", a
   assert.equal(rowsOf(kept.value).length, WINDOW);
   assert.equal(kept.first.rowJson, 0, "no record's JSON read");
   assert.equal(kept.first.rows, 0, "no row made");
-  assert.equal(kept.first.rowsKept, WINDOW + 1, "its window's rows and one more, as they were kept");
+  assert.equal(kept.first.rowsKept, WINDOW, "its window's rows, as they were kept");
   assert.equal(kept.first.conformed, kept.value.days.length, "no row shaped as it went out: its days alone");
   assert.equal(kept.text, warm.text);
 });
@@ -166,7 +166,7 @@ test("a_record_a_core_from_before_writes_takes_its_row_with_it_and_the_list_make
   sql.run("UPDATE chat SET json = json_set(json, '$.last.text', 'CI 挂了，在看。') WHERE station = ? AND archived = 0 AND id = ?", [top.station, top.id]);
   assert.equal(sql.all("SELECT count(*) FROM chat_row WHERE station = ? AND id = ?", [top.station, top.id])[0]![0], 0, "its row went with it");
   const anew = await listAnew(host, base);
-  assert.deepEqual([anew.first.rows, anew.first.rowJson, anew.first.rowsKept], [1, 1, WINDOW]);
+  assert.deepEqual([anew.first.rows, anew.first.rowJson, anew.first.rowsKept], [1, 1, WINDOW - 1]);
   assert.equal(rowsOf(anew.value)[0].last.preview, "CI 挂了，在看。");
   const again = await listAnew(host, base);
   assert.deepEqual([again.first.rows, again.first.rowJson], [0, 0], "kept again after it");
@@ -335,4 +335,186 @@ test("a_pinned_chat_whose_row_was_kept_stays_with_the_pinned_as_the_list_is_made
   t.store.runner.shutdown();
   assert.deepEqual(pinnedOf(u.value), [`${other.station} ${other.id}`, ...pinned], "the one pinned here first, the pinned before it after it");
   for (const d of u.value.days) if (d.label !== PINNED) assert.ok(d.items.every((r: J) => r.pinned !== true), `no pinned row in ${d.label}`);
+});
+
+/// What a list's window of `rows` rows is of the whole list (views.ts firstRows).
+function firstOf(whole: J, rows: number): J {
+  let left = rows;
+  let more = 0;
+  const days: J[] = [];
+  for (const d of whole.days) {
+    if (left <= 0) more += d.items.length;
+    else if (d.items.length <= left) days.push(d);
+    else {
+      days.push({ ...d, items: d.items.slice(0, left) });
+      more += d.items.length - left;
+    }
+    left -= Math.min(left, d.items.length);
+  }
+  return more === 0 ? whole : { ...whole, days, more };
+}
+
+/// The list shown on a core started anew on `host`, its rows kept already: the rig, its page, and the text of what
+/// the chat table's statements give back from now on (`texts`: each one longer than a key or a number, by statement).
+async function shown(host: FakeHost, base: number) {
+  const t = setup({ all: true, host });
+  const u = ui();
+  t.window(LIST, WINDOW);
+  t.subscribe(1, LIST);
+  for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
+  await t.read(u, 1);
+  await t.host.time.pass(100);
+  const sql = sqlOf(host);
+  const all = sql.all.bind(sql);
+  const texts: string[] = [];
+  sql.all = (q: string, p?: readonly unknown[]) => {
+    const r = all(q, p as never);
+    if (/\bchat(_row)?\b/.test(q)) for (const row of r) for (const v of row) if (typeof v === "string" && v.length > 120) texts.push(q);
+    return r;
+  };
+  return { t, u, texts, done: () => (delete (sql as J).all, t.store.runner.shutdown()) };
+}
+
+test("a_change_of_one_chat_with_the_list_shown_reads_no_rows_text_but_that_chats_own_and_that_from_its_writer", async () => {
+  const { host, base } = await written();
+  await listAnew(host, base);
+  const { t, u, texts, done } = await shown(host, base);
+  try {
+    const items = rowsOf(u.value);
+    // One in the window renamed by its station: its row made as its record is written (db/account.ts #keepListRow), the
+    // window's keys read again, no record's JSON nor any row kept beside one read (those held are taken from the cache).
+    // (its record as its station's stream gives it: read as the sync reads it, before)
+    const top = items[2];
+    const record = t.data.chat(top.station, top.id) as J;
+    texts.length = 0;
+    let before = { ...work };
+    t.data.putChat(top.station, { ...record, title: "改了名" });
+    await t.read(u, 1);
+    assert.equal(rowsOf(u.value)[2].title, "改了名");
+    // (its own JSON read by its writer alone, to see whether what it is given is what it holds: account.ts putChat)
+    const own = ["SELECT ord, json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?"];
+    assert.deepEqual([workSince(before).rowJson, workSince(before).rowsKept], [1, 0], "no other record's JSON, no kept row read");
+    assert.deepEqual(texts, own, "nothing but keys read of the chat table");
+    // One far below the window, as its station's stream gives it (its record read as the sync reads it, before): nothing
+    // of it shown, nothing read but the window's keys.
+    const last = String(sqlOf(host).all("SELECT id FROM chat WHERE station = ? AND archived = 0 ORDER BY last_active LIMIT 1", [UP[1]])[0]![0]);
+    const far = t.data.chat(UP[1], last) as J;
+    texts.length = 0;
+    before = { ...work };
+    const was = u.value;
+    t.data.putChat(UP[1], { ...far, title: "远处改了名" });
+    await t.read(u, 1);
+    assert.deepEqual([workSince(before).rowJson, workSince(before).rowsKept, workSince(before).rows], [1, 0, 0]);
+    assert.deepEqual(texts, own);
+    assert.deepEqual(rowsOf(u.value).map((r: J) => r.id), rowsOf(was).map((r: J) => r.id));
+  } finally {
+    done();
+  }
+});
+
+test("rows_an_older_core_put_are_derived_again_at_the_next_open_and_every_read_of_them_is_right", async () => {
+  const { host, base } = await written();
+  const sql = sqlOf(host);
+  const station = UP[0];
+  const now = base + 3_600_000;
+  // As an older core puts a record (its statement: the columns it knows; `made`, `state` and what SQLite derives for
+  // this core left as they fall): a chat new on top, one at work taking part as another session; one of the window
+  // hidden by its station; one archived now.
+  const older = (archived: number, record: J, ord: number) =>
+    sql.run(
+      "INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, json) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0, 1, 0, NULL, 0, ?)",
+      [station, record.id, archived, ord, record.thread ?? null, record.session ?? null, record.lastActiveAt ?? 0, JSON.stringify(record)],
+    );
+  const records = sql.all("SELECT id, json FROM chat WHERE station = ? AND archived = 0 ORDER BY last_active DESC LIMIT 3", [station]);
+  const like = JSON.parse(String(records[0]![1]));
+  const one = like.agents[0];
+  older(0, { ...like, id: "zz-new", session: "k-zz-new", thread: null, pinned: undefined, hidden: undefined, title: "旧的核心写的", agents: [{ ...one, key: "k-zz-new", process: "cold" }, { ...one, key: "k-zz-agent", process: "running" }], lastActiveAt: now }, -1);
+  const hidden = JSON.parse(String(records[1]![1]));
+  older(0, { ...hidden, hidden: true }, 0);
+  const gone = JSON.parse(String(records[2]![1]));
+  sql.run("DELETE FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, gone.id]);
+  older(1, { ...gone, archived: { at: now, by: "auto" } }, 0);
+  assert.equal(sql.all("SELECT count(*) FROM chat WHERE made IS NULL")[0]![0], 3, "three rows to derive");
+  // Opened: those three alone derived again, their JSON read for `state` alone.
+  const t = setup({ all: true, host });
+  try {
+    assert.deepEqual((t.data as J).db("s1").chatColumnsMade, { rows: 3, read: 3, bytes: (t.data as J).db("s1").chatColumnsMade.bytes });
+    assert.equal(sql.all("SELECT count(*) FROM chat WHERE made IS NULL")[0]![0], 0);
+    const u = ui();
+    t.window(LIST, WINDOW);
+    t.subscribe(1, LIST);
+    for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
+    await t.read(u, 1);
+    // The window: the new one on top of those not pinned, the hidden one not there; as the list read whole has it, byte
+    // for byte.
+    const ids = rowsOf(u.value).filter((r: J) => r.pinned !== true).map((r: J) => r.id);
+    assert.equal(ids[0], "zz-new");
+    const every = rowsOf(u.value).map((r: J) => r.id);
+    assert.ok(!every.includes(hidden.id) && !every.includes(gone.id));
+    const windowed = t.store.value(LIST) as J;
+    // (the list whole, its stations' rows loaded behind its first screen: views.ts #head)
+    t.views.chatsWhole("ws");
+    await t.host.time.pass(100);
+    const whole = t.views.chatsWhole("ws") as J;
+    const { days: d1, ...rest1 } = JSON.parse(JSON.stringify(windowed.ok));
+    const { days: d2, ...rest2 } = JSON.parse(JSON.stringify(firstOf(whole.ok, WINDOW)));
+    assert.deepEqual(rest1, rest2);
+    assert.deepEqual(d1, d2);
+    assert.equal(JSON.stringify(windowed.ok), JSON.stringify(firstOf(whole.ok, WINDOW)));
+    // Its agents' sessions (`chat_agent`, its trigger), its state (the glyph's), its archive.
+    assert.equal((t.data.chatOfAgent(station, "k-zz-agent") as J)?.id, "zz-new");
+    assert.equal(sql.all("SELECT state FROM chat WHERE station = ? AND id = 'zz-new'", [station])[0]![0], "run");
+    const archive = ui();
+    t.subscribe(2, { topic: "archive", scope: "ws", limit: 60 });
+    await t.read(archive, 2);
+    assert.equal(archive.value.days[0].items[0].id, gone.id);
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
+test("the_columns_sqlite_makes_of_a_record_are_what_the_js_that_read_the_record_says", async () => {
+  // schema.ts CHAT_COLUMNS, as the writer puts a record (its statement) and as a row another core put is derived again
+  // at the next open: each against the rule the JS that read the record keeps (the list's for `hidden` and the title,
+  // archive.ts's for the moment it was archived), for every chat of the workspace of real size, listed and archived,
+  // and the odd ones.
+  const { host, base } = await written();
+  const odd: J[] = [
+    { id: "o1" },
+    { id: "o2", title: 3, hidden: false },
+    { id: "o3", title: "", hidden: 1, archived: "yes" },
+    { id: "o4", archived: { at: null }, lastActiveAt: 5 },
+    { id: "o5", archived: {}, lastActiveAt: 6.5 },
+    { id: "o6", archived: { at: "x" }, lastActiveAt: 7 },
+    { id: "o7", archived: { at: 8 }, hidden: true, title: "标题" },
+    { id: "o8", archived: { at: null } },
+    { id: "o9", archived: [1], hidden: "true" },
+    { id: "o10", archived: null, title: null },
+  ];
+  const sql = sqlOf(host);
+  // (as an older core puts them: no column but its own, every one derived at the next open)
+  for (const [i, r] of odd.entries()) {
+    for (const archived of [0, 1]) sql.run("INSERT OR REPLACE INTO chat (station, id, archived, ord, json) VALUES ('ws/zz-older', ?, ?, ?, ?)", [r.id, archived, i, JSON.stringify(r)]);
+  }
+  const t = setup({ all: true, host });
+  try {
+    // (as this core's writer puts them)
+    t.set({ topic: "chatRows", station: "ws/zz-written" }, odd);
+    t.set({ topic: "archivedRows", station: "ws/zz-written" }, odd);
+    await t.host.time.pass(100);
+    const rows = sql.all("SELECT station, archived, id, json, hidden, title, archived_mark, archived_at FROM chat");
+    assert.ok(rows.length >= 720 + 4 * odd.length, `${rows.length} rows`);
+    for (const [station, archived, id, json, hidden, title, mark, at] of rows) {
+      const record = JSON.parse(String(json));
+      const archivedMark = record.archived !== null && typeof record.archived === "object" && !Array.isArray(record.archived);
+      const moment = archivedMark ? (record.archived.at ?? record.lastActiveAt) : undefined;
+      assert.deepEqual(
+        [hidden, title, mark, at],
+        [record.hidden === true ? 1 : 0, typeof record.title === "string" ? record.title : null, archivedMark ? 1 : 0, archivedMark && typeof moment === "number" ? moment : null],
+        `${station} ${archived} ${id}: ${json}`,
+      );
+    }
+  } finally {
+    t.store.runner.shutdown();
+  }
 });

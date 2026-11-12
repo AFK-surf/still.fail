@@ -570,7 +570,7 @@ test("a_rolled_back_first_chat_list_does_not_start_noticing", async () => {
 
 test("the_rows_that_ask_something_and_the_first_screen_are_found_by_their_columns", async () => {
   const { host, runner } = fresh();
-  const data = new Data(host, runner, { owner: () => "s1", derive: { tone: (r) => (r.unread === true && r.mine === true ? "done" : null), asks: (r) => r.decision !== undefined } });
+  const data = new Data(host, runner, { owner: () => "s1", derive: { tone: (r) => (r.unread === true && r.mine === true ? "done" : null), asks: (r) => r.decision !== undefined, state: () => null, watched: () => false } });
   await run(data.open(["s1"]));
   data.set(rows("w/a"), [
     { id: "old", lastActiveAt: 1 },

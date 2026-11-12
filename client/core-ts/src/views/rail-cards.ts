@@ -27,13 +27,12 @@ const stat = (value: string | number, label: string, tone: Tone | null = null, g
   ...(go === null ? {} : { go }),
 });
 
-/// The 对话 place's: how many chats are at work (its line), how many wait for the viewer, went wrong, have something
+/// The 对话 place's: how many chats are at work (its line: `running`, the list's rows whose `state` is `run`, as views.ts
+/// counts them), how many wait for the viewer, went wrong, have something
 /// unread (the viewer's marks: views/marks.ts), and how many were archived today (`archived`, when each was, on a
 /// clock `offset` minutes east of UTC; `now`). Each figure opens the chats it counts (2026-11-10 用户「这里面不能点击跳转，光告诉我有几个
 /// 没用啊」): the first three 待处理, which lists them, those archived the archive.
-export function chatsCard(rows: J[], mark: J, archived: number[], now: number, offset: number): J {
-  // (a row's `state` as its list says it, views.ts #chats: said by a row not made yet too, so the card makes none)
-  const running = rows.filter((r) => get(r, "state") === "run").length;
+export function chatsCard(running: number, mark: J, archived: number[], now: number, offset: number): J {
   const wait = num(get(mark, "wait"));
   const alert = num(get(mark, "alert"));
   const today = localDay(now, offset);

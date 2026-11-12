@@ -844,7 +844,8 @@ test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
   t.subscribe(1, list);
   await t.read(page, 1);
   await t.read(page, 1);
-  assert.ok(names.every((id) => t.data.loaded(rows(`ws/${id}`))), "its stations' rows loaded behind it");
+  // (a window over its stations' rows, none of them loaded: db/chat-reads.ts `window`)
+  assert.ok(names.every((id) => !t.data.loaded(rows(`ws/${id}`))), "none of its stations' rows loaded");
   assert.equal(madeItems(page.value).length, 50);
   assert.equal(page.value.more, 370);
   assert.ok(work.rows - from <= 50, `the first page made ${work.rows - from} rows`);
@@ -892,10 +893,10 @@ test("a_chat_lists_rows_are_made_as_its_page_shows_them", async () => {
   assert.ok(![page, ...shown].some((u) => holdsStandIn(u.value)), "none went out");
 });
 
-test("a_lists_rows_behind_its_first_screen_are_loaded_after_the_first_answers_of_its_burst", async () => {
+test("a_list_answered_in_a_burst_loads_none_of_its_stations_rows_before_or_after_the_others", async () => {
   // A switch of workspace subscribes its first screen's topics in one go, the list among the first: its stations' rows
   // loaded behind it (views.ts #head, a station a turn) went ahead of each answer after the list's, 2.3-3.5 ms each in
-  // Hermes (2026-11-11).
+  // Hermes (2026-11-11); since 2026-11-12 nothing loads them.
   const t = setup({ all: true });
   const now = t.host.nowMs();
   const names = ["a", "b", "c", "d", "e"];
@@ -931,9 +932,10 @@ test("a_lists_rows_behind_its_first_screen_are_loaded_after_the_first_answers_of
   // In the order subscribed, and none of the rows loaded till the last of them went.
   assert.deepEqual([...firsts].sort((a, b) => a - b), firsts);
   assert.deepEqual(firsts.map((at) => went[at]![1]), burst.map(() => 0), `rows loaded as each went out: ${JSON.stringify(went)}`);
-  // Loaded all the same, and the list as it was: its later value whole, `more` its rows past the page.
-  assert.equal(loaded(), names.length, "its stations' rows loaded behind it");
-  assert.ok(went.filter(([id]) => id === 1).length >= 2, "the list sent again once its rows are loaded");
+  // Nor after: the list is a window over its stations' rows (db/chat-reads.ts `window`), whole as it first went, `more`
+  // its rows past the page; nothing behind it to send it again for.
+  assert.equal(loaded(), 0, "none of its stations' rows loaded");
+  assert.equal(went.filter(([id]) => id === 1).length, 1, "the list sent once");
   assert.equal(madeItems(page.value).length, 50);
   assert.equal(page.value.more, 370);
 });
