@@ -2,7 +2,7 @@
 // files (FILES, a directory on disk), a page's .html at its address without it, a directory's index.html, the headers
 // its _headers says, and what is not there as its wrangler file's not_found_handling says (HANDLING). The web app's
 // answers go through src/web.ts as stillfail-web's do, and its pages say where this cloud's preview host is
-// (<meta name="stillfail-preview">, web/src/channel.ts), which a build made for any cloud cannot know.
+// (<meta name="stillfail-preview">, web/src/previewOrigin.ts), which a build made for any cloud cannot know.
 import { serveWeb } from "../src/web.ts";
 
 export type StaticEnv = {

@@ -10,7 +10,7 @@ import type { Job } from "../core/shapes.ts";
 import { bridge, fromPreview, toPreview } from "../previewBridge.ts";
 import { accounts, signInHere, takeSignedIn } from "./core.ts";
 import * as css from "./service.css.ts";
-import { PREVIEW_ORIGIN } from "../channel.ts";
+import { PREVIEW_ORIGIN } from "../previewOrigin.ts";
 
 const ORIGIN = PREVIEW_ORIGIN;
 

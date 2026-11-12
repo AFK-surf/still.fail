@@ -4,7 +4,8 @@
 // on the native hosts (src/core/core_native.c there); what the worker says back goes to mbui's queue on the channel
 // "core" (the host's `post`), its bytes beside its JSON.
 import { BUILT_AT } from "../core/built.ts";
-import { BETA, PREVIEW_ORIGIN } from "../channel.ts";
+import { BETA } from "../channel.ts";
+import { PREVIEW_ORIGIN } from "../previewOrigin.ts";
 import { takeShare } from "./share.ts";
 import { putBack, take } from "../login/signin.ts";
 // the app's words' face in a browser: the web's own Inter (its Latin, as the web's pages have it), not the whole face
