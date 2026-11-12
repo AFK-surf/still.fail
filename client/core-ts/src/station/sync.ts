@@ -41,8 +41,7 @@ import { Retold } from "./retold.ts";
 import { Seen } from "./seen.ts";
 import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
-import { type Marks, marksOf, marksWith, rowsMade, rowsShared } from "./rows-made.ts";
-import { current, tr } from "../i18n.ts";
+import { type Marks, marksOf, marksWith, rowWords, rowsMade, rowsShared } from "./rows-made.ts";
 import { timed } from "../spent.ts";
 import { isOwnSurface } from "../titles.ts";
 
@@ -683,11 +682,11 @@ export class StationsSync {
     return this.#asked((read) => Effect.gen({ self: this }, function* () {
       if (!this.reachable(address) || !this.#links.has(address)) return unread?.();
       const link = this.#links.get(address)!;
-      const answer = yield* Effect.result(shape ? this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }) : this.#whole(link, topic, path, ctx));
+      const answer = yield* Effect.result(shape ? Effect.map(this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }), (value) => ({ value: shape(value), changed: undefined })) : this.#whole(link, topic, path, ctx));
       const key = topicKey(topic);
       if (answer._tag === "Success") {
         link.errors.delete(key);
-        this.#core.data.set(topic, shape ? shape(answer.success) : answer.success);
+        this.#core.data.set(topic, answer.success.value, true, answer.success.changed);
         this.#retell(address, read);
         if (topic.topic === "sessions" || topic.topic === "threads") this.#remake(address);
         if (topic.topic === "sessions") this.unlisted(address);
@@ -719,9 +718,11 @@ export class StationsSync {
   /// What `GET path` answers. A list some of which is held is asked as what changed of it (POST /changed/<list>, each
   /// held row's digest sent), and put together from what came and what is held, in the station's order: read again
   /// after a stream that could not be resumed, most of a list is as it is held, and on a slow link it was most of the
-  /// wait. A station from before is asked the list whole (and tried again after CHANGES_RETRY_MS).
-  #whole(link: Link, topic: Topic, path: string, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
-    const whole = this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx });
+  /// wait. A station from before is asked the list whole (and tried again after CHANGES_RETRY_MS). `changed`: the keys of
+  /// the rows it sent, the rest being as held (none where it was read whole), so that only those are compared with what
+  /// is written (account.ts setSessions, setThreads).
+  #whole(link: Link, topic: Topic, path: string, ctx: SpanContext | null): Effect.Effect<{ value: unknown; changed: ReadonlySet<string> | undefined }, CoreError> {
+    const whole = Effect.map(this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }), (value) => ({ value, changed: undefined }));
     const id = LIST_ID[topic.topic];
     const refused = link.changesRefused !== null && this.#core.host.nowMs() - link.changesRefused < CHANGES_RETRY_MS;
     const held = id === undefined || refused ? undefined : this.#core.data.shared(topic);
@@ -745,9 +746,12 @@ export class StationsSync {
       const order = get(asked.success, "order");
       const changed = get(asked.success, "rows");
       if (!Array.isArray(order) || !Array.isArray(changed)) return yield* whole;
+      const sent = new Set<string>();
       for (const row of changed) {
         const key = idText(get(row, id));
-        if (key !== null) rows.set(key, row);
+        if (key === null) continue;
+        rows.set(key, row);
+        sent.add(key);
       }
       const list: unknown[] = [];
       for (const key of order) {
@@ -756,7 +760,7 @@ export class StationsSync {
         if (row === undefined) return yield* whole;
         list.push(row);
       }
-      return list;
+      return { value: list, changed: sent };
     });
   }
 
@@ -1563,8 +1567,8 @@ export class StationsSync {
         // last turn held may be one that ended asking a person: not standing asking again until then.
         const taken = pending < (u64(get(held, "pending")) ?? 0);
         const now = taken ? { ...held, pending, process: "running" } : { ...held, pending };
-        this.#rowsAfterSession(address, key, held, now);
         this.#core.data.putSummary(address, now);
+        this.#rowsAfterSession(address, key, held, now);
         return;
       }
       case "session-removed": {
@@ -1744,8 +1748,10 @@ export class StationsSync {
     const key = str(get(summary, "key"));
     if (!key) return;
     const before = this.#core.data.of(address)?.summary(address, key);
+    // (written before the sidebar is made again of it: a task enqueued may run at once)
+    const again = this.#core.data.putSummary(address, summary);
     this.#rowsAfterSession(address, key, before, summary);
-    if (this.#core.data.putSummary(address, summary) && details) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
+    if (again && details) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
     // How far its transcript goes: what the device lacks of it after what it holds is read (channels.ts `settle`).
     const length = u64(get(summary, "transcriptLength"));
     if (length !== null && length > 0) this.channels.goesTo(transcriptOf(address, key), length - 1);
@@ -1855,16 +1861,12 @@ export class StationsSync {
     if (link.shared) {
       // Of the chat list the station makes for everyone, once it is read: till then the rows held stand.
       if (link.sharedRows === null) return;
-      const lang = current();
-      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
-      return data.set({ topic: "chatRows", station: address }, rowsShared(link.sharedRows.values(), link.marks, me, words));
+      return data.set({ topic: "chatRows", station: address }, rowsShared(link.sharedRows.values(), link.marks, me, rowWords(), link.rows));
     }
     const sessions = data.shared({ topic: "sessions", station: address });
     const threads = data.shared({ topic: "threads", station: address });
     if (!Array.isArray(sessions) || !Array.isArray(threads)) return;
-    const lang = current();
-    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
-    data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, words));
+    data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, rowWords(), link.rows));
   }
 
   /// A row gone from the list, by its id.

@@ -8,6 +8,8 @@ import { get, isObject } from "../util.ts";
 import * as titles from "../titles.ts";
 import { trim } from "../whitespace.ts";
 import { type Own, rowFor } from "../chat-row.ts";
+import { current, tr } from "../i18n.ts";
+import { work } from "../work.ts";
 
 type J = Record<string, any>;
 
@@ -39,6 +41,54 @@ export type Marks = {
 
 /// The words a row says in the viewer's language.
 export type Words = titles.TitleWords & { quotedOnly: string };
+
+/// The words of the language the core speaks now, the same object while it is the same (what every row is made in:
+/// RowsMemo `whole`, data.ts `inWords`).
+let wordsNow: { lang: string; words: Words & { admin: string } } | null = null;
+export function rowWords(): Words & { admin: string } {
+  const lang = current();
+  if (wordsNow?.lang !== lang) {
+    wordsNow = { lang, words: { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") } };
+  }
+  return wordsNow.words;
+}
+
+/// What a station's rows were last made of (`rowsMade`, `rowsShared`), kept on its link (link.ts `rows`): each row by a
+/// key of its own, with what it was made of (`of`), so a row all of whose parts are as they were is the same object as
+/// before (rule 6), and only those something changed are made again (work.ts `chatRowsMade`). Its parts are compared as
+/// they are (===): the summaries and threads held are the database's rows, the same objects while unchanged
+/// (account.ts); of the marks, each row takes what it reads, a value, or an entry's object, which the sync's events and
+/// reads replace rather than change (sync.ts #held, `marksWith`), so the marks need no revision of their own. What every
+/// row reads (whose rows they are, the words) is `whole`: all of them are made again as it changes. Empty, it holds
+/// nothing, and the rows are made as they always were.
+export type RowsMemo = { whole: string; rows: Map<string, { of: unknown[]; row: J }> };
+export const rowsMemo = (): RowsMemo => ({ whole: "", rows: new Map() });
+
+/// Makes each row through `memo`: `row(key, of, make)` gives the row made before under `key` where `of` is all as it
+/// was, else `make`'s. `done` puts what was made this time in its place (a row not asked again is let go).
+function through(memo: RowsMemo, whole: string) {
+  const was = memo.whole === whole ? memo.rows : new Map<string, { of: unknown[]; row: J }>();
+  const now = new Map<string, { of: unknown[]; row: J }>();
+  const same = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+  return {
+    row(key: string, of: unknown[], make: () => J): J {
+      const before = was.get(key);
+      let row: J;
+      if (before !== undefined && same(before.of, of)) row = before.row;
+      else {
+        work.chatRowsMade++;
+        // (frozen: the same object is the same row, data.ts `inWords`, account.ts `setChats`)
+        row = Object.freeze(make());
+      }
+      now.set(key, { of, row });
+      return row;
+    },
+    done(): void {
+      memo.whole = whole;
+      memo.rows = now;
+    },
+  };
+}
 
 /// What of the station's answer is marks (none where it is not: a station from before).
 export function marksOf(answer: unknown): Marks | null {
@@ -90,8 +140,8 @@ export function mineFor(me: string, selves: readonly string[]): (p: unknown) => 
 }
 
 /// The viewer's sidebar of the chat list its station made for everyone (`shared`, by row id) and the marks that are
-/// theirs (chat-row.ts), the latest first.
-export function rowsShared(shared: Iterable<J>, marks: Marks, me: string, words: Words): J[] {
+/// theirs (chat-row.ts), the latest first; made through `memo` (RowsMemo) as `rowsMade`'s are.
+export function rowsShared(shared: Iterable<J>, marks: Marks, me: string, words: Words, memo: RowsMemo = rowsMemo()): J[] {
   const own: Own = {
     mine: mineFor(me, marks.selves),
     reads: new Map(Object.entries(marks.reads).map(([k, n]) => [Number(k), num(n)])),
@@ -101,11 +151,22 @@ export function rowsShared(shared: Iterable<J>, marks: Marks, me: string, words:
     ...(marks.muted !== undefined ? { muted: new Set(marks.muted) } : {}),
     pins: new Map(Object.entries(marks.pins).map(([k, at]) => [k, num(at)])),
   };
-  return [...shared].map((row) => rowFor(row, own, words)).sort((a, b) => num(b.lastActiveAt) - num(a.lastActiveAt));
+  const rows = through(memo, JSON.stringify(["shared", me, marks.selves, words]));
+  // (what rowFor reads of the viewer's own for a row: where they read it to, the cards they let go of it, its marks)
+  const ownOf = (row: J): unknown[] => {
+    const thread = typeof row.thread === "number" ? row.thread : null;
+    if (thread === null) return [row, own.pins.get(row.id)];
+    const letGo = (c: unknown) => (isObject(c) ? own.dismissed.has(`${thread}:${get(c, "seq")}`) : null);
+    return [row, own.pins.get(row.id), own.reads.get(thread), letGo(row.card), letGo(row.need), letGo(row.decision), own.kept.has(thread), own.hidden?.has(thread), own.muted?.has(thread)];
+  };
+  const out = [...shared].map((row) => rows.row(String(row.id), ownOf(row), () => rowFor(row, own, words)));
+  rows.done();
+  return out.sort((a, b) => num(b.lastActiveAt) - num(a.lastActiveAt));
 }
 
 /// The sidebar of the viewer whose email is `me`, as the station makes it (views.ts `chats`, not archived).
-export function rowsMade(sessions: readonly unknown[], threads: readonly unknown[], marks: Marks, me: string, words: Words): J[] {
+/// Made through `memo` (RowsMemo): the rows whose parts are as they were are those made before.
+export function rowsMade(sessions: readonly unknown[], threads: readonly unknown[], marks: Marks, me: string, words: Words, memo: RowsMemo = rowsMemo()): J[] {
   const mine = mineFor(me, marks.selves);
   // The sessions in lists, the latest active first.
   const shown = new Map<string, J>();
@@ -146,86 +207,107 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
       }
     }
   }
+  const made = through(memo, JSON.stringify(["made", me, marks.selves, words]));
+  const kept = new Set(marks.kept);
+  const hidden = marks.hidden === undefined ? undefined : new Set(marks.hidden);
+  const muted = marks.muted === undefined ? undefined : new Set(marks.muted);
+  const suggested = new Set(marks.suggested);
+  const teamOf = (t: J | null): unknown => {
+    const connect = t === null ? null : connectOf(t);
+    return connect === null ? null : marks.teams[connect];
+  };
+  // (what a row reads of the marks by its agent's key, and puts last)
+  const byKey = (key: string): unknown[] => [marks.pins[key], marks.openers[key], marks.opened[key], marks.shares[key]];
+  const keyed = (row: J): J => {
+    const key = row.id as string;
+    row.pinned = marks.pins[key] ?? null;
+    if (marks.openers[key] !== undefined) row.opener = marks.openers[key];
+    if (marks.opened[key] !== undefined) row.opened = marks.opened[key];
+    if (marks.shares[key] !== undefined) row.xshare = marks.shares[key];
+    return row;
+  };
   const rows: J[] = [];
   for (const t of held) {
     if (!own(t) || !listed(t)) continue;
     const inChat = members(t).map((m) => m.session as string).filter((k) => shown.has(k));
     if (inChat.length === 0) continue;
     const from = members(t).map((m) => origins.get(m.session)).find((o) => o !== undefined) ?? null;
-    const agents = inChat.map(agent);
-    const origin_ = from === null ? null : origin(from);
-    const key = agents[0]!.key as string;
-    const title = from !== null && origin_ !== null && titles.givenTitle(t) === null ? titleOf(from, origin_.channelName) : titleOf(t, null);
-    let last: J | null = null;
-    const m = t.lastMessage;
-    if (isObject(m)) {
-      const text0 = typeof m.text === "string" ? trim(m.text) : "";
-      const text = text0 === "" && Array.isArray(m.quotes) && m.quotes.length > 0 ? words.quotedOnly : text0;
-      last = { seq: m.seq, authorKind: m.authorKind, author: m.author, authorName: m.authorName ?? null, text: typeof m.text === "string" ? [...text].slice(0, LAST_CHARS).join("") : null, createdAt: m.createdAt };
-      if (m.authorPicture !== undefined) last.authorPicture = m.authorPicture;
-      if (m.agentIdentity != null) last.agentIdentity = m.agentIdentity;
-      if (m.authorModel !== undefined) last.authorModel = m.authorModel;
-      if (m.authorRuntime !== undefined) last.authorRuntime = m.authorRuntime;
-    }
-    const creator = t.creator ?? null;
-    const people = Array.isArray(t.people) ? t.people : [];
-    const starters = inChat.map((k) => shown.get(k)!.creator ?? null);
-    const row: J = {
-      id: key, session: key, thread: t.id, title, agents, last,
-      unread: num(t.unread) > 0,
-      mine: mine(creator) || people.some(mine) || starters.some(mine) || inChat.some((k) => spoke.has(k)),
-      lastActiveAt: Math.max(num(t.createdAt), said(t)),
-      connect: from === null ? null : connectOf(from),
-      origin: origin_, creator, people,
-    };
+    const key = inChat[0]!;
     const id = String(t.id);
-    row.archiveReminderDismissed = marks.kept.includes(t.id);
-    if (marks.hidden !== undefined) row.hidden = marks.hidden.includes(t.id);
-    if (marks.muted !== undefined) row.muted = marks.muted.includes(t.id);
-    row.archiveRecommended = marks.suggested.includes(t.id);
-    if (marks.reviews) {
-      row.archiveReviewed = true;
-      if (marks.verdicts[id] !== undefined) row.archiveCheck = marks.verdicts[id];
-    }
-    if (marks.clientKeys[key] !== undefined) row.clientKey = marks.clientKeys[key];
-    const card = marks.card[id];
-    if (isObject(card)) {
-      if (get(card.card, "type") === "options") {
-        const { card: c, ...rest } = card as J;
-        row.decision = { ...rest, options: get(c, "options") ?? null };
+    const of = [
+      t, from, teamOf(from), inChat.some((k) => spoke.has(k)), kept.has(t.id), hidden?.has(t.id), muted?.has(t.id), suggested.has(t.id), marks.reviews, marks.verdicts[id],
+      marks.clientKeys[key], marks.card[id], marks.need[id], marks.answered[id], ...byKey(key), inChat.length, ...inChat.map((k) => shown.get(k)),
+    ];
+    rows.push(made.row(`t:${id}`, of, () => {
+      const agents = inChat.map(agent);
+      const origin_ = from === null ? null : origin(from);
+      const title = from !== null && origin_ !== null && titles.givenTitle(t) === null ? titleOf(from, origin_.channelName) : titleOf(t, null);
+      let last: J | null = null;
+      const m = t.lastMessage;
+      if (isObject(m)) {
+        const text0 = typeof m.text === "string" ? trim(m.text) : "";
+        const text = text0 === "" && Array.isArray(m.quotes) && m.quotes.length > 0 ? words.quotedOnly : text0;
+        last = { seq: m.seq, authorKind: m.authorKind, author: m.author, authorName: m.authorName ?? null, text: typeof m.text === "string" ? [...text].slice(0, LAST_CHARS).join("") : null, createdAt: m.createdAt };
+        if (m.authorPicture !== undefined) last.authorPicture = m.authorPicture;
+        if (m.agentIdentity != null) last.agentIdentity = m.agentIdentity;
+        if (m.authorModel !== undefined) last.authorModel = m.authorModel;
+        if (m.authorRuntime !== undefined) last.authorRuntime = m.authorRuntime;
       }
-      row.card = card;
-    } else if (isObject(marks.need[id])) {
-      row.need = marks.need[id];
-    }
-    if (Array.isArray(marks.answered[id])) row.answered = marks.answered[id];
-    rows.push(row);
+      const creator = t.creator ?? null;
+      const people = Array.isArray(t.people) ? t.people : [];
+      const starters = inChat.map((k) => shown.get(k)!.creator ?? null);
+      const row: J = {
+        id: key, session: key, thread: t.id, title, agents, last,
+        unread: num(t.unread) > 0,
+        mine: mine(creator) || people.some(mine) || starters.some(mine) || inChat.some((k) => spoke.has(k)),
+        lastActiveAt: Math.max(num(t.createdAt), said(t)),
+        connect: from === null ? null : connectOf(from),
+        origin: origin_, creator, people,
+      };
+      row.archiveReminderDismissed = kept.has(t.id);
+      if (hidden !== undefined) row.hidden = hidden.has(t.id);
+      if (muted !== undefined) row.muted = muted.has(t.id);
+      row.archiveRecommended = suggested.has(t.id);
+      if (marks.reviews) {
+        row.archiveReviewed = true;
+        if (marks.verdicts[id] !== undefined) row.archiveCheck = marks.verdicts[id];
+      }
+      if (marks.clientKeys[key] !== undefined) row.clientKey = marks.clientKeys[key];
+      const card = marks.card[id];
+      if (isObject(card)) {
+        if (get(card.card, "type") === "options") {
+          const { card: c, ...rest } = card as J;
+          row.decision = { ...rest, options: get(c, "options") ?? null };
+        }
+        row.card = card;
+      } else if (isObject(marks.need[id])) {
+        row.need = marks.need[id];
+      }
+      if (Array.isArray(marks.answered[id])) row.answered = marks.answered[id];
+      return keyed(row);
+    }));
   }
   for (const key of order) {
     if (chatted.has(key)) continue;
     const x = shown.get(key)!;
     const from = origins.get(key) ?? null;
-    const origin_ = from === null ? null : origin(from);
-    const named = typeof x.title === "string" ? trim(x.title) : "";
-    const starter = x.creator ?? null;
-    rows.push({
-      id: key, session: key, thread: null,
-      title: named !== "" ? named : from !== null && origin_ !== null ? titleOf(from, origin_.channelName) : words.untitled,
-      agents: [agent(key)], last: null, unread: false,
-      mine: mine(starter) || spoke.has(key),
-      lastActiveAt: num(x.lastActiveAt),
-      connect: titles.isOwnSurface(x.connect) ? null : (x.connect ?? null),
-      origin: origin_,
-      people: starter === null ? [] : [starter],
-      creator: starter,
-    });
+    rows.push(made.row(`s:${key}`, [x, from, teamOf(from), spoke.has(key), ...byKey(key)], () => {
+      const origin_ = from === null ? null : origin(from);
+      const named = typeof x.title === "string" ? trim(x.title) : "";
+      const starter = x.creator ?? null;
+      return keyed({
+        id: key, session: key, thread: null,
+        title: named !== "" ? named : from !== null && origin_ !== null ? titleOf(from, origin_.channelName) : words.untitled,
+        agents: [agent(key)], last: null, unread: false,
+        mine: mine(starter) || spoke.has(key),
+        lastActiveAt: num(x.lastActiveAt),
+        connect: titles.isOwnSurface(x.connect) ? null : (x.connect ?? null),
+        origin: origin_,
+        people: starter === null ? [] : [starter],
+        creator: starter,
+      });
+    }));
   }
-  for (const row of rows) {
-    const key = row.id as string;
-    row.pinned = marks.pins[key] ?? null;
-    if (marks.openers[key] !== undefined) row.opener = marks.openers[key];
-    if (marks.opened[key] !== undefined) row.opened = marks.opened[key];
-    if (marks.shares[key] !== undefined) row.xshare = marks.shares[key];
-  }
+  made.done();
   return rows;
 }

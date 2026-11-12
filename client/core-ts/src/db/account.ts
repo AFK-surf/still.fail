@@ -12,7 +12,7 @@
 // chats, sessions, threads, jobs) is loaded by one indexed query the first time it is asked for and from then on kept
 // current by the writer, row by row, until no topic reads it. Nothing is loaded at start.
 import { lowerBound, upperBound } from "../ordered.ts";
-import { work } from "../work.ts";
+import { glanced, work } from "../work.ts";
 import { LogIndex, LogIndices } from "./log-index.ts";
 import { Deferred, Effect, type Fiber, Queue } from "effect";
 import type { Sql, SqlRow, SqlValue } from "../host.ts";
@@ -310,6 +310,14 @@ const PUT_CHAT = `INSERT OR REPLACE INTO chat (station, id, archived, ord, threa
   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${CHAT_MADE}, r.json, ${CHAT_COLUMNS.map(([, of]) => of("r.json")).join(", ")} FROM (SELECT ? AS json) AS r`;
 
 
+/// A chat row as a station's list was last written (`setChats`): the row as it was given (null: only read), and its
+/// place.
+type HeldChat = { row: J; ord: number };
+
+/// The most rows of a list given that `setChats` compares with what is written by reading them by their keys: more,
+/// and it reads the list once.
+const CHATS_COMPARED_BY_KEY = 8;
+
 /// The logs a station's channels are held in (station/channel-kinds.ts): a thread's entries, its letters (their own log
 /// beside its entries), a session's transcript.
 export type LogTable = "entry" | "letter" | "transcript";
@@ -341,6 +349,14 @@ export class AccountDb {
   readonly kept: KeptValues;
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
+  /// Each station's chat list (`chats`, `archived`) as it was last written, by K(list, station), each row by its id
+  /// (HeldChat): the row object given and its place, nothing that grows with the row (its JSON would be the list again
+  /// in memory, for every station the sync touches, the whole run, to save a read that is seldom needed). So `setChats`
+  /// takes a row given that is the one written before (the same object, frozen) at the same place as written, reading
+  /// nothing; the few others are read by their keys to be compared, many the list once. Kept true by every write of
+  /// the table here (#putChatRow, #deleteChatRow), let go where it could not be (a burst rolled back, a station
+  /// forgotten): then the next `setChats` reads the list once.
+  readonly #chatsHeld = new Map<string, Map<string, HeldChat>>();
   readonly #runner: Runner;
   readonly #derive: Derive;
   #inTx = false;
@@ -521,6 +537,7 @@ export class AccountDb {
       this.#logSpans.clear();
       this.#logPutsForgotten();
       this.#lists.clear();
+      this.#chatsHeld.clear();
       this.#slackNames.clear();
       const again = [...this.#unwritten, ...precious];
       this.#unwritten = [];
@@ -1091,6 +1108,7 @@ export class AccountDb {
   }
 
   #chatCols(row: J): ChatCols {
+    work.chatRowsSerialised++;
     const rest = { ...row };
     const unread = typeof rest.unread === "boolean" ? (rest.unread ? 1 : 0) : null;
     delete rest.unread;
@@ -1115,11 +1133,12 @@ export class AccountDb {
     };
   }
 
-  #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined, ordBefore: number | undefined): void {
-    const c = this.#chatCols(row);
+  /// (`c`: its columns, where they were made already)
+  #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined, ordBefore: number | undefined, c: ChatCols = this.#chatCols(row)): void {
     // (asked before the record is put: its triggers take the row kept beside it)
     const beside = this.kept.writing("chat", [station, id]);
     this.#run(PUT_CHAT, [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.state, c.watched, c.json]);
+    this.#chatsHeld.get(K(archived ? "archived" : "chats", station))?.set(id, { row, ord });
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
     // (its row kept beside it went with it, by the triggers: made again of it, where it is listed)
@@ -1130,12 +1149,12 @@ export class AccountDb {
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
 
-  /// A station's chat list as read: rows that changed are written, those gone deleted, the list read.
+  /// A station's chat list as read: rows that changed are written, those gone deleted, the list read. What was written
+  /// before is held (#chatsHeld): only what must be compared is read.
   setChats(station: string, archived: boolean, rows: J[], confirmed: number | null): void {
     this.#write(() => {
       const a = archived ? 1 : 0;
-      const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT id, ord, json, unread FROM chat WHERE station = ? AND archived = ? ORDER BY ord", [station, a])) was.set(String(r[0]), r);
+      const list = archived ? "archived" : "chats";
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const row of rows) {
@@ -1144,27 +1163,65 @@ export class AccountDb {
         seen.add(id);
         items.push([id, row]);
       }
-      const places = placesFor(items.map(([id]) => (was.has(id) ? (was.get(id)![1] as number) : null)));
+      let held = this.#chatsHeld.get(K(list, station));
+      // (the row written, frozen: it cannot have changed since)
+      const asHeld = (id: string, row: J) => held?.get(id)?.row === row && Object.isFrozen(row);
+      // What is written of those to compare and those gone (id, ord, json, unread): by their keys where they are few,
+      // else the list.
+      const stored = new Map<string, SqlRow>();
+      const unsure = held === undefined ? [] : [...items.filter(([id, row]) => !asHeld(id, row)).map(([id]) => id), ...[...held.keys()].filter((id) => !seen.has(id))];
+      if (held === undefined || unsure.length > CHATS_COMPARED_BY_KEY) {
+        for (const r of this.sql.all("SELECT id, ord, json, unread FROM chat WHERE station = ? AND archived = ?", [station, a])) stored.set(String(r[0]), r);
+        const was = held;
+        held = new Map([...stored].map(([id, r]) => [id, { row: was?.get(id)?.row ?? null, ord: r[1] as number }]));
+        this.#chatsHeld.set(K(list, station), held);
+      } else if (unsure.length > 0) {
+        for (const r of this.sql.all("SELECT c.id, c.ord, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = ? AND c.archived = ? AND c.id = k.value", [JSON.stringify(unsure), station, a])) stored.set(String(r[0]), r);
+      }
+      const was = held;
+      const places = placesFor(items.map(([id]) => was.get(id)?.ord ?? null));
+      // (a record as written: read just now, else the row given again, written as it is)
+      const before = (id: string, row: J): J => {
+        const r = stored.get(id);
+        if (r !== undefined) return this.#chatRow(station, a, id, r[2], r[3]);
+        const kept = this.#cache.get(K("chat", station, a, id));
+        return kept !== undefined && kept !== null ? kept : frozen(JSON.parse(JSON.stringify(row)));
+      };
       let changed = false;
       items.forEach(([id, row], i) => {
-        const before = was.get(id);
+        const h = was.get(id);
+        if (h !== undefined && asHeld(id, row)) {
+          if (h.ord === places[i]) {
+            glanced.chatRowsSame++;
+            return;
+          }
+          // (moved alone)
+          changed = true;
+          return this.#putChatRow(station, a, id, row, places[i], before(id, row), h.ord);
+        }
         const c = this.#chatCols(row);
-        if (before && before[1] === places[i] && before[2] === c.json && before[3] === c.unread) return;
+        const r = stored.get(id);
+        if (h !== undefined && r !== undefined && h.ord === places[i] && r[2] === c.json && r[3] === c.unread) {
+          h.row = row;
+          return;
+        }
         changed = true;
-        this.#putChatRow(station, a, id, row, places[i], before ? this.#chatRow(station, a, id, before[2], before[3]) : undefined, before ? (before[1] as number) : undefined);
+        this.#putChatRow(station, a, id, row, places[i], h === undefined ? undefined : before(id, row), h?.ord, c);
       });
-      for (const [id, r] of was) {
-        if (seen.has(id)) continue;
+      // (those gone, in the list's order)
+      const gone = [...was].filter(([id]) => !seen.has(id)).sort(([, x], [, y]) => x.ord - y.ord);
+      for (const [id, h] of gone) {
         changed = true;
-        this.#deleteChatRow(station, a, id, this.#chatRow(station, a, id, r[2], r[3]), r[1] as number);
+        this.#deleteChatRow(station, a, id, before(id, h.row), h.ord);
       }
-      this.#markListed(station, archived ? "archived" : "chats", confirmed, changed);
+      this.#markListed(station, list, confirmed, changed);
     });
   }
 
   #deleteChatRow(station: string, archived: number, id: string, before: J | undefined, ordBefore: number): void {
     const kept = this.kept.writing("chat", [station, id]);
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
+    this.#chatsHeld.get(K(archived ? "archived" : "chats", station))?.delete(id);
     this.#cache.delete(K("chat", station, archived, id));
     this.kept.wrote(kept, () => undefined);
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
@@ -1376,13 +1433,16 @@ export class AccountDb {
     return r && r[0] !== null ? this.#cached(K("sum", station, key), r[0]) : undefined;
   }
 
-  /// A station's sessions as read: summaries written where they changed, those no longer listed unlisted.
-  setSessions(station: string, list: J[], confirmed: number | null): void {
+  /// A station's sessions as read: summaries written where they changed, those no longer listed unlisted. `changed`: the
+  /// keys of those its station said changed from the ones held (sync.ts #whole), the rest as written: then only those
+  /// are compared with what is written, the others' places alone read.
+  setSessions(station: string, list: J[], confirmed: number | null, changed?: ReadonlySet<string>): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
       // Only listed sessions need comparing with the list. Unlisted ones keep their details but cannot be removed from
       // this list, and the details of listed ones are not needed to compare their summaries either.
-      for (const r of this.sql.all("SELECT key, ord, summary, listed FROM session WHERE station = ? AND listed = 1", [station])) was.set(String(r[0]), r);
+      const read = changed === undefined ? "SELECT key, ord, summary, listed FROM session WHERE station = ? AND listed = 1" : "SELECT key, ord FROM session WHERE station = ? AND listed = 1";
+      for (const r of this.sql.all(read, [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const s of list) {
@@ -1391,24 +1451,27 @@ export class AccountDb {
         seen.add(key);
         items.push([key, s]);
       }
-      const places = placesFor(items.map(([key]) => (was.get(key)?.[3] === 1 ? (was.get(key)![1] as number) : null)));
-      let changed = false;
+      const places = placesFor(items.map(([key]) => (was.has(key) ? (was.get(key)![1] as number) : null)));
+      let wrote = false;
       items.forEach(([key, s], i) => {
         const r = was.get(key);
+        // (as written, where it stays: none of it to compare)
+        if (r && r[1] === places[i] && changed !== undefined && !changed.has(key)) return;
         const json = JSON.stringify(s);
-        if (r && r[3] === 1 && r[1] === places[i] && r[2] === json) return;
-        changed = true;
+        const summary = changed === undefined ? r?.[2] : r && changed.has(key) ? this.sql.all("SELECT summary FROM session WHERE station = ? AND key = ?", [station, key])[0]?.[0] : undefined;
+        if (r && r[1] === places[i] && summary === json) return;
+        wrote = true;
         this.#putSummary(station, key, s, json, 1, places[i]);
       });
-      for (const [key, r] of was) {
-        if (seen.has(key) || r[3] !== 1) continue;
-        changed = true;
+      for (const [key] of was) {
+        if (seen.has(key)) continue;
+        wrote = true;
         this.#run("UPDATE session SET listed = 0 WHERE station = ? AND key = ?", [station, key]);
         this.#loadedList(station, "sessions")?.delete(key);
         this.#tell({ topic: "sessions", station });
         this.#tellSession(station, key);
       }
-      this.#markListed(station, "sessions", confirmed, changed);
+      this.#markListed(station, "sessions", confirmed, wrote);
     });
   }
 
@@ -1717,21 +1780,22 @@ export class AccountDb {
     this.#tell({ topic: "thread", station, thread: id });
   }
 
-  /// A station's threads as read.
-  setThreads(station: string, list: J[], confirmed: number | null): void {
+  /// A station's threads as read. `changed`: the ids of those its station said changed from the ones held (sync.ts
+  /// #whole), the rest as written: only those are compared with what is written.
+  setThreads(station: string, list: J[], confirmed: number | null, changed?: ReadonlySet<string>): void {
     this.#write(() => {
       const seen = new Set<number>();
       for (const view of list) {
         const id = u64(get(view, "id"));
         if (id === null || seen.has(id)) continue;
         seen.add(id);
-        this.#putThreadRow(station, view, 1);
+        if (changed === undefined || changed.has(String(id))) this.#putThreadRow(station, view, 1);
       }
-      let changed = false;
+      let wrote = false;
       for (const r of this.sql.all("SELECT id FROM thread WHERE station = ? AND listed = 1", [station])) {
         const id = r[0] as number;
         if (seen.has(id)) continue;
-        changed = true;
+        wrote = true;
         const before = this.thread(station, id);
         this.#run("UPDATE thread SET listed = 0 WHERE station = ? AND id = ?", [station, id]);
         this.#loadedList(station, "threads")?.delete(String(id));
@@ -1739,7 +1803,7 @@ export class AccountDb {
         this.#tell({ topic: "thread", station, thread: id });
         for (const member of membersOf(before)) this.#tellSession(station, member);
       }
-      this.#markListed(station, "threads", confirmed, changed);
+      this.#markListed(station, "threads", confirmed, wrote);
     });
   }
 
@@ -2473,6 +2537,7 @@ export class AccountDb {
       this.#logIndices.clear();
       this.#logSpans.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
+      for (const list of ["chats", "archived"] as const) this.#chatsHeld.delete(K(list, station));
       this.#tell({ topic: "$station-reset", station });
       for (const topic of ["overview", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });

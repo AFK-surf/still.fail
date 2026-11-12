@@ -17,8 +17,8 @@ import { topicKey, type Topic } from "./protocol.ts";
 import { Marks, signal, tracking, untracked, type Source as ReactiveSource } from "./reactive.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
-import { worded } from "./chat-row.ts";
-import { current, tr } from "./i18n.ts";
+import { worded, type Words } from "./chat-row.ts";
+import { rowWords } from "./station/rows-made.ts";
 import { ofAddress } from "./workspace.ts";
 
 export { frozen };
@@ -818,8 +818,9 @@ export class Data {
   }
 
   /// A held topic's new value (read, or as an event left it). `confirmed`: it came from its source just now (else it
-  /// is the core's own change).
-  set(topic: Topic, value: unknown, confirmed = true): void {
+  /// is the core's own change). `changed`: of a list of sessions or threads, the keys of the rows its station said
+  /// changed from those held (sync.ts #whole), the rest as held (none: any of them may have).
+  set(topic: Topic, value: unknown, confirmed = true, changed?: ReadonlySet<string>): void {
     const s = (k: string) => String(topic[k]);
     const at = confirmed ? this.#host.nowMs() : null;
     if (topic.topic === "prefs") {
@@ -850,9 +851,9 @@ export class Data {
       case "archivedRows":
         return db.setChats(station, true, list.map(inWords), at);
       case "sessions":
-        return db.setSessions(station, list, at);
+        return db.setSessions(station, list, at, changed);
       case "threads":
-        return db.setThreads(station, list, at);
+        return db.setThreads(station, list, at, changed);
       case "jobs":
         return db.setJobs(station, list, at);
       case "overview":
@@ -1708,9 +1709,18 @@ export class Data {
 }
 
 /// A chat's row as its station gives it (station/src/read/views.ts `chats`: what names it, `named`, and a last message
-/// that only quotes, marked so) in this device's words; one a station from before worded itself, as it is.
+/// that only quotes, marked so) in this device's words; one a station from before worded itself, as it is. A frozen row
+/// (as the sync makes them, rows-made.ts RowsMemo) is what it was while it is the same object: in the same words it is
+/// the same object here too (`wordedRows`), frozen, and so taken as written (account.ts `setChats`). Any other is worded
+/// anew.
+const wordedRows = new WeakMap<object, { words: Words; row: unknown }>();
 function inWords(row: unknown): unknown {
   if (!isObject(row)) return row;
-  const lang = current();
-  return worded(row as Record<string, any>, { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") });
+  const words = rowWords();
+  if (!Object.isFrozen(row)) return worded(row as Record<string, any>, words);
+  const was = wordedRows.get(row);
+  if (was?.words === words) return was.row;
+  const out = Object.freeze(worded(row as Record<string, any>, words));
+  wordedRows.set(row, { words, row: out });
+  return out;
 }
