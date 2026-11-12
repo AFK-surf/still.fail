@@ -345,9 +345,9 @@ test "the composer in the list's foot, on 小屏 and 大屏: read up the list, a
     let l = long_chat()
     let (t, src) = foot_long_open(l, s)
     let draft = @sfbase.writing(src, "ws1/st1:s-c1")
-    // (the list reading up corrects what it counted of its rows by what they measure, what it holds 101 shorter in a
-    // frame on 小屏, and the frames' judge takes that for the composer, pinned in its foot and still where it shows,
-    // moved as much in a frame: the list's to mend; what is read is held here as a result)
+    // (as the error comes in the composer under its quote, on 小屏, the quote's 「Claude」 is drawn under 「发送没有成功」
+    // while it moves (words over words, 5100 at the default rate): the composer's to mend; what is read is held here as
+    // a result)
     t.motion_unjudged(true)
     t.move_to(w / 2.0, h / 2.0)
     t.wheel(w / 2.0, h / 2.0, -600.0)
@@ -423,10 +423,7 @@ test "a chat's page made with its inside nodes tells the core what is read and w
     let placed = places().length()
     let (x, y) = (w * 0.6, h / 2.0)
     t.move_to(x, y)
-    // (read up: as the wheel's first frame scrolls the list, the frames' judge takes the composer, pinned in the list's
-    // foot and still where it shows, for moved in its row by as much as the list went (598 on 大屏 at 60 frames a
-    // second): the list's to mend, as in the composer's own test above; what the core is told is held here as a result)
-    t.motion_unjudged(true)
+    // (read up)
     t.wheel(x, y, -600.0)
     t.run_for(@ui.move_most_ms)
     guard focus().last() is Some(up) else { fail("\{name}: nothing told read up") }
@@ -464,14 +461,13 @@ test "a chat's page made with its inside nodes tells the core what is read and w
 /// The long chat (chat_window_wbtest's) opened on screen `s` with its page's inside nodes, at rest (the Tester's screen:
 /// 2 pixels a point); the core saying where it was left (`at`: the message's seq, its top under the list's in pixels, if
 /// said) and its unread line at message `line` (none at 0) as it is read; `before` done as the run begins, before the chat
-/// is opened (a message it is to go to); not judged on how what moves goes where `unjudged` (from the start).
+/// is opened (a message it is to go to).
 fn place_long_open(
   l : LongChat,
   s : (String, Double, Double, Int),
   at? : (Double, Double?)? = None,
   line? : @signals.Signal[Int] = @signals.signal(0),
   before? : () -> Unit = fn() {  },
-  unjudged? : Bool = false,
 ) -> @ui.Tester {
   let (_, w, h, platform) = s
   new_run()
@@ -505,9 +501,6 @@ fn place_long_open(
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, begun=fn() {
     @sfbase.window_tall.val = h
   })
-  if unjudged {
-    t.motion_unjudged(true)
-  }
   long_run(t, l, long_opened_ms)
   t
 }
@@ -546,9 +539,6 @@ test "a chat's page made with its inside nodes opens where it was left, on 小�
     // read up
     let l = long_chat()
     let t = place_long_open(l, s)
-    // (as the wheel's first frame scrolls the list, the frames' judge takes the composer, pinned in the list's foot and
-    // still where it shows, for moved as much: the list's to mend; where it opens is held here as a result)
-    t.motion_unjudged(true)
     t.move_to(w / 2.0, h / 2.0)
     t.wheel(w / 2.0, h / 2.0, -600.0)
     long_run(t, l, long_rest_ms)
@@ -607,8 +597,7 @@ test "a chat's page made with its inside nodes opens at its unread line before w
     let l = long_chat()
     let line = @signals.signal(0)
     let t = place_long_open(l, s, line~)
-    // (read up: the wheel's, as in the test above)
-    t.motion_unjudged(true)
+    // (read up: the wheel's)
     t.move_to(w / 2.0, h / 2.0)
     t.wheel(w / 2.0, h / 2.0, -600.0)
     long_run(t, l, long_rest_ms)
@@ -645,9 +634,7 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: the way ba
     let last = "第\{long_count}条："
     guard t.rect_of(last) is Some((_, end, _, _)) else { fail("\{name}: its last message not drawn as it opens") }
     assert_true(to_newest_shown(t) is None, msg="\{name}: the way back to the newest shown at its end")
-    // (read up: as the wheel's first frame scrolls the list, the frames' judge takes the composer, pinned in the list's
-    // foot and still where it shows, for moved as much: the list's to mend; what shows is held here as a result)
-    t.motion_unjudged(true)
+    // (read up)
     t.move_to(w / 2.0, h / 2.0)
     t.wheel(w / 2.0, h / 2.0, -600.0)
     long_run(t, l, long_rest_ms)
@@ -674,7 +661,9 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: a message 
     let t = place_long_open(l, s)
     let last = "第\{long_count}条："
     guard t.rect_of(last) is Some((_, end, _, _)) else { fail("\{name}: its last message not drawn as it opens") }
-    // (read up more than a screen: the wheel's, as in the tests above)
+    // (read up more than a screen: the wheel's. On 大屏 at 120 frames a second a box drawn with no words steps 6.4 in
+    // height in a frame at 5016.7 as it is read up (sizes steady, judged): not the composer's, not yet found; what shows
+    // is held here as a result)
     t.motion_unjudged(true)
     t.move_to(w / 2.0, h / 2.0)
     for _ in 0..<3 {
@@ -719,10 +708,7 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: opened to 
     let (name, h) = (s.0, s.2)
     let target = 120
     let l = long_chat()
-    // (as the list is brought to the message come, the frames' judge takes the composer, pinned in the list's foot and
-    // still where it shows, for moved as far as the list went (4500 on 大屏 at 120 frames a second), as it does from a
-    // wheel in the tests above: the list's to mend; where it comes to is held here as a result)
-    let t = place_long_open(l, s, before=fn() { go_to(long_ref, target.to_double(), keep_place=false) }, unjudged=true)
+    let t = place_long_open(l, s, before=fn() { go_to(long_ref, target.to_double(), keep_place=false) })
     long_run(t, l, long_rest_ms)
     let older = l.asked.filter(fn(a) { a.has_prefix("older") })
     assert_true(older.length() > 0, msg="\{name}: asked \{@ui.list_text(l.asked)}")
