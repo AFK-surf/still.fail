@@ -792,3 +792,60 @@ test "大屏, 中屏: the window's own buttons in its top row (Windows) pressed 
     assert_eq(t.window_acts().length(), acts, msg="\{win.0}: 8 before them none of theirs")
   }
 }
+
+///|
+test "大屏, 中屏: 归档 on a chat keeping watch, asked, and 归档 in the question: the cursor in the next chat's composer, in the window, what is typed its; every frame built whole past the moment a composer let go would let go" {
+  for win in wide_bar_windows {
+    let calls : Array[Made] = []
+    let t = wide_bar_at(
+      calls,
+      w=win.1,
+      over=wide_bar_both(
+        wide_bar_chat_field("archivable", fn(_) { Json::boolean(true) }),
+        wide_bar_chat_field("watch", fn(_) { { "ask": "它还在盯着 CI，归档后就不盯了。" } }),
+      ),
+    )
+    @sf.presenters_reset()
+    guard wide_bar_button(t, @sf.t("web-pages.chat.archive")) is Some(a) else { fail("\{win.0}: no 归档") }
+    // (pressed by a pointer: the composer keeps the cursor till the question takes it)
+    wide_bar_tap(t, a)
+    assert_true(@sf.presenting(), msg="\{win.0}: asked")
+    guard t.all(Button).filter(fn(b) { b.label == @sf.t("web-pages.chat.archive") && b.rect.1 > 90.0 }) is [yes, ..] else {
+      fail("\{win.0}: no 归档 in the question")
+    }
+    let (x, y, w, h) = yes.rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    // (each frame on the way, past the moment the composer of a chat without the cursor lets it go: the one archived,
+    // sliding off on 中屏, and the next must not take turns with it; a size that steps there is said by the frame)
+    let until = t.time() + @sfpages.let_go_ms + @ui.move_most_ms
+    if @ui.test_at_a_rate() {
+      t.run_for(until - t.time())
+    } else {
+      while t.time() < until {
+        t.frame()
+      }
+    }
+    assert_eq(named(calls, "chat.archive").length(), 1, msg=win.0)
+    assert_true(!@sf.presenting(), msg="\{win.0}: the question gone")
+    assert_true(
+      match app.nav.top() {
+        Chat(r) => r.session == "s-c2"
+        _ => false
+      },
+      msg="\{win.0}: on to the next chat",
+    )
+    guard t.focused() is Some(f) else { fail("\{win.0}: the cursor nowhere") }
+    let (fx, _, fw, _) = f.rect
+    assert_true(f.role is TextField && f.label == "发消息" && fx >= 0.0 && fx + fw <= win.1, msg="\{win.0}: \{Repr(f.role)} \{f.label} \{@ui.rect_text(f.rect)}")
+    let before = named(calls, "composer.text").length()
+    t.type_text("接着写")
+    t.run_for(@ui.move_most_ms)
+    let typed = named(calls, "composer.text")
+    assert_true(typed.length() > before, msg="\{win.0}: typed into none")
+    let keys : Array[String] = []
+    for i in before..<typed.length() {
+      keys.push(text(Some(typed[i].params), "key"))
+    }
+    assert_true(keys.iter().all(fn(k) { k.contains("s-c2") }), msg="\{win.0}: \{Repr(keys)}")
+  }
+}

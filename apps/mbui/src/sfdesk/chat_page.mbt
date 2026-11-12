@@ -14,7 +14,6 @@
 priv struct ChatOwn {
   info_open : @signals.Signal[Bool]
   jobs_open : @signals.Signal[Bool]
-  archive_asking : @signals.Signal[String]
 }
 
 ///|
@@ -22,14 +21,12 @@ priv struct ChatOwn {
 let chat_own : ChatOwn = {
   info_open: @signals.signal(false, same=fn(a, b) { a == b }),
   jobs_open: @signals.signal(false, same=fn(a, b) { a == b }),
-  archive_asking: @signals.signal("", same=fn(a, b) { a == b }),
 }
 
 ///|
 fn chat_page_reset() -> Unit {
   chat_own.info_open.set(false)
   chat_own.jobs_open.set(false)
-  chat_own.archive_asking.set("")
   chat_bar_from.info_node = None
   chat_bar_from.jobs_node = None
 }
@@ -205,7 +202,13 @@ fn stop_agents(src : Source, r : ChatRef, v : ChatView) -> Unit {
 /// Into the archive, asked first where the chat keeps watch (in the core's words).
 fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   if field(chat, "watch") is Some(Object(_)) {
-    chat_own.archive_asking.set(chat_key(r))
+    @sf.confirm(
+      @sf.t("web-pages.chat.archiveConfirm", args=[("title", v.title)]),
+      text(field(chat, "watch"), "ask"),
+      @sf.t("web-pages.chat.archive"),
+      fn() { archive(src, w, r, v) },
+      danger=true,
+    )
   } else {
     archive(src, w, r, v)
   }
@@ -322,29 +325,6 @@ fn chat_bar_handed(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Ch
     // (not read yet: the actions of the chat before it kept in the system's bars till its own come)
     None => bar_chat_waiting() |> ignore
   }
-  chat_archive_confirm(c, src, w, r, v, chat)
-}
-
-///|
-/// A chat keeping watch, archived once asked (the core's words).
-fn chat_archive_confirm(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : Json?) -> Unit {
-  @sf.confirm_dialog(
-    c,
-    "archive-confirm/" + chat_key(r),
-    chat_own.archive_asking.get() == chat_key(r),
-    @sf.t("web-pages.chat.archiveConfirm", args=[("title", match v { Some(view) => view.title; None => r.title })]),
-    text(field(chat, "watch"), "ask"),
-    @sf.t("web-pages.chat.archive"),
-    cancel=@sf.t("common.cancel"),
-    on_confirm=fn() {
-      chat_own.archive_asking.set("")
-      match v {
-        Some(view) => archive(src, w, r, view)
-        None => ()
-      }
-    },
-    on_close=fn() { chat_own.archive_asking.set("") },
-  )
 }
 
 ///|
