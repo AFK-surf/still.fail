@@ -78,9 +78,7 @@ pub fn vault_editor_dialog(
     saving: false,
     reveal: {},
     serial: vault_serial.val,
-    file_content: text(field(was, "fields"), "content"),
-    file_name: text(field(was, "fields"), "filename"),
-    file_pick: None,
+    file: @signals.signal((text(field(was, "fields"), "content"), text(field(was, "fields"), "filename"))),
   }
   let key = fn(part : String) { "vault-editor/" + e.serial.to_string() + "/" + part }
   let filled : Map[String, Bool] = Map([])
@@ -151,35 +149,25 @@ pub fn vault_editor_dialog(
         // a sign-in: its cookies as they were kept, never typed or shown here
         "browser" => words["cookies"] = text(field(was, "fields"), "cookies")
         "file" => {
-          // the system's picker answered: the file it gave (one too big said so, and none kept)
-          match e.file_pick {
-            Some(p) =>
-              if take_picked_file(core, p, fn(content, name) {
-                  e.file_content = content
-                  e.file_name = name
-                }) {
-                e.file_pick = None
-              }
-            None => ()
-          }
+          let (file_content, file_name) = e.file.get()
           @sf.field(c, @sf.t("web-pages.vault.editor.file"), fn() {
             // (the button the same before and after: what was picked fades in beside it, the row no higher)
             c.box(style=vd_file, fn() {
               @sf.button(c, @sf.t("web-pages.vault.editor.pickFile"), key=key("file"), tone=Plain, on_press=fn() {
-                e.file_pick = @ui.pick(Files)
+                pick_vault_file(core, fn(content, name) { e.file.set((content, name)) })
               }) |> ignore
-              if e.file_content != "" {
-                let name = if e.file_name != "" { e.file_name } else { @sf.t("web-pages.vault.kind.file") }
+              if file_content != "" {
+                let name = if file_name != "" { file_name } else { @sf.t("web-pages.vault.kind.file") }
                 // (faded in as it is drawn)
                 let shown = @kit.presence(c, key("file/" + name), true).t
-                let i = c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.theme().p.text)], style=vd_file_name)
+                let i = c.rich([@ui.span(name + " · " + file_size(file_content), color=@sf.theme().p.text)], style=vd_file_name)
                 c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get(c)))) })
               }
             })
             |> ignore
           })
-          words["content"] = e.file_content
-          words["filename"] = e.file_name
+          words["content"] = file_content
+          words["filename"] = file_name
         }
         _ => {
           input(c, "username", @sf.t("web-pages.vault.editor.username"), "name@example.com", false, false, "")
@@ -236,6 +224,11 @@ pub fn vault_editor_dialog(
     },
     fn(c, shut) {
       let k = vault_item_kinds[e.kind]
+      if k == "file" {
+        let (file_content, file_name) = e.file.get()
+        words["content"] = file_content
+        words["filename"] = file_name
+      }
       match row {
         Some(r) => {
           let removing = is_doing(core, ["vault.deleteItem"], [("workspace", ws), ("vault", vault)])

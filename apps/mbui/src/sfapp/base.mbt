@@ -440,7 +440,6 @@ pub using @sfbase {
   dv_shown,
   dv_station,
   dv_stations,
-  dv_take_picked,
   dv_trouble,
   dv_up_done,
   dv_up_part,

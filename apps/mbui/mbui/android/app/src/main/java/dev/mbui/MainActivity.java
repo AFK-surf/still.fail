@@ -398,16 +398,24 @@ public class MainActivity extends Activity {
         else super.onBackPressed();
     }
 
+    /** This activity's host again before `onResume` runs (a system answer arrives ahead of `onResume`). */
+    private void takeHost() {
+        Host.activity = this;
+        if (mbView != null) Host.view = mbView;
+    }
+
     /** A picker's answer (Picks: the photo picker, the documents UI, the camera). */
     @Override
     @SuppressWarnings("deprecation")
     protected void onActivityResult(int request, int result, Intent data) {
+        takeHost();
         if (!Picks.answered(request, result, data) && !Keeps.answered(request, result, data)) super.onActivityResult(request, result, data);
     }
 
     /** The system's answer to POST_NOTIFICATIONS (Notices: asked as notifications are turned on, or once at first). */
     @Override
     public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        takeHost();
         if (request == Gallery.ASK) {
             Gallery.answered();
             return;

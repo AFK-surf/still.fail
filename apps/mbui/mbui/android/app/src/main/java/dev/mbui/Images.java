@@ -17,22 +17,26 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Images: read and decoded on a few background threads straight to the size
- * asked for, EXIF orientation applied, then uploaded on the GL thread as
- * premultiplied RGBA textures the C renderer draws. A content:// source (a
- * photo of the gallery: Gallery.java) is the system's thumbnail of it.
+ * Images: read and decoded on background threads straight to the size asked
+ * for, EXIF orientation applied, then uploaded on the GL thread as
+ * premultiplied RGBA textures the C renderer draws. Local/in-memory decodes,
+ * gallery thumbnails (content://) and remote fetches run on separate pools so a
+ * burst of gallery thumbnails or slow URLs never starves an image just picked.
  */
 final class Images {
-    // a few at a time, so a grid scrolled fast doesn't keep every core busy
-    // with pictures already off screen
+    // local files and bytes already in memory (picked previews, icons, marks)
     static final ExecutorService pool = Executors.newFixedThreadPool(3);
+    // content:// URIs (gallery thumbnails and video stills: MediaProvider IPC)
+    static final ExecutorService thumbs = Executors.newFixedThreadPool(2);
+    // http(s):// fetches, kept off local decodes when the network stalls
+    static final ExecutorService remote = Executors.newFixedThreadPool(2);
 
     static final class Req {
         final String src;
@@ -54,13 +58,25 @@ final class Images {
     }
 
     // what each live image was loaded from, to decode it again if the GL
-    // context (and with it every texture) is lost; GL thread only
-    static final HashMap<Integer, Req> live = new HashMap<>();
+    // context (and with it every texture) is lost; written on the GL thread,
+    // checked by workers so freed requests skip work
+    static final ConcurrentHashMap<Integer, Req> live = new ConcurrentHashMap<>();
+
+    static ExecutorService poolFor(Req r) {
+        if (r.data != null) return pool;
+        if (r.src.startsWith("content://")) return thumbs;
+        if (r.src.startsWith("http://") || r.src.startsWith("https://")) return remote;
+        return pool;
+    }
+
+    static void submit(int id, Req r) {
+        poolFor(r).execute(() -> decode(id, r));
+    }
 
     static void load(int id, String src, byte[] data, int maxPx) {
         Req r = new Req(src, data, maxPx);
         live.put(id, r);
-        pool.execute(() -> decode(id, r));
+        submit(id, r);
     }
 
     // mbui-render (android_host.c mb_render_init_offscreen): its main holds the GL thread while it waits for its
@@ -77,8 +93,12 @@ final class Images {
     }
 
     static void toGL(Runnable r) {
-        if (held) heldUploads.add(r);
-        else Host.view.toGL(r);
+        if (held) {
+            heldUploads.add(r);
+            return;
+        }
+        MBView v = Host.view;
+        if (v != null) v.toGL(r);
     }
 
     static void free(int id) {
@@ -90,58 +110,73 @@ final class Images {
             int id = e.getKey();
             Req r = e.getValue();
             if (r.redo != null) r.redo.run();
-            else pool.execute(() -> decode(id, r));
+            else submit(id, r);
         }
     }
 
+    static Bitmap decodeSource(ImageDecoder.Source src, int maxPx, int[] orig) throws IOException {
+        Bitmap b = ImageDecoder.decodeBitmap(src, (d, info, s) -> {
+            int w = info.getSize().getWidth(), h = info.getSize().getHeight();
+            orig[0] = w;
+            orig[1] = h;
+            double k = Math.min(1.0, maxPx / (double) Math.max(w, h));
+            if (k < 1) {
+                d.setTargetSize(Math.max(1, (int) Math.round(w * k)),
+                        Math.max(1, (int) Math.round(h * k)));
+            }
+            d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+            d.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB));
+        });
+        if (b.getConfig() != Bitmap.Config.ARGB_8888) {
+            Bitmap c = b.copy(Bitmap.Config.ARGB_8888, false);
+            b.recycle();
+            b = c;
+        }
+        return b;
+    }
+
     static void decode(int id, Req r) {
+        if (live.get(id) != r) return;
         long t0 = System.nanoTime();
         int[] orig = new int[2];
         Bitmap b = null;
         try {
             byte[] data = r.data;
             if (data == null && r.src.startsWith("content://")) {
-                // a photo of the gallery (Gallery.java): its thumbnail, as big as asked for
-                Bitmap t = Host.activity.getContentResolver().loadThumbnail(android.net.Uri.parse(r.src),
-                        new android.util.Size(r.maxPx, r.maxPx), null);
-                orig[0] = t.getWidth();
-                orig[1] = t.getHeight();
-                b = t.getConfig() == Bitmap.Config.ARGB_8888 ? t : t.copy(Bitmap.Config.ARGB_8888, false);
-                if (b != t) t.recycle();
-                Bitmap bmp = b;
-                toGL(() -> upload(id, bmp, orig[0], orig[1]));
-                return;
-            }
-            if (data == null && (r.src.startsWith("http://") || r.src.startsWith("https://"))) {
-                data = fetch(r.src);
-            }
-            String path = r.src.startsWith("file://") ? r.src.substring(7) : r.src;
-            try {
-                // minSdk is 30, so ImageDecoder is always there; BitmapFactory
-                // is the second try for what it can't read
-                b = ImageDecoder.decodeBitmap(data != null
-                        ? ImageDecoder.createSource(ByteBuffer.wrap(data))
-                        : ImageDecoder.createSource(new File(path)),
-                        (d, info, s) -> {
-                            int w = info.getSize().getWidth(), h = info.getSize().getHeight();
-                            orig[0] = w;
-                            orig[1] = h;
-                            double k = Math.min(1.0, r.maxPx / (double) Math.max(w, h));
-                            if (k < 1) {
-                                d.setTargetSize(Math.max(1, (int) Math.round(w * k)),
-                                        Math.max(1, (int) Math.round(h * k)));
-                            }
-                            d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
-                            d.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB));
-                        });
-            } catch (IOException e) {
-                b = withFactory(data, path, r.maxPx, orig);
-                if (b == null) throw e;
-            }
-            if (b.getConfig() != Bitmap.Config.ARGB_8888) {
-                Bitmap c = b.copy(Bitmap.Config.ARGB_8888, false);
-                b.recycle();
-                b = c;
+                android.content.ContentResolver cr = Host.activity.getContentResolver();
+                android.net.Uri uri = android.net.Uri.parse(r.src);
+                // a photo or video of the gallery (Gallery.java), or a file held by its address (Picks.java):
+                // its thumbnail first (a video's still, a photo's cached preview), else the image itself
+                try {
+                    Bitmap t = cr.loadThumbnail(uri, new android.util.Size(r.maxPx, r.maxPx), null);
+                    orig[0] = t.getWidth();
+                    orig[1] = t.getHeight();
+                    b = t.getConfig() == Bitmap.Config.ARGB_8888 ? t : t.copy(Bitmap.Config.ARGB_8888, false);
+                    if (b != t) t.recycle();
+                } catch (Exception thumbErr) {
+                    b = decodeSource(ImageDecoder.createSource(cr, uri), r.maxPx, orig);
+                }
+            } else {
+                if (data == null && (r.src.startsWith("http://") || r.src.startsWith("https://"))) {
+                    data = fetch(r.src);
+                    if (live.get(id) != r) return;
+                }
+                String path = r.src.startsWith("file://") ? r.src.substring(7) : r.src;
+                try {
+                    // minSdk is 30, so ImageDecoder is always there; BitmapFactory
+                    // is the second try for what it can't read
+                    b = decodeSource(data != null
+                            ? ImageDecoder.createSource(ByteBuffer.wrap(data))
+                            : ImageDecoder.createSource(new File(path)), r.maxPx, orig);
+                } catch (IOException e) {
+                    b = withFactory(data, path, r.maxPx, orig);
+                    if (b == null) throw e;
+                    if (b.getConfig() != Bitmap.Config.ARGB_8888) {
+                        Bitmap c = b.copy(Bitmap.Config.ARGB_8888, false);
+                        b.recycle();
+                        b = c;
+                    }
+                }
             }
         } catch (Throwable e) {
             Host.log("image " + r.src + ": " + e);
@@ -195,6 +230,8 @@ final class Images {
 
     static byte[] fetch(String url) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(15_000);
+        c.setReadTimeout(30_000);
         try (InputStream in = c.getInputStream()) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[64 * 1024];

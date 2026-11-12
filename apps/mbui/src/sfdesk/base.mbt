@@ -88,7 +88,6 @@ using @sfbase {
   dv_rights,
   dv_root_label,
   dv_stations,
-  dv_take_picked,
   dv_upload,
   field,
   filter_of,

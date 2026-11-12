@@ -1,9 +1,10 @@
 // What a picture's bytes say of it before it is decoded: whether they are a PNG, and the width and height it is shown
-// at as their header gives it (PNG, GIF, WebP, JPEG: a JPEG turned as its EXIF note says, as hosts decode it).
+// at as their header gives it (PNG, GIF, WebP, JPEG, HEIC/HEIF, AVIF: turned as its EXIF note or irot says, as hosts
+// decode it).
 
 ///|
-/// The width and height a picture's bytes say it is shown at (PNG, JPEG, GIF, WebP), or None: a JPEG's frame, its sides
-/// swapped where its EXIF orientation turns it a quarter (5–8: a phone's photo kept on its side).
+/// The width and height a picture's bytes say it is shown at (PNG, JPEG, GIF, WebP, HEIC/HEIF, AVIF), or None: a
+/// JPEG's or HEIF's frame, its sides swapped where its EXIF orientation (5–8) or `irot` (1, 3) turns it a quarter.
 pub fn image_size(b : Bytes) -> (Int, Int)? {
   let n = b.length()
   let u8 = fn(i : Int) -> Int { if i < n { b[i].to_int() } else { 0 } }
@@ -60,6 +61,200 @@ pub fn image_size(b : Bytes) -> (Int, Int)? {
         return Some(if turned { (h, w) } else { (w, h) })
       }
       i += 2 + be16(i + 2)
+    }
+  }
+  if n >= 16 && box_is(b, 4, b"ftyp") {
+    return heif_size(b)
+  }
+  None
+}
+
+///|
+fn box_is(b : Bytes, at : Int, tag : Bytes) -> Bool {
+  at >= 0 &&
+  at + 4 <= b.length() &&
+  b[at] == tag[0] &&
+  b[at + 1] == tag[1] &&
+  b[at + 2] == tag[2] &&
+  b[at + 3] == tag[3]
+}
+
+///|
+fn next_box(b : Bytes, at : Int, end : Int) -> (Int, Int, Int)? {
+  if at < 0 || at + 8 > end || end > b.length() {
+    return None
+  }
+  let u8 = fn(i : Int) -> Int { b[i].to_int() }
+  let be16 = fn(i : Int) -> Int { (u8(i) << 8) | u8(i + 1) }
+  let be32 = fn(i : Int) -> Int {
+    if be16(i) >= 0x8000 {
+      -1
+    } else {
+      (be16(i) << 16) | be16(i + 2)
+    }
+  }
+  let sz = be32(at)
+  if sz == 1 {
+    if at + 16 > end || be32(at + 8) != 0 {
+      return None
+    }
+    let big = be32(at + 12)
+    if big < 16 || at + big > end {
+      return None
+    }
+    Some((at + 4, at + 16, at + big))
+  } else if sz == 0 {
+    Some((at + 4, at + 8, end))
+  } else if sz < 8 || at + sz > end {
+    None
+  } else {
+    Some((at + 4, at + 8, at + sz))
+  }
+}
+
+///|
+fn heif_brand(b : Bytes, at : Int) -> Bool {
+  for brand in [b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1", b"avif", b"avis", b"miaf"] {
+    if box_is(b, at, brand) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// The width and height an ISOBMFF still image (`ftyp` with a HEIF/AVIF brand, then `meta`) says its primary item is
+/// shown at (`pitm` → `iprp` `ipco`/`ipma`: `ispe`, turned a quarter where `irot` is 90° or 270°).
+fn heif_size(b : Bytes) -> (Int, Int)? {
+  let n = b.length()
+  let u8 = fn(i : Int) -> Int { b[i].to_int() }
+  let be16 = fn(i : Int) -> Int { (u8(i) << 8) | u8(i + 1) }
+  let be32 = fn(i : Int) -> Int {
+    if be16(i) >= 0x8000 {
+      -1
+    } else {
+      (be16(i) << 16) | be16(i + 2)
+    }
+  }
+  guard next_box(b, 0, n) is Some((ft_tag, ft_body, ft_end)) &&
+    box_is(b, ft_tag, b"ftyp") &&
+    ft_body + 8 <= ft_end else {
+    return None
+  }
+  let mut branded = heif_brand(b, ft_body)
+  let mut p = ft_body + 8
+  while !branded && p + 4 <= ft_end {
+    branded = heif_brand(b, p)
+    p += 4
+  }
+  if !branded {
+    return None
+  }
+  let mut top = ft_end
+  while next_box(b, top, n) is Some((tag, body, bend)) {
+    top = bend
+    if !box_is(b, tag, b"meta") || body + 4 > bend {
+      continue
+    }
+    let mut primary = -1
+    let props : Array[(Int, Int, Int)] = []
+    let assocs : Array[(Int, Array[Int])] = []
+    let mut c = body + 4
+    while next_box(b, c, bend) is Some((ctag, cbody, cend)) {
+      c = cend
+      if box_is(b, ctag, b"pitm") && cbody + 4 <= cend {
+        let ver = u8(cbody)
+        if ver == 0 && cbody + 6 <= cend {
+          primary = be16(cbody + 4)
+        } else if ver >= 1 && cbody + 8 <= cend {
+          primary = be32(cbody + 4)
+        }
+      } else if box_is(b, ctag, b"iprp") {
+        let mut ip = cbody
+        while next_box(b, ip, cend) is Some((ptag, pbody, pend)) {
+          ip = pend
+          if box_is(b, ptag, b"ipco") {
+            let mut kp = pbody
+            while next_box(b, kp, pend) is Some((ktag, kbody, kend)) {
+              kp = kend
+              if box_is(b, ktag, b"ispe") && kbody + 12 <= kend {
+                props.push((be32(kbody + 4), be32(kbody + 8), -1))
+              } else if box_is(b, ktag, b"irot") && kbody + 1 <= kend {
+                props.push((0, 0, u8(kbody) & 3))
+              } else {
+                props.push((0, 0, -1))
+              }
+            }
+          } else if box_is(b, ptag, b"ipma") && pbody + 8 <= pend {
+            let ver = u8(pbody)
+            let wide = (u8(pbody + 3) & 1) != 0
+            let count = be32(pbody + 4)
+            let mut q = pbody + 8
+            if count > 0 {
+              for _ in 0..<count {
+                let id_len = if ver < 1 { 2 } else { 4 }
+                if q + id_len + 1 > pend {
+                  break
+                }
+                let item_id = if ver < 1 { be16(q) } else { be32(q) }
+                let m = u8(q + id_len)
+                q += id_len + 1
+                let step = if wide { 2 } else { 1 }
+                if q + m * step > pend {
+                  break
+                }
+                let idxs : Array[Int] = []
+                for _ in 0..<m {
+                  let idx = if wide { be16(q) & 0x7FFF } else { u8(q) & 0x7F }
+                  idxs.push(idx)
+                  q += step
+                }
+                assocs.push((item_id, idxs))
+              }
+            }
+          }
+        }
+      }
+    }
+    let mut w = 0
+    let mut h = 0
+    let mut rot = 0
+    let mut matched = false
+    if primary >= 0 {
+      for entry in assocs {
+        if entry.0 == primary {
+          matched = true
+          for idx in entry.1 {
+            if idx >= 1 && idx <= props.length() {
+              let (pw, ph, prot) = props[idx - 1]
+              if pw > 0 && ph > 0 {
+                w = pw
+                h = ph
+              }
+              if prot >= 0 {
+                rot = prot
+              }
+            }
+          }
+        }
+      }
+    }
+    if !matched {
+      for prop in props {
+        let (pw, ph, prot) = prop
+        if w == 0 && pw > 0 && ph > 0 {
+          w = pw
+          h = ph
+        }
+        if prot >= 0 {
+          rot = prot
+        }
+      }
+    }
+    return if w > 0 && h > 0 {
+      Some(if (rot & 1) == 1 { (h, w) } else { (w, h) })
+    } else {
+      None
     }
   }
   None

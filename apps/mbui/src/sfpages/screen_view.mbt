@@ -61,9 +61,6 @@ priv struct ScreenUi {
   covered : @signals.Signal[Bool]
   /// a mouse on the stage (screen_mouse)
   mouse : MouseDrive
-  /// the picker asked for files, and where they go (as the state said when it was asked for)
-  mut picking : @ui.Pick?
-  mut drop_to : DropTo?
   /// a read of the device's clipboard under way, for a paste
   mut reading : @ui.ClipboardRead?
   /// the modifiers held from the keys row as each key went down (by its code), for it to go up with them too
@@ -134,8 +131,6 @@ fn screen_ui(key : String) -> ScreenUi {
         drove: false,
         covered: @signals.signal(false, same=fn(a, b) { a == b }),
         mouse: mouse_drive_new(),
-        picking: None,
-        drop_to: None,
         reading: None,
         down_with: {},
         copies: 0,
@@ -269,7 +264,6 @@ pub fn screen_page(
   screen_count(c, s, u)
   screen_copies(c, s, u)
   screen_pasted(c, s, u)
-  screen_picked(c, s, u)
   // unseen, where the keyboard's input goes
   let catcher = "screen-keys/" + key
   let kc = c.key_catcher(catcher)
@@ -684,42 +678,22 @@ fn paste_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// 发送文件 tapped: the system's picker, the files it gives going where the state says now.
 fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  ignore(u)
   guard s.drops_to() is Some(to) else { return }
-  match @ui.pick(Files) {
-    Some(p) => {
-      u.picking = Some(p)
-      u.drop_to = Some(to)
-    }
-    None => say(c, @sf.t("android-chat.composer.noFiles"))
+  if @ui.pick(Files, on_got=fn(files) { if !files.is_empty() { s.send_files(files, to) } }) is None {
+    say(c, @sf.t("android-chat.composer.noFiles"))
   }
 }
 
 ///|
 /// 安装 App tapped: the system's picker, what it gives going up to be installed on the device.
 fn install_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  ignore(u)
   let folder = text(s.state, "install")
   guard folder != "" else { return }
-  match @ui.pick(Files) {
-    Some(p) => {
-      u.picking = Some(p)
-      u.drop_to = Some({ folder, reveal: false, install: true })
-    }
-    None => say(c, @sf.t("android-chat.composer.noFiles"))
-  }
-}
-
-///|
-/// The files picked, once the system has answered: each going onto the machine, one after another.
-fn screen_picked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  guard u.picking is Some(p) else { return }
-  guard p.files() is Some(files) else { return }
-  u.picking = None
-  match u.drop_to {
-    Some(to) => {
-      let n = s.drops_serial
-      c.tell("screen-send/" + s.view + "/\{n}", fn() { s.send_files(files, to) })
-    }
-    None => ()
+  let to : DropTo = { folder, reveal: false, install: true }
+  if @ui.pick(Files, on_got=fn(files) { if !files.is_empty() { s.send_files(files, to) } }) is None {
+    say(c, @sf.t("android-chat.composer.noFiles"))
   }
 }
 

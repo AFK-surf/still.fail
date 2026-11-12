@@ -101,6 +101,11 @@ impl @hostapi.Host for FakeHost with pk_start(self, kind) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with pk_photo(self, _) {
+  @hostapi.Host::pk_start(self, 1)
+}
+
+///|
 /// Ask `id` answered with what the pickers give: told as a host's event tells it (on_outside, MB_OUTSIDE_PICK).
 fn fake_pick_said(f : FakeHost, id : Int) -> Unit {
   guard f.pick_asks.get(id - 1) is Some(a) && !a.said else { return }
