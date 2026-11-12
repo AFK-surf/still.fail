@@ -4,6 +4,7 @@
 import { SHAPES } from "./shapes/schema.ts";
 import type { Ty } from "./shapes/dsl.ts";
 import { shaped, shapedAs } from "./util.ts";
+import { walked } from "./work.ts";
 
 export type { Field, Shape, Ty } from "./shapes/dsl.ts";
 
@@ -269,6 +270,7 @@ const has = Object.prototype.hasOwnProperty;
 /// it (a path written for every field, every object's keys sorted) was much of what the core did on a phone
 /// (2026-10-19). Anything that does not fit is MISFIT, for `walk` to say.
 function fit(v: unknown, ty: Ty): unknown {
+  walked.fitted++;
   if (typeof ty === "object" && "opt" in ty) return v === null || v === undefined ? null : fit(v, ty.opt);
   if (wentOut(v, ty)) return v;
   if (typeof ty === "object") {

@@ -29,7 +29,7 @@ import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 import { token } from "./digest.ts";
-import { work } from "./work.ts";
+import { walked, walkingAs, work } from "./work.ts";
 
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
@@ -718,17 +718,32 @@ export class Store {
   /// message took the whole core down once, and the page stayed on 正在读取对话).
   #compute(topic: Topic): Value | undefined {
     let value: Value | undefined;
+    // (what it walks counted to it: work.ts `walkingAs`)
+    const was = walkingAs(topic.topic);
+    walked.recomputes++;
     try {
       value = this.#source?.compute?.(topic);
     } catch (error) {
       console.error(`computing ${topicDebug(topic)} failed`, error);
       return { err: new CoreError("internal", t("core-misc.compute", { topic: topicDebug(topic), reason: error instanceof Error ? error.message : String(error) })) };
+    } finally {
+      walkingAs(was);
     }
     if (value !== undefined && "ok" in value) sharedValue(value.ok);
     return value;
   }
 
   #flush(topic: Topic): void {
+    // (what making it and sending it walks counted to it: work.ts `walkingAs`)
+    const was = walkingAs(topic.topic);
+    try {
+      this.#flushOf(topic);
+    } finally {
+      walkingAs(was);
+    }
+  }
+
+  #flushOf(topic: Topic): void {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
     entry.emitScheduled = false;

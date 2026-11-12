@@ -20,8 +20,10 @@ design rules (the user, 2026-10-03):
 5. **An action does not wait for the network**: it takes effect in the core at once (the outbox, a pending chat, the
    overlays of renames, pins, archives, kept in the database across restarts), `doing` tracks it, a failure rolls it
    back and says why. Something made here meets the station's by its exact `clientKey`, never by a guess.
-6. **Changes are by key**: a topic's collections (`src/collections.ts`) recompute only the items whose records changed;
-   an unchanged item is the same object, and a keyed subscriber gets insert, patch, drop, move ops.
+6. **Changes are by key**: a view makes its topic's value again whole as anything it read changes; the store keeps
+   what equals the last value as the same objects (`src/collections.ts` `share`), sends a keyed subscriber insert,
+   patch, drop and move ops of its keyed lists (`diffKeyed`), and shapes again only items that are not the objects that
+   went out (`src/output.ts`). What that still walks for one change is counted (`test/view-work.test.ts`).
 7. **Workspaces are isolated** from each other.
 
 ## What a topic sends is bounded
@@ -65,6 +67,12 @@ the statements that read most. What the sync writes is held the same way: each c
 of each setting, from its run to the core at rest, alone (a core started anew, nothing asked) and held (everything the
 app asks held), reads at most twice what it writes (text bound to statements that write) and sends, or 8 KB, growing
 no faster; `OVER_WRITE` and `GROWS_WRITE` there, which only fall. A new cause is measured by being in `CAUSES`.
+What the views, the store and what goes out walk in memory is held the same way (`test/view-work.test.ts`): work.ts
+`walked` counts reads tracked, values made again, `share`'s and `equal`'s walks, keyed lists' diffs and the items put
+together, copied and fitted as they go out, each to the topic made or sent then; each cause, held, walks no more with
+what is shown three times as large (the lists' windows, the chat's messages, a `limit`, `lines`, `days`) nor with three
+times the chats. Those that do are in its `OVER_SHOWN` and `OVER_CHATS` as pairs (a cause, a counter that grows), which
+only fall as a set; by how much one grows is printed, not held (a field more in a row moves what it counts).
 What the sync makes of an event of a chat is held on the sync's own path (`test/rows-changed.test.ts`): a station's
 rows are made through a memo on its link (`src/station/rows-made.ts` `RowsMemo`: a row whose parts are the objects they
 were is the row made before, frozen) and written as the list was last written (`src/db/account.ts` `#chatsHeld`: a row's

@@ -125,6 +125,67 @@ export const glanced = {
   marksWalked: 0,
 };
 
+/// What the views, the store and what goes out walked in memory: items looked at, each a plain count where the walk is,
+/// whatever topic it is for. A change of one thing must walk what changed, not what is held or shown
+/// (test/view-work.test.ts holds every cause of real-size-asked.ts `CAUSES` to it, with what is shown three times as
+/// large and with three times the chats).
+export const walked = {
+  /// Reads a computed or an observer tracked (reactive.ts `tracked`): each signal or computed read, each time.
+  reads: 0,
+  /// Topics' values made again by their source (store.ts #compute).
+  recomputes: 0,
+  /// Objects and arrays collections.ts `share` went into past the same object, and the items of each array it mapped
+  /// (a keyed list's last items each put in its map as well).
+  shared: 0,
+  /// Objects and arrays util.ts `equal` compared past the same object.
+  equaled: 0,
+  /// Items a keyed list's diff looked at (collections.ts `list`): the old list where it is the same items, else both
+  /// lists' keys taken whole.
+  diffed: 0,
+  /// Items of keyed lists output.ts #build put together or looked up in its memo.
+  built: 0,
+  /// Objects and arrays output.ts `copy` walked.
+  copied: 0,
+  /// Values conform.ts `fit` visited, those that went out as they are among them.
+  fitted: 0,
+};
+
+export type Walked = typeof walked;
+
+/// Whose walking it is: the topic made or sent now (store.ts sets it as it makes and sends one, `walkingAs`), and, where
+/// a test asks (`walkingBy`), each topic's counts beside the totals: what was walked between two switches of the topic
+/// is counted to the one walking then, the walks themselves counting the totals alone.
+export const walking: { topic: string; by: Map<string, Walked> | null } = { topic: "", by: null };
+/// The totals as the topic walking now took over (while `walking.by` is set).
+let walkedAt: Walked = { ...walked };
+
+/// The topic walking now becomes `topic`, and the one before is given back (to be set again as `topic` is done). Where
+/// a test counts by topic, what was walked since the last switch is counted to the one before. Outside tests it only
+/// sets the topic.
+export function walkingAs(topic: string): string {
+  const was = walking.topic;
+  const by = walking.by;
+  if (by !== null) {
+    let w: Walked | undefined;
+    for (const k of Object.keys(walked) as (keyof Walked)[]) {
+      const n = walked[k] - walkedAt[k];
+      if (n === 0) continue;
+      if (w === undefined && (w = by.get(was)) === undefined) by.set(was, (w = { reads: 0, recomputes: 0, shared: 0, equaled: 0, diffed: 0, built: 0, copied: 0, fitted: 0 }));
+      w[k] += n;
+    }
+    walkedAt = { ...walked };
+  }
+  walking.topic = topic;
+  return was;
+}
+
+/// Counts by topic from now into `by` (a test's), or no more (null): what was walked till now counted as it was.
+export function walkingBy(by: Map<string, Walked> | null): void {
+  walkingAs(walking.topic);
+  walking.by = by;
+  walkedAt = { ...walked };
+}
+
 /// What was counted since `from` (a copy taken before).
 export function workSince(from: Work): Work {
   const out = { ...work };

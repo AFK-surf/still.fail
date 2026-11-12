@@ -1,6 +1,7 @@
 // The core's lazy dependency graph, built on alien-signals/system. A change queues its observers without computing
 // their values until the store schedules them; a dependency that is no longer read releases its links.
 import { createReactiveSystem, type ReactiveFlags as Flags, type Link, type ReactiveNode } from "alien-signals/system";
+import { walked } from "./work.ts";
 
 // The package declares its flags as an ambient const enum, which cannot be
 // imported as a value with this project's verbatimModuleSyntax setting.
@@ -66,7 +67,10 @@ function shouldUpdate(node: ReactiveNode): boolean {
 }
 
 function tracked(node: ReactiveNode): void {
-  if (active !== undefined && active.flags !== F.None) link(node, active, cycle);
+  if (active !== undefined && active.flags !== F.None) {
+    walked.reads++;
+    link(node, active, cycle);
+  }
 }
 
 export class Source<T> implements ReactiveNode {

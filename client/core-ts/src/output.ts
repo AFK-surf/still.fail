@@ -15,7 +15,7 @@ import * as present from "./present.ts";
 import type { Topic } from "./protocol.ts";
 import { computed, observe, type Derived } from "./reactive.ts";
 import { equal, isObject, shaped, sharedValue } from "./util.ts";
-import { work } from "./work.ts";
+import { walked, work } from "./work.ts";
 
 /// An item as it goes out: what it was made from, and what is made of it.
 type Memo = { raw: unknown; out: Derived<unknown> };
@@ -107,6 +107,7 @@ export class Output {
   /// The value with each keyed item put as it goes out.
   #build(topic: Topic, raw: unknown, spec: Spec, ty: Ty | undefined, at: string, path: string, next: Map<string, Memo>): unknown {
     if (spec.key && Array.isArray(raw)) {
+      walked.built += raw.length;
       const itemTy = ty === undefined ? undefined : present.itemOf(ty);
       return raw.map((item, i) => {
         const here = `${path}[${i}]`;
@@ -194,6 +195,7 @@ function compactChat(value: unknown): unknown {
 /// A copy to decorate, sharing what already went out.
 function copy(v: unknown): unknown {
   if (v === null || typeof v !== "object") return v;
+  walked.copied++;
   if (shaped.has(v)) return v;
   if (Array.isArray(v)) return v.map(copy);
   const out: Record<string, unknown> = {};

@@ -5,7 +5,7 @@
 import { type Op, type Segment, diffAt, jsonLength, largerThan } from "./delta.ts";
 import type { Topic } from "./protocol.ts";
 import { compareKeys, equal, isObject } from "./util.ts";
-import { work } from "./work.ts";
+import { walked, work } from "./work.ts";
 
 /// Where the keyed lists of a value are: `key` (the fields an item's key is made of) says the value at this place is
 /// one; `item` where the keyed lists of each item are; `fields` those of an object's fields.
@@ -125,10 +125,14 @@ export function share<T>(prev: unknown, next: T, spec: Spec | null): T {
 function shareAt(prev: unknown, next: unknown, spec: Spec | null): unknown {
   if (prev === next || typeof next !== "object" || next === null || typeof prev !== "object" || prev === null) return next;
   work.compared++;
+  walked.shared++;
   let out: unknown;
   if (Array.isArray(next)) {
     if (!Array.isArray(prev)) return next;
     const fields = spec?.key;
+    // (each item mapped, and a keyed list's last items each put in its map)
+    const looked = next.length + (fields ? prev.length : 0);
+    walked.shared += looked;
     let byKey: Map<string, unknown> | null = null;
     if (fields) {
       byKey = new Map();
@@ -183,7 +187,11 @@ function keysOf(list: unknown[], fields: string[]): string[] | null {
 /// added to a chat costs that message.
 function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops: AnyOp[]): boolean {
   const fields = spec.key!;
-  if (old.length === next.length && old.every((item, i) => item === next[i])) return true;
+  // (the old list walked to its first item not the same; its keys and the new one's taken whole, below)
+  const same = old.length === next.length && old.every((item, i) => item === next[i]);
+  const looked = same ? old.length : old.length + next.length;
+  walked.diffed += looked;
+  if (same) return true;
   const allOld = keysOf(old, fields);
   const allNext = keysOf(next, fields);
   if (!allOld || !allNext) return false;
