@@ -5475,6 +5475,22 @@ fn view_focus_kept_for(c : Ctx, id : Int) -> Bool {
 }
 
 ///|
+/// Whether what Ctx's focus names `id` takes input now, as the focus would be given back to it (view_layers_focus): a
+/// stop of an old view, where the node it is hosted in is where presses are taken (Tree::presses_here: nothing that
+/// holds it put away, leaving or said to take none), a modal layer still over it or not (what that keeps from input may
+/// still be given it, for that one to give back as it goes); none, a node of the tree's (held so as it is given it:
+/// focus_told_tree), or one of the old frame's own layers, as it is.
+fn back_takes_input(t : @view.Tree, id : Int) -> Bool {
+  if id == 0 || tree_said_ids.contains(id) {
+    return true
+  }
+  match focus_node_of(id) {
+    Some(n) => t.presses_here(n)
+    None => true
+  }
+}
+
+///|
 /// The node of the window's tree what Ctx's focus names `id` is in: the node itself, or the old view a stop of an old
 /// view's (as the last frame built it) is in; none where it is neither (a layer of the old frame's own).
 fn focus_node_of(id : Int) -> @view.NodeId? {
@@ -5552,6 +5568,12 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
     None if c.focus == 0 => going.last().map(fn(l) { l.back })
     None => None
   }
+  // (given back only to what takes input as it is given it: not to a stop of an old view put away in the same change,
+  // its page taken off for another (a chat archived from a question over it, the next come in its place), which it would
+  // follow off the window; the focus to none then, for what is in front now to take, as an old frame's layer gives
+  // nothing back to what took it meanwhile: Ctx::layers_focus. A node of the tree's is held so as it is given it:
+  // focus_told_tree)
+  let back = back.filter(fn(b) { back_takes_input(t, b) })
   let left = layer_focus_open.filter(fn(l) { !gone.contains(l.layer) })
   layer_focus_open.clear()
   layer_focus_open.append(left)
