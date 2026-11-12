@@ -67,7 +67,7 @@ let rule_words : Map[String, String] = {
   "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's sf/motion.mbt)",
   "built-by-hand": "the app says by hand that what was built is to be built again (Ctx::forget_parts, built_from_changed): what changed is a signal (same= by its value), read where it is used, and what read it is built again by itself, nothing else; a kept build that differs from one built whole is a read not followed, made followed, never covered by building more",
   "layout-read-back": "the app reads back where or how large something was laid out (Ctx::rect_of, laid_size, laid_rect) for what it builds: the first frame has none and draws it wrong, a change lays the frame out again; say it as layout (a box's own rules, by the width it is given, Ctx::place_by_size, cover), a press by what took it (c.hovered, press_within); a flight's ends by @motion.measure",
-  "layout-told": "what is made reads back what the layout came to, told as a change once all is laid out (View::laid_size_told, went_told, pointer_here_told): it is made again by it and laid out again, the layout's result flowing back into what this layout made; make it by the room it is given as that layout comes to it (View::by_room: Room::width, Room::tall), say it as layout (min_width/max_width `within`), or as the framework's own (a scroll's reach, a beside's side); counted, so those left only go",
+  "layout-told": "what is made reads back what the layout came to, told as a change once all is laid out (View::laid_size_told, went_told, pointer_here_told): it is made again by it and laid out again, the layout's result flowing back into what this layout made; make it by the room it is given as that layout comes to it (View::by_room: Room::width, Room::tall), say it as layout (min_width/max_width `within`), or as the framework's own (a scroll's reach, a beside's side); counted, so those left only go. What a page's list has in sight, told to handlers (ListPlace::on_sight, ListPlace::sight_now) at the moments the hand is found again, for the accounts they keep and tell the core of, is let through by name: never read as a frame is built, nor bound to what is made",
   "motion-spring": "the app makes a spring of its own (@motion.spring, motion_spring, Ctx::spring): a spring is one of @motion's (move_spring, sheet_spring, lift_spring), as a timed motion's curve is one of @ui.Ease's (the app's sf/motion.mbt, Curves)",
   "motion-length": "a move given a length of its own (a tween on Move): a thing moved takes as long as its way is far, from where it is as it is told (@motion.moved, @ui.move_ms; the app's sf/motion.mbt, Curves: the user, 2026-10-30, 「有些动效不应该固定播放时间，因为它的距离是不固定的」)",
   "motion-read": "the app reads whether a motion runs (moving()): what is shown, what takes a press, when state is let go follow from the cause and the motion's declared end (ends()); what only draws by it says so on its line (det-ok)",
@@ -92,6 +92,11 @@ let layout_read_back : Array[String] = ["rect_of", "laid_size", "laid_rect"]
 ///|
 /// what the layout came to, told back as a change to make things by (layout-told)
 let layout_told : Array[String] = ["laid_size_told", "went_told", "pointer_here_told"]
+
+///|
+/// what a page's list has in sight, told to handlers at the hand's moments (list_sight.mbt): let through layout-told by
+/// name, read by a handler for its accounts, never by what is made
+let layout_told_handlers : Array[String] = ["on_sight", "sight_now"]
 
 ///|
 /// what @math works out by the engine on js (implementation-approximated in ECMAScript): @dmath's in their place

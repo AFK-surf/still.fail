@@ -4,11 +4,12 @@
 // a chat's agent at work), so that frames are drawn while the list rests. At its own moments, from as it is made: a key
 // appended at its foot at 1000 ms (the cause frame), asked to its first key at 6000 ms and back to its foot at 6500 ms,
 // each at once (a jump from its foot to its top and back); between those, the drive's drags and fling (list.drive).
+// MBUI_FIXTURE=list-sight:N: the same, what it has in sight told to a handler keeping a count (ListPlace::on_sight).
 
 ///|
 /// The keys a list scene holds: 30, or 1,500 where it says so.
 fn list_scene_keys(mode : String) -> Int {
-  if mode == "list:1500" {
+  if mode == "list:1500" || mode == "list-sight:1500" {
     1500
   } else {
     30
@@ -17,10 +18,15 @@ fn list_scene_keys(mode : String) -> Int {
 
 ///|
 /// The scene in `root`: the spinner's bar over the list, which takes the rest.
-fn list_scene(root : @view.View, n : Int) -> Unit {
+fn list_scene(root : @view.View, n : Int, sight? : Bool = false) -> Unit {
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { a == b })
   let scroll = @view.Scroll::list()
   let place : @view.ListPlace[Int] = @view.ListPlace::new()
+  // (`sight`: what it has in sight told to a handler keeping a count of it, as one marking what is read would)
+  if sight {
+    let told = Ref(0)
+    place.on_sight(fn(_) { told.val = told.val + 1 })
+  }
   root.box(fn(col) {
     col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
     col.box(fn(bar) {

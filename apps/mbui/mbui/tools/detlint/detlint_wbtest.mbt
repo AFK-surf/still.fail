@@ -2098,15 +2098,25 @@ test "layout-told" {
         "  let h = room.tall(p)\n" +
         "}\n",
       ),
+      // (what a page's list has in sight, told to a handler at the hand's moments: let through by name; a read-back
+      // beside it still refused)
+      (
+        "src/app/marks.mbt",
+        "fn m(place : @view.ListPlace[Int], p : @view.View) -> Unit {\n" +
+        "  place.on_sight(fn(s) { told(s) })\n" +
+        "  let now = place.sight_now()\n" +
+        "  let w = p.laid_size_told()\n" +
+        "}\n",
+      ),
       ("src/app/card_wbtest.mbt", "test \"t\" {\n  v.laid_size_told() |> ignore\n}\n"),
       ("src/ui/links.mbt", "fn w(v : @view.View) -> Unit {\n  v.pointer_here_told() |> ignore\n}\n"),
       ("src/view/scroll.mbt", "fn w(v : View) -> Unit {\n  v.laid_size_told() |> ignore\n}\n"),
     ],
     "layout-told",
-    4,
+    5,
     cfg~,
   )
-  assert_eq(lines(fs), [2, 2, 3, 4])
+  assert_eq(lines(fs), [2, 2, 3, 4, 4])
 }
 
 ///|

@@ -13,6 +13,11 @@ fn main {
     @film.run_bench(fn(_) {  }, tree=fn(root) { list_scene(root, list_scene_keys(mode)) })
     return
   }
+  // (the same list, what it has in sight told to a handler: list_scene.mbt)
+  if mode.has_prefix("list-sight:") {
+    @film.run_bench(fn(_) {  }, tree=fn(root) { list_scene(root, list_scene_keys(mode), sight=true) })
+    return
+  }
   // (a plain column alone, its rows 17 or 170: col_scene.mbt)
   if mode.has_prefix("col:") {
     @film.run_bench(fn(_) {  }, tree=fn(root) { col_scene(root, col_scene_rows(mode)) })
