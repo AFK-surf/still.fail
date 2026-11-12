@@ -276,12 +276,10 @@ pub fn chat_row_node(
       corner_end=fn() { row_aside_end_w(item(), lead) },
       fn(h) {
         let tone = fn() { @sfbase.row_tone(item()) }
+        // (the show's own box its slot: a box a part, no box round one)
         h.show(fn() { tone() != "" && !renaming() }, fn(m) {
-          m.box(fn(s) {
-            @sf.style_node(s, fn() { mark_slot }, in_row=true)
-            chat_mark_node(s, tone)
-          })
-          |> ignore
+          @sf.style_node(m, fn() { mark_slot }, in_row=true)
+          chat_mark_node(m, tone)
         })
         h.pick(renaming, fn(n, on) {
           // (what is left of the line, from none: its title cut short in it, what stands at its end kept whole)
@@ -290,33 +288,26 @@ pub fn chat_row_node(
             rename_node(n, src, item, at)
             return
           }
-          n.box(fn(w) {
-            w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-            @sf.words_node(w, fn() {
-              if item().hidden == Some(true) { item().title + " · " + @sf.t("web-main.filter.hidden") } else { item().title }
-            }, fn() {
-              let look = t().chat_list
-              let title = if item().unread { look.title_unread } else { look.title }
-              if offline() || item().settled {
-                title.then(title_dim)
-              } else {
-                title
-              }
-            })
-            |> ignore
+          @sf.words_node(n, fn() {
+            if item().hidden == Some(true) { item().title + " · " + @sf.t("web-main.filter.hidden") } else { item().title }
+          }, fn() {
+            let look = t().chat_list
+            let title = if item().unread { look.title_unread } else { look.title }
+            if offline() || item().settled {
+              title.then(title_dim)
+            } else {
+              title
+            }
           })
           |> ignore
         })
         // failed a moment ago: a red mark, why on it
-        h.show(fn() { failed() is Some(_) }, fn(f) {
-          f.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            let why = fn() { failed().unwrap_or("") }
-            s.says(By(fn() { Some(@view.said(Image, label=why())) })) |> ignore
-            chat_mark_node(s, fn() { "alert" })
-            @sf.tip_node(tips, s, why, within=true) |> ignore
-          })
-          |> ignore
+        h.show(fn() { failed() is Some(_) }, fn(s) {
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          let why = fn() { failed().unwrap_or("") }
+          s.says(By(fn() { Some(@view.said(Image, label=why())) })) |> ignore
+          chat_mark_node(s, fn() { "alert" })
+          @sf.tip_node(tips, s, why, within=true) |> ignore
         })
         // its station offline, or its link coming back: unplugged (its update's mark while it updates); one from
         // elsewhere (Slack, Feishu) says so, by its platform's mark
@@ -326,7 +317,7 @@ pub fn chat_row_node(
             _ => ""
           }
         }
-        h.pick(fn() {
+        let away_which = fn() {
           if away() != "" {
             if item().updating { 2 } else { 1 }
           } else if item().connect {
@@ -334,51 +325,43 @@ pub fn chat_row_node(
           } else {
             0
           }
-        }, fn(
-          a,
-          which,
-        ) {
+        }
+        h.pick(away_which, fn(s, which) {
           guard which != 0 else { return }
-          a.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            let said = fn() {
-              if which >= 3 {
-                if item().origin_text != "" {
-                  item().origin_text
-                } else {
-                  "Slack"
-                }
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          let said = fn() {
+            if which >= 3 {
+              if item().origin_text != "" {
+                item().origin_text
               } else {
-                away()
+                "Slack"
               }
+            } else {
+              away()
             }
-            s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
-            match which {
-              2 => @sf.updating_mark_node(s, kind_glyph, fn() { t().p.subtle })
-              1 => @sf.icon_node(s, "unplug", kind_glyph, By(fn() { t().p.subtle })) |> ignore
-              // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
-              4 => @sf.drawable_node(s, "comma", kind_mark, tint=fn() { Some(t().p.text) }) |> ignore
-              _ => @sf.origin_mark_node(s, fn() { item().origin_kind }, kind_mark) |> ignore
-            }
-            @sf.tip_node(tips, s, said, within=true) |> ignore
-          })
-          |> ignore
+          }
+          s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
+          match which {
+            2 => @sf.updating_mark_node(s, kind_glyph, fn() { t().p.subtle })
+            1 => @sf.icon_node(s, "unplug", kind_glyph, By(fn() { t().p.subtle })) |> ignore
+            // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
+            4 => @sf.drawable_node(s, "comma", kind_mark, tint=fn() { Some(t().p.text) }) |> ignore
+            _ => @sf.origin_mark_node(s, fn() { item().origin_kind }, kind_mark) |> ignore
+          }
+          @sf.tip_node(tips, s, said, within=true) |> ignore
         })
         // opened by another chat's agent: marked so, that chat named on it
-        h.show(fn() { item().opener is Some(_) && !renaming() }, fn(o) {
-          o.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            let said = fn() {
-              match item().opener {
-                Some(o) => if o.archived { o.text + " · " + o.note } else { o.text }
-                None => ""
-              }
+        h.show(fn() { item().opener is Some(_) && !renaming() }, fn(s) {
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          let said = fn() {
+            match item().opener {
+              Some(o) => if o.archived { o.text + " · " + o.note } else { o.text }
+              None => ""
             }
-            s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
-            @sf.icon_node(s, "spawned", kind_glyph, By(fn() { t().p.subtle })) |> ignore
-            @sf.tip_node(tips, s, said, within=true) |> ignore
-          })
-          |> ignore
+          }
+          s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
+          @sf.icon_node(s, "spawned", kind_glyph, By(fn() { t().p.subtle })) |> ignore
+          @sf.tip_node(tips, s, said, within=true) |> ignore
         })
         // the station it runs on, by its mark: last, in the same column at every row's end
         // (as big as its kind of mark is: made again where another chat's is of another, the row taken for that one)
@@ -390,20 +373,18 @@ pub fn chat_row_node(
           }
         }, fn(k, size) {
           guard size is Some(size) else { return }
-          k.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            s.says(By(fn() { Some(@view.said(Image, label=item().station_name)) })) |> ignore
-            @sf.station_mark_node(
-              s,
-              fn() { item().station_emoji },
-              fn() { item().station_icon },
-              size,
-              fn() { if offline() { t().p.subtle } else { t().p.muted } },
-              stint,
-            )
-            @sf.tip_node(tips, s, fn() { item().station_name }, within=true) |> ignore
-          })
-          |> ignore
+          let s = k
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          s.says(By(fn() { Some(@view.said(Image, label=item().station_name)) })) |> ignore
+          @sf.station_mark_node(
+            s,
+            fn() { item().station_emoji },
+            fn() { item().station_icon },
+            size,
+            fn() { if offline() { t().p.subtle } else { t().p.muted } },
+            stint,
+          )
+          @sf.tip_node(tips, s, fn() { item().station_name }, within=true) |> ignore
         })
       },
       fn(u) {
@@ -615,31 +596,34 @@ pub fn chat_row_node(
     // (Tab passes the rows, as the old list's: they are gone through by ⌥↑ ⌥↓, chat.prev and chat.next)
     row.tab_stop(Is(false)) |> ignore
     // 归档 at the row's top right while a mouse points at it (concentric with the row's corner)
-    row.show(archive_key, fn(o) {
-      o
-      .over(Is(true))
-      .lines_up(Is(Some(End)))
-      .padding(Is((0.0, @ui.capsule_in(@sf.row_corner, row_key_side), @ui.capsule_in(@sf.row_corner, row_key_side), 0.0)))
-      |> ignore
-      o.box(fn(k) {
-        k
-        .width(Is(Some(row_key_side)))
-        .height(Is(Some(row_key_side)))
-        .radius(Is(1.0e6))
-        .lines_up(Is(Some(Middle)))
-        .lies_along(Is(Middle))
-        .ground(By(fn() { if @sf.lit_node(k) { t().p.hover } else { 0L } }))
+    // (a mouse's alone: nothing of it made for a finger's row)
+    if !finger {
+      row.show(archive_key, fn(o) {
+        o
+        .over(Is(true))
+        .lines_up(Is(Some(End)))
+        .padding(Is((0.0, @ui.capsule_in(@sf.row_corner, row_key_side), @ui.capsule_in(@sf.row_corner, row_key_side), 0.0)))
         |> ignore
-        @sf.presses_node(k, fn() { then_whole(fn(w) { archive_row(src, w) }, fn() {  }) })
-        k.says(By(fn() {
-          Some(@view.said(Button, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item().title)])))
-        }))
+        o.box(fn(k) {
+          k
+          .width(Is(Some(row_key_side)))
+          .height(Is(Some(row_key_side)))
+          .radius(Is(1.0e6))
+          .lines_up(Is(Some(Middle)))
+          .lies_along(Is(Middle))
+          .ground(By(fn() { if @sf.lit_node(k) { t().p.hover } else { 0L } }))
+          |> ignore
+          @sf.presses_node(k, fn() { then_whole(fn(w) { archive_row(src, w) }, fn() {  }) })
+          k.says(By(fn() {
+            Some(@view.said(Button, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item().title)])))
+          }))
+          |> ignore
+          @sf.icon_node(k, "archive", row_icon, By(fn() { if @sf.lit_node(k) { t().p.text } else { t().p.muted } })) |> ignore
+          @sf.tip_node(tips, k, fn() { @sf.t("web-main.chat.archive") }) |> ignore
+        })
         |> ignore
-        @sf.icon_node(k, "archive", row_icon, By(fn() { if @sf.lit_node(k) { t().p.text } else { t().p.muted } })) |> ignore
-        @sf.tip_node(tips, k, fn() { @sf.t("web-main.chat.archive") }) |> ignore
       })
-      |> ignore
-    })
+    }
   })
 }
 

@@ -109,9 +109,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     sfdesk's `frame_opens`: the rail's, the sidebar's, the page the pane lands on): something a pane comes to show
     of a workspace as it opens goes in its function, never in a list of the switch's. What the press put up to choose
     by (the workspaces' sheet, its popover, a dialog that made or joined one) is part of the screen as it was: it is
-    given to the switch (`switch_workspace_to`'s `closes`) and closes at the switch's moment, never at the press (the
-    owner's 「收起抽屉…会卡帧」, 2026-11-12: the new Home made in the closing's fastest frames;
-    `src/sfapp/switch_drawer_wbtest.mbt`).
+    given to the switch (`switch_workspace_to`'s `closes`) and closes at the switch's moment, never at the press, showing
+    till it is gone what it showed at the press (the owner's 「收起抽屉…会卡帧」, 2026-11-12: the new Home made in the
+    closing's fastest frames; the sheet's rows reshuffled as it closed; `src/sfapp/switch_drawer_wbtest.mbt`).
   - What those functions say is declared as the workspace comes to be in view, between frames (sfbase's
     `opens_ahead_node`, `declare_topic`): asked of the core then, not as the frame that builds the panes runs, and taken
     over by the reader that comes to read it, the same subscription all along; what no reader took is let go of as

@@ -1852,9 +1852,13 @@ fn open_job_row_node(row : @view.View, src : Source, job : () -> Json?) -> Unit 
         }
       },
     )
-    s.show(fn() { doing(skey()) }, fn(b) { @sf.spinner_node(b, size=open_job_stop_spin) |> ignore })
-    s.show(fn() { !doing(skey()) }, fn(b) {
-      @sf.icon_node(b, "stop", open_job_stop_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+    // (stopping, a spinner in its icon's place: one of them made, not one made and one waiting)
+    s.pick(fn() { doing(skey()) }, fn(b, stopping) {
+      if stopping {
+        @sf.spinner_node(b, size=open_job_stop_spin) |> ignore
+      } else {
+        @sf.icon_node(b, "stop", open_job_stop_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+      }
     })
   })
   |> ignore

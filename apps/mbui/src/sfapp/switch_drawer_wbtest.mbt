@@ -282,9 +282,8 @@ test "another workspace picked in the sheet while the switch to the first waits:
     t.tap(x + 4.0, y + 4.0)
   }, between=(sd_next_tap_ms, fn() { t.tap(x3 + 4.0, y3 + 4.0) }))
   assert_eq(frames.filter(fn(f) { f.ws == "ws2" }), [])
-  // (not held to laying out nothing as it goes: the second row's ripple goes on over the closing, laying out its 7
-  // nodes a frame, as the first's does till the switch)
-  assert_eq(sd_faults("third", frames, open, "ws3", false), [])
+  // (the second row's ripple goes on over the closing, drawn bigger as it goes, laid out once: sf's ripple_disc)
+  assert_eq(sd_faults("third", frames, open, "ws3", true), [])
 }
 
 ///|
@@ -306,4 +305,150 @@ test "a workspace picked in the popover on 大屏 at real size over the late cor
   // wide frame's own, not held here)
   let faults = sd_faults("大屏", frames, open, "ws2", false).filter(fn(f) { !f.contains("still there at the end") })
   assert_eq(faults, [])
+}
+
+///|
+/// What the presented sheet (or popover) shows now, as a screen reader is told it (read out or, closing, not): each of
+/// what it holds (its role and name), where it is down the sheet, top to bottom; None where nothing is presented.
+fn sd_sheet_seen(t : @ui.Tester) -> Array[(String, String, Double)]? {
+  let all = t.semantics()
+  guard all.search_by(fn(s) { s.role == @ui.Role::Dialog }) is Some(di) else { return None }
+  let d = all[di]
+  // (its own: those whose holders lead to it, each's `parent` its holder's place among them all)
+  let within = fn(i : Int) {
+    let mut p = all[i].parent
+    while p >= 0 {
+      if p == di {
+        return true
+      }
+      p = all[p].parent
+    }
+    false
+  }
+  let held = []
+  for i, s in all {
+    if i != di && within(i) {
+      // (where it is down the sheet, a share of how tall the sheet is drawn, to a thousandth: a popover closing is drawn
+      // smaller as it goes, what it holds with it)
+      held.push((Repr(s.role).to_string(), s.label, ((s.rect.1 - d.rect.1) / d.rect.3 * 1000.0).round() / 1000.0))
+    }
+  }
+  held.sort_by(fn(a, b) { if a.2 == b.2 { a.1.compare(b.1) } else { a.2.compare(b.2) } })
+  Some(held)
+}
+
+///|
+/// Every frame from the press `press` (done now) till what is presented is gone: what it shows (sd_sheet_seen), each
+/// with the workspace in view then.
+fn sd_sheet_frames(
+  t : @ui.Tester,
+  src : Source,
+  upto : Double,
+  press : () -> Unit,
+) -> Array[(String, Array[(String, String, Double)]?)] {
+  let start = t.time()
+  let out = []
+  t.each_frame(Some(fn() { out.push((sd_ws(src), sd_sheet_seen(t))) }))
+  press()
+  while t.time() - start < upto - 1.0e-6 {
+    t.run_for(@ui.frame_period_default)
+  }
+  t.each_frame(None)
+  out
+}
+
+///|
+/// What is wrong with `frames` (a switch to `to` pressed in what is presented, which showed `at_press` then): any frame
+/// it shows anything but that till it is gone; it never gone, or the switch never done while it showed.
+fn sd_sheet_faults(
+  name : String,
+  frames : Array[(String, Array[(String, String, Double)]?)],
+  at_press : Array[(String, String, Double)],
+  to : String,
+) -> Array[String] {
+  let faults : Array[String] = []
+  let mut switched_shown = false
+  for i, f in frames {
+    match f.1 {
+      Some(seen) => {
+        if f.0 == to {
+          switched_shown = true
+        }
+        if seen != at_press {
+          faults.push("\{name}: frame \{i} (\{f.0}) shows \{Repr(seen)}, at the press \{Repr(at_press)}")
+        }
+      }
+      None => ()
+    }
+  }
+  if !switched_shown {
+    faults.push("\{name}: no frame of the switch done with it still shown")
+  }
+  match frames.last() {
+    Some((_, Some(_))) => faults.push("\{name}: still shown at the end")
+    _ => ()
+  }
+  faults
+}
+
+///|
+test "a workspace picked in the sheet on 小屏 at real size: from the press till the sheet is gone it shows what it showed at the press, its rows, their order and the one in use; opened again, the new one is in use" {
+  let faults : Array[String] = []
+  for list_ms in [0.0, 25.0, 100.0, 600.0] {
+    new_run()
+    let src = if list_ms == 0.0 { sd_source(0.0, again=true) } else { sd_source(list_ms) }
+    let t = sd_app(src, 390.0, 844.0, 2)
+    if list_ms == 0.0 {
+      // (everything it opens on read once already: switched in the press's own frame)
+      let tree = @ui.view_tree().unwrap()
+      let away = @sfbase.switch_wait_ms + @ui.move_most_ms * 2.0
+      tree.event(t.time(), fn() { @sfpages.switch_workspace(src, "ws2") })
+      t.run_for(away)
+      tree.event(t.time(), fn() { @sfpages.switch_workspace(src, "ws1") })
+      t.run_for(away)
+    }
+    sd_open_sheet(t)
+    guard sd_sheet_seen(t) is Some(at_press) && at_press.iter().any(fn(h) { h.1 == "个人" }) else {
+      fail("no sheet naming 个人: \{Repr(sd_sheet_seen(t))}")
+    }
+    let (x, y) = sd_in_sheet(t, "个人")
+    let upto = @cmp.maximum(list_ms, @sfbase.switch_wait_ms) + @ui.move_most_ms * 2.0
+    let frames = sd_sheet_frames(t, src, upto, fn() { t.tap(x + 4.0, y + 4.0) })
+    for f in sd_sheet_faults("list \{list_ms}", frames, at_press, "ws2") {
+      faults.push(f)
+    }
+    // (opened again: the one in use the new one, first, on its card, at once)
+    guard t.semantics().iter().find_first(fn(s) { !s.hidden && s.role == @ui.Role::Button && s.label == "个人" }) is Some(sw) else {
+      faults.push("list \{list_ms}: no switcher saying 个人")
+      continue
+    }
+    let (sx, sy, sw_, sh) = sw.rect
+    t.tap(sx + sw_ / 2.0, sy + sh / 2.0)
+    t.run_for(sd_sheet_up_ms)
+    match sd_sheet_seen(t) {
+      Some(held) =>
+        match held.iter().find_first(fn(h) { h.1 == "个人" || h.1 == "星火工作室" }) {
+          Some(h) if h.1 == "个人" => ()
+          _ => faults.push("list \{list_ms}: opened again, it shows \{Repr(held)}")
+        }
+      None => faults.push("list \{list_ms}: not opened again")
+    }
+  }
+  assert_eq(faults, [])
+}
+
+///|
+test "a workspace picked in the popover on 大屏 at real size: from the press till it is gone it shows what it showed at the press" {
+  new_run()
+  let src = sd_source(25.0)
+  let t = sd_app(src, 1280.0, 800.0, 0)
+  @ui.view_tree().unwrap().event(t.time(), fn() { @sfpages.open_workspaces(src, At(32.0, 16.0, 150.0, 38.0), compact=true) })
+  t.run_for(sd_sheet_up_ms)
+  guard sd_sheet_seen(t) is Some(at_press) && at_press.iter().any(fn(h) { h.1 == "个人" }) else {
+    fail("no popover naming 个人: \{Repr(sd_sheet_seen(t))}")
+  }
+  let (x, y) = sd_in_sheet(t, "个人")
+  let frames = sd_sheet_frames(t, src, @sfbase.switch_wait_ms + @ui.move_most_ms * 2.0, fn() { t.tap(x + 4.0, y + 4.0) })
+  // (its rows' words drawn while it goes, faded, as switch_drawer's 大屏 test finds: not held to be gone at the end)
+  assert_eq(sd_sheet_faults("大屏", frames, at_press, "ws2").filter(fn(f) { !f.contains("still shown at the end") }), [])
 }
