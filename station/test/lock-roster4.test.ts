@@ -52,7 +52,7 @@ const R3_JOBS: [string, Job3][] = [
   ...([["member", "none"], ["member", "admit"], ["member", "cancel new"], ["admin", "none"], ["admin", "cancel new"], ["admin", "cancel adopt"]] as [ "member" | "admin", A4Y][]).map(([role, y]): [string, Job3] => [`a4 ${role} ${y}`, { t: "a4", v: VON, role, y, adopt: y === "cancel adopt", n: CASES }]),
   ...([true, false] as const).map((reach): [string, Job3] => [`b2 ${reach ? "reached" : "unreached"}`, { t: "b2", v: VON, reach, n: CASES }]),
 ];
-const r3Rows = R3_JOBS.map(([, job]) => [ask<Any>({ t: "r3", job, round: 3 }), ask<Any>({ t: "r3", job, round: 4 }), ask<Any>({ t: "r3", job, round: 4, more: { cancels: "h" } }), ask<Any>({ t: "r3", job, round: 4, more: { again: "batch" } })] as const);
+const r3Rows = R3_JOBS.map(([, job]) => [ask<Any>({ t: "r3", job, round: 3 }), ask<Any>({ t: "r3", job, round: 4 }), ask<Any>({ t: "r3", job, round: 4, more: { cancels: "entry" } }), ask<Any>({ t: "r3", job, round: 4, more: { again: "since" } })] as const);
 const m5Clocks = [false, true].flatMap((webAt) => [0, 300, 3600].map((skew) => ask<M5Clock>({ t: "m5clock", skew, webAt })));
 const revokedRows = ([["web", false, "entry", "since"], ["off", false, "entry", "since"], ["off", false, "h", "since"], ["off", false, "entry", "any"], ["off", false, "entry", "batch"], ["off", false, "h", "batch"], ["off", true, "entry", "since"]] as const).flatMap(([kind, offFinal, cancels, again]) =>
   (["same", "any"] as const).map((parent) => ({ kind, parent, offFinal, cancels, again, out: ask<Any>({ t: "revoked", kind, parent, n: CASES, offFinal, more: { cancels, again } }) })));
@@ -147,7 +147,7 @@ test("M4: round three's measures, with bodies in the way", async () => {
     const [a, b, c, d] = await Promise.all(r3Rows[i]);
     const x = pick(label, a), y = pick(label, b), z = pick(label, c), u = pick(label, d);
     const pad = " ".repeat(label.length);
-    print(`${label}: ${x === y && y === z && z === u ? `the same: ${x}` : `r3 ${x}\n${pad}  r4 ${y}\n${pad}  r4 cancels=h ${z}\n${pad}  r4 again=batch ${u}`}`);
+    print(`${label}: ${x === y && y === z && z === u ? `the same: ${x}` : `r3 ${x}\n${pad}  r4 ${y}\n${pad}  r4 cancels=entry ${z}\n${pad}  r4 again=since ${u}`}`);
     if (label === "fold") assert.deepEqual(b.differ, [], "the model's rules and personFold differ");
     if (label.startsWith("drawn")) assert.equal(b.forged, false, "a keeper stored a forged entry");
   }

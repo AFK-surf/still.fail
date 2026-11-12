@@ -253,6 +253,7 @@ export type W4Options = World3Options & {
   gate?: boolean;
   offFinal?: boolean;
   webAt?: boolean;
+  /// Defaults (2026-11-13, after M6 was chased): `cancels=h`, `again=batch`; round three's readings beside them.
   /// `tellOut` (default on, the lead's of 2026-11-13): the body of a statement that takes someone out is given also to
   /// those the giver's state listed before it counted (off: nobody is told). `cancels`: what a removal names, the log
   /// entries' hashes (`entry`, round three's) or the statements' bodies' (`h`), which signing again does not change.
@@ -427,7 +428,7 @@ export class World4 extends World3 {
     if (kind === "ws.member" && rest.email === undefined) rest.email = `${rest.sub}@x`;
     // (`cancels=h`: a removal names the statements' bodies, whatever entry its signer saw them in)
     const rc = rest as { cancels?: string[] };
-    if (this.x.o.cancels === "h" && Array.isArray(rc.cancels)) rc.cancels = [...new Set(rc.cancels.map((c) => (this.all.get(c)?.kind === "ws" ? (this.all.get(c)!.body.h as string) : c)))].sort();
+    if ((this.x.o.cancels ?? "h") === "h" && Array.isArray(rc.cancels)) rc.cancels = [...new Set(rc.cancels.map((c) => (this.all.get(c)?.kind === "ws" ? (this.all.get(c)!.body.h as string) : c)))].sort();
     const b: Body = { ws, kind: kind.slice(3), ...rest, prev, salt };
     const hb = bodyHash(b);
     const x = this.x;
@@ -663,7 +664,7 @@ export class World4 extends World3 {
     if (this.v.resign === "off" || d.compromised || this.resigning) return;
     this.resigning = true;
     try {
-      const batch = this.x.o.again === "batch";
+      const batch = (this.x.o.again ?? "batch") === "batch";
       const before = new Map([...d.h.logs].map(([g, k]) => [g, [...k.active]]));
       for (const h of [...d.mine]) {
         const k = d.h.logs.get(this.logOf.get(h)!)!;
@@ -780,7 +781,7 @@ export class World4 extends World3 {
     const logs = new Map<string, unknown>();
     // (`cancels=h`: what a removal names is every statement in force of that body)
     const byBody = new Map<string, string[]>();
-    if (this.x.o.cancels === "h") for (const x of f.stmts.keys()) byBody.set(this.entry(x).body.h, [...(byBody.get(this.entry(x).body.h) ?? []), x]);
+    if ((this.x.o.cancels ?? "h") === "h") for (const x of f.stmts.keys()) byBody.set(this.entry(x).body.h, [...(byBody.get(this.entry(x).body.h) ?? []), x]);
     for (const [g, k] of h.logs) {
       logs.set(g, {
         active: k.active, rules: k.rules, headState: () => k.headState(),
