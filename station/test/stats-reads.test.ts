@@ -250,6 +250,76 @@ test("a page of exported chats does not enumerate every session", () => {
   } finally { store.close(); }
 });
 
+test("what a chat asks of whom now: a need for its card's assignee over its creator, a done its creator has not read, a failure; none archived; its page in the app", () => {
+  const store = Store.open(":memory:");
+  try {
+    const chat = (key: string, by = "ann@x") => {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, createdBy: by });
+      const thread = store.openThreadOf("ember", "CHAT", key, key, by, key);
+      store.joinThread(thread.id, key, "ember");
+      store.insertMessage(newMessage(thread.id, `${key}.1`, "person", by, "please"));
+      return thread.id;
+    };
+    const turn = (key: string, outcome: string, detail: string | null, declared: string | null, need: string | null, about: [number, number, string] | null = null) => {
+      store.startTurnFor(`t-${key}`, key, "input", { profile: "cc", person: "ann@x", thread: null });
+      if (need !== null) store.setNeed(`t-${key}`, need);
+      store.setAbout(`t-${key}`, about);
+      store.endTurn(`t-${key}`, outcome, detail, declared, null);
+    };
+    const carded = chat("carded");
+    const [asked] = store.insertMessage({ ...newMessage(carded, "carded.2", "agent", "carded", "Ship it?"), card: { type: "options", options: [{ label: "Ship" }], assignee: "Bob@X" } });
+    turn("carded", "completed", null, "need_human", "Should 1389 ship?", [carded, asked, "carded.2"]);
+    const asks = chat("asks");
+    turn("asks", "completed", null, "need_human", "Which branch?");
+    const done = chat("done");
+    store.insertMessage(newMessage(done, "done.2", "agent", "done", "merged"));
+    turn("done", "completed", null, "all_done", "Merged into main as 82f108a5");
+    const seen = chat("seen");
+    const [last] = store.insertMessage(newMessage(seen, "seen.2", "agent", "seen", "merged"));
+    turn("seen", "completed", null, "all_done", "Merged");
+    store.setRead("ann@x", seen, last);
+    const failed = chat("failed");
+    turn("failed", "failed", "rate_limit: out of quota\nretry after 5h", null, null);
+    const stopped = chat("stopped");
+    turn("stopped", "aborted", "other: stopped", null, null);
+    const archived = chat("archived");
+    store.insertMessage(newMessage(archived, "archived.2", "agent", "archived", "merged"));
+    turn("archived", "completed", null, "all_done", "Merged");
+    store.db.prepare("UPDATE threads SET hidden_at = 5 WHERE id = ?").run(archived);
+    readyChats(store);
+    const reader = read.makeStore(store.db, ".");
+    const pages = { origin: "https://still.fail", workspace: "ws-home", station: "st-1" };
+    // Each by its key: no chat's messages counted or gone through.
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === read.UNREAD || sql === read.HAS_UNREAD) throw new Error("counted unread history");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    let got: any;
+    try { got = outflowChats(reader, 0, undefined, null, pages); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+    const by = new Map<number, any>(got.chats.map((c: any) => [c.thread, c]));
+    assert.deepEqual(by.get(carded).attention, { kind: "need", waitsFor: ["bob@x"], note: "Should 1389 ship?" }, "who decides its card, over who started it");
+    assert.deepEqual(by.get(asks).attention, { kind: "need", waitsFor: ["ann@x"], note: "Which branch?" });
+    assert.deepEqual(by.get(done).attention, { kind: "done", waitsFor: ["ann@x"], note: "Merged into main as 82f108a5" });
+    assert.equal(by.get(seen).attention, undefined, "read to its latest message: nothing waits");
+    assert.deepEqual(by.get(failed).attention, { kind: "failed", waitsFor: ["ann@x"], note: "rate_limit: out of quota" });
+    assert.equal(by.get(stopped).attention, undefined, "stopped by a person is no failure");
+    assert.equal(by.get(archived).attention, undefined);
+    assert.equal(by.get(done).url, "https://still.fail/o/ws-home/st-1/done");
+    // Read since: it waits no more; and without where the pages are, no link.
+    store.setRead("ann@x", done, last + 100);
+    const again = outflowChats(reader, 0) as any;
+    assert.equal(again.chats.find((c: any) => c.thread === done).attention, undefined);
+    assert.ok(again.chats.every((c: any) => c.url === undefined));
+  } finally { store.close(); }
+});
+
 test("another station's read: one of the statistics reads, of the workspace it asks in, its answer as bytes", async () => {
   const asked: [string, any][] = [];
   const answer = peerRead(async (op, args) => (asked.push([op, args]), JSON.stringify({ chats: [{ thread: 3 }] })), () => "ws-home", () => "en", () => 0, () => {});

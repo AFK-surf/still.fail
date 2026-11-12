@@ -8,12 +8,19 @@ import { resourceChats, usage } from "./usage.ts";
 import { usageCallsPage } from "./store.ts";
 import { usageTurns } from "../store/usage.ts";
 import { HOME, type Of, outflowChats, outflowMessages, outflowUsage } from "./outflow.ts";
+import type { PageBase } from "../sessions/page.ts";
 
 /// A whole number from the args (another station's may say anything), else 0.
 const num = (v: unknown): number => (typeof v === "number" && Number.isSafeInteger(v) ? v : 0);
 /// The workspace whose chats a statistics read reads: as another station asked it, else the home one.
 const outflowOf = (ws: unknown): Of =>
   ws !== null && typeof ws === "object" && typeof (ws as Of).workspace === "string" ? { workspace: (ws as Of).workspace, home: (ws as Of).home === true } : HOME;
+/// Where the session pages are, as the station gave it; null when it gave none.
+const pagesOf = (p: unknown): PageBase | null => {
+  const v = p as PageBase | null | undefined;
+  return v !== null && typeof v === "object" && typeof v.origin === "string" && typeof v.workspace === "string" && typeof v.station === "string"
+    ? { origin: v.origin, workspace: v.workspace, station: v.station } : null;
+};
 /// A span of usage read at once, at most (as a Comma connect reads it, comma/stats.ts).
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
 
@@ -32,9 +39,10 @@ export const usageOps: Record<string, ReadOp> = {
   // The workspace's statistics a Comma connect sends (comma/stats.ts), of this station: named as stations of every
   // version answer them (`outflow.read`, comma/peer.ts). `ws`: the workspace another station asks for; absent, the home one.
   outflowUsage: (store, a) => outflowUsage(store, a.lang, num(a.from), Math.min(num(a.to), num(a.from) + SPAN_MAX_MS), Math.max(-1440, Math.min(num(a.tz), 1440)), outflowOf(a.ws)),
-  // `limit`: a page of them, after `before`; absent, all.
+  // `limit`: a page of them, after `before`; absent, all. `pages`: where this station's session pages are (the
+  // station gives it, comma/module.ts), to link each chat with.
   outflowChats: (store, a) =>
-    outflowChats(store, num(a.since), outflowOf(a.ws), typeof a.limit === "number" ? { limit: Math.min(Math.max(num(a.limit), 1), 1000), before: typeof a.before === "string" ? a.before : null } : null),
+    outflowChats(store, num(a.since), outflowOf(a.ws), typeof a.limit === "number" ? { limit: Math.min(Math.max(num(a.limit), 1), 1000), before: typeof a.before === "string" ? a.before : null } : null, pagesOf(a.pages)),
   // A chat's messages, as the Router reads it through a Comma connect (`task.read`).
   outflowMessages: (store, a) => outflowMessages(store, num(a.thread), num(a.after), Math.min(Math.max(num(a.limit), 1), 500), outflowOf(a.ws), a.messagesOnly === true),
   machineSessions: (store) => machineSessions(store),
