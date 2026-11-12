@@ -29,6 +29,7 @@ priv struct ChatBodyRow {
 ///|
 /// The room over a row (top_at's): none (the list's first, a row under its top's), joined_gap (a message close under
 /// the one before), or the gap between messages (list_gap, narrow or wide).
+#derive(Eq)
 priv enum ChatBodyGap {
   NoGap
   Joined
@@ -154,6 +155,25 @@ fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending
     rows[at_keys[i]] = { entry: e, gap }
   }
   { keys: at_keys, rows }
+}
+
+///|
+/// Whether row `b` is what row `a` was: the same room over it and the same entry, an entry the same as the chat's list
+/// keeps it (its message, what was said elsewhere, what was sent from here or an agent's line the same one, read again
+/// only as it changed: sfbase's chat_read; the rest by what they say). What a row reads of its key (chat_body_row's)
+/// changes only so: one row's entry changed, or one more come, none of the others' read again.
+fn chat_body_row_same(a : ChatBodyRow, b : ChatBodyRow) -> Bool {
+  a.gap == b.gap &&
+  (match (a.entry, b.entry) {
+    (Top, Top) | (Empty, Empty) | (Line, Line) | (Newer, Newer) | (Foot, Foot) => true
+    (Older(x), Older(y)) => x == y
+    (Said(x), Said(y)) => physical_equal(x, y)
+    (Sent(x), Sent(y)) => physical_equal(x, y)
+    (Out(x), Out(y)) => physical_equal(x, y)
+    (State(w1, l1, r1), State(w2, l2, r2)) => w1 == w2 && l1 == l2 && r1 == r2
+    (Working(x), Working(y)) => physical_equal(x, y)
+    _ => false
+  })
 }
 
 ///|
@@ -328,8 +348,10 @@ fn chat_body_row(
 ) -> Unit {
   let first = @signals.untracked(fn() { rows.get().rows.get(k) })
   guard first is Some(first) else { return }
-  // (as the list says it now; one let go as its key goes reads what it last was)
-  let row = fn() { rows.get().rows.get(k).unwrap_or(first) }
+  // (as the list says it now, told only as it is another (chat_body_row_same): what changed in another row reads
+  // none of this one again; one let go as its key goes reads what it last was)
+  let now = @signals.computed(fn(_) { rows.get().rows.get(k).unwrap_or(first) }, same=chat_body_row_same)
+  let row = fn() { now.get() }
   let entry = fn() { row().entry }
   let top = fn() { chat_body_gap_room(row().gap, (here.width)()) }
   slot.pick(fn() { chat_body_kind(entry()) }, fn(p, kind) {

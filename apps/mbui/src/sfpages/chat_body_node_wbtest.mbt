@@ -1243,3 +1243,67 @@ test "the page before read in over a chat's list as nodes at its top: what was r
   )
   assert_eq(t.audit().filter(fn(f) { !body_time_short(f) }), [])
 }
+
+///|
+/// How many of the tree's bindings were looked at again so far (Tree::work's `bound`).
+fn body_bound() -> Int {
+  @ui.view_tree().unwrap().work().bound
+}
+
+///|
+test "a chat's list as nodes given the same entries again reads none of its rows again; one row changed, fewer than every row's" {
+  @sfbase.reset()
+  reset()
+  let src = @sffixture.fixture("chat")
+  let s = body_screens()[0]
+  let seen : Ref[(ChatView, Array[Entry])?] = Ref(None)
+  body_old(src, s.1, s.2, s.3, seen~) |> ignore
+  let (v0, read0) = seen.val.unwrap()
+  @sfbase.reset()
+  reset()
+  let src = @sffixture.fixture("chat")
+  let view = @signals.signal(v0)
+  let entries = @signals.signal(read0)
+  let made : Map[String, Int] = Map([])
+  let t = body_new(src, s.1, s.2, s.3, view, entries, made=fn(k, _) { made[k] = made.get(k).unwrap_or(0) + 1 })
+  t.run_for(@ui.move_most_ms)
+  let made0 = made.copy()
+  // the same entries again (another array, each entry as it was): no row's binding looked at again
+  let b0 = body_bound()
+  entries.set(read0.copy())
+  t.run_for(@ui.move_most_ms)
+  let same = body_bound() - b0
+  assert_eq(same, 0, msg="the same entries again looked at \{same} bindings")
+  // the last message's words changed: that row's
+  let mut last = -1
+  for i, e in read0 {
+    if e is Said(_) {
+      last = i
+    }
+  }
+  guard last >= 0 && read0[last] is Said(m) else { fail("no message") }
+  let words = "改过的字：只有这一行重读。"
+  let one = read0.copy()
+  one[last] = Said({ ..m, text: words, md: Some(body_md(words)) })
+  let b1 = body_bound()
+  entries.set(one)
+  t.run_for(@ui.move_most_ms)
+  let one_row = body_bound() - b1
+  assert_true(t.find(words) is Some(_), msg="its new words drawn")
+  // every message another (each as it was, read anew): every row's
+  let all = one.map(fn(e : Entry) -> Entry {
+    match e {
+      Said(m) => Said({ ..m, text: m.text })
+      e => e
+    }
+  })
+  let b2 = body_bound()
+  entries.set(all)
+  t.run_for(@ui.move_most_ms)
+  let every = body_bound() - b2
+  assert_true(
+    one_row > 0 && one_row < every,
+    msg="one row changed looked at \{one_row} bindings, every row \{every}",
+  )
+  assert_eq(made, made0, msg="no row made again")
+}
