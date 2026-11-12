@@ -354,3 +354,74 @@ test "bar places kept: Home's rows changed as it rested are there at once as it 
     assert_true(@sfpages.rows_rest() > t.time(), msg="kept \{kept}: rows moving as the list changes in view")
   }
 }
+
+///|
+/// How late the core answers in the test below: a phone's, a little more (PLP110's `bar_switch`, 2026-11-12: Home's
+/// topics answered 9–16 ms after they were asked again).
+let kept_core_late_ms : Double = 40.0
+
+///|
+test "bar places kept: Home taken back over a core that answers late shows what it showed, nothing made again, no row coming in" {
+  // (the owner's phone, 2026-11-12, 0.1.8722: back to 对话 from 额度, Home's lists, let go of as it rested, were asked
+  // again and shown only as the core answered: the long jobs and the rows under 今天 gone for the frames between, every
+  // row then made again (2202 nodes, 50–68 ms) and coming in as were it new, drawn as slivers through that frame)
+  let c = @sfrealsize.RealSizeChanging::new()
+  let src : Ref[Source?] = Ref(None)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        reset()
+        let s = { ..round_trip_again(c.source(@sffixture.fixture("home")), kept_core_late_ms), reads_ahead: fn() { true } }
+        open_fixture_over("home", s)
+        src.val = Some(s)
+        s
+      }
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(x) { view(x, made()) },
+    tree=fn(root) { app_tree(made())(root) },
+    w=home_again_window.1,
+    h=home_again_window.2,
+    platform=home_again_window.3,
+    window_corner=test_window_corner(home_again_window.3),
+    corners_held=false,
+    words_over_held=false,
+    env=[("MBUI_LOCALE", "zh")],
+  )
+  // (the core's client keeping what the places open on as it lets it go, as src/stillfail's main has it)
+  @core.client.keep(@sfbase.topic_kept)
+  t.motion_unjudged(true)
+  t.run_for(kept_switch_over_ms * 3.0)
+  bars_picked.set(Some(([kept_bar], 0)))
+  t.run_for(kept_switch_over_ms)
+  let rows_before = t.words().filter(fn(w) { w.2 > 120.0 && w.2 < home_again_window.2 - 120.0 && w.5 > 0.99 }).length()
+  t.tree_frames_from_now()
+  kept_go(t, "profiles", true)
+  t.run_for(kept_switch_over_ms)
+  // (what 额度 made, an old view's place: let go of as it is left, never kept)
+  let away_made = t.tree_frames().fold(init=0, fn(n, f) { n + f.made })
+  t.tree_frames_from_now()
+  kept_go(t, "chats", true)
+  let start = t.time()
+  let mut made_all = 0
+  let mut let_go_all = 0
+  let mut moving = false
+  while t.time() < start + kept_switch_over_ms {
+    t.frame()
+    if @sfpages.rows_rest() > t.time() {
+      moving = true
+    }
+  }
+  for f in t.tree_frames() {
+    made_all += f.made
+    let_go_all += f.let_go
+  }
+  let seen = t.words().filter(fn(w) { w.2 > 120.0 && w.2 < home_again_window.2 - 120.0 && w.5 > 0.99 }).length()
+  @core.client.keep(fn(_, _) { 0 })
+  println("bar-kept late core: back to Home made \{made_all}, let go \{let_go_all} (额度 made \{away_made}), rows moving \{moving}; words \{rows_before} then \{seen}")
+  assert_eq(seen, rows_before, msg="Home as it was left")
+  assert_false(moving, msg="no row coming in as Home is taken back")
+  assert_eq((made_all, let_go_all), (0, away_made), msg="nothing of Home made again or let go, only 额度 let go")
+}
