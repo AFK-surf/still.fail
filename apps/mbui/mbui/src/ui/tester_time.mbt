@@ -373,7 +373,13 @@ pub fn Tester::come_to(self : Tester, t : Double) -> Unit {
       Some(f) => f()
       None => @double.infinity
     }
-    if said > self.fake.time && said <= t + due_hair && said < next - due_hair && told < outside_told_most {
+    if said > self.fake.time && said <= t + due_hair && said < next - due_hair {
+      // (said, not left: one that keeps saying a next moment between the same two frames is a fault of what says it)
+      if told >= outside_told_most {
+        @halt.saying(
+          "Tester::come_to: the outside said \{outside_told_most} moments between two of the host's frames, the last at \{said} ms, the next frame at \{next} ms: what says its next moment (Tester::between_frames' due) says one more each time it is told",
+        )
+      }
       told += 1
       fake_dues_to(self.fake, said)
       if said > self.fake.time {
@@ -396,8 +402,8 @@ pub fn Tester::come_to(self : Tester, t : Double) -> Unit {
 }
 
 ///|
-/// How many moments of the outside's come_to tells between two of a host's frames at most: one that says the same
-/// moment again without its having come is not run on for ever.
+/// How many moments of the outside's come_to tells between two of a host's frames at most: one that keeps saying a
+/// next moment is stopped there, saying so, not run on for ever nor let be.
 let outside_told_most : Int = 10000
 
 ///|
