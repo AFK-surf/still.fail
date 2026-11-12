@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [22dda4926](https://github.com/AFK-surf/still.fail/commit/22dda49266334245453d5f4ba0fd2ae143873cf2) core: the rows a chat list showed are kept beside  | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.14 | 127.45 |
 | [e64ecb965](https://github.com/AFK-surf/still.fail/commit/e64ecb965d245bac9d5ab9c032214d37b2d218ed) mbui: a page's list keeps slots only round what sh | 1.86 | 2.49 | 10.45 | 29.22 | 36.93 | 26.02 | 48.62 | 93.75 | 185.04 |
 | [463705e72](https://github.com/AFK-surf/still.fail/commit/463705e72271bfe3096d07a864814e90ba9971b1) mbui app: 回放按设备的时刻给消息、按录像的时刻走步骤，分三轮判；铃的读法不再短路，相关录像 | 1.86 | 2.49 | 10.43 | 29.21 | 36.88 | 26 | 48.58 | 94.5 | 178.18 |
 | [79643b03d](https://github.com/AFK-surf/still.fail/commit/79643b03d1d8254a093a81f910740d5f1fd9d133) station: a session's usage turns and calls read by | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 94.59 | 139.17 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [aabd99d7e](https://github.com/AFK-surf/still.fail/commit/aabd99d7e79520301ed9d20bb5860622710aed16) mbui: a small key of the window's tree over an old | 1.84 | 2.45 | 10.24 | 29 | 36.21 | 25.82 | 48 | 94.29 | 180.59 |
 | [e7fa757d4](https://github.com/AFK-surf/still.fail/commit/e7fa757d4a6c9acfbd3413912199351792addbb6) mbui: whether the app is shown, in front and going | 1.83 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.54 | 155.91 |
 | [4b231d061](https://github.com/AFK-surf/still.fail/commit/4b231d0618e72bab4c12dc8d748fef3c4621cdda) mbui: a page's list held stretched at an end told  | 1.84 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.57 | 170.18 |
-| [525a3f848](https://github.com/AFK-surf/still.fail/commit/525a3f848a2de213b7314f3af6cd579bfaea28e8) app: links to a station's screens and to a chat's  | 1.84 | 2.45 | 10.23 | 29 | 36.2 | 25.82 | 48 | 94.49 | 132.29 |
