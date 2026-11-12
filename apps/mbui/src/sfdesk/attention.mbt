@@ -53,7 +53,8 @@ let attention_size : FixedArray[Double] = [0.0]
 /// 新建对话, 6 under it), 300 wide. With the bell, the stations' trouble not looked at yet (looked at as it opens:
 /// listed while open, then no longer, until the trouble changes, kept on this device) and the services left up long
 /// first; then each workspace's chats that want the viewer, not read since (the one in view's first), 忽略 on the row
-/// pointed at (`decision.dismiss`); pressed, its chat; 通知设置 at its foot.
+/// pointed at (`decision.dismiss`); pressed, its chat; 全部已读 and 通知设置 at its foot, which stays as the rest
+/// scrolls.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let close = fn() { attention_set(false) }
   // (the window turned beside the system's tabs: what it opened from is elsewhere, closed: rail_native.mbt)
@@ -105,11 +106,16 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       },
       // (and a press of it its own, none outside the panel)
       anchor_node?=if railed && !@sf.native_on() { rail_drawn.get("attention") } else { None },
-      look=@sf.beside_look(Px(attention_w), inner=att_list),
-      fn() {
-        attention_rows(c, src, w, railed, close)
-        attention_foot(c, src, w, close)
+      // (its foot under what scrolls, held at the panel's foot: 全部已读 is wanted most when the list is longest,
+      // pengxiao 2026-11-12)
+      look=fn(c, s, body) {
+        @sf.small_panel(c, w=Px(attention_w), fn() {
+          @sf.within_room(c, s, body, inner=att_list)
+          attention_foot(c, src, w, close)
+        })
+        |> ignore
       },
+      fn() { attention_rows(c, src, w, railed, close) },
     )
     |> ignore
   })
@@ -449,8 +455,11 @@ fn attention_item(
       "done" => (@sf.mark_blue, "web-main.chatMark.done")
       _ => (Data(@sf.theme().p.warn_ink), "web-main.attention.waitOne")
     }
-    let dot = c.box(style=att_dot.then(@ui.style(bg=ground)), fn() {  })
-    c.semantics(dot, Image, label=@sf.t(said))
+    c.box(style=att_mark, fn() {
+      let dot = c.box(style=att_dot.then(@ui.style(bg=ground)), fn() {  })
+      c.semantics(dot, Image, label=@sf.t(said))
+    })
+    |> ignore
     c.box(style=att_text, fn() {
       c.text(title, style=att_title) |> ignore
       if line != "" {
@@ -514,14 +523,19 @@ let att_empty : @ui.Style = @ui.css("w=Full p=S2_5")
 let att_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6)
 
 ///|
-/// A row (item): 6 by 10 in, its dot and words 8 apart, its corner the panel's inner (--panel-in); pointed at, on the
-/// pointer's ground.
+/// A row (item): 6 by 10 in, its dot's column and words 10 apart, its corner the panel's inner (--panel-in); pointed
+/// at, on the pointer's ground. Its words start where a long job's do above it (open_job_row), not 11 left of them.
 // kept across runs: a value (no field of it changes)
-let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2, align=ACenter, radius=@sf.panel_in)
+let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2_5, align=ACenter, radius=@sf.panel_in)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let att_item_on : @ui.Style = att_item.then(@ui.css("bg=Hover"))
+
+///|
+/// Its dot's column: the 16 a long job's dot and a workspace's mark stand in (open_job_mark), the dot in its middle.
+// kept across runs: a value (no field of it changes)
+let att_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
 
 ///|
 /// Its dot, 7 round, in the amber's ink (red gone wrong).

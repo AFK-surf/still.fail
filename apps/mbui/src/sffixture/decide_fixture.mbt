@@ -445,7 +445,8 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
         }),
       )
     "longJobs" =>
-      if f.mode == "home-jobs-screens" {
+      // (待处理 beside the rail's bell lists them over its chats: the panel as it was reported, 2026-11-12)
+      if f.mode == "home-jobs-screens" || f.mode == "home-attention" {
         Some(Some(long_screens_view()))
       } else if f.mode == "home-jobs" {
         Some(
