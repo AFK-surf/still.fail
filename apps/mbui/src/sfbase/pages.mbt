@@ -117,6 +117,8 @@ pub fn chat_page_made(
       // old view in a node of its own as yet (built as the stack's island is, what the page reads read there)
       v.box(fn(col) {
         col.grow(Is(1.0)).min_height(Is(Some(0.0))).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+        // (coming to need the viewer while open, felt, as its old view felt it)
+        feel_needed_node(col, retained, r)
         b(col, retained, r)
         app.nav.page_island(
           col,

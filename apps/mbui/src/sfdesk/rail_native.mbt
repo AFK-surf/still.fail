@@ -108,6 +108,19 @@ let drawn_page : Ref[Page?] = { val: None }
 let top_drawn : Ref[Bool] = { val: false }
 
 ///|
+/// The page's actions taken as page `page`'s: those handed for another let go, as a frame does as the page on top
+/// changes (nav_frame), or as what was chosen in the bars brought another (rail_native_taps), and as a page made as
+/// nodes hands its own on coming on top, between frames (chat_page.mbt's chat_bar_handed_node).
+fn nav_page_for(page : Page) -> Unit {
+  if nav_page_of.val != Some(page) {
+    nav_page.clear()
+    bar_chat_carried.clear()
+    bar_chat_of.val = None
+    nav_page_of.val = Some(page)
+  }
+}
+
+///|
 /// The page's actions the frame before, as handed (nav_page), for a frame the page on top is not drawn in.
 let nav_page_before : Array[(@hostapi.NavItem, () -> Unit)] = []
 
@@ -366,6 +379,21 @@ fn bar_menu_from(c : @ui.Ctx, id : Int) -> (@sf.Beside, @ui.Along) {
 }
 
 ///|
+/// bar_menu_from's for a page made as nodes, in node `v`: where it has no item of the system's bars chosen yet, beside
+/// the page's node.
+fn bar_menu_from_node(v : @view.View) -> (@sf.Beside, @ui.Along) {
+  if !@sf.native_on() || native_mark.val == 0 {
+    return (Node(v), End)
+  }
+  if @sf.native_side() {
+    let (x, y, _) = native_mark_in(v.window())
+    (@sf.at_point(x - @sf.panel_offset, y), End)
+  } else {
+    (Of(native_mark.val), End)
+  }
+}
+
+///|
 /// Whether the window turned or was folded since `was` (the width it had) beside the system's tabs: what opened from
 /// their items is elsewhere now, closed as the system's popovers are. False elsewhere, always: nothing closes so.
 fn native_turned(c : @ui.Ctx, was : FixedArray[Double]) -> Bool {
@@ -421,13 +449,7 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   // (the column as the window is now, turned or not, before anything is laid out beside it)
   native_side_now()
   // (the page's actions as they were while the same page is shown: one built again hands them again)
-  let page = app.nav.top()
-  if nav_page_of.val != Some(page) {
-    nav_page.clear()
-    bar_chat_carried.clear()
-    bar_chat_of.val = None
-    nav_page_of.val = Some(page)
-  }
+  nav_page_for(app.nav.top())
   top_drawn.val = false
   body()
   // (what is up over the whole window as it said it, built again this frame or its part kept; gone once it is not)
@@ -544,11 +566,17 @@ fn rail_native_marks(c : @ui.Ctx) -> Unit {
 ///|
 /// Where the mark is: at the item last chosen, else where the column has the bell (its x, y and height).
 fn native_mark_at(c : @ui.Ctx) -> (Double, Double, Double) {
+  native_mark_in(c.window_size())
+}
+
+///|
+/// native_mark_at's, in a window of `size` (its width, its height).
+fn native_mark_in(size : (Double, Double)) -> (Double, Double, Double) {
   let at = @hostapi.nav_tapped_at
   if at[2] > 0.0 {
     (at[0], at[1], at[3])
   } else {
-    let (ww, wh) = c.window_size()
+    let (ww, wh) = size
     (dmax(0.0, ww - @sf.native_clear() - 1.0), dmax(0.0, wh - native_bell_up), 40.0)
   }
 }
@@ -672,14 +700,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   // (another page come to by what was chosen, mid-frame: the actions the one left handed in frames before not its; the
   // one come to hands its own as it is drawn after this: nav_frame)
-  defer {
-    if nav_page_of.val != Some(app.nav.top()) {
-      nav_page.clear()
-      bar_chat_carried.clear()
-      bar_chat_of.val = None
-      nav_page_of.val = Some(app.nav.top())
-    }
-  }
+  defer nav_page_for(app.nav.top())
   for id in taps {
     // (anything else chosen in the bars closes 待处理's panel, as a tap off a popover of the system's does)
     if id != "act/attention" && id != "lead/attention" {

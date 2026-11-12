@@ -110,6 +110,7 @@ let list_head_gap : Double = 24.0
 ///|
 /// Chat `r`'s messages where its page is made with its inside nodes (sfbase's chat_page_nodes: chat_page_made's
 /// `body`), in `v`, as wide as it is given: under the bar's room, `in_pane` the page a panel of its own (chat_bar_room).
+/// What the page's old view hands the system's bars said here as nodes (chat_bar_handed_node).
 fn chat_body_nodes(
   v : @view.View,
   src : Source,
@@ -119,6 +120,7 @@ fn chat_body_nodes(
   in_pane? : Bool = false,
 ) -> Unit {
   @sfpages.chat_page_body_node(v, src, r, tips~, stint~, top=fn() { chat_bar_room(in_pane~) + list_head_gap })
+  chat_bar_handed_node(v, src, r)
 }
 
 ///|
