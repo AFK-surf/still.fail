@@ -29,14 +29,26 @@ let ps_ways_look_ms : Double = 1500.0
 /// A page's list of 12 rows, 300 wide and 400 tall: each a button 40 tall saying it opens or shuts (`expanded`) a show
 /// `open` tall, over it where `over`, under it where not; with each row's button.
 fn ps_ways_list(open : Double, over : Bool) -> (@view.Tree, Map[Int, @view.View]) {
+  let (tree, buttons, _) = ps_ways_list_opened(open, over)
+  (tree, buttons)
+}
+
+///|
+/// ps_ways_list, with what each row's show made as it opened (its last).
+fn ps_ways_list_opened(open : Double, over : Bool) -> (@view.Tree, Map[Int, @view.View], Map[Int, @view.View]) {
   let buttons : Map[Int, @view.View] = Map([])
+  let opened : Map[Int, @view.View] = Map([])
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(win) {
       win.width(Is(Some(300.0))).height(Is(Some(400.0))) |> ignore
       win.scrolls_window(@view.Scroll::list(), fn() { Array::makei(12, fn(i) { i }) }, est=40.0, fn(b, k) {
         let on = @signals.signal(false, same=fn(a, b) { a == b })
         let opens = fn() {
-          b.show(fn() { on.get() }, fn(o) { o.height(Is(Some(open))) |> ignore }) |> ignore
+          b.show(fn() { on.get() }, fn(o) {
+            opened[k] = o
+            o.height(Is(Some(open))) |> ignore
+          })
+          |> ignore
         }
         if over {
           opens()
@@ -61,7 +73,7 @@ fn ps_ways_list(open : Double, over : Bool) -> (@view.Tree, Map[Int, @view.View]
     |> ignore
   })
   tree.frame(390.0, 844.0) |> ignore
-  (tree, buttons)
+  (tree, buttons, opened)
 }
 
 ///|
@@ -178,7 +190,7 @@ test "a page's list holding a pressed block as what it opened over it grows: a p
 ///|
 test "a page's list holding a pressed block as what it opened over it grows, no frame drawn for 88 ms or 150 ms: an input then at the button's drawn middle reaches it, and the frame then and every one after shows it where it was" {
   for gap in [88.0, 150.0] {
-    let (tree, buttons) = ps_ways_list(ps_long_open, true)
+    let (tree, buttons, opened) = ps_ways_list_opened(ps_long_open, true)
     let reached = Ref(false)
     let ask = fn() {
       match tree.drawn().filter(fn(d) { d.words == "行3" }) {
@@ -196,11 +208,14 @@ test "a page's list holding a pressed block as what it opened over it grows, no 
       looks.push(at)
       at = at + rc_look_ms
     }
+    // (what row 3 opened over it, there and as tall as its way has it: what holds the row up is there, not none)
     let got = rc_walk(tree, [(rc_at, fn() { ps_ways_press(tree, buttons, 3) }), (rc_at + gap, ask)], looks, 0.0, fn() {
-      rc_y(tree, "行3")
+      (rc_y(tree, "行3"), opened.get(3).map(fn(o) { if o.alive() { o.rect().3 } else { -1.0 } }).unwrap_or(-1.0))
     }, inputs=true)
     assert_true(reached.val, msg="after \{gap} ms")
-    assert_true(got.iter().all(fn(y) { (y - 120.0).abs() < 1.0e-6 }), msg="after \{gap} ms: \{Repr(got)}")
+    assert_true(got.iter().all(fn(y) { (y.0 - 120.0).abs() < 1.0e-6 }), msg="after \{gap} ms: \{Repr(got)}")
+    assert_true(got[1:].iter().all(fn(y) { y.1 > 0.0 }), msg="after \{gap} ms, what it opened: \{Repr(got)}")
+    assert_eq(got[got.length() - 1].1, ps_long_open, msg="after \{gap} ms, what it opened at its end")
   }
 }
 
@@ -225,3 +240,54 @@ test "a page's list holding a pressed block as what it opened over it grows, no 
     }
   }
 }
+
+///|
+test "a page's list holding a pressed block as what it opened over it grows, Page Down 88 ms or 150 ms after the last frame (a key told in its event, as a host tells it: no bring of its own): where its rows are drawn from then on is the same as with frames drawn till it, at every rate" {
+  for gap in [88.0, 150.0] {
+    let looks = [rc_at]
+    let mut at = rc_at + gap
+    while at <= rc_at + gap + ps_ways_look_ms {
+      looks.push(at)
+      at = at + rc_look_ms * 10.0
+    }
+    let by_rate = rc_rates.map(fn(rate) {
+      let (tree, buttons) = ps_ways_list(ps_long_open, true)
+      let key = fn() { tree.stroke(16, 0, rc_at + gap, from=Some(buttons[3].id())) |> ignore }
+      rc_walk(tree, [(rc_at, fn() { ps_ways_press(tree, buttons, 3) }), (rc_at + gap, key)], looks, rate, fn() {
+        Array::makei(12, fn(k) { rc_y(tree, "行\{k}") })
+      })
+    })
+    for i, rate in rc_rates {
+      assert_eq(by_rate[i], by_rate[2], msg="after \{gap} ms at \{rate} a second (120 a second the other)")
+    }
+  }
+}
+
+///|
+test "a page's list holding a pressed block as what it opened over it grows, the frames after the press 88 ms or 150 ms late, or two and then none till its end: what it opened is drawn as tall and the row pressed where they are at 120 a second, at every moment looked at" {
+  let cases : Array[(String, Array[Double])] = [
+    ("88", [rc_at + 88.0, rc_at + 98.0, rc_at + 300.0, rc_at + ps_ways_look_ms]),
+    ("150", [rc_at + 150.0, rc_at + 160.0, rc_at + 400.0, rc_at + ps_ways_look_ms]),
+    ("two then none", [rc_at + 10.0, rc_at + 20.0, rc_at + ps_ways_look_ms]),
+  ]
+  for c in cases {
+    let (name, then) = c
+    let looks = [rc_at]
+    looks.append(then)
+    let by_rate = [0.0, 120.0].map(fn(rate) {
+      let (tree, buttons, opened) = ps_ways_list_opened(ps_long_open, true)
+      rc_walk(tree, [(rc_at, fn() { ps_ways_press(tree, buttons, 3) })], looks, rate, fn() {
+        let o = match opened.get(3) {
+          Some(o) if o.alive() => o.rect()
+          _ => (-1.0, -1.0, -1.0, -1.0)
+        }
+        (rc_y(tree, "行3"), o)
+      }, inputs=true)
+    })
+    let (sparse, dense) = (by_rate[0], by_rate[1])
+    assert_true(sparse.iter().all(fn(r) { (r.0 - 120.0).abs() < 1.0e-6 }), msg="\{name}: \{Repr(sparse)}")
+    assert_eq(sparse[sparse.length() - 1].1.3, ps_long_open, msg="\{name}: what it opened at its end")
+    assert_eq(sparse, dense, msg="\{name}: the frames as they came, then at 120 a second")
+  }
+}
+
