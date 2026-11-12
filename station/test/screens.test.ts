@@ -289,7 +289,7 @@ test("frames go unacknowledged while the link keeps up: two before its round tri
 /// 2026-11-11: on a link of a few hundred kbit/s the computer's sound (1.5 Mbit/s of PCM) went on the stream as fast as
 /// it was made, every picture seconds behind it. What comes before the first picture's round trip is known, and while the
 /// pictures wait in front of the link, is left out; once they go through, the sound goes again.
-test("the sound is left out while the pictures wait in front of the link", async () => {
+test("the sound is left out while the pictures wait in front of the link, and while it is silence", async () => {
   class HeldSound extends FakeView {
     #waiting: ((frame: AudioFrame) => void) | null = null;
     nextAudio() {
@@ -299,7 +299,8 @@ test("the sound is left out while the pictures wait in front of the link", async
       const give = this.#waiting;
       this.#waiting = null;
       assert.ok(give, "a packet of sound asked for");
-      give({ ts, data: new Uint8Array(3840), codec: "pcm_s16le" });
+      // (ts 99: digital silence)
+      give({ ts, data: new Uint8Array(3840).fill(ts === 99 ? 0 : 1), codec: "pcm_s16le" });
     }
   }
   const hub = new ScreenHub();
@@ -331,6 +332,12 @@ test("the sound is left out while the pictures wait in front of the link", async
   view.give(4);
   await settle();
   assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 4n);
+  // Digital silence (a source from before sends it while nothing plays) is left out too; the sound after it goes.
+  view.give(99);
+  await settle();
+  view.give(5);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 5n);
   await v.stream.finish();
   await v.served;
 });

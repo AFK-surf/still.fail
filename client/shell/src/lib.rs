@@ -258,8 +258,10 @@ struct ScreenTap {
     out: Vec<u8>,
     /// a video frame's head given the core since the last config
     told_video: bool,
-    /// the view's sound is Opus (its config said so): what decodes it
+    /// the view's sound is Opus (its config said so): what decodes it, and the capture time the next packet follows
+    /// on from (0: none decoded since it was made)
     opus: Option<Box<opus_rs::OpusDecoder>>,
+    opus_next: u64,
 }
 
 const FRAME_CONFIG: u8 = 1;
@@ -272,10 +274,14 @@ const FRAME_MAX: usize = 64 * 1024 * 1024;
 /// packet (RFC 6716 3.2.1).
 const PCM_PACKET: usize = 3840;
 const OPUS_MAX: usize = 1275;
+/// A packet's capture time this far (µs) from where the last one ended still follows on from it (the Helper's
+/// AudioPackets `slack`); one further is after a gap (left out before the round trip was known, muted, or silence not
+/// sent), decoded by a decoder made anew: one that went on from the sound before the gap blended that into it.
+const OPUS_SLACK: u64 = 5_000;
 
 impl ScreenTap {
     fn new(call: u64) -> Self {
-        ScreenTap { call, pending: Vec::new(), out: Vec::new(), told_video: false, opus: None }
+        ScreenTap { call, pending: Vec::new(), out: Vec::new(), told_video: false, opus: None, opus_next: 0 }
     }
 
     /// What came next: its whole frames said or kept.
@@ -349,11 +355,25 @@ impl ScreenTap {
                 let pcm = match &mut self.opus {
                     None => &body[8..],
                     Some(decoder) => {
+                        if self.opus_next != 0 && ts.abs_diff(self.opus_next) > OPUS_SLACK {
+                            match opus_rs::OpusDecoder::new(48_000, 2) {
+                                Ok(fresh) => **decoder = fresh,
+                                Err(_) => return true,
+                            }
+                            tally("tap.audio.resumed");
+                        }
                         let mut samples = [0f32; PCM_PACKET / 2];
-                        // (one that does not decode to 20 ms is none: the sound goes on with the next)
-                        match decoder.decode(&body[8..], PCM_PACKET / 4, &mut samples) {
-                            Ok(n) if n * 4 == PCM_PACKET => {}
+                        // (one that does not decode to 20 ms is none: the sound goes on with the next, its decoder made
+                        // anew; a panic of the decoder on bytes the station sent is that too, not the end of the view)
+                        let packet = &body[8..];
+                        let decoded_n = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decoder.decode(packet, PCM_PACKET / 4, &mut samples)));
+                        match decoded_n {
+                            Ok(Ok(n)) if n * 4 == PCM_PACKET => self.opus_next = ts + 20_000,
                             _ => {
+                                self.opus_next = 0;
+                                if let Ok(fresh) = opus_rs::OpusDecoder::new(48_000, 2) {
+                                    **decoder = fresh;
+                                }
                                 tally("tap.audio.undecoded");
                                 return true;
                             }
@@ -383,6 +403,7 @@ impl ScreenTap {
                 }
                 // (the app is told PCM either way: what it plays is what is said from here)
                 self.opus = None;
+                self.opus_next = 0;
                 if codec == Some("opus") {
                     match opus_rs::OpusDecoder::new(48_000, 2) {
                         Ok(decoder) => self.opus = Some(Box::new(decoder)),
@@ -1439,6 +1460,11 @@ impl Inner {
     }
 
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
+        // Whether a screen view's Opus sound is decoded here (ScreenTap): only where its tap says to the app, so the
+        // core asks the station for Opus only then (client/core-ts hosts/bridge.ts `opus`), else PCM.
+        if op == "tap.opus" {
+            return Ok(json!(self.say.lock().unwrap().is_some()));
+        }
         if op == "fetch.cancel" {
             let pending = self.fetches.lock().unwrap().remove(&id_of(a)?);
             return Ok(json!(pending.is_some_and(|cancel| cancel.send(()).is_ok())));
@@ -2113,6 +2139,10 @@ mod tests {
         let mut broken = 100_000u64.to_be_bytes().to_vec();
         broken.extend_from_slice(&[0xff; 3]);
         wire.extend(frame(FRAME_AUDIO, &broken));
+        // after a gap (and the packet not decoded): decoded by a decoder made anew
+        let mut after = 1_000_000u64.to_be_bytes().to_vec();
+        after.extend(unhex(TONE_OPUS[1]));
+        wire.extend(frame(FRAME_AUDIO, &after));
         for piece in wire.chunks(13) {
             tap.take(piece, &told);
         }
@@ -2120,8 +2150,8 @@ mod tests {
         // the app is told PCM: what it plays is the decoded sound
         assert_eq!(said[0].0, json!({ "id": 4, "value": { "audioConfig": { "codec": "pcm_s16le", "sampleRate": 48000, "channels": 2 } } }));
         let packets: Vec<&Vec<u8>> = said[1..].iter().map(|s| s.1.as_ref().unwrap()).collect();
-        assert_eq!(packets.iter().map(|p| p.len()).collect::<Vec<_>>(), vec![PCM_PACKET; 4]);
-        assert_eq!(said[1..].iter().map(|s| s.0["value"]["audio"]["ts"].as_u64().unwrap()).collect::<Vec<_>>(), vec![20_000, 40_000, 60_000, 80_000]);
+        assert_eq!(packets.iter().map(|p| p.len()).collect::<Vec<_>>(), vec![PCM_PACKET; 5]);
+        assert_eq!(said[1..].iter().map(|s| s.0["value"]["audio"]["ts"].as_u64().unwrap()).collect::<Vec<_>>(), vec![20_000, 40_000, 60_000, 80_000, 1_000_000]);
         // past the decoder's start, the tone: the left about 0.22 of full scale (RMS), the right about 0.21
         let rms = |p: &[u8], ch: usize| {
             let v: Vec<f64> = p.chunks_exact(4).map(|f| i16::from_le_bytes([f[ch * 2], f[ch * 2 + 1]]) as f64 / 32768.0).collect();

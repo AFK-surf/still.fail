@@ -1009,7 +1009,7 @@ export class Mesh {
 
   /// Whether a view's sound may be asked as Opus: what taps it decodes it (IrohEndpoint `opus`).
   decodesOpus(): boolean {
-    return this.#endpoint.opus === true;
+    return this.#endpoint.opus?.() === true;
   }
 
   /// This device's word, with its key, that `endpoint` (its main endpoint's or one made over for a relay) is its own

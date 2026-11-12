@@ -292,7 +292,7 @@ for (const opus of [false, true]) {
   sim(`a_screen_views_sound_is_asked_as_opus_${opus ? "where" : "only where"}_its_tap_decodes_it`, async (s) => {
     if (opus) {
       const bind = s.iroh.bind.bind(s.iroh);
-      s.iroh = { bind: (options) => Effect.map(bind(options), (endpoint) => Object.assign(endpoint, { opus: true as const })) };
+      s.iroh = { bind: (options) => Effect.map(bind(options), (endpoint) => Object.assign(endpoint, { opus: () => true })) };
     }
     const { mesh, station } = await setup(s);
     station.screenFrames = [{ key: true, ts: 0, data: new Uint8Array(9) }];

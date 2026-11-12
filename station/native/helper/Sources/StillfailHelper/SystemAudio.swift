@@ -93,20 +93,33 @@ final class SystemAudio: NSObject, SCStreamOutput {
   }
 
   private func flush() {
-    guard wanted, let (ts, pcm) = packets.pop() else { return }
-    var data = pcm
-    if let encoder {
-      // (one in, one out: a packet the encoder gives nothing for is none to send; the next is)
-      guard let encoded = encoder.encode(pcm) else { return }
-      data = encoded
+    while wanted, let (ts, pcm) = packets.pop() {
+      // Digital silence (an app holding its output open with nothing playing; ScreenCaptureKit itself sends nothing
+      // then) is not sent: as PCM it was 1.5 Mbit/s of zeros, as Opus 3-byte packets. The sound after it starts anew.
+      if pcm.allSatisfy({ $0 == 0 }) {
+        sentEnd = nil
+        continue
+      }
+      var data = pcm
+      if let encoder {
+        // After a gap (silence left out, sound that does not follow on) the encoder starts anew, as the client's
+        // decoder does (client/shell ScreenTap): neither carries the sound before the gap into the packet after it.
+        if let end = sentEnd, abs(ts - end) <= AudioPackets.slack {} else { encoder.reset() }
+        // (one in, one out: a packet the encoder gives nothing for is none to send; the next is)
+        guard let encoded = encoder.encode(pcm) else { return }
+        data = encoded
+      }
+      wanted = false
+      sentEnd = ts + Int64(AudioPackets.frames) * 1_000_000 / Int64(SystemAudio.rate)
+      var payload = Data(count: 8)
+      var be = UInt64(max(0, ts)).bigEndian
+      payload.replaceSubrange(0..<8, with: Data(bytes: &be, count: 8))
+      payload.append(data)
+      channel.send(9, payload)
     }
-    wanted = false
-    var payload = Data(count: 8)
-    var be = UInt64(max(0, ts)).bigEndian
-    payload.replaceSubrange(0..<8, with: Data(bytes: &be, count: 8))
-    payload.append(data)
-    channel.send(9, payload)
   }
+  /// Where the sound last sent ends (µs of the capture clock); nil before any, and after silence left out.
+  private var sentEnd: Int64?
 
   /// A sample buffer's PCM as interleaved stereo PCM16: 32-bit float or 16-bit integer samples, interleaved or not;
   /// one channel given to both sides, past two the first two. Nil in any other format.
@@ -222,6 +235,11 @@ final class OpusPackets {
     self.converter = converter
     self.input = input
     self.format = format
+  }
+
+  /// The next packet starts the sound anew (after a gap): nothing of the sound before it is carried into it.
+  func reset() {
+    converter.reset()
   }
 
   /// One packet's PCM (3840 bytes) as one Opus packet; nil when the encoder gave none for it.

@@ -4,7 +4,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED};
-use super::{Out, audio_queue::AudioQueue};
+use super::{Out, audio_packets::Packets, audio_queue::AudioQueue};
 
 const RATE: u32 = 48_000;
 const CHANNELS: u16 = 2;
@@ -14,7 +14,8 @@ const PACKET_BYTES: usize = PACKET_FRAMES * FRAME_BYTES;
 
 pub struct Audio { next: Sender<()> }
 impl Audio {
-    pub fn start(out: Out) -> Self {
+    /// `opus`: its packets as Opus (the view asked `audioCodec: "opus"`), else PCM.
+    pub fn start(out: Out, opus: bool) -> Self {
         let (tx, rx) = channel();
         std::thread::spawn(move || {
             unsafe {
@@ -22,7 +23,7 @@ impl Audio {
                     out.json(8, serde_json::json!({"error":"audio COM initialization failed"}));
                     return;
                 }
-                if let Err(e) = run(rx, &out) {
+                if let Err(e) = run(rx, &out, Packets::new(opus)) {
                     out.json(8, serde_json::json!({"error":e.message()}));
                 }
                 CoUninitialize();
@@ -33,7 +34,7 @@ impl Audio {
     pub fn next(&self) { let _ = self.next.send(()); }
 }
 
-unsafe fn run(rx: Receiver<()>, out: &Out) -> windows::core::Result<()> {
+unsafe fn run(rx: Receiver<()>, out: &Out, packets: Packets) -> windows::core::Result<()> {
     unsafe {
         let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
         let device = devices.GetDefaultAudioEndpoint(eRender, eConsole)?;
@@ -45,14 +46,14 @@ unsafe fn run(rx: Receiver<()>, out: &Out) -> windows::core::Result<()> {
             2_000_000, 0, &format, None)?;
         let capture: IAudioCaptureClient = client.GetService()?;
         client.Start()?;
-        out.json(8, serde_json::json!({"codec":"pcm_s16le","sampleRate":RATE,"channels":CHANNELS}));
-        let result = packets(&capture, rx, out);
+        out.json(8, serde_json::json!({"codec":packets.codec(),"sampleRate":RATE,"channels":CHANNELS}));
+        let result = pull(&capture, rx, out, packets);
         let _ = client.Stop();
         result
     }
 }
 
-unsafe fn packets(capture: &IAudioCaptureClient, rx: Receiver<()>, out: &Out) -> windows::core::Result<()> {
+unsafe fn pull(capture: &IAudioCaptureClient, rx: Receiver<()>, out: &Out, mut packets: Packets) -> windows::core::Result<()> {
     // Drain WASAPI without discarding packets within a normal capture or network burst.
     let mut building = Vec::with_capacity(PACKET_BYTES);
     let mut queued = AudioQueue::new();
@@ -87,11 +88,10 @@ unsafe fn packets(capture: &IAudioCaptureClient, rx: Receiver<()>, out: &Out) ->
                 capture.ReleaseBuffer(frames)?;
             }
         }
-        if wanted {
-            if let Some((ts, data)) = queued.pop() {
-                let mut payload = Vec::with_capacity(8 + data.len());
-                payload.extend_from_slice(&ts.to_be_bytes());
-                payload.extend_from_slice(&data);
+        // (silence is none to send: the next with sound goes in its place)
+        while wanted {
+            let Some((ts, data)) = queued.pop() else { break };
+            if let Some(payload) = packets.payload(ts, &data) {
                 out.send(9, &payload);
                 wanted = false;
             }

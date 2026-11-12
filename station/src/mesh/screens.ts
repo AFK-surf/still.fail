@@ -192,6 +192,10 @@ export function parseInput(v: any): ScreenInput | null {
   }
 }
 
+/// Digital silence: a source from before that sends it (an older still.fail Helper, stillfail-screen) sends 1.5 Mbit/s
+/// of zeros while nothing plays; left out, the client's player waits for sound as after any gap.
+const silent = (pcm: Uint8Array) => pcm.every((b) => b === 0);
+
 /// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), the 画质
 /// chosen (`quality`: the most its bit rate goes to; none for 自动 and from a client before it), the 帧率 chosen (`fps`:
 /// 120, 90, 60, 30 or 15, the most frames a second; none for 自动 and from a client before it), and the phone it is
@@ -537,7 +541,7 @@ class ViewSession {
           await this.#send(KIND.audioConfig, Buffer.from(JSON.stringify({ codec: next.codec, sampleRate: 48000, channels: 2 })));
           configured = true;
         }
-        if (!this.#timed || !this.#soundOn || (next.codec === "pcm_s16le" && this.pacer.backlogged())) continue;
+        if (!this.#timed || !this.#soundOn || (next.codec === "pcm_s16le" && (this.pacer.backlogged() || silent(next.data)))) continue;
         const payload = Buffer.alloc(8 + next.data.length);
         payload.writeBigUInt64BE(BigInt(Math.round(next.ts)), 0);
         payload.set(next.data, 8);
