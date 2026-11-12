@@ -84,6 +84,7 @@ import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
 import { readAgentEnvFrom } from "../ops/agent-env.ts";
 import { CardOutcomeWorker } from "../store/card-outbox-worker.ts";
+import { type PageBase, sessionPage } from "./page.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
@@ -138,6 +139,8 @@ export type AgentsParts = {
   bound(): boolean;
   /// A session's page in the app (`<origin>/o/…`), in still.fail cloud only.
   pageOf(key: string): string | undefined;
+  /// Where the session pages are (sessions/page.ts), in still.fail cloud only: for a read off this thread to link them.
+  pages(): PageBase | null;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
   /// Where the station stands with its control plane: the workspaces it is in.
@@ -197,10 +200,14 @@ export const AgentsLive = (control: Control) =>
       const bound = () => place() !== null;
       // Session pages are still.fail cloud's (`<origin>/o/…`); other control planes have none to link to.
       // In the workspace its chat is in.
-      const pageOf = (key: string) => {
+      const pages = (): PageBase | null => {
         const s = place();
+        return s && plane.spec().pages ? { origin: s.origin, workspace: s.workspace, station: s.station } : null;
+      };
+      const pageOf = (key: string) => {
+        const s = pages();
         const ws = store.sessionWs(key) ?? s?.workspace;
-        return s && plane.spec().pages && (ws === s.workspace || cloud.membership(ws!) !== null) ? `${s.origin}/o/${ws}/${s.station}/${encode(key)}` : undefined;
+        return s && (ws === s.workspace || cloud.membership(ws!) !== null) ? sessionPage(s, ws!, key) : undefined;
       };
 
       // Each profile running the models its last check found besides those config.json names (the accounts, once made).
@@ -926,7 +933,7 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      const self = Agents.of({ pageOf, previousGone: previous, cardOutcomes, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connects: (more) => void moreConnects.push(more), receive: (connect, event) => receive(connect, event), route: (f) => void (receive = f), nameBook: (kind, book) => void nameBooks.set(kind, book), nameBooks, heldBy: (ws, kind, own) => connectHeld(ws, kind, own), connectHeld: (f) => void (connectHeld = f), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      const self = Agents.of({ pageOf, pages, previousGone: previous, cardOutcomes, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connects: (more) => void moreConnects.push(more), receive: (connect, event) => receive(connect, event), route: (f) => void (receive = f), nameBook: (kind, book) => void nameBooks.set(kind, book), nameBooks, heldBy: (ws, kind, own) => connectHeld(ws, kind, own), connectHeld: (f) => void (connectHeld = f), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
       // The admin API asks for the agents' side as a request comes (services.ts AgentsSide); its routes are a part.
       (yield* AgentsSide).current = self;
       // And what the mesh asks of it (services.ts MeshSide).
