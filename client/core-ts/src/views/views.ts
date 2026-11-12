@@ -2252,7 +2252,7 @@ export class Views implements Owner {
       for (const t0 of o.threads) threads.push(`${a}\u0001${t0}`);
       for (const k of o.sessions) sessions.push(`${a}\u0001${k}`);
     }
-    const p = { stations: addresses, keys: Object.fromEntries(keys), mine, hidden: visibility === "hidden" ? 1 : visibility === "all" ? 2 : 0, watching, threads, sessions, limit: first } as const;
+    const p = { stations: addresses, mine, hidden: visibility === "hidden" ? 1 : visibility === "all" ? 2 : 0, watching, threads, sessions, limit: first } as const;
     const items = new Map<string, J[]>();
     const counts = new Map<string, { n: number; runs: boolean; running: number }>();
     const apart = new Set<J>();
@@ -2262,27 +2262,26 @@ export class Views implements Owner {
     const put = (station: string, item: J, ord: SqlValue, id: string) => placed.set(station, [...(placed.get(station) ?? []), { item, ord: typeof ord === "number" ? ord : 0, id }]);
     // (the rows kept beside their records read of them alone, from the cache where held; the records of the rest. A
     // record held already is taken as it is, kept beside it or not: what the list made of it before is taken again)
-    const found = data.chatFound(CHAT_READS.window, p, (cols) => cols[2] !== 1);
-    for (const f of found) if (f.cols[2] === 1) f.record = data.heldChat(f.station, f.id);
-    const kept = data.keptListRows(found.filter((f) => f.cols[2] === 1 && f.record === undefined).map((f) => [f.station, f.id]), keys);
-    let k = 0;
-    // (the stations' rows in the list's order, across their databases: each read its own first)
+    // (the stations' rows in the list's order, across their databases: each read its own first. The window's answer is
+    // of their keys and columns alone, read again only as a write changes what of a row it reads (chat-reads.ts `by`):
+    // each row's record or kept row is taken by its own key, so a chat that changes and moves nothing is told by its key)
+    const found = data.chatFound(CHAT_READS.window, p, () => false);
     const at = (f: ChatFound) => [typeof f.cols[0] === "number" ? 0 : 1, -(typeof f.cols[0] === "number" ? f.cols[0] : 0), -(typeof f.cols[1] === "number" ? f.cols[1] : 0), addresses.indexOf(f.station)];
-    const rows = found.map((f) => ({ f, row: f.cols[2] === 1 && f.record === undefined ? kept[k++] : undefined }));
-    rows.sort((a, b) => {
-      const x = at(a.f);
-      const y = at(b.f);
+    const shown = [...found].sort((a, b) => {
+      const x = at(a);
+      const y = at(b);
       for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i];
       return 0;
-    });
-    for (const { f, row } of rows.slice(0, first)) {
-      if (row !== undefined) {
-        put(f.station, headOf(f.station, f.id, typeof f.cols[0] === "number" ? f.cols[0] : null, row), f.cols[3], f.id);
-        continue;
-      }
-      // (one kept beside it as the window asked, and gone since: its record)
-      const record = f.record ?? (f.cols[2] === 1 ? data.chat(f.station, f.id) : undefined);
-      if (record !== undefined) put(f.station, record, f.cols[3], f.id);
+    }).slice(0, first);
+    for (const f of shown) f.record = data.heldChat(f.station, f.id);
+    const notHeld = shown.filter((f) => f.record === undefined);
+    const kept = data.keptListRows(notHeld.map((f) => [f.station, f.id]), keys);
+    data.chatRecords(notHeld.filter((_, i) => kept[i] === undefined));
+    const keptOf = new Map(notHeld.map((f, i) => [f, kept[i]]));
+    for (const f of shown) {
+      const row = keptOf.get(f);
+      if (row !== undefined) put(f.station, headOf(f.station, f.id, typeof f.cols[0] === "number" ? f.cols[0] : null, row), f.cols[2], f.id);
+      else if (f.record !== undefined) put(f.station, f.record, f.cols[2], f.id);
     }
     if (threads.length > 0 || sessions.length > 0) {
       for (const f of data.chatFound(CHAT_READS.overlaid, { stations: addresses, archived: false, threads, sessions })) {

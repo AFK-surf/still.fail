@@ -475,7 +475,8 @@ export function ensureChatColumns(sql: Sql, derive: (agents: unknown) => { state
     for (const column of ["state", "watched", "made", ...CHAT_COLUMNS.map(([c]) => c)]) if (!has.has(column)) sql.exec(`ALTER TABLE chat ADD COLUMN ${column}`);
     // The indexes the declared reads are found by (chat-reads.ts; chat-plans.test.ts holds each read's plan to its
     // bound): `chat_listed` the window's counts and the chats at work, of it alone; `chat_marks` the marked rows, of it
-    // alone (in the place of `chat_marked`, which held their stations only); `chat_client` a chat by the key it was
+    // alone (in the place of `chat_marked`, which held their stations only; `chat_running` and `chat_desk`, which no read
+    // reads any more, go: each cost every write); `chat_client` a chat by the key it was
     // asked for here by; `chat_archive` the archive's newest in its order, across stations; `chat_archived_at` the
     // archive's counts, of it alone. Partial, each holds only the rows its reads are of; one read of an index alone has
     // every column its statement names in it, those of the index's own WHERE too (SQLite takes it as covering only so),
@@ -488,6 +489,8 @@ export function ensureChatColumns(sql: Sql, derive: (agents: unknown) => { state
       CREATE INDEX IF NOT EXISTS chat_listed ON chat (station, archived, state, mine, hidden, watched, last_active, thread, session, id) WHERE archived = 0;
       CREATE INDEX IF NOT EXISTS chat_marks ON chat (station, archived, id, tone, asks) WHERE archived = 0 AND (tone IS NOT NULL OR asks = 1);
       DROP INDEX IF EXISTS chat_marked;
+      DROP INDEX IF EXISTS chat_running;
+      DROP INDEX IF EXISTS chat_desk;
       CREATE INDEX IF NOT EXISTS chat_client ON chat (station, client_key) WHERE client_key IS NOT NULL;
       CREATE TABLE IF NOT EXISTS chat_agent (station TEXT NOT NULL, session TEXT NOT NULL, archived INTEGER NOT NULL, id TEXT NOT NULL, PRIMARY KEY (station, session, archived, id)) WITHOUT ROWID;
       CREATE INDEX IF NOT EXISTS chat_agent_row ON chat_agent (station, archived, id);
