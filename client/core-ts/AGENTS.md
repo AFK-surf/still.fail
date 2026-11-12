@@ -74,6 +74,11 @@ what is changing or asked here (`src/views/local.ts`), a message that did not go
   `hold` (its `chosen`) and `src/personal-lock.ts` `#heard`/`#pin`: what goes on from the head is taken, anything else
   is kept with it and the rules' fork choice decides (`src/lock-keep.ts`). Never put an entry after one whose hash is not
   its `prev`, and never drop one a station showed but past `ASIDE_MOST` (2026-11-12).
+- This device signs a lock one entry at a time, in that lock's turn (`Lock.append`, personal-lock.ts `#append`): read
+  first outside it, sign after the head held as it begins, give it up once the entry is held, refused or left to the
+  cloud. Nothing waits for one turn while holding the other. An entry of its own that lost its place is signed again
+  only by the rules of `lock-keep.ts` `againOf`, at most `AGAIN_MOST` times, a person's lock's only with a seed in hand,
+  never by asking for one.
 
 ## Contracts made from here
 

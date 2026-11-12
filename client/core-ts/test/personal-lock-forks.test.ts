@@ -170,13 +170,16 @@ test("a station behind, or one whose entries do not verify, changes nothing; a l
   assert.equal(w.said(w.a.lock.entries(SUB)), "g,P,X");
 });
 
-test("an entry signed here while a read moved the chain pinned to another branch is refused, the branch pinned", async () => {
+test("an entry signed here while a read moved the chain pinned to another branch loses its place there: the branch pinned, the entry signed again after it (personal-lock-signs-again.test.ts)", async () => {
   const w = await setUp();
   // A read lands as a station takes the entry brought: the stations moved to Y.
   w.st.say.taking = () => Effect.andThen(Effect.sync(() => { w.st.say.follow = false; w.st.say.chains = [[w.g, w.P, w.Y, w.Z]]; }), w.a.lock.refresh(SUB));
   const out = await w.a.runner.run(Effect.result(w.a.lock.addDevice(SUB, other("66"), "why")));
-  assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused", JSON.stringify(out));
-  assert.equal(w.said(w.a.lock.entries(SUB)), "g,P,Y,Z");
+  assert.equal(out._tag, "Success", JSON.stringify(out));
+  const pinned = w.a.lock.entries(SUB);
+  assert.equal(w.said(pinned.slice(0, 4)), "g,P,Y,Z");
+  assert.equal(pinned.length, 5);
+  assert.deepEqual(pinned[4]!.body, other("66"));
   assert.equal(w.a.lock.standing(SUB), "member");
 });
 

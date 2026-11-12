@@ -163,10 +163,12 @@ test("a person's devices read and bring their lock at their stations, the cloud 
     await b.runner.run(b.lock.addDevice(SUB, other("22"), "why"));
     await a.runner.run(a.lock.refresh(SUB));
     assert.equal(a.lock.entries(SUB).length, 3);
-    // a, behind (it did not read since), signs at odds with what the stations keep: refused there, as the cloud did.
+    // a, behind (it did not read since), signs at odds with what the stations keep: refused there, its entry lost its
+    // place; the stations read, it is signed again after b's, its seed in hand (personal-lock-signs-again.test.ts).
     await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
     const out = await a.runner.run(Effect.result(a.lock.addDevice(SUB, other("44"), "why")));
-    assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused");
+    assert.equal(out._tag, "Success", JSON.stringify(out));
+    assert.deepEqual(a.lock.entries(SUB).slice(3).map((e) => (e.body as { key: string }).key), [other("33").key, other("44").key], "after b's");
     // None of the stations reached: the cloud is what it is read of and brought to, as before.
     c.say.down = false;
     st.say.up = false;

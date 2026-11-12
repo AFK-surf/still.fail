@@ -1,9 +1,10 @@
-// An entry a station of the lock refuses on the lock it keeps (views/lock.ts `Lock.append`, `#refusedBy`): its 409
-// (station/src/mesh/serve.ts: another entry at the place, or the lock's rules), with no station taking it, is the
-// call's failure, `lock_refused` in the station's words; the cloud is not sent the entry (sent, it took it where its
-// chain was a place behind the station's, and the two forked; its POST unanswered, the call never answered), and the
-// station's lock is read again, so the same call pressed again signs after what it keeps. A station keeping another
-// lock, or refusing this device, is as before: the entry goes to the cloud. A station that takes it wins over another's
+// An entry a station of the lock refuses on the lock it keeps (views/lock.ts `Lock.append`, `#refusedBy`, `#lost`): its
+// 409 (station/src/mesh/serve.ts: another entry at the place, or the lock's rules), with no station taking it, is never
+// sent to the cloud (sent, it took it where its chain was a place behind the station's, and the two forked; its POST
+// unanswered, the call never answered). The station's lock is read again in the call's turn: another device's entry at
+// its place, the entry is signed again after it and taken (lock-signs-again.test.ts says the rest of that); the read
+// moving nothing (the lock's rules), it is the call's failure, `lock_refused` in the station's words. A station keeping
+// another lock, or refusing this device, is as before: the entry goes to the cloud. A station that takes it wins over another's
 // refusal, whichever comes first: a refusal does not end the wait, and with another station silent it is the call's
 // answer once the call's wait is over. Each case in a workspace of its own, locked, this device signing for its owner,
 // on the test clock.
@@ -142,42 +143,39 @@ async function timedCall(r: Rig, name: string, params: Record<string, unknown>) 
 
 const removePhone = (r: Rig) => timedCall(r, "lock.removeDevice", { workspace: "ws", device: PHONE });
 const said = (what: string, ms: number | null, answer: Record<string, unknown> | undefined) => `${what}: after ${ms} ms, ${JSON.stringify(answer ?? null)}`;
+/// What a station says as its lock's rules refuse an entry (a 409 that no other entry at its place explains).
+const RULES = "the lock's rules refuse it";
 /// The call refused in the station's words.
-function refused(what: string, ms: number | null, answer: Record<string, unknown> | undefined) {
+function refused(what: string, ms: number | null, answer: Record<string, unknown> | undefined, words = FORK) {
   assert.ok(answer !== undefined && "error" in answer, said(what, ms, answer));
   const e = answer.error as { code: string; message: string };
-  assert.deepEqual([e.code, e.message], ["lock_refused", FORK], said(what, ms, answer));
+  assert.deepEqual([e.code, e.message], ["lock_refused", words], said(what, ms, answer));
 }
 const removedLast = (c: Entry[]) => c.at(-1)!.kind === "device.remove" && (c.at(-1)!.body as { id: string }).id === PHONE;
 
-test("an entry the lock's station refuses (another device's at its place) fails the call, the cloud not sent it; read again, pressed again it signs after it", async (t) => {
+test("an entry the lock's station refuses (another device's at its place): its lock read again, signed again after that entry, taken; the cloud never sent the one refused", async (t) => {
   const { r, inner, stations, cloud, another } = await setUp([A]);
   const st = stations.get(A)!;
   st.say.pending = another();
   const { ms, answer } = await removePhone(r);
-  t.diagnostic(`refused after ${ms} ms`);
-  refused("removeDevice", ms, answer);
-  assert.equal(cloud.posted, 0, "the cloud was not sent the entry");
-  assert.equal(r.cloud.chains.get("ws")!.length, 1, "the cloud's chain unchanged");
-  // The station's lock, read again, held here.
-  const caught = await until(r, () => held(inner, "ws")?.head?.hash === st.head().hash);
-  assert.notEqual(caught, null, "what is held caught up with the station's");
-  assert.deepEqual(held(inner, "ws")!.entries.map(entryHash), st.chain.map(entryHash));
-  // Pressed again: after it, the station taking it.
-  const again = await removePhone(r);
-  assert.ok(again.answer !== undefined && "ok" in again.answer, said("again", again.ms, again.answer));
+  t.diagnostic(`answered after ${ms} ms`);
+  assert.ok(answer !== undefined && "ok" in answer, said("removeDevice", ms, answer));
   assert.equal(st.chain.length, 3);
   assert.ok(removedLast(st.chain) && st.chain.at(-1)!.seq === 2, "signed after the other device's entry, taken by the station");
+  assert.deepEqual(held(inner, "ws")!.entries.map(entryHash), st.chain.map(entryHash), "held as the station keeps it");
+  await r.host.time.pass(500);
+  assert.equal(cloud.posted, 1, "the cloud sent only the one taken, behind");
+  assert.ok(removedLast(r.cloud.chains.get("ws")!) && r.cloud.chains.get("ws")!.length === 2, "the cloud's chain: the one signed again alone");
 });
 
-test("refused so, the cloud's POST unanswered: the call fails at once", async (t) => {
-  const { r, stations, cloud, another } = await setUp([A]);
-  stations.get(A)!.say.pending = another();
+test("refused by the lock's rules (its lock read again moves nothing), the cloud's POST unanswered: the call fails at once in the station's words, the cloud not sent it", async (t) => {
+  const { r, stations, cloud } = await setUp([A]);
+  stations.get(A)!.say.refuse = new CoreError("http_409", RULES, 409);
   cloud.hang = true;
   const { ms, answer } = await removePhone(r);
   t.diagnostic(`refused after ${ms} ms`);
   assert.notEqual(ms, null, `no answer in ${LIMIT_MS} ms`);
-  refused("removeDevice, the cloud's POST unanswered", ms, answer);
+  refused("removeDevice, the cloud's POST unanswered", ms, answer, RULES);
   assert.ok(ms! <= 50, `answered after ${ms} ms`);
   assert.equal(cloud.posted, 0);
 });
@@ -223,15 +221,15 @@ test("one station refuses the entry, another takes it a moment after: the call s
   assert.ok(ms! >= 100 && ms! <= 150, `answered after ${ms} ms`);
 });
 
-test("within a call's wait, one station refusing at 1 s and the other silent: the refusal is the call's answer once its wait is over, the cloud not sent the entry", async (t) => {
-  const { r, stations, cloud, another } = await setUp([A, B]);
+test("within a call's wait, one station refusing at 1 s by the lock's rules and the other silent: the refusal is the call's answer once its wait is over, the cloud not sent the entry", async (t) => {
+  const { r, stations, cloud } = await setUp([A, B]);
   const a = stations.get(A)!;
-  a.say.pending = another();
+  a.say.refuse = new CoreError("http_409", RULES, 409);
   a.say.delay = 1_000;
   stations.get(B)!.say.silent = true;
   const { ms, answer } = await removePhone(r);
   t.diagnostic(`refused after ${ms} ms`);
-  refused("removeDevice, B silent", ms, answer);
+  refused("removeDevice, B silent", ms, answer, RULES);
   assert.ok(ms! >= ASKED_MS && ms! <= ASKED_MS + 50, `answered after ${ms} ms`);
   await r.host.time.pass(500);
   assert.equal(cloud.posted, 0);

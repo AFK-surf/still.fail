@@ -244,6 +244,7 @@
   "core-misc.lock.keyNotKept": "无法读取或保存此设备的安全密钥：{error}",
   "core-misc.lock.inWorkspace": "「{name}」：{error}",
   "core-misc.lock.listSep": "；",
+  "core-misc.lock.changedMeanwhile": "这项改动没有生效：{what}刚被另一台设备改过。请查看现在的状态，仍然需要的话再操作一次",
   "core-misc.screen.opening": "正在打开屏幕",
   "core-misc.screen.noWire": "此处无法查看 station 的屏幕",
   "core-misc.screen.timeout": "屏幕未能打开：station 无响应",
