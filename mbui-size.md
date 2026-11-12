@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [f55d44fbd](https://github.com/AFK-surf/still.fail/commit/f55d44fbd3bb9aa39c30c521b8547a12f64af8e5) locks: a change no station took is pending, said s | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.44 | 195.46 |
 | [0c2cefade](https://github.com/AFK-surf/still.fail/commit/0c2cefade414d76375cce92d44602bc8192faf61) mbui: a chat's page made as nodes opens where it w | 1.93 | 2.59 | 11.13 | 30.47 | 39.88 | 27.15 | 51.9 | 94.44 | 134.93 |
 | [b57eff00e](https://github.com/AFK-surf/still.fail/commit/b57eff00eee66af42e2e90be5c9895b7ff3bf75b) The last of the names from before: preview frames' | 1.93 | 2.59 | 11.13 | 30.47 | 39.88 | 27.15 | 51.9 | 94.36 | 200.59 |
 | [bb67b07b0](https://github.com/AFK-surf/still.fail/commit/bb67b07b03885ed3cfb571eb91958cf04cabc716) mbui: a mouse's drag scrolls and flings the tree's | 1.93 | 2.59 | 11.12 | 30.36 | 39.88 | 27.02 | 51.63 | 94.19 | 127.67 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [97e43caca](https://github.com/AFK-surf/still.fail/commit/97e43cacab55b1c942f136c91f094f1fb6fb9c4e) mbui: the structures one change marks are committe | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.67 | 176.55 |
 | [5b5d29887](https://github.com/AFK-surf/still.fail/commit/5b5d29887d25bcd46af63b9331f2c0b51af2450e) app: a chat's list as nodes reads a row again only | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.41 | 186.24 |
 | [825299c07](https://github.com/AFK-surf/still.fail/commit/825299c07d914964bf0299a5991577392908bc80) mbui: close_option's replay found clean at every r | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.54 | 186.42 |
-| [32c8bd9d2](https://github.com/AFK-surf/still.fail/commit/32c8bd9d2c5943df7135f884643c7d539a0057f5) station: the Comma Task index says which chats Com | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.85 | 187.41 |
