@@ -55,12 +55,25 @@ export const MeshLive = Layer.effectDiscard(
       }
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
-      const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
+      const bind = Effect.tryPromise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) }));
+      const acquire = Effect.acquireRelease(
+        bind,
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
       );
+      let endpoint = yield* acquire.pipe(Effect.catch((error) => {
+        // A front introduced during this handover has no endpoint yet: the old Node may still hold its fixed port.
+        // A front already holding the endpoint can bind at once, keeping its connections across the handover.
+        if (!process.env.STILLFAIL_MESH_FRONT || previous.pid === null || !(Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0)) return Effect.fail(error);
+        log.warn("mesh", "the front could not bind; trying again after the previous station exits", { error: String(error.cause ?? error) });
+        return Effect.succeed(null);
+      }));
+      if (!endpoint) {
+        // Wait outside acquireRelease's uninterruptible acquisition so shutdown never waits on the old process.
+        yield* Effect.promise(() => previous.exited);
+        endpoint = yield* acquire;
+      }
       log.info("mesh", "mesh listening", { station: endpoint.id(), workspace: cloud.state.state!.workspace_name, sockets: endpoint.sockets() });
       // The advanced network settings as they are saved, on the running endpoint (no restart needed).
       yield* Effect.acquireRelease(Effect.sync(() => applyNetwork(endpoint, config)), (off) => Effect.sync(off));
