@@ -744,7 +744,8 @@ export type VaultAskOf = { request: string; save: boolean };
 function vaultAskOf(card: J): VaultAskOf | null {
   const request = typeof get(card, "vault") === "string" ? (card.vault as string) : null;
   const ask = get(card, "vaultAsk");
-  return request === null || request === "" || !isObject(ask) ? null : { request, save: get(ask, "save") !== undefined };
+  // (a request to rename an item is answered as one to keep: written into the vault, by a device set up)
+  return request === null || request === "" || !isObject(ask) ? null : { request, save: get(ask, "save") !== undefined || get(ask, "describe") !== undefined };
 }
 
 /// The views' environment in a core.

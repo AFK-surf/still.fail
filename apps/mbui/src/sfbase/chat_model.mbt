@@ -222,6 +222,8 @@ pub(all) struct VaultAsk {
   /// a file's name, where the agent gave one
   filename : String
   typed : Bool
+  /// one to rename the item or change its about (secret_describe): what would change is `how_text`
+  describe : Bool
   status : String
   scope : String
   /// another station of the workspace its commands run on, by name (empty: the chat's)
@@ -471,6 +473,7 @@ pub fn message_of(m : Json) -> Message {
                 username: text(field(a, "save"), "username"),
                 filename: text(field(a, "save"), "filename"),
                 typed: flag(field(a, "save"), "typed"),
+                describe: field(a, "describe") is Some(_),
                 status: text(a, "status"),
                 scope: text(a, "scope"),
                 station: text(a, "station"),

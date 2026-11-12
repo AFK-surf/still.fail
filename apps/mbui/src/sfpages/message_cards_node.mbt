@@ -255,6 +255,7 @@ let vault_ask_none : VaultAsk = {
   username: "",
   filename: "",
   typed: false,
+  describe: false,
   status: "",
   scope: "",
   station: "",
@@ -280,6 +281,7 @@ fn vault_asked_of(ask : VaultAsk) -> @settings.Asked {
     filename: ask.filename,
     typed: ask.typed,
     station: ask.station,
+    describe: ask.describe,
   }
 }
 

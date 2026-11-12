@@ -74,7 +74,7 @@ import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
 import type { VaultOutcome } from "./local.ts";
-import { fileBytes, howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
+import { aboutText, describeText, fileBytes, howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
 import { timed } from "../spent.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -926,9 +926,11 @@ export function vaultsView(inner: Inner, ws: string): J {
   const requestRow = (r: Request, itemName: string | null, vaultName: string, lasts: Scope) => ({
     id: r.id, vault: r.vault, vaultName, item: r.item, itemName, lasts,
     session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at, ...(r.timeout ? { timeoutKind: r.timeout.kind, timeoutSeconds: r.timeout.seconds } : {}),
-    howText: howText(r.mode, r.hosts ?? []),
+    howText: r.describe ? describeText(itemName ?? r.describe.was.name, { name: r.describe.name, about: r.describe.about, wasAbout: r.describe.was.about }) : r.save?.about ? aboutText(r.save.about) : howText(r.mode, r.hosts ?? []),
     // A secret an agent asks to keep: what kind, the account it is for, whether the person types it in.
     ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.filename ? { filename: r.save.filename } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
+    // An item to rename or say what it is: its name and about as they would be (and its about as it was).
+    ...(r.describe ? { describe: { name: r.describe.name, about: r.describe.about, wasAbout: r.describe.was.about } } : {}),
   });
   const personal = t("core-misc.vault.personal");
   // No security mode: the plain library, one vault on the station keeping most of its items (or the first keeping one).
@@ -943,7 +945,7 @@ export function vaultsView(inner: Inner, ws: string): J {
     const requests = Object.values(h.requests)
       .filter((r) => r.status === "pending" && r.vault === PLAIN)
       .sort((a, b) => a.at - b.at)
-      .map((r) => requestRow(r, r.save?.name ?? h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
+      .map((r) => requestRow(r, r.save?.name ?? r.describe?.was.name ?? h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
     return { ...base, plain: true, vaults: row, requests, ...statusWords(row, requests) };
   }
   const self = me(lock, signerOf(inner));
@@ -976,7 +978,7 @@ export function vaultsView(inner: Inner, ws: string): J {
     .sort((a, b) => a.at - b.at)
     .map((r) => {
       const listing = items(inner, ws, r.vault)[r.item]?.listing;
-      return { ...requestRow(r, r.save?.name ?? listing?.name ?? null, h.vaults[r.vault]?.name ?? personal, listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat"), ...(notHere(r, self?.device ?? null, m.box ?? null) ? { notHere: true } : {}) };
+      return { ...requestRow(r, r.save?.name ?? r.describe?.was.name ?? listing?.name ?? null, h.vaults[r.vault]?.name ?? personal, listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat"), ...(notHere(r, self?.device ?? null, m.box ?? null) ? { notHere: true } : {}) };
     });
   // What is left of the plain library from before security mode, to be moved into the person's vault.
   return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...statusWords(vaults, requests), ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
@@ -1021,7 +1023,7 @@ function plainItemsView(inner: Inner, ws: string): J {
   const list = Object.values(held(inner, ws).plain)
     .filter((i) => !i.deleted)
     .map((i) => ({
-      id: i.id, version: i.version, at: i.at, name: i.name, kind: i.kind,
+      id: i.id, version: i.version, at: i.at, name: i.name, kind: i.kind, ...(i.notes ? { about: i.notes } : {}),
       listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null, lasts: i.listing?.lasts ?? null,
       ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
     }))
@@ -1053,6 +1055,7 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
       return {
         id: i.id, version: i.version, at: i.at,
         name: str(plain?.name) ?? i.listing?.name ?? null, kind: str(plain?.kind) ?? i.listing?.kind ?? null,
+        ...((str(plain?.notes) || i.listing?.about) ? { about: str(plain?.notes) || i.listing?.about } : {}),
         listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null, lasts: i.listing?.lasts ?? null,
         ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
       };
@@ -1133,6 +1136,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
 }
 
 const KINDS = ["token", "ssh_key", "login", "file", "browser"];
+/// The most an item's about may be, its characters (the station's ABOUT_MOST).
+const ABOUT_MOST = 2000;
 const MODES = ["proxy", "ssh", "env", "file", "browser"];
 /// The most a file kept may be, its bytes (the station's FILE_MOST): one credential's file, not a store of files.
 const FILE_MOST = 64 * 1024;
@@ -1163,7 +1168,9 @@ function listingOf(v: unknown): Listing | undefined {
   if (!isObject(v) || typeof v.name !== "string" || !KINDS.includes(v.kind as string)) throw CoreError.invalid("listing: {name, kind, modes, hosts, env?}");
   const modes = arr(v.modes).filter((m) => MODES.includes(m));
   const lasts = SCOPES.find((s) => s === v.lasts);
-  return { name: v.name, kind: v.kind as Listing["kind"], modes, hosts: arr(v.hosts).filter((x) => typeof x === "string"), ...(typeof v.env === "string" ? { env: v.env } : {}), ...(lasts ? { lasts } : {}) };
+  const about = typeof v.about === "string" ? v.about.trim() : "";
+  if (about.length > ABOUT_MOST) throw new CoreError("vault_about_long", t("core-misc.vault.aboutTooLong", { most: String(ABOUT_MOST) }));
+  return { name: v.name, kind: v.kind as Listing["kind"], modes, hosts: arr(v.hosts).filter((x) => typeof x === "string"), ...(typeof v.env === "string" ? { env: v.env } : {}), ...(lasts ? { lasts } : {}), ...(about ? { about } : {}) };
 }
 
 /// What the person typed in for a secret an agent asked to keep (`typed: {secret, username?}`; a file picked, `{secret:
@@ -1913,6 +1920,7 @@ class Vaults {
       // The plain library's: its owner says so, nothing to open or sign (the station holds the value).
       const asked = yield* self.#request(id);
       if (asked.r.save) return yield* self.#keepSaved(asked.r, asked.station, typed);
+      if (asked.r.describe) return yield* self.#describe(asked.r, asked.station);
       if (asked.r.timeout && scope !== "once" && !timeout) return yield* Effect.fail(CoreError.invalid("this request needs an approval with its timeout; update the app"));
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
@@ -2036,8 +2044,8 @@ class Vaults {
         try: () => {
           const fields = given ?? JSON.parse(new TextDecoder().decode(openSeal(priv, sealed!.secret, saveContext(self.ws, r.id))));
           return {
-            plain: plainOf({ kind: s.kind, name: s.name, fields, domains: [], notes: "" }),
-            listing: listingOf({ name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}) }),
+            plain: plainOf({ kind: s.kind, name: s.name, fields, domains: [], notes: s.about ?? "" }),
+            listing: listingOf({ name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}), ...(s.about ? { about: s.about } : {}) }),
           };
         },
         catch: asCoreError,
@@ -2083,6 +2091,34 @@ class Vaults {
       yield* self.#station(station, "POST", "/vault/saves", { request: r.id, vault: vault.id, ...(grant ? { grant } : {}) });
       self.#settled(r.id, { status: "granted", ...(grant ? { scope } : {}) });
       return { request: r.id, vault: vault.id, item: r.item, ...(grant ? { scope } : {}) };
+    });
+  }
+
+  /// An agent's request to rename an item or change its about, approved: the plain library's written by its station; a
+  /// vault's item opened here and written as its next version saying so (its listing too, what agents read), its copy
+  /// brought to the station that asked, which is then told. It grants nothing.
+  #describe(r: Request, station: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      const d = r.describe!;
+      if (typeof d.name !== "string" || d.name.trim() === "" || typeof d.about !== "string") return yield* Effect.fail(CoreError.invalid("describe: {name, about}"));
+      if (r.vault === PLAIN) {
+        yield* self.#station(station, "POST", "/vault/plain/described", { request: r.id });
+        self.#settled(r.id, { status: "granted" });
+        return { request: r.id, item: r.item };
+      }
+      const opened = (yield* self.open(r.item)) as { vault: string; plain: Plain };
+      const item = items(inner, self.ws, opened.vault)[r.item];
+      if (!item || item.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
+      const { about: _, ...listing } = item.listing ?? { name: d.name, kind: opened.plain.kind, modes: [], hosts: [] };
+      // (one agents may not ask for keeps no listing: its name and notes alone change)
+      yield* self.putItem(opened.vault, r.item, { ...opened.plain, name: d.name, notes: d.about }, item.listing ? { ...listing, name: d.name, ...(d.about ? { about: d.about } : {}) } : null);
+      // The station that asked holds its copy before it is told.
+      yield* spread(inner, `${self.ws}/${station}`);
+      yield* self.#station(station, "POST", "/vault/described", { request: r.id });
+      self.#settled(r.id, { status: "granted" });
+      return { request: r.id, item: r.item };
     });
   }
 

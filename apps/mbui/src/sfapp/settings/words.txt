@@ -759,8 +759,11 @@ android-settings.tokens.verified
 android-settings.tokens.verify
 android-settings.vault.act.allow
 android-settings.vault.act.allowWhat
+android-settings.vault.act.change
+android-settings.vault.act.changeWhat
 android-settings.vault.act.deny
 android-settings.vault.act.denyWhat
+android-settings.vault.act.dontChange
 android-settings.vault.act.dontSave
 android-settings.vault.act.save
 android-settings.vault.act.saveWhat
@@ -780,6 +783,7 @@ android-settings.vault.approve.inApp
 android-settings.vault.approve.once
 android-settings.vault.approve.onceDetail
 android-settings.vault.approve.what
+android-settings.vault.ask.changed
 android-settings.vault.ask.denied
 android-settings.vault.ask.expired
 android-settings.vault.ask.granted
@@ -791,6 +795,7 @@ android-settings.vault.ask.kind.file
 android-settings.vault.ask.kind.browser
 android-settings.vault.ask.kind.token
 android-settings.vault.ask.notKept
+android-settings.vault.ask.notChanged
 android-settings.vault.ask.on
 android-settings.vault.ask.plain
 android-settings.vault.ask.save
@@ -800,6 +805,7 @@ android-settings.vault.ask.typed.file
 android-settings.vault.ask.typed.token
 android-settings.vault.ask.typed.username
 android-settings.vault.ask.use
+android-settings.vault.ask.describe
 android-settings.vault.conflict
 android-settings.vault.copied
 android-settings.vault.create
@@ -1583,6 +1589,7 @@ web-pages.stations.search.what
 web-pages.stations.settingsOffline
 web-pages.stations.software
 web-pages.stations.softwareOffline
+web-pages.vault.aboutEdit
 web-pages.vault.accounts
 web-pages.vault.add
 web-pages.vault.addDevice
@@ -1615,6 +1622,9 @@ web-pages.vault.deleteVaultEmpty
 web-pages.vault.deleteWhat
 web-pages.vault.deleted
 web-pages.vault.devicesHold
+web-pages.vault.editor.about
+web-pages.vault.editor.aboutNote
+web-pages.vault.editor.aboutPlaceholder
 web-pages.vault.editor.agent
 web-pages.vault.editor.agentNote
 web-pages.vault.editor.env

@@ -179,6 +179,7 @@ function fakeStation() {
   const plainGrants: unknown[] = [];
   // Secrets agents asked to keep, approved: where they went.
   const saves: unknown[] = [];
+  const described: unknown[] = [];
   const plainSaves: unknown[] = [];
   const uses: unknown[] = [];
   const plainLock = { on: false };
@@ -284,10 +285,19 @@ function fakeStation() {
         r.status = "granted";
         return { ok: true };
       }
+      case "POST /vault/described": {
+        // Taken only once its item here says so (its copy brought first).
+        const r = requests.find((q) => q.id === body.request);
+        const l = r ? items.get(r.item)?.listing : undefined;
+        if (!r || !r.describe || l?.name !== r.describe.name || (l.about ?? "") !== r.describe.about) return status(409, { error: "not here", code: "vault_refused" });
+        described.push(body);
+        r.status = "granted";
+        return { ok: true };
+      }
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, plainSaves, reply };
+  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, described, plainSaves, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -908,6 +918,34 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   r.st.requests.push(elsewhere);
   r.push("vault-request", elsewhere);
   await fails(r.ask("vault.approve", { request: "r_u", scope: "once" }), "vault_no_key");
+  r.core.close();
+});
+
+test("vault calls: an agent's request to rename an item: answered as one to keep, the item opened and written as its next version saying so (its listing too), then told; nothing granted", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const v = [...r.st.vaults.values()][0]!;
+  const { id } = (await r.ask("vault.putItem", { vault: v.id, plain: { kind: "token", name: "127.0.0.1 登录态", fields: { value: "t-1" }, domains: [], notes: "" }, listing: { name: "127.0.0.1 登录态", kind: "token", modes: ["proxy"], hosts: ["127.0.0.1"] } })) as { id: string };
+  const ask: Request = {
+    id: "r_d", ws: "ws", vault: v.id, item: id, session: "k1", chat: "7", mode: "proxy", reason: "认不出来", box: "", at: 1, status: "pending",
+    describe: { name: "UniFi 后台", about: "经 Studio 转发到 127.0.0.1:8443", was: { name: "127.0.0.1 登录态", about: "" } },
+  };
+  r.st.requests.push(ask);
+  r.push("vault-request", ask);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  const row = vaults().requests[0];
+  assert.deepEqual([row.itemName, row.describe, row.howText], ["127.0.0.1 登录态", { name: "UniFi 后台", about: "经 Studio 转发到 127.0.0.1:8443", wasAbout: "" }, "名字改为：UniFi 后台\n说明改为：经 Studio 转发到 127.0.0.1:8443"]);
+  await r.ask("vault.approve", { request: "r_d", scope: "once" });
+  const written = r.st.items.get(id)!;
+  assert.ok(signedOk(written, TAG.item));
+  assert.deepEqual([written.version, written.listing], [1, { name: "UniFi 后台", kind: "token", modes: ["proxy"], hosts: ["127.0.0.1"], about: "经 Studio 转发到 127.0.0.1:8443" }]);
+  const opened = (await r.ask("vault.open", { item: id })).plain;
+  assert.deepEqual([opened.name, opened.notes, opened.fields], ["UniFi 后台", "经 Studio 转发到 127.0.0.1:8443", { value: "t-1" }]);
+  assert.deepEqual(r.st.described, [{ request: "r_d" }]);
+  assert.deepEqual(r.st.grants, [], "it grants nothing");
   r.core.close();
 });
 

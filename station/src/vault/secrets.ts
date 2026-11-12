@@ -25,7 +25,7 @@ import { CARD_OCCUPIED, cardPlace, recordPostedCard } from "../sessions/card-pla
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
 import { stateOf } from "../browser/signins.ts";
-import { type BoxCert, type Deny, type Grant, type Item, type Kind, type Listing, type Mode, type Request, type Save, type Scope, type Sealed, type Vault, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
+import { ABOUT_MOST, type BoxCert, type Deny, type Grant, type Item, type Kind, type Listing, type Mode, type Request, type Save, type Scope, type Sealed, type Vault, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
 import { type Carried, type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
 import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
@@ -94,6 +94,11 @@ const PENDING_SECS = 86400;
 const SAVE_WORDS = {
   save: { label: "存入密钥库", detail: "agent 之后每次使用仍需你批准" },
   deny: { label: "拒绝", detail: "不保存，通知 agent" },
+};
+/// The words on the card of a request to rename an item or say what it is.
+const DESCRIBE_WORDS = {
+  yes: { label: "修改", detail: "按上面改名字和说明" },
+  no: { label: "不改", detail: "保持原样，通知 agent" },
 };
 const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥", file: "文件", browser: "登录态" };
 const howWords = (mode: Mode, hosts: string[]): string =>
@@ -1003,7 +1008,7 @@ export class Secrets {
     // NUL in a key. Never expose a use whose parsed vault or plain-library owner differs from the authorized scope.
     const email = viewer.email.toLowerCase();
     const requests = bodies.map((body) => JSON.parse(body) as Request)
-      .filter((r) => r.vault === vault && (vault !== PLAIN || r.owner === email) && r.save == null);
+      .filter((r) => r.vault === vault && (vault !== PLAIN || r.owner === email) && r.save == null && r.describe == null);
     const names = new Map<string, string | null>();
     const prepare = this.#d.hub.prepareLatestThreads;
     const titleIfReady = this.#d.titleIfReady;
@@ -1197,7 +1202,9 @@ export class Secrets {
     if (!r.save && !listing) throw new Refused("The secret is no longer available to request.");
     const posted = r.save
       ? await this.#postSave(session, place.thread, r, true, signal)
-      : await this.#post(session, place.thread, r, listing!, r.owner, true, signal);
+      : r.describe
+        ? await this.#postDescribe(session, place.thread, r, this.#deciderOf(r), true, signal)
+        : await this.#post(session, place.thread, r, listing!, r.owner, true, signal);
     const current = this.#kept(ws, id);
     if (current?.request.status === "pending" && !this.#requestLive(current.request, Math.floor(this.#d.now() / 1000))) this.#settle(current.request, "expired");
     // The original request may have been decided while the new message was being posted.
@@ -1222,6 +1229,131 @@ export class Secrets {
       throw error;
     }
     return `The card for request ${id} is in the chat again. It is the same request; no secret was read again. ${UNDECIDED}`;
+  }
+
+  // ── an item renamed, or said what it is (secret_describe 改名和说明) ──
+
+  /// secret_describe: a request from `session` to give item `a.item` (its id or listed name) a new name or about, its card
+  /// posted for the item's owner (or the person named). Granted, the item says so: a vault's written by the app that
+  /// approves it (its device signs the item), the plain library's here (`describedPlain`). It grants nothing.
+  async describe(session: string, a: { item: string; name?: string; about?: string; reason: string; person?: string }): Promise<string> {
+    const { ws } = this.#placeOf(session);
+    const found = this.#findListing(session, a.item.trim().toLowerCase(), a.person);
+    if (found === undefined) throw new Refused(`No secret named ${JSON.stringify(a.item)} is listed here: secret_list lists those that are.`);
+    const decider = a.person?.trim() ? this.#personFor(session, a.person) : found.owner;
+    const { listing } = found;
+    const was = { name: listing.name, about: listing.about ?? "" };
+    const name = (a.name ?? was.name).trim();
+    const about = (a.about ?? was.about).trim();
+    if (name === "" || name.length > 200) throw new Refused("name is at most 200 characters, and not empty: what the person and agents will know it by");
+    if (about.length > ABOUT_MOST) throw new Refused(`about is at most ${ABOUT_MOST} characters`);
+    if (name === was.name && about === was.about) throw new Refused(`「${was.name}」 is named and described so already: nothing to change.`);
+    if (a.reason.trim() === "") throw new Refused("reason is required: why, for the person deciding");
+    const thread = this.#latestThreadReady(session);
+    if (thread === undefined) {
+      await this.#d.hub.prepareLatestThreads!([session]);
+      const current = this.#d.hub.store.getSession(session);
+      if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone.");
+      return this.describe(session, a);
+    }
+    const plain = found.vault === PLAIN;
+    const now = this.#d.now();
+    const id = `r_${ulid(now)}`;
+    const request: Request = {
+      id, ws, vault: found.vault, item: found.item, session, chat: "", mode: listing.modes[0]!, reason: a.reason.trim(),
+      box: "", at: Math.floor(now / 1000), status: "pending", ...(plain && found.owner ? { owner: found.owner } : {}),
+      describe: { name, about, was },
+    };
+    const kept: Kept = { request, thread: null, cardTs: null };
+    if (thread !== null) {
+      request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
+      kept.cardTs = await this.#postDescribe(session, thread, request, decider ?? undefined);
+      kept.thread = thread.thread.id;
+    }
+    this.#save(kept);
+    this.#audit(request, "describe-request", name === was.name ? "about" : `name ${name}`);
+    this.#told(request);
+    return this.#saidDescribe(request) + (decider ? ` It is for ${decider} to decide.` : "");
+  }
+
+  /// Who decides request `r` as its card says: the plain library's item's owner, else its vault's owner.
+  #deciderOf(r: Request): string | undefined {
+    if (r.owner) return r.owner;
+    const lock = this.#d.lock(r.ws);
+    const vault = this.#d.vaults.vault(r.ws, r.vault);
+    return lock !== null && vault !== null ? lock.members.get(vault.owner)?.email.toLowerCase() : undefined;
+  }
+
+  /// The card of a request to rename an item or say what it is: its name and about as they were and are to be.
+  async #postDescribe(session: string, thread: SessionThread, r: Request, decider: string | undefined, requireEmpty = false, signal?: AbortSignal): Promise<string | null> {
+    const d = r.describe!;
+    const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
+    const text = [
+      `申请修改「${d.was.name}」：${r.reason}`,
+      ...(d.name !== d.was.name ? [`名字改为：${d.name}`] : []),
+      ...(d.about !== d.was.about ? [d.about === "" ? "删去说明" : `说明改为：${d.about}`] : []),
+      ...(stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"]),
+    ].join("\n\n");
+    const card = stillfail
+      ? {
+          type: "options",
+          options: [{ ...DESCRIBE_WORDS.yes, recommended: true }, DESCRIBE_WORDS.no],
+          ...(decider ? { assignee: decider.toLowerCase() } : {}),
+          // The request as the app draws it: `describe` says it is one to rename; its outcome added once decided.
+          vault: { request: r.id, name: d.was.name, reason: r.reason, mode: r.mode, hosts: [], describe: { name: d.name, about: d.about, wasAbout: d.was.about } },
+        }
+      : null;
+    return this.#postCard(session, thread, text, card, requireEmpty, r, signal);
+  }
+
+  /// What an agent is told of a request to rename an item, waiting (secret_describe's answer) or decided (a notice).
+  #saidDescribe(r: Request): string {
+    const d = r.describe!;
+    if (r.status === "granted") return `Changed: the item ${r.item} is 「${d.name}」 now${d.about ? `, described as: ${d.about}` : ", with no description"}.`;
+    if (r.status === "denied") return `The person chose not to change 「${d.was.name}」 (request ${r.id}): it stays as it was.`;
+    if (r.status === "expired") return `The request to change 「${d.was.name}」 (${r.id}) was let go.`;
+    return `Asked to change 「${d.was.name}」 (request ${r.id}); the card is in your chat, approved in the still.fail app. ${UNDECIDED} Only their approval in the app changes it: a reply in the chat saying yes does not.`;
+  }
+
+  /// POST vault/described `{request}`: a request to rename an item of a vault, approved by a member of it whose app wrote
+  /// the item's next version (and brought it here): taken once the item here says what was asked. Why not, or null.
+  described(lock: LockState, sub: string, d: { request?: unknown }): string | null {
+    const k = typeof d?.request === "string" ? this.#kept(lock.ws, d.request) : null;
+    if (k === null || !k.request.describe || k.request.vault === PLAIN) return "no such request to rename an item of a vault";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    const vault = this.#d.vaults.vault(lock.ws, k.request.vault);
+    if (vault === null || !vault.members.includes(sub)) return "only the vault's members decide its requests";
+    const item = this.#d.vaults.item(lock.ws, vault.id, k.request.item);
+    const want = k.request.describe;
+    if (item === null || item.deleted || item.listing?.name !== want.name || (item.listing.about ?? "") !== want.about) return "the item does not say so here: bring its copy first";
+    if (!this.#settle(k.request, "granted")) return this.#decisionChanged(k.request);
+    return null;
+  }
+
+  /// POST vault/plain/described `{request}`: a request to rename an item of the plain library, approved by its owner:
+  /// its next version written here. The item as written, or why not.
+  describedPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown }): PlainItem | string {
+    const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
+    if (k === null || !k.request.describe || k.request.vault !== PLAIN) return "no such request to rename an item of the plain library";
+    if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
+    if (lock !== null) return "security mode is on: the item is in the vault, changed by the app";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    const snapshot = this.#d.plain.itemSnapshot(ws, k.request.item);
+    const prev = snapshot?.value ?? null;
+    if (prev === null || prev.deleted || prev.listing === undefined) return "the item is gone, or not one agents may ask for";
+    const want = k.request.describe;
+    const { about: _, ...listing } = prev.listing;
+    const next: PlainItem = { ...prev, version: prev.version + 1, name: want.name, notes: want.about, listing: { ...listing, name: want.name, ...(want.about ? { about: want.about } : {}) }, at: Math.floor(this.#d.now() / 1000) };
+    const why = plainOk(prev, next, prev.owner);
+    if (why !== null) return why;
+    try {
+      const settled = this.#settle(k.request, "granted", undefined, undefined, () => {
+        if (this.#d.db.prepare("SELECT 1 FROM vault_plain WHERE ws=? AND id=? AND body=?").get(ws, prev.id, snapshot!.body) === undefined) throw new Refused("the item changed; try again");
+        this.#d.plain.put(next);
+      });
+      if (!settled) return this.#decisionChanged(k.request);
+    } catch (error) { if (error instanceof Refused) return error.message; throw error; }
+    return this.#d.plain.item(ws, next.id)!;
   }
 
   // ── secrets agents ask to keep (secret_save agent 存入) ──
@@ -1292,6 +1424,8 @@ export class Secrets {
     a: {
       name: string; kind: string; reason: string; value?: string; command?: string; path?: string; username?: string; public_key?: string; filename?: string; modes?: string[]; hosts?: string[]; env?: string;
       cwd: string; station?: string; browser?: "chat" | "station"; person?: string;
+      /// What it is and how it is used (its listing's `about`, the item's notes): shown to agents with its name.
+      about?: string;
       /// Kept from a sign-in's card (signin.ts), the person having chosen there to keep it: no card of its own, its
       /// request told to `made` (the app that signed in approves it in place).
       quiet?: (request: string) => void;
@@ -1319,6 +1453,8 @@ export class Secrets {
     const name = a.name.trim();
     if (name === "" || name.length > 200) throw new Refused("name is required (at most 200 characters): what the person and agents will know it by");
     if (a.reason.trim() === "") throw new Refused("reason is required: why it is worth keeping, for the person deciding");
+    const about = (a.about ?? "").trim();
+    if (about.length > ABOUT_MOST) throw new Refused(`about is at most ${ABOUT_MOST} characters`);
     if (a.value !== undefined && command !== undefined) throw new Refused("Give the secret as value or as a command that prints it (command), not both; neither, and the card asks the person to type it in.");
     const typed = kind !== "browser" && a.value === undefined && command === undefined;
     const hosts = [...new Set((a.hosts ?? []).map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
@@ -1328,11 +1464,11 @@ export class Secrets {
     if (kind === "file" && (modes.length !== 1 || modes[0] !== "file")) throw new Refused("a file is given as a file (modes: [\"file\"])");
     let sub = lock === null ? null : this.#memberOf(lock, email);
     if (lock !== null && sub === null) throw new Refused(`${email} is not in the workspace's security mode: there is no vault of theirs to keep it in.`);
-    const listing: Listing = { name, kind, modes, hosts, ...(a.env ? { env: a.env } : {}) };
+    const listing: Listing = { name, kind, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(about ? { about } : {}) };
     const now = this.#d.now();
     const item = `i_${ulid(now)}`;
     // What is not secret checked before anything is run.
-    const draft = (fields: Record<string, string>): PlainItem => ({ ws, id: item, owner: email, version: 0, kind, name, fields, notes: "", listing, at: Math.floor(now / 1000) });
+    const draft = (fields: Record<string, string>): PlainItem => ({ ws, id: item, owner: email, version: 0, kind, name, fields, notes: about, listing, at: Math.floor(now / 1000) });
     // (a file's value: its bytes in base64; given as value, its text)
     const fieldsOf = (value: string): Record<string, string> =>
       kind === "token" ? { value } : kind === "browser" ? { cookies: value } : kind === "login" ? { ...(a.username ? { username: a.username } : {}), password: value }
@@ -1380,7 +1516,7 @@ export class Secrets {
     const id = `r_${ulid(requestedAt)}`;
     const save: Save = {
       kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}), ...(filename ? { filename } : {}),
-      ...(typed ? { typed: true as const } : {}),
+      ...(typed ? { typed: true as const } : {}), ...(about ? { about } : {}),
     };
     const request: Request = {
       id, ws, vault: lock === null ? PLAIN : this.#vaultFor(lock, sub!), item, session, chat: "", mode: modes[0]!, reason: a.reason.trim(),
@@ -1429,6 +1565,7 @@ export class Secrets {
     const kind = `（${KIND_WORDS[s.kind]}${s.username ? ` · ${s.username}` : s.filename ? ` · ${s.filename}` : ""}）`;
     const text = [
       s.typed ? `请填入「${s.name}」${kind}并存入密钥库：${r.reason}` : `申请将「${s.name}」存入密钥库${kind}：${r.reason}`,
+      ...(s.about ? [`说明：${s.about}`] : []),
       ...(stillfail ? [] : [s.typed ? "请在 still.fail 客户端的「密钥」中填写并存入。" : "请在 still.fail 客户端的「密钥」中批准。"]),
     ].join("\n\n");
     const card = stillfail
@@ -1439,6 +1576,7 @@ export class Secrets {
           // The request as the app draws it: `save` says it is one to keep; its outcome added once decided.
           vault: {
             request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: hosted(s.modes[0]!) ? s.hosts : [],
+            ...(s.about ? { about: s.about } : {}),
             ...(r.runOn ? { station: r.runOn.name } : {}),
             save: { kind: s.kind, ...(s.username ? { username: s.username } : {}), ...(s.filename ? { filename: s.filename } : {}), ...(s.typed ? { typed: true } : {}) },
           },
@@ -1618,8 +1756,8 @@ export class Secrets {
     const fields = s.typed ? typedFields(s.kind, d.fields) : this.#unsaved.get(k.request.id);
     if (fields === undefined) return s.typed ? "this secret is typed in on its card, and sent with its fields (an app from before that cannot: update it)" : "the secret is gone (the station restarted): the agent asks again";
     const next: PlainItem = {
-      ws, id: k.request.item, owner: k.request.owner!, version: 0, kind: s.kind, name: s.name, fields, notes: "",
-      listing: { name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}) }, at: Math.floor(this.#d.now() / 1000),
+      ws, id: k.request.item, owner: k.request.owner!, version: 0, kind: s.kind, name: s.name, fields, notes: s.about ?? "",
+      listing: { name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}), ...(s.about ? { about: s.about } : {}) }, at: Math.floor(this.#d.now() / 1000),
     };
     if (this.#d.plain.item(ws, next.id) !== null) return "the item is there already";
     const why = plainOk(null, next, next.owner);
@@ -1693,7 +1831,7 @@ export class Secrets {
     if (status !== "granted") this.keeper.drop(r.id);
     this.#audit(k.request, status, "");
     this.#told(k.request);
-    if (status === "granted" && k.request.mode === "browser") {
+    if (status === "granted" && k.request.mode === "browser" && !k.request.describe) {
       this.#renewalGranted(k.request);
       this.#signIn(k.request);
     }
@@ -1701,7 +1839,7 @@ export class Secrets {
     if (status !== "expired") {
       const l = this.#listingOf(r);
       try {
-        this.#d.hub.notify(r.session, k.request.save ? this.#saidSave(k.request) : l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);
+        this.#d.hub.notify(r.session, k.request.save ? this.#saidSave(k.request) : k.request.describe ? this.#saidDescribe(k.request) : l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);
       } catch {
         // The session is gone: nobody to tell.
       }
@@ -1843,6 +1981,7 @@ export class Secrets {
     const k = typeof grant?.request === "string" ? this.#kept(lock.ws, grant.request) : null;
     if (k === null) return "no such request";
     if (k.request.save) return "a secret to keep is approved by POST vault/saves";
+    if (k.request.describe) return "a request to rename an item grants nothing: it is approved by POST vault/described";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
     const vaultSnapshot = this.#d.vaults.vaultSnapshot(lock.ws, k.request.vault);
     const itemSnapshot = this.#d.vaults.itemSnapshot(lock.ws, k.request.vault, k.request.item);
@@ -1868,6 +2007,7 @@ export class Secrets {
     const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
     if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
     if (k.request.save) return "a secret to keep is approved by POST vault/plain/saves";
+    if (k.request.describe) return "a request to rename an item grants nothing: it is approved by POST vault/plain/described";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
     if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
     if (lock !== null) return "security mode is on: the plain library's secrets are moved into the vault, not given out";

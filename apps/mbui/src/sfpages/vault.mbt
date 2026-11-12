@@ -275,6 +275,7 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
     filename: text(save, "filename"),
     typed: flag(save, "typed"),
     station: "",
+    describe: field(rv, "describe") is Some(_),
   }
   let station = text(rv, "station")
   let extra = if station == "" {

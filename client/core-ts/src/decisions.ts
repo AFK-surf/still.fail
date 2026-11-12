@@ -4,7 +4,7 @@
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
-import { howText } from "./vault-words.ts";
+import { aboutText, describeText, howText } from "./vault-words.ts";
 import { arr as arrU, get as getU, isObject, str, u64 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -125,9 +125,17 @@ function vaultAsk(v: J): J | null {
     const username = trimmed(get(get(v, "save"), "username"));
     const filename = trimmed(get(get(v, "save"), "filename"));
     out.save = { kind, ...(username !== null ? { username } : {}), ...(filename !== null ? { filename } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
+  } else if (isObject(get(v, "describe")) && typeof get(get(v, "describe"), "name") === "string") {
+    // A request to rename the item or change its about (secret_describe): as they would be, and its about as it was.
+    const d = get(v, "describe");
+    out.describe = { name: d.name, about: str(d.about) ?? "", wasAbout: str(d.wasAbout) ?? "" };
+    out.howText = describeText(name, out.describe);
   } else {
     out.howText = howText(mode, hosts);
   }
+  // What a secret to keep is for and how it is used, as the agent said it: said where how it is given would be.
+  const about = trimmed(get(v, "about"));
+  if (about !== null && out.save !== undefined) out.howText = aboutText(about);
   return out;
 }
 

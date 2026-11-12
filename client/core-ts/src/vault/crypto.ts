@@ -29,8 +29,9 @@ export type Mode = "proxy" | "ssh" | "env" | "file" | "browser";
 export type Scope = "once" | "hour" | "chat";
 /// The scopes, shortest first.
 export const SCOPES: Scope[] = ["once", "hour", "chat"];
-/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: as its vault says).
-export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope };
+/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: as its vault says); `about`: what
+/// it is and how it is used, the item's notes as agents are shown them beside its name (never a secret).
+export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope; about?: string };
 /// Whether a grant may last as long as `scope` for an item that allows `lasts` at most (none: any).
 export const allows = (lasts: Scope | null | undefined, scope: Scope): boolean =>
   SCOPES.indexOf(scope) >= 0 && SCOPES.indexOf(scope) <= SCOPES.indexOf(lasts ?? "chat");
@@ -55,9 +56,12 @@ export type Request = {
   /// vault's members' devices set up (`saveContext` under its id): written as the item's next version when this
   /// request is granted, and granted.
   renewal?: { id: string; sealed: { device: string; box: string; secret: string }[] };
+  /// An agent asking to rename the item or change its about (secret_describe 改名和说明): as they are to be, and as
+  /// they were when asked. Granted by writing the item's next version so (`vault.approve`); it grants nothing.
+  describe?: { name: string; about: string; was: { name: string; about: string } };
 };
 /// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true; about?: string };
 export type Timeout = { kind: "idle" | "fixed"; seconds: number };
 export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; timeout?: Timeout; secret: string; at: number; sig: Sig };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };
