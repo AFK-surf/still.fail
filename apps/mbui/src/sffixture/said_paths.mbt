@@ -19,6 +19,11 @@ pub let said_paths : Map[String, Array[String]] = {
     "personal.*.pair.error",
     "personal.*.pair.untilText",
     "personal.*.pair.showing.*",
+    "personal.*.pending.*.text",
+    "personal.*.pending.*.stations.*",
+    "personal.*.pending.*.why",
+    "personal.*.pending.*.dismissText",
+    "personal.*.pendingText",
   ],
   "agentCard": [
     "jobs",
@@ -666,6 +671,11 @@ pub let said_paths : Map[String, Array[String]] = {
     "renew.*.label",
     "renew.*.nameText",
     "renew.*.fullText",
+    "pending.*.text",
+    "pending.*.stations.*",
+    "pending.*.why",
+    "pending.*.dismissText",
+    "pendingText",
   ],
   "lockDraft": [
     "members.*.email",

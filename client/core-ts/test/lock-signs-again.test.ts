@@ -19,7 +19,7 @@ import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
 import { keep } from "../src/lock-keep.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { lockChain } from "../src/vault/lock-check.ts";
-import { ASKED_MS, Lock, TAKEN_MS, asked, held, lockView, read } from "../src/views/lock.ts";
+import { ASKED_MS, Lock, TAKEN_MS, asked, held, lockView, pendingHeld, read } from "../src/views/lock.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { subscribe } from "./helpers.ts";
 import { ME, genesis, grant, rig, unhex, withoutMesh } from "./lock-rig.ts";
@@ -359,7 +359,7 @@ for (const how of ["running all along", "closed meanwhile and started again"] as
     assert.ok(l?.locked, "the lock topic answers after");
   });
 
-test("taken by hash: a station whose answer's head is as far but another entry took none of it (the cloud refusing, the entry fails)", async () => {
+test("taken by hash: a station whose answer's head is as far but another entry took none of it (pending, whatever the cloud says)", async () => {
   const w = await setUp([A]);
   const a = w.st(A);
   // A station from before answering what it took by how far its chain goes, its chain at that place another entry.
@@ -374,7 +374,9 @@ test("taken by hash: a station whose answer's head is as far but another entry t
   })(w.inner.stations.requests.call) as typeof w.inner.stations.requests.call;
   stationReplies(w.r.host, (req) => (req.method === "POST" && /\/v1\/workspaces\/ws\/lock$/.test(new URL(req.url).pathname) ? new Status(503, { error: "unavailable" }) : w.r.cloud.reply(req)));
   const out = await w.run(Effect.result(new Lock(w.inner, "ws", "s1", null).append("member", s3)));
-  assert.equal(out._tag, "Failure", "not taken: the cloud's failure is the entry's");
+  assert.equal(out._tag, "Success", "not taken: pending");
+  assert.equal(held(w.inner, "ws")!.entries.length, 1, "not held");
+  assert.deepEqual(pendingHeld(w.inner, "ws").map((x) => x.entry.kind), ["member"]);
 });
 
 test("a station on another branch of the lock is not another lock; one of another genesis is", async () => {

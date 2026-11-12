@@ -639,7 +639,7 @@ for (const lost of [true, false])
       else await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
       const theirs = [...st2.kept.values()][0]!;
       st.say.taking = () => a.lock.heardFrom(SUB, [theirs]);
-      const out = await a.runner.run(Effect.result(lost ? a.lock.addDevice(SUB, other("44"), "why") : a.lock.removeDevice(SUB, other("22").key, "why")));
+      const out = await a.runner.run(Effect.result(lost ? Effect.asVoid(a.lock.addDevice(SUB, other("44"), "why")) : Effect.asVoid(a.lock.removeDevice(SUB, other("22").key, "why"))));
       assert.equal(st.say.taking, null, "the other chain was heard while the entry was being brought");
       const pinned = a.lock.entries(SUB);
       assert.notEqual(checkChain(pinned, SUB), null, `the lock pinned holds: ${kinds(pinned)}`);

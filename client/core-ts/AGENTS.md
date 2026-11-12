@@ -115,10 +115,15 @@ another; the accounts' list's merge across stations and its refills.
   is kept with it and the rules' fork choice decides (`src/lock-keep.ts`). Never put an entry after one whose hash is not
   its `prev`, and never drop one a station showed but past `ASIDE_MOST` (2026-11-12).
 - This device signs a lock one entry at a time, in that lock's turn (`Lock.append`, personal-lock.ts `#append`): read
-  first outside it, sign after the head held as it begins, give it up once the entry is held, refused or left to the
-  cloud. Nothing waits for one turn while holding the other. An entry of its own that lost its place is signed again
+  first outside it, sign after the head held as it begins, give it up once the entry is held, refused or pending.
+  Nothing waits for one turn while holding the other. An entry of its own that lost its place is signed again
   only by the rules of `lock-keep.ts` `againOf`, at most `AGAIN_MOST` times, a person's lock's only with a seed in hand,
   never by asking for one.
+- The cloud's taking an entry never counts (2026-11-12): what no station took nor refused by the call's wait
+  (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
+  held and never on it, shown on the lock's topic as not in effect, and brought to the stations as one is next read
+  (views/lock.ts `deliver`, personal-lock.ts `#deliver`), never on a timer. The cloud is sent an entry once a station
+  took it. Only a lock that names no station, and a person's lock begun anew, are still the cloud's to take.
 
 ## Contracts made from here
 

@@ -55,37 +55,14 @@ const CALLS: { name: string; needs: "either" | "cloud" | "none"; make: (s: Setup
 
 /// Cells that do not hold yet, by `call|station|cloud`, each with why. Only falls: one that holds now fails the test
 /// until it is taken out.
-const KNOWN: Record<string, string> = {
-  // Neither the station nor the cloud answering anything: the entry waits on both with no end (views/lock.ts: past
-  // TAKEN_MS the stations are let go of, the cloud's POST waited on as long as it takes).
-  "lock.removeDevice|never|never": "nothing bounds the wait on the cloud's POST",
-  "lock.renew|never|never": "nothing bounds the wait on the cloud's POST",
-  "lock.disable|never|never": "nothing bounds the wait on the cloud's POST",
-  "approved face to face|never|never": "nothing bounds the wait on the cloud's POST",
-  // A cloud that takes the request and never answers (frozen; the shell's client bounds only the connecting, 15 s):
-  // the roster's write is the cloud's, its request waited on with no end, whatever the station does.
-  "workspace.setRole|now|never": "the cloud's request has no deadline",
-  "workspace.setRole|late|never": "the cloud's request has no deadline",
-  "workspace.setRole|never|never": "the cloud's request has no deadline",
-  "workspace.addMembers|now|never": "the cloud's request has no deadline",
-  "workspace.addMembers|late|never": "the cloud's request has no deadline",
-  "workspace.addMembers|never|never": "the cloud's request has no deadline",
-  "workspace.removeMember|now|never": "the cloud's request has no deadline",
-  "workspace.removeMember|late|never": "the cloud's request has no deadline",
-  "workspace.removeMember|never|never": "the cloud's request has no deadline",
-  "workspace.removeStation|now|never": "the cloud's request has no deadline",
-  "workspace.removeStation|late|never": "the cloud's request has no deadline",
-  "workspace.removeStation|never|never": "the cloud's request has no deadline",
-  "workspace.enroll|now|never": "the cloud's request has no deadline",
-  "workspace.enroll|late|never": "the cloud's request has no deadline",
-  "workspace.enroll|never|never": "the cloud's request has no deadline",
-};
+const KNOWN: Record<string, string> = {};
 
 /// Whether the call is to be done in this cell.
 function done(needs: "either" | "cloud" | "none", st: Station, cloud: Cloud): boolean {
   if (needs === "none") return true;
   if (needs === "cloud") return cloud === "answers";
-  return st !== "never" || cloud === "answers";
+  // (what no station took by the call's wait answers as pending, whatever the cloud does: views/lock.ts `Lock.append`)
+  return true;
 }
 
 /// How long the call may take in this cell: done, as the one that takes it answers; failing, once neither did.

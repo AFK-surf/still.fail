@@ -75,7 +75,7 @@ export type AdbEnv = {
   personal: PersonalLock;
   /// A device taken off the person's lock here (`removal`, by its id there), then out of the workspaces' locks where
   /// they bound it (views/lock.ts `takeOffBound`, `withBound`): the removal's own answer. None, the removal alone.
-  tookOff?: <E>(sub: string, id: string, removal: Effect.Effect<null, E>) => Effect.Effect<null, E>;
+  tookOff?: <A, E>(sub: string, id: string, removal: Effect.Effect<A, E>) => Effect.Effect<A, E>;
   subOf: (workspace: string) => string | null;
   /// The accounts signed in here: each has a lock of its own.
   subs: () => { sub: string; email: string }[];
@@ -661,6 +661,9 @@ export class Adb {
           const itself = personal.view(sub).devices.some((d: { key: string; me: boolean }) => d.key === call.key && d.me);
           return id === undefined || itself || this.#env.tookOff === undefined ? removal : this.#env.tookOff(sub, id, removal);
         }));
+      // A failed pending change to their lock, read: dropped.
+      case "personalPendingDismiss":
+        return this.#of(call.sub, (sub) => Effect.sync(() => (this.#env.personal.dismissPending(sub, call.id), null)));
       case "personalForget":
         return this.#of(call.sub, (sub) => this.#env.personal.forget(sub, t("core-misc.personal.reason.forget")));
       case "personalRestart":
