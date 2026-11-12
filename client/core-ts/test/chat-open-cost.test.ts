@@ -143,9 +143,10 @@ test("a_chat_opens_the_same_on_a_database_from_before_its_part_and_while_a_core_
   const { host, base } = await written();
   const kept = await chatAnew(host, base);
   const sql = host.sqls.get(dbName("s1"))!;
-  // As a core before the chat's part left it: its table without the column, its triggers.
-  sql.exec("ALTER TABLE station_part DROP COLUMN chat");
+  // As a core before the chat's part left it: its triggers, its table without the column (dropped once no trigger
+  // reads it).
   sql.exec(olderTriggers());
+  sql.exec("ALTER TABLE station_part DROP COLUMN chat");
   // Brought to it as it opens: the column added, the triggers and every part made again, by SQLite.
   const anew = await chatAnew(host, base);
   assert.deepEqual(sql.all("SELECT count(*), count(chat) FROM station_part")[0], [5, 5]);

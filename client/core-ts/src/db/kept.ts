@@ -20,13 +20,14 @@ export type Owner = readonly string[];
 export type Kept<V> = {
   /// Its name: what the views make it by (Data.makes) and its counters' (work.ts `<name>Kept`, `Written`, `Made`).
   readonly name: string;
-  /// Its table: the owner's columns (text), the key's (what else it was made with, the views' to say), `made` where it
-  /// says what of its record it was made of (the record's `by` column, as it was), and the value's own (`columns`).
+  /// Its table: the owner's columns (text), the key's (what else it was made with, the views' to say), and the value's
+  /// own (`columns`). `older`: columns an older core's values had beside these, kept (nullable, never written here) so
+  /// that one opening the database after this one still puts and reads its own.
   readonly table: string;
   readonly owner: readonly string[];
   readonly key: string;
-  readonly made?: string;
   readonly columns: readonly (readonly [string, string])[];
+  readonly older?: readonly string[];
   /// What it is made of: the records of `table` (those `of` says, of a trigger's row `new` or `old`), its owner's
   /// columns there in the order of the kept table's, and the column whose change makes it another record (none: any).
   readonly source: { readonly table: string; readonly owner: readonly string[]; readonly of?: (row: string) => string; readonly by?: string };
@@ -98,15 +99,16 @@ export const KEPT = {
     take: (c) => (typeof c[0] === "number" ? c[0] === 1 : undefined),
   } satisfies Kept<boolean>,
   /// A station's accounts' rows (views.ts profileRowKey) of its overview's `profiled` part, kept as the accounts' list
-  /// first reads them. Its part is put again at every write of the overview (schema.ts overviewTriggers): its rows go
-  /// only where the part says otherwise than they were made of (`made`), so most writes, which reach no account, keep them.
+  /// first reads them. The part is kept in place as the overview is written (schema.ts overviewTriggers), so its rows go
+  /// only as `profiled` changes, and most writes, which reach no account, keep them. (`profiled`: what the cores that
+  /// made the rows of the part their `made` said, 2026-11-12, till OLDEST_CORE is past them.)
   profileRow: {
     name: "profileRow",
     table: "profile_row",
     owner: ["address"],
     key: "key",
-    made: "profiled",
     columns: [["rows", "TEXT NOT NULL"]],
+    older: ["profiled"],
     source: { table: "station_part", owner: ["address"], by: "profiled" },
     policy: "read",
     each: "owner",
@@ -123,14 +125,12 @@ export const KEPT_ALL: readonly AnyKept[] = Object.values(KEPT) as AnyKept[];
 
 const spaced = (s: string) => s.replace(/\s+/g, " ").trim();
 
-/// `owner` = the owner of `row` (a trigger's `new` or `old`, a source's alias).
-const ownerOf = (d: AnyKept, row: string, alias = "") => d.owner.map((c, i) => `${alias}${c} = ${row}.${d.source.owner[i]}`).join(" AND ");
+/// `owner` = the owner of `row` (a trigger's `new` or `old`).
+const ownerOf = (d: AnyKept, row: string) => d.owner.map((c, i) => `${c} = ${row}.${d.source.owner[i]}`).join(" AND ");
 
 /// The triggers dropping a declaration's values as their record is put, changed or goes, whoever writes it (a core
-/// that knows nothing of them too), by name as sqlite_master keeps them. Put: always, or where `made`, only as the
-/// record says otherwise than its value was made of. Changed: in any column (its owner too, old and new), or in `by`.
-/// Gone: where nothing says what it was made of (`made`: its record's table puts it again at every write; what is read
-/// is joined to what it says, so a value of one no longer held is never read).
+/// that knows nothing of them too), by name as sqlite_master keeps them. Changed: in any column (its owner too, old and
+/// new), or in `by`.
 export function keptTriggers(d: AnyKept): [string, string][] {
   const s = d.source;
   const when = (...c: (string | undefined)[]) => {
@@ -138,28 +138,33 @@ export function keptTriggers(d: AnyKept): [string, string][] {
     return all.length === 0 ? "" : ` WHEN ${all.join(" AND ")}`;
   };
   const drop = (row: string) => `DELETE FROM ${d.table} WHERE ${ownerOf(d, row)};`;
-  const putWhen = d.made === undefined ? undefined : `new.${s.by} IS NOT (SELECT k.${d.made} FROM ${d.table} AS k WHERE ${ownerOf(d, "new", "k.")})`;
-  const out: [string, string][] = [[`${d.table}_put`, `CREATE TRIGGER ${d.table}_put AFTER INSERT ON ${s.table}${when(s.of?.("new"), putWhen)} BEGIN ${drop("new")} END`]];
-  out.push([
-    `${d.table}_set`,
-    s.by === undefined
-      ? `CREATE TRIGGER ${d.table}_set AFTER UPDATE ON ${s.table} BEGIN ${drop("old")} ${drop("new")} END`
-      : `CREATE TRIGGER ${d.table}_set AFTER UPDATE OF ${s.by} ON ${s.table}${when(s.of?.("new"), `old.${s.by} IS NOT new.${s.by}`)} BEGIN ${drop("new")} END`,
-  ]);
-  if (d.made === undefined) out.push([`${d.table}_drop`, `CREATE TRIGGER ${d.table}_drop AFTER DELETE ON ${s.table}${when(s.of?.("old"))} BEGIN ${drop("old")} END`]);
-  return out;
+  return [
+    [`${d.table}_put`, `CREATE TRIGGER ${d.table}_put AFTER INSERT ON ${s.table}${when(s.of?.("new"))} BEGIN ${drop("new")} END`],
+    [
+      `${d.table}_set`,
+      s.by === undefined
+        ? `CREATE TRIGGER ${d.table}_set AFTER UPDATE ON ${s.table} BEGIN ${drop("old")} ${drop("new")} END`
+        : `CREATE TRIGGER ${d.table}_set AFTER UPDATE OF ${s.by} ON ${s.table}${when(s.of?.("new"), `old.${s.by} IS NOT new.${s.by}`)} BEGIN ${drop("new")} END`,
+    ],
+    [`${d.table}_drop`, `CREATE TRIGGER ${d.table}_drop AFTER DELETE ON ${s.table}${when(s.of?.("old"))} BEGIN ${drop("old")} END`],
+  ];
 }
 
-/// A declaration's table and triggers, made where missing at every open; where a trigger was missing or not this
-/// core's (an older core made its record's table again, its triggers with it), or what is kept was made otherwise
-/// (`making`, as the database's `meta` says it was made: none said, a database from before, whose values' keys say it),
-/// every value kept goes, nothing left that a record outlived.
+/// A declaration's table and triggers, made where missing at every open; a table not this core's (its columns
+/// otherwise: an earlier core's) made again, its values with it. Where a trigger was missing or not this core's (an
+/// older core made its record's table again, its triggers with it), or what is kept was made otherwise (`making`, as
+/// the database's `meta` says it was made: none said, a database from before, whose values' keys say it), every value
+/// kept goes, nothing left that a record outlived.
 export function openKept(sql: Sql, d: AnyKept): void {
   sql.exec("BEGIN IMMEDIATE");
   try {
     const pk = d.each === "owner" ? d.owner : [...d.owner, d.key];
-    const columns = [...d.owner.map((c) => `${c} TEXT NOT NULL`), `${d.key} TEXT NOT NULL`, ...(d.made === undefined ? [] : [`${d.made} TEXT NOT NULL`]), ...d.columns.map(([c, ty]) => `${c} ${ty}`)];
-    sql.exec(`CREATE TABLE IF NOT EXISTS ${d.table} (${columns.join(", ")}, PRIMARY KEY (${pk.join(", ")}))${d.each === "key" ? " WITHOUT ROWID" : ""}`);
+    const columns = [...d.owner.map((c) => `${c} TEXT NOT NULL`), `${d.key} TEXT NOT NULL`, ...d.columns.map(([c, ty]) => `${c} ${ty}`), ...(d.older ?? []).map((c) => `${c} TEXT`)];
+    const table = `CREATE TABLE ${d.table} (${columns.join(", ")}, PRIMARY KEY (${pk.join(", ")}))${d.each === "key" ? " WITHOUT ROWID" : ""}`;
+    const was = sql.all("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", [d.table])[0]?.[0];
+    const ours = was !== undefined && spaced(String(was)) === spaced(table);
+    if (was !== undefined && !ours) sql.exec(`DROP TABLE ${d.table}`);
+    if (!ours) sql.exec(table);
     const triggers = keptTriggers(d);
     const had = new Map(sql.all(`SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name IN (${triggers.map(() => "?").join(", ")})`, triggers.map(([name]) => name)).map((r) => [String(r[0]), String(r[1])]));
     let remade = false;
@@ -272,12 +277,6 @@ export class KeptValues {
     return v;
   }
 
-  /// `AND` the value's `made` is what its record says now: a value of a record no longer held is never read.
-  #madeNow(d: AnyKept, alias: string): string {
-    if (d.made === undefined) return "";
-    return ` AND ${alias}.${d.made} = (SELECT s.${d.source.by} FROM ${d.source.table} AS s WHERE ${d.owner.map((c, i) => `s.${d.source.owner[i]} = ${alias}.${c}`).join(" AND ")})`;
-  }
-
   /// An owner's value kept under `key` (the key in force where none is given): as read or kept this run, else read.
   one<V>(d: Kept<V>, owner: Owner, key?: string): V | undefined {
     const k = d as AnyKept;
@@ -293,7 +292,7 @@ export class KeptValues {
 
   /// An owner's value under `key` as the database holds it (read, the cache not looked at).
   stored<V>(d: Kept<V>, owner: Owner, key: string): V | undefined {
-    const r = this.#host.sql.all(`SELECT ${d.columns.map(([c]) => `k.${c}`).join(", ")} FROM ${d.table} AS k WHERE ${d.owner.map((c) => `k.${c} = ?`).join(" AND ")} AND k.${d.key} = ?${this.#madeNow(d as AnyKept, "k")}`, [...owner, key])[0];
+    const r = this.#host.sql.all(`SELECT ${d.columns.map(([c]) => `k.${c}`).join(", ")} FROM ${d.table} AS k WHERE ${d.owner.map((c) => `k.${c} = ?`).join(" AND ")} AND k.${d.key} = ?`, [...owner, key])[0];
     return r === undefined ? undefined : this.#take(d as AnyKept, r);
   }
 
@@ -313,7 +312,7 @@ export class KeptValues {
     const n = d.owner.length;
     const read = new Map<string, SqlRow>();
     const rows = this.#host.sql.all(
-      `SELECT ${[...d.owner, ...d.columns.map(([c]) => c)].map((c) => `k.${c}`).join(", ")} FROM json_each(?) AS j CROSS JOIN ${d.table} AS k WHERE ${[...d.owner, d.key].map((c, i) => `k.${c} = json_extract(j.value, '$[${i}]')`).join(" AND ")}${this.#madeNow(k, "k")}`,
+      `SELECT ${[...d.owner, ...d.columns.map(([c]) => c)].map((c) => `k.${c}`).join(", ")} FROM json_each(?) AS j CROSS JOIN ${d.table} AS k WHERE ${[...d.owner, d.key].map((c, i) => `k.${c} = json_extract(j.value, '$[${i}]')`).join(" AND ")}`,
       [JSON.stringify(missing.map((i) => [...owners[i], keys[i]]))],
     );
     for (const r of rows) read.set(r.slice(0, n).join("\u0001"), r);
@@ -331,7 +330,7 @@ export class KeptValues {
   /// value's columns (`width` of them), which `taken` takes of each row.
   joined(d: AnyKept, alias: string, owner: readonly string[], key: string): { join: string; columns: string; width: number } {
     return {
-      join: `LEFT JOIN ${d.table} AS ${alias} ON ${d.owner.map((c, i) => `${alias}.${c} = ${owner[i]}`).join(" AND ")} AND ${alias}.${d.key} = ${key}${this.#madeNow(d, alias)}`,
+      join: `LEFT JOIN ${d.table} AS ${alias} ON ${d.owner.map((c, i) => `${alias}.${c} = ${owner[i]}`).join(" AND ")} AND ${alias}.${d.key} = ${key}`,
       columns: d.columns.map(([c]) => `${alias}.${c}`).join(", "),
       width: d.columns.length,
     };
@@ -361,16 +360,8 @@ export class KeptValues {
 
   #put(d: AnyKept, owner: Owner, key: string, value: J): void {
     (work as Record<string, number>)[`${d.name}Written`]++;
-    const columns = [...d.owner, d.key, ...(d.made === undefined ? [] : [d.made]), ...d.columns.map(([c]) => c)];
-    const values = d.put(value);
-    if (d.made === undefined) {
-      this.#host.run(`INSERT OR REPLACE INTO ${d.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`, [...owner, key, ...values]);
-    } else {
-      // (what its record says as it is put: the one it was made of, held)
-      const s = d.source;
-      const where = [...s.owner.map((c) => `s.${c} = ?`), ...(s.of === undefined ? [] : [s.of("s")])].join(" AND ");
-      this.#host.run(`INSERT OR REPLACE INTO ${d.table} (${columns.join(", ")}) SELECT ${[...owner.map(() => "?"), "?", `s.${s.by}`, ...values.map(() => "?")].join(", ")} FROM ${s.table} AS s WHERE ${where}`, [...owner, key, ...values, ...owner]);
-    }
+    const columns = [...d.owner, d.key, ...d.columns.map(([c]) => c)];
+    this.#host.run(`INSERT OR REPLACE INTO ${d.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`, [...owner, key, ...d.put(value)]);
     this.#host.cache.set(this.#cacheKey(d, owner), { key, value });
     if (d.policy === "read") this.#heldOf(d, owner).add(owner[owner.length - 1]);
   }
@@ -397,22 +388,23 @@ export class KeptValues {
     return { owner, makes };
   }
 
-  /// The record `writing` said was written, as it is now (undefined: gone, or none to make a value of): what was kept
-  /// of it went (the triggers; where `made`, here), and its value is made again where `writing` said so, in the burst.
-  wrote(w: Writing, record: J): void {
+  /// The record `writing` said was written, as `record` gives it now (undefined: gone, or none to make a value of;
+  /// asked only where a value is to be made again): what was kept of it went (the triggers), and its value is made
+  /// again where `writing` said so, in the burst.
+  wrote(w: Writing, record: () => J): void {
     const owner = w.owner;
     for (const [d, makes] of w.makes) {
       this.#host.cache.delete(this.#cacheKey(d, owner));
-      if (record === undefined) {
+      if (!makes) continue;
+      const now = record();
+      if (now === undefined) {
         if (d.policy === "read") this.#heldOf(d, owner).delete(owner[owner.length - 1]);
-        if (d.made !== undefined) this.#host.run(`DELETE FROM ${d.table} WHERE ${d.owner.map((c) => `${c} = ?`).join(" AND ")}`, owner);
         continue;
       }
-      if (!makes) continue;
       const maker = this.#makers.get(d)!;
       const key = maker.key(owner);
       if (key === null) continue;
-      const value = maker.make(owner, record);
+      const value = maker.make(owner, now);
       if (value === null) continue;
       (work as Record<string, number>)[`${d.name}Made`]++;
       this.#put(d, owner, key, value);
