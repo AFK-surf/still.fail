@@ -1135,6 +1135,19 @@ fn takers_by_the_frame() -> Unit {
 let views_told : Map[Int, Bool] = Map([])
 
 ///|
+/// How many times views_told changed: read by what asks whether a view's host is done (NativeView::host_done), so a
+/// binding of the window's tree that asks it is done again as the host says so (a host says it at a moment of its own,
+/// not always with how the view stands: outside_stood).
+// kept across runs: only counts
+let views_told_rev : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// views_told changed: what read it told.
+fn views_told_changed() -> Unit {
+  views_told_rev.set(@signals.untracked(fn() { views_told_rev.get() }) + 1)
+}
+
+///|
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
@@ -1207,8 +1220,9 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
     h_request_frame()
     return
   }
-  if kind == outside_view && state != 0 {
+  if kind == outside_view && state != 0 && !views_told.contains(id) {
     views_told[id] = true
+    views_told_changed()
   }
   outside_end(kind, id)
   if kind == outside_view && state == 0 {
@@ -1384,7 +1398,10 @@ fn h_view_place(
 ///|
 fn h_view_close(id : Int) -> Unit {
   outside_end(outside_view, id)
-  views_told.remove(id)
+  if views_told.contains(id) {
+    views_told.remove(id)
+    views_told_changed()
+  }
   @hostapi.view_close(id)
 }
 

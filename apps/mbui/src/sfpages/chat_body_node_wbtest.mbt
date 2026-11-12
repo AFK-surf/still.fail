@@ -578,8 +578,8 @@ fn body_cut_at_top(f : String) -> Bool {
 fn body_unmade(c : BodyCase, key : String) -> String? {
   match c.entries.get(key) {
     Some(Said(m)) if m.placed.iter().any(fn(n) { is_viz(n) }) =>
-      // (its page drawn as its file's card: the window's tree holds no host's web view, P12)
-      Some("an HTML page it places, as its card (P12)")
+      // (its page drawn in its row as the old one's, as high: what is drawn over its view as it comes is not compared)
+      Some("an HTML page it places, as high, not compared (P12)")
     Some(Said(_)) if body_unmade_dh(c.mode, key) is Some(_) =>
       // (a screen's card with its preview: not made as nodes yet, P13)
       Some("a screen's card with its preview, as its link (P13)")
@@ -592,7 +592,7 @@ fn body_unmade(c : BodyCase, key : String) -> String? {
 /// fixture mode and key, on every screen: held exactly.
 fn body_unmade_dh(mode : String, key : String) -> Double? {
   match (mode, key) {
-    ("chat-viz", "m:ts12") => Some(-96.0)
+    ("chat-viz", "m:ts12") => Some(0.0)
     ("chat-screens", "m:ts12") => Some(-237.0)
     _ => None
   }
@@ -803,19 +803,18 @@ fn body_held(which : BodyHeld) -> String {
   let lines = match which {
     HeldMain => [
     "a code block pressed in 42 (markdown_node's): 1",
-    "a press cut by the window's top: 1",
-    "a row one shows at the window's edge, the rows' heights between apart: 8",
+    "a row one shows at the window's edge, the rows' heights between apart: 5",
     "a screen's card with its preview, as its link (P13): 6",
-    "an HTML page it places, as its card (P12): 6",
+    "an HTML page it places, as high, not compared (P12): 6",
     "its head's time pressed short (message_head_node's): 33",
     "its picture held under the list's top (c.stick): 41",
     "where it went, narrow, route_line_down further down (meant): 7",
   ]
     HeldLarge => [
     "a pill or a capsule as high as its words at a larger size (meant): 2",
-    "a row one shows at the window's edge, the rows' heights between apart: 3",
+    "a row one shows at the window's edge, the rows' heights between apart: 2",
     "a screen's card with its preview, as its link (P13): 1",
-    "an HTML page it places, as its card (P12): 1",
+    "an HTML page it places, as high, not compared (P12): 1",
     "where it went, narrow, route_line_down further down (meant): 1",
   ]
     HeldChanges => [

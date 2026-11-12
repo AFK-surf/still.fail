@@ -706,8 +706,9 @@ pub fn NativeView::shown(self : NativeView) -> Bool {
 ///|
 /// Whether its host said it is done opening it (a page: its content ready to be drawn, WebView's visual state;
 /// failed too), the event the app's run waits on as the host works (hostcall.mbt's outside_view): later than
-/// `state` (a page: loaded)
+/// `state` (a page: loaded). Read by a binding, it is done again as the host says so (views_told_rev).
 pub fn NativeView::host_done(self : NativeView) -> Bool {
+  views_told_rev.get() |> ignore
   views_told.contains(self.id)
 }
 
@@ -959,6 +960,23 @@ fn views_arrive() -> Unit {
   for v in open_views {
     if ids.contains(v.id) {
       v.stood()
+    }
+  }
+}
+
+///|
+/// As a frame begins, before it is decided what it does again (frame_watch.mbt), with views_arrive: what each page or
+/// site's host has said since the last frame taken (take_site: what its page said to the app, its requests), so that
+/// what a node of the window's tree binds of it (a visualization's height as its page says it) is laid out and drawn
+/// by this frame. Taken only after the paint (sync_views, which still takes what came meanwhile), what it set was read
+/// by no frame till the next, and a Tester's frame painted alone parted from the same built whole.
+fn sites_arrive() -> Unit {
+  if open_views.length() == 0 {
+    return
+  }
+  for v in open_views.copy() {
+    if !v.closed && (v.serve is Some(_) || v.said is Some(_)) {
+      v.take_site()
     }
   }
 }

@@ -775,3 +775,183 @@ test "大屏, a chat's page made with its inside nodes: ⌘↓ takes the list re
   long_run(t, l, long_rest_ms)
   assert_eq(t.pick_asks().length(), picks + 1, msg="⌘U")
 }
+
+///|
+/// The fixture's chat s-c1 whose last message places a page (chat-viz: release.html, a fragment) with its page's inside
+/// nodes, `w` by `h` on `platform`, at rest, its page not drawn by its host yet where `held` (viz_nodes_run), else as
+/// the host draws it; what is asked of the
+/// core (a call's name, a file's too) kept in `asked`. Its other messages without their files: no picture's bytes
+/// handed to the host (chat_nodes_calling's).
+fn viz_nodes_open(w : Double, h : Double, platform : Int, asked : Array[String], held? : Bool = true) -> @ui.Tester {
+  new_run()
+  @sf.presenters_reset()
+  @sfbase.chat_page_nodes.set(true)
+  let base = fixture("chat-viz")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
+      guard name == "chat" && got.value is Some(Object(chat)) else { return got }
+      let out = chat.copy()
+      out["messages"] = Json::array(
+        items(got.value, "messages").map(fn(j) {
+          guard j is Object(was) && !(was.get("placed") is Some(Array([String("release.html"), ..]))) else { return j }
+          let m = was.copy()
+          m.remove("attachments")
+          m.remove("placed")
+          Json::object(m)
+        }),
+      )
+      { ..got, value: Some(Json::object(out)) }
+    },
+    call: fn(name, params, done) {
+      asked.push(name)
+      (base.call)(name, params, done)
+    },
+    read_bytes: fn(name, params, done) {
+      asked.push(name)
+      (base.read_bytes)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, finish=!held)
+  viz_nodes_run(t, @ui.move_most_ms, held)
+  t
+}
+
+///|
+/// Where the host has the message's page (x0, y0, x1, y1), shown; why not, where it is not.
+fn viz_nodes_shown(t : @ui.Tester, page : @ui.NativeView) -> Result[(Double, Double, Double, Double), String] {
+  match t.view_stands(page) {
+    Some((x0, y0, x1, y1, true)) => Ok((x0, y0, x1, y1))
+    Some((x0, y0, x1, y1, false)) => Err("hidden at \{x0} \{y0} \{x1} \{y1}")
+    None => Err("not placed, or closed")
+  }
+}
+
+///|
+/// `ms` of frames, what the host was asked done as each begins (as a host does it), but a page's view while `held`: its
+/// host done drawing it when the test says (Tester::finish).
+fn viz_nodes_run(t : @ui.Tester, ms : Double, held : Bool) -> Unit {
+  let from = t.time()
+  while t.time() - from < ms - 1.0e-6 {
+    for p in t.pending() {
+      if !(held && p.0 == 2) {
+        t.finish(p.0, p.1)
+      }
+    }
+    t.run_for(@ui.frame_period_default)
+  }
+}
+
+///|
+/// Where the message's page is against its words (`t`'s now), on `name`: None where it is in its row, under the words
+/// before it and over those after it.
+fn viz_nodes_in_row(t : @ui.Tester, name : String, r : (Double, Double, Double, Double)) -> String? {
+  let (_, y0, _, y1) = r
+  match (t.rect_of("这周的发布节奏："), t.rect_of("流程是这样：")) {
+    (Some((_, by, _, bh)), Some((_, ay, _, _))) if by + bh <= y0 + 1.0 && y1 <= ay + 1.0 => None
+    (before, after) => Some("\{name}: the page at \{y0}…\{y1}, the words before it \{Repr(before)}, after it \{Repr(after)}")
+  }
+}
+
+///|
+/// Whether the line's grey (whatever its breath's alpha) is drawn over all of `r` in `t`'s frame now.
+fn viz_nodes_covered(t : @ui.Tester, r : (Double, Double, Double, Double)) -> Bool {
+  let line = @sf.palette_of(false).line >> 8
+  let (x0, y0, x1, y1) = r
+  t.drawn_rects().iter().any(fn(d) {
+    d.4 >> 8 == line && d.0 <= x0 + 1.0 && d.1 <= y0 + 1.0 && d.0 + d.2 >= x1 - 1.0 && d.1 + d.3 >= y1 - 1.0
+  })
+}
+
+///|
+/// The message's page's frame (viz_frames'), on `name`.
+fn viz_nodes_frame(name : String) -> @sfbase.VizFrame raise {
+  guard viz_frames.iter().find_first(fn(e) { e.0.has_suffix("/release.html") }) is Some((_, f)) else {
+    fail("\{name}: no page made for the message's release.html")
+  }
+  f
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: a placed page in its message, 120 high under its placeholder till it has drawn, then as tall as it says; moved with its row by the wheel, hidden out of sight, not closed" {
+  for screen in [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)] {
+    let (name, w, h, platform) = screen
+    let asked : Array[String] = []
+    let t = viz_nodes_open(w, h, platform, asked)
+    let page = viz_nodes_frame(name).view
+    assert_eq(asked.filter(fn(a) { a == "station.file" }).length(), 1, msg="\{name}: its file asked once")
+    let first = match viz_nodes_shown(t, page) {
+      Ok(r) => r
+      Err(why) => fail("\{name}: the page not shown at first: \{why}")
+    }
+    assert_eq(first.3 - first.1, 120.0, msg="\{name}: 120 high till it says")
+    assert_eq(viz_nodes_in_row(t, name, first), None)
+    assert_true(viz_nodes_covered(t, first), msg="\{name}: its placeholder over it")
+    // its height said, its host not done drawing it: still held
+    t.view_says(page.id(), "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
+    viz_nodes_run(t, @ui.move_most_ms, true)
+    let said = viz_nodes_shown(t, page).unwrap()
+    assert_eq(said.3 - said.1, 232.0, msg="\{name}: as tall as it says")
+    assert_true(viz_nodes_covered(t, said), msg="\{name}: its placeholder over it till its host has drawn it")
+    t.finish(2, page.id())
+    viz_nodes_run(t, @ui.move_most_ms, false)
+    let drawn = viz_nodes_shown(t, page).unwrap()
+    assert_eq(drawn.3 - drawn.1, 232.0, msg=name)
+    assert_eq(viz_nodes_in_row(t, name, drawn), None)
+    assert_false(viz_nodes_covered(t, drawn), msg="\{name}: nothing over it once drawn")
+    let (dx0, dy0, dx1, dy1) = drawn
+    assert_true(
+      t.holes().iter().any(fn(o) { (o.0 - dx0).abs() < 1.0 && (o.1 - dy0).abs() < 1.0 && (o.0 + o.2 - dx1).abs() < 1.0 && (o.1 + o.3 - dy1).abs() < 1.0 }),
+      msg="\{name}: its hole drawn where the host has it, \{dx0} \{dy0} \{dx1} \{dy1}: " + t.holes().map(fn(o) { "\{o.0} \{o.1} \{o.2} \{o.3}" }).join(" | "),
+    )
+    // read up by the wheel: it goes with its row
+    let (_, by, _, _) = t.rect_of("这周的发布节奏：").unwrap()
+    t.move_to(w / 2.0, by)
+    t.wheel(w / 2.0, by, -150.0)
+    viz_nodes_run(t, @ui.move_most_ms, false)
+    let up = viz_nodes_shown(t, page).unwrap()
+    let (_, by2, _, _) = t.rect_of("这周的发布节奏：").unwrap()
+    assert_true(by2 > by, msg="\{name}: read up")
+    assert_eq(up.1 - drawn.1, by2 - by, msg="\{name}: moved with its row")
+    // far up, out of sight: hidden, not closed
+    for _ in 0..<12 {
+      t.wheel(w / 2.0, h / 2.0, -400.0)
+      viz_nodes_run(t, @ui.move_most_ms, false)
+    }
+    match t.view_stands(page) {
+      Some((_, _, _, _, false)) => ()
+      other => fail("\{name}: out of sight, the host has it \{Repr(other)}")
+    }
+    assert_false(t.views().contains("close \{page.id()}"), msg="\{name}: not closed out of sight")
+  }
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: a placed page drawn is kept as the chat is left; opened again, the same view shown as it was, in its row, not loaded again" {
+  for screen in [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)] {
+    let (name, w, h, platform) = screen
+    let asked : Array[String] = []
+    let t = viz_nodes_open(w, h, platform, asked, held=false)
+    let page = viz_nodes_frame(name).view
+    t.view_says(page.id(), "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
+    viz_nodes_run(t, @ui.move_most_ms, false)
+    home()
+    @ui.came_from_outside()
+    viz_nodes_run(t, long_opened_ms, false)
+    assert_false(t.views().contains("close \{page.id()}"), msg="\{name}: kept as the chat is left")
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+    @ui.came_from_outside()
+    viz_nodes_run(t, long_opened_ms, false)
+    assert_true(physical_equal(viz_nodes_frame(name).view, page), msg="\{name}: the same view")
+    assert_eq(asked.filter(fn(a) { a == "station.file" }).length(), 1, msg="\{name}: not loaded again")
+    let back = match viz_nodes_shown(t, page) {
+      Ok(r) => r
+      Err(why) => fail("\{name}: not shown again: \{why}")
+    }
+    assert_eq(back.3 - back.1, 232.0, msg=name)
+    assert_eq(viz_nodes_in_row(t, name, back), None)
+    assert_false(viz_nodes_covered(t, back), msg="\{name}: shown as it was, nothing over it")
+  }
+}

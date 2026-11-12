@@ -166,6 +166,7 @@ fn reset_globals() -> Unit {
   outside_takers.clear()
   @hostapi.autofill_forget()
   views_told.clear()
+  views_told_changed()
   code_fields.clear()
   code_clears.clear()
   bars_hand.clear()
