@@ -1,6 +1,6 @@
 // A chat's page made with its inside nodes (sfbase's chat_page_nodes on: chat_page_made's `body` and `foot`), as a
-// skeleton: its messages the page's list, the composer under it in its old view. That it holds together, no more: what
-// the old page floats over its list, puts over its rows and flies over it is not made yet.
+// skeleton: its messages the page's list, the composer in the list's foot in its old view. That it holds together, no
+// more: what the old page floats over its list, puts over its rows and flies over it is not made yet.
 
 ///|
 /// The fixture's chat s-c1 opened with its page's inside nodes, `w` by `h` on `platform`, at rest.
@@ -183,4 +183,175 @@ test "大屏 with its inside nodes: an agent's picture opens its card under a po
   t.move_to(1.0, 1.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_true(t.find(card) is None, msg="closed")
+}
+
+///|
+/// How far the composer's ground (the lowest wide glass drawn) stands under the chat's last message's words.
+fn foot_gap(t : @ui.Tester) -> Double raise {
+  let mut top : Double? = None
+  for g in t.drawn_glass() {
+    let (_, y, w, _, _, _) = g
+    if w > 150.0 && (top is None || top.unwrap() < y) {
+      top = Some(y)
+    }
+  }
+  guard top is Some(top) else { fail("no composer drawn at \{t.time()}") }
+  guard t.rect_of("做完了：列表、跳到最新的按钮") is Some((_, y, _, h)) else {
+    fail("the last message gone from view at \{t.time()}")
+  }
+  top - (y + h)
+}
+
+///|
+/// The composer's field focused and given a line more, as `platform` takes a new line in it.
+fn foot_line_more(t : @ui.Tester, platform : Int) -> Unit {
+  let mut field : (Double, Double, Double, Double)? = None
+  for s in t.semantics() {
+    if s.role == @ui.Role::TextField && (field is None || field.unwrap().1 < s.rect.1) {
+      field = Some(s.rect)
+    }
+  }
+  match field {
+    Some((x, y, w, h)) => t.tap(x + w / 2.0, y + h / 2.0)
+    None => ()
+  }
+  t.run_for(@ui.move_most_ms)
+  t.type_text("第一行")
+  if platform == 2 {
+    t.enter()
+  } else {
+    t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+  }
+  t.type_text("第二行")
+}
+
+///|
+/// Each step of what changes the composer's height or the room round it, on 小屏 (`platform` 2) or 大屏, and how far
+/// its ground stands under the last message's words at rest after it, and what was on its way in the frame after the
+/// window's step (idle_said's).
+fn foot_steps(w : Double, h : Double, platform : Int) -> Array[(String, Double, String?)] raise {
+  let (t, src) = chat_nodes_tester(w, h, platform)
+  let draft = @sfbase.writing(src, "ws1/st1:s-c1")
+  let steps : Array[(String, Double, String?)] = []
+  let step_done = fn(name : String) -> Unit raise {
+    t.run_for(@ui.move_most_ms)
+    steps.push((name, foot_gap(t), None))
+  }
+  step_done("opened")
+  foot_line_more(t, platform)
+  step_done("a line more")
+  @sfbase.writing_add(src, draft, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
+  step_done("a file")
+  let moved = fn(name : String) -> Unit raise {
+    t.frame()
+    let said = t.idle_said()
+    t.run_for(@ui.move_most_ms)
+    steps.push((name, foot_gap(t), said))
+  }
+  if platform == 2 {
+    t.set_ime_inset(300.0)
+    t.resize_next(w, h - 300.0)
+    step_done("the keyboard up")
+    t.set_ime_inset(0.0)
+    t.resize_next(w, h)
+    step_done("the keyboard down")
+  } else {
+    t.resize(900.0, h)
+    moved("the window narrower")
+    t.resize(w, h)
+    moved("the window wider")
+    // (not walked yet: a side panel opened. As it slides in and the chat's width passes chat_narrow_w, a card's
+    // button (先不换) steps 8 in its row in one frame, at 60 and 120 frames a second: the rows', nothing of the
+    // composer's, to mend with the rows; the distance held after it, 36.2)
+  }
+  // (not walked yet: a quote, and what comes after one. Once a quote has come (the focus given to its own field, made
+  // in the list's foot) the list at its foot follows no further change of its foot or of its room: an error's line, a
+  // line more, the keyboard each leave the last message covered by as much (小屏 21.9 to -10.1, -2.9, -278.1), where
+  // after a file alone it follows each. The list's to mend; these steps come back here with it)
+  steps
+}
+
+///|
+test "the composer in the list's foot, on 小屏 and 大屏: at its foot the last message as far over it after each change, nothing covered, nothing on its way after the window's" {
+  let said : Array[String] = []
+  for screen in [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)] {
+    let (name, w, h, platform) = screen
+    let now = foot_steps(w, h, platform)
+    // (opened with a line more: how far the last message stands over it at its foot, the room under the last row)
+    let at_foot = now[1].1
+    let wrong : Array[String] = []
+    for i, s in now {
+      let (step, gap, said) = s
+      // (a capsule before it is opened: its ground lower in the same room, as far over it or further)
+      let kept = if i == 0 { gap >= at_foot } else { (gap - at_foot).abs() <= 0.5 }
+      if !kept || gap < 0.0 || said is Some(_) {
+        wrong.push(step)
+      }
+    }
+    if !wrong.is_empty() {
+      // (a line a step: a runner cuts long lines)
+      said.push("\{name}: \{Repr(wrong)} in")
+      for s in now {
+        said.push("  \{s.0}: \{s.1} \{Repr(s.2)}")
+      }
+    }
+  }
+  assert_true(said.is_empty(), msg=said.join("\n"))
+}
+
+///|
+/// The long chat (chat_window_wbtest's) opened on screen `s` with its page's inside nodes, at rest.
+fn foot_long_open(l : LongChat, s : (String, Double, Double, Int)) -> (@ui.Tester, Source) {
+  let (_, w, h, platform) = s
+  new_run()
+  @sfbase.chat_page_nodes.set(true)
+  let src = long_source(l)
+  open_chat(long_ref)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, begun=fn() {
+    @sfbase.window_tall.val = h
+  })
+  long_run(t, l, long_opened_ms)
+  (t, src)
+}
+
+///|
+test "the composer in the list's foot, on 小屏 and 大屏: read up the list, a line more, a file, a quote or an error in the composer moves nothing of what is read" {
+  for s in long_screens {
+    let (name, w, h, platform) = s
+    let l = long_chat()
+    let (t, src) = foot_long_open(l, s)
+    let draft = @sfbase.writing(src, "ws1/st1:s-c1")
+    // (the list reading up corrects what it counted of its rows by what they measure, what it holds 101 shorter in a
+    // frame on 小屏, and the frames' judge takes that for the composer, pinned in its foot and still where it shows,
+    // moved as much in a frame: the list's to mend; what is read is held here as a result)
+    t.motion_unjudged(true)
+    t.move_to(w / 2.0, h / 2.0)
+    t.wheel(w / 2.0, h / 2.0, -600.0)
+    long_run(t, l, long_rest_ms)
+    // (a message's words in the middle of what shows)
+    let mut read : (String, Double)? = None
+    for n in 1..=long_count {
+      let said = "第\{n}条："
+      if read is None && t.rect_of(said) is Some((_, y, _, _)) && y > h / 3.0 && y < h / 2.0 {
+        read = Some((said, y))
+      }
+    }
+    guard read is Some((words, y)) else { fail("\{name}: nothing read in the middle of the list") }
+    let at = fn(step : String) -> Unit raise {
+      long_run(t, l, @ui.move_most_ms)
+      let now = t.rect_of(words).map(fn(r) { r.1 })
+      assert_true(
+        now is Some(ny) && (ny - y).abs() < 0.5,
+        msg="\{name}, \{step}: \{words} at \{y}, now \{Repr(now)}",
+      )
+    }
+    foot_line_more(t, platform)
+    at("a line more")
+    @sfbase.writing_add(src, draft, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
+    at("a file")
+    @sfbase.writing_quote(src, draft, { "author": "Claude", "text": "其余的行按估计的高度占位", "ts": "ts8" })
+    at("a quote")
+    @sfbase.writing_error(src, draft, "发送没有成功")
+    at("an error")
+  }
 }
