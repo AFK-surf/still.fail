@@ -14,6 +14,18 @@ export type Seen = { method: string; path: string; auth: string; query: Record<s
 
 export type Answer = (seen: Seen) => Json | Promise<Json>;
 
+/// An OpenAPI response whose body is not the stand-in's usual JSON.
+export class RawAnswer {
+  readonly bytes: Uint8Array;
+  readonly headers: Record<string, string>;
+  readonly status: number;
+  constructor(bytes: Uint8Array, headers: Record<string, string>, status = 200) {
+    this.bytes = bytes;
+    this.headers = headers;
+    this.status = status;
+  }
+}
+
 export class FakeFeishu {
   readonly server: Server;
   readonly wss: WebSocketServer;
@@ -32,7 +44,9 @@ export class FakeFeishu {
   constructor() {
     this.server = createServer((req, res) => {
       void this.take(req).then(
-        (body) => res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body)),
+        (body) => body instanceof RawAnswer
+          ? res.writeHead(body.status, body.headers).end(body.bytes)
+          : res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body)),
         (error) => res.writeHead(500).end(String(error)),
       );
     });
