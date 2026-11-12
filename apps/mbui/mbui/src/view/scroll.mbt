@@ -1314,11 +1314,15 @@ pub fn View::scrolls(
     } else {
       self.tree.nodes[self.at].flex.height - dmax(0.0, @signals.untracked(s.foot_covered))
     }
-    let x = s.stopped(t)
+    // (where it is, read: stopped and sent only where something of it has to move. In sight already, it is left as it
+    // is, on its way or at its foot following it, nothing written of it)
+    let x = @signals.untracked(fn() { s.where_at(t) })
     if top < 0.0 {
       s.sent(t, x + top)
     } else if foot > vh {
       s.sent(t, x + dmin(top, foot - vh))
+    } else {
+      return 0.0
     }
     s.at(self.tree) - x
   }, across~)
