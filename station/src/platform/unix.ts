@@ -495,6 +495,8 @@ export const unix: Platform = {
     program: "/bin/sh",
     args: ["-c", `set -e; s=$(curl -fsSL https://cli.devin.ai/install.sh); printf '%s\\n' "$s" | sed -E '/^"[^"]*" setup[[:space:]]*$/d' | bash`],
   },
+  /// The Antigravity CLI's own installer, as antigravity.google/cli gives it.
+  agyInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://antigravity.google/cli | bash"] },
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",

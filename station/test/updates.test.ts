@@ -1017,6 +1017,11 @@ INSTALLER
     assert.deepEqual(howToInstall("devin", bare), machine.devinInstall);
     assert.equal((howToInstall("devin", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
     assert.equal(kindPackage("devin"), "", "no npm package");
+    // The Antigravity CLI by its own installer; it updates itself.
+    assert.deepEqual(howToInstall("agy", bare), machine.agyInstall);
+    assert.equal((howToInstall("agy", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
+    const agy = found("/Users/a/.local/bin/agy");
+    assert.deepEqual(howToUpdate("agy", agy, env), { program: agy.onPath, args: ["update"] });
   });
 
   test("a command's failure shown as its last lines, without a terminal's escapes and a progress bar's returns", () => {

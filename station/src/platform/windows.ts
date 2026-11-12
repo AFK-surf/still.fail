@@ -507,6 +507,11 @@ export const windows: Platform = {
     program: "powershell",
     args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "$s = irm https://cli.devin.ai/install.ps1; iex ($s -replace '(?m)^\\s*&\\s*\\S+\\s+setup\\s*$', '')"],
   },
+  /// The Antigravity CLI's own installer on Windows, as antigravity.google/cli gives it.
+  agyInstall: {
+    program: "powershell",
+    args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://antigravity.google/cli/install.ps1 | iex"],
+  },
   installerExt: "ps1",
   startInstaller,
   /// Vite+'s command is a shim of its own (codex.cmd, codex.exe) beside vp.exe; npm's a .cmd in its global prefix,
