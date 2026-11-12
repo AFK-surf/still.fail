@@ -5,6 +5,10 @@
 ///|
 fn init {
   @ui.sizes_steady_known([
+    // (小屏, a new chat's long first words sent, at both sizes of words: the composer's field steps 31 points in a frame
+    // at 2157 ms, between -13 and 26 round it; at 60 and 120 a frame it stops dead from 40 a frame as well, and 预设's
+    // column comes 52 in a frame at 1583)
+    ("src/sfapp/daily_paths_wbtest.mbt", 2),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
     ("src/sfapp/home_wbtest.mbt", 1),
     ("src/sfapp/menu_node_wbtest.mbt", 12),

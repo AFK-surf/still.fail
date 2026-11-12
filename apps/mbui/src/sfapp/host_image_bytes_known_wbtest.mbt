@@ -13,6 +13,7 @@ fn init {
     ("src/sfapp/composer_under_sheet_wbtest.mbt", 159102),
     ("src/sfapp/composer_wbtest.mbt", 231032),
     ("src/sfapp/covered_focus_wbtest.mbt", 192504),
+    ("src/sfapp/daily_paths_wbtest.mbt", 89156),
     ("src/sfapp/decide_wbtest.mbt", 159102),
     ("src/sfapp/downloads_wbtest.mbt", 89156),
     ("src/sfapp/duo_wbtest.mbt", 960538),
