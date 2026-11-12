@@ -13,15 +13,52 @@ fn feedback_reports(src : Source, r : ChatRef) -> Array[Json] {
 }
 
 ///|
-/// Over chat `r`'s composer (`width` its width, `chat` its notices' key): its newest report the team replied on, its
-/// heading and the first line of their latest reply, 查看 opening them. Nothing while there is none.
-fn feedback_notice(c : @ui.Ctx, src : Source, r : ChatRef, width : Double, chat : String) -> Bool {
-  let reports = feedback_reports(src, r)
-  guard reports.length() > 0 else { return false }
-  let report = reports[0]
-  let open = c.id("composer/feedback")
+/// The latest reply's id on `report`: `latestId` from the core, or its last team reply's id.
+fn report_latest_id(report : Json) -> String {
+  let given = text(Some(report), "latestId")
+  if given != "" {
+    return given
+  }
+  let team = items(Some(report), "replies").filter(fn(x) { text(Some(x), "from") == "team" })
+  if team.length() > 0 { text(Some(team[team.length() - 1]), "id") } else { "" }
+}
+
+///|
+/// Whether `report`'s notice has been dismissed up to its latest reply (`chatFeedback` or `feedback_dismissed`).
+fn report_dismissed(report : Json) -> Bool {
+  if flag(Some(report), "dismissed") {
+    return true
+  }
   let id = text(Some(report), "id")
+  let latest_id = report_latest_id(report)
+  latest_id != "" && feedback_dismissed.get(id) == Some(latest_id)
+}
+
+///|
+/// Over chat `r`'s composer (`width` its width, `chat` its notices' key): its newest report the team replied on whose
+/// latest reply has not been dismissed here, its heading and the first line of their latest reply, 查看 opening them and
+/// × letting it go until a newer reply comes (still in the chat's "…" menu). Nothing while there is none.
+fn feedback_notice(c : @ui.Ctx, src : Source, r : ChatRef, width : Double, chat : String) -> Bool {
+  let found = feedback_reports(src, r).iter().find_first(fn(f) { !report_dismissed(f) })
+  guard found is Some(report) else { return false }
+  let open = c.id("composer/feedback")
+  let dismiss = c.id("composer/feedback/dismiss")
+  let id = text(Some(report), "id")
+  let ws = text(Some(report), "workspace")
+  let latest_id = report_latest_id(report)
   c.on_press(open, fn() { c.tell("composer/feedback", fn() { open_feedback(src, r, id) }) })
+  if latest_id != "" {
+    c.on_press(dismiss, fn() {
+      feedback_dismissed[id] = latest_id
+      c.tell("composer/feedback/dismiss", fn() {
+        (src.call)(
+          "feedback.dismiss",
+          { "workspace": Json::string(ws), "id": Json::string(id), "reply": Json::string(latest_id) },
+          @sfbase.answer_unread,
+        )
+      })
+    })
+  }
   let latest = text(Some(report), "latest")
   let heading = text(Some(report), "heading")
   composer_notice(
@@ -30,6 +67,7 @@ fn feedback_notice(c : @ui.Ctx, src : Source, r : ChatRef, width : Double, chat 
     "feedback",
     if latest == "" { heading } else { heading + "：" + latest },
     Some((open, "web-main.feedback.open", "web-main.feedback.open", false)),
+    dismiss=Some((dismiss, "web-main.feedback.dismiss", latest_id == "")),
     icon="said",
     chat~,
   )
@@ -39,13 +77,18 @@ fn feedback_notice(c : @ui.Ctx, src : Source, r : ChatRef, width : Double, chat 
 
 ///|
 /// What is being written to the team, by report (the panel's field: kept while the app runs, as a draft is while its
-/// page is open), and the reports whose answer is on its way.
+/// page is open), and the latest reply id dismissed here on each report before the core's `chatFeedback` answers.
 // kept across runs: put back by feedback_reset
 let feedback_fields : Map[String, @ui.Field] = Map([])
 
 ///|
+// kept across runs: put back by feedback_reset
+let feedback_dismissed : @sf.LiveMap[String, String] = @sf.LiveMap::new()
+
+///|
 fn feedback_reset() -> Unit {
   feedback_fields.clear()
+  feedback_dismissed.clear()
 }
 
 ///|

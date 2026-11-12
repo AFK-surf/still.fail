@@ -3,7 +3,7 @@
 
 ///|
 /// The core's `chatFeedback` for the chat: FB-12, the team's reply on it.
-fn feedback_value() -> Json {
+fn feedback_value(latest_id? : String = "r1", latest_text? : String = "能再说一下出错时在跑什么吗？", dismissed? : Bool = false) -> Json {
   {
     "reports": [
       {
@@ -14,9 +14,11 @@ fn feedback_value() -> Json {
         "label": "FB-12",
         "title": "chat_post 偶尔发不出去",
         "heading": "still.fail 团队回复了 FB-12",
-        "latest": "能再说一下出错时在跑什么吗？",
+        "latest": latest_text,
+        "latestId": latest_id,
+        "dismissed": dismissed,
         "replies": [
-          { "id": "r1", "from": "team", "who": "still.fail 团队", "text": "能再说一下出错时在跑什么吗？", "when": "14:05" },
+          { "id": latest_id, "from": "team", "who": "still.fail 团队", "text": latest_text, "when": "14:05" },
         ],
       },
     ],
@@ -24,10 +26,10 @@ fn feedback_value() -> Json {
 }
 
 ///|
-fn feedback_core(calls : Array[Made], replied? : Bool = true) -> @ui.Tester {
+fn feedback_core(calls : Array[Made], replied? : Bool = true, value? : Json = feedback_value()) -> @ui.Tester {
   fake_core(calls, over=fn(name, tp) {
     if name == "chatFeedback" && replied {
-      { ..tp, value: Some(feedback_value()) }
+      { ..tp, value: Some(value) }
     } else {
       tp
     }
@@ -85,4 +87,54 @@ test "交给 agent puts the team's reply in the chat's draft as a quote, whose i
   // in the draft, not sent: the person sends it, or not
   assert_eq(named(calls, "chat.send").length(), 0)
   assert_true(t.find("FB-12 · chat_post 偶尔发不出去") is None)
+}
+
+///|
+test "关闭 lets the notice go (feedback.dismiss), still reachable from the chat's menu; a newer reply brings it back" {
+  let calls : Array[Made] = []
+  let reply_val : @signals.Signal[Json] = @signals.signal(feedback_value())
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name == "chatFeedback" {
+      { ..tp, value: Some(reply_val.get()) }
+    } else if name == "chatRow" {
+      { ..tp, value: Some(Json::null()) }
+    } else {
+      tp
+    }
+  })
+  assert_true(t.find("still.fail 团队回复了 FB-12：能再说一下出错时在跑什么吗？") is Some(_))
+  // 查看 and 关闭 keep to the room, corner, gap, contrast and hand rules
+  let notice_faults = t.room_faults().filter(fn(f) { f.contains("composer/feedback") || f.contains("查看") || f.contains("关闭") })
+  assert_eq(notice_faults, [])
+  assert_eq(t.hand_moves(), [])
+  assert_eq(t.fixed_outgrown(), [])
+
+  t.click(Button, label="关闭")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("still.fail 团队回复了 FB-12：能再说一下出错时在跑什么吗？") is None)
+  assert_true(t.find("查看") is None)
+  let dismissed = named(calls, "feedback.dismiss")
+  assert_eq(dismissed.length(), 1)
+  let dp = Some(dismissed[0].params)
+  assert_eq([text(dp, "workspace"), text(dp, "id"), text(dp, "reply")], ["ws1", "FB12", "r1"])
+  assert_eq(named(calls, "chat.send").length(), 0)
+
+  // still reachable from the chat's "…" menu once the banner is gone
+  t.click(Button, label="更多")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("FB-12 的回复") is Some(_))
+  t.tap_text("FB-12 的回复")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("FB-12 · chat_post 偶尔发不出去") is Some(_))
+  t.back()
+  t.run_for(@ui.move_most_ms)
+
+  // a newer reply from the team brings the notice back over the composer
+  reply_val.set(feedback_value(latest_id="r2", latest_text="查到了，下个版本修。"))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("still.fail 团队回复了 FB-12：查到了，下个版本修。") is Some(_))
+
+  // already dismissed in the core: does not show on opening
+  let already = feedback_core([], value=feedback_value(dismissed=true))
+  assert_true(already.find("查看") is None)
 }

@@ -277,7 +277,10 @@ export class CloudSync {
       if (sub === null) return;
       const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/workspaces/${encode(id)}/feedback`, null));
       if (answer._tag === "Success") core.data.put("feedback", id, isObject(answer.success) ? answer.success : { feedback: [] });
-      else if (answer.failure.status === 404 || answer.failure.status === 403) core.data.forgetRecord("feedback", id);
+      else if (answer.failure.status === 404 || answer.failure.status === 403) {
+        core.data.forgetRecord("feedback", id);
+        core.data.forgetRecord("feedbackDismissed", id);
+      }
     });
   }
 

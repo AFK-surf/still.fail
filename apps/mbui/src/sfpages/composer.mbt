@@ -71,7 +71,7 @@ priv struct Composing {
   /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown before, composer_was)
   mut notices_new : Bool
   /// what each notice over a chat's composer said as it was last drawn, by its key: drawn so as it leaves
-  notices_said : Map[String, (String, (Int, String, String, Bool)?, String??, String, Array[(Int, String, Bool)], (String, String)?)]
+  notices_said : Map[String, (String, (Int, String, String, Bool)?, (Int, String, Bool)?, String??, String, Array[(Int, String, Bool)], (String, String)?)]
   /// the page's choices in its row as it was last built, as they were before this build's page (roomy_was), and those
   /// of the page it came from that this one has not, while they leave (a new chat's, gone to its chat)
   mut toolbar : (() -> Unit)?
@@ -2691,9 +2691,10 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
       continue
     }
     match composing.notices_said.get("composer/notice/" + chat + "/" + mark) {
-      Some((said, offer, failed, icon, choices, summary)) => {
+      Some((said, offer, dismiss, failed, icon, choices, summary)) => {
         let offer = offer.map(fn(o) { (o.0, o.1, o.2, true) })
-        composer_notice(c, width, mark, said, offer, failed?=failed, icon~, chat~, gone=true, choices~, held=true, summary~) |> ignore
+        let dismiss = dismiss.map(fn(d) { (d.0, d.1, true) })
+        composer_notice(c, width, mark, said, offer, dismiss~, failed?=failed, icon~, chat~, gone=true, choices~, held=true, summary~) |> ignore
       }
       None => ()
     }
@@ -2705,7 +2706,8 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
 /// drawn in from the composer's (`width`) so its mark (icon `icon`, else `mark`, which notice it is; `updating`, the
 /// update's mark turning) stands over the composer's ＋ in the middle of its round start, its words quiet where the
 /// composer's are, what it offers at its end (`offer`: its target, its words' key now, its name's key for what reads
-/// the screen, whether it is out of reach) in the words' colour, a step heavier, or a choice of two or more
+/// the screen, whether it is out of reach) in the words' colour, a step heavier, with an optional × concentric with
+/// its round end (`dismiss`: its target, its name's key, whether it is out of reach), or a choice of two or more
 /// (`choices`: each its target, its words' key, whether it is the one taken; `held`, out of reach). The chosen
 /// value is shown in a quiet menu control. Why what it offers failed (`failed`) is under its words, red. `summary`
 /// holds the status and detail as separate words when the core supplies them. The choice's value comes back.
@@ -2715,6 +2717,7 @@ fn composer_notice(
   mark : String,
   said : String,
   offer : (Int, String, String, Bool)?,
+  dismiss? : (Int, String, Bool)? = None,
   failed? : String?,
   icon? : String,
   chat? : String = "",
@@ -2728,7 +2731,7 @@ fn composer_notice(
   // gone, it leaves as a row of a list does, drawn as it was (notices_gone)
   let key = "composer/notice/" + chat + "/" + mark
   if !gone {
-    composing.notices_said[key] = (said, offer, failed, icon, choices, summary)
+    composing.notices_said[key] = (said, offer, dismiss, failed, icon, choices, summary)
   }
   let look = @motion.presence(c, key, !gone, initial=composing.notices_new, enter=@sf.waiting_in, exit=@sf.leave)
   if gone && look is None {
@@ -2810,7 +2813,13 @@ fn composer_notice(
     )
     selected.val = menu.chosen
   }
-  let box_style = if beside { composer_notice_box.then(@ui.style(pr=@sf.room_of(inline_end))) } else { composer_notice_box }
+  let box_style = if beside {
+    composer_notice_box.then(@ui.style(pr=@sf.room_of(inline_end)))
+  } else if dismiss is Some(_) {
+    composer_notice_box_dismiss
+  } else {
+    composer_notice_box
+  }
   let b = c.box(style=box_style.then(round), glass=@sf.glass_floating(), fn() {
     if choices.length() > 0 {
       if beside {
@@ -2826,6 +2835,34 @@ fn composer_notice(
           draw_choice()
         }) |> ignore
       }
+    } else if dismiss is Some((close_id, close_label, close_off)) {
+      c.box(style=composer_notice_line, fn() {
+        c.box(style=@ui.style(w=Fixed(side), h=Fixed(side), align=ACenter, justify=JCenter), fn() {
+          @sf.icon(c, icon, size=composer_notice_mark, color=t.p.muted) |> ignore
+        }) |> ignore
+        c.box(style=composer_notice_words_dismiss, fn() {
+          c.text(said, style=composer_notice_words) |> ignore
+        }) |> ignore
+        c.box(style=composer_notice_actions_dismiss, fn() {
+          match offer {
+            Some((id, words, name, off)) => {
+              let b = c.box(id~, style=composer_notice_offer_dismiss.then(@ui.style(min_w=Fixed(side), min_h=Fixed(side))), fn() {
+                c.text(@sf.t(words), style=if off { composer_notice_quiet } else { composer_notice_button }) |> ignore
+              })
+              c.semantics(b, Button, id~, label=@sf.t(name), disabled=off)
+            }
+            None => ()
+          }
+          let hot = !close_off && c.lit(close_id)
+          if !close_off {
+            @sf.tip(c, key + "/dismiss", close_id, @sf.t(close_label))
+          }
+          let cb = c.box(id=close_id, style=@ui.style(w=Fixed(side), h=Fixed(side), align=ACenter, justify=JCenter), fn() {
+            @sf.icon(c, "close", size=composer_notice_mark, color=if hot { t.p.text } else { t.p.muted }) |> ignore
+          })
+          c.semantics(cb, Button, id=close_id, label=@sf.t(close_label), disabled=close_off)
+        }) |> ignore
+      }) |> ignore
     } else {
       c.box(style=composer_notice_line, fn() {
         draw_mark()
@@ -2884,6 +2921,24 @@ let composer_notice_mark : Double = 16.0
 /// What a line offers: 12 from its words.
 // kept across runs: a value (no field of it changes)
 let composer_notice_offer : @ui.Style = @ui.css("pl=S3")
+
+///|
+/// A notice's capsule with its × concentric with its round end (composer_notice): its top and bottom room on its words
+/// so its mark and its × stand `side` square at its ends.
+// kept across runs: a value (no field of it changes)
+let composer_notice_box_dismiss : @ui.Style = @ui.css("mb=S2 gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_words_dismiss : @ui.Style = @ui.css("row w=Full py=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_actions_dismiss : @ui.Style = @ui.css("row pl=S3 gap=S2_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_offer_dismiss : @ui.Style = @ui.css("align=ACenter justify=JCenter")
 
 ///|
 /// Words and choices fit on one line when there is room, otherwise the choices follow the words.

@@ -1783,6 +1783,8 @@ export const SHAPES: Record<string, Shape> = {
     ["title", "String", { said: true }],
     ["heading", "String", { said: true, doc: "still.fail 团队回复了 FB-12: the card's first line." }],
     ["latest", "String", { said: true, doc: "The first line of the team's latest reply." }],
+    ["latestId", "String", { default: true, doc: "The team's latest reply's id (`feedback.dismiss` lets the notice go up to it; a newer reply brings it back)." }],
+    ["dismissed", "bool", { default: true, doc: "Dismissed on this device up to `latestId`: hidden over the composer, still in the chat's menu." }],
     ["replies", vec("ChatFeedbackReply")],
   ], { keepNone: true }),
   ChatFeedbackReply: struct([

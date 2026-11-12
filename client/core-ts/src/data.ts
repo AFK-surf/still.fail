@@ -984,8 +984,8 @@ export class Data {
       const ws = key.slice(7);
       return [this.#ofWorkspace(ws) ?? null, [ws, "opened"]];
     }
-    // The team's replies on bug reports from the workspace's chats, as the cloud gives them (feedback-replies.ts).
-    if (table === "feedback") return [this.#ofWorkspace(key) ?? null, [key, "feedback"]];
+    // The team's replies on bug reports from the workspace's chats, as the cloud gives them, and the ones dismissed here (feedback-replies.ts).
+    if (table === "feedback" || table === "feedbackDismissed") return [this.#ofWorkspace(key) ?? null, [key, table]];
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
     // A workspace's ways as its stations keep them (views/ways-stations.ts): in the workspace's, by its id.
