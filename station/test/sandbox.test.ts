@@ -98,7 +98,7 @@ describe("placing", () => {
     const agyEntry = entries.find((e) => e.path === "/h/agy/.gemini");
     assert.ok(agyEntry);
     assert.equal(agyEntry.mode, "whole");
-    for (const ignored of ["brain", "cache", "log", "conversation_summaries.db", "conversation_summaries.db-wal"]) {
+    for (const ignored of ["bin", "brain", "builtin", "cache", "cli.log", "conversations", "log", "conversation_summaries.db", "conversation_summaries.db-wal"]) {
       assert.ok(agyEntry.skip?.includes(ignored), `expected ${ignored} in skip`);
     }
   });

@@ -109,8 +109,12 @@ const CLAUDE_OWN = ["projects", "todos", "shell-snapshots", "statsig", "debug", 
 const CODEX_OWN = ["sessions", "archived_sessions", "log", "tmp", ".tmp", "shell_snapshots", "cache", "history.jsonl", "models_cache.json", "auth.json"];
 const AGY_OWN = [
   "annotations",
+  "bin",
   "brain",
+  "builtin",
   "cache",
+  "cli.log",
+  "conversations",
   "crashes",
   "implicit",
   "log",
