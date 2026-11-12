@@ -102,6 +102,9 @@ pub struct Scroll {
   /// then kept: blocks come or gone since are told from it)
   priv mut held : Bool
   priv mut held_said : () -> Unit
+  /// whether it is at its foot, followed, told only as that changes (Scroll::at_foot_now): a page's list's by its own
+  /// blocks and anchor (View::scrolls_window), else by how far it goes as last laid out (View::scrolls)
+  priv mut at_foot_said : (() -> Bool)?
 }
 
 ///|
@@ -161,6 +164,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     corrected: 0.0,
     held: false,
     held_said: fn() {  },
+    at_foot_said: None,
   }
 }
 
@@ -533,6 +537,20 @@ fn Scroll::at_foot(self : Scroll) -> Bool {
 }
 
 ///|
+/// Whether it is at its foot, followed: told only as that comes to be so or stops (what follows the newest, a button
+/// back to it, reads it), never as it scrolls on either side of that. A page's list's (View::scrolls_window) by its own
+/// blocks as they are counted and its anchor, so in the same layout as a block measured anew or grown at its foot,
+/// never a frame after it: at its foot where it follows it there, however far that comes to be, else where the top of
+/// what shows is within half a point of where it would be at its foot. Else by how far it can go as last laid out.
+pub fn Scroll::at_foot_now(self : Scroll) -> Bool {
+  match self.at_foot_said {
+    Some(f) => f()
+    // (scrolling in nothing yet: where it is put)
+    None => self.x.get() == @double.infinity
+  }
+}
+
+///|
 /// Scrolled by the hand at `t` (the wheel, a finger, a fling, a part brought into sight): what is told so told (its
 /// bar), and what hosts the tree that it moved (Scroll::offset_said).
 fn Scroll::scrolled_at(self : Scroll, t : Double) -> Unit {
@@ -751,6 +769,15 @@ pub fn View::scrolls(
     }
   }
   s.host = Some(self)
+  // (at its foot, told only as that changes: a page's list says it by its blocks (View::scrolls_window); else by how
+  // far it can go as last laid out, where it is drawn)
+  if s.at_foot_said is None && !s.across {
+    let at_foot = @signals.computed(fn(_) {
+      let most = s.most_now()
+      s.x.get() == @double.infinity || s.drawn(self.tree) >= most - 0.5
+    }, same=fn(a, b) { a == b })
+    s.at_foot_said = Some(fn() { at_foot.get() })
+  }
   // (its keys, down a column: Home, End, the pages, the lines, as an old view's list's: scroll_keys.mbt)
   if !s.across {
     self.scroll_keys(s)
