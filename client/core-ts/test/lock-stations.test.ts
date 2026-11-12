@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
-import { ASKED_MS, Lock, OTHERS_MS, fold, held, personalStations, read } from "../src/views/lock.ts";
+import { ASKED_MS, Lock, OTHERS_MS, fold, held, pendingHeld, personalStations, read } from "../src/views/lock.ts";
 import { ME, genesis, grant, rig } from "./lock-rig.ts";
 import { REREAD_WAIT_MS, hooks } from "../src/core/execute.ts";
 import { jsonResponse } from "../src/testing.ts";
@@ -132,9 +132,10 @@ test("an entry is brought to the stations and done once one took it: the cloud, 
   // Sent to the cloud as well, for those from before.
   await r.host.time.pass(100);
   assert.ok(cloud.asked.includes("POST /lock"));
-  // No station takes it (one from before): the cloud is what takes it, and its failure is the call's.
+  // No station answers the read before it is signed (one from before): the cloud is read, and, down, nothing is signed.
   st.say.old = true;
   await assert.rejects(run(new Lock(inner, "ws", "s1", null).append("member", { sub: "s4", email: "d@x.com", role: "member" })));
+  assert.equal(pendingHeld(inner, "ws").length, 0);
 });
 
 test("a station that tells its lock moved is read again", async () => {
@@ -398,7 +399,7 @@ test("the one to begin its person's lock, held back for a station asleep, begins
   assert.equal(r.host.secureAsked.length, asked, JSON.stringify(r.host.secureAsked));
 });
 
-test("a locked workspace's roster changes answer within the stations' wait and the reread's while nothing read answers, signed in the lock as held", async () => {
+test("a locked workspace's roster changes answer within the stations' wait and the reread's while nothing read answers, pending in the lock, the cloud's roster asked after", async () => {
   // (2026-11-11: 添加 turned for minutes in a locked workspace whose stations were not reached; #5549 bounded only the
   // reread after. test/writes-answer.test.ts holds every cloud write to this in a workspace with no lock; here the six
   // of them the lock has a part in, in one this device signs for, its station having served the lock and gone silent)
@@ -435,24 +436,35 @@ test("a locked workspace's roster changes answer within the stations' wait and t
     assert.ok(r.host.nowMs() - t0 <= ASKED_MS + REREAD_WAIT_MS + 200, `${name} answered after ${r.host.nowMs() - t0} ms`);
     return answer;
   };
-  // Each entry follows the one before: the chain is held here after each, nothing read between them.
-  const follows = async (name: string, params: Record<string, unknown>, kind: string, body: unknown) => {
+  // Each entry pending (no station took it), after the head held, which none of them moves; the cloud not sent it.
+  const pends = async (name: string, params: Record<string, unknown>, kind: string, body: unknown) => {
     const length = chain().length;
+    const head = held(inner, "ws")!.head!.hash;
     await timed(name, params);
-    assert.equal(chain().length, length + 1, name);
-    assert.deepEqual([chain().at(-1)!.kind, chain().at(-1)!.body, chain().at(-1)!.seq], [kind, body, length], name);
-    assert.equal(held(inner, "ws")?.head?.hash, r.cloud.head("ws")!.hash, name);
+    assert.equal(chain().length, length, `${name}: the cloud not sent it`);
+    assert.equal(held(inner, "ws")!.head!.hash, head, `${name}: not held`);
+    const p = pendingHeld(inner, "ws").at(-1)!;
+    assert.deepEqual([p.state, p.entry.kind, p.entry.body, p.entry.prev], ["waiting", kind, body, head], name);
   };
 
-  await follows("workspace.setRole", { member: "s2", role: "admin" }, "member", { sub: "s2", email: "b@x.com", role: "admin" });
-  assert.deepEqual(said, ["lock", "cloud PATCH"], "in the lock before the cloud's roster is asked, still");
-  assert.ok(cloud.asked.includes("POST /lock"));
-  await follows("workspace.addMembers", { role: "admin", emails: ["d@x.com"] }, "member", { sub: "pending:d@x.com", email: "", role: "admin" });
-  await follows("workspace.removeAdded", { email: "d@x.com" }, "member.remove", { sub: "pending:d@x.com" });
+  await pends("workspace.setRole", { member: "s2", role: "admin" }, "member", { sub: "s2", email: "b@x.com", role: "admin" });
+  assert.deepEqual(said, ["cloud PATCH"], "the lock's entry before the cloud's roster is asked, still (pending, not sent to the cloud)");
+  assert.ok(!cloud.asked.includes("POST /lock"), "the cloud not sent the lock's entry no station took");
+  await pends("workspace.addMembers", { role: "admin", emails: ["d@x.com"] }, "member", { sub: "pending:d@x.com", email: "", role: "admin" });
+  // Taken out again while their adding is pending: the adding dropped, nothing signed (it never took effect).
+  const before = pendingHeld(inner, "ws").length;
+  await timed("workspace.removeAdded", { email: "d@x.com" });
+  assert.equal(pendingHeld(inner, "ws").length, before - 1);
+  assert.ok(!pendingHeld(inner, "ws").some((p) => (p.entry.body as { sub?: string }).sub === "pending:d@x.com"));
   // The command pins the lock as its station last said it (it took none of the entries since): an entry of the chain.
   const enrolled = await timed("workspace.enroll", { name: "mini" });
   assert.ok(enrolled.command.endsWith(` --lock ${st.head().hash}`), enrolled.command);
   assert.equal(st.chain.length, 1);
-  await follows("workspace.removeMember", { member: "s2" }, "member.remove", { sub: "s2" });
-  await follows("workspace.removeStation", { station: A }, "station.remove", { key: A });
+  await pends("workspace.removeMember", { member: "s2" }, "member.remove", { sub: "s2" });
+  // Its one station taken out: the lock names none after that, which is the cloud's to keep from it on, as a lock that
+  // never named one is (a station gone for good is waited for by nothing), and held.
+  const length = chain().length;
+  await timed("workspace.removeStation", { station: A });
+  assert.ok(chain().slice(length).some((e) => e.kind === "station.remove"), "the cloud keeps it");
+  assert.ok(held(inner, "ws")!.entries.some((e) => e.kind === "station.remove" && (e.body as { key: string }).key === A), "held");
 });

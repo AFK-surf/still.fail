@@ -9,10 +9,13 @@
 // src/views/lock.ts `Lock.append`): the locks are the stations'. Each device holds a chain of its own, brought up to date
 // only as it reads a station (GET /lock, as the stations tell it their lock moved on, or as its line to one opens),
 // keeping what each showed it and going by the rules' fork choice among it (since 2026-11-12, client/core-ts
-// src/lock-keep.ts; before, it took only a chain that went on from the one it held). It signs after that chain, brings the whole chain to every
-// station of the lock at once, each on its own line, and sends the entry to the plane beside it, waited on only where
-// no station took it. Nothing orders the entries: two devices signing after the same chain may each be taken first by
-// another station.
+// src/lock-keep.ts; before, it took only a chain that went on from the one it held). It signs after that chain, one
+// entry at a time (since step 3b, views/lock.ts `Lock.append`'s turn), brings the whole chain to every station of the
+// lock at once, each on its own line, and sends the entry to the plane beside it, waited on only where no station took
+// it; taken is by hash. Nothing orders the entries: two devices signing after the same chain may each be taken first by
+// another station. An entry of its own that lost its place (refused as not on a station's head, or left aside as it
+// reads) it signs again after the head, by the core's rule and limits (`againOf`, AGAIN_MOST); and what it keeps that a
+// station it reads lacks, each entry a station showed or took, it carries there with `keep` (views/lock.ts `carry`).
 //
 // After every step what must always hold is checked: every chain a station, the plane or a device holds checks out,
 // nothing a forger made is in any of them or lets anyone in, nobody is let in whom the station's own chain does not
@@ -31,10 +34,11 @@
 // same fork choice (step 3's reading, 2026-11-12), E3 holds but where a device holds an entry it signed that no station
 // kept (it goes with signing again, the rest of step 3). The plane keeps what a station gives it of another branch by
 // the same fork choice, as the cloud does (cloud/src/lock.ts `keepLockAt`, the station's presence.ts `planeParted`), so
-// where it took the entry that lost first it comes to the stations' chain (2026-11-12). What still fails is E4 where the
-// plane keeps an entry no station took (a device's, waited on), and E3 with it. That is in `KNOWN_SEEDS` and
-// `KNOWN_TOLD` (`WHY`), and the tests pass when exactly that fails: anything else that fails fails them, and so does a
-// known failure that holds now (take it out). The checks of every step stay hard: a wrong chain, a forger's entry or
+// where it took the entry that lost first it comes to the stations' chain (2026-11-12). E4, the plane keeping an entry
+// no station took, and E3 with it, went once the cloud's taking one no longer counted: what no station took is pending
+// on the device that signed it, sent to the plane only once a station took it (step 3b, 2026-11-12). What still fails
+// is in `KNOWN_SEEDS` and `KNOWN_TOLD` (`WHY`), and the tests pass when exactly that fails: anything else that fails
+// fails them, and so does a known failure that holds now (take it out). The checks of every step stay hard: a wrong chain, a forger's entry or
 // someone let in whom the chain does not name fails at once.
 import assert from "node:assert/strict";
 import { createPrivateKey, createPublicKey, sign as nodeSign } from "node:crypto";
@@ -184,7 +188,46 @@ type StationSim = {
 /// A device of a person that holds the locks (a signer's app, a spare): its chain of each workspace, as it last read it
 /// of a station or signed it.
 /// `held`: the chain each lock is gone by on the device; `aside`, the entries of it a station showed that are off it.
-type Dev = { n: number; name: string; sub: string; base: Key; signer: Key; held: Map<string, Entry[]>; aside: Map<string, Entry[]> };
+/// `turn`: of each lock, whether it is signing (one entry at a time, views/lock.ts `Lock.append`) and what waits for it;
+/// `handled` its entries that lost their place, signed again or let be; `tries` how many signings again each is;
+/// `shown` the entries a station showed it or took from it; `carried` what it carried to which station (`carry`).
+type Dev = {
+  n: number; name: string; sub: string; base: Key; signer: Key; held: Map<string, Entry[]>; aside: Map<string, Entry[]>;
+  turn: Map<string, { busy: boolean; next: (() => void)[] }>; handled: Set<string>; tries: Map<string, number>; shown: Set<string>; carried: Set<string>;
+  /// `pending`: of each lock, what it signed that no station took nor refused (client/core-ts/src/lock-pending.ts),
+  /// never on its chain, brought as it next reads a station (views/lock.ts `deliver`); `delivering`, the locks whose
+  /// pending entries are being brought (one run at a time, as the core's `delivering`: a read meanwhile adds none).
+  pending: Map<string, Entry[]>; delivering: Set<string>;
+};
+const devParts = () => ({ turn: new Map(), handled: new Set<string>(), tries: new Map<string, number>(), shown: new Set<string>(), carried: new Set<string>(), pending: new Map<string, Entry[]>(), delivering: new Set<string>() });
+
+/// The same JSON whatever the order of its keys (an entry's body, compared by what it says).
+const sameJson = (v: unknown): string => JSON.stringify(v, (_k, x) => (x !== null && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
+/// What an entry of a workspace's lock is about (client/core-ts/src/views/lock.ts `subjectOf`).
+function subjectOf(e: Entry): string | null {
+  const b = (e.body ?? {}) as any;
+  if (e.kind === "device" || e.kind === "device.remove") return `device ${b.id}`;
+  if (e.kind === "member" || e.kind === "member.remove" || e.kind === "person") return `member ${b.sub}`;
+  if (e.kind === "station" || e.kind === "station.remove") return `station ${b.key}`;
+  return e.kind === "disable" ? "lock" : null;
+}
+/// What becomes of an entry that lost its place, by the chain held and what is aside (client/core-ts/src/lock-keep.ts
+/// `againOf`, the same rule): done, otherwise, unmoved or sign.
+function againOf(chain: Entry[], aside: Entry[], lost: Entry): "done" | "otherwise" | "unmoved" | "sign" {
+  const at = new Map(chain.map((e, i) => [entryHash(e), i]));
+  if (at.has(entryHash(lost))) return "done";
+  const up = new Map(aside.map((e) => [entryHash(e), e]));
+  let parent = lost.prev;
+  for (let n = 0; parent !== null && !at.has(parent) && n <= aside.length; n++) parent = up.get(parent)?.prev ?? null;
+  const i = parent === null ? undefined : at.get(parent);
+  if (i === undefined || i === chain.length - 1) return "unmoved";
+  const since = chain.slice(i + 1);
+  if (since.some((e) => e.kind === lost.kind && sameJson(e.body) === sameJson(lost.body))) return "done";
+  const about = subjectOf(lost);
+  return about !== null && since.some((e) => subjectOf(e) === about) ? "otherwise" : "sign";
+}
+/// How many times one entry that lost its place is signed again (client/core-ts/src/lock-keep.ts AGAIN_MOST).
+const AGAIN_MOST = 3;
 
 /// A world from its steps; `check` throws what went wrong, naming the step.
 class World {
@@ -226,8 +269,8 @@ class World {
     });
     const genesis = new Map(this.sp.map((sp) => [sp.ws, [sp.plane[0]!]]));
     this.devs = [
-      ...signers.map((s, n) => ({ n, name: `${s.sub}'s app`, sub: s.sub as string, base: s.app, signer: s.signer, held: new Map(genesis), aside: new Map() })),
-      ...spare.map((d, j) => ({ n: signers.length + j, name: d.name, sub: d.sub, base: d.base, signer: d.signer, held: new Map(genesis), aside: new Map() })),
+      ...signers.map((s, n) => ({ n, name: `${s.sub}'s app`, sub: s.sub as string, base: s.app, signer: s.signer, held: new Map(genesis), aside: new Map(), ...devParts() })),
+      ...spare.map((d, j) => ({ n: signers.length + j, name: d.name, sub: d.sub, base: d.base, signer: d.signer, held: new Map(genesis), aside: new Map(), ...devParts() })),
     ];
     for (const l of this.allLines()) this.lines.set(l, true);
     for (const s of this.stations) this.start(s);
@@ -493,10 +536,18 @@ class World {
   /// (`lock_unconfirmed`), telling the last entries of its chain (mesh/serve.ts `refusalOf`), which the device keeps
   /// as a read's where they go on from an entry it holds (views/lock.ts heardTail). A station whose lock does not name the device refuses it
   /// (`lock_unconfirmed`).
-  read(dev: Dev, s: StationSim, sp: Space) {
+  /// `then`: what the device does once the read landed or was lost (a signing turn waiting on it, `lost`). What it
+  /// read, it carries to the station where that lacks some of what the device keeps (`carry`).
+  read(dev: Dev, s: StationSim, sp: Space, then?: () => void) {
     const chan = `d${s.i}#${this.chanSeq++}`;
+    let after = then;
+    const done = () => {
+      const f = after;
+      after = undefined;
+      f?.();
+    };
     this.send(`d${s.i}`, chan, () => {
-      if (s.cloud === null) return;
+      if (s.cloud === null) return done();
       const state = s.cloud.locked(keyOf(sp))?.state;
       if (state && !state.devices.has(dev.base.hex)) {
         const tail: Entry[] = [];
@@ -506,13 +557,125 @@ class World {
           if (bytes > REFUSAL_ENTRIES_BYTES) break;
           tail.unshift(entry);
         }
-        if (tail.length > 0) this.send(`d${s.i}`, chan, () => this.heardTail(dev, sp, tail));
+        if (tail.length > 0) this.send(`d${s.i}`, chan, () => (this.heardTail(dev, sp, tail), done()), done);
+        else done();
         return;
       }
-      const [, answer] = lockRoute(s.cloud, "GET", [], Buffer.alloc(0), viewer(dev.base, dev.sub, "member", sp.ws)) as [number, { entries: Entry[] }];
+      const [, answer] = lockRoute(s.cloud, "GET", [], Buffer.alloc(0), viewer(dev.base, dev.sub, "member", sp.ws)) as [number, { head: { genesis: string } | null; entries: Entry[] }];
       const chain = answer.entries;
-      this.send(`d${s.i}`, chan, () => this.take(dev, sp, chain));
+      const genesis = answer.head?.genesis ?? null;
+      this.send(`d${s.i}`, chan, () => {
+        for (const e of chain) dev.shown.add(entryHash(e));
+        this.take(dev, sp, chain);
+        this.carry(dev, s, sp, chain, genesis);
+        this.deliverPending(dev, sp);
+        done();
+      }, done);
+    }, done);
+  }
+
+  /// What `dev` keeps of `sp`'s lock (its chain, then what is aside), each entry a station showed or took, brought with
+  /// `keep` to station `s` it just read, where `s` keeps this lock (`genesis`) and lacks some of it: once each
+  /// (views/lock.ts `carry`).
+  carry(dev: Dev, s: StationSim, sp: Space, theirs: Entry[], genesis: string | null) {
+    const held = dev.held.get(sp.ws) ?? [];
+    if (held.length === 0 || genesis !== entryHash(held[0]!) || fold(held, null).disabled) return;
+    const kept = [...held, ...(dev.aside.get(sp.ws) ?? [])].filter((e) => dev.shown.has(entryHash(e)));
+    const has = new Set(theirs.map(entryHash));
+    if (kept.length === 0 || kept.every((e) => has.has(entryHash(e)))) return;
+    const what = `${s.i}|${sp.ws}|${kept.map(entryHash).join(",")}`;
+    if (dev.carried.has(what)) return;
+    dev.carried.add(what);
+    this.log.push(`  ${dev.name} carries ${kept.length} entries of ${sp.name} to s${s.i}`);
+    this.send(`d${s.i}`, `d${s.i}#${this.chanSeq++}`, () => {
+      if (s.cloud === null) return;
+      lockRoute(s.cloud, "POST", [], Buffer.from(JSON.stringify({ entries: kept, keep: true })), viewer(dev.base, dev.sub, dev.sub === "alice" ? "owner" : "member", sp.ws));
     });
+  }
+
+  /// What `dev` has pending in `sp` brought to its stations, it having read one (views/lock.ts `deliver`), oldest first,
+  /// each in its turn: on the chain held, dropped; its parent the head held, brought as it is; else by `againOf`: done,
+  /// dropped; sign, signed again after the head (AGAIN_MOST times at most) and brought; else let be (failed, said so).
+  deliverPending(dev: Dev, sp: Space) {
+    const waiting = dev.pending.get(sp.ws) ?? [];
+    if (waiting.length === 0 || dev.delivering.has(sp.ws)) return;
+    dev.delivering.add(sp.ws);
+    for (const e of [...waiting].sort((x, y) => x.seq - y.seq)) {
+      this.turn(dev, sp, () => {
+        const left = dev.pending.get(sp.ws) ?? [];
+        if (!left.some((x) => entryHash(x) === entryHash(e))) return;
+        const drop = () => dev.pending.set(sp.ws, (dev.pending.get(sp.ws) ?? []).filter((x) => entryHash(x) !== entryHash(e)));
+        const held = dev.held.get(sp.ws) ?? [];
+        if (held.some((x) => entryHash(x) === entryHash(e))) {
+          // (a station took it by another's carrying: the plane sent it now, as what a station took is)
+          drop();
+          return this.send("dc", `dc#${this.chanSeq++}`, () => this.log.push(`  the plane ${this.append(sp, [e]) ? "takes" : "refuses"} ${dev.name}'s ${said(e)}`));
+        }
+        if (held.length === 0 || fold(held, null).disabled) return drop();
+        if (e.seq === held.length && e.prev === entryHash(held.at(-1)!)) {
+          this.log.push(`  ${dev.name} brings its pending ${said(e)} in ${sp.name}`);
+          return this.bring(dev, sp, held, e, held, dev.tries.get(entryHash(e)) ?? 0);
+        }
+        const how = againOf(held, dev.aside.get(sp.ws) ?? [], e);
+        const tries = dev.tries.get(entryHash(e)) ?? 0;
+        drop();
+        if (how === "sign" && tries < AGAIN_MOST && this.signAgain(dev, sp, e, tries + 1)) return;
+        this.log.push(`  ${dev.name}'s pending ${said(e)} fails (${how})`);
+      });
+    }
+    // (the run over once each was brought and answered, or let be: the turn after the last)
+    this.turn(dev, sp, () => void dev.delivering.delete(sp.ws));
+  }
+
+  /// `dev`'s turn to sign in `sp` (views/lock.ts `Lock.append`): `f` once no entry of its is being brought there.
+  turn(dev: Dev, sp: Space, f: () => void) {
+    this.turnOf(dev, sp).next.push(f);
+    this.nextTurn(dev, sp);
+  }
+  turnOf(dev: Dev, sp: Space) {
+    let t = dev.turn.get(sp.ws);
+    if (t === undefined) dev.turn.set(sp.ws, (t = { busy: false, next: [] }));
+    return t;
+  }
+  nextTurn(dev: Dev, sp: Space) {
+    const t = this.turnOf(dev, sp);
+    while (!t.busy && t.next.length > 0) t.next.shift()!();
+  }
+  /// The turn given up (the entry held, refused, or left to the plane): what waits for it goes on.
+  giveUp(dev: Dev, sp: Space) {
+    this.turnOf(dev, sp).busy = false;
+    this.nextTurn(dev, sp);
+  }
+
+  /// `lost`, refused by station `s` that keeps the lock and taken by none, in the turn (views/lock.ts `#lost`): `s`
+  /// read, then done, let be, or signed again after the head (AGAIN_MOST times at most).
+  lost(dev: Dev, sp: Space, lost: Entry, tries: number, s: StationSim) {
+    dev.handled.add(entryHash(lost));
+    this.read(dev, s, sp, () => {
+      const how = againOf(dev.held.get(sp.ws) ?? [], dev.aside.get(sp.ws) ?? [], lost);
+      if (how === "sign" && tries < AGAIN_MOST && this.signAgain(dev, sp, lost, tries + 1)) return;
+      this.log.push(`  ${dev.name}'s ${said(lost)} is refused (${how})`);
+      this.giveUp(dev, sp);
+    });
+  }
+
+  /// `lost` signed again after the head held, in the turn: whether it was (the rules taking it there).
+  signAgain(dev: Dev, sp: Space, lost: Entry, tries: number): boolean {
+    const chain = dev.held.get(sp.ws) ?? [];
+    if (chain.length === 0) return false;
+    const state = fold(chain, null);
+    if (state.disabled) return false;
+    const at = Math.floor(this.t / 1000);
+    const entry = signed(after(chain, at, lost.kind, lost.body), dev.signer);
+    try {
+      apply(state, entry, at);
+    } catch {
+      return false;
+    }
+    dev.tries.set(entryHash(entry), tries);
+    this.log.push(`  ${dev.name} signs ${said(entry)} again in ${sp.name}, after ${said(chain.at(-1)!)}`);
+    this.bring(dev, sp, chain, entry, chain, tries);
+    return true;
   }
 
   /// The last entries of a station's chain told in its refusal: from the entries held before the first of them, kept as
@@ -526,6 +689,7 @@ class World {
       if (tail[i]!.seq !== first + i || (prev !== undefined && tail[i]!.prev !== entryHash(prev))) return;
     }
     const chain = [...was.slice(0, first), ...tail];
+    for (const e of tail) dev.shown.add(entryHash(e));
     if (entryHash(chain[0]!) === entryHash(was[0]!)) this.take(dev, sp, chain);
   }
 
@@ -554,6 +718,15 @@ class World {
       if (t.moved) this.log.push(`  ${dev.name} goes by #${entryHash(t.kept.entries.at(-1)!).slice(0, 6)} in ${sp.name}, the rules' choice, keeping ${t.kept.aside.length} aside`);
       dev.held.set(sp.ws, t.kept.entries);
       dev.aside.set(sp.ws, t.kept.aside);
+      // Its own entries the chain held went off: each signed again once, in its turn (views/lock.ts `hold`, `again`).
+      for (const e of [...t.kept.aside].sort((x, y) => x.seq - y.seq)) {
+        if (e.sig?.key !== dev.signer.id || dev.handled.has(entryHash(e))) continue;
+        dev.handled.add(entryHash(e));
+        this.turn(dev, sp, () => {
+          const tries = dev.tries.get(entryHash(e)) ?? 0;
+          if (tries < AGAIN_MOST && againOf(dev.held.get(sp.ws) ?? [], dev.aside.get(sp.ws) ?? [], e) === "sign") this.signAgain(dev, sp, e, tries + 1);
+        });
+      }
     } catch {}
   }
 
@@ -562,6 +735,11 @@ class World {
   sign(who: number, what: number, pick: number) {
     const dev = this.devs[who % signers.length]!;
     const sp = this.sp[(what >> 4) % this.sp.length]!;
+    // (in its turn: one entry at a time, each after the chain held as the turn begins)
+    this.turn(dev, sp, () => this.signNow(dev, sp, what, pick));
+  }
+
+  signNow(dev: Dev, sp: Space, what: number, pick: number) {
     const chain = dev.held.get(sp.ws) ?? [];
     if (chain.length === 0) return;
     const state = fold(chain, null);
@@ -621,13 +799,17 @@ class World {
   /// The whole chain (`prefix` and `entry`) brought by `dev` to every station of the lock it makes, each on its own line
   /// (views/lock.ts `#firstTaken`): once one took it, the entry goes to the plane too, nothing waiting on it, and the
   /// device holds the chain (where what it holds is still `was`: a call a person waits on, `within`); refused by a
-  /// station that keeps this lock and taken by none, nothing more; none answering (all lost, or TAKEN_MS over), the
-  /// plane is sent it and waited on, and the device holds it as the plane took it.
-  bring(dev: Dev, sp: Space, prefix: Entry[], entry: Entry, was: Entry[]) {
+  /// station that keeps this lock and taken by none, nothing more; none answering (all lost, or TAKEN_MS over), it is
+  /// pending (client/core-ts/src/lock-pending.ts): not held, not sent to the plane, brought again as the device next
+  /// reads a station (`deliverPending`), and held as a station's answer that comes later says it took it. Only a lock that names
+  /// no station is the plane's, sent there and waited on, the device holding it as the plane took it (until
+  /// 2026-11-12 every entry no station took was).
+  bring(dev: Dev, sp: Space, prefix: Entry[], entry: Entry, was: Entry[], tries = 0) {
+    this.turnOf(dev, sp).busy = true;
     const whole = [...prefix, entry];
     const genesis = entryHash(whole[0]!);
     const to = this.stations.filter((s) => sp.members.includes(s.i) && fold(whole, null).stations.has(s.key.hex));
-    const call = { done: false, left: to.length, refused: false };
+    const call = { done: false, left: to.length, refused: null as StationSim | null };
     const hold = () => {
       const h = dev.held.get(sp.ws) ?? [];
       if (h.length === was.length && (h.length === 0 || entryHash(h.at(-1)!) === entryHash(was.at(-1)!))) {
@@ -644,15 +826,40 @@ class World {
       });
     };
     let cancel = () => {};
+    const unpend = () => dev.pending.set(sp.ws, (dev.pending.get(sp.ws) ?? []).filter((x) => entryHash(x) !== entryHash(entry)));
+    const taken = () => {
+      // (held as a station took it, kept with what is held by the rules where that moved on: views/lock.ts `#taken`)
+      for (const e of whole) dev.shown.add(entryHash(e));
+      this.take(dev, sp, whole);
+      unpend();
+      toPlane(false);
+    };
     const finish = (took: boolean) => {
-      if (call.done) return;
+      if (call.done) {
+        // (a station's answer past the wait: one that took it, held as it comes, views/lock.ts `#tookLate`)
+        if (took && (dev.pending.get(sp.ws) ?? []).some((x) => entryHash(x) === entryHash(entry))) taken();
+        return;
+      }
       call.done = true;
       cancel();
       if (took) {
-        hold();
-        toPlane(false);
-      } else if (!call.refused) toPlane(true);
-      else this.log.push(`  ${dev.name}'s ${said(entry)} is refused`);
+        taken();
+        this.giveUp(dev, sp);
+      } else if (call.refused === null && (to.length === 0 || entry.kind === "genesis")) {
+        // (a lock that names no station, or one turned on (views/lock.ts `open`, which this piece leaves as it was):
+        // left to the plane, the turn given up)
+        toPlane(true);
+        this.giveUp(dev, sp);
+      } else if (call.refused === null) {
+        // (pending, the turn given up)
+        const left = dev.pending.get(sp.ws) ?? [];
+        if (!left.some((x) => entryHash(x) === entryHash(entry))) dev.pending.set(sp.ws, [...left, entry]);
+        this.log.push(`  ${dev.name}'s ${said(entry)} is pending in ${sp.name}`);
+        this.giveUp(dev, sp);
+      } else {
+        unpend();
+        this.lost(dev, sp, entry, tries, call.refused);
+      }
     };
     const gone = () => {
       if (--call.left === 0) finish(false);
@@ -662,18 +869,18 @@ class World {
       this.send(`d${s.i}`, chan, () => {
         if (s.cloud === null) return gone();
         const [status, answer] = lockRoute(s.cloud, "POST", [], Buffer.from(JSON.stringify({ entries: whole })), viewer(dev.base, dev.sub, dev.sub === "alice" ? "owner" : "member", sp.ws)) as [number, any];
-        const took = status === 200 && (answer?.head?.seq ?? -1) >= entry.seq;
+        // (taken by hash: the entry on its chain, views/lock.ts `#takenBy`)
+        // (a `disable` taken lets the lock go: none kept after it to show it by hash, its answer's `taken` says it,
+        // views/lock.ts `letGo`)
+        const took = status === 200 && (s.cloud.lockAfter(-1, keyOf(sp)).some((e) => entryHash(e) === entryHash(entry)) || (entry.kind === "disable" && (answer?.taken ?? 0) > 0 && !s.cloud.locked(keyOf(sp))));
         const refused = status === 409 && answer?.head?.genesis === genesis;
         if (took && entry.kind === "disable") sp.off.add(genesis);
         if (took && entry.kind === "genesis" && !sp.opened.includes(genesis)) sp.opened.push(genesis);
         this.log.push(`  s${s.i} ${took ? "takes" : "does not take"} ${dev.name}'s ${said(entry)}${took ? "" : `: ${answer?.error ?? status}`}`);
         this.send(`d${s.i}`, chan, () => {
           if (took) return finish(true);
-          if (refused) {
-            call.refused = true;
-            // Its lock read again: what is signed next follows what it keeps (`#refusedBy`).
-            this.read(dev, s, sp);
-          }
+          // (what becomes of it then is `lost`'s: that station read, in the turn)
+          if (refused) call.refused ??= s;
           gone();
         }, gone);
       }, gone, `${dev.name}→s${s.i}`);
@@ -936,9 +1143,10 @@ class World {
     // The stations of the lock: those every chain of it kept by a station names (one taken out of it in any of them is
     // no longer brought level by the others, nor are they by it).
     const named = sp.members.filter((i) => of.every((j) => fold(chain(j), null).stations.has(stationKeys[i]!.hex)));
-    // E1: every station of the lock keeps the same chain, the same head.
+    // E1: every station of the lock keeps the same chain, the same head. (None named, every one taken out of it, there
+    // is nothing for it to say: seed 29 failed it on no station at all, 2026-11-12.)
     const heads = new Map(named.map((i) => [i, chain(i).length === 0 ? "none" : entryHash(chain(i).at(-1)!)]));
-    const one = new Set(heads.values()).size === 1;
+    const one = new Set(heads.values()).size <= 1;
     if (!one) out.push(`E1 one chain: in ${sp.name} ${named.map((i) => `s${i} keeps ${chain(i).length === 0 ? "no lock" : `${chain(i).length - 1} #${heads.get(i)!.slice(0, 6)}`}`).join(", ")}`);
     const common = one && named.length > 0 ? chain(named[0]!) : null;
     // E4: the plane level with it once one station of it reaches the plane (a plane that holds back from all of them is
@@ -1012,16 +1220,12 @@ async function fails(steps: Step[], held: boolean[], seed: number): Promise<{ er
 /// properties each breaks; by told world, the same. Each is one of these (`WHY`), the stations agreeing in every one
 /// (seeds 3, 4, 26 and both told worlds checked from their traces, 2026-11-12). Only shrinks: a world that holds one of these now
 /// fails its test until it is taken out.
-const WHY: Record<string, string> = {
-  E3: "a device here holds an entry it signed that no station kept (the plane took it, waited on): it goes with signing again, step 3 (2026-11-12)",
-  E4: "the plane keeps an entry no station took (a device's, waited on), which its fork choice prefers to the stations' branch: it goes with the cloud no longer counting as taking one, step 3 (2026-11-12)",
-};
+const WHY: Record<string, string> = {};
 // (16 added on 2026-11-12, the one seed ever added, as the model's device changed to read as the core does, and gone
 // with 5, 18, 20, 24, 28 and 30 once the plane kept what a station gives it by the fork choice, as the cloud does: in
-// those the plane only held the entry that lost. In 11 and 26 it holds one no station took. Nothing is to be added.)
-const KNOWN_SEEDS: Record<number, (keyof typeof WHY)[]> = {
-  11: ["E4"], 26: ["E3", "E4"],
-};
+// those the plane only held the entry that lost. 11 and 26, where it held one no station took, gone with the device
+// holding such an entry pending, 2026-11-12. Nothing is to be added.)
+const KNOWN_SEEDS: Record<number, (keyof typeof WHY)[]> = {};
 const KNOWN_TOLD: Record<string, (keyof typeof WHY)[]> = {};
 /// The seeds `KNOWN_SEEDS` says all of (past them, what a world breaks at the end is told, not failed on).
 const KNOWN_UPTO = 30;

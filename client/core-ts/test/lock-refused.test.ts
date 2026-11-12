@@ -4,7 +4,8 @@
 // unanswered, the call never answered). The station's lock is read again in the call's turn: another device's entry at
 // its place, the entry is signed again after it and taken (lock-signs-again.test.ts says the rest of that); the read
 // moving nothing (the lock's rules), it is the call's failure, `lock_refused` in the station's words. A station keeping
-// another lock, or refusing this device, is as before: the entry goes to the cloud. A station that takes it wins over another's
+// another lock, or refusing this device, takes nothing: the entry is pending, the cloud not sent it (the cloud's taking
+// it counts for nothing, views/lock.ts `Lock.append`). A station that takes it wins over another's
 // refusal, whichever comes first: a refusal does not end the wait, and with another station silent it is the call's
 // answer once the call's wait is over. Each case in a workspace of its own, locked, this device signing for its owner,
 // on the test clock.
@@ -13,7 +14,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
-import { ASKED_MS, held, read } from "../src/views/lock.ts";
+import { ASKED_MS, TAKEN_MS, held, pendingHeld, read } from "../src/views/lock.ts";
 import { call } from "./helpers.ts";
 import { ME, PHONE, elsewhere, genesis, grant, rig } from "./lock-rig.ts";
 import { stationLater } from "./station-fixture.ts";
@@ -180,7 +181,7 @@ test("refused by the lock's rules (its lock read again moves nothing), the cloud
   assert.equal(cloud.posted, 0);
 });
 
-test("a station refusing for another reason (another lock kept since; this device not let in) is as before: the cloud takes the entry", async (t) => {
+test("a station refusing for another reason (another lock kept since; this device not let in): pending, the cloud not sent it", async (t) => {
   for (const why of ["another lock", "lock_unconfirmed"]) {
     const { r, stations, cloud } = await setUp([A]);
     const st = stations.get(A)!;
@@ -189,9 +190,10 @@ test("a station refusing for another reason (another lock kept since; this devic
     const { ms, answer } = await removePhone(r);
     t.diagnostic(`${why}: answered after ${ms} ms`);
     assert.ok(answer !== undefined && "ok" in answer, said(why, ms, answer));
-    assert.equal(cloud.posted, 1, why);
-    const kept = r.cloud.chains.get("ws")!;
-    assert.ok(kept.length === 2 && removedLast(kept), `${why}: on the cloud's chain`);
+    assert.ok((answer as { ok: { pending?: unknown } }).ok.pending !== undefined, `${why}: answered as pending`);
+    assert.equal(cloud.posted, 0, why);
+    assert.equal(held(r.core.inner, "ws")!.entries.length, 1, `${why}: not held`);
+    assert.deepEqual(pendingHeld(r.core.inner, "ws").map((x) => x.entry.kind), ["device.remove"], why);
   }
 });
 
@@ -235,11 +237,10 @@ test("within a call's wait, one station refusing at 1 s by the lock's rules and 
   assert.equal(cloud.posted, 0);
 });
 
-test("the same refusal coming at 5 s, past the call's wait: the cloud was sent the entry at its end and took it, the call answers well (the known gap)", async (t) => {
-  // Past the wait the cloud is asked too, the stations still listened to (views/lock.ts ASKED_MS): at 3 s no station had
-  // taken the entry nor refused it, so it went to the cloud, which took it at once. A's refusal at 5 s cannot unsend
-  // it: the cloud's chain has this device's entry where A keeps another's. The one case of a station that keeps this
-  // lock refusing that cannot be told in time (`Lock.append`); asserted here so that a change to it is seen.
+test("the same refusal coming at 5 s, past the call's wait: pending at the wait's end, then signed again after A's entry and taken (the gap closed)", async (t) => {
+  // Past the wait the cloud was asked too and took the entry at once; A's refusal at 5 s could not unsend it, and the
+  // cloud's chain forked from A's. Now the entry is pending at 3 s, the cloud not sent it; A's refusal has A read and
+  // what is pending decided again (views/lock.ts `deliver`): signed again after A's entry, which is about someone else.
   const { r, stations, cloud, another } = await setUp([A, B]);
   const a = stations.get(A)!;
   a.say.pending = another();
@@ -249,9 +250,11 @@ test("the same refusal coming at 5 s, past the call's wait: the cloud was sent t
   t.diagnostic(`answered after ${ms} ms`);
   assert.ok(answer !== undefined && "ok" in answer, said("refused at 5 s", ms, answer));
   assert.ok(ms! >= ASKED_MS && ms! <= ASKED_MS + 50, `answered after ${ms} ms`);
-  assert.equal(cloud.posted, 1, "the cloud sent it at the wait's end");
-  await r.host.time.pass(3_000);
-  const kept = r.cloud.chains.get("ws")!;
-  assert.ok(removedLast(kept) && kept.at(-1)!.seq === 1, "the cloud keeps this device's entry at 1");
-  assert.equal(a.chain[1]!.kind, "member", "where A keeps another device's: the fork");
+  assert.equal(cloud.posted, 0, "the cloud not sent it at the wait's end");
+  // (A refuses at 5 s; with B silent, what A said is gone by once the stations' wait is over, TAKEN_MS from the bring,
+  // a refusal not ending it; then it is signed again, and A takes it 5 s on, as it takes everything here)
+  await r.host.time.pass(TAKEN_MS + 5_000);
+  assert.deepEqual(a.chain.map((e) => e.kind), ["genesis", "member", "device.remove"], "A took it after another device's");
+  assert.equal(pendingHeld(r.core.inner, "ws").length, 0);
+  assert.equal(cloud.posted, 1, "the cloud sent it once A took it");
 });

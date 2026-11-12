@@ -78,6 +78,9 @@ priv struct SettingsFixture {
   mut pairing_more : Bool
   /// Maple is being added to security mode (settings-security-protecting).
   mut protecting : Bool
+  /// the lock's changes made here that no station took yet, by id (settings-security-pending: `fx_pending_rows`),
+  /// a failed one dropped by `lock.pendingDismiss`
+  pending : Array[String]
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
   mut pair_ended : String
   /// a device of lin's (Pixel 9) set up without the key to 林的库, waiting on this one for it (settings-vault-prompt),
@@ -165,6 +168,7 @@ let fx : SettingsFixture = {
   pairing_personal: false,
   pairing_more: false,
   protecting: false,
+  pending: [],
   pair_ended: "",
   key_ask: false,
   key_ask_ended: "",
@@ -319,6 +323,7 @@ fn fixture_reset() -> Unit {
   fx.pairing_personal = false
   fx.pairing_more = false
   fx.protecting = false
+  fx.pending.clear()
   fx.pair_ended = ""
   fx.key_ask = false
   fx.key_ask_ended = ""
@@ -657,6 +662,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-security-join" => fixture_open.desk = "lock-join"
     "settings-security-off" => fixture_open.desk = "lock-off"
     "settings-security-protecting" => fx.protecting = true
+    "settings-security-pending" => fx.pending.append(["p1", "p2", "p3"])
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -720,7 +726,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connects-motion" => "connects"
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
-    "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
+    "settings-security-join" | "settings-security-off" | "settings-security-protecting" | "settings-security-pending" => "security"
     "settings-stations-tasks" | "settings-stations-tasks-outside" | "settings-stations-tasks-theirs" | "settings-stations-devices" => "stations"
     "settings-station-devices" => "station:ws1/st1"
     "settings-station-tasks" | "settings-station-tasks-locked" => "station:ws1/aa11"
@@ -2687,7 +2693,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             ],
           ),
           ("renew", []),
-        ]),
+        ] +
+        fx_pending_fields()),
       )
     "vaults" =>
       Some(
@@ -3013,6 +3020,15 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
+    // a failed pending change read, dropped (a waiting one stays)
+    "lock.pendingDismiss" => {
+      let id = text(p, "id")
+      if fx_pending_rows().iter().any(fn(r) { text(Some(r), "id") == id && text(Some(r), "state") == "failed" }) {
+        fx.pending.retain(fn(x) { x != id })
+        fx_changed()
+      }
+      Some(Ok(Json::null()))
+    }
     "drive.kept.clear" => {
       fx.drive_kept = 0.0
       fx_changed()
@@ -3953,4 +3969,55 @@ fn fixture_copies_restored() -> Json {
     ("canRestore", Json::boolean(true)),
     ("formerly", [str("st9")]),
   ])
+}
+
+///|
+/// The lock's changes made here that no station took yet, as the core's `lock` topic has them (lock-pending.ts
+/// `pendingRow`), oldest first: a device of a long name taken out, waiting for Willow and Maple; Ana's role, changed
+/// meanwhile on another device; a web page's renewal refused, in the station's words.
+fn fx_pending_rows() -> Array[Json] {
+  let all = [
+    obj([
+      ("id", str("p1")),
+      ("text", str("移除设备 林的 MacBook Pro（2024 款 · 公司配的那台 · 放在办公室）：已记下，等 Willow、Maple 上线后生效")),
+      ("state", str("waiting")),
+      ("stations", [str("Willow"), str("Maple")]),
+    ]),
+    obj([
+      ("id", str("p2")),
+      ("text", str("把 Ana 改为成员：没有生效。「Ana」在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次")),
+      ("state", str("failed")),
+      ("stations", []),
+      ("dismissText", str("知道了")),
+    ]),
+    obj([
+      ("id", str("p3")),
+      ("text", str("续期 Chrome · macOS：没有生效。请查看现在的状态，仍然需要的话再操作一次")),
+      ("state", str("failed")),
+      ("stations", []),
+      ("why", str("这台设备已不在安全模式中")),
+      ("dismissText", str("知道了")),
+    ]),
+  ]
+  all.filter(fn(r) { fx.pending.contains(text(Some(r), "id")) })
+}
+
+///|
+/// The `lock` topic's fields of what is pending: the rows, and their heading while there are any.
+fn fx_pending_fields() -> Array[(String, Json)] {
+  let rows = fx_pending_rows()
+  if rows.is_empty() {
+    [("pending", Json::array(rows))]
+  } else {
+    [("pending", Json::array(rows)), ("pendingText", str("以下改动还没有生效"))]
+  }
+}
+
+///|
+/// What is pending made `ids` (of settings-security-pending's), as the core says it changed: a station took one, or one
+/// was dropped.
+pub fn fixture_pending_set(ids : Array[String]) -> Unit {
+  fx.pending.clear()
+  fx.pending.append(ids)
+  fx_changed()
 }

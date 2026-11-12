@@ -19,7 +19,7 @@ import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
-import { Lock, bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, putOnBound, read, signerOf } from "../src/views/lock.ts";
+import { Lock, TAKEN_MS, bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, pendingHeld, putOnBound, read, signerOf } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalBegin, served, serveTrusted, trying, tryOne } from "../src/views/pair.ts";
 import { ME, PHONE, elsewhere, genesis, grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
@@ -1093,14 +1093,15 @@ test("a station of the lock that does not say it knows the entry, or does not an
   await run(bindPerson(inner, "ws"));
   await run(read(inner, "ws"));
   assert.equal(persons(), undefined);
+  assert.equal(pendingHeld(inner, "ws").length, 0);
   // One that does not answer.
   said.set(B, Effect.fail(new CoreError("offline", "offline")));
   await run(bindPerson(inner, "ws"));
   await run(read(inner, "ws"));
   assert.equal(persons(), undefined);
-  // All of them know it.
+  // All of them know it: signed (pending here, these stations taking no entry: what is signed waits for one that does).
   said.set(B, knows);
-  await run(bindPerson(inner, "ws"));
-  await run(read(inner, "ws"));
-  assert.equal(persons(), personal.root("s1"));
+  inner.runner.fork(bindPerson(inner, "ws"));
+  await r.host.time.pass(TAKEN_MS + 500);
+  assert.deepEqual(pendingHeld(inner, "ws").map((p) => [p.entry.kind, (p.entry.body as { person?: string }).person]), [["person", personal.root("s1")]]);
 });

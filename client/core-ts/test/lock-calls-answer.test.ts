@@ -2,8 +2,8 @@
 // renewed, the lock turned off; a device approved face to face, views/pair.ts `approve`) wait on its stations for ASKED_MS at most, all told (2026-11-12: with the one station
 // asleep, each took 45 s, three waits of TAKEN_MS; with the cloud's reads unanswered too, none answered). Its station
 // served the lock and then went silent (its machine asleep: asked, it neither answers nor closes), the cloud (a)
-// answering everything, (b) leaving its reads unanswered: each answers within ASKED_MS, what it signed on the cloud's
-// chain after the entry before and held here as the head. Stations that answer are still what takes the entry, the
+// answering everything, (b) leaving its reads unanswered: each answers within ASKED_MS, what it signed pending (no
+// station took it: not held, not sent to the cloud, whose taking it would count for nothing). Stations that answer are still what takes the entry, the
 // cloud not waited on: with the cloud down entirely a device is taken out at once, and the lock turned off after the
 // person took 10 s over its prompt (the wait begins at the stations, not with the call). Each case in a workspace of
 // its own, locked, this device signing for its owner.
@@ -12,7 +12,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, entryHash } from "../src/lock.ts";
-import { ASKED_MS, held, lockView, read } from "../src/views/lock.ts";
+import { ASKED_MS, held, lockView, pendingHeld, read } from "../src/views/lock.ts";
 import { serveTrusted, tryOne } from "../src/views/pair.ts";
 import { call } from "./helpers.ts";
 import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
@@ -125,15 +125,17 @@ function answeredWithin(what: string, ms: number | null, answer: Record<string, 
   assert.ok(ms <= bound, `${what}: answered after ${ms} ms, more than ${bound}`);
 }
 
-/// What the call signed: one entry on the cloud's chain after the one before (`before` its length), `is` of it, and
-/// what is held here has it as head.
-function signedOn(what: string, r: Rig, inner: Rig["core"]["inner"], before: number, is: (e: Entry) => boolean) {
-  const chain = r.cloud.chains.get("ws")!;
-  assert.equal(chain.length, before + 1, `${what}: one entry more on the cloud's chain`);
-  const e = chain.at(-1)!;
+/// What the call signed, no station taking it: pending here (`is` of it, after the head held), the chain held and the
+/// cloud's (`before` its length) without it.
+function pendingOn(what: string, r: Rig, inner: Rig["core"]["inner"], before: number, is: (e: Entry) => boolean) {
+  assert.equal(r.cloud.chains.get("ws")!.length, before, `${what}: the cloud is not sent what no station took`);
+  const h = held(inner, "ws")!;
+  assert.equal(h.entries.length, before, `${what}: the chain held is without it`);
+  const waiting = pendingHeld(inner, "ws").filter((x) => x.state === "waiting");
+  assert.equal(waiting.length, 1, `${what}: one pending`);
+  const e = waiting[0]!.entry;
   assert.ok(is(e), `${what}: ${e.kind} ${JSON.stringify(e.body)}`);
-  assert.deepEqual([e.seq, e.prev], [before, entryHash(chain[before - 1]!)], `${what}: after the entry before`);
-  assert.equal(held(inner, "ws")?.head?.hash, entryHash(e), `${what}: held here as the head`);
+  assert.equal(e.prev, h.head!.hash, `${what}: after the head held`);
 }
 
 const CONDITIONS = [
@@ -162,8 +164,9 @@ for (const cond of CONDITIONS) {
       const { ms, answer } = await timedCall(r, c.call, c.params);
       t.diagnostic(`${c.call}, ${cond.name}: ${ms} ms`);
       answeredWithin(`${c.call}, ${cond.name}`, ms, answer, ASKED_MS + SLACK_MS);
-      if (c.entry !== null) signedOn(`${c.call}, ${cond.name}`, r, inner, before, c.entry);
-      if (c.call === "lock.disable") assert.equal((lockView(inner, "ws") as { locked: boolean }).locked, false, "the lock's page says it is off");
+      if (c.entry !== null) pendingOn(`${c.call}, ${cond.name}`, r, inner, before, c.entry);
+      // (not in effect while pending: the page says it is on still, and shows it pending)
+      if (c.call === "lock.disable") assert.equal((lockView(inner, "ws") as { locked: boolean }).locked, true, "the lock's page says it is on still");
     });
   }
 
@@ -194,14 +197,13 @@ for (const cond of CONDITIONS) {
     t.diagnostic(`${what}: ${ms} ms`);
     answeredWithin(what, ms, out === undefined ? undefined : "ok" in out ? { ok: out.ok } : { error: String((out.err as Error)?.message ?? out.err) }, ASKED_MS + SLACK_MS);
     assert.deepEqual((out as { ok: { approved: { workspaces: string[] } } }).ok.approved.workspaces, ["ws"], what);
-    signedOn(what, r, inner, before, (e) => e.kind === "device" && (e.body as { id?: string; sign_key?: string }).id === PHONE && (e.body as { sign_key?: string }).sign_key === sign_key);
+    pendingOn(what, r, inner, before, (e) => e.kind === "device" && (e.body as { id?: string; sign_key?: string }).id === PHONE && (e.body as { sign_key?: string }).sign_key === sign_key);
   });
 }
 
-test("the cloud keeping the entry, its answer lost on the way back, the lock's station silent: the device is taken out, not said to have failed", async (t) => {
-  // The cloud is what takes the entry once the stations' wait is over, and whether it kept one whose answer was lost
-  // (a gateway's 502) is read of it after that wait: with that read left to the stations' wait it was never made, the
-  // call failed with the entry kept, and pressed again signed the same place on the chain and was refused.
+test("the cloud losing its answers, the lock's station silent: the removal is pending, not said to have failed, and nothing asks the cloud", async (t) => {
+  // The cloud was what took the entry once the stations' wait was over, and whether it kept one whose answer was lost
+  // (a gateway's 502) was read of it after that wait. It takes none now: the call answers pending whatever it does.
   const { r, inner, st } = await setUp([{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8" }]);
   cloudAs(r, "all");
   st.say.silent = true;
@@ -209,9 +211,9 @@ test("the cloud keeping the entry, its answer lost on the way back, the lock's s
   const before = r.cloud.chains.get("ws")!.length;
   const { ms, answer } = await timedCall(r, "lock.removeDevice", { workspace: "ws", device: PHONE });
   t.diagnostic(`removeDevice, the cloud's answer lost: ${ms} ms`);
-  assert.equal(r.cloud.lose.posts, 0, "its answer was lost");
+  assert.equal(r.cloud.lose.posts, 1, "nothing was posted to the cloud");
   answeredWithin("removeDevice, the cloud's answer lost", ms, answer, ASKED_MS + SLACK_MS);
-  signedOn("removeDevice, the cloud's answer lost", r, inner, before, (e) => e.kind === "device.remove" && (e.body as { id?: string }).id === PHONE);
+  pendingOn("removeDevice, the cloud's answer lost", r, inner, before, (e) => e.kind === "device.remove" && (e.body as { id?: string }).id === PHONE);
 });
 
 test("stations that answer take the entry, the cloud down entirely not waited on: a device taken out at once", async (t) => {

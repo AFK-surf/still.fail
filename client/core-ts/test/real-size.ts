@@ -14,6 +14,7 @@
 // indexes alone: the same every run.
 import { workerData } from "node:worker_threads";
 import { activity } from "../src/history.ts";
+import { PENDING_MOST, type Pending } from "../src/lock-pending.ts";
 import type { Topic } from "../src/protocol.ts";
 import { PAGE } from "../src/station/channel-kinds.ts";
 import { localDay } from "../src/views/usage.ts";
@@ -1258,6 +1259,7 @@ export function records(now: number): [string, string, unknown][] {
     ["choice", "ws:ws:preset", { id: "p-app", station: "ws/maple" }],
     ...UP.map((at, st): [string, string, unknown] => ["memberships", at, { workspaces: [{ workspace: "ws", workspaceName: "Acme", name: STATIONS[st]!.name, home: true }], canJoin: true }]),
     ["lock", "ws", lockOf(now)],
+    ["lockPending", "ws", pendingOf(now)],
     ["vault", "ws", vaultOf(now)],
   ];
 }
@@ -1288,6 +1290,35 @@ function presetsOf(now: number, station: number): J {
 /// (each a phone and a computer or two, a web page for some) and its stations, and when each device was last seen. Its
 /// entries are not signed (the lock's view folds them as they are; views/vault.ts checks them, and keeps to its plain
 /// library, unchecked).
+/// What this device signed in the workspace's lock that no station took yet (src/lock-pending.ts), as many as are kept:
+/// PENDING_MOST waiting (the bound on signing more) and as many failed (the bound on those kept), by the longest names.
+function pendingOf(now: number): J {
+  const at = Math.floor(now / 1000);
+  const item = (i: number, state: "waiting" | "failed") => {
+    const p = PEOPLE[i % PEOPLE.length]!;
+    const name = `macos still.fail 桌面版 · ${p.name} 的 MacBook Pro`;
+    const entry = { v: 1, ws: "ws", seq: 40, prev: `${i}`.padStart(64, "a"), at: at - i * 60, kind: "device.remove", body: { id: `dev-${p.sub}-mac` }, sig: { key: `sk-${PEOPLE[0].sub}-mac`, alg: "Ed25519", sig: "ab".repeat(64) } };
+    const failed = state === "failed" ? (i % 2 === 0 ? { what: name } : { why: "the entry disagrees with this station's lock (a fork)" }) : {};
+    return { id: `${state}${i}`.padEnd(64, "0"), entry, act: "removeDevice", name, at: now - i * 60_000, state, ...failed };
+  };
+  return { items: [...Array.from({ length: PENDING_MOST }, (_, i) => item(i, "waiting")), ...Array.from({ length: PENDING_MOST }, (_, i) => item(i + PENDING_MOST, "failed"))] };
+}
+
+/// What this device signed in its person's own lock that no station of theirs took yet, as many as are kept (as
+/// `pendingOf`), each about a device none of the workspace's pending ones is about: the workspace's `lock` topic says
+/// them after its own (views/lock.ts `ownPendingRows`).
+export function ownPendingOf(now: number): Pending[] {
+  const at = Math.floor(now / 1000);
+  const item = (i: number, state: "waiting" | "failed"): Pending => {
+    const p = PEOPLE[i % PEOPLE.length]!;
+    const name = `android still.fail 手机版 · ${p.name} 的 Pixel 9 Pro XL`;
+    const entry = { v: 1 as const, ws: "person:s1", seq: 12, prev: `${i}`.padStart(64, "b"), at: at - i * 60, kind: "device.remove", body: { key: `ed25519:${`${i}`.padStart(64, "c")}` }, sig: { key: `ed25519:${"d".repeat(64)}`, alg: "Ed25519" as const, sig: "ab".repeat(64) } };
+    const failed = state === "failed" ? (i % 2 === 0 ? { what: name } : { why: "the entry disagrees with this station's lock (a fork)" }) : {};
+    return { id: `${state}${i}`.padEnd(64, "1"), entry, act: "removeDevice", name, at: now - i * 60_000, state, ...failed };
+  };
+  return [...Array.from({ length: PENDING_MOST }, (_, i) => item(i, "waiting")), ...Array.from({ length: PENDING_MOST }, (_, i) => item(i + PENDING_MOST, "failed"))];
+}
+
 function lockOf(now: number): J {
   const secs = Math.floor(now / 1000);
   const devices = PEOPLE.flatMap((p, i) => [

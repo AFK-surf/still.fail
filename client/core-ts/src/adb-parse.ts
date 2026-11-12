@@ -32,6 +32,7 @@ export type AdbCall =
   | { kind: "personalCode"; code: string }
   | { kind: "personalCancel" }
   | { kind: "personalRemove"; sub: string; key: string }
+  | { kind: "personalPendingDismiss"; sub: string; id: string }
   | { kind: "personalForget"; sub: string }
   | { kind: "personalRestart"; sub: string }
   /// The grants made before they were signed, signed now at one go (the person asked once).
@@ -81,6 +82,8 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       return { kind: "personalCancel" };
     case "adb.personalRemove":
       return { kind: "personalRemove", sub: text("sub"), key: text("key") };
+    case "adb.personalPendingDismiss":
+      return { kind: "personalPendingDismiss", sub: text("sub"), id: text("id") };
     case "adb.personalForget":
       return { kind: "personalForget", sub: text("sub") };
     case "adb.personalRestart":

@@ -45,6 +45,10 @@ pub fn security_node(
           if flag(me, "waiting") || flag(me, "unsigned") {
             out.push("pair")
           }
+          // (what was just done and is not in effect: first after the state)
+          if items(l, "pending").length() > 0 {
+            out.push("pending")
+          }
           out.push("people")
           out.push("stations")
           out.push("web")
@@ -54,6 +58,9 @@ pub fn security_node(
         }
         Some(_) => {
           out.push("off")
+          if items(l, "pending").length() > 0 {
+            out.push("pending")
+          }
           out.push("signing")
         }
       }
@@ -84,6 +91,7 @@ pub fn security_node(
         "signing" => signing_node(b)
         "on" => lock_on_node(b, lock)
         "pair" => pair_node(b, core, ws, lock)
+        "pending" => pending_node(b, core, ws, lock)
         "people" => people_node(b, core, ws, lock)
         "stations" => stations_node(b, core, ws, lock, stint)
         "web" =>
@@ -273,6 +281,68 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
 }
 
 ///|
+/// 以下改动还没有生效: the changes this device made that no station took yet (the core's `pending`, oldest first, of the
+/// workspace's lock and the person's own alike), a row each by its id, so one going leaves the others where they are.
+fn pending_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?) -> Unit {
+  @sf.section_node(parent, fn() { text(lock(), "pendingText") }, fn(s) {
+    sec_group_node(s, fn(g) {
+      g.each(fn() { items(lock(), "pending") }, fn(x) { text(Some(x), "id") }, fn(row, x) {
+        sec_pending_node(row, core, ws, fn() { Some(x.get()) })
+      })
+    })
+  })
+}
+
+///|
+/// A change not in effect, `pv` as it is now: its mark (waiting, the time's; failed, the warning's in amber), its
+/// sentence whole on as many lines as it takes, why it failed under it where the core says; a failed one's
+/// `dismissText` drops it (`lock.pendingDismiss`), on a line of its own under its words. A waiting one does nothing
+/// pressed: it is taken by itself as a station takes it.
+fn sec_pending_node(parent : @view.View, core : Core, ws : () -> String, pv : () -> Json?) -> Unit {
+  let id = fn() { text(pv(), "id") }
+  let failed = fn() { text(pv(), "state") == "failed" }
+  let dropping = fn() { is_doing(core, ["lock.pendingDismiss"], [("workspace", ws()), ("id", id())]) }
+  let mark = fn() { if failed() { "info" } else { "wait" } }
+  sec_line_node(
+    parent,
+    fn() { text(pv(), "text") },
+    note=fn() { text(pv(), "why") },
+    wraps=true,
+    mark=fn(m) {
+      m.box(fn(b) {
+        @sf.style_node(b, fn() { sec_pending_mark }, in_row=true)
+        @sf.icon_node(b, @signals.untracked(mark), sec_device_glyph, By(fn() {
+          if failed() {
+            @sf.theme().p.warn_ink
+          } else {
+            @sf.theme().p.muted
+          }
+        }), name_now=mark)
+        |> ignore
+      })
+      |> ignore
+    },
+    // (one look at either width: the accent's words, starting where the sentence starts)
+    acts=fn(a) {
+      sec_tap_do_node(
+        a,
+        fn() { text(pv(), "dismissText") },
+        fn() {
+          @settings.act(
+            core,
+            @signals.untracked(fn() { text(pv(), "dismissText") }),
+            "lock.pendingDismiss",
+            obj([("workspace", str(@signals.untracked(ws))), ("id", str(@signals.untracked(id)))]),
+          )
+        },
+        dropping,
+      )
+    },
+    acts_shown=fn() { failed() && text(pv(), "dismissText") != "" },
+  )
+}
+
+///|
 /// 成员: its people (DeviceRow's people), each with what they are, and their devices by the app each is, its name over
 /// the first (still.fail 桌面版: which machine each is).
 fn people_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?) -> Unit {
@@ -376,7 +446,9 @@ fn sec_group_node(
 /// (wide; amber while `warn`), `end` at its end; `acts`, what it does (while `acts_shown` says) where its title is
 /// words of no length known (a device's name): at its end wide, narrow a line of its own under its words, the title
 /// never squeezed by it. `over`: the name of the rows it starts, over it at its mark while it says one (a person's
-/// devices of one app: still.fail 桌面版), `apart` from the rows before it. Its words as they are said.
+/// devices of one app: still.fail 桌面版), `apart` from the rows before it. Its words as they are said. `wraps`: its
+/// title a sentence, whole on as many lines as it takes, its note under it and what it does under them at either width
+/// (beside it, that took the room the sentence needs), its mark at its first line (a change not in effect).
 fn sec_line_node(
   parent : @view.View,
   title : () -> String,
@@ -390,6 +462,7 @@ fn sec_line_node(
   acts_shown? : () -> Bool = fn() { true },
   over? : () -> String = fn() { "" },
   apart? : () -> Bool = fn() { false },
+  wraps? : Bool = false,
 ) -> Unit {
   match @sf.look_node(parent) {
     Narrow => {
@@ -413,7 +486,7 @@ fn sec_line_node(
             @sf.style_node(first, fn() { sec_first_line })
             first.box(fn(t) {
               @sf.style_node(t, fn() { sec_title_room }, in_row=true)
-              @sf.words_node(t, title, fn() { narrow_row_title }) |> ignore
+              @sf.words_node(t, title, fn() { if wraps { sec_pending_body } else { narrow_row_title } }) |> ignore
             })
             |> ignore
             // (at the row's top: at a card's first row's end in its corner as far from its top as from its side, and
@@ -436,7 +509,14 @@ fn sec_line_node(
         |> ignore
       }
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { (if indent { sec_narrow_row_in } else { @sf.pg_said_row }).then(sec_narrow_round) })
+        @sf.style_node(r, fn() {
+          let row = (if indent { sec_narrow_row_in } else { @sf.pg_said_row }).then(sec_narrow_round)
+          if wraps {
+            row.then(sec_pending_top)
+          } else {
+            row
+          }
+        })
         match acts {
           None => words(r)
           // (its mark beside its title and its note as in a row doing nothing, what it does under them all from where
@@ -445,7 +525,7 @@ fn sec_line_node(
             r.box(fn(wa) {
               @sf.style_node(wa, fn() { sec_with_acts }, in_row=true)
               wa.box(fn(mw) {
-                @sf.style_node(mw, fn() { sec_mark_words })
+                @sf.style_node(mw, fn() { if wraps { sec_mark_words.then(sec_pending_top) } else { sec_mark_words } })
                 words(mw)
               })
               |> ignore
@@ -471,19 +551,48 @@ fn sec_line_node(
         |> ignore
       })
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { sec_row })
+        @sf.style_node(r, fn() { if wraps { sec_pending_row } else { sec_row } })
         match mark {
           Some(f) => f(r)
           None => ()
         }
         r.box(fn(t) {
-          @sf.style_node(t, fn() { sec_row_text }, in_row=true)
+          @sf.style_node(t, fn() { if wraps { sec_pending_words } else { sec_row_text } }, in_row=true)
           t.show(fn() { title() != "" }, fn(w) {
-            @sf.words_node(w, title, fn() { if strong { sec_row_name } else { sec_row_words } }) |> ignore
+            @sf.words_node(w, title, fn() {
+              if wraps {
+                sec_pending_ui
+              } else if strong {
+                sec_row_name
+              } else {
+                sec_row_words
+              }
+            })
+            |> ignore
           })
           t.show(fn() { note() != "" }, fn(w) {
-            @sf.words_node(w, note, fn() { if warn() { sec_warn } else { sec_row_meta } }) |> ignore
+            @sf.words_node(w, note, fn() {
+              if wraps {
+                sec_pending_why
+              } else if warn() {
+                sec_warn
+              } else {
+                sec_row_meta
+              }
+            })
+            |> ignore
           })
+          match acts {
+            Some(f) if wraps =>
+              t.show(acts_shown, fn(a) {
+                a.box(fn(ab) {
+                  @sf.style_node(ab, fn() { sec_acts_under })
+                  f(ab)
+                })
+                |> ignore
+              })
+            _ => ()
+          }
         })
         |> ignore
         match end {
@@ -491,8 +600,8 @@ fn sec_line_node(
           None => ()
         }
         match acts {
-          Some(f) => r.show(acts_shown, f)
-          None => ()
+          Some(f) if !wraps => r.show(acts_shown, f)
+          _ => ()
         }
       })
       |> ignore
@@ -511,16 +620,23 @@ fn sec_do_node(
   primary? : Bool = false,
 ) -> Unit {
   match @sf.look_node(parent) {
-    Narrow =>
-      parent.pick(busy, fn(p, at_work) {
-        if at_work {
-          @sf.spinner_node(p, size=sec_spin) |> ignore
-        } else {
-          @sf.tap_text_node(p, label, press)
-        }
-      })
+    Narrow => sec_tap_do_node(parent, label, press, busy)
     Wide => @sf.button_node(parent, label, press, tone=if primary { Primary } else { Ghost }, busy~) |> ignore
   }
+}
+
+///|
+/// What a row does as words in the link's ink (the library's tap_text_node: its words where the row's start, its room
+/// to be pressed round them), a spinner in their place while it is at work: a narrow row's at its end, and a change
+/// not in effect's 知道了 at either width.
+fn sec_tap_do_node(parent : @view.View, label : () -> String, press : () -> Unit, busy : () -> Bool) -> Unit {
+  parent.pick(busy, fn(p, at_work) {
+    if at_work {
+      @sf.spinner_node(p, size=sec_spin) |> ignore
+    } else {
+      @sf.tap_text_node(p, label, press)
+    }
+  })
 }
 
 ///|
@@ -1012,6 +1128,36 @@ let sec_actions_gap : Double = 10.0
 
 ///|
 let sec_open_foot_gap : Double = 12.0
+
+///|
+/// A change not in effect (pending_node's rows): wide, a card's row with its words from its top; narrow, a group's row
+/// so. Its mark beside its first line, its words the body's on as many lines as they take, why under them the meta's.
+// kept across runs: a value (no field of it changes)
+let sec_pending_row : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(sec_row_least), gap=S3, align=AStart)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_top : @ui.Style = @ui.css("align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_mark : @ui.Style = @ui.css("pt=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_words : @ui.Style = @ui.style(w=@sf.grow, gap=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_ui : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_body : @ui.TextStyle = @sf.body.then(@sf.full_words)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// A narrow row's first line: its title and what is at its end (row_lines' row_first_line).

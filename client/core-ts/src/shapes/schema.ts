@@ -1907,6 +1907,14 @@ export const SHAPES: Record<string, Shape> = {
     ["ownLock", opt("bool"), { doc: "Its person bound a lock of their own here that this app is not on: the stations let it in on that lock\nalone, so it waits however the workspace's names it, and `lock.pair` asks to join that one (`pair` its try)." }],
     ["pair", opt("LockPair"), { doc: "Its try to be approved face to face (or made one that signs), once it began (`lock.pair`)." }],
   ], { doc: "This device in the workspace's lock." }),
+  LockPending: struct([
+    ["id", "String", { doc: "Which one (`lock.pendingDismiss`, `adb.personalPendingDismiss`); in a workspace's `lock`, one of the person's own lock begins `own:`." }],
+    ["text", "String", { said: true, doc: "Its sentence: what it does and what it waits for, or that it did not take effect and why." }],
+    ["state", "String", { doc: "`waiting` for a station of the lock to take it; `failed` (`dismissText` drops it)." }],
+    ["stations", vec("String"), { said: true, doc: "The stations it waits for, by name (three at most)." }],
+    ["why", opt("String"), { said: true, doc: "Failed for another reason than a change made meanwhile: that reason, in the station's words." }],
+    ["dismissText", opt("String"), { doc: "A failed one's button that drops it (知道了)." }],
+  ], { doc: "A change signed here that no station took yet (client/core-ts/src/lock-pending.ts): not in effect, shown as such." }),
   LockView: struct([
     ["available", "bool", { doc: "Whether the control plane keeps locks (still.fail cloud's does; Comma's not)." }],
     ["locked", "bool"],
@@ -1923,6 +1931,8 @@ export const SHAPES: Record<string, Shape> = {
     ["protected", "u32"],
     ["renew", vec("LockDevice"), { doc: "The viewer's own web devices running out soon." }],
     ["attention", "u32"],
+    ["pending", vec("LockPending"), { default: true, doc: "The changes this device made that no station of the lock took yet, oldest first, then those to its person's own lock\n(one made in both once); none from a core of before." }],
+    ["pendingText", opt("String"), { doc: "Their heading (以下改动还没有生效), while there are any." }],
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts)." }),
   LockPromptWorkspace: struct([
     ["id", "String"],
@@ -2166,6 +2176,8 @@ export const SHAPES: Record<string, Shape> = {
     ["standing", "String", { doc: "`none` (no lock yet), `member`, `outside` (a lock this device is not on), `replaced` (the cloud has another than the one pinned here)." }],
     ["devices", vec("AdbPersonalDevice"), { default: true }],
     ["pair", opt("AdbPersonalPair")],
+    ["pending", vec("LockPending"), { default: true, doc: "The changes this device made to it that no station of theirs took yet, oldest first." }],
+    ["pendingText", opt("String"), { doc: "Their heading, while there are any." }],
   ], { doc: "The person's own lock as this device has it (the `adbShare` topic's `personal`)." }),
   AdbLend: struct([
     ["station", "String"],

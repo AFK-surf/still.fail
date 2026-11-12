@@ -15,6 +15,7 @@ import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
 import { Kind } from "../trace.ts";
 import { t } from "../i18n.ts";
+import { CLOUD_WRITE_MS, cloudSilent } from "../lock-pending.ts";
 import { isObject } from "../util.ts";
 import { Wake } from "../wake.ts";
 import type { Call } from "./calls.ts";
@@ -38,6 +39,9 @@ export const hooks: {
   /// A member about to be taken out of a workspace or given another role, or a station taken out: so in its lock
   /// first, by this device's signature where it signs there (views/lock.ts).
   roster?: (inner: Inner, sub: string, workspace: string, what: Roster) => Effect.Effect<unknown, CoreError>;
+  /// A change of the roster's pending in the lock (`roster`'s `{pending: {id}}`) whose write to the cloud then failed:
+  /// dropped, so that the change is not made at all, as the call's failure says (views/lock.ts).
+  pendingDrop?: (inner: Inner, workspace: string, id: string) => void;
   /// People added to a workspace (the cloud's answer): so in its lock too, with the role given (views/lock.ts).
   added?: (inner: Inner, sub: string, workspace: string, role: string, answer: unknown) => Effect.Effect<unknown, CoreError>;
   /// A new device's connection, met face to face (views/pair.ts).
@@ -57,6 +61,9 @@ function rosterOf(method: string, path: string, body: unknown): { ws: string; wh
   const role = isObject(body) ? body.role : undefined;
   return method === "PATCH" && kind === "members" && typeof role === "string" ? { ws, what: { member: id, role } } : null;
 }
+
+// (CLOUD_WRITE_MS: src/lock-pending.ts, where the lock's own writes to the cloud end by it too)
+export { CLOUD_WRITE_MS };
 
 /// How long a write to still.fail cloud that went through waits for the account's topics read again before it answers:
 /// that read goes on after. 2026-11-11 a member added answered after 3 min 40 s, the POST itself under a second: every
@@ -147,16 +154,28 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
             // word alone (it could hold back a credential's end, let one back in, and the lock would still take them as
             // it says, an admin made a member signing as an admin there still).
             const roster = rosterOf(op.method, op.path, op.body);
-            if (roster && hooks.roster) yield* hooks.roster(inner, sub, roster.ws, roster.what);
-            let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
-            // People added: so in a locked workspace's lock too, with the role given (views/lock.ts `added`).
+            const signed = roster && hooks.roster ? yield* hooks.roster(inner, sub, roster.ws, roster.what) : null;
             const adding = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/members$/.exec(op.path) : null;
+            const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
+            // The roster's writes end by CLOUD_WRITE_MS. One whose lock's entry is pending (no station took it) and that
+            // fails here leaves nothing changed: that entry is dropped too, as the failure says (nothing saved).
+            const asked = inner.provider.request(sub, op.method, op.path, op.body, ctx);
+            const bounded = roster || adding || enrolling
+              ? Effect.flatMap(Effect.timeoutOption(asked, CLOUD_WRITE_MS), (o) => (o._tag === "Some" ? Effect.succeed(o.value) : Effect.fail(cloudSilent()))) // timer: a deadline on what a call waits for
+              : asked;
+            const pendingId = isObject(signed) && isObject(signed.pending) && typeof signed.pending.id === "string" ? signed.pending.id : null;
+            let result = yield* (pendingId !== null && roster ? Effect.tapError(bounded, () => Effect.sync(() => hooks.pendingDrop?.(inner, roster.ws, pendingId))) : bounded);
+            // The lock's entry pending (no station took it): the answer says so, the cloud's with its row as `pending`
+            // (`LockPending`), which the app says in place of its done words.
+            const pendingRow = (said: unknown) => (isObject(said) && isObject(said.pending) ? said.pending : null);
+            const withPending = (row: unknown) => (row === null ? result : { ...(isObject(result) ? result : {}), pending: row });
+            if (roster) result = withPending(pendingRow(signed));
+            // People added: so in a locked workspace's lock too, with the role given (views/lock.ts `added`).
             if (adding && hooks.added) {
               const role = isObject(op.body) && typeof op.body.role === "string" ? op.body.role : "member";
-              yield* hooks.added(inner, sub, decodeURIComponent(adding[1]!), role, result);
+              result = withPending(pendingRow(yield* hooks.added(inner, sub, decodeURIComponent(adding[1]!), role, result)));
             }
             // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
-            const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
             if (enrolling && hooks.enrolled) result = yield* hooks.enrolled(inner, sub, decodeURIComponent(enrolling[1]!), result);
             // A workspace made: the invite code kept through signing in is done with.
             if (made) prefs.inviteUsed(inner.data);

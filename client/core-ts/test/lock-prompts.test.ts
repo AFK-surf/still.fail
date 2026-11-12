@@ -11,7 +11,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
-import { BEHIND_MS, BEHIND_TRIES, Lock, held, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
+import { BEHIND_MS, BEHIND_TRIES, Lock, fold, held, pendingHeld, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
@@ -122,13 +122,15 @@ test("a station's refusal names the workspace and the code to approve, where the
 });
 
 
-test("a change to the lock is done once the cloud keeps it, not once every station of the lock has heard (one offline held it up)", async () => {
+test("a change to the lock answers though its one station is offline, not once every station of the lock has heard: pending, the cloud not sent it", async () => {
   // `st` is protected, and never answers what it is brought: offline.
   const r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: ST, name: "studio" }], {}, ME, [phone]) }), (host) => {
     stationLater(host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/lock") ? new Promise(() => {}) : undefined));
   }, ST);
-  await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
-  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
+  const done = await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
+  assert.equal(done.pending.state, "waiting");
+  assert.deepEqual(r.cloud.posted, []);
+  assert.deepEqual(pendingHeld(r.core.inner, "ws").map((p) => [p.entry.kind, (p.entry.body as { id: string }).id]), [["device.remove", PHONE]]);
 });
 
 test("a change the cloud kept, its answer lost on the way back: done, not said to have failed", async () => {
@@ -163,7 +165,9 @@ test("a station that takes none of the workspace's members, the lock turned on a
   const call = r.core.inner.stations.requests.call.bind(r.core.inner.stations.requests);
   r.core.inner.stations.requests.call = ((addr: { station: string }, method: string, path: string, ...rest: unknown[]) =>
     addr.station === ST && method === "GET" && path.startsWith("/lock") ? Effect.fail(new CoreError("lock_station", t("core-logic.mesh.lock_station.unpinned"))) : (call as any)(addr, method, path, ...rest)) as never;
-  await r.ask("lock.joinStation", { workspace: "ws", station: ST });
+  const done = await r.ask("lock.joinStation", { workspace: "ws", station: ST });
+  // (pending until the station shows it took it; the cloud, its only way there, sent it all the same)
+  assert.equal(done.pending.state, "waiting");
   assert.deepEqual(r.cloud.chains.get("ws")!.slice(1).map((e) => [e.kind, (e.body as { key: string }).key]), [["station", ST]]);
 });
 
@@ -430,18 +434,26 @@ test("a member or a station taken out of a locked workspace, or a member given a
   answer(r);
   await r.watch({ topic: "lock", workspace: "ws" });
   // (an admin the cloud made a member would still sign as one in the lock)
+  // (its one station offline: each entry pending, signed before the cloud is asked, and the cloud not sent it)
+  const last = () => { const p = pendingHeld(r.core.inner, "ws").at(-1)!; return [p.entry.kind, p.entry.body]; };
   await r.ask("workspace.setRole", { account: "s1", workspace: "ws", member: "s2", role: "admin" });
-  assert.deepEqual([r.cloud.chains.get("ws")!.at(-1)!.kind, r.cloud.chains.get("ws")!.at(-1)!.body], ["member", { sub: "s2", email: "b@x.com", role: "admin" }]);
-  assert.deepEqual(said, ["lock", "cloud PATCH /v1/workspaces/ws/members/s2"]);
+  assert.deepEqual(last(), ["member", { sub: "s2", email: "b@x.com", role: "admin" }]);
+  assert.deepEqual(said, ["cloud PATCH /v1/workspaces/ws/members/s2"]);
   said.length = 0;
   await r.ask("workspace.removeMember", { account: "s1", workspace: "ws", member: "s2" });
-  const after = r.cloud.chains.get("ws")!;
-  assert.deepEqual([after.at(-1)!.kind, after.at(-1)!.body], ["member.remove", { sub: "s2" }]);
-  assert.deepEqual(said, ["lock", "cloud DELETE /v1/workspaces/ws/members/s2"], "out of the lock before the cloud is asked");
+  assert.deepEqual(last(), ["member.remove", { sub: "s2" }]);
+  assert.deepEqual(said, ["cloud DELETE /v1/workspaces/ws/members/s2"], "out of the lock (pending) before the cloud is asked");
   said.length = 0;
   await r.ask("workspace.removeStation", { account: "s1", workspace: "ws", station: ST });
-  assert.deepEqual([r.cloud.chains.get("ws")!.at(-1)!.kind, r.cloud.chains.get("ws")!.at(-1)!.body], ["station.remove", { key: ST }]);
-  assert.deepEqual(said, ["lock", `cloud DELETE /v1/workspaces/ws/stations/${ST}`]);
+  // (its one station: the lock names none after its removal, which is the cloud's then, as a lock that never named one
+  // is, before the cloud is asked; and what was pending is brought there then)
+  assert.equal(said[0], "lock");
+  assert.ok(said.includes(`cloud DELETE /v1/workspaces/ws/stations/${ST}`), said.join());
+  await r.host.time.pass(1_000);
+  assert.ok(held(r.core.inner, "ws")!.entries.some((e) => e.kind === "station.remove" && (e.body as { key: string }).key === ST));
+  // (nothing left pending or failed: the role given and the removal brought in the order made, each as if made then)
+  assert.deepEqual(pendingHeld(r.core.inner, "ws").map((p) => [p.entry.kind, p.state]), []);
+  assert.ok(!fold(held(r.core.inner, "ws")!.entries).members.has("s2"), "s2 out");
   // One the lock does not name: the cloud's alone.
   said.length = 0;
   const length = r.cloud.chains.get("ws")!.length;
@@ -485,7 +497,8 @@ test("people added to a locked workspace are in its lock with the role given: by
     });
   }, ST);
   await r.watch({ topic: "lock", workspace: "ws" });
-  const last = (n: number) => r!.cloud.chains.get("ws")!.slice(-n).map((e) => [e.kind, e.body]);
+  // (its one station offline: what is signed is pending, the cloud not sent it)
+  const last = (n: number) => pendingHeld(r!.core.inner, "ws").slice(-n).map((p) => [p.entry.kind, p.entry.body]);
 
   await r.ask("workspace.addMembers", { account: "s1", workspace: "ws", role: "admin", emails: ["C@x.com", "d@x.com", "b@x.com"] });
   // (b@x.com the cloud had already, and the lock has as a member: left as they are)
@@ -504,10 +517,15 @@ test("people added to a locked workspace are in its lock with the role given: by
   void admitted.then(() => (over = true));
   await r.host.time.passUntil(20000, () => over);
   await admitted;
-  assert.deepEqual(last(2), [["member", { sub: "s5", email: "d@x.com", role: "admin" }], ["member.remove", { sub: "pending:d@x.com" }]]);
+  // (the name held for them only pending: that adding dropped, their role from it)
+  assert.deepEqual(last(1), [["member", { sub: "s5", email: "d@x.com", role: "admin" }]]);
+  const named = () => pendingHeld(r!.core.inner, "ws").filter((p) => (p.entry.body as { sub?: string }).sub === "pending:d@x.com").length;
+  assert.equal(named(), 0);
 
-  // One added and taken back before they signed in: out of the lock too.
+  // One added and taken back before they signed in: the adding dropped, nothing signed.
   await r.ask("workspace.addMembers", { account: "s1", workspace: "ws", role: "admin", emails: ["d@x.com"] });
+  assert.equal(named(), 1);
   await r.ask("workspace.removeAdded", { account: "s1", workspace: "ws", email: "d@x.com" });
-  assert.deepEqual(last(1), [["member.remove", { sub: "pending:d@x.com" }]]);
+  assert.equal(named(), 0);
+  assert.equal(r.cloud.chains.get("ws")!.length, 1);
 });

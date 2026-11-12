@@ -345,3 +345,37 @@ test "wide: while the device looks for its trusted devices, 没收到？重新�
   t.frame()
   assert_true(calls.contains("lock.pair"), msg="\{Repr(calls)}")
 }
+
+///|
+test "a waiting device's code approved, no station having taken it yet: the code put away, its sentence said, not the done words" {
+  new_run()
+  let said = "批准设备 Pixel 9：已记下，等 Willow 上线后生效"
+  let answers : Array[(Result[Json, Json]) -> Unit] = []
+  let base = fixture("lock-code")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "lock.pairCode" {
+        answers.push(done)
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  assert_true(t.ime().0)
+  t.type_text("123456")
+  assert_eq(answers.length(), 1)
+  answers[0](
+    Ok({
+      "t": "approved",
+      "workspaces": ["ws1"],
+      "failed": [],
+      "pending": { "id": "p9", "text": said, "state": "waiting", "stations": ["Willow"] },
+    }),
+  )
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfbase.toast_words(), said)
+  assert_false(t.ime().0)
+  assert_true(t.find(said) is Some(_))
+}

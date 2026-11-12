@@ -39,7 +39,10 @@
 //     shows the code; it is in the workspace's lock as a web page's for 30 days at most, let in, signing nothing, no
 //     vault, her own lock untouched; started again, let in with nobody asked; B takes it out on 设置 › 安全: refused;
 //   17 a station enrolled in the first workspace with its token alone, not in its lock (#5540): B reads it alone and
-//     still holds the lock the first keeps, started again too; B's 「保护」 takes it in and it keeps the lock; out again.
+//     still holds the lock the first keeps, started again too; B's 「保护」 takes it in and it keeps the lock; out again;
+//   18 no station up, the cloud up: B removes A installed anew, answered within seconds as pending, its page showing it
+//     waiting for the station by name, A installed anew still listed; the station started: within seconds the removal
+//     is on its chain, nothing pending, A installed anew refused.
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { readFileSync, writeFileSync } from "node:fs";
@@ -287,14 +290,17 @@ try {
     log(`  C sees: ${short(st)}`);
   });
 
-  // ── D taken off while the station is away: refused once it is back ──
-  await must("A removes D from alice's own lock while the station is frozen", async () => {
+  // ── D taken off while the station is away: pending (no station took it, and the cloud's taking it would count for
+  // nothing), still on alice's lock as A shows it; refused once the station is back and has taken it ──
+  await must("A removes D from alice's own lock while the station is frozen: pending, D still on her lock", async () => {
     stationDo("freeze");
-    await a.call("adb.personalRemove", { sub, key: dKey });
-    await a.personal((p) => p.devices.length === 2, 60_000);
+    const r = await a.call("adb.personalRemove", { sub, key: dKey });
+    if (r?.pending?.state !== "waiting") throw new Error(`not pending: ${JSON.stringify(r)?.slice(0, 300)}`);
+    await a.personal((p) => p.devices.length === 3 && (p.pending ?? []).some((x: J) => x.state === "waiting"), 60_000);
   });
-  await check("the station back: D refused, gone from the workspace's lock, the vault keyed anew for A and B", async () => {
+  await check("the station back: D refused, gone from alice's lock and the workspace's, nothing pending, the vault keyed anew for A and B", async () => {
     stationDo("thaw");
+    await a.personal((p) => p.devices.length === 2 && (p.pending ?? []).length === 0, 60_000);
     await a.lock(workspace, (l) => !lockDevices(l).some((x) => x.id === dBase), 120_000);
     log(`  D sees: ${short(await d.stationState(workspace, (s) => s.state !== "online", 120_000))}`);
     await refusedVault(d);
@@ -1445,6 +1451,36 @@ try {
     await b.stationState(workspace, (s) => s.state === "online", 60_000);
     await b.lock(workspace, (l) => l.locked && l.signs, 30_000);
     await opens(b);
+  });
+  // ── round 18: no station up (3b-2). The workspace's one station left frozen (asked, it never answers), the cloud up:
+  // B removes A installed anew (its own lock bound here, so off that first and out of the workspace's after it,
+  // views/lock.ts `run`'s removeDevice). No station takes it: pending, said so at once, nothing on the chains held
+  // (A installed anew still listed), the cloud's taking it counting for nothing; the station back, B brings it as it
+  // reads it again, and A installed anew is refused ──
+  const firstName = (stationRow(await b.lock(workspace, (l) => stationRow(l, firstId) !== undefined, 30_000), firstId)?.name ?? "") as string;
+  stationDo("freeze");
+  try {
+    await check("no station up: B removes A installed anew, answered within seconds as pending; B's page shows it waiting for the station by name, A installed anew still listed", async () => {
+      const t0 = Date.now();
+      const r = await b.call("lock.removeDevice", { workspace, device: eId });
+      const ms = Date.now() - t0;
+      log(`  answered after ${ms} ms: ${JSON.stringify(r)?.slice(0, 300)}`);
+      if (ms > 10_000) throw new Error(`answered after ${ms} ms`);
+      if (r?.pending?.state !== "waiting") throw new Error("not answered as pending");
+      const l = await b.lock(workspace, (l) => (l.pending ?? []).some((x: J) => x.state === "waiting" && (x.stations ?? []).includes(firstName)), 10_000);
+      log(`  B's page: ${JSON.stringify(l.pending)?.slice(0, 300)}`);
+      if (!lockDevices(l).some((x) => x.id === eId)) throw new Error("A installed anew is not listed while its removal is pending");
+    });
+  } finally {
+    stationDo("thaw");
+  }
+  await check("the station started: within seconds the removal is on its chain, nothing pending on B's page, A installed anew refused", async () => {
+    const t1 = Date.now();
+    await whenChanged([stationData], () => (keptAt(stationData) ?? []).some((x) => x.kind === "device.remove" && x.body?.id === eId), 20_000, () => "the station's chain has no removal of A installed anew");
+    log(`  on the station's chain ${Date.now() - t1} ms after it was up`);
+    await b.lock(workspace, (l) => (l.pending ?? []).length === 0 && !lockDevices(l).some((x) => x.id === eId), 20_000);
+    await e.restart();
+    log(`  A installed anew sees: ${short(await stationIn(e, firstId, (s) => s.state !== "online" && s.state !== "connecting", 60_000))}`);
   });
 } catch (e) {
   fail("the run", e);
