@@ -6,4 +6,5 @@ options(
     "halt_native.mbt": [ "native" ],
     "halt_other.mbt": [ "js", "wasm", "wasm-gc" ],
   },
+  "native-stub": [ "halt_flush.c" ],
 )
