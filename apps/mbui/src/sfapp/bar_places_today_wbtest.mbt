@@ -3,7 +3,7 @@
 // window's tree, the stack's entry before and after it, and what the client tells the core on the way (the made-up core
 // under the app's own client, late_core_wbtest's switch_core: the messages a run's trace keeps), held to what it told
 // as every switch made its page anew (the 2026-11-12 baseline, `today_baseline`); then, of each place made as nodes,
-// what is as it was and what is anew once it is come back to.
+// that it is as it was left once it is come back to (its scroll, its choice: the owner, 2026-11-12, 「三样都记得」).
 
 ///|
 /// A second of frames after a switch or a step: every way it sets off (a place's way in, the bar's springs, a page's
@@ -354,7 +354,7 @@ fn today_looks(t : @ui.Tester, typed : String) -> String {
 }
 
 ///|
-test "bar places today: each place made as nodes left for another and come back to: what is as it was and what is anew" {
+test "bar places today: each place made as nodes left for another and come back to is as it was left: its scroll and its choice" {
   for place in ["chats", "connects", "usage"] {
     new_run()
     let src = fixture("home")
@@ -391,6 +391,9 @@ test "bar places today: each place made as nodes left for another and come back 
         }
     }
     t.run_for(kept_switch_over_ms)
+    if place == "connects" {
+      assert_true(@settings.connects_mine.val, msg="连接's 我的 chosen")
+    }
     // scrolled: a finger up the page
     t.drag(195.0, 650.0, 195.0, 350.0, steps=20)
     t.run_for(kept_glide_over_ms)
@@ -407,7 +410,8 @@ test "bar places today: each place made as nodes left for another and come back 
         None => "-"
       }
     }
-    println("bar-keep \{place}: scroll mark \{Repr(marked.map(fn(m) { m.0 }))} at \{mark_y()} as left")
+    let left_y = mark_y()
+    println("bar-keep \{place}: scroll mark \{Repr(marked.map(fn(m) { m.0 }))} at \{left_y} as left")
     println("bar-keep \{place}: as left: \{left} \{choice()} entry \{today_entry()}")
     // to 额度 (an old view's place) and back, by a finger on the bar
     t.tap(xs[3], y)
@@ -420,15 +424,23 @@ test "bar places today: each place made as nodes left for another and come back 
     println("bar-keep \{place}: scroll mark at \{mark_y()} come back")
     println("bar-keep \{place}: come back: \{back} \{choice()} entry \{today_entry()}")
     println("bar-keep \{place}: same as left: \{left == back}")
-    // (Home's list where it was left, to the point (made anew it came back 14 points off: kept, it is the same nodes);
-    // 用量's at its top and its days as chosen, 连接's 我的 back to all, as they were as each page was made anew:
-    // places_back_as_made)
+    // (each as it was left, to the point, the same nodes taken back (made anew Home's list came back 14 points off):
+    // Home's list, filter and search, 用量's list and its days, 连接's list and its 我的; the owner, 2026-11-12:
+    // 「三样都记得」. Only the keyboard's focus is lost at the switch)
+    let what = fn(looks : String) { looks.split(" focus ").to_array()[0].to_owned() }
+    assert_eq(mark_y(), left_y, msg="\{place}: its list where it was left")
+    assert_eq(what(back), what(left), msg="\{place}: what shows and what is chosen as left")
     match place {
       "chats" => assert_eq(mark_y(), "[318]", msg="Home's list where it was left")
-      "usage" => assert_true(back.has_prefix("mid Some((\"Token 活跃度\", 340)) chosen [\"按天\", \"按人\", \"30 天\"]"), msg=back)
+      "usage" => {
+        // (scrolled as left: not at its top, where 用量 opens on its activity at 340)
+        assert_false(left.has_prefix("mid Some((\"Token 活跃度\", 340))"), msg="用量 scrolled before it was left: \{left}")
+        assert_true(back.contains("\"30 天\""), msg="用量's days as chosen: \{back}")
+      }
       _ => {
-        assert_false(@settings.connects_mine.val, msg="连接's 我的 left as it went")
-        assert_true(t.query(Button, label=connects_filter_label()) is Some(_), msg="连接's filter all again")
+        assert_true(@settings.connects_mine.val, msg="连接's 我的 still on")
+        let mine_label = @sf.t("web-main.filter.connects.named", args=[("named", @sf.t("web-main.filter.connects.mine"))])
+        assert_true(t.query(Button, label=mine_label) is Some(_), msg="连接's filter shows 我的")
       }
     }
     // a layer opened from the page (a menu), then the place switched with no finger (the menu's scrim over the bar),

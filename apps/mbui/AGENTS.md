@@ -97,10 +97,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     anew at each switch was the largest cause of hangs on Home): its page's nodes put on the stack's shelf at rest and
     taken back as it is switched to (sfbase's `nav_root_kept`: the bar, back to the chats, the history; the rail and the
     wide frames replace as before; a page an old view draws is never kept). Kept pages are let go as the workspace in
-    view changes and as the tier does. What a place had anew when it was made at each switch it still has as it comes
-    back, by one switch (`places_back_as_made`, sfbase's pages.mbt; a decision pending with the owner): 用量's and 连接's lists at their top, 连接's 我的 as `@settings.left` leaves it; Home's list, filter and
-    search and 用量's days were kept apart from the page and are as they were. The keyboard's focus is lost at the switch.
-    A page made for a place that holds what a page made anew would not (its own choice, its scroll) says it by its `anew`.
+    view changes and as the tier does (only then is what the page kept let go, `@settings.left`). A kept place comes
+    back as it was left: its scroll, 连接's 我的, as Home's list, filter and search and 用量's days (the owner,
+    2026-11-12: 「三样都记得」). The keyboard's focus is still lost at the switch. A page made for a place says nothing
+    of its own for it: being kept is all it takes.
   - Nothing looks like loading within 300 ms of switching workspace (the user, 2026-11-11: 「在三百 ms 内都不应该让用户
     感觉到加载」, 「按理说一帧就能处理完」): the screen stays as it was till all the new workspace's first screen reads
     is answered, `switch_wait_ms` at most, and switches in the press's frame where it is answered already

@@ -13,9 +13,7 @@
 /// as the core's connects and stations views say them now, all of them or the viewer's as its filter says (kept while
 /// the page is on the stack: @settings.connects_mine). What it does (添加连接) at its title's end, or where a frame's
 /// bar names it, in that bar (`bar_actions`). `here`: who and where, as that changes; `stint`: its time on top (the
-/// pictures asked for on it); `tips`: the window's, else its own over it. `anew`: given what puts it as a page made now
-/// would be (its list at its top, its filter as @settings.connects_mine says), for a holder that keeps it as it goes (a
-/// place of the bar's on 小屏) to call as it puts it back.
+/// pictures asked for on it); `tips`: the window's, else its own over it.
 pub fn connects_node(
   v : @view.View,
   src : Source,
@@ -29,7 +27,6 @@ pub fn connects_node(
   width? : () -> Double,
   tips? : @sf.TipLayer,
   bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
-  anew? : (() -> Unit) -> Unit,
 ) -> Unit {
   // (what is said of what the pointer rests on: the frame's, over the window; else drawn over the page in the page's own
   // node, each tip its holder over all of it there: history_node's)
@@ -42,17 +39,6 @@ pub fn connects_node(
   let set_mine = fn(m : Bool) {
     connects_mine.val = m
     mine.set(m)
-  }
-  // (where its list is scrolled to: its own, as page_node's would be; `anew` puts it at its top and its filter as a
-  // page made now would have it)
-  let scroll = @view.Scroll::list()
-  match anew {
-    Some(f) =>
-      f(fn() {
-        scroll.put(0.0)
-        set_mine(connects_mine.val)
-      })
-    None => ()
   }
   let topic = fn() { (core.topic)("connects", { "scope": str(here().workspace), "mine": Json::boolean(mine.get()) }).get() }
   let stations = fn() {
@@ -114,7 +100,6 @@ pub fn connects_node(
   }
   @sf.page_node(
     v,
-    scroll~,
     fn() { @sf.t("android-settings.connects.title") },
     fn() {
       let out : Array[String] = []
