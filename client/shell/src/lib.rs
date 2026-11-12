@@ -1061,6 +1061,24 @@ impl Inner {
                 #[cfg(not(unix))]
                 Err("Unix sockets are Unix's".into())
             }
+            // Two sockets carried into each other, both ways, here (each side's end said to the other as it comes),
+            // answered once both ways ended: what a station's program passes on whole, with no step of its own per piece.
+            "tcp.pipe" => {
+                let ids = a.get("ids").and_then(Value::as_array).ok_or("missing ids")?;
+                let id = |i: usize| ids.get(i).and_then(Value::as_u64).ok_or_else(|| "missing ids".to_string());
+                let (one, two) = (self.drop_handle(id(0)?), self.drop_handle(id(1)?));
+                let (Some(Handle::Tcp { read: r1, write: w1 }), Some(Handle::Tcp { read: r2, write: w2 })) = (one, two) else {
+                    return Err("not two tcp connections".into());
+                };
+                async fn carry(from: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>, to: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>) -> u64 {
+                    let (mut from, mut to) = (from.lock().await, to.lock().await);
+                    let n = tokio::io::copy(&mut *from, &mut *to).await.unwrap_or(0);
+                    let _ = to.shutdown().await;
+                    n
+                }
+                let (there, back) = tokio::join!(carry(r1, w2), carry(r2, w1));
+                Ok(Answer::json(json!({ "there": there, "back": back })))
+            }
             // The next connection to a listening socket: a socket read and written as `tcp.open`'s are (`tcp.read`,
             // `tcp.write`, `tcp.end`, `tcp.close`), and who it came from.
             "tcp.accept" => {
@@ -2414,6 +2432,42 @@ mod tests {
             let p = path.clone();
             serve(94_050, unix["id"].as_u64().unwrap(), &move || Box::new(std::os::unix::net::UnixStream::connect(&p).unwrap()));
         }
+    }
+
+    #[test]
+    fn pipes_two_sockets_into_each_other() {
+        use std::io::{Read, Write};
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().join("shell"), complete, std::ptr::null_mut()).unwrap();
+        let call = |id: u64, op: &str, a: Value| {
+            shell.call(id, op.into(), a.to_string().as_bytes(), None);
+            let (json, error, _) = answer(id);
+            assert_eq!(error, "", "{op}");
+            serde_json::from_str::<Value>(&json).unwrap()
+        };
+        let front = call(95_001, "tcp.listen", json!({ "port": 0 }));
+        let target = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = std::net::TcpStream::connect(("127.0.0.1", front["port"].as_u64().unwrap() as u16)).unwrap();
+        let accepted = call(95_002, "tcp.accept", json!({ "id": front["id"] }));
+        let opened = call(95_003, "tcp.open", json!({ "port": target.local_addr().unwrap().port() }));
+        let (mut server, _) = target.accept().unwrap();
+        shell.call(95_004, "tcp.pipe".into(), json!({ "ids": [accepted["id"], opened["id"]] }).to_string().as_bytes(), None);
+        client.write_all(b"hello").unwrap();
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+        let mut got = Vec::new();
+        server.read_to_end(&mut got).unwrap();
+        assert_eq!(got, b"hello", "carried there, and its end");
+        server.write_all(b"back").unwrap();
+        drop(server);
+        let mut back = Vec::new();
+        client.read_to_end(&mut back).unwrap();
+        assert_eq!(back, b"back", "carried back, and its end");
+        let (json, error, _) = answer(95_004);
+        assert_eq!(error, "");
+        assert_eq!(serde_json::from_str::<Value>(&json).unwrap(), json!({ "there": 5, "back": 4 }));
+        // the sockets are the pipe's now: not the shell's to read
+        shell.call(95_005, "tcp.read".into(), json!({ "id": accepted["id"] }).to_string().as_bytes(), None);
+        assert_ne!(answer(95_005).1, "");
     }
 
     trait ReadWrite: std::io::Read + std::io::Write {}

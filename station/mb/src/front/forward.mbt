@@ -1,34 +1,13 @@
 // The station's entrances in MoonBit (station/AGENTS.md: the entrance moves to station/mb's program, what it does not
 // answer itself carried to Node). So far: a listening socket served by carrying each connection, byte for byte both
 // ways, to a port of this machine (`forward`), as the Windows launcher's entrance does for Node (native/launcher's
-// proxy.rs).
+// proxy.rs): the shell carries its bytes (`tcp.pipe`), none of them through this program.
 
 ///|
-/// A socket of the shell's (`tcp.*`): read, written, ended, let go.
+/// A socket of the shell's (`tcp.*`).
 struct Conn {
   host : @host.Host
   id : Json
-}
-
-///|
-/// What came next; none once the other end ended what it sends.
-async fn Conn::read(self : Conn) -> Bytes? {
-  let (said, carried) = self.host.shell("tcp.read", { "id": self.id })
-  if said is { "end": True, .. } {
-    return None
-  }
-  Some(carried.unwrap_or(b""))
-}
-
-///|
-async fn Conn::write(self : Conn, bytes : Bytes) -> Unit {
-  ignore(self.host.shell("tcp.write", { "id": self.id }, bytes~))
-}
-
-///|
-/// Says the end of what this side sends (its other half still read).
-async fn Conn::end(self : Conn) -> Unit {
-  ignore(self.host.shell("tcp.end", { "id": self.id }))
 }
 
 ///|
@@ -36,15 +15,6 @@ async fn Conn::close(self : Conn) -> Unit {
   ignore(self.host.shell("tcp.close", { "id": self.id })) catch {
     _ => ()
   }
-}
-
-///|
-/// What `from` sends written to `to` until `from` ends it, then the end said to `to`.
-async fn pump(from : Conn, to : Conn) -> Unit {
-  while from.read() is Some(bytes) {
-    to.write(bytes)
-  }
-  to.end()
 }
 
 ///|
@@ -79,27 +49,23 @@ pub async fn forward(host : @host.Host, listening : Listening, to : Int) -> Unit
       host.rt.fork(name="forward", () => {
         let opened = try { Ok(host.shell("tcp.open", { "port": Json::number(to.to_double()) })) } catch { e => Err(e) }
         guard opened is Ok(({ "id": sid, .. }, _)) else {
-          @host.note("forward: 127.0.0.1:\{to} not reached: \{match opened { Err(@wire.ShellError(m)) => m; _ => "no socket" }}")
+          @host.note("forward: 127.0.0.1:\{to} not reached: \{match opened { Err(e) => message(e); _ => "no socket" }}")
           client.close()
           return
         }
-        let server = { host, id: sid }
-        let back = host.rt.fork(name="forward back", () => pump(server, client) catch {
-          e => @host.note("forward: the server's side failed: \{e}")
-        })
-        // (the client gone mid-way: the server told the end, so it ends its side too and the way back ends)
-        pump(client, server) catch {
-          e => {
-            @host.note("forward: the client's side failed: \{e}")
-            server.end() catch {
-              _ => ()
-            }
-          }
+        // (carried by the shell itself, both ways: nothing of it passes through this program)
+        ignore(host.shell("tcp.pipe", { "ids": [client.id, sid] })) catch {
+          e => @host.note("forward: a connection failed: \{message(e)}")
         }
-        back.join()
-        client.close()
-        server.close()
       }),
     )
+  }
+}
+
+///|
+fn message(e : Error) -> String {
+  match e {
+    @wire.ShellError(m) => m
+    e => e.to_string()
   }
 }
