@@ -232,8 +232,8 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 /// (tree_laid_spare), each as a new one; `fresh` (a Tester's look at it, tester_corners.mbt): each worked out anew
 /// (Tree::laid_held_toward, Node::new), nothing kept touched.
 /// `facts`: each besides as it is said to be laid out and its words as drawn (Ctx::tree_facts,
-/// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else. `steady`: which scroll what they
-/// hold (tree_scroller_at), for sizes steady. Which of the tree's each of the frame's nodes is (tree_frame_ids) is
+/// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else. `steady`: which a scroller holds
+/// and moves (tree_scroll_held_at), for sizes steady. Which of the tree's each of the frame's nodes is (tree_frame_ids) is
 /// said while `f` runs, where it is not `laid` (none of whose asks reads it), and let go after.
 fn[T] Ctx::with_tree_nodes(
   self : Ctx,
@@ -366,8 +366,8 @@ fn[T] Ctx::with_tree_nodes(
         corner_scale_at[i] = s
       }
     }
-    if steady && tree.is_scroller(d.id) {
-      tree_scroller_at.add(i)
+    if steady && tree.is_scroll_held(d.id) {
+      tree_scroll_held_at.add(i)
     }
     if facts {
       self.tree_facts(i, n, d, if holder >= 0 { Some(held[holder].0) } else { None }, contents, tree)
@@ -441,7 +441,7 @@ fn[T] Ctx::with_tree_nodes(
   tree_draws_at.clear()
   tree_fixed_h_at.clear()
   tree_moved_at.clear()
-  tree_scroller_at.clear()
+  tree_scroll_held_at.clear()
   tree_nodes_from.val = -1
   for r in reparented {
     self.nodes[r.0].parent = r.1

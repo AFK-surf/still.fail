@@ -280,3 +280,77 @@ test "sizes steady: a dead stop said as the frame it stops on is drawn, a turn b
   // (turned back through rest between two frames slowing at one rate: none)
   assert_true(!said([0.0, -30.0, -50.0, -60.0, -60.0, -50.0, -30.0]))
 }
+
+// A page's list's foot (View::scrolls_window's `foot`) stands pinned at the foot of the scroller, over what scrolls,
+// not inside `scroll_held`: what stands at the foot's bottom stays in place in the window when room grows over it inside
+// the foot, and stays in place when rows measured above what shows correct the list's scroll (`Tree::scroll_corrected`),
+// while a real step inside the foot still jolts.
+
+///|
+/// A page's list 400 by 200 of eighty rows 50 tall (`est` 20, so scrolling up corrects what was counted above what
+/// shows), following its foot, with a pinned foot holding `over` room above a 40-tall bar "脚底" and `under` room
+/// below it: sizes steady said but not held (`steady_faults`).
+fn steady_list_foot_case(over : @signals.Signal[Double], under : @signals.Signal[Bool]) -> Tester {
+  let scroll = @view.Scroll::list()
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, words_over_held=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      col.scrolls_window(
+        scroll,
+        fn() { Array::makei(80, fn(i) { i }) },
+        est=20.0,
+        follows=fn() { true },
+        foot=fn(f) {
+          f.box(fn(g) { g.height(By(fn() { Some(over.get()) })).shrink(Is(0.0)) |> ignore }) |> ignore
+          f.box(fn(b) {
+            b.width(Is(Some(160.0))).height(Is(Some(40.0))).shrink(Is(0.0)).ground(Is(0x336699FFL)).words(Is("脚底"))
+            |> ignore
+          })
+          |> ignore
+          f.show(at_once=true, fn() { under.get() }, fn(u) {
+            u.box(fn(g) { g.height(Is(Some(40.0))).shrink(Is(0.0)) |> ignore }) |> ignore
+          })
+        },
+        fn(b, k) {
+          b.width(Is(Some(160.0))).height(Is(Some(50.0))).ground(Is(0x445566FFL)).words(Is("第\{k}行")) |> ignore
+        },
+      )
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t
+}
+
+///|
+test "sizes steady in a page's list's pinned foot: room growing over what stands at its bottom, or the list correcting its scroll as it reads up, is no jolt; a step of what is in the foot still is" {
+  // (room growing 60 at once over "脚底" inside the pinned foot: the foot's top goes up 60, "脚底" stays at y=160)
+  let over = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let under = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = steady_list_foot_case(over, under)
+  let rest = steady_faults(t, 4)
+  over.set(60.0)
+  let grown = steady_faults(t, 4).filter(fn(f) { f.contains("脚底") })
+  // (scrolled up into rows taller than `est`, correcting the list's scroll: "脚底" stays pinned at y=160)
+  let over2 = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let under2 = @signals.signal(false, same=fn(a, b) { a == b })
+  let r = steady_list_foot_case(over2, under2)
+  steady_faults(r, 4) |> ignore
+  r.move_to(80.0, 80.0)
+  r.wheel(80.0, 80.0, -100.0)
+  let read_up = steady_faults(r, 12).filter(fn(f) { f.contains("脚底") })
+  let corrected = view_tree().unwrap().lists_reckoned()[0].3
+  // (room under "脚底" in the foot gone at once with no hand input: "脚底" drops 40 in one frame in the window)
+  let over3 = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let under3 = @signals.signal(true, same=fn(a, b) { a == b })
+  let j = steady_list_foot_case(over3, under3)
+  steady_faults(j, 4) |> ignore
+  under3.set(false)
+  let stepped = steady_faults(j, 4).filter(fn(f) { f.contains("脚底") })
+  assert_eq((rest, grown, read_up), ([], [], []))
+  assert_true(corrected.abs() > 0.5, msg="expected non-zero scroll correction reading up, got \{corrected}")
+  assert_true(stepped.length() > 0, msg="a real step in the pinned foot: no jolt found")
+}
