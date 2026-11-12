@@ -221,7 +221,10 @@ function noticesHeard(notices: Notices, rows: [string, J[]][]): void {
 /// A rig with every view, a new chat's and a model's pickers, the changelog, the pages' own topics (`pageOwners`); the
 /// real-size workspace set in it, the chat with its six pages loaded (`long`) or its last alone, the chat of four weeks
 /// held whole, and every topic of `ASKED` measured so subscribed as the app subscribes (keyed), its messages to each by id.
-export async function held(long = false) {
+// zz scratch: `cold`, a rig started anew on `host`, whose database holds the workspace already (a rig `held` made on it):
+// what the device holds is not put again, nothing subscribed; `setLive` (on the returned value) puts what comes from
+// the network as the sync would (the topics no table holds), for what a subscription made then watches.
+export async function held(long = false, zz: { host?: FakeHost; cold?: boolean } = {}) {
   const chat = long ? CHAT_MESSAGES : OPENS;
   // (the workspace's devices as core.ts makes them: what each up station says, the rigs' none here)
   let devices: Devices | null = null;
@@ -234,6 +237,7 @@ export async function held(long = false) {
   };
   let changelog: Changelog | null = null;
   const t = setup({
+    host: zz.host,
     all: true,
     // (the account's workspaces and how their stations are reached, as core.ts gives the views them of its `/v1/me`)
     env: (parts) => ({
@@ -267,15 +271,26 @@ export async function held(long = false) {
       ];
     },
   });
-  const base = t.host.nowMs();
+  const base = zz.cold ? zzBase : t.host.nowMs();
+  zzBase = base;
   screens = screensOf(base);
-  for (const [table, k, value] of records(base)) t.data.put(table, k, value);
-  // (the changelog as read from the cloud, on a device of Android that saw a build before its own)
-  t.data.put("changelog", "feed", changelogFeed(base));
-  t.data.put("changelog", "seen", CHANGELOG_SEEN, false);
+  if (!zz.cold) {
+    for (const [table, k, value] of records(base)) t.data.put(table, k, value);
+    // (the changelog as read from the cloud, on a device of Android that saw a build before its own)
+    t.data.put("changelog", "feed", changelogFeed(base));
+    t.data.put("changelog", "seen", CHANGELOG_SEEN, false);
+  }
   changelog!.device(CHANGELOG_DEVICE);
   const names = Object.keys(ASKED).filter((name) => LONG.has(name) === long);
   for (const name of names) if (WINDOWS[name] !== undefined) t.window(topicOf(name), WINDOWS[name]);
+  if (zz.cold) {
+    // (what comes of the network as the sync reads it: the topics no table holds, and each up station's devices)
+    const setLive = () => {
+      for (const [topic, value] of [...fixture(base, chat), ...more(base)]) if (!zzHolds(topic)) t.set(topic, value);
+      for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
+    };
+    return { t, base, chat, first: new Map<string, J>(), during: async (_f: () => void, _ms: number) => new Map<string, J[]>(), notices: notices!, devices: devices!, screensAre: (_v: J) => {}, setLive, names };
+  }
   names.forEach((name, i) => t.store.subscribe(1, i + 1, topicOf(name), true));
   // Set as the topics are watched, and again once the views watch what they found they are made of (a value set of a
   // topic nothing watches is not kept: the core's station topics read what is watched).
@@ -319,10 +334,13 @@ export async function held(long = false) {
     screens = value;
     t.store.invalidate({ topic: "screens", station: CHAT.station });
   };
-  return { t, base, chat, first, during, notices: notices!, devices: devices!, screensAre };
+  return { t, base, chat, first, during, notices: notices!, devices: devices!, screensAre, setLive: () => {}, names };
 }
 
 export type Held = Awaited<ReturnType<typeof held>>;
+// zz scratch
+let zzBase = 0;
+import { holds as zzHolds } from "../src/data.ts";
 
 // ── what changes ──
 

@@ -12,6 +12,7 @@
 // job's log, the chat's letters, screens, the cards of what messages name. Every family of
 // fields is filled as a station fills it, none made larger than a station makes it. Made of the test's clock and
 // indexes alone: the same every run.
+import { workerData } from "node:worker_threads";
 import { activity } from "../src/history.ts";
 import type { Topic } from "../src/protocol.ts";
 import { PAGE } from "../src/station/channel-kinds.ts";
@@ -21,36 +22,52 @@ import { hostOf, link, overview, rows, sessions, threads, workspace } from "./vi
 // deno-lint-ignore no-explicit-any
 type J = any;
 
+/// The workspace's size: k times each of what it has (its chats a station, the messages of the chat opened and of the
+/// chat held whole, the profiles a station, its people, its stations, as `Size` says), 1 each by default: the workspace
+/// as above, byte for byte. A size other than 1 is given only to a worker thread of its own (topic-work.test.ts), as its
+/// `workerData.realSize`: the module's exports are made of it as it loads.
+export type Size = { chats: number; messages: number; profiles: number; people: number; stations: number };
+const asked = (workerData as { realSize?: Partial<Size> } | null)?.realSize ?? {};
+const knob = (v: number | undefined): number => (v !== undefined && Number.isInteger(v) && v >= 1 ? v : 1);
+export const SIZE: Size = { chats: knob(asked.chats), messages: knob(asked.messages), profiles: knob(asked.profiles), people: knob(asked.people), stations: knob(asked.stations) };
+
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 
 /// The workspace's stations: the last one down (its overview from before kept, its chats out of the lists).
-export const STATIONS = [
+const STATIONS_BASE = [
   { id: "maple", name: "Maple", host: "maple", cpu: "Apple M4 Max", cpus: 16, memGb: 128, emoji: "🍁" },
   { id: "willow", name: "Willow", host: "willow-mini", cpu: "Apple M4 Pro", cpus: 14, memGb: 64, emoji: "🌳" },
   { id: "studio", name: "Studio", host: "studio", cpu: "Apple M3 Ultra", cpus: 28, memGb: 192, emoji: "🎛️" },
   { id: "cedar", name: "Cedar", host: "CEDAR-WIN", cpu: "Intel Core Ultra 9 285K", cpus: 24, memGb: 64, emoji: null },
   { id: "ash", name: "Ash", host: "ash-old-mbp", cpu: "Apple M1 Pro", cpus: 10, memGb: 32, emoji: null },
 ] as const;
+type StationOf = { id: string; name: string; host: string; cpu: string; cpus: number; memGb: number; emoji: string | null };
+const copyOf = (s: StationOf, j: number): StationOf => (j === 0 ? s : { ...s, id: `${s.id}${j + 1}`, name: `${s.name} ${j + 1}`, host: `${s.host}-${j + 1}` });
+/// (the four up ones k times, then the down one k times: the down ones last)
+export const STATIONS: readonly StationOf[] = [
+  ...Array.from({ length: SIZE.stations }, (_, j) => STATIONS_BASE.slice(0, 4).map((s) => copyOf(s, j))).flat(),
+  ...Array.from({ length: SIZE.stations }, (_, j) => copyOf(STATIONS_BASE[4], j)),
+];
 /// How many of them are up: the first ones.
-const UP_COUNT = 4;
+const UP_COUNT = 4 * SIZE.stations;
 export const UP = STATIONS.slice(0, UP_COUNT).map((s) => `ws/${s.id}`);
-export const DOWN = `ws/${STATIONS[UP_COUNT].id}`;
+export const DOWN = `ws/${STATIONS[UP_COUNT]!.id}`;
 export const address = (i: number) => `ws/${STATIONS[i]!.id}`;
 
 /// The chat of 300 messages: its station, its thread, its two agents.
 export const CHAT = { station: "ws/maple", thread: 1001, keys: ["k-maple-0", "k-maple-0b"] } as const;
 /// A chat of each up station's sidebar: their rows, then the archive's, by station.
-const ROWS_UP = 100;
-const ROWS_DOWN = 20;
-const ARCHIVED = 60;
+const ROWS_UP = 100 * SIZE.chats;
+const ROWS_DOWN = 20 * SIZE.chats;
+const ARCHIVED = 60 * SIZE.chats;
 
 const pick = <T>(pool: readonly T[], i: number): T => pool[((i % pool.length) + pool.length) % pool.length]!;
 
 // ── people ──
 
-export const PEOPLE = [
+const PEOPLE_BASE = [
   { sub: "s1", email: "me@x.com", name: "左子健" },
   { sub: "s2", email: "lina@acme.dev", name: "Lina Park" },
   { sub: "s3", email: "wang.lei@acme.dev", name: "王磊" },
@@ -64,6 +81,10 @@ export const PEOPLE = [
   { sub: "s11", email: "dev.ops@acme.dev", name: "Ops Bot" },
   { sub: "s12", email: "sun.fei@acme.dev", name: "孙飞" },
 ] as const;
+export const PEOPLE: readonly { sub: string; email: string; name: string }[] = [
+  ...PEOPLE_BASE,
+  ...Array.from({ length: PEOPLE_BASE.length * (SIZE.people - 1) }, (_, i) => ({ sub: `s${13 + i}`, email: `member${13 + i}@acme.dev`, name: `成员 ${13 + i}` })),
+];
 const SLACK_USERS = ["U04A1B2C3D4", "U04E5F6G7H8", "U05J9K0L1M2", "U05N3P4Q5R6", "U06S7T8U9V0", "U06W1X2Y3Z4"];
 const SLACK_NAMES = ["lina", "marco.rossi", "aiko.t", "sam", "wanglei", "chenyu"];
 const slackPicture = (i: number) => `https://avatars.slack-edge.com/2026-03-1${i % 10}/71${i}20${i}83${i}_8f3c${i}a2b9d1e4f07c6a5_192.jpg`;
@@ -350,11 +371,11 @@ function profileOf(now: number, station: number, n: number, kind: string, k: num
 
 /// A station's eight profiles, by kind: Claude's and ChatGPT's subscriptions, Devin, DeepSeek, and one of the rest in
 /// turn (OpenRouter, an Anthropic key, OpenCode Go, SuperGrok, Cursor), so the workspace has every kind.
-const KINDS: [string, number][] = [["claude", 3], ["codex", 2], ["devin", 1], ["dsh", 1]];
+const KINDS: [string, number][] = [["claude", 3 * SIZE.profiles], ["codex", 2 * SIZE.profiles], ["devin", SIZE.profiles], ["dsh", SIZE.profiles]];
 const OTHERS = ["openrouter", "anthropic", "opencode", "grok", "cursor"];
 export function profilesOf(now: number, station: number): J[] {
   const out: J[] = [];
-  const kinds: [string, number][] = [...KINDS, [pick(OTHERS, station), 1]];
+  const kinds: [string, number][] = [...KINDS, [pick(OTHERS, station), SIZE.profiles]];
   for (const [kind, count] of kinds) for (let k = 0; k < count; k++) out.push(profileOf(now, station, out.length, kind, k));
   return out;
 }
@@ -441,9 +462,9 @@ export function overviewOf(now: number, station: number): J {
     disk: { freeBytes: (180 + station * 40) * 1e9, totalBytes: 1000e9 },
     logins: station === 1 ? [{ id: "login-1", runtime: "codex", job: { profile: "codex-new", runtime: "codex", state: "needs_approval", url: "https://auth.openai.com/codex/device", userCode: "QH7K-2M9P", startedAt: now - 2 * MIN, expiresAt: now + 13 * MIN, browser: true } }] : [],
     machineLogins: [
-      { runtime: "claude", installed: true, loggedIn: true, email: PEOPLE[station].email, plan: "max_20x", usable: true, quota: claudeQuota(now, station + 30), text: `Claude Code 已登录：${PEOPLE[station].email}（Max 20x）` },
+      { runtime: "claude", installed: true, loggedIn: true, email: pick(PEOPLE, station).email, plan: "max_20x", usable: true, quota: claudeQuota(now, station + 30), text: `Claude Code 已登录：${pick(PEOPLE, station).email}（Max 20x）` },
       station !== 2
-        ? { runtime: "codex", installed: true, loggedIn: true, email: PEOPLE[station + 1].email, plan: "pro", usable: true, quota: codexQuota(now, station + 30), text: `Codex 已登录：${PEOPLE[station + 1].email}（Pro）` }
+        ? { runtime: "codex", installed: true, loggedIn: true, email: pick(PEOPLE, station + 1).email, plan: "pro", usable: true, quota: codexQuota(now, station + 30), text: `Codex 已登录：${pick(PEOPLE, station + 1).email}（Pro）` }
         : { runtime: "codex", installed: true, loggedIn: false, usable: true, text: "Codex 未登录" },
     ],
     sharing: true,
@@ -502,7 +523,7 @@ export function hostReading(now: number, station: number, load = 0.21 + station 
     disk: { path: "/", totalBytes: 1000e9, freeBytes: (180 + station * 40) * 1e9 }, stationRssBytes: 212 * 1024 ** 2 + station * 1e6, checkedAt: now,
     // (as station/src/jobs/gpu.ts reads them: a Mac's its chip's, the PC's its card's)
     gpus: s.cpu.startsWith("Apple")
-      ? [{ name: s.cpu, cores: [40, 20, 80, 0, 16][station], busy: 0.12 + station * 0.05 }]
+      ? [{ name: s.cpu, cores: pick([40, 20, 80, 0, 16], station), busy: 0.12 + station * 0.05 }]
       : [{ name: "NVIDIA GeForce RTX 4090", memoryTotalBytes: 24_564 * 1024 ** 2, memoryUsedBytes: 3_100 * 1024 ** 2, busy: 0.07 }],
   };
 }
@@ -619,7 +640,7 @@ const rowsCount = (station: number) => (station < UP_COUNT ? ROWS_UP : ROWS_DOWN
 
 /// All of its messages, six of the pages a chat is read in (`PAGE`): as many as a chat with all six loaded holds. One
 /// opened holds the last page alone (`OPENS`).
-export const CHAT_MESSAGES = 6 * PAGE;
+export const CHAT_MESSAGES = 6 * PAGE * SIZE.messages;
 /// What the chat holds as it opens: its last page.
 export const OPENS = PAGE;
 
@@ -672,7 +693,7 @@ export function chatPage(now: number, count = CHAT_MESSAGES): J {
 /// person's (533 of them: the viewer, three others and one from Slack with its picture; most a long line, some a few
 /// words, a page or only a picture), the rest its agent's.
 export const OUTLINED = { station: "ws/maple", thread: threadIdOf(0, 2), key: keyOf(0, 2) } as const;
-export const OUTLINED_ENTRIES = 1600;
+export const OUTLINED_ENTRIES = 1600 * SIZE.messages;
 const OUTLINED_EVERY = 25 * MIN;
 /// One of Slack who is not the viewer (whose Slack ids are the overview's `slackUsers`).
 const SLACK_OTHER = { id: "U07Z1X2Y3W4", name: "aiko.t", picture: slackPicture(2) };
