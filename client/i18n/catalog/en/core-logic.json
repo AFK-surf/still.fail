@@ -36,13 +36,23 @@
   "core-logic.activity.remote.upload": "Uploading {what} to {station}",
   "core-logic.activity.tools": "Loading tools {names}",
   "core-logic.choose.account": "Account",
+  "core-logic.choose.account.all": "All",
   "core-logic.choose.account.auto": "Auto",
   "core-logic.choose.account.auto_note": "Switches when out of quota or signed out",
   "core-logic.choose.account.auto_on": "Auto · {name}",
   "core-logic.choose.account.auto_switch": "Auto (switch accounts)",
+  "core-logic.choose.account.count": {
+    "one": "1 account",
+    "other": "{n} accounts"
+  },
+  "core-logic.choose.account.count_on": {
+    "one": "1 account · {name}",
+    "other": "{n} accounts · {name}"
+  },
   "core-logic.choose.account.fixed": "Fixed",
   "core-logic.choose.account.now": "Current: {name}",
   "core-logic.choose.account.repick": "Reassign",
+  "core-logic.choose.account.subset_note": "Switches among selected accounts",
   "core-logic.choose.default_effort": "Default effort",
   "core-logic.choose.maker.other": "Other makers",
   "core-logic.choose.dropped": "The selected account can't run {model}; switched to auto",

@@ -112,3 +112,73 @@ fn check_row_box_node(
   })
   |> ignore
 }
+
+///|
+/// A tick row's mark in `parent` where the row itself takes the press (choice_row_node's `lead`): its side and corner
+/// the theme's rows' (`check`, `check_corner`), standing `row_corner` in from a rounded row's edge (as
+/// check_row_box's `pl=room(row_corner)`), filled in the primary ink with its check when `on` (or quiet on
+/// `neutral_bg` in `muted` when `dimmed`, as the last ticked row that cannot be unticked).
+#callsite(autofill(loc))
+pub fn check_mark_node(
+  parent : @view.View,
+  on : () -> Bool,
+  dimmed? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
+) -> Unit {
+  let side = fn() { theme().rows.check }
+  let corner = fn() { theme().rows.check_corner }
+  let narrow = look_node(parent) is Narrow
+  let at = panel_in_of(parent)
+  let card = on_card_node(parent)
+  let reach = !narrow && part_of(parent).list && in_pane_node(parent) && at.words == 0.0
+  let inset = if (narrow && !card && !at.small) || reach {
+    0.0
+  } else {
+    let pad = match panel_row_at(at, own=if narrow { card_pad - corner_inset } else { desk_list_out }, card~) {
+      Some(p) => p.side
+      None => text_in
+    }
+    dmax(0.0, row_corner - pad + 0.001)
+  }
+  parent.box(made_for=loc, fn(b) {
+    if inset > 0.0 {
+      b.margin(Is((inset, 0.0, 0.0, 0.0))) |> ignore
+    }
+    b
+    .width(By(fn() { Some(side()) }))
+    .height(By(fn() { Some(side()) }))
+    .radius(By(corner))
+    .lines_up(Is(Some(Middle)))
+    .lies_along(Is(Middle))
+    .ground(By(fn() {
+      let t = @ui.tree_theme()
+      let p = theme().p
+      if !on() {
+        t.bg
+      } else if dimmed() {
+        p.neutral_bg
+      } else {
+        t.primary
+      }
+    }))
+    .edge(By(fn() {
+      let t = @ui.tree_theme()
+      if on() && !dimmed() {
+        (1.0, t.primary)
+      } else {
+        (1.0, t.border)
+      }
+    }))
+    |> ignore
+    b.show(on, fn(m) {
+      m
+      .words(Is("✓"))
+      .words_look(By(fn() {
+        { size: side() * 0.7, weight: 700, line: side(), wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
+      }))
+      .ink(By(fn() { if dimmed() { theme().p.muted } else { @ui.tree_theme().on_primary } }))
+      |> ignore
+    })
+  })
+  |> ignore
+}

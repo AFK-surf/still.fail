@@ -42,7 +42,7 @@ export const sees = (viewer: InWorkspace, ws: string | null): boolean => ws === 
 
 export type SessionRow = {
   key: string; connect: string; scope: SessionScope; title: string | null; createdBy: string | null; runtime: string;
-  profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
+  profile: string; profilePinned: boolean; profiles?: string[] | null; model: string | null; effort: string | null; fast: boolean | null;
   /// Whether it goes on afresh once its prompt cache is over, as chosen in its chat (null: as its station is set,
   /// `afreshWhenCold`).
   afresh: boolean | null;
@@ -64,7 +64,7 @@ export type SessionRow = {
 /// A session as it is first recorded (what NewSession::default leaves out may be left out).
 export type NewSession = {
   key: string; connect: string; scope?: SessionScope | null; title?: string | null; createdBy?: string | null;
-  runtime: string; profile: string; profilePinned?: boolean; model?: string | null; effort?: string | null;
+  runtime: string; profile: string; profilePinned?: boolean; profiles?: string[] | null; model?: string | null; effort?: string | null;
   fast?: boolean | null; context?: number | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
   createdAt: number; lastActiveAt: number; ws?: string | null;
 };
@@ -398,10 +398,24 @@ export function authorKind(s: string): AuthorKind {
   return "person";
 }
 
+function parseProfiles(raw: unknown, profile: string, pinned: boolean): string[] | null {
+  if (typeof raw === "string" && raw !== "") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const list = parsed.filter((x): x is string => typeof x === "string" && x !== "");
+        if (list.length > 0) return list;
+      }
+    } catch {}
+  }
+  return pinned ? [profile] : null;
+}
+
 export function toSession(r: Json): SessionRow {
+  const profilePinned = r.profile_pinned === 1;
   return {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
-    runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
+    runtime: r.runtime, profile: r.profile, profilePinned, profiles: parseProfiles(r.profiles, r.profile, profilePinned), model: r.model, effort: r.effort,
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0,
     afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, context: typeof r.context === "number" ? r.context : null, contextBefore: typeof r.context_before === "number" ? r.context_before : null,
     runtimeSessionId: r.runtime_session_id,

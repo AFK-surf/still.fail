@@ -33,6 +33,7 @@ import { STATION_AUTHOR } from "../store/rows.ts";
 export type NewChat = {
   runtime: Runtime;
   profile?: string | null;
+  profiles?: string[] | null;
   model?: string | null;
   effort?: string | null;
   fast?: boolean | null;
@@ -147,26 +148,36 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const runtime = options.runtime;
   const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
   if (all.length === 0) throw new Error(`no ${runtime} profile configured`);
-  const pinned = options.profile ?? null;
-  const requested = all.find((p) => p.id === pinned);
-  if (requested?.enabled === false) throw new Error(tr(lang, "station.profile.disabled", { profile: requested.name }));
+  const rawList = Array.isArray(options.profiles) ? [...new Set(options.profiles.map((x) => x.trim()).filter((x) => x !== ""))] : [];
+  const wantedProfiles = rawList.length > 0 ? rawList : options.profile ? [options.profile] : null;
+  if (wantedProfiles !== null) {
+    for (const id of wantedProfiles) {
+      const requested = all.find((p) => p.id === id);
+      if (requested?.enabled === false) throw new Error(tr(lang, "station.profile.disabled", { profile: requested.name }));
+    }
+  }
   const here = new Set(hub.profilesIn(options.ws ?? null).map((p) => p.id));
   const profiles = all.filter((p) => here.has(p.id));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
   const model = trimmed(options.model);
   let profile;
-  if (pinned !== null) {
-    profile = profiles.find((p) => p.id === pinned);
-    if (!profile) {
-      const there = all.find((p) => p.id === pinned);
-      throw new Error(there ? tr(lang, "station.profile.notHere", { profile: there.name }) : `no ${runtime} profile ${pinned}`);
+  if (wantedProfiles !== null) {
+    const subset = [];
+    for (const id of wantedProfiles) {
+      const found = profiles.find((p) => p.id === id);
+      if (!found) {
+        const there = all.find((p) => p.id === id);
+        throw new Error(there ? tr(lang, "station.profile.notHere", { profile: there.name }) : `no ${runtime} profile ${id}`);
+      }
+      if (model !== null && !runs(found, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: found.name, model }));
+      subset.push(found);
     }
-    if (model !== null && !runs(profile, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: profile.name, model }));
+    profile = subset.length === 1 ? subset[0]! : hub.accounts.pick(subset, model, true);
   } else profile = hub.accounts.pick(profiles, model, true);
   const effort = options.effort ? options.effort : null;
   checkContext(runtime, options.context, lang);
   if (effort !== null) {
-    const allowed = hub.accounts.modelEfforts(runtime, model, pinned, (p) => here.has(p.id));
+    const allowed = hub.accounts.modelEfforts(runtime, model, wantedProfiles, (p) => here.has(p.id));
     if (!allowed.includes(effort)) throw new Error(`effort must be one of ${allowed.join(", ")}`);
   }
   const workspace = chatWorkspace(config.dataDir, key);
@@ -191,7 +202,8 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     createdBy: options.createdBy,
     runtime,
     profile: profile.id,
-    profilePinned: pinned !== null,
+    profilePinned: wantedProfiles?.length === 1,
+    profiles: wantedProfiles,
     model: model ?? profile.model ?? null,
     effort,
     fast: FAST_RUNTIMES.includes(runtime) ? (options.fast ?? null) : null,
@@ -224,7 +236,7 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
     log.info("hub", "going on afresh once its cache is over set", { session: key, afresh: afresh ?? "station's" });
     if (Object.keys(rest).length === 0) return;
   }
-  const { row, runtime, model, effort, profile, pinned, repick } = hub.accounts.change(key, change, lang);
+  const { row, runtime, model, effort, profile, profiles, pinned, repick } = hub.accounts.change(key, change, lang);
   const movedRuntime = runtime !== row.runtime && typeof profile === "string";
   const recapped = change.context !== undefined && change.context !== row.context;
   // Its runtime compacts on its own only some calls into a new process: what it holds over a lower most is compacted
@@ -232,17 +244,18 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
   const over = !movedRuntime && typeof change.context === "number" && (usageNow(hub.store, key)?.contextTokens ?? 0) > change.context;
   if (movedRuntime) {
     if (row.runtimeSessionId) hub.store.ranIn(key, row.runtimeSessionId, row.profile);
-    hub.store.setSessionRuntime(key, runtime, profile, pinned === true, model, effort, change.fast ?? null, change.context ?? null);
+    hub.store.setSessionRuntime(key, runtime, profile, pinned === true, model, effort, change.fast ?? null, change.context ?? null, profiles ?? null);
     hub.store.setSessionContextBefore(key, null);
   } else {
-    if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
+    const leftPool = profiles !== undefined && profiles !== null && profiles.length > 1 && !profiles.includes(row.profile);
+    if (profiles !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null, profiles);
     if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
     if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
     if (recapped) {
       hub.store.setSessionContext(key, change.context ?? null);
       hub.store.setSessionContextBefore(key, over ? (row.contextBefore ?? row.context ?? 0) : null);
     }
-    if (repick) hub.accounts.repick(key);
+    if (repick || leftPool) hub.accounts.repick(key);
     else if (profile === null) hub.accounts.runOn(key, false, true);
   }
   // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new

@@ -42,7 +42,7 @@ export type Connect = {
   /// single-session only: whether starting on a new thread needs an @mention (multi-session: always).
   requireMention: boolean;
   slack: { botName?: string; [key: string]: unknown };
-  bind: { runtime: Runtime; profile?: string; model?: string; effort?: string };
+  bind: { runtime: Runtime; profile?: string; profiles?: string[]; model?: string; effort?: string };
   /// The workspace it was added in, whose chats its sessions are; absent: the home one.
   workspace?: string;
   /// One of another station whose chats run here (connects/remote.ts), not config.json's.
@@ -132,6 +132,10 @@ export function hubConfig(raw: any, dataDir: string, found: (id: string) => read
   const connects: Connect[] = (Array.isArray(raw?.connects) ? raw.connects : []).map((c: any): Connect => {
     const mode: ConnectMode = c.mode === "single-session" ? "single-session" : "multi-session";
     const bind = c.bind ?? {};
+    const bindProfiles: string[] = Array.isArray(bind.profiles)
+      ? [...new Set<string>(bind.profiles.filter((x: unknown): x is string => typeof x === "string" && x.trim() !== "").map((x: string) => x.trim()))]
+      : [];
+    const singleProfile = nonEmpty(bind.profile) ?? (bindProfiles.length === 1 ? bindProfiles[0] : undefined);
     return {
       id: c.id,
       kind: c.kind === "feishu" || c.kind === "comma" ? c.kind : "slack",
@@ -139,7 +143,13 @@ export function hubConfig(raw: any, dataDir: string, found: (id: string) => read
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention !== false,
       slack: { ...(c.slack ?? {}), botName: nonEmpty(c.slack?.botName) },
-      bind: { runtime: runtimeKind(bind.runtime) ?? "claude", profile: nonEmpty(bind.profile), model: nonEmpty(bind.model), effort: nonEmpty(bind.effort) },
+      bind: {
+        runtime: runtimeKind(bind.runtime) ?? "claude",
+        profile: singleProfile,
+        ...(bindProfiles.length > 0 ? { profiles: bindProfiles } : singleProfile !== undefined ? { profiles: [singleProfile] } : {}),
+        model: nonEmpty(bind.model),
+        effort: nonEmpty(bind.effort),
+      },
       ...(nonEmpty(c.workspace) !== undefined ? { workspace: nonEmpty(c.workspace) } : {}),
     };
   });

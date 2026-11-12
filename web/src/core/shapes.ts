@@ -556,6 +556,7 @@ export interface Bind {
 	model?: string;
 	effort?: string;
 	profile?: string;
+	profiles?: string[];
 }
 
 export interface SlackTokens {

@@ -1298,13 +1298,12 @@ fn triple_chip(
 /// Who runs it, at the foot's start (the web's panel's foot, the phone's sheet's): the accounts in a panel of their
 /// own, from it.
 fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
-  let draft = field(v, "draft")
   let who = c.id("triple/who")
   let go = fn() {
     triple.accounts_asked = false
-    @sf.panel(
+    @sf.panel_nodes(
       @sf.t("web-main.model.account"),
-      fn(c, close) { triple_accounts(c, src, station, of, close) },
+      fn(n, close) { triple_accounts_node(n, src, station, of, close) },
       from=Of(who),
       focus=false,
     )
@@ -1315,11 +1314,15 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
     go()
   }
   let level = text(v, "whoLevel")
+  let words = match text(v, "who") {
+    "" => @sf.t("web-main.model.selectAll")
+    w => w
+  }
   triple_chip(
     c,
     who,
     @sf.t("web-main.model.account"),
-    if text(draft, "profile") != "" { text(v, "who") } else { @sf.t("web-main.model.auto") },
+    words,
     look=if level == "amber" {
       triple_amber_sm
     } else if level == "red" {
@@ -1840,91 +1843,145 @@ fn triple_option(
 }
 
 ///|
-/// The accounts (runPickerAccounts), in a panel of their own from who runs it: 自动 with what the station's pick is on
-/// now (and at its end, a chat's, what has the station pick again now: `pick.repick`, which account it took said in a
-/// toast), then each account with what is left of it; picked, back to the pick's panel.
-fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, close : () -> Unit) -> Unit {
-  let v = src.topic("pick", pick_params(station, of)).get().value
-  let draft = field(v, "draft")
-  c.box(style=triple_accounts_box, fn() {
-    match text(v, "dropped") {
-      "" => ()
-      d => c.text(d, style=triple_amber_sm) |> ignore
+/// The explicit subset of accounts drafted (`[]`: 全选, every eligible account).
+fn triple_selected_accounts(draft : Json?) -> Array[String] {
+  match field(draft, "profiles") {
+    Some(Array(xs)) => {
+      let out : Array[String] = []
+      for x in xs {
+        if x is String(s) && s != "" && !out.contains(s) {
+          out.push(s)
+        }
+      }
+      if !out.is_empty() {
+        return out
+      }
     }
-    let mine = text(draft, "profile")
-    let repick = text(v, "repick")
-    let repicking = "pick.repick/" + station + "/" + of
-    triple_option(
-      c,
-      "triple/account/",
-      @sf.t("web-main.model.auto"),
-      mine == "",
-      fn() {
-        c.box(style=triple_option_text, fn() {
-          c.text(@sf.t("web-main.model.auto"), style=if mine == "" { triple_picked } else { triple_words }) |> ignore
-          c.text(text(v, "autoNote"), style=triple_note_cut) |> ignore
-        })
-        |> ignore
-      },
-      trail?=if repick == "" {
-        None
-      } else {
-        Some(fn() {
-          let busy = doing(repicking)
-          if busy {
-            @sf.spinner(c, size=14.0) |> ignore
-          }
-          @sf.panel_button(c, "triple/repick", repick, on_press=fn() {
-            if !busy {
-              act(src, repick, repicking, "pick.repick", Json::object(pick_params(station, of)), ok=fn(r) {
-                match text(Some(r), "said") {
+    _ => ()
+  }
+  match text(draft, "profile") {
+    "" => []
+    id => [id]
+  }
+}
+
+///|
+/// The accounts (runPickerAccounts), in a panel of their own from who runs it: 全选 with what the station's pick is on
+/// now (and at its end, a chat's, what has the station pick again now: `pick.repick`, which account it took said in a
+/// toast), then each account with its checkbox, 当前 when active, 仅此 for quick solo-pinning, and what is left of it;
+/// checking all accounts collapses back to 全选, and the last checked account cannot be unchecked.
+fn triple_accounts_node(n : @view.View, src : Source, station : String, of : String, _close : () -> Unit) -> Unit {
+  let v = fn() { src.topic("pick", pick_params(station, of)).get().value }
+  let draft = fn() { field(v(), "draft") }
+  let accounts = fn() { items(v(), "accounts") }
+  let all_on = fn() { triple_selected_accounts(draft()).is_empty() }
+  let repicking = "pick.repick/" + station + "/" + of
+  n.show(fn() { text(v(), "dropped") != "" }, fn(w) {
+    @sf.style_node(w, fn() { @sf.panel_words_in_node(w).then(triple_dropped_box) })
+    @sf.words_node(w, fn() { text(v(), "dropped") }, fn() { triple_amber_sm }) |> ignore
+  })
+  @sf.choice_row_node(
+    n,
+    fn() { @sf.t("web-main.model.selectAll") },
+    fn() { false },
+    note=fn() { text(v(), "autoNote") },
+    trail_middle=true,
+    lead=fn(l) { @sf.check_mark_node(l, all_on) },
+    trail?=if of.has_prefix("session:") {
+      Some(fn(e) {
+        e.show(fn() { text(v(), "repick") != "" }, fn(r) {
+          r.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
+          r.show(fn() { doing(repicking) }, fn(s) { @sf.spinner_node(s, size=14.0) |> ignore })
+          @sf.panel_button_node(r, fn() { text(v(), "repick") }, fn() {
+            if !doing(repicking) {
+              let label = text(@signals.untracked(v), "repick")
+              act(src, label, repicking, "pick.repick", Json::object(pick_params(station, of)), ok=fn(res) {
+                match text(Some(res), "said") {
                   "" => ()
                   said => toast_later(said)
                 }
               })
             }
-          }) |> ignore
+          })
+          |> ignore
+        })
+      })
+    } else {
+      None
+    },
+    press=fn() {
+      if !@signals.untracked(all_on) {
+        pick_save(src, station, of, { "profiles": Json::null(), "profile": Json::null() })
+      }
+    },
+  )
+  n.each(accounts, fn(a) { text(Some(a), "id") }, fn(row, a) {
+    let id = text(Some(a.untracked()), "id")
+    let av = fn() { Some(a.get()) }
+    let checked = fn() {
+      let sel = triple_selected_accounts(draft())
+      sel.is_empty() || sel.contains(id)
+    }
+    let sole = fn() {
+      let sel = triple_selected_accounts(draft())
+      sel.length() == 1 && sel[0] == id
+    }
+    let locked = fn() { accounts().length() > 1 && sole() }
+    @sf.choice_row_node(
+      row,
+      fn() { text(av(), "name") },
+      fn() { false },
+      trail_middle=true,
+      disabled=locked,
+      lead=fn(l) { @sf.check_mark_node(l, checked, dimmed=locked) },
+      tag=fn(g) {
+        g.show(fn() { flag(av(), "current") && accounts().length() > 1 }, fn(p) {
+          @sf.pill_node(p, fn() { @sf.t("web-main.model.current") }) |> ignore
         })
       },
-      on_press=fn() {
-        pick_save(src, station, of, { "profile": Json::null() })
-        close()
+      note=fn() { text(field(av(), "quotaLine"), "text") },
+      note_ink=fn() {
+        match text(field(av(), "quotaLine"), "level") {
+          "amber" => @sf.theme().p.warn_ink
+          "red" => @sf.theme().p.red
+          _ => @sf.theme().p.muted
+        }
+      },
+      trail=fn(e) {
+        e.show(fn() { accounts().length() > 1 && !sole() }, fn(b) {
+          @sf.panel_button_node(
+            b,
+            fn() { @sf.t("web-main.model.only") },
+            fn() { pick_save(src, station, of, { "profiles": Json::array([Json::string(id)]) }) },
+            tone=Quiet,
+          )
+          |> ignore
+        })
+      },
+      press=fn() {
+        let all_ids = @signals.untracked(accounts).map(fn(x) { text(Some(x), "id") }).filter(fn(x) { x != "" })
+        let sel = triple_selected_accounts(@signals.untracked(draft))
+        if sel.is_empty() {
+          let next = all_ids.filter(fn(x) { x != id })
+          if !next.is_empty() {
+            pick_save(src, station, of, { "profiles": Json::array(next.map(fn(s) { Json::string(s) })) })
+          }
+        } else if sel.contains(id) {
+          let next = sel.filter(fn(x) { x != id })
+          if !next.is_empty() {
+            pick_save(src, station, of, { "profiles": Json::array(next.map(fn(s) { Json::string(s) })) })
+          }
+        } else {
+          let next = all_ids.filter(fn(x) { x == id || sel.contains(x) })
+          if next.length() >= all_ids.length() {
+            pick_save(src, station, of, { "profiles": Json::null(), "profile": Json::null() })
+          } else {
+            pick_save(src, station, of, { "profiles": Json::array(next.map(fn(s) { Json::string(s) })) })
+          }
+        }
       },
     )
-    let accounts = items(v, "accounts")
-    for i, a in accounts {
-      let a = Some(a)
-      let id = text(a, "id")
-      // (one line where nothing is said of what is left of it: a capsule, standing so in the panel's foot corners)
-      let one_line = text(field(a, "quotaLine"), "text") == ""
-      triple_option(c, "triple/account/" + id, text(a, "name"), mine == id, fn() {
-        c.box(style=triple_option_text, fn() {
-          c.text(text(a, "name"), style=if mine == id { triple_picked } else { triple_words }) |> ignore
-          let line = field(a, "quotaLine")
-          match text(line, "text") {
-            "" => ()
-            q =>
-              c.text(
-                q,
-                style=match text(line, "level") {
-                  "amber" => triple_amber_sm
-                  "red" => triple_red_sm
-                  _ => triple_note
-                },
-              )
-              |> ignore
-          }
-        })
-        |> ignore
-      }, corner=one_line, at_foot=i == accounts.length() - 1,
-        on_press=fn() {
-          pick_save(src, station, of, { "profile": Json::string(id) })
-          close()
-        },
-      )
-    }
   })
-  |> ignore
 }
 
 ///|
@@ -2210,10 +2267,6 @@ let triple_option_on : @ui.Style = @ui.css((
 )).then(@ui.style(radius=@sf.panel_in))
 
 ///|
-// kept across runs: a value (no field of it changes)
-let triple_option_text : @ui.Style = @ui.css("gap=SPx")
-
-///|
 /// A model's name in its row: across the room left in it, on two lines where it needs them (cut short past those, a
 /// name longer than any).
 // kept across runs: a value (no field of it changes)
@@ -2336,7 +2389,7 @@ let triple_who_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_accounts_box : @ui.Style = @ui.css("w=Full min_w=S56 gap=SPx")
+let triple_dropped_box : @ui.Style = @ui.css("w=Full pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

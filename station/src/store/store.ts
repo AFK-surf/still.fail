@@ -222,7 +222,8 @@ export function archiveLookOf(db: DatabaseSync, now: number, after: number, slac
   };
   const marksReady = archiveMarksReady(db);
   const idleSessions: { row: SessionRow; quiet: boolean; quietLong: boolean }[] = [];
-  for (const row of (db.prepare(LIVE_SESSIONS).all() as Json[]).map(toSession)) {
+  for (const full of (db.prepare(LIVE_SESSIONS).all() as Json[]).map(toSession)) {
+    const { profiles: _, ...row } = full;
     const quiet = idle([row.lastActiveAt, row.shownAt], after);
     const quietLong = idle([row.lastActiveAt, row.shownAt], slackAfter);
     if (quiet || quietLong) idleSessions.push({ row, quiet, quietLong });
@@ -1082,11 +1083,13 @@ export class Store {
   }
 
   insertSession(s: NewSession): void {
+    const list = s.profiles !== undefined ? (s.profiles && s.profiles.length > 0 ? s.profiles : null) : (s.profilePinned ? [s.profile] : null);
+    const pinned = list !== null ? list.length === 1 : (s.profilePinned ?? false);
     this.#with((changes) => {
       this.#run(
-        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws, context)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        s.key, s.connect, s.scope ?? "thread", s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, flag(s.profilePinned ?? false),
+        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, profiles, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws, context)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        s.key, s.connect, s.scope ?? "thread", s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, flag(pinned), list !== null ? JSON.stringify(list) : null,
         s.model ?? null, s.effort ?? null, s.workspace, s.cwd ?? null, s.runtimeSessionId ?? null, s.token, s.createdAt, s.lastActiveAt,
         // A new session begins with today's instructions: no note is news to it.
         latestNote(), optFlag(s.fast), s.ws ?? null, s.context ?? null,
@@ -1096,18 +1099,21 @@ export class Store {
     });
   }
 
-  /// Moves a session to another profile (its transcripts are shared by its runtime's profiles); `pinned` keeps it there.
-  setSessionProfile(key: string, profile: string, pinned: boolean): void {
-    this.#updateSession(key, "UPDATE sessions SET profile = ?1, profile_pinned = ?2 WHERE key = ?3", profile, flag(pinned), key);
+  /// Moves a session to another profile (its transcripts are shared by its runtime's profiles); `pinned` keeps it to one,
+  /// `profiles` to a chosen set (null: all of them).
+  setSessionProfile(key: string, profile: string, pinned: boolean, profiles?: string[] | null): void {
+    const list = profiles !== undefined ? (profiles && profiles.length > 0 ? profiles : null) : (pinned ? [profile] : null);
+    this.#updateSession(key, "UPDATE sessions SET profile = ?1, profile_pinned = ?2, profiles = ?3 WHERE key = ?4", profile, flag(pinned), list !== null ? JSON.stringify(list) : null, key);
   }
 
   /// A runtime change is one setting: readers must never see a runtime paired with another's profile or model.
-  setSessionRuntime(key: string, runtime: string, profile: string, pinned: boolean, model: string | null, effort: string | null, fast: boolean | null, context: number | null): void {
+  setSessionRuntime(key: string, runtime: string, profile: string, pinned: boolean, model: string | null, effort: string | null, fast: boolean | null, context: number | null, profiles?: string[] | null): void {
+    const list = profiles !== undefined ? (profiles && profiles.length > 0 ? profiles : null) : (pinned ? [profile] : null);
     // Before this field existed a station with the ordered index could already have changed runtime. Its first
     // transcript recovers the original. Without the index no older station could have made such a change.
     const first = hasRuntimeOrderIndex(this.db)
-      ? "(SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ?8 ORDER BY at, rowid LIMIT 1), " : "";
-    this.#updateSession(key, `UPDATE sessions SET original_runtime = COALESCE(original_runtime, ${first}runtime), runtime = ?1, profile = ?2, profile_pinned = ?3, model = ?4, effort = ?5, fast = ?6, context = ?7 WHERE key = ?8`, runtime, profile, flag(pinned), model, effort, optFlag(fast), context, key);
+      ? "(SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ?9 ORDER BY at, rowid LIMIT 1), " : "";
+    this.#updateSession(key, `UPDATE sessions SET original_runtime = COALESCE(original_runtime, ${first}runtime), runtime = ?1, profile = ?2, profile_pinned = ?3, profiles = ?4, model = ?5, effort = ?6, fast = ?7, context = ?8 WHERE key = ?9`, runtime, profile, flag(pinned), list !== null ? JSON.stringify(list) : null, model, effort, optFlag(fast), context, key);
   }
 
   /// A session's model and effort from its next start on (null: the runtime's default).

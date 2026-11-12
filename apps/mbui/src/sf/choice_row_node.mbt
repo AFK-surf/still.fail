@@ -21,6 +21,8 @@ pub fn choice_row_node(
   tag? : (@view.View) -> Unit,
   trail? : (@view.View) -> Unit,
   ink? : () -> Int64,
+  note_ink? : () -> Int64,
+  trail_middle? : Bool = false,
   disabled? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> Unit {
@@ -31,8 +33,8 @@ pub fn choice_row_node(
   let card = on_card_node(parent)
   let goes = fn() { !disabled() }
   // (its words as a page's row has them: the label, what follows it on its line, a note under them, its end on that
-  // line where a note is under them)
-  let under = fn() { body is None && note() != "" }
+  // line where a note is under them unless `trail_middle` centres it across the row)
+  let under = fn() { body is None && !trail_middle && note() != "" }
   let chevron = if narrow { pg_chevron } else { desk_chevron }
   // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; elsewhere a page's row's; on a
   // page's list in a panel's card its ground reaching past it over and under: link_reach)
@@ -207,7 +209,11 @@ pub fn choice_row_node(
             })
             |> ignore
             words.show(fn() { note() != "" }, at_once=true, fn(n) {
-              words_node(n, note, fn() { if narrow { pg_link_note } else { wide_list_note } }) |> ignore
+              let nw = words_node(n, note, fn() { if narrow { pg_link_note } else { wide_list_note } })
+              match note_ink {
+                Some(f) => nw.ink(By(f)) |> ignore
+                None => ()
+              }
             })
           })
           |> ignore

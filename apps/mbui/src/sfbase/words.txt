@@ -1054,6 +1054,7 @@ web-main.menu.more
 web-main.model.account
 web-main.model.auto
 web-main.model.borrowed
+web-main.model.current
 web-main.model.defaultEffort
 web-main.model.effort
 web-main.model.context
@@ -1070,10 +1071,12 @@ web-main.model.likeModel
 web-main.model.forgetCombo
 web-main.model.noMatch
 web-main.model.none
+web-main.model.only
 web-main.model.otherSeries
 web-main.model.pick
 web-main.model.runtime
 web-main.model.search
+web-main.model.selectAll
 web-main.model.speed
 web-main.model.standard
 web-main.newChat.addProfile

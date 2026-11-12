@@ -17,6 +17,7 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  d_profiles : Array[String]
   /// The most context it runs with, in tokens ("" its model's whole window)
   mut context : String
   mut made : Int
@@ -54,6 +55,7 @@ pub let new_fix : NewFix = {
   d_runtime: "claude",
   d_effort: "high",
   d_profile: "",
+  d_profiles: [],
   context: "",
   made: 0,
   reading: 0,
@@ -501,8 +503,8 @@ fn fix_combos() -> Json {
 ///|
 pub fn fix_pick() -> Json {
   let n = new_fix
-  let changed = n.d_model != n.model || n.d_effort != n.effort || n.d_runtime != n.runtime || n.d_profile != ""
-  let picked = fn(model : String, runtime : String, effort : String, profile : String) -> Json {
+  let changed = n.d_model != n.model || n.d_effort != n.effort || n.d_runtime != n.runtime || n.d_profile != "" || !n.d_profiles.is_empty()
+  let picked = fn(model : String, runtime : String, effort : String, profile : String, profiles : Array[String]) -> Json {
     let o : Map[String, Json] = {
       "model": Json::string(model),
       "runtime": Json::string(runtime),
@@ -510,7 +512,11 @@ pub fn fix_pick() -> Json {
     if effort != "" {
       o["effort"] = Json::string(effort)
     }
-    if profile != "" {
+    if profiles.length() >= 2 {
+      o["profiles"] = Json::array(profiles.map(fn(s) { Json::string(s) }))
+    } else if profiles.length() == 1 {
+      o["profile"] = Json::string(profiles[0])
+    } else if profile != "" {
       o["profile"] = Json::string(profile)
     }
     Json::object(o)
@@ -546,9 +552,9 @@ pub fn fix_pick() -> Json {
     } else {
       Json::null()
     },
-    "value": picked(n.model, n.runtime, n.effort, ""),
+    "value": picked(n.model, n.runtime, n.effort, "", []),
     "valueOption": fix_model(n.model),
-    "draft": picked(n.d_model, n.d_runtime, n.d_effort, n.d_profile),
+    "draft": picked(n.d_model, n.d_runtime, n.d_effort, n.d_profile, n.d_profiles),
     "option": Json::string(n.d_model),
     // (all the drafted model runs on, crowded; else the one it runs on)
     "runtimes": if n.crowded {
@@ -583,16 +589,43 @@ pub fn fix_pick() -> Json {
       },
       { "id": "p2", "name": "团队 API key", "runtime": "claude" },
     ],
-    "who": if n.d_profile == "p1" {
-      "Claude 订阅"
-    } else if n.d_profile == "p2" {
-      "团队 API key"
+    "who": if n.d_profiles.length() >= 2 {
+      Json::string("\{n.d_profiles.length()} 个账号")
     } else {
-      "自动"
+      let one = if n.d_profiles.length() == 1 { n.d_profiles[0] } else { n.d_profile }
+      Json::string(
+        match one {
+          "p1" => "Claude 订阅"
+          "p2" => "团队 API key"
+          "p3" => "Claude 备用订阅"
+          "" => "全选"
+          s => s
+        },
+      )
     },
-    // who runs it as the control says it: the station's pick (no profile kept to)
-    "account": { "text": "自动分配", "level": "ok" },
-    "autoNote": "由 station 选择：现在是 Claude 订阅",
+    // who runs it as the control says it: the station's pick (no profile kept to), the subset count, or the account pinned
+    "account": {
+      "text": if n.d_profiles.length() >= 2 {
+        Json::string("\{n.d_profiles.length()} 个账号")
+      } else {
+        let one = if n.d_profiles.length() == 1 { n.d_profiles[0] } else { n.d_profile }
+        Json::string(
+          match one {
+            "p1" => "Claude 订阅"
+            "p2" => "团队 API key"
+            "p3" => "Claude 备用订阅"
+            "" => "自动分配"
+            s => s
+          },
+        )
+      },
+      "level": "ok",
+    },
+    "autoNote": if n.d_profiles.length() >= 2 {
+      "在已选账号间自动切换"
+    } else {
+      "由 station 选择：现在是 Claude 订阅"
+    },
     "changed": Json::boolean(changed),
     "was": [],
     "becomes": [],
@@ -662,11 +695,28 @@ fn fix_pick_options(all : Array[Json]) -> Json {
 }
 
 ///|
-/// A chat's model control (`pick` of `session:<key>`): the new chat's, with what picks its account again beside 自动.
+/// A chat's model control (`pick` of `session:<key>`): the new chat's, with what picks its account again beside 全选,
+/// which account runs it now (`current`), and three accounts so multi-account subset selection can be exercised.
 pub fn fix_session_pick() -> Json {
   match fix_pick() {
     Object(o) => {
       o["repick"] = Json::string("重新分配")
+      o["accounts"] = [
+        {
+          "id": "p1",
+          "name": "Claude 订阅",
+          "runtime": "claude",
+          "current": true,
+          "quotaLine": { "text": "5 小时窗口已用 32%" },
+        },
+        {
+          "id": "p3",
+          "name": "Claude 备用订阅",
+          "runtime": "claude",
+          "quotaLine": { "text": "5 小时窗口已用 84%", "level": "amber" },
+        },
+        { "id": "p2", "name": "团队 API key", "runtime": "claude" },
+      ]
       Json::object(o)
     }
     other => other
@@ -928,6 +978,7 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
         n.d_runtime = n.runtime
         n.d_effort = n.effort
         n.d_profile = ""
+        n.d_profiles.clear()
       }
       take("model", fn(s) {
         n.d_model = s
@@ -935,7 +986,38 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       })
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
-      take("profile", fn(s) { n.d_profile = s })
+      match field(p, "profiles") {
+        Some(Null) => {
+          n.d_profile = ""
+          n.d_profiles.clear()
+        }
+        Some(Array(xs)) => {
+          n.d_profiles.clear()
+          for x in xs {
+            if x is String(s) && s != "" && !n.d_profiles.contains(s) {
+              n.d_profiles.push(s)
+            }
+          }
+          if n.d_profiles.length() == 1 {
+            n.d_profile = n.d_profiles[0]
+            n.d_profiles.clear()
+          } else {
+            n.d_profile = ""
+          }
+        }
+        _ =>
+          match field(p, "profile") {
+            Some(Null) => {
+              n.d_profile = ""
+              n.d_profiles.clear()
+            }
+            Some(String(s)) => {
+              n.d_profile = s
+              n.d_profiles.clear()
+            }
+            _ => ()
+          }
+      }
       f.changed()
       Some(Ok(Json::object({})))
     }
@@ -969,7 +1051,38 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       })
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
-      take("profile", fn(s) { n.d_profile = s })
+      match field(p, "profiles") {
+        Some(Null) => {
+          n.d_profile = ""
+          n.d_profiles.clear()
+        }
+        Some(Array(xs)) => {
+          n.d_profiles.clear()
+          for x in xs {
+            if x is String(s) && s != "" && !n.d_profiles.contains(s) {
+              n.d_profiles.push(s)
+            }
+          }
+          if n.d_profiles.length() == 1 {
+            n.d_profile = n.d_profiles[0]
+            n.d_profiles.clear()
+          } else {
+            n.d_profile = ""
+          }
+        }
+        _ =>
+          match field(p, "profile") {
+            Some(Null) => {
+              n.d_profile = ""
+              n.d_profiles.clear()
+            }
+            Some(String(s)) => {
+              n.d_profile = s
+              n.d_profiles.clear()
+            }
+            _ => ()
+          }
+      }
       // (in tokens, as a configuration used most has it, or its digits, as the panel's context says it)
       match field(p, "context") {
         Some(Number(k, ..)) => n.context = k.to_int64().to_string()
@@ -980,6 +1093,10 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       n.effort = n.d_effort
       f.changed()
       Some(Ok(Json::object({})))
+    }
+    "pick.repick" => {
+      f.changed()
+      Some(Ok({ "said": "已切到 Claude 备用订阅" }))
     }
     "newChat.create" => {
       n.made += 1

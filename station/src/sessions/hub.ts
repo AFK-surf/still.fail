@@ -1320,8 +1320,14 @@ export class Hub {
     const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
     if (fits.length === 0 && chosen !== null) throw new Error(tr(stationLang(), "station.session.noProfileForModel", { model: model ?? runtimeTitle(runtime), runtime: runtimeTitle(runtime) }));
     if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
-    const kept = chosen === null && connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
-    const profile = kept ?? this.accounts.pick(fits, model, false);
+    const boundIds = chosen === null && connect.bind.profiles && connect.bind.profiles.length > 0
+      ? connect.bind.profiles
+      : chosen === null && connect.bind.profile !== undefined
+        ? [connect.bind.profile]
+        : null;
+    const boundFits = boundIds !== null ? fits.filter((p) => boundIds.includes(p.id) && serves(p, model)) : [];
+    const savedProfiles = boundFits.length > 0 ? boundFits.map((p) => p.id) : null;
+    const profile = boundFits.length === 1 ? boundFits[0]! : this.accounts.pick(boundFits.length > 0 ? boundFits : fits, model, false);
     const dir = scope === "thread" && message ? `${message.channel}-${message.threadTs.replace(".", "-")}` : key.slice(connect.id.length + 1);
     const workspace = join(config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });
@@ -1335,7 +1341,8 @@ export class Hub {
       createdBy,
       runtime,
       profile: profile.id,
-      profilePinned: kept !== undefined,
+      profilePinned: savedProfiles?.length === 1,
+      profiles: savedProfiles,
       model,
       effort: chosen === null ? (connect.bind.effort ?? null) : null,
       fast: null,

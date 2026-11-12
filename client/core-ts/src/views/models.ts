@@ -183,20 +183,27 @@ function profileEfforts(profile: J, runtime: string, m: string | null): string[]
 
 /// The model's own reasoning level on `runtime` (its account's, `profile`, else the first account's that says one),
 /// where the runtime says one.
-export function effortDefault(overview: J, runtime: string, m: string | null, profile: string | null): string | null {
+export function effortDefault(overview: J, runtime: string, m: string | null, profile: string | readonly string[] | null): string | null {
   if (m === null) return null;
+  const allow = typeof profile === "string" ? [profile] : profile;
   const said = (p: J): string | null => {
     const levels = get(get(get(p, "check"), "modelEffortDefaults"), runtime);
     if (levels === undefined || levels === null || typeof levels !== "object") return null;
     const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m));
     return found !== undefined && typeof found[1] === "string" ? found[1] : null;
   };
-  const profiles = profilesOf(overview).filter((p) => runs(p, runtime) && (profile === null || get(p, "id") === profile));
+  const profiles = profilesOf(overview).filter((p) => runs(p, runtime) && (allow === null || allow.includes(get(p, "id"))));
   for (const p of profiles) {
     const level = said(p);
     if (level !== null) return level;
   }
   return null;
+}
+
+/// The reasoning levels shared by a chosen subset of `PickProfile` rows on `runtime`.
+export function subsetEfforts(accounts: J[], runtime: string): string[] {
+  const lists = accounts.map((a) => arr(get(a, "efforts")).filter((x): x is string => typeof x === "string")).filter((xs) => xs.length > 0);
+  return reasoning.common(lists, runtime);
 }
 
 /// What its accounts share. One that has reported no levels (its check not done, or failed) is not known to lack any, so

@@ -1052,11 +1052,12 @@ test "a run can choose another runtime for a model available on both" {
 }
 
 ///|
-test "the run's 账号: what 自动分配 means, then 自动分配 and each account with its provider's mark and its allowance" {
+test "the run's 账号: what 全选 means, then 全选 and each account with its provider's mark and its allowance" {
   let t = settings_tester("run:ws1/st1#s-c1", mode="settings-run-accounts", shows="settings-run-accounts")
   t.draw()
-  // (AccountList: the note, 自动分配, each account without a line under it, its windows as the allowance's boxes)
-  assert_true(t.find("自动分配时，额度用完或登录失效会切换账号") is Some(_))
+  // (AccountList: the note, 全选, each account without a line under it, its windows as the allowance's boxes)
+  assert_true(t.find("勾选多个账号或全选时，额度用完或登录失效会自动切换") is Some(_))
+  assert_true(t.find("全选") is Some(_))
   assert_true(t.find("Claude 主账号") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("38%") is Some(_))
   assert_true(t.find("70%") is Some(_))
