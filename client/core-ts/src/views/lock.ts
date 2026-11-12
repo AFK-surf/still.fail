@@ -174,7 +174,78 @@ export const tookOrRefused = (r: Result.Result<unknown, unknown>): number => (r.
 /// others their own; none from a cloud that would not say): when each was last used and what it calls itself now.
 /// A device is approved only face to face (views/pair.ts): the cloud's requests of older clients, approved there with
 /// a press, are neither read nor answered (2026-11-02 the user: a tap let a device in without its code typed on it).
-type Held = { head: Head | null; entries: Entry[]; seen?: J[] | null };
+/// `shown`: the place up to which some station of the workspace has shown (or taken) the very entries held (absent: all
+/// of them, as every record from before). What is held past it (an entry `append` holds that the cloud alone took, or a
+/// chain read of the cloud alone) gives way to a station keeping another entry there (`readLockOnce`); what is held
+/// through it never gives way to one station's word (#5540).
+type Held = { head: Head | null; entries: Entry[]; seen?: J[] | null; shown?: number };
+
+/// How far what is held has been shown by a station (Held `shown`).
+const shownOf = (h: Held | null): number => (h?.head ? Math.min(h.shown ?? h.head.seq, h.head.seq) : -1);
+
+/// Whether `theirs` is an entry of what is held, by its place and hash (not one past it: that is not known yet).
+const holds = (h: Held | null, theirs: Head): boolean => {
+  if (!h?.head || theirs.genesis !== h.head.genesis || theirs.seq > h.head.seq) return false;
+  const e = h.entries[theirs.seq];
+  return e !== undefined && entryHash(e) === theirs.hash;
+};
+
+/// A station said a head of what is held (its GET /lock, its POST /lock's answer, its refusal of this device): what is
+/// held is shown that far.
+function showed(inner: Inner, ws: string, theirs: Head | null): void {
+  const h = held(inner, ws);
+  if (theirs === null || !holds(h, theirs) || theirs.seq <= shownOf(h)) return;
+  inner.data.put("lock", ws, { ...h!, shown: theirs.seq });
+}
+
+/// Whether each entry of `entries` from `from` follows the one before it (its place, and the hash it names).
+function follows(entries: Entry[], from: number): boolean {
+  for (let i = Math.max(1, from); i < entries.length; i++) if (entries[i]!.seq !== i || entries[i]!.prev !== entryHash(entries[i - 1]!)) return false;
+  return entries.length === 0 || entries[0]!.seq === 0;
+}
+
+/// The first place where two chains differ (the shorter one's length where one goes on from the other).
+function parting(a: Entry[], b: Entry[]): number {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) if (entryHash(a[i]!) !== entryHash(b[i]!)) return i;
+  return n;
+}
+
+/// Whether two entries are about the same thing, as the lock's rules apply them (rules/src/lock/lock.mbt,
+/// station/src/cloud/lock.ts `apply`): where another device's entry took the place of one of this device's, the latter is
+/// signed again after it only when they are not (`Lock.again`), else the one at the place is what stands. A device's
+/// entry and its removal by the device's id, and a member's removal by every device of theirs; a member's entry, removal
+/// and own lock (`person`) by the member's sub; a station's by its key. `disable`, and any kind not placed here, are
+/// about everything: never signed again blindly. `subOf`: whose a device is, as the lock had it.
+function sameThing(a: { kind: string; body: unknown }, b: { kind: string; body: unknown }, subOf: (device: string) => string | undefined): boolean {
+  type About = { device?: string; of?: string; member?: string; devicesOf?: string; station?: string } | null;
+  const about = (e: { kind: string; body: unknown }): About => {
+    const id = str(get(e.body, "id"));
+    const sub = str(get(e.body, "sub"));
+    const key = str(get(e.body, "key"));
+    switch (e.kind) {
+      case "device":
+        return id === null ? null : { device: id, of: sub ?? subOf(id) };
+      case "device.remove":
+        return id === null ? null : { device: id, of: subOf(id) };
+      case "member":
+      case "person":
+        return sub === null ? null : { member: sub };
+      case "member.remove":
+        return sub === null ? null : { member: sub, devicesOf: sub };
+      case "station":
+      case "station.remove":
+        return key === null ? null : { station: key };
+      default:
+        return null;
+    }
+  };
+  const x = about(a);
+  const y = about(b);
+  if (x === null || y === null) return true;
+  const both = (p: string | undefined, q: string | undefined) => p !== undefined && p === q;
+  return both(x.device, y.device) || both(x.member, y.member) || both(x.station, y.station) || both(x.devicesOf, y.of) || both(x.of, y.devicesOf);
+}
 
 /// What this device keeps of a workspace's lock this run.
 type Part = {
@@ -374,6 +445,7 @@ function readStations(inner: Inner, ws: string): Effect.Effect<void> {
       Effect.map(Effect.result(inner.stations.requests.call(new StationAddr(ws, id), "GET", "/lock?after=999999999", null, { quiet: true })), (r) => {
         if (r._tag !== "Success") return;
         p.heads.set(id, readHead(get(r.success, "head")));
+        showed(inner, ws, readHead(get(r.success, "head")));
         touch(inner, ws);
       }),
     { concurrency: 4, discard: true },
@@ -494,7 +566,8 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     let entries = same ? [...was!.entries, ...more.filter((e) => e.seq > was!.head!.seq)] : more;
     if (!same && head && (more.length === 0 || more[0]!.seq !== 0)) entries = arr(get(yield* cloud("/lock"), "entries")) as Entry[];
     const seen = head === null ? null : yield* Effect.orElseSucceed(Effect.map(cloud("/devices"), (r) => arr(get(r, "devices"))), () => was?.seen ?? null);
-    yield* hold(inner, ws, sub, head, entries, seen);
+    // (the cloud's word shows nothing: what a station showed of what was held, as far as it goes on, and no more)
+    yield* hold(inner, ws, sub, head, entries, seen, same ? shownOf(was) : -1);
   });
 }
 
@@ -567,8 +640,18 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           const more = arr(get(r.success, "entries")) as Entry[];
           let entries: Entry[] | null = null;
           if (head === null) entries = [];
-          else if (was?.head && !off && head.genesis === was.head.genesis) entries = head.seq <= was.head.seq ? null : [...was.entries, ...more.filter((e) => e.seq > was.head!.seq)];
-          else if (more[0]?.seq === 0) entries = more;
+          else if (was?.head && !off && head.genesis === was.head.genesis) {
+            // Of the lock held: its head an entry held (it shows what is held that far); or what it has past the head
+            // held, where that follows it. Else it went another way after some entry: where that may be past what a
+            // station showed (`shown`), its whole chain, weighed below; at or before it, nothing it says is taken.
+            const on = [...was.entries, ...more.filter((e) => e.seq > was.head!.seq)];
+            if (holds(was, head)) entries = null;
+            else if (head.seq > was.head.seq && on.length === head.seq + 1 && follows(on, was.head.seq + 1)) entries = on;
+            else if (head.seq > shownOf(was)) {
+              const all = yield* ask(id, "/lock");
+              entries = all._tag === "Success" ? (arr(get(all.success, "entries")) as Entry[]) : null;
+            }
+          } else if (more[0]?.seq === 0) entries = more;
           else {
             const all = yield* ask(id, "/lock");
             entries = all._tag === "Success" ? (arr(get(all.success, "entries")) as Entry[]) : null;
@@ -586,12 +669,41 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     // lock); none longer, what is held stays.
     let head = was?.head ?? null;
     let entries = was?.entries ?? [];
+    /// What gave way of what was held (from `at`), and the station's chain from there.
+    let gave = null as { at: number; ours: Entry[]; theirs: Entry[] } | null;
     if (!off) {
       for (const a of served) {
         if (a.head === null || a.entries === null || a.entries.length !== a.head.seq + 1) continue;
         if (a.head.genesis !== head!.genesis || a.head.seq <= head!.seq || entryHash(a.entries[head!.seq]!) !== head!.hash) continue;
         head = a.head;
         entries = a.entries;
+      }
+      // None goes on from what is held: what is held past `shown` (as the answers show it now) gives way to a station
+      // keeping another entry there, its whole chain checked as the stations check it; what is held through `shown`
+      // stays, whatever one station says (#5540). The first such station's, then the longest that goes on from it. (Not
+      // where what is held moved on as this read ran: it is weighed again as the next read comes.)
+      const at = Math.max(shownOf(was), ...served.flatMap((a) => (a.head !== null && holds(was, a.head) ? [a.head.seq] : [])));
+      const still = held(inner, ws);
+      if (head === was!.head && still?.head?.hash === was!.head!.hash) {
+        for (const a of served) {
+          if (a.head === null || a.entries === null || a.entries.length !== a.head.seq + 1 || a.head.genesis !== head!.genesis || holds(was, a.head)) continue;
+          const k = parting(was!.entries, a.entries);
+          if (gave === null) {
+            if (k <= at || k > was!.head!.seq || entryHash(a.entries[0]!) !== head!.genesis || !follows(a.entries, k)) continue;
+            try {
+              checkLock(a.entries, now(inner));
+            } catch {
+              continue;
+            }
+            gave = { at: k, ours: was!.entries.slice(k), theirs: a.entries.slice(k) };
+            head = a.head;
+            entries = a.entries;
+          } else if (a.head.seq > head!.seq && entryHash(a.entries[head!.seq]!) === head!.hash && follows(a.entries, head!.seq + 1)) {
+            head = a.head;
+            entries = a.entries;
+            gave = { ...gave, theirs: a.entries.slice(gave.at) };
+          }
+        }
       }
     } else {
       // None held (or the one held turned off, whose own chain is not taken again): which lock of those the stations
@@ -643,7 +755,16 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     // read (one read alone as its link opened told only who came to it, and the others' devices lost their last use
     // on 设置 › 安全 until all were read again).
     const whole = lockStations(inner, ws).every((id) => served.some((a) => a.id === id));
-    yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]));
+    // How far a station showed what is held now: as far as was shown of the lock held, where it goes on from that (and
+    // short of where it gave way), and each answer's head that is an entry of it.
+    const kept: Held = { head, entries };
+    const before = !off && head !== null && head.genesis === was?.head?.genesis ? (gave === null ? shownOf(was) : Math.min(shownOf(was), gave.at - 1)) : -1;
+    const shown = Math.max(before, ...served.flatMap((a) => (a.head !== null && holds(kept, a.head) ? [a.head.seq] : [])));
+    yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]), shown);
+    if (gave !== null) {
+      const g = gave;
+      inner.runner.fork(Effect.ignore(new Lock(inner, ws, sub, null, { holds: true }).again(g.ours, g.theirs, was!.entries), { log: "Unhandled", message: "lock entry signed again after a station's" }));
+    }
     return true;
   });
 }
@@ -664,14 +785,16 @@ function mergeSeen(lists: J[][]): J[] {
 /// while it was read (another read landed first: a station asked alone as its link opened, on a slow line, answers
 /// what it kept as it was asked): a chain that goes only as far as some entry of the one held now is behind it, and
 /// the one held stays. Held as read, it took the entries since back off this device until the lock next moved.
-function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries: Entry[], seen: J[] | null): Effect.Effect<void> {
+/// `shown`: how far a station showed what was read (Held `shown`).
+function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries: Entry[], seen: J[] | null, shown: number): Effect.Effect<void> {
   return Effect.gen(function* () {
     if (said !== null && inner.provider.kind === "stillfail") yield* Effect.ignore(new Lock(inner, ws, sub, null).base());
     // (as held now, not as it was when the read began)
     const was = held(inner, ws);
     const ahead = said !== null && was?.head != null && said.seq < was.head.seq && onChain(was, said) ? was : null;
     const head = ahead !== null ? ahead.head : said;
-    inner.data.put("lock", ws, { head, entries: head === null ? [] : ahead !== null ? ahead.entries : entries, ...(seen ? { seen } : {}) });
+    const upTo = head === null ? -1 : ahead !== null ? Math.max(shownOf(was), Math.min(shown, said!.seq)) : Math.min(shown, head.seq);
+    inner.data.put("lock", ws, { head, entries: head === null ? [] : ahead !== null ? ahead.entries : entries, ...(seen ? { seen } : {}), ...(head === null ? {} : { shown: upTo }) });
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
@@ -718,6 +841,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   // Its own lock is another: no approval in this one lets this device in there, however often it is tried.
   const said = readHead(theirs);
   if (said !== null) p.heads.set(station, said);
+  showed(inner, ws, said);
   if (said !== null && !onChain(h, said)) {
     p.refused.set(station, h?.head?.hash ?? null);
     touch(inner, ws);
@@ -1412,7 +1536,7 @@ function heardTail(inner: Inner, ws: string, raw: unknown): void {
   const entries = [...was.entries.slice(0, first), ...tail];
   if (entries.length <= was.entries.length || entryHash(entries[0]!) !== was.head.genesis) return;
   const last = entries[entries.length - 1]!;
-  inner.runner.fork(hold(inner, ws, sub, { seq: last.seq, hash: entryHash(last), genesis: was.head.genesis }, entries, was.seen ?? null));
+  inner.runner.fork(hold(inner, ws, sub, { seq: last.seq, hash: entryHash(last), genesis: was.head.genesis }, entries, was.seen ?? null, last.seq));
 }
 
 /// The stations of `sub`'s workspaces here, each once (one in two of them is asked in the first).
@@ -2121,20 +2245,30 @@ export function takeInJoined(inner: Inner, sub: string, ws: string, station: str
   return new Lock(inner, ws, sub, null).addStation(station, shortCode(station));
 }
 
+/// How many times more an entry a call signs is signed again after the chain of a station that refused it (`append`).
+const AGAIN_TRIES = 2;
+
 /// What the stations brought an entry did: one took it, or none did (`refused`: one that keeps this lock refused it).
 type Brought = { took: boolean; refused: CoreError | null };
 
 /// A station that refused an entry on the lock it keeps, read again in a fiber of the core's: once for each head held
 /// here, so a refusal the read brings nothing for (the lock's rules, not another entry) is not read again and again by
-/// what tries again as the lock is held (`bindPerson`, `keepToPerson`, `ownLockFor`, each forked by `hold`).
-const refusingRead = new WeakMap<Inner, Set<string>>();
-function readRefusing(inner: Inner, ws: string, station: string): void {
+/// what tries again as the lock is held (`bindPerson`, `keepToPerson`, `ownLockFor`, each forked by `hold`). What it
+/// gives: that read's end, to wait on (`Lock.append`, which signs again after what it brought).
+const refusingRead = new WeakMap<Inner, Map<string, Deferred.Deferred<void>>>();
+function readRefusing(inner: Inner, ws: string, station: string): Effect.Effect<void> {
   let once = refusingRead.get(inner);
-  if (once === undefined) refusingRead.set(inner, (once = new Set()));
+  if (once === undefined) refusingRead.set(inner, (once = new Map()));
   const at = `${ws}/${station}/${held(inner, ws)?.head?.hash ?? ""}`;
-  if (once.has(at)) return;
-  once.add(at);
-  inner.runner.fork(Effect.ignore(readLockOf(inner, ws, [station]), { log: "Unhandled", message: "lock read of a station that refused an entry" }));
+  const had = once.get(at);
+  if (had !== undefined) return Deferred.await(had);
+  const read = Deferred.makeUnsafe<void>();
+  once.set(at, read);
+  inner.runner.fork(Effect.ensuring(
+    Effect.ignore(readLockOf(inner, ws, [station]), { log: "Unhandled", message: "lock read of a station that refused an entry" }),
+    Effect.sync(() => void Deferred.doneUnsafe(read, Effect.void)),
+  ));
+  return Deferred.await(read);
 }
 
 export class Lock {
@@ -2154,9 +2288,12 @@ export class Lock {
   /// Whether the lock is still to be read before the first entry signed (within that wait): not where the call that
   /// made it read it already (`managed`).
   #toRead: boolean;
+  /// Whether what it signs that a station took is held here though no one waits on it (`again`: what it signs follows
+  /// the station's chain just held, and the pages show it so).
+  readonly #holds: boolean;
 
-  /// `read`: the maker read the lock already, within `within`.
-  constructor(inner: Inner, ws: string, sub: string, ctx: SpanContext | null, how: { byHand?: boolean; within?: Asked; read?: boolean } = {}) {
+  /// `read`: the maker read the lock already, within `within`. `holds`: see `#holds`.
+  constructor(inner: Inner, ws: string, sub: string, ctx: SpanContext | null, how: { byHand?: boolean; within?: Asked; read?: boolean; holds?: boolean } = {}) {
     this.#inner = inner;
     this.ws = ws;
     this.sub = sub;
@@ -2164,6 +2301,7 @@ export class Lock {
     this.#byHand = how.byHand === true;
     this.#within = how.within ?? null;
     this.#toRead = this.#within !== null && how.read !== true;
+    this.#holds = how.holds === true;
   }
 
   #cloud(method: string, path: string, body: unknown = null) {
@@ -2333,6 +2471,7 @@ export class Lock {
       const pinned = get(get(done, "stations"), station);
       if (isObject(pinned) && typeof pinned.error === "string") return yield* Effect.fail(new CoreError("lock_station_refused", pinned.error));
       part(self.#inner, self.ws).heads.set(station, readHead(pinned));
+      showed(self.#inner, self.ws, readHead(pinned));
       return done;
     });
   }
@@ -2351,13 +2490,54 @@ export class Lock {
       if (signer === null) return yield* Effect.fail(new CoreError("lock_no_signer", "this device signs nothing for the workspace lock"));
       const { head, entries } = yield* self.#chain();
       if (head === null) return yield* Effect.fail(new CoreError("lock_none", "the workspace has no lock"));
+      return yield* self.#signAfter(signer, head, entries, kind, body, waitFor, AGAIN_TRIES, null);
+    });
+  }
+
+  /// This device's own entries that gave way to a station's chain (`ours`, held past what a station had shown; `theirs`,
+  /// that chain's entries from the place they part; `before`, what was held), each signed again after it, the same kind
+  /// and body, where none of `theirs` is about the same thing (`sameThing`) and the stations would take it after them
+  /// (`checkSigned`), and brought to the stations as an entry no one waits on is. The others are dropped: the pages show
+  /// what the stations keep. (Another device's entry that gave way is that device's to sign again.)
+  again(ours: Entry[], theirs: Entry[], before: Entry[]): Effect.Effect<void, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const signer = yield* Signer.load(self.#inner.host);
+      if (signer === null) return;
+      const had = fold(before).devices;
+      const kept = fold(held(self.#inner, self.ws)?.entries ?? []).devices;
+      const subOf = (id: string): string | undefined => str(get(had.get(id), "sub")) ?? str(get(kept.get(id), "sub")) ?? undefined;
+      for (let i = 0; i < ours.length; i++) {
+        const e = ours[i]!;
+        if (e.sig?.key !== signer.id) continue;
+        const over = theirs.find((x) => sameThing(x, e, subOf));
+        if (over !== undefined) {
+          yield* Effect.ignore(Effect.fail(CoreError.invalid(`a lock entry (${e.kind}) not signed again: the station's ${over.kind} at ${over.seq} is about the same thing`)), { log: "Unhandled", message: "lock entry dropped" });
+          continue;
+        }
+        const h = held(self.#inner, self.ws);
+        if (!h?.head) return;
+        yield* Effect.ignore(self.#signAfter(signer, h.head, h.entries, e.kind, e.body, [], 0, null), { log: "Unhandled", message: "lock entry signed again" });
+        // (not taken by a station, so not held: the next would be signed at the same place, and is left)
+        if (i < ours.length - 1 && held(self.#inner, self.ws)?.head?.hash === h.head.hash) return yield* Effect.fail(CoreError.invalid("lock entries not signed again: a station took none of the one before"));
+      }
+    });
+  }
+
+  /// One entry signed after `head` (`entries` the chain to it) and brought (`append`). `again`: how many times more it
+  /// is signed after the chain a refusing station keeps, where that one's read moved what is held on (a call a person
+  /// waits on). `instead`: the refusal it is signed again for, which is the failure where it cannot be (the person
+  /// is told what they were before).
+  #signAfter(signer: Signer, head: Head, entries: Entry[], kind: string, body: unknown, waitFor: string[], again: number, instead: CoreError | null): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
       const entry = signer.sign(next(self.ws, head, self.#inner.host.nowMs() / 1000, kind, body));
       // The whole chain: a station that is behind takes what it lacks, and skips what it has.
       const chain = [...entries, entry];
       // Checked as the stations check it before it goes: one they refuse, kept at the cloud, leaves every entry after
       // it refused there too (2026-10-28: a device the lock names without its key approved one, and a station kept
       // turning the devices approved after it away for days).
-      yield* checkSigned(entries, chain, signer.id, now(self.#inner));
+      yield* instead === null ? checkSigned(entries, chain, signer.id, now(self.#inner)) : Effect.mapError(checkSigned(entries, chain, signer.id, now(self.#inner)), () => instead);
       const stations = [...fold(chain).stations.keys()];
       const pinned = yield* self.#bring(chain, stations.filter((s) => waitFor.includes(s)));
       const taken = (h: unknown) => (readHead(h)?.seq ?? -1) >= entry.seq;
@@ -2366,15 +2546,31 @@ export class Lock {
       const others = stations.filter((s) => !waitFor.includes(s));
       const later = others.filter((s) => !serving.has(s));
       if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later), { log: "Unhandled", message: "lock chain brought" }));
-      const first = Object.values(pinned).some(taken) ? { now: { took: true, refused: null } } : yield* self.#firstTaken(chain, others.filter((s) => serving.has(s)), taken, head.genesis);
+      const rereads: Effect.Effect<void>[] = [];
+      const first = Object.values(pinned).some(taken) ? { now: { took: true, refused: null } } : yield* self.#firstTaken(chain, others.filter((s) => serving.has(s)), taken, head.genesis, rereads);
       // Refused by a station that keeps this lock (another entry at its place, or the lock's rules) and taken by none:
       // the entry does not go on, and the cloud is not sent it. Sent there, the cloud took it where its chain was a
       // place behind the stations' and the call answered well, the cloud's chain forked from the stations'; or, its
       // POST unanswered, the call never answered (2026-11-12, found reading). The station's lock is read again
-      // (`#refusedBy`), so the next press signs after what it keeps. (The stations named in `waitFor` say theirs in
-      // `pinned`, which their calls report, as before.)
+      // (`#refusedBy`). Where that moved what is held on (another device's entry at the place), a call a person waits
+      // on signs it again after that, as `again` would (not about the same thing, taken by the stations' rules), twice
+      // more at most, the read waited for within the call's wait; where it did not (the lock's rules refused it), or
+      // the call's wait is over before it is read, the refusal is the call's, and the next press signs after what the
+      // station keeps. (The stations named in `waitFor` say theirs in `pinned`, which their calls report, as before.)
       const refused = "now" in first ? first.now.refused : first.refused();
-      if (refused !== null) return yield* Effect.fail(refused);
+      if (refused !== null) {
+        if (again > 0 && self.#within !== null) {
+          yield* self.#within.wait(Effect.all(rereads, { discard: true }));
+          const h = held(self.#inner, self.ws);
+          if (h?.head && h.head.genesis === head.genesis && h.head.hash !== head.hash) {
+            const from = Math.min(parting(entries, h.entries), entry.seq);
+            const had = fold(entries).devices;
+            const subOf = (id: string): string | undefined => str(get(had.get(id), "sub")) ?? undefined;
+            if (!h.entries.slice(from).some((x) => sameThing(x, { kind, body }, subOf))) return yield* self.#signAfter(signer, h.head, h.entries, kind, body, waitFor, again - 1, instead ?? refused);
+          }
+        }
+        return yield* Effect.fail(instead ?? refused);
+      }
       // Not taken as far as this device heard: the cloud may have kept it all the same, its answer lost on the way
       // back (a gateway's 502, the line gone). Then it is done: asked again, it would say it failed while it went.
       // (a call a person waits on waits ASKED_MS on that read, a wait of its own: the cloud is what takes the entry
@@ -2388,6 +2584,7 @@ export class Lock {
           return there !== undefined && entryHash(there) === entryHash(entry) ? Effect.void : Effect.fail(e);
         });
       });
+      const took = "now" in first && first.now.took;
       if ("now" in first) {
         if (first.now.took) yield* self.#toCloud([entry], true);
         else yield* cloudTakes;
@@ -2397,19 +2594,21 @@ export class Lock {
         // either takes it, the other going on behind. Only once the stations are over with none taking it is the
         // cloud's failure the call's. (2026-11-12: the cloud frozen, the station just started anew, its link back 10 s
         // later: a device let in face to face was never answered, the call having stopped listening to the stations at
-        // 3 s.) What that costs, known: a station that keeps this lock and refuses it past the wait cannot unsend what
-        // the cloud was sent at the wait's end; the cloud taking it then, the call answers well and the cloud's chain
-        // forks from the stations', the one case of `#refusedBy` that cannot be told in time.
+        // 3 s.) A station that keeps this lock and refuses it after that cannot unsend what the cloud was sent at the
+        // wait's end: the call answered well, and what it held is past what a station has shown (Held `shown`), so it
+        // gives way to that station's chain as its refusal's read brings it, and is signed again after it (`again`).
+        // The cloud's chain stays forked from the stations': it is kept only for the stations and devices from before,
+        // and goes with them (the root AGENTS.md, The cloud is the account system).
         yield* eitherTakes(self.#inner.runner, cloudTakes, Effect.map(first.later, (b) => b.took));
       }
       const signed: Head = { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis };
       // A call a person waits on reads nothing between the entries it signs one after another (`added` signs one for
       // each person, `admit` a member before their device): the chain is held here with this one on it, so the next
       // follows it, and the pages show it though no station answered. Where what is held moved on meanwhile, a read
-      // brought more already, and it is left as it is.
-      if (self.#within !== null) {
+      // brought more already, and it is left as it is. Shown as far as a station took it: none, where only the cloud did.
+      if (self.#within !== null || (self.#holds && took)) {
         const was = held(self.#inner, self.ws);
-        if (was?.head?.hash === head.hash) yield* hold(self.#inner, self.ws, self.sub, signed, chain, was.seen ?? null);
+        if (was?.head?.hash === head.hash) yield* hold(self.#inner, self.ws, self.sub, signed, chain, was.seen ?? null, took ? entry.seq : shownOf(was));
       }
       return { head: signed, stations: pinned };
     });
@@ -2421,18 +2620,23 @@ export class Lock {
   /// seen once all answered or the wait ended. One refusal does not end the wait: another station may take the entry a
   /// moment after, and a taking wins. For a call a person waits on (`within`): as it stands at the end of its ASKED_MS
   /// (`now`), else the way to wait for the stations still (`later`, by TAKEN_MS from when they were brought it) and
-  /// the refusal seen so far, the cloud being asked too meanwhile (`append`).
-  #firstTaken(entries: Entry[], stations: string[], taken: (head: unknown) => boolean, genesis: string): Effect.Effect<{ now: Brought } | { later: Effect.Effect<Brought>; refused: () => CoreError | null }> {
+  /// the refusal seen so far, the cloud being asked too meanwhile (`append`). A station taking them shows what is held
+  /// that far (`showed`, where it is held by then); `rereads`, the reads of the lock of those that refused.
+  #firstTaken(entries: Entry[], stations: string[], taken: (head: unknown) => boolean, genesis: string, rereads: Effect.Effect<void>[]): Effect.Effect<{ now: Brought } | { later: Effect.Effect<Brought>; refused: () => CoreError | null }> {
     const self = this;
     return Effect.gen(function* () {
       if (stations.length === 0) return { now: { took: false, refused: null } };
       const done = Deferred.makeUnsafe<boolean>();
       let left = stations.length;
       let refused: CoreError | null = null;
+      const last = entries[entries.length - 1]!;
       for (const id of stations)
         self.#inner.runner.fork(Effect.flatMap(Effect.result(self.#station(id, "POST", "/lock", { entries })), (r) => Effect.sync(() => {
-          if (r._tag === "Success" && taken(get(r.success, "head"))) return void Deferred.doneUnsafe(done, Effect.succeed(true));
-          refused ??= self.#refusedBy(id, r, genesis);
+          if (r._tag === "Success" && taken(get(r.success, "head"))) {
+            showed(self.#inner, self.ws, { seq: last.seq, hash: entryHash(last), genesis });
+            return void Deferred.doneUnsafe(done, Effect.succeed(true));
+          }
+          refused ??= self.#refusedBy(id, r, genesis, rereads);
           if (--left === 0) Deferred.doneUnsafe(done, Effect.succeed(false));
         })));
       // (the stations are brought it still, each in a fiber of its own)
@@ -2452,13 +2656,13 @@ export class Lock {
   /// another lock or none, one refusing this device (`lock_unconfirmed`) or the station (`lock_station`), one from
   /// before (404), the network. Which lock it keeps is as it last said this run (`part.heads`, its GET /lock): its 409
   /// carries its head, but a station's refusal reaches the core as its code, words and status alone
-  /// (station/requests.ts `httpError`). Its lock is read again behind (once for each head held here): what is held
-  /// catches up, and what is signed next follows what it keeps.
-  #refusedBy(id: string, r: Result.Result<unknown, CoreError>, genesis: string): CoreError | null {
+  /// (station/requests.ts `httpError`). Its lock is read again behind (once for each head held here; its end put in
+  /// `rereads`): what is held catches up, and what is signed next follows what it keeps.
+  #refusedBy(id: string, r: Result.Result<unknown, CoreError>, genesis: string, rereads: Effect.Effect<void>[]): CoreError | null {
     if (r._tag !== "Failure" || r.failure.status !== 409) return null;
     const theirs = part(this.#inner, this.ws).heads.get(id);
     if (theirs == null || theirs.genesis !== genesis) return null;
-    readRefusing(this.#inner, this.ws, id);
+    rereads.push(readRefusing(this.#inner, this.ws, id));
     return new CoreError("lock_refused", r.failure.message, 409);
   }
 
