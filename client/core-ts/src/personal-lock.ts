@@ -493,7 +493,16 @@ export class PersonalLock {
       if (typeof taken === "number" && taken > 0) this.#env.runner.fork(Effect.ignore(toCloud));
       else if (taken !== null && typeof taken === "object") yield* eitherTakes(this.#env.runner, cloudTakes, Effect.map(taken.later, (n) => n !== null && n > 0));
       else yield* cloudTakes;
-      yield* this.#pin(sub, [...(this.#pinned.get(sub) ?? []), e]);
+      // Pinned as it stands now: a read answered while the entry was brought may have pinned it already (a station's,
+      // taken after the station took it: put on again, the chain held it twice, and a device let in face to face was
+      // brought a lock that does not hold and told it was not let in, 2026-11-12), or another entry in its place (two
+      // stations, each taking a different one), or a chain it does not follow: then it is refused as a station's 409 is,
+      // what is pinned kept. Never one the chain does not hold.
+      const now = this.#pinned.get(sub) ?? [];
+      const there = now[e.seq];
+      const follows = now.length === e.seq && (e.seq === 0 || entryHash(now[e.seq - 1]!) === e.prev);
+      if (follows) yield* this.#pin(sub, [...now, e]);
+      else if (there === undefined || entryHash(there) !== entryHash(e)) return yield* Effect.fail(new CoreError("lock_refused", "another entry took its place", 409));
       this.#seen.delete(sub);
       this.#env.changed();
     });
