@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e3c683113](https://github.com/AFK-surf/still.fail/commit/e3c683113f21411a3b910eb58ef0e5856be543c7) Connect pages: each platform's own words (Feishu,  | 1.87 | 2.5 | 10.52 | 29.5 | 37.21 | 26.28 | 49.15 | 94.03 | 174.97 |
 | [9ca6804f9](https://github.com/AFK-surf/still.fail/commit/9ca6804f997c0a33011d9a63b722864f87b75ca0) mbui: a page's list's blocks come or gone by data  | 1.87 | 2.5 | 10.52 | 29.33 | 37.2 | 26.11 | 48.83 | 94.16 | 178.95 |
 | [031d90e13](https://github.com/AFK-surf/still.fail/commit/031d90e133a9105c05eb13487969fec00e8eff37) app tests: what floats over the old chat page's li | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 94.24 | 174.48 |
 | [5ee283c78](https://github.com/AFK-surf/still.fail/commit/5ee283c7884e3b5d3253e08bfbbdcdfd4be76e93) fix(mbui): keep compact MoonBit diagnostics in dev | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 94.03 | 136.81 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f06a53f31](https://github.com/AFK-surf/still.fail/commit/f06a53f316e0107577e0dab7bb0d30aea93e14a6) mbui: tree_select_wbtest's words look says max_lin | 1.85 | 2.47 | 10.35 | 29.09 | 36.57 | 25.91 | 48.32 | 94.34 | 113.74 |
 | [3ac2bae84](https://github.com/AFK-surf/still.fail/commit/3ac2bae8499dc5db4f9f62ce53f801c4f4b745ba) app: what the workspace in view's first screen rea | 1.85 | 2.47 | 10.35 | 29.09 | 36.55 | 25.9 | 48.32 | 94.86 | 135.49 |
 | [62447bc44](https://github.com/AFK-surf/still.fail/commit/62447bc440a1d8e8b9db9c9c1225ad9757411600) mbui: words in pieces in a block lent a picker of  | 1.84 | 2.47 | 10.35 | 29.09 | 36.55 | 25.9 | 48.3 | 94.31 | 135.49 |
-| [0d024466b](https://github.com/AFK-surf/still.fail/commit/0d024466b290064b1d9dec6da6309128fb2c7283) mbui: the corner rule holds a node of the window's | 1.85 | 2.47 | 10.36 | 29.09 | 36.58 | 25.9 | 48.32 | 94.6 | 125.5 |
