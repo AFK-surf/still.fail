@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1916c2b23](https://github.com/AFK-surf/still.fail/commit/1916c2b23a0070b62aec34280763fa475d0ee580) core: a lock's entries are signed one at a time, t | 1.88 | 2.51 | 10.74 | 29.71 | 37.97 | 26.44 | 49.57 | 94.29 | 180.06 |
 | [4c4afd5c0](https://github.com/AFK-surf/still.fail/commit/4c4afd5c0c57c40f35e8f258924d0d499c1d7f7b) app fixture: a chat's outline is of all its device | 1.88 | 2.51 | 10.74 | 29.7 | 37.97 | 26.43 | 49.57 | 94.88 | 187.13 |
 | [568c44c5d](https://github.com/AFK-surf/still.fail/commit/568c44c5dfe2236d6718e478fe4f8b62f8b3be4c) app: what changed in Home's chats' list while it r | 1.88 | 2.51 | 10.74 | 29.69 | 37.98 | 26.42 | 49.57 | 94.7 | 191.35 |
 | [d1a62d3cd](https://github.com/AFK-surf/still.fail/commit/d1a62d3cd8eee3463b2bb4006a1bf2f74f899662) mbui: at_cause says where key_taking held in turn  | 1.88 | 2.51 | 10.74 | 29.7 | 37.97 | 26.42 | 49.57 | 94.27 | 172.83 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [b310ef4c6](https://github.com/AFK-surf/still.fail/commit/b310ef4c6e94a4c6a2e9b4e18ab67e173a632d9a) mbui: a scripted run's step comes where a device's | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 93.91 | 183.33 |
 | [67e932c32](https://github.com/AFK-surf/still.fail/commit/67e932c32099609e6fda4b9956bff8a5d12659e6) core: a device its station ended for the lock dial | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.11 | 141.24 |
 | [4639baabb](https://github.com/AFK-surf/still.fail/commit/4639baabb4604530b8ec011b31eea93409a2d689) mbui: a field in a page's list drawn whole as one  | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.01 | 180.81 |
-| [3aa695f5f](https://github.com/AFK-surf/still.fail/commit/3aa695f5f2c79821758de737b08483d580cc3c3b) app: a chat's bar on 中屏 and 大屏 as nodes of the win | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 93.98 | 140.55 |
