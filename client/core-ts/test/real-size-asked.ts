@@ -12,7 +12,7 @@ import { parseTopic, type Topic } from "../src/protocol.ts";
 import { isObject } from "../src/util.ts";
 import {
   CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, PEOPLE, CHAT_MESSAGES, DRIVE, LETTERS_COUNT, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, PEEKS, SEARCH, UP, VAULT_ITEM, cardCame, changelogFeed, changelogReleased,
-  chatArchived, chatRenamed, devicesAdded, devicesSaid, driveAdded, fixture, hostReading, jobLogOf, jobsMoved, lettersHeld, liveStepped, lockApproved, memberJoined, messageAdded, more,
+  chatArchived, chatRenamed, devicesAdded, devicesSaid, driveAdded, fixture, hostReading, jobLogOf, jobsMoved, lettersHeld, listedOf, liveStepped, lockApproved, memberJoined, messageAdded, more,
   netOf, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, overviewMoved, presetsChanged, quotaChanged, records, resourcesOf, screensMoved, screensOf, sessionMade, thingSaid, transcriptOf,
   usageRead, vaultAdded, vaultUsed, ownPendingOf, STATIONS,
 } from "./real-size.ts";
@@ -24,6 +24,7 @@ import { Browsing } from "../src/drive-browse.ts";
 import { driveCount, kindOf } from "../src/drive.ts";
 import { Notices } from "../src/notices.ts";
 import { screensView } from "../src/screens.ts";
+import { sharedPlace } from "../src/station/rows-made.ts";
 import type { Store } from "../src/store.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { lockView } from "../src/views/lock.ts";
@@ -225,6 +226,52 @@ function noticesHeard(notices: Notices, rows: [string, J[]][]): void {
   }
 }
 
+type Rig = ReturnType<typeof setup>;
+
+/// What the rig is given of the workspace, as the sync first writes it: a station's chat list as one its station makes is
+/// written once read (sync.ts `#made`: whole, each row at its place, rows-made.ts `sharedPlace`); the rest set.
+function given(t: Rig, topic: Topic, value: unknown): void {
+  if (topic.topic !== "chatRows") return t.set(topic, value);
+  const rows = value as J[];
+  t.data.setChatsAt(String(topic.station), rows, rows.map(sharedPlace));
+}
+
+/// The lists a station tells a change of by key, and the key of each's items.
+const BY_KEY: Record<string, string> = { chatRows: "id", threads: "id", sessions: "key" };
+
+/// A list of a station (its chat rows, threads or sessions) as the fixture makes it once something changed (`now`),
+/// told as the sync tells such a change, by key: each item the change made (not as the workspace was made at `base`)
+/// put alone, each gone dropped, no other looked at. A chat's row as a list its station makes is written (sync.ts
+/// `#made`: Data.putChat at its `sharedPlace`, Data.dropChat); a thread as its `thread` event puts it (`putThread`); a
+/// session as its `session` event does (`#onSession`: Data.putSummary).
+function listTold(t: Rig, base: number, station: string, topic: "chatRows" | "threads" | "sessions", now: J[]): void {
+  const key = (item: J) => String(item[BY_KEY[topic]!]);
+  const was = new Map(listedOf(base, station, topic).map((item) => [key(item), JSON.stringify(item)]));
+  const seen = new Set<string>();
+  for (const item of now) {
+    seen.add(key(item));
+    if (was.get(key(item)) === JSON.stringify(item)) continue;
+    if (topic === "chatRows") t.data.putChat(station, item, sharedPlace(item));
+    else if (topic === "threads") t.data.putThread(station, item);
+    else t.data.putSummary(station, item);
+  }
+  for (const k of was.keys()) {
+    if (seen.has(k)) continue;
+    // (a thread or a session gone has an event of its own, which no cause here tells)
+    if (topic !== "chatRows") throw new Error(`${station}'s ${topic}: ${k} gone`);
+    t.data.dropChat(station, k);
+  }
+}
+
+/// What a cause's station tells (`said`, made at `base`), as the sync takes it: a list it tells a change of by key so
+/// (`listTold`), the rest set.
+function told(t: Rig, base: number, said: [Topic, unknown][]): void {
+  for (const [topic, value] of said) {
+    if (BY_KEY[topic.topic] !== undefined) listTold(t, base, String(topic.station), topic.topic as "chatRows" | "threads" | "sessions", value as J[]);
+    else t.set(topic, value);
+  }
+}
+
 /// A rig with every view, a new chat's and a model's pickers, the changelog, the pages' own topics (`pageOwners`); the
 /// real-size workspace set in it, the chat with its six pages loaded (`long`) or its last alone, the chat of four weeks
 /// held whole, and every topic of `ASKED` measured so subscribed as the app subscribes (keyed), its messages to each by id.
@@ -308,7 +355,7 @@ export async function held(long = false, on: { host?: FakeHost; cold?: boolean }
   // Set as the topics are watched, and again once the views watch what they found they are made of (a value set of a
   // topic nothing watches is not kept: the core's station topics read what is watched).
   for (let round = 0; round < 2; round++) {
-    for (const [topic, value] of [...fixture(base, chat), ...more(base)]) t.set(topic, value);
+    for (const [topic, value] of [...fixture(base, chat), ...more(base)]) given(t, topic, value);
     t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), outlinedLog(base));
     for (const key of CHAT.keys) t.data.putItems("transcript", CHAT.station, key, key === CHAT.keys[0] ? transcriptOf(base) : []);
     for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
@@ -355,7 +402,17 @@ let lastBase = 0;
 /// through the core's own code, that code: log-lines.ts `logged`, notices.ts `changed`, devices.ts `heard`); then `ms`
 /// of the clock pass (1 s). `long`: done again with the chat's six pages loaded. Each on a rig of its own, so what it
 /// sends is what changed from the values sent whole (real-size-app.test.ts writes it for the app as that).
+/// What changes one item of a station's list is told by that item's key, as the sync takes the station's event
+/// (`listTold`): a chat's row as a list its station makes is written (every station since build 7143, sync.ts `#made`,
+/// one row by its key at its place), a thread as its `thread` event puts it, a session as its `session` event; never the
+/// list whole, which is written so only as it is read (`given`). What a cause still tells otherwise than the sync would,
+/// because telling it so would change what it sends, is in `UNTOLD` with why.
 export type Cause = { run: (h: Held) => void; ms?: number; long?: true };
+/// The causes told otherwise than the sync takes what their station says, and why.
+export const UNTOLD: Record<string, string> = {
+  archived:
+    "its archived rows set whole where a page shows them: the sync reads them only at a snapshot or after this device's own write (sync.ts #archivedChanged, afterWrite), a station's archiving tells it the row gone alone (chat-shared-removed); told so, the archive, fleet and railCard are sent nothing",
+};
 const job = (h: Held, j: J) => {
   // (as station/sync.ts `onJob` takes a station's `job` event)
   h.t.data.patchDetail(station, j.session, (detail) => {
@@ -368,12 +425,7 @@ export const CAUSES: Record<string, Cause> = {
   // A station's host reading (its load up), an allowance read again, a message in the chat, a minute passing.
   host: { run: ({ t }) => t.set(hostOf(station), hostReading(t.host.nowMs(), 0, 0.83)), long: true },
   quota: { run: ({ t, base }) => t.set(overview(station), quotaChanged(base, t.host.nowMs(), 0)), long: true },
-  message: {
-    run: ({ t, base, chat }) => {
-      for (const [topic, value] of messageAdded(base, t.host.nowMs(), chat)) t.set(topic, value);
-    },
-    long: true,
-  },
+  message: { run: ({ t, base, chat }) => told(t, base, messageAdded(base, t.host.nowMs(), chat)), long: true },
   minute: { run: () => {}, ms: 60_000, long: true },
   // The chat of four weeks: its agent writing on (twice), a person's words edited, a person saying something.
   agent: {
@@ -400,10 +452,10 @@ export const CAUSES: Record<string, Cause> = {
   // The chat's agent's next message with a picture and a link (its things).
   thing: {
     run: ({ t, base, chat }) => {
-      const told = messageAdded(base, t.host.nowMs(), chat, thingSaid(t.host.nowMs()));
-      for (const [topic, value] of told) t.set(topic, value);
+      const said = messageAdded(base, t.host.nowMs(), chat, thingSaid(t.host.nowMs()));
+      told(t, base, said);
       // (and the chat's whole log, where its things are found: views.ts `#thingsMade`)
-      t.set({ topic: "letters", station, thread: CHAT.thread }, lettersHeld(base, undefined, [(told[0]![1] as J).entries.at(-1)]));
+      t.set({ topic: "letters", station, thread: CHAT.thread }, lettersHeld(base, undefined, [(said[0]![1] as J).entries.at(-1)]));
     },
   },
   // A letter more from another chat.
@@ -412,7 +464,7 @@ export const CAUSES: Record<string, Cause> = {
   card: {
     run: ({ t, base, notices }) => {
       const { rows, before, after } = cardCame(base, t.host.nowMs());
-      t.set({ topic: "chatRows", station }, rows);
+      listTold(t, base, station, "chatRows", rows);
       notices.changed(station, [{ id: after.id, before, after }], false);
     },
   },
@@ -420,11 +472,14 @@ export const CAUSES: Record<string, Cause> = {
   archived: {
     run: ({ t, base }) => {
       const { rows, archived } = chatArchived(base, t.host.nowMs());
-      t.set({ topic: "chatRows", station }, rows);
-      t.set({ topic: "archivedRows", station }, archived);
+      listTold(t, base, station, "chatRows", rows);
+      // (where a page shows the archived rows, set whole as they were: the sync reads them again only at a snapshot or
+      // after this device's own write, so the archive, fleet and railCard would be sent nothing, `UNTOLD`; where none
+      // does, nothing is read, as sync.ts `#archivedChanged` reads none)
+      if (t.store.inUse({ topic: "archivedRows", station })) t.set({ topic: "archivedRows", station }, archived);
     },
   },
-  renamed: { run: ({ t, base }) => t.set({ topic: "chatRows", station }, chatRenamed(base)) },
+  renamed: { run: ({ t, base }) => listTold(t, base, station, "chatRows", chatRenamed(base)) },
   // The chats' lists scrolled near their foot: each told a window a step more (the rows added go out, not the list).
   grown: {
     run: ({ t }) => {
@@ -460,9 +515,7 @@ export const CAUSES: Record<string, Cause> = {
   member: { run: ({ t, base }) => t.set({ topic: "workspace", workspace: "ws" }, memberJoined(base)) },
   // A session more on Maple, a Slack thread's.
   session: {
-    run: ({ t, base }) => {
-      for (const [topic, value] of sessionMade(base, t.host.nowMs())) t.set(topic, value);
-    },
+    run: ({ t, base }) => told(t, base, sessionMade(base, t.host.nowMs())),
   },
   // Maple's overview told again: an automatic decision made, Claude Code updating, the machine's login's allowance, a
   // sign-in begun, its archiving changed, its automatic decisions turned off.

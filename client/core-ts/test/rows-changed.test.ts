@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { worded } from "../src/chat-row.ts";
-import { rowWords } from "../src/station/rows-made.ts";
+import { rowWords, sharedPlace } from "../src/station/rows-made.ts";
 import type { Topic } from "../src/protocol.ts";
 import { CAUSES, held } from "./real-size-asked.ts";
 import { glanced } from "../src/work.ts";
@@ -75,31 +75,52 @@ test("a chat list written as given is what was given, after each change of the r
   try {
     const words = rowWords();
     // What each station's lists were last given (its rows in this device's words, each id once), as a core started anew
-    // with nothing held would write them.
-    const given = new Map<string, J[]>();
-    const asGiven = (rows: J[]) => {
-      const seen = new Set<string>();
-      return rows.flatMap((r) => {
-        if (seen.has(r.id)) return [];
-        seen.add(r.id);
+    // with nothing held would write them: a list given whole, and each row told since by its key (as the sync writes a
+    // list its station makes, real-size-asked.ts `rowsTold`); the rows of a list written at their places in those places
+    // (rows-made.ts `sharedPlace`, then by id), the others in the order given.
+    const given = new Map<string, { rows: Map<string, J>; placed: boolean }>();
+    const asGiven = (rows: Iterable<J>) =>
+      [...rows].map((r) => {
         const { unread, ...rest } = worded(r, words);
-        return [{ id: r.id, json: JSON.stringify(rest), unread: typeof unread === "boolean" ? (unread ? 1 : 0) : null }];
+        return { id: r.id, json: JSON.stringify(rest), unread: typeof unread === "boolean" ? (unread ? 1 : 0) : null };
       });
+    const whole = (key: string, rows: J[], placed: boolean) => {
+      const byId = new Map<string, J>();
+      for (const r of rows) if (!byId.has(r.id)) byId.set(r.id, r);
+      given.set(key, { rows: byId, placed });
     };
+    const keyOf = (station: string, archived: boolean) => `${station} ${archived ? 1 : 0}`;
     const set = h.t.set;
     h.t.set = (topic: Topic, value: unknown) => {
-      if (topic.topic === "chatRows" || topic.topic === "archivedRows") given.set(`${topic.station} ${topic.topic === "archivedRows" ? 1 : 0}`, asGiven(value as J[]));
+      if (topic.topic === "chatRows" || topic.topic === "archivedRows") whole(keyOf(String(topic.station), topic.topic === "archivedRows"), value as J[], false);
       set(topic, value);
+    };
+    const data = h.t.data;
+    const { setChatsAt, putChat, dropChat } = data;
+    data.setChatsAt = (station, rows, places) => {
+      whole(keyOf(station, false), rows as J[], true);
+      setChatsAt.call(data, station, rows, places);
+    };
+    data.putChat = (station, row, place) => {
+      given.get(keyOf(station, false))?.rows.set((row as J).id, row);
+      putChat.call(data, station, row, place);
+    };
+    data.dropChat = (station, id) => {
+      given.get(keyOf(station, false))?.rows.delete(id);
+      dropChat.call(data, station, id);
     };
     // (as the rig was made: the fixture's)
     const { fixture } = await import("./real-size.ts");
-    for (const [topic, value] of fixture(h.base, h.chat)) if (topic.topic === "chatRows" || topic.topic === "archivedRows") given.set(`${topic.station} ${topic.topic === "archivedRows" ? 1 : 0}`, asGiven(value as J[]));
+    for (const [topic, value] of fixture(h.base, h.chat)) if (topic.topic === "chatRows" || topic.topic === "archivedRows") whole(keyOf(String(topic.station), topic.topic === "archivedRows"), value as J[], topic.topic === "chatRows");
+    const id = (r: J) => String(r.id);
+    const inOrder = ({ rows, placed }: { rows: Map<string, J>; placed: boolean }) =>
+      asGiven(placed ? [...rows.values()].sort((a, b) => sharedPlace(a) - sharedPlace(b) || (id(a) < id(b) ? -1 : id(a) > id(b) ? 1 : 0)) : rows.values());
     const check = (what: string) => {
-      for (const [key, rows] of given) {
+      for (const [key, list] of given) {
         const [station, archived] = key.split(" ");
-        const now = h.t.data.of(station!)!.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? ORDER BY ord", [station!, Number(archived)])
+        const now = h.t.data.of(station!)!.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? ORDER BY ord, id", [station!, Number(archived)])
           .map((r) => ({ id: String(r[0]), json: String(r[1]), unread: r[2] as number | null }));
-        assert.deepEqual(differences(now, rows).slice(0, 8), [], `${station}'s ${archived === "1" ? "archived" : "listed"} chats after ${what}`);
+        assert.deepEqual(differences(now, inOrder(list)).slice(0, 8), [], `${station}'s ${archived === "1" ? "archived" : "listed"} chats after ${what}`);
       }
     };
     check("the workspace was set");

@@ -40,7 +40,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import type { Found, Measured } from "./topic-work-measure.ts";
-import { ASKED, CAUSES } from "./real-size-asked.ts";
+import { ASKED, CAUSES, UNTOLD } from "./real-size-asked.ts";
 import type { Size } from "./real-size.ts";
 
 const print = process.env.TOPIC_WORK_PRINT === "1";
@@ -167,45 +167,32 @@ const GROWS: Record<string, Partial<Record<Knob, number>>> = {
 /// The changes reading more than `READ_PER_SENT` × what they write and send and `READ_FREE_KB` now, by `<cause> alone`
 /// and `<cause> held`: what each reads, KB rounded up to a multiple of 8.
 const OVER_WRITE: Record<string, number> = {
-  "message alone": 288,
-  "message held": 328,
+  "message held": 48,
   "edit held": 16,
   "said held": 16,
-  "thing alone": 288,
-  "thing held": 328,
-  "card alone": 184,
-  "card held": 208,
-  "archived alone": 272,
-  "archived held": 304,
-  "renamed alone": 184,
-  "renamed held": 192,
+  "archived held": 120,
   "screen held": 16,
   "member held": 24,
-  "session alone": 120,
-  "session held": 152,
-  "message six pages alone": 288,
-  "message six pages held": 312,
+  "message six pages held": 32,
 };
 /// The changes whose reading grows faster than what they write and send with a knob, by the same names and knob: what
-/// each reads with that thing held three times, KB rounded up to a multiple of 8.
+/// each reads with that thing held three times, KB rounded up to a multiple of 8. Those of a knob that came in as the
+/// causes were told by key (real-size-asked.ts `listTold`) read less than they did at every size, past the ratio only as
+/// the lists read whole went (KB read at k = 1 and with the knob, before and after): `message alone` with the people
+/// 286.5, 292.5 → 10.4, 13.5; `message held` with the stations 321.3, 334.2 → 45.3, 58.2; `card held` with the stations
+/// 203.7, 216.6 → 15.9, 28.8; `session alone` with the profiles 117.6, 143.4 → 14.6, 40.4; `session held` with the
+/// profiles 144.1, 169.8 → 30.6, 56.3; `login held` with the profiles 25.1, 50.9 → 14.6, 40.4.
 const GROWS_WRITE: Record<string, Partial<Record<Knob, number>>> = {
-  "message alone": { chats: 848 },
-  "message held": { chats: 888 },
-  "thing alone": { chats: 840 },
-  "thing held": { chats: 888 },
-  "card alone": { chats: 544 },
-  "card held": { chats: 568 },
-  "archived alone": { chats: 808 },
-  "archived held": { chats: 840 },
-  "renamed alone": { chats: 544 },
-  "renamed held": { chats: 552 },
-  "session alone": { chats: 328 },
-  "session held": { chats: 352 },
-  "message six pages alone": { chats: 848 },
-  "message six pages held": { chats: 864 },
+  "message alone": { chats: 16, people: 16 },
+  "archived held": { chats: 296 },
   "quota alone": { profiles: 48 },
+  "session alone": { profiles: 48 },
+  "session held": { profiles: 64 },
   "machine alone": { profiles: 48 },
   "login alone": { profiles: 48 },
+  "login held": { profiles: 48 },
+  "message held": { stations: 64 },
+  "card held": { stations: 32 },
   "screen held": { stations: 16 },
   "member held": { stations: 48 },
 };
@@ -389,6 +376,8 @@ test("what each change the sync writes makes the core read follows what it write
     }
   }
   for (const all of sizes.values()) for (const [name, m] of all) if (m.error !== undefined) fail(name, `failed: ${m.error}`);
+  // (a cause told otherwise than the sync would is one: real-size-asked.ts UNTOLD)
+  for (const name of Object.keys(UNTOLD)) if (CAUSES[name] === undefined) fail(name, "in UNTOLD, not a cause");
   // READ.
   const wouldRead: Record<string, number> = {};
   for (const [name, m] of one) if (readHeld(name, m, OVER_WRITE[name], "OVER_WRITE", WRITES, fail)) wouldRead[name] = up8(m.read);
