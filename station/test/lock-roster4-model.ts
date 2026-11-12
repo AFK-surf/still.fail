@@ -731,10 +731,10 @@ export class World4 extends World3 {
   }
   /// The keepers the workspace has, as any of its stations' state says them (its stations, the devices on its members'
   /// bound logs): those given its bodies, and so those whose states are compared.
-  comparable(ws = WS): Holder[] {
+  comparable(ws = WS, without?: Holder): Holder[] {
     // the stations another station lists (one taken out is told nothing more and keeps what it had: its own list,
     // naming itself and whom it had, does not count), then everyone those list
-    const lists = new Map(this.stations.filter((s) => this.pinsOf(s).get(ws)).map((s) => {
+    const lists = new Map(this.stations.filter((s) => s !== without && this.pinsOf(s).get(ws)).map((s) => {
       const r = this.rosterOf(s, ws);
       return [s, new Set([...r.stations, ...r.letIn.keys()])] as const;
     }));
@@ -948,7 +948,8 @@ export function m1(family: Family, runs: number, steps: number, more: W4Options 
     const s = w.sameEntries();
     out.same += s.mismatch;
     out.sameChecks += s.checks;
-    const K = w.stations[station], others = w.comparable().filter((h) => h !== K);
+    // (K's own list left out: it lacks a body, and names whom the others may not)
+    const K = w.stations[station], others = w.comparable(WS, K).filter((h) => h !== K);
     if (new Set(others.map((h) => w.stateSaid(h))).size === 1) out.agree++;
     for (const h of w.holders) {
       if (w.lacking(h).length > 0) continue;
