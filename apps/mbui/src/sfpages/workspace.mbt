@@ -61,8 +61,8 @@ fn new_ws_cleared() -> Unit {
 ///|
 /// The workspace `ws` the one in view, at its top (the prefs' `workspace`: the rail's switch, the list's row), once
 /// what its Home opens on is answered, switch_wait_ms at most (sfbase's switch_workspace_to).
-pub fn switch_workspace(src : Source, ws : String) -> Unit {
-  @sfbase.switch_workspace_to(src, ws)
+pub fn switch_workspace(src : Source, ws : String, closes? : () -> Unit = fn() {  }) -> Unit {
+  @sfbase.switch_workspace_to(src, ws, closes~)
 }
 
 // ── the workspaces ─────────────────────────────────────────────────────
@@ -152,10 +152,8 @@ fn workspaces_list(v : @view.View, src : Source, close : () -> Unit, compact~ : 
           fn() { w().email },
           lead=w,
           mark=fn() { field(marks(), id).unwrap_or(Json::null()) },
-          fn() {
-            close()
-            switch_workspace(src, id)
-          },
+          // (the sheet closed as the switch is done, with it: sfbase's switch_workspace_to)
+          fn() { switch_workspace(src, id, closes=close) },
         )
       }
     }
@@ -534,7 +532,7 @@ let invite_line_words : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Fu
 let invite_line_email : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
-/// An invitation joined (its workspace the one in view, `joined` first: what showed it closed) or ignored, said and
+/// An invitation joined (its workspace the one in view, what showed it closed as that is done: `joined`) or ignored, said and
 /// felt so once done; why not, said so and felt as refused.
 pub fn answer_invitation(src : Source, account : Json?, id : String, join : Bool, name : String, joined : () -> Unit) -> Unit {
   if src.read_only {
@@ -549,8 +547,7 @@ pub fn answer_invitation(src : Source, account : Json?, id : String, join : Bool
       Ok(v) => {
         @ui.haptic(Confirm)
         if join {
-          joined()
-          switch_workspace(src, text(Some(v), "id"))
+          switch_workspace(src, text(Some(v), "id"), closes=joined)
           toast_later(@sf.t("web-pages.workspace.joined", args=[("name", name)]))
         } else {
           toast_later(@sf.t("web-pages.workspace.ignored"))
@@ -725,8 +722,7 @@ fn make_workspace(src : Source, owner : String, name : String, code : String) ->
       Ok(v) => {
         let close = new_ws.close
         new_ws_cleared()
-        close()
-        switch_workspace(src, text(Some(v), "id"))
+        switch_workspace(src, text(Some(v), "id"), closes=close)
       }
       Err(e) => {
         new_ws.error_code.set(text(Some(e), "code"))

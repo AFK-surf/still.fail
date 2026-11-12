@@ -3,6 +3,12 @@
 // till all the new workspace's first screen reads is answered, that long at most; where it is answered already, the
 // press's own handler switches, drawn in its frame (「按理说一帧就能处理完」).
 //
+// What the press put up to choose by (the workspaces' sheet on 小屏, its popover on 中屏 and 大屏, a dialog that made or
+// joined one) is part of the screen as it was: it is closed at the moment the switch is done (`closes`), with it, so its
+// closing motion sets out from the switch's own frame, not from the press's with the switch falling in its middle (the
+// owner on a phone, 0.1.8610: 「现在切 workspace 时收起抽屉不流畅，会卡帧」: the new Home made in a frame of the sheet's
+// fastest part). Where the switch is done in the press's handler, both are in the press's frame, as before.
+//
 // What that screen reads is what its panes say they open on, never a list kept here: each shell gives its node
 // (workspace_switch_node) the function its panes open by (`opens`: 小屏's Home, sfapp's home_opens; 中屏's and 大屏's
 // rail, sidebar and the page the pane lands on, sfdesk's frame_opens), which the pages wait by too, asking each topic
@@ -45,6 +51,21 @@ priv struct SwitchWait {
 ///|
 // kept across runs: put back as a run begins (switch_reset)
 let switch_wait : Ref[SwitchWait?] = Ref(None)
+
+///|
+/// What the presses of the switch waiting put up to choose by, to close as it is done or called off (each once).
+// kept across runs: put back as a run begins (switch_reset)
+let switch_closes : Ref[Array[() -> Unit]] = Ref([])
+
+///|
+/// What the switch waiting is to close closed now, each once: the switch done or called off.
+fn switch_closed() -> Unit {
+  let closes = switch_closes.val
+  switch_closes.val = []
+  for c in closes {
+    c()
+  }
+}
 
 ///|
 /// The shell's node that waits (workspace_switch_node), the source it was made with, what its screen opens on and its
@@ -111,31 +132,42 @@ fn SwitchWait::answered_now(self : SwitchWait) -> (Bool, Bool) {
 ///|
 /// The workspace `ws` the one in view, at its top (the prefs' `workspace`), once what its first screen opens on is
 /// answered or switch_wait_ms after now, whichever comes first; at once where it is answered already. Another asked
-/// meanwhile takes its place; the one in view asked, the one waiting is called off.
-pub fn switch_workspace_to(src : Source, ws : String) -> Unit {
+/// meanwhile takes its place; the one in view asked, the one waiting is called off. `closes`: what the press put up to
+/// choose by, closed at the moment the switch is done (in the press's handler where it is done there), with the switch
+/// to another asked meanwhile, at once where the one in view is asked; once (what the person closed meanwhile is closed already: a
+/// presenter's close of what is no longer open closes nothing).
+pub fn switch_workspace_to(src : Source, ws : String, closes? : () -> Unit = fn() {  }) -> Unit {
   if ws == "" {
+    closes()
     return
   }
   let here = @signals.untracked(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) })
   if here == Some(ws) {
     switch_called_off()
+    closes()
     return
   }
   if switch_wait.val is Some(w) && w.ws == ws {
+    switch_closes.val.push(closes)
     return
   }
   // (no shell to wait in: at once, as before there was one)
   guard switch_shell.val is Some((v, base, opens, _)) else {
     switch_picked(src, ws)
+    closes()
     return
   }
   switch_count.val += 1
   // (the shell's source, not a page's that may go first)
   let wait = { ws, src: base, scope: "switch/" + switch_count.val.to_string(), opens }
   let done = wait.hold_all()
-  // (the one waiting before let go of once this one is held)
+  // (the one waiting before let go of once this one is held; what it was to close closed with this one, which takes
+  // its place: a second row pressed in the same sheet as it waits leaves it standing till the switch)
+  let carried = switch_closes.val
+  switch_closes.val = []
   switch_called_off()
   switch_wait.val = Some(wait)
+  switch_closes.val = [..carried, closes]
   if done {
     switch_pick(v)
   } else {
@@ -144,7 +176,7 @@ pub fn switch_workspace_to(src : Source, ws : String) -> Unit {
 }
 
 ///|
-/// The switch waiting called off, what it held let go of.
+/// The switch waiting called off, what it held let go of, what it was to close closed.
 fn switch_called_off() -> Unit {
   match switch_wait.val {
     Some(w) => {
@@ -154,16 +186,19 @@ fn switch_called_off() -> Unit {
     None => ()
   }
   switch_asked.set(("", -1.0))
+  switch_closed()
 }
 
 ///|
 /// The switch waiting done, by shell node `v`: what it held handed over to the screen it shows, let go of once that is
-/// in (the longest a page takes to come: the panes' own readers hold it by then).
+/// in (the longest a page takes to come: the panes' own readers hold it by then); what its presses put up closed with
+/// it, at its moment.
 fn switch_pick(v : @view.View) -> Unit {
   guard switch_wait.val is Some(w) else { return }
   switch_wait.val = None
   switch_asked.set(("", -1.0))
   switch_picked(w.src, w.ws)
+  switch_closed()
   switch_handing.val.push((w.src, w.scope))
   switch_hand_at.set(v.cause_at() + @ui.move_most_ms)
 }
@@ -349,6 +384,7 @@ fn switch_reset() -> Unit {
   switch_asked.set(("", -1.0))
   switch_held_more.set(0)
   switch_handing.val = []
+  switch_closes.val = []
   switch_hand_at.set(-1.0)
   opens_declared.val = None
   declared_reset()

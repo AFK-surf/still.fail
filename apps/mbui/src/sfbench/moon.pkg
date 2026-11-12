@@ -5,6 +5,7 @@ import {
   "stillfail/sfkept",
   "stillfail/sfapp",
   "stillfail/sffixture",
+  "stillfail/sfrealsize",
   "mbui/wasmrt",
   "mbui/view",
   "mbui/signals",
