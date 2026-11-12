@@ -407,7 +407,14 @@ fn main {
   if @ui.env("MBUI_CORE_TRACE") == "1" && local_cloud(cloud) {
     // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace make's MAX_BYTES, kept as their length alone)
     let bytes_max = @string.parse_int(@ui.env("MBUI_CORE_TRACE_BYTES")[:]) catch { _ => 16384 }
-    @core.trace_to(fn(line) { @hostapi.log("CORETRACE " + line) }, bytes_max~)
+    // (and to a scripted run, whose `answered` counts the core's answers as they come, read by the app or not)
+    @core.trace_to(
+      fn(line) {
+        @hostapi.log("CORETRACE " + line)
+        @ui.drive_heard(line)
+      },
+      bytes_max~,
+    )
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
     let started : Map[String, Json] = Map([])

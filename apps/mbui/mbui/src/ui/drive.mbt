@@ -79,7 +79,11 @@
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
 //                               value) answered, and a frame drawn after it, within the timeout: the run's k-th
 //                               `answered CALL` line its k-th answer, counted from the run's start (one come before
-//                               the step that acted ahead of the line is as good), each line an answer of its own
+//                               the step that acted ahead of the line is as good), each line an answer of its own.
+//                               What is counted is the core's answers as they come, whether the app reads them or
+//                               not: where the app's conversation with its core is kept (drive_heard, its
+//                               MBUI_CORE_TRACE), each answer heard there; else each wait on the core that ended
+//                               (one whose answer nobody reads is awaited by nothing, so not counted there)
 //   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") or
 //                               begins with it (a prefix: a gallery's content://media/) decoded, from its address or
 //                               from bytes handed over for it (Ctx::image_bytes, add_image)
@@ -260,6 +264,8 @@ fn runner_said(done : Map[String, String], j : String) -> Unit {
 
 ///|
 fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
+  // (the answers heard counted from the run's start, as the waits ended are)
+  heard_answers.clear()
   let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_owned() }).to_array()
   // what the runner has done, as the host posts it (done_watch.h: {"done": X, "said": WORDS}), the frame its post
   // wakes taking it
@@ -1801,6 +1807,14 @@ fn key_named(name : String) -> (Int, Int)? {
 /// subscription's "core: KEY").
 fn Driver::count_answers(self : Driver) -> Unit {
   let come = runtime().outside_ended_since(self.counted)
+  // (the conversation heard: each answer as it came, read by the app or not; the waits' ends are of the same answers)
+  if heard_on.val {
+    for name, n in heard_answers {
+      self.answers[name] = n
+    }
+    self.counted = self.counted + come.length()
+    return
+  }
   for w in come {
     if w.has_prefix("core: ") {
       let rest = w.unsafe_substring(start=6, end=w.length())
@@ -1874,4 +1888,57 @@ fn first_words(c : Ctx, i : Int) -> String {
     k = c.nodes[k].next
   }
   ""
+}
+
+///|
+/// Whether the app's conversation with its core is heard (drive_heard: it is kept, the app's MBUI_CORE_TRACE).
+// kept across runs: once heard, the conversation is kept for the whole process
+let heard_on : Ref[Bool] = Ref(false)
+
+///|
+/// The calls the app made, by the id it gave each, as heard (drive_heard), till an answer for it came.
+// kept across runs: emptied of each as its answer comes
+let heard_calls : Map[Int, String] = Map([])
+
+///|
+/// How many answers came for each call by its name since the run began, as heard (drive_heard): what `answered`
+/// counts.
+// kept across runs: emptied as a run begins (drive_start)
+let heard_answers : Map[String, Int] = Map([])
+
+///|
+/// A line of the app's conversation with its core as it is kept (src/core/trace.mbt's `{"out":…}`, `{"in":…}`), told
+/// to a driven run where it is kept: a call going out, and the core's answer to it (`ok` or `error`) coming in, so
+/// `answered CALL` counts the core's answers as they come, whether the app reads them or not. Only where the
+/// conversation is kept already (the app's MBUI_CORE_TRACE, a scripted run's): nothing waits on it, nothing reads more.
+pub fn drive_heard(line : String) -> Unit {
+  heard_on.val = true
+  let out = line.has_prefix("{\"out\":")
+  if out && !line.contains("\"call\":") {
+    return
+  }
+  if !out && !(line.contains("\"ok\":") || line.contains("\"error\":")) {
+    return
+  }
+  guard (try Some(@json.parse(line)) catch { _ => None }) is Some(Object(o)) else { return }
+  match (o.get("out"), o.get("in")) {
+    (Some(Object(m)), _) =>
+      match (m.get("id"), m.get("call")) {
+        (Some(Number(id, ..)), Some(String(name))) => heard_calls[id.to_int()] = name
+        _ => ()
+      }
+    (_, Some(Object(m))) =>
+      match m.get("id") {
+        Some(Number(id, ..)) if m.contains("ok") || m.contains("error") =>
+          match heard_calls.get(id.to_int()) {
+            Some(name) => {
+              heard_calls.remove(id.to_int())
+              heard_answers[name] = heard_answers.get(name).unwrap_or(0) + 1
+            }
+            None => ()
+          }
+        _ => ()
+      }
+    _ => ()
+  }
 }
