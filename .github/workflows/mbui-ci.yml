@@ -249,9 +249,22 @@ jobs:
         working-directory: apps/mbui/mbui
     runs-on: macos-15
     timeout-minutes: 5
+    # (the C units its four builds compile, kept by content (scripts/mbc's MBC_STORE): main's last run's, taken by every
+    # run. Without it each run compiled all of them anew, 0 up to date, on a runner whose speed differs run to run: 2:57
+    # to 3:28 on #5754 to #5776, then 5:02 on #5779 (each step 1.4 to 1.9 times as long: macOS apps 125 s where it was
+    # 85-90, the iOS app's 133 units 52 s for 28-32), cancelled at its five minutes, 2026-11-12)
+    env:
+      MBC_STORE: ${{ github.workspace }}/apps/mbui/mbui/_build/mbc-store-mac
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        id: store
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: mbui-ci-macos-store-${{ github.sha }}
+          restore-keys: mbui-ci-macos-store-
+      - run: mkdir -p "$MBC_STORE" && touch "$RUNNER_TEMP/start"
       - name: macOS apps
         run: |
           for app in demo textdiff kitdemo; do
@@ -268,6 +281,18 @@ jobs:
         run: scripts/render_check.sh
       - name: iOS simulator app
         run: scripts/ios.sh build
+      # (main's run keeps what it used, the units it took or compiled, and lets the rest go: the store no larger than one
+      # run's; a branch's run keeps nothing, so each takes main's newest)
+      - name: The units kept
+        if: success() && github.event_name == 'push'
+        run: |
+          find "$MBC_STORE" -name '*.lock' -delete
+          find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
+      - if: success() && github.event_name == 'push'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: mbui-ci-macos-store-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
         continue-on-error: true
