@@ -15,14 +15,22 @@ import * as present from "./present.ts";
 import type { Topic } from "./protocol.ts";
 import { computed, observe, type Derived } from "./reactive.ts";
 import { equal, isObject, shaped, sharedValue } from "./util.ts";
-import { work } from "./work.ts";
+import { walked, work } from "./work.ts";
 
-/// An item as it goes out: what it was made from, and what is made of it.
-type Memo = { raw: unknown; out: Derived<unknown> };
+/// An item of a keyed list as it goes out: what it was made from, its key, what is made of it, and the keyed lists it
+/// holds as they went out (an item holding them: a chat list's day); `still`, what was made where making it read
+/// nothing that can change (no time in words, no list of its own): taken as it is, its computed not read again.
+type Memo = { raw: unknown; key: string; out: Derived<unknown>; lists: Lists; still?: { out: unknown } };
+/// A keyed list as it went out: the array it was made of, what is made of it (its items as they go out), and its
+/// items by the object each was made of and by their key.
+type Made = { raw: unknown[]; out: Derived<unknown[]>; byItem: Map<unknown, Memo>; byKey: Map<string, Memo> };
+/// The keyed lists of a value or of an item, by the fields that lead to each from it.
+type Lists = Map<string, Made>;
 
-/// One topic's items as they last went out, by their place and key.
+/// One topic's keyed lists and their items as they last went out. (Its own: what one topic made of an object is never
+/// another's, whose shape may differ.)
 export class Output {
-  #memo = new Map<string, Memo>();
+  #lists: Lists = new Map();
   /// The clock the items are made for now (what their computeds read when they are made again).
   #c: present.Clock = { now: 0, offsetMin: 0 };
   /// What keeps the items' computeds (and so what they made) while they are the ones that went out.
@@ -61,7 +69,7 @@ export class Output {
     work.shapes++;
     const spec = specOf(topic);
     const ty = shapes ? present.shapeOf(topic) : undefined;
-    const next = new Map<string, Memo>();
+    const next: Lists = new Map();
     let out: { ok: unknown } | { error: string } = { error: "" };
     try {
       // (made under a watch of its own, the old one let go after: the items' computeds kept as they were, those of
@@ -69,7 +77,7 @@ export class Output {
       const was = this.#keep;
       const keep = observe(() => {
         const input = topic.topic === "chat" && topic.compact === true ? compactChat(raw) : raw;
-        const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", next) : input;
+        const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", this.#lists, next) : input;
         // (as it was made beside it, where it was: the accounts' rows beside their whole value, views.ts `profiles`)
         const made = ty === undefined ? undefined : keptShape(skeleton, ty);
         if (made !== undefined) out = { ok: made };
@@ -85,7 +93,7 @@ export class Output {
       if ("ok" in out) {
         this.#keep = keep;
         was?.();
-        this.#memo = next;
+        this.#lists = next;
         sharedValue(out.ok);
         this.#last = { topic, raw, shapes, said: said(topic, c), product: brand.current(), out };
       } else keep();
@@ -100,64 +108,114 @@ export class Output {
   stop(): void {
     this.#keep?.();
     this.#keep = null;
-    this.#memo = new Map();
+    this.#lists = new Map();
     this.#last = null;
   }
 
-  /// The value with each keyed item put as it goes out.
-  #build(topic: Topic, raw: unknown, spec: Spec, ty: Ty | undefined, at: string, path: string, next: Map<string, Memo>): unknown {
+  /// The value with each keyed list put as it goes out (`was`: its lists as they went out last; `now` takes them as they
+  /// go out now). A list that is the very array that went out is what was made of it, its items not looked at; in
+  /// another, an item that is the very object an item was made of is what was made of it (and an item holding keyed
+  /// lists of its own, a chat list's day, is with them), one lookup by the object, nothing of it walked. Only the others
+  /// are found by their key: one equal to the item made with that key is as it went, the rest are made.
+  #build(topic: Topic, raw: unknown, spec: Spec, ty: Ty | undefined, path: string, fields: string, was: Lists, now: Lists): unknown {
     if (spec.key && Array.isArray(raw)) {
+      const before = was.get(fields);
+      if (before !== undefined && before.raw === raw) {
+        walked.same++;
+        now.set(fields, before);
+        return before.out.get();
+      }
       const itemTy = ty === undefined ? undefined : present.itemOf(ty);
-      return raw.map((item, i) => {
-        const here = `${path}[${i}]`;
-        const place = `${at}\u0001${textOf(item, spec.key!)}`;
-        // Items holding keyed lists of their own are put together anew around them (cheap: their items are done).
-        const leaf = !spec.item;
-        const was = leaf ? this.#memo.get(place) : undefined;
+      const byItem = new Map<unknown, Memo>();
+      const byKey = new Map<string, Memo>();
+      const memos = new Array<Memo>(raw.length);
+      let looked = 0;
+      for (let i = 0; i < raw.length; i++) {
+        const item = raw[i];
         // (the store keeps what did not change as the same object, never changed after: collections.ts share)
-        if (was && (was.raw === item || equal(was.raw, item))) {
-          next.set(place, was);
-          return was.out.get();
+        let m = before?.byItem.get(item);
+        if (m === undefined) {
+          looked++;
+          const key = textOf(item, spec.key);
+          const had = before?.byKey.get(key);
+          const here = `${path}[${i}]`;
+          if (spec.item) m = this.#holder(topic, item, key, spec.item, itemTy, here, had);
+          else if (had !== undefined && (had.raw === item || equal(had.raw, item))) m = had;
+          else m = { raw: item, key, out: this.#made(topic, () => item, itemTy, here), lists: new Map() };
         }
-        const inner = spec.item ? this.#build(topic, item, spec.item, itemTy, place, here, next) : item;
-        const made = computed(() => {
-          // Decorated as it is, not a copy of it: an item's decoration (present.ts `decorateItem`: `session`, `times`)
-          // makes a new object of what it puts something in and never writes on what it is given. A copy of each was
-          // 1.3 ms of the 52 items of a chat list's first page in Hermes on a Mac Studio (2026-11-11).
-          const decorated = present.decorateItem(topic, inner, this.#c);
-          let out = decorated;
-          if (itemTy !== undefined) {
-            // (as it was made beside it, where it was: a chat list's row kept beside its record, conform.ts shapedBeside)
-            const made = keptShape(decorated, itemTy);
-            if (made !== undefined) out = made;
-            else {
-              work.conformed++;
-              const shapedItem = conformTy(itemTy, decorated, here);
-              if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
-              out = shapedItem.ok;
-            }
+        memos[i] = m;
+        byItem.set(item, m);
+        byKey.set(m.key, m);
+      }
+      walked.same += raw.length - looked;
+      walked.built += looked;
+      // (gone out as it is, as its items: copy and fit take it so)
+      const out = computed(() => {
+        const items = new Array<unknown>(memos.length);
+        for (let i = 0; i < memos.length; i++) {
+          const m = memos[i]!;
+          if (m.still !== undefined) items[i] = m.still.out;
+          else {
+            items[i] = m.out.get();
+            if (m.out.deps === undefined) m.still = { out: items[i] };
           }
-          // (what goes out is marked as gone out, which other values that hold it take it as, shaped: never the item
-          // itself, where nothing was put in it nor shaped of it, no shape or one of `Value`: a copy of it, as before)
-          if (out === inner && !shaped.has(inner)) out = copy(inner);
-          freeze(out);
-          return out;
-        });
-        // What it was made from: the item itself (a store's value is never changed in place: frozen where that is checked).
-        if (leaf) next.set(place, { raw: item, out: made });
-        work.shaped++;
-        const out = made.get();
-        return out;
+        }
+        freeze(items);
+        return items;
       });
+      now.set(fields, { raw, out, byItem, byKey });
+      return out.get();
     }
     if (spec.fields && isObject(raw)) {
       const out: Record<string, unknown> = { ...raw };
       for (const [field, inner] of Object.entries(spec.fields)) {
-        if (field in raw) out[field] = this.#build(topic, raw[field], inner, ty === undefined ? undefined : present.fieldOf(ty, field), `${at}/${field}`, path === "" ? field : `${path}.${field}`, next);
+        if (field in raw) out[field] = this.#build(topic, raw[field], inner, ty === undefined ? undefined : present.fieldOf(ty, field), path === "" ? field : `${path}.${field}`, `${fields}/${field}`, was, now);
       }
       return out;
     }
     return raw;
+  }
+
+  /// An item holding keyed lists of its own (`spec`), made of `item`: its lists found in those of the item of its key
+  /// before (`had`), and made again with it as one of their items is (the clock moving on past its words).
+  #holder(topic: Topic, item: unknown, key: string, spec: Spec, itemTy: Ty | undefined, here: string, had: Memo | undefined): Memo {
+    const m: Memo = { raw: item, key, out: undefined!, lists: had?.lists ?? new Map() };
+    m.out = this.#made(topic, () => {
+      const lists: Lists = new Map();
+      const inner = this.#build(topic, item, spec, itemTy, here, "", m.lists, lists);
+      m.lists = lists;
+      return inner;
+    }, itemTy, here);
+    return m;
+  }
+
+  /// What an item goes out as, made of what `inner` gives.
+  #made(topic: Topic, inner: () => unknown, itemTy: Ty | undefined, here: string): Derived<unknown> {
+    work.shaped++;
+    return computed(() => {
+      const raw = inner();
+      // Decorated as it is, not a copy of it: an item's decoration (present.ts `decorateItem`: `session`, `times`)
+      // makes a new object of what it puts something in and never writes on what it is given. A copy of each was
+      // 1.3 ms of the 52 items of a chat list's first page in Hermes on a Mac Studio (2026-11-11).
+      const decorated = present.decorateItem(topic, raw, this.#c);
+      let out = decorated;
+      if (itemTy !== undefined) {
+        // (as it was made beside it, where it was: a chat list's row kept beside its record, conform.ts shapedBeside)
+        const made = keptShape(decorated, itemTy);
+        if (made !== undefined) out = made;
+        else {
+          work.conformed++;
+          const shapedItem = conformTy(itemTy, decorated, here);
+          if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
+          out = shapedItem.ok;
+        }
+      }
+      // (what goes out is marked as gone out, which other values that hold it take it as, shaped: never the item
+      // itself, where nothing was put in it nor shaped of it, no shape or one of `Value`: a copy of it, as before)
+      if (out === raw && !shaped.has(raw as object)) out = copy(raw);
+      freeze(out);
+      return out;
+    });
   }
 }
 
@@ -194,7 +252,11 @@ function compactChat(value: unknown): unknown {
 /// A copy to decorate, sharing what already went out.
 function copy(v: unknown): unknown {
   if (v === null || typeof v !== "object") return v;
-  if (shaped.has(v)) return v;
+  if (shaped.has(v)) {
+    walked.same++;
+    return v;
+  }
+  walked.copied++;
   if (Array.isArray(v)) return v.map(copy);
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(v)) out[k] = copy((v as Record<string, unknown>)[k]);

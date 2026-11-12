@@ -5,7 +5,7 @@ import { markdown } from "../src/markdown.ts";
 import { Output } from "../src/output.ts";
 import * as present from "../src/present.ts";
 import { deepFreeze, isObject, shaped } from "../src/util.ts";
-import { work } from "../src/work.ts";
+import { walked, work } from "../src/work.ts";
 
 test("output_an_agents_markdown_goes_out_as_the_tree_kept_for_its_words_not_copied_again", () => {
   // A chat's page of agents' replies is mostly their trees: copied, put through the shape and cloned to keep for the
@@ -176,5 +176,95 @@ test("every_keyed_topics_items_are_decorated_as_they_are_never_written_and_never
     }
     // (what the decoration puts in, where the topic says times in words: so it was put, not left out)
     if (present.ticks(topic) && name !== "stations") assert.ok(isObject((sent[0] as Record<string, unknown>).time) && "lastActiveAt" in ((sent[0] as Record<string, Record<string, unknown>>).time), name);
+  }
+});
+
+test("an_item_the_very_object_it_was_goes_out_as_made_found_by_the_object_and_nothing_of_it_walked", () => {
+  const now = Date.UTC(2026, 10, 12, 4, 30, 10);
+  const c = { now, offsetMin: 480 };
+  const topic = { topic: "chatRows", station: "w/s" };
+  const rows = Array.from({ length: 90 }, (_, i) => Object.freeze({ id: `t${i}`, key: `t${i}`, title: `chat ${i}` }));
+  const out = new Output();
+  const shape = (v: unknown) => (out.shape(topic, v, c, false) as { ok: { id: string }[] }).ok;
+  const first = shape(rows);
+  // one changed in a new list: that one made, the others found by the object
+  const from = { ...walked };
+  const next = shape(rows.map((r, i) => (i === 40 ? Object.freeze({ ...r, title: "new" }) : r)));
+  assert.equal(walked.built - from.built, 1);
+  assert.equal(walked.same - from.same, 89 + 1, "the others, and the list as it goes out to copy");
+  // (the others' making read nothing that can change: not read again, the one made and the list alone)
+  assert.ok(walked.reads - from.reads <= 3, `reads ${walked.reads - from.reads}`);
+  assert.equal(walked.copied - from.copied, 1, "the one made, copied as no shape makes it anew");
+  assert.equal(next[0], first[0]);
+  assert.notEqual(next[40], first[40]);
+  assert.deepEqual(next, first.map((r, i) => (i === 40 ? { ...r, title: "new" } : r)));
+  // the very list again in another value: the list as it went out, its items not looked at
+  const value = { items: rows };
+  const history = new Output();
+  const h = (v: unknown) => (history.shape({ topic: "history", station: "w/s", key: "k" }, v, c, false) as { ok: { items: unknown[] } }).ok;
+  const was = h(value);
+  const again = { ...walked };
+  assert.equal(h({ ...value, edge: "x" }).items, was.items);
+  assert.equal(walked.built - again.built, 0);
+  assert.ok(walked.same - again.same <= 3, `${walked.same - again.same}`);
+});
+
+test("an_item_holding_keyed_lists_the_very_object_it_was_goes_out_as_made_until_its_items_words_move_on", () => {
+  const now = Date.UTC(2026, 10, 8, 4, 30, 10);
+  const topic = { topic: "search", scope: "w", query: "" };
+  const row = (key: string, at: number) => Object.freeze({ key, lastActiveAt: at });
+  const recent = row("recent", now - 2 * 60_000);
+  const old = row("old", now - 3 * 86_400_000);
+  const group = Object.freeze({ kind: "chat", items: Object.freeze([recent, old]) });
+  const other = Object.freeze({ kind: "file", items: Object.freeze([row("f", now - 5 * 86_400_000)]) });
+  const out = new Output();
+  type G = { kind: string; items: { key: string; time: { lastActiveAt: { ago: string } } }[] };
+  const groups = (v: unknown, c: { now: number; offsetMin: number }) => (out.shape(topic, v, c, false) as { ok: { groups: G[] } }).ok.groups;
+  const c = { now, offsetMin: 480 };
+  const first = groups({ items: [], groups: [group, other] }, c);
+  // the other group changed, this one the same object: as it went, nothing of it made
+  const from = { ...walked };
+  const shaped0 = work.shaped;
+  const next = groups({ items: [], groups: [group, { ...other, items: [row("g", now - 5 * 86_400_000)] }] }, c);
+  assert.equal(next[0], first[0]);
+  assert.notEqual(next[1], first[1]);
+  assert.equal(work.shaped - shaped0, 2, "the other group and its one item");
+  assert.equal(walked.built - from.built, 2);
+  // a minute on, the same value: the group made again for its recent item's words, its old one as it went
+  const later = groups({ items: [], groups: [group, other] }, { now: now + 60_000, offsetMin: 480 });
+  assert.notEqual(later[0], first[0]);
+  assert.notEqual(later[0]!.items[0]!.time.lastActiveAt.ago, first[0]!.items[0]!.time.lastActiveAt.ago);
+  assert.equal(later[0]!.items[1], first[0]!.items[1]);
+  assert.equal(later[1]!.items[0]!.key, "f");
+});
+
+test("the_very_object_sent_by_two_topics_of_two_shapes_goes_out_in_each_ones_shape", () => {
+  // (a chat's row in a search, ChatItem, and in the chat list, ListedChat: what a list's row carries, `mayShare` not)
+  const c = { now: Date.UTC(2026, 10, 12, 4, 30, 10), offsetMin: 480 };
+  const chat = (id: string) => Object.freeze({ id, session: `s-${id}`, title: id, agents: [], unread: false, station: "w/s", stationName: "S", mayShare: true });
+  const r = chat("a");
+  const search = new Output();
+  const list = new Output();
+  type Row = { id: string; mayShare?: boolean };
+  const searched = (items: unknown[]) => {
+    const out = search.shape({ topic: "chatSearch", scope: "w", query: "" }, { items, words: [], messages: [] }, c, true);
+    assert.ok("ok" in out, JSON.stringify(out));
+    return (out.ok as { items: Row[] }).items;
+  };
+  const listed = (items: unknown[]) => {
+    const out = list.shape({ topic: "chats", scope: "w" }, { stations: [], days: [{ daysAgo: 0, label: "今天", items }] }, c, true);
+    assert.ok("ok" in out, JSON.stringify(out));
+    return (out.ok as { days: { items: Row[] }[] }).days[0]!.items;
+  };
+  for (let round = 0; round < 2; round++) {
+    // (and again, the same row beside a new one: each as its own made it)
+    const s = searched(round === 0 ? [r] : [chat("b"), r]);
+    const l = listed(round === 0 ? [r] : [chat("b"), r]);
+    const sr = s[s.length - 1]!;
+    const lr = l[l.length - 1]!;
+    assert.equal(sr.mayShare, true, "a search's row as ChatItem");
+    assert.ok(!("mayShare" in lr), "the list's as ListedChat");
+    assert.equal(sr.id, "a");
+    assert.equal(lr.id, "a");
   }
 });

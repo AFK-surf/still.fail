@@ -1,6 +1,8 @@
 // Bytes and text the core needs on every host (Node, a browser's worker, Hermes): UTF-8, base64, hex, SHA-256, and
 // JSON as the Rust core reads and writes it (objects' keys in order, as serde_json without preserve_order keeps them).
 
+import { walked } from "./work.ts";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -159,6 +161,7 @@ export function isObject(v: unknown): v is JsonObject {
 export function equal(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  walked.equaled++;
   if (Array.isArray(a)) {
     if (!Array.isArray(b) || a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) if (!equal(a[i], b[i])) return false;

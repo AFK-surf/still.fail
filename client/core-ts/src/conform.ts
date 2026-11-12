@@ -4,6 +4,7 @@
 import { SHAPES } from "./shapes/schema.ts";
 import type { Ty } from "./shapes/dsl.ts";
 import { shaped, shapedAs } from "./util.ts";
+import { walked } from "./work.ts";
 
 export type { Field, Shape, Ty } from "./shapes/dsl.ts";
 
@@ -267,10 +268,26 @@ const has = Object.prototype.hasOwnProperty;
 
 /// `walk` for a value that fits, making the same value: every topic's every change goes through it whole, and walking
 /// it (a path written for every field, every object's keys sorted) was much of what the core did on a phone
-/// (2026-10-19). Anything that does not fit is MISFIT, for `walk` to say.
+/// (2026-10-19). Anything that does not fit is MISFIT, for `walk` to say. What went out as it is, or was made of the
+/// very object as this shape before (`shapedBeside`, `reshaped`), is taken with one lookup by the object, nothing of it
+/// walked (`same`); `fitted` counts what is walked.
 function fit(v: unknown, ty: Ty): unknown {
   if (typeof ty === "object" && "opt" in ty) return v === null || v === undefined ? null : fit(v, ty.opt);
-  if (wentOut(v, ty)) return v;
+  if (wentOut(v, ty)) {
+    walked.same++;
+    return v;
+  }
+  if (typeof ty === "string" && v !== null && typeof v === "object") {
+    // (one with what it goes out as made beside it: as it was made)
+    const made = beside.get(v)?.get(ty);
+    // (one a view shaped as another struct: as this one once, kept as it went out)
+    const kept = made ?? (shaped.has(v) ? reshaped.get(v)?.get(ty) : undefined);
+    if (kept !== undefined) {
+      walked.same++;
+      return kept;
+    }
+  }
+  walked.fitted++;
   if (typeof ty === "object") {
     if ("vec" in ty) {
       if (!Array.isArray(v)) throw MISFIT;
@@ -319,15 +336,8 @@ function fit(v: unknown, ty: Ty): unknown {
     if (typeof tag !== "string" || !has.call(shape.variants, tag) || !(shape.content in obj)) throw MISFIT;
     return { [shape.tag]: tag, [shape.content]: fit(obj[shape.content], shape.variants[tag]) };
   }
-  // (one with what it goes out as made beside it: as it was made)
-  const made = beside.get(obj)?.get(ty);
-  if (made !== undefined) return made;
-  // (one a view shaped as another struct: as this one once, kept as it went out)
+  // (one a view shaped as another struct: made as this one once, kept as it went out)
   const other = shaped.has(obj);
-  if (other) {
-    const kept = reshaped.get(obj)?.get(ty);
-    if (kept !== undefined) return kept;
-  }
   const out: Record<string, unknown> = {};
   for (const f of shape.fields) {
     let value: unknown;

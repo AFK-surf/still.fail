@@ -29,7 +29,7 @@ import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 import { token } from "./digest.ts";
-import { work } from "./work.ts";
+import { walked, walkingAs, work } from "./work.ts";
 
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
@@ -718,17 +718,32 @@ export class Store {
   /// message took the whole core down once, and the page stayed on 正在读取对话).
   #compute(topic: Topic): Value | undefined {
     let value: Value | undefined;
+    // (what it walks counted to it: work.ts `walkingAs`)
+    const was = walkingAs(topic.topic);
+    walked.recomputes++;
     try {
       value = this.#source?.compute?.(topic);
     } catch (error) {
       console.error(`computing ${topicDebug(topic)} failed`, error);
       return { err: new CoreError("internal", t("core-misc.compute", { topic: topicDebug(topic), reason: error instanceof Error ? error.message : String(error) })) };
+    } finally {
+      walkingAs(was);
     }
     if (value !== undefined && "ok" in value) sharedValue(value.ok);
     return value;
   }
 
   #flush(topic: Topic): void {
+    // (what making it and sending it walks counted to it: work.ts `walkingAs`)
+    const was = walkingAs(topic.topic);
+    try {
+      this.#flushOf(topic);
+    } finally {
+      walkingAs(was);
+    }
+  }
+
+  #flushOf(topic: Topic): void {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
     entry.emitScheduled = false;
@@ -774,12 +789,15 @@ export class Store {
     let changed: (() => void)[] = [];
     // What equals the last value is the last value's (collections.ts share): what did not change goes on as the same
     // objects, which the diff and the items' shaping step over.
-    // (only what goes out: what reads a topic in the core reads what its source made)
+    // (only what goes out: what reads a topic in the core reads what its source made) What `share` did not give back as
+    // the last value differs from it: not compared again.
+    let shared = false;
     if (now.subscribers.length > 0 && computed !== undefined && "ok" in computed && now.value !== undefined && "ok" in now.value && now.value.ok !== computed.ok) {
       const kept = share(now.value.ok, computed.ok, specOf(topic));
       computed = kept === now.value.ok ? now.value : { ok: sharedValue(kept) };
+      shared = true;
     }
-    if (computed !== undefined && computed !== now.value && !sameValue(now.value, computed)) {
+    if (computed !== undefined && computed !== now.value && (shared || !sameValue(now.value, computed))) {
       // What is held tells its watchers as it changes (changed): only an error is news to them here.
       const news = !isHeld || "err" in computed || (now.value !== undefined && "err" in now.value);
       now.value = computed;

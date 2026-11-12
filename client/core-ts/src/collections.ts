@@ -5,7 +5,7 @@
 import { type Op, type Segment, diffAt, jsonLength, largerThan } from "./delta.ts";
 import type { Topic } from "./protocol.ts";
 import { compareKeys, equal, isObject } from "./util.ts";
-import { work } from "./work.ts";
+import { walked, work } from "./work.ts";
 
 /// Where the keyed lists of a value are: `key` (the fields an item's key is made of) says the value at this place is
 /// one; `item` where the keyed lists of each item are; `fields` those of an object's fields.
@@ -125,21 +125,41 @@ export function share<T>(prev: unknown, next: T, spec: Spec | null): T {
 function shareAt(prev: unknown, next: unknown, spec: Spec | null): unknown {
   if (prev === next || typeof next !== "object" || next === null || typeof prev !== "object" || prev === null) return next;
   work.compared++;
+  walked.shared++;
   let out: unknown;
   if (Array.isArray(next)) {
     if (!Array.isArray(prev)) return next;
     const fields = spec?.key;
+    // The items that are the objects at the same place before, at its start and its end, are taken as they are: only
+    // what is between them is matched (a list of 90 rows with one changed costs that row).
+    let start = 0;
+    while (start < next.length && start < prev.length && next[start] === prev[start]) start++;
+    let prevEnd = prev.length;
+    let nextEnd = next.length;
+    while (prevEnd > start && nextEnd > start && prev[prevEnd - 1] === next[nextEnd - 1]) {
+      prevEnd--;
+      nextEnd--;
+    }
+    walked.same += start + next.length - nextEnd;
+    if (start === nextEnd && start === prevEnd) {
+      work.remade++;
+      return prev;
+    }
+    // (each item between mapped, and a keyed list's last items there each put in its map)
+    const looked = nextEnd - start + (fields ? prevEnd - start : 0);
+    walked.shared += looked;
     let byKey: Map<string, unknown> | null = null;
     if (fields) {
       byKey = new Map();
-      for (const item of prev) byKey.set(textOf(item, fields), item);
+      for (let i = start; i < prevEnd; i++) byKey.set(textOf(prev[i], fields), prev[i]);
     }
     let all = prev.length === next.length;
-    const items = next.map((item, i) => {
-      const kept = shareAt(byKey ? byKey.get(textOf(item, fields!)) : prev[i], item, spec?.item ?? null);
+    const items = next.slice();
+    for (let i = start; i < nextEnd; i++) {
+      const kept = shareAt(byKey ? byKey.get(textOf(next[i], fields!)) : prev[i], next[i], spec?.item ?? null);
       if (kept !== prev[i]) all = false;
-      return kept;
-    });
+      items[i] = kept;
+    }
     out = all ? prev : items;
   } else {
     if (!isObject(prev) || !isObject(next)) return next;
@@ -179,14 +199,10 @@ function keysOf(list: unknown[], fields: string[]): string[] | null {
 
 /// A keyed list's ops: drops, then from the last item on, each new one put and each moved one moved before the one
 /// after it (those in the longest run kept in order stay), and each changed one patched. False: not keyed (a key twice).
-/// The same objects at its start and its end stay as they are: only what is between them is matched, so a message
-/// added to a chat costs that message.
+/// The same objects at its start and its end stay as they are, each one comparison: only what is between them is
+/// matched by its key, so a message added to a chat costs that message. (A key there twice is found between them.)
 function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops: AnyOp[]): boolean {
   const fields = spec.key!;
-  if (old.length === next.length && old.every((item, i) => item === next[i])) return true;
-  const allOld = keysOf(old, fields);
-  const allNext = keysOf(next, fields);
-  if (!allOld || !allNext) return false;
   let start = 0;
   while (start < old.length && start < next.length && old[start] === next[start]) start++;
   let oldEnd = old.length;
@@ -195,13 +211,18 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
     oldEnd--;
     nextEnd--;
   }
-  const oldKeys = allOld.slice(start, oldEnd);
-  const nextKeys = allNext.slice(start, nextEnd);
+  walked.same += start + next.length - nextEnd;
+  if (start === oldEnd && start === nextEnd) return true;
+  const looked = oldEnd - start + (nextEnd - start);
+  walked.diffed += looked;
+  const oldKeys = keysOf(old.slice(start, oldEnd), fields);
+  const nextKeys = keysOf(next.slice(start, nextEnd), fields);
+  if (!oldKeys || !nextKeys) return false;
   const was = new Map(oldKeys.map((k, i) => [k, start + i]));
   const now = new Set(nextKeys);
   const out: AnyOp[] = [];
   for (let i = start; i < oldEnd; i++) {
-    if (!now.has(allOld[i]!)) out.push({ path: [...path], key: fields, drop: keyOf(old[i], fields) });
+    if (!now.has(oldKeys[i - start]!)) out.push({ path: [...path], key: fields, drop: keyOf(old[i], fields) });
   }
   // Where each kept one was among the kept (in the new order), and which of them stay.
   const positions = nextKeys.map((k) => was.get(k) ?? -1);
