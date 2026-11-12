@@ -344,12 +344,16 @@ fn info_row_ground(b : @view.View) -> Int64 {
 }
 
 ///|
+// kept across runs: a value (no field of it changes)
+let info_row_round : @ui.Style = @ui.style(radius=@sf.panel_in)
+
+///|
 /// A row of the info (info_row's, ui.tsx PanelRow) in `parent`: its icon (14, muted) at the panel's words' inset, as
 /// the facts' words and the agents' marks over it, and words 10 apart, what is at its end (`end`) muted, under its words
 /// where the line has not the room; round with the panel, the pointer's ground on it; `press` as it is pressed.
 fn info_row_node(parent : @view.View, icon : String, label : String, end : String, press : () -> Unit) -> Unit {
   parent.box(fn(b) {
-    @sf.style_node(b, info_tool)
+    @sf.style_node(b, fn() { info_tool().then(info_row_round) })
     b.ground(By(fn() { info_row_ground(b) })).says(Is(Some(@view.said(Button, label~)))) |> ignore
     @sf.presses_node(b, press)
     b.box(fn(i) {
@@ -379,7 +383,7 @@ fn info_pull_node(parent : @view.View, src : Source, r : ChatRef, pull : Json?, 
   let title = @sfpages.pull_title(pull)
   let url = text(pull, "url")
   parent.box(fn(b) {
-    @sf.style_node(b, info_tool)
+    @sf.style_node(b, fn() { info_tool().then(info_row_round) })
     b.ground(By(fn() { info_row_ground(b) })).says(Is(Some(@view.said(Link, label=title)))) |> ignore
     @sf.menu_presses_node(b, press, fn(x, y, _) {
       @sfpages.thing_menu_node_at(x, y, number(pull, "seq"), url, fn(seq) {

@@ -160,7 +160,13 @@ pub fn danger_row_node(
   loc~ : SourceLoc,
 ) -> Unit {
   parent.box(made_for=loc, fn(r) {
-    style_node(r, fn() { pg_row })
+    r
+    .row(Is(true))
+    .gap(Is(12.0))
+    .padding(Is((text_in, text_in, text_in, text_in)))
+    .radius(Is(@ui.concentric(group_corner, list_pad)))
+    .lines_up(Is(Some(Middle)))
+    |> ignore
     let live = fn() { !busy() }
     let go = fn() {
       if @signals.untracked(live) {

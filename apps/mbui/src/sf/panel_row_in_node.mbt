@@ -16,4 +16,4 @@ pub fn panel_row_in_node(v : @view.View) -> @ui.Style {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_panel_row_in_node : @ui.Style = @ui.style(px=room(text_in), radius=Inner)
+let small_panel_row_in_node : @ui.Style = @ui.style(px=room(text_in), radius=rounded(small_panel_inner(r_menu)))

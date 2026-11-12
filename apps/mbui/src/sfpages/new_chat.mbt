@@ -498,7 +498,7 @@ fn station_rows_node(n : @view.View, src : Source, w : Workspace, v : Json?, clo
       // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in_node; its ground under a mouse, as
       // panel_row_in's `hovered`)
       @sf.style_node(row, fn() { station_row.then(@sf.panel_row_in_node(row)) })
-      row.ground(By(fn() { if @sf.hovered_node(row) { @sf.theme().p.hover } else { 0L } })) |> ignore
+      row.ground(By(fn() { if @sf.hovered_in_node(row) || row.focus_shown() { @sf.theme().p.hover } else { 0L } })) |> ignore
       @sf.rippled_node(row, fn() {
         @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
         close()

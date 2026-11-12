@@ -436,7 +436,7 @@ fn sec_line_node(
         |> ignore
       }
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { if indent { sec_narrow_row_in } else { @sf.pg_said_row } })
+        @sf.style_node(r, fn() { (if indent { sec_narrow_row_in } else { @sf.pg_said_row }).then(sec_narrow_round) })
         match acts {
           None => words(r)
           // (its mark beside its title and its note as in a row doing nothing, what it does under them all from where
@@ -1196,6 +1196,10 @@ let sec_note_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// it is to be renewed soon; what a row says at its end (the secondary's, on one line).
 // kept across runs: a value (no field of it changes)
 let sec_narrow_row_in : @ui.Style = @ui.css("row w=Full pl=S6 pr=S3 py=S2_5 gap=S3 radius=Inner align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_narrow_round : @ui.Style = @ui.style(radius=@sf.group_row_end_radius)
 
 ///|
 /// Narrow: the app a person's devices under it are, at their marks (sec_narrow_row_in's), 6 over the first (Security.tsx's

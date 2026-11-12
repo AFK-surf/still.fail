@@ -92,4 +92,5 @@ test "wide: a mouse's pointer over a rail card's ground is the arrow, over 分�
   assert_eq(grounds, [Arrow, Arrow, Arrow], msg="its ground at \{Repr(points)}")
   let (sx, sy, sw, sh) = t.get(Button, label="分享卡片").rect
   assert_eq(shape_on(sx + sw / 2.0, sy + sh / 2.0), Hand, msg="分享卡片")
+  assert_eq(t.corner_faults(), [], msg="分享卡片 lit in the card's foot corners")
 }

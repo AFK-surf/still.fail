@@ -259,7 +259,6 @@ fn usage_prices_link_node(parent : @view.View, core : Core) -> Unit {
     // it then, cut short there)
     .shrink(Is(1.0))
     .padding(Is((8.0, 4.0, 8.0, 4.0)))
-    .radius(By(fn() { @ui.tree_theme().corner(Inner) }))
     .says(By(fn() { Some(@view.said(Link, label=@sf.t("web-main.usage.costPrices"))) }))
     |> ignore
     @sf.presses_node(b, fn() { (core.push)(UsagePrices(usage_pick.days.untracked())) })

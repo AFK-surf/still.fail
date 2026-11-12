@@ -824,16 +824,15 @@ fn login_step_node(p : @view.View, s : () -> LoginStep) -> Unit {
             (false, true) => lc_step_lit
             (false, false) => lc_step
           }
-          if in_row {
+          let step = if in_row {
             look.then(lc_in_row)
           } else {
             foot(look)
           }
+          step.then(lc_inner_round)
         },
         in_row~,
       )
-      // (concentric with the card: lc_step's Inner, the old view's worked out as it is laid out)
-      b.radius(Is(lc_inner_corner)) |> ignore
       @sf.presses_node(b, fn() { (s().press)() }, on=fn() { !s().busy })
       b.says(By(fn() { Some(@view.said(Button, label=s().label)) })) |> ignore
       let ink = fn() { if s().solid { @sf.theme().p.on_primary } else { @sf.theme().p.text } }
@@ -853,8 +852,7 @@ fn login_step_node(p : @view.View, s : () -> LoginStep) -> Unit {
       @sf.style_node(r, fn() { foot(lc_step_row) })
       button(r, true)
       r.box(fn(m) {
-        @sf.style_node(m, fn() { if @sf.lit_node(m) { lc_more_lit } else { lc_more } }, in_row=true)
-        m.radius(Is(lc_inner_corner)) |> ignore
+        @sf.style_node(m, fn() { (if @sf.lit_node(m) { lc_more_lit } else { lc_more }).then(lc_inner_round) }, in_row=true)
         @sf.presses_node(m, fn() {
           let (wx, wy, ww, wh) = m.placed_window_now()
           @sf.menu(s().more.map(fn(i) { Some(i) }), from=At(wx, wy, ww, wh), along=End)
@@ -886,8 +884,7 @@ fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Jso
     login_answer(core, station, id, code)
   }
   x.box(fn(b) {
-    @sf.style_node(b, fn() { lc_paste })
-    b.radius(Is(lc_inner_corner)) |> ignore
+    @sf.style_node(b, fn() { lc_paste.then(lc_inner_round) })
     b.box(fn(w) {
       @sf.style_node(w, fn() { lc_paste_words }, in_row=true)
       @ui.field(
@@ -914,8 +911,7 @@ fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Jso
     |> ignore
     b.show(fn() { words() != "" || shows().busy }, fn(d) {
       d.box(fn(go) {
-        @sf.style_node(go, fn() { if @sf.lit_node(go) && !shows().busy { lc_done_lit } else { lc_done } }, in_row=true)
-        go.radius(Is(lc_done_corner)) |> ignore
+        @sf.style_node(go, fn() { (if @sf.lit_node(go) && !shows().busy { lc_done_lit } else { lc_done }).then(lc_done_round) }, in_row=true)
         @sf.presses_node(go, fn() { send(words()) }, on=fn() { !shows().busy })
         go.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.logins.finish"))) })) |> ignore
         // busy: a spinner over its word, as wide as before
@@ -1180,3 +1176,11 @@ let lc_inner_corner : Double = @ui.concentric(@sf.card_corner, @ui.capsule_in(@s
 
 ///|
 let lc_done_corner : Double = @ui.concentric(lc_inner_corner, 4.0)
+
+///|
+// kept across runs: a value (no field of it changes)
+let lc_inner_round : @ui.Style = @ui.style(radius=@sf.radius_between(lc_inner_corner))
+
+///|
+// kept across runs: a value (no field of it changes)
+let lc_done_round : @ui.Style = @ui.style(radius=@sf.radius_between(lc_done_corner))

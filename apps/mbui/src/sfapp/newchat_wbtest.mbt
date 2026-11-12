@@ -690,3 +690,31 @@ test "where a new chat runs, on every screen at the default size of words and on
     assert_eq(ns_rows_wrong(t, "phone \{lang} at 1.3"), "")
   }
 }
+
+///|
+test "wide: a new chat's stations under a mouse have concentric corners in the panel and stay lit over a row's meter chips" {
+  let t = ns_open([], platform=0, wide=true)
+  t.host_says_finger(Some(false))
+  let rows = t.semantics().filter(fn(n) { n.role == @ui.Role::Button && (n.label == "Willow" || n.label == "Maple") && n.check is Some(_) && !n.hidden })
+  guard rows.length() == 2 else { fail("expected Willow and Maple rows") }
+  let same_box = fn(b : @ui.Laid, r : (Double, Double, Double, Double)) {
+    (b.x - r.0).abs() < 0.5 && (b.y - r.1).abs() < 0.5 && (b.w - r.2).abs() < 0.5 && (b.h - r.3).abs() < 0.5 && b.bg != 0L
+  }
+  let (wx, wy, ww, wh) = rows[0].rect
+  let (mx, my, mw, mh) = rows[1].rect
+  // Pointer on the bottom row (Maple): its hover ground is concentric with the small panel's corners.
+  t.move_to(mx + mw / 2.0, my + mh / 2.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  let lit_maple = t.boxes_held().filter(fn(b) { same_box(b, (mx, my, mw, mh)) })
+  assert_true(lit_maple.length() == 1 && (lit_maple[0].radius - @sf.row_corner).abs() < 0.5, msg="\{lit_maple.length()} maple lit")
+  // Pointer moved onto the CPU meter chip inside Willow: Willow's own hover ground stays lit across the whole row.
+  guard t.words().iter().find_first(fn(w) { w.0 == "CPU" && w.5 > 0.0 && w.2 >= wy && w.2 + w.4 <= wy + wh }) is Some((_, cx, cy, cw, ch, _)) else {
+    fail("no CPU chip in Willow")
+  }
+  t.move_to(cx + cw / 2.0, cy + ch / 2.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  let lit_willow = t.boxes_held().filter(fn(b) { same_box(b, (wx, wy, ww, wh)) })
+  assert_true(lit_willow.length() == 1 && (lit_willow[0].radius - @sf.row_corner).abs() < 0.5, msg="\{lit_willow.length()} willow lit")
+}
