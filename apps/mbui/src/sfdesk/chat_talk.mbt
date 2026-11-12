@@ -105,3 +105,34 @@ fn chat_bar_room() -> Double {
 
 ///|
 let list_head_gap : Double = 24.0
+
+///|
+/// Chat `r`'s messages where its page is made with its inside nodes (sfbase's chat_page_nodes: chat_page_made's
+/// `body`), in `v`: under the bar's room, the pane `width` wide as it changes.
+fn chat_body_nodes(
+  v : @view.View,
+  src : Source,
+  r : ChatRef,
+  width : () -> Double,
+  tips : @sf.TipLayer,
+  stint : () -> Int,
+) -> Unit {
+  @sfpages.chat_page_body_node(v, src, r, width~, tips~, stint~, top=fn() { chat_bar_room() + list_head_gap })
+}
+
+///|
+/// Chat `r`'s composer under its messages where its page is made with its inside nodes (sfbase's chat_page_nodes:
+/// chat_page_made's `foot`), at its own height, `apart` as chat_composer's; nothing over it or let go into it yet
+/// (chat_talk's layers).
+fn chat_composer_nodes(c : @ui.Ctx, src : Source, r : ChatRef, apart : Bool) -> Unit {
+  guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
+  let foot = c.box(style=chat_composer_under, fn() {
+    @sfpages.chat_composer(c, src, w, r, view_of_chat(src, r).0, apart~)
+  })
+  @motion.scope(c, foot, bottom=true)
+}
+
+///|
+/// The composer's box under a chat's messages made as nodes (chat_composer_nodes): as wide as the pane.
+// kept across runs: a value (no field of it changes)
+let chat_composer_under : @ui.Style = @ui.css("w=Full")

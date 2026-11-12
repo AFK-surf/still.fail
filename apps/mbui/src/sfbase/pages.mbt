@@ -70,6 +70,17 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 }
 
 ///|
+/// Whether a chat's page is made with its inside nodes (chat_page_made's `body` and `foot`): a bridge while the page
+/// is moved off its old view, deleted at the switch-over; off, the page is as it was. Read as a page is made.
+// kept across runs: chat_page_nodes_at_start as a run begins (reset)
+pub let chat_page_nodes : @signals.Signal[Bool] = @signals.signal(chat_page_nodes_at_start, same=fn(a, b) { a == b })
+
+///|
+/// What chat_page_nodes is as a run begins.
+// kept across runs: a value
+let chat_page_nodes_at_start : Bool = false
+
+///|
 /// A chat's page made once in node `v` of a stack's (entry `serial`'s: nav_view's and nav_flat_view's `made`), and the
 /// new chat that becomes it in place, the same page: what it holds its old view as yet, its island (Nav::page_island),
 /// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
@@ -77,7 +88,8 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 /// a picture flying from its list while under its bar (viewer_flight_slot), and over that what of it is nodes already (`over`: given a node over the island, the chat's source, what the page is now and its
 /// time on top, `stint`; made while `drawn` says its entry is drawn: shown, or kept shown in place while the one on top
 /// waits, as its island is). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
-/// what is beside it reads by it too.
+/// what is beside it reads by it too. With chat_page_nodes on as a chat's page is made: its inside nodes, chat `r`'s
+/// messages made by `body` in a column and under them its composer by `foot`, its old view in a node of its own.
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -87,23 +99,53 @@ pub fn chat_page_made(
   over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
   stint? : () -> Int = fn() { 0 },
   drawn? : (Int) -> Bool = fn(serial) { app.nav.shows(serial) },
+  body? : (@view.View, Source, ChatRef) -> Unit,
+  foot? : (@ui.Ctx, Source, ChatRef) -> Unit,
 ) -> Source {
   let retained = page_entry_source(src, v, serial)
   let page_read = page_chat_reader(retained, v, serial)
   let shown = src.owned_by(v)
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-  app.nav.page_island(
-    v,
-    serial,
-    fn(c, page) {
-      page_entry_read(serial, retained, page)
-      page_read(page)
-      build(c, if page is Chat(_) { retained } else { shown }, page)
-    },
-    key~,
-  )
-  .grow(Is(1.0))
-  |> ignore
+  // (with chat_page_nodes on, a chat's made as nodes inside: what it is as it is made)
+  let inside = match (body, foot, @signals.untracked(fn() { app.nav.page_of(serial) })) {
+    (Some(b), Some(f), Some((Chat(r), _))) if @signals.untracked(fn() { chat_page_nodes.get() }) => Some((b, f, r))
+    _ => None
+  }
+  match inside {
+    Some((b, f, r)) =>
+      // a column: the chat's messages growing to what it leaves them, the composer under them at its own height, its
+      // old view in a node of its own as yet (built as the stack's island is, what the page reads read there)
+      v.box(fn(col) {
+        col.grow(Is(1.0)).min_height(Is(Some(0.0))).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+        b(col, retained, r)
+        app.nav.page_island(
+          col,
+          serial,
+          fn(c, page) {
+            page_entry_read(serial, retained, page)
+            page_read(page)
+            f(c, retained, r)
+          },
+          key~,
+          natural=true,
+        )
+        |> ignore
+      })
+      |> ignore
+    None =>
+      app.nav.page_island(
+        v,
+        serial,
+        fn(c, page) {
+          page_entry_read(serial, retained, page)
+          page_read(page)
+          build(c, if page is Chat(_) { retained } else { shown }, page)
+        },
+        key~,
+      )
+      .grow(Is(1.0))
+      |> ignore
+  }
   // (a picture flying from its list drawn here while under its bar, the bar over it: viewer_flight_slot)
   v.box(fn(slot) { viewer_flight_slot(slot, retained, serial, fn() { slot.window() }) }) |> ignore
   match over {
@@ -966,6 +1008,8 @@ pub fn reset() -> Unit {
   fresh_reset()
   // how times are said (message_words.mbt)
   absolute_times.set(false)
+  // whether a chat's page is made as nodes inside (chat_page_nodes)
+  chat_page_nodes.set(chat_page_nodes_at_start)
   // a chat's list's turns and its messages out of avatars (list_turns.mbt, emit.mbt)
   turns_by.clear()
   emits.clear()

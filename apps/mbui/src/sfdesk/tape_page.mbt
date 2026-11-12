@@ -500,7 +500,7 @@ fn tape_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) {
+          fn(v, _page, _under, stint, k) {
             // (its bar the tree's, over the page's old view: chat_bar_wide_node, keeping clear of the panel's corners as a
             // page's bar on the tape does; the tape's head over it none, tape_bar_head)
             @sfbase.chat_page_made(
@@ -511,6 +511,9 @@ fn tape_made(
               key=tape_island_key,
               drawn=fn(serial) { tape_page_wait.draws(serial) },
               over=fn(o, src, page, stint) { chat_bar_wide_node(o, src, page, tape_chat_bar_ends(), tips, stint) },
+              // (with chat_page_nodes on: its messages nodes, its composer under them its old view)
+              body=fn(col, s, r) { chat_body_nodes(col, s, r, width, tips, stint) },
+              foot=fn(c, s, r) { chat_composer_nodes(c, s, r, wide.tape.get()) },
             )
             |> ignore
           },
