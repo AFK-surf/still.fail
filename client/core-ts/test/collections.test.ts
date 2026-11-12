@@ -2,7 +2,7 @@
 // value with the rows that did not change the same objects.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type AnyOp, applyKeyed, diffKeyed, heavier, keyOf, share, type Spec, specOf, textOf } from "../src/collections.ts";
+import { type AnyOp, applyKeyed, diffKeyed, heavier, type Kept, keyOf, share, type Spec, specOf, textOf } from "../src/collections.ts";
 import { apply, diff, diffAt, largerThan, type Op, type Segment } from "../src/delta.ts";
 import { compareKeys, equal, isObject } from "../src/util.ts";
 import { walked } from "../src/work.ts";
@@ -346,4 +346,185 @@ test("shares_and_diffs_of_shuffles_are_what_they_were", () => {
     if (next.days.some((d) => new Set(d.items.map((r) => r.id)).size !== d.items.length)) continue;
     measured(old, next, spec);
   }
+});
+
+// A source that keeps what it made (a list's rows, its days) hands objects of its own, which are never the store's
+// once the store kept a part of the value before in one of them: found by what each was kept as.
+type OwnRow = Readonly<Omit<ReturnType<typeof row>, "agents"> & { agents: { name: string }[] }>;
+const kept = (rows: OwnRow[][]) => ({ me: { email: "a" }, loading: false, stations: [], days: rows.map((items, d) => ({ daysAgo: d, at: d, label: `d${d}`, items })) });
+const ownRows = (): OwnRow[] => Array.from({ length: N }, (_, i) => Object.freeze({ ...row("ws/st", `t${i}`), agents: [{ name: "a" }] }));
+
+test("a_source_handing_again_the_objects_it_made_costs_one_lookup_each_though_they_are_not_the_ones_kept", () => {
+  const spec = specOf({ topic: "chats", scope: "ws" })!;
+  const theirs = ownRows();
+  const held = kept([theirs.slice(0, 45), theirs.slice(45)]);
+  // the source's own rows and days: equal, made anew once (all its rows read again)
+  const own = ownRows();
+  const days = kept([own.slice(0, 45), own.slice(45)]).days;
+  const value = () => ({ me: held.me, loading: false, stations: held.stations, days: [...days] });
+  const first = measured(held, value(), spec);
+  assert.equal(first.shared, held, "all equal: the value held");
+  // (the value; its days, both of each list; each day; its rows, of each list; each row, its agents and its one agent)
+  assert.equal(first.sharing.shared, 1 + (1 + 2 * 2) + 2 + (2 + 2 * N) + N + 2 * N + N);
+  // again, the same days in a value made again: the value and its list of days walked, each day one lookup
+  const again = measured(held, value(), spec);
+  assert.equal(again.shared, held);
+  assert.deepEqual(again.sharing, { same: 2, shared: 2 });
+  // and its list of days itself handed again: found as the list was, its days not looked at
+  const list = [...days];
+  measured(held, { ...value(), days: list }, spec);
+  assert.deepEqual(measured(held, { ...value(), days: list }, spec).sharing, { same: 1, shared: 1 });
+  // and the value itself: nothing of it looked at
+  const whole = { ...value(), days: list };
+  measured(held, whole, spec);
+  const handed = measured(held, whole, spec);
+  assert.deepEqual(handed.sharing, { same: 0, shared: 0 });
+  assert.equal(handed.shared, held, "the value held, not the source's");
+  // one row changed, in a day made again around the rows it had: that row walked (its agents its own of before)
+  const changed = Object.freeze({ ...own[7]!, title: "new" });
+  const day = { ...days[0]!, items: own.slice(0, 45).map((r, i) => (i === 7 ? changed : r)) };
+  const moved = measured(held, { ...value(), days: [day, days[1]!] }, spec);
+  const rows = (moved.shared as typeof held).days[0]!.items;
+  assert.equal(rows[6], theirs[6], "a row kept is the one held, not the source's");
+  assert.equal(rows[8], theirs[8]);
+  assert.equal(rows[7]!.title, "new");
+  assert.equal(rows[7]!.agents, theirs[7]!.agents);
+  assert.equal((moved.shared as typeof held).days[1], held.days[1]);
+  // (the value; its days and the one between the same, of both lists; that day; its rows and the one between, of both
+  // lists; that row, its agents and its one agent: what is in an item is walked with it)
+  assert.equal(moved.sharing.shared, 1 + (1 + 2) + 1 + (1 + 2) + 1 + 2 + 1);
+  assert.equal(moved.sharing.same, 1 + 44);
+  // and that day and row handed again, beside another change: what was kept of them is found
+  const after = measured(moved.shared, { ...value(), loading: true, days: [day, days[1]!] }, spec);
+  assert.deepEqual(after.sharing, { same: 2, shared: 2 });
+  assert.equal((after.shared as typeof held).days[0], (moved.shared as typeof held).days[0]);
+  // that day made again around the list of rows it had: the list kept of it is found (the value, its days and the day
+  // between the same, of both lists; the day; its rows one lookup)
+  const around = measured(after.shared, { ...value(), loading: true, days: [{ ...day }, days[1]!] }, spec);
+  assert.deepEqual(around.sharing, { same: 1 + 1, shared: 1 + (1 + 2) + 1 });
+  assert.equal(around.shared, after.shared);
+  // a row of the source's moved to the top of its day: the one kept of it found by its key, not walked, and given
+  const top = [day.items[20]!, ...day.items.slice(0, 20), ...day.items.slice(21)];
+  const up = measured(around.shared, { ...value(), loading: true, days: [{ ...day, items: top }, days[1]!] }, spec);
+  const upRows = (up.shared as typeof held).days[0]!.items;
+  assert.equal(upRows[0], theirs[20], "the row kept, not the source's");
+  assert.equal(upRows[8], rows[7]);
+  // (the value; its days and the day between; the day; its rows and the 21 between the same, of both lists)
+  assert.equal(up.sharing.shared, 1 + (1 + 2) + 1 + (1 + 2 * 21));
+  assert.equal(up.sharing.same, 1 + 24 + 21);
+});
+
+test("what_a_kept_object_was_kept_of_says_nothing_of_another_value", () => {
+  const spec = specOf({ topic: "chats", scope: "ws" })!;
+  const theirs = ownRows();
+  const held = kept([theirs]);
+  const own = ownRows();
+  const day = kept([own]).days[0]!;
+  assert.equal(share(held, { ...held, days: [day] }, spec), held);
+  // another value held, one of whose rows says otherwise: the source's day is not what that one was kept of
+  const others = ownRows().map((r, i) => (i === 3 ? Object.freeze({ ...r, title: "other" }) : r));
+  const other = kept([others]);
+  const m = measured(other, { ...other, days: [day] }, spec);
+  const rows = (m.shared as typeof held).days[0]!.items;
+  assert.equal(rows[3]!.title, "t3");
+  assert.equal(rows[2], others[2]);
+  // a row of the source's put in a list of rows of its own again is itself: nothing held there to be kept of it
+  assert.equal(share([own[0]], [own[1]], listSpec)[0], own[1]);
+});
+
+test("two_values_of_one_source_each_find_what_they_kept_of_it_by_what_is_remembered_for_each", () => {
+  const spec = specOf({ topic: "chats", scope: "ws" })!;
+  // two topics' values, each with rows of its own equal to the source's (two lists of the same chats)
+  const [a, b] = [kept([ownRows()]), kept([ownRows()])];
+  const day = kept([ownRows()]).days[0]!;
+  const walks = (maps: [Kept, Kept]): number => {
+    share(a, { ...a, days: [day] }, spec, maps[0]);
+    share(b, { ...b, days: [day] }, spec, maps[1]);
+    const from = walked.shared;
+    assert.equal(share(a, { ...a, days: [day] }, spec, maps[0]), a);
+    assert.equal(share(b, { ...b, days: [day] }, spec, maps[1]), b);
+    return walked.shared - from;
+  };
+  // (each: the value and its list of days; the day one lookup)
+  assert.equal(walks([new WeakMap(), new WeakMap()]), 2 * 2);
+  // with one remembered for both, what the day was last kept as is the other's: each walks its rows again
+  const one: Kept = new WeakMap();
+  assert.ok(walks([one, one]) > 2 * N);
+});
+
+test("a_source_keeping_its_rows_through_changes_is_shared_as_before_all_along", () => {
+  let seed = 23;
+  const rand = (n: number) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    // (its high bits: the low ones of such a sequence come round every few calls)
+    return Math.floor(seed / 65536) % n;
+  };
+  const spec = specOf({ topic: "chats", scope: "ws" })!;
+  // The source's rows by key and its days, kept from one value to the next but where it changes them; now and then all
+  // made anew (equal, other objects), as a list whose rows are read again makes them.
+  let pool = Array.from({ length: 40 }, (_, i) => Object.freeze({ ...row("s", `k${i}`), agents: [{ name: "a" }] }));
+  let days = [0, 1, 2].map((d) => Object.freeze({ daysAgo: d, at: d, label: `d${d}`, items: Object.freeze(pool.filter((_, i) => i % 3 === d)) }));
+  let held: unknown = { loading: false, days: [...days] };
+  let lookups = 0;
+  for (let round = 0; round < 400; round++) {
+    if (rand(25) === 0) pool = pool.map((r) => Object.freeze({ ...r, agents: [{ name: "a" }] }));
+    if (rand(25) === 0) days = days.map((d) => Object.freeze({ ...d, items: Object.freeze(d.items.map((r) => pool.find((p) => p.id === r.id)!)) }));
+    const at = rand(3);
+    const kind = rand(4);
+    if (kind === 0) {
+      // one row's words
+      const i = rand(pool.length);
+      const now = Object.freeze({ ...pool[i]!, title: `x${rand(9)}` });
+      days = days.map((d) => (d.items.includes(pool[i]!) ? Object.freeze({ ...d, items: Object.freeze(d.items.map((r) => (r === pool[i] ? now : r))) }) : d));
+      pool[i] = now;
+    } else if (kind === 1 && days[at]!.items.length > 1) {
+      // a row to the top of its day
+      const items = [...days[at]!.items];
+      items.unshift(items.splice(rand(items.length), 1)[0]!);
+      days[at] = Object.freeze({ ...days[at]!, items: Object.freeze(items) });
+    } else if (kind === 2 && days[at]!.items.length > 2) {
+      // a row from one day to the next
+      const to = (at + 1) % 3;
+      const items = [...days[at]!.items];
+      const [r] = items.splice(rand(items.length), 1);
+      days[at] = Object.freeze({ ...days[at]!, items: Object.freeze(items) });
+      days[to] = Object.freeze({ ...days[to]!, items: Object.freeze([r!, ...days[to]!.items]) });
+    }
+    const m = measured(held, { loading: rand(2) === 0, days: [...days] }, spec);
+    // (nothing of the days changed, and none made anew since they were last kept: the value and its list of days)
+    if (kind === 3 && m.sharing.shared <= 2) lookups++;
+    held = m.shared;
+  }
+  assert.ok(lookups > 50, `rounds whose days cost a lookup each: ${lookups}`);
+});
+
+test("an_object_with_a_field_fewer_more_or_other_is_not_the_one_before_and_keeps_its_equal_parts", () => {
+  const prev = { a: { x: 1 }, b: 2, c: [1] };
+  const fewer = share(prev, { a: { x: 1 }, b: 2 }, null) as Record<string, unknown>;
+  assert.deepEqual(fewer, { a: { x: 1 }, b: 2 });
+  assert.equal(fewer.a, prev.a);
+  const more = share(prev, { a: { x: 1 }, b: 2, c: [1], d: null }, null) as Record<string, unknown>;
+  assert.deepEqual(more, { a: { x: 1 }, b: 2, c: [1], d: null });
+  assert.equal(more.c, prev.c);
+  // as many fields, one of another name with nothing in it
+  const other = share({ a: { x: 1 }, b: undefined }, { a: { x: 1 }, c: undefined }, null) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(other), ["a", "c"]);
+  // a field late in it changed: those before it the ones before's, in their order
+  const late = share(prev, { a: { x: 1 }, b: 2, c: [2] }, null) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(late), ["a", "b", "c"]);
+  assert.equal(late.a, prev.a);
+  assert.deepEqual(late.c, [2]);
+  // a list longer, shorter, and with an item late in it changed
+  const list = [{ x: 1 }, { x: 2 }, { x: 3 }];
+  const longer = share(list, [{ x: 1 }, { x: 2 }, { x: 3 }, { x: 4 }], null) as unknown[];
+  assert.deepEqual(longer, [{ x: 1 }, { x: 2 }, { x: 3 }, { x: 4 }]);
+  assert.equal(longer[1], list[1]);
+  const shorter = share(list, [{ x: 1 }, { x: 2 }], null) as unknown[];
+  assert.deepEqual(shorter, [{ x: 1 }, { x: 2 }]);
+  assert.equal(shorter[0], list[0]);
+  const changed = share(list, [{ x: 1 }, { x: 2 }, { x: 9 }], null) as unknown[];
+  assert.deepEqual(changed, [{ x: 1 }, { x: 2 }, { x: 9 }]);
+  assert.equal(changed[0], list[0]);
+  assert.equal(changed[1], list[1]);
+  assert.equal(share(list, [{ x: 1 }, { x: 2 }, { x: 3 }], null), list);
 });

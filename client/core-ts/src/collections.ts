@@ -4,7 +4,7 @@
 // changes by the old ops (delta.ts). A list whose keys are not each once there (or not all there) goes the old way.
 import { type Op, type Segment, diffAt, jsonLength, largerThan } from "./delta.ts";
 import type { Topic } from "./protocol.ts";
-import { compareKeys, equal, isObject } from "./util.ts";
+import { compareKeys, equal, isObject, sharedValue } from "./util.ts";
 import { walked, work } from "./work.ts";
 
 /// Where the keyed lists of a value are: `key` (the fields an item's key is made of) says the value at this place is
@@ -119,30 +119,78 @@ function at(path: Segment[], old: unknown, next: unknown, spec: Spec | null, ops
 /// list, else the one at the same place) taken from `prev`, and `prev` itself where all of it is equal. The store keeps
 /// a topic's new value so (store.ts): what did not change is the object that went out before, so what follows (the
 /// diff, the weighing, the items' shaping) steps over it, and a source that made all of it again costs one comparison.
-export function share<T>(prev: unknown, next: T, spec: Spec | null): T {
-  return shareAt(prev, next, spec) as T;
+/// What is kept of a keyed list's item is not the source's own object where it took a part of the one before (or all
+/// of it), so a source that keeps what it made (a list's rows, its days) would hand items that are never the ones kept,
+/// each walked again whole at every change of anything beside it (a chat list of 90 rows, 76 to 80 of them at every
+/// change of one, in the app: 2026-11-12). So what the value, each keyed list and each item of one was kept as is
+/// remembered in `kept` (one value's from one time to the next: a topic's own, in the store), and the source's object
+/// handed again is the one kept, with one lookup. By the source's object, so that what a source makes anew each time
+/// is held by nothing here once it is let go; and not of every object: in Hermes that costs a source that makes all
+/// anew more than what it saves one that keeps what it made (the walk 20% longer; of these alone, 1%).
+export function share<T>(prev: unknown, next: T, spec: Spec | null, kept: Kept = keptHere): T {
+  if (keptAs(prev, next, kept)) return prev as T;
+  const out = shareAt(prev, next, spec, kept);
+  remember(out, next, kept);
+  return out as T;
 }
-function shareAt(prev: unknown, next: unknown, spec: Spec | null): unknown {
+/// What a source's objects were last kept as: each the object share gave for it, which equals it (found equal to the
+/// one before, or made of it with the equal parts of the one before). Both are read-only from then on (what is shared
+/// is never written), so they stay equal.
+export type Kept = WeakMap<object, unknown>;
+/// (where no value's own is given: a test's)
+const keptHere: Kept = new WeakMap();
+/// Whether `next` is another object than `prev` and `prev` what it was kept as: one lookup.
+function keptAs(prev: unknown, next: unknown, kept: Kept): boolean {
+  return prev !== next && typeof prev === "object" && prev !== null && typeof next === "object" && next !== null && kept.get(next) === prev;
+}
+/// `out` is what share keeps of `source` (the source's read-only from here, as what is kept is: frozen where shared
+/// values are checked).
+function remember(out: unknown, source: unknown, kept: Kept): void {
+  if (out === source || typeof out !== "object" || out === null || typeof source !== "object" || source === null) return;
+  sharedValue(source);
+  kept.set(source, out);
+}
+/// The list share keeps of `next` where it is not `prev`, begun as its item at `upTo` is come to: `next`'s items, those
+/// at its start and its end as they are kept (which the source's own objects there may not be, of a keyed list), and
+/// those before `upTo` the ones before's at their places (found so).
+function begun(prev: unknown[], next: unknown[], start: number, prevEnd: number, nextEnd: number, upTo: number, keyed: boolean): unknown[] {
+  const items = next.slice();
+  if (keyed) {
+    for (let i = 0; i < start; i++) items[i] = prev[i];
+    for (let i = nextEnd; i < next.length; i++) items[i] = prev[i - nextEnd + prevEnd];
+  }
+  for (let i = start; i < upTo; i++) items[i] = prev[i];
+  return items;
+}
+function shareAt(prev: unknown, next: unknown, spec: Spec | null, kept: Kept): unknown {
   if (prev === next || typeof next !== "object" || next === null || typeof prev !== "object" || prev === null) return next;
+  // (a keyed list the source hands again: the one kept of it)
+  if (spec?.key !== undefined && kept.get(next) === prev) {
+    walked.same++;
+    return prev;
+  }
   work.compared++;
   walked.shared++;
   let out: unknown;
   if (Array.isArray(next)) {
     if (!Array.isArray(prev)) return next;
     const fields = spec?.key;
-    // The items that are the objects at the same place before, at its start and its end, are taken as they are: only
-    // what is between them is matched (a list of 90 rows with one changed costs that row).
+    // The items that are the objects at the same place before (a keyed list's, or what those were kept as), at its
+    // start and its end, are taken as they are kept: only what is between them is matched (a list of 90 rows with one
+    // changed costs that row).
+    const keyed = fields !== undefined;
     let start = 0;
-    while (start < next.length && start < prev.length && next[start] === prev[start]) start++;
+    while (start < next.length && start < prev.length && (next[start] === prev[start] || (keyed && keptAs(prev[start], next[start], kept)))) start++;
     let prevEnd = prev.length;
     let nextEnd = next.length;
-    while (prevEnd > start && nextEnd > start && prev[prevEnd - 1] === next[nextEnd - 1]) {
+    while (prevEnd > start && nextEnd > start && (prev[prevEnd - 1] === next[nextEnd - 1] || (keyed && keptAs(prev[prevEnd - 1], next[nextEnd - 1], kept)))) {
       prevEnd--;
       nextEnd--;
     }
     walked.same += start + next.length - nextEnd;
     if (start === nextEnd && start === prevEnd) {
       work.remade++;
+      if (keyed) remember(prev, next, kept);
       return prev;
     }
     // (each item between mapped, and a keyed list's last items there each put in its map)
@@ -154,24 +202,43 @@ function shareAt(prev: unknown, next: unknown, spec: Spec | null): unknown {
       for (let i = start; i < prevEnd; i++) byKey.set(textOf(prev[i], fields), prev[i]);
     }
     let all = prev.length === next.length;
-    const items = next.slice();
+    // (the list to keep made only once an item of it is found not to be the one before's: a list all equal makes none)
+    let items: unknown[] | null = all ? null : begun(prev, next, start, prevEnd, nextEnd, start, keyed);
     for (let i = start; i < nextEnd; i++) {
-      const kept = shareAt(byKey ? byKey.get(textOf(next[i], fields!)) : prev[i], next[i], spec?.item ?? null);
-      if (kept !== prev[i]) all = false;
-      items[i] = kept;
+      const was = byKey ? byKey.get(textOf(next[i], fields!)) : prev[i];
+      let item: unknown;
+      // (an item of the source's own that moved: the one kept of it, found by its key)
+      if (keyed && keptAs(was, next[i], kept)) {
+        item = was;
+        walked.same++;
+      } else {
+        item = shareAt(was, next[i], spec?.item ?? null, kept);
+        if (keyed) remember(item, next[i], kept);
+      }
+      if (item !== prev[i]) {
+        all = false;
+        if (items === null) items = begun(prev, next, start, prevEnd, nextEnd, i, keyed);
+      }
+      if (items !== null) items[i] = item;
     }
-    out = all ? prev : items;
+    out = items ?? prev;
+    if (keyed) remember(out, next, kept);
   } else {
     if (!isObject(prev) || !isObject(next)) return next;
     const keys = Object.keys(next);
-    let all = keys.length === Object.keys(prev).length;
-    const fields: Record<string, unknown> = {};
-    for (const key of keys) {
-      const kept = shareAt(prev[key], next[key], spec?.fields?.[key] ?? null);
-      if (kept !== prev[key] || !(key in prev)) all = false;
-      fields[key] = kept;
+    const all = keys.length === Object.keys(prev).length;
+    // (the object to keep made only once a field of it is found not to be the one before's: one all equal makes none)
+    let fields: Record<string, unknown> | null = all ? null : {};
+    for (let k = 0; k < keys.length; k++) {
+      const key = keys[k]!;
+      const field = shareAt(prev[key], next[key], spec?.fields?.[key] ?? null, kept);
+      if (fields === null && (field !== prev[key] || !(key in prev))) {
+        fields = {};
+        for (let j = 0; j < k; j++) fields[keys[j]!] = prev[keys[j]!];
+      }
+      if (fields !== null) fields[key] = field;
     }
-    out = all ? prev : fields;
+    out = fields ?? prev;
   }
   if (out === prev) work.remade++;
   return out;
