@@ -175,6 +175,8 @@ function written(replica: string): Json {
       const text = readFileSync(join(dir, "head.json"), "utf8");
       const head = JSON.parse(text) as Head;
       const log = existsSync(join(dir, "log")) ? readdirSync(join(dir, "log")).sort() : [];
+      // (two generations of one time would be one key here: each test names them apart)
+      assert.equal(out[`${ws}/${genOf(gen)}`], undefined, `two generations of ${ws} at one time`);
       out[`${ws}/${genOf(gen)}`] = {
         head: headOf(head),
         // (written by JSON.stringify(head, null, 1): the same text, its random parts and size aside)
@@ -308,6 +310,8 @@ test("the MoonBit export finds a database rolled back under it as export.ts does
   for (const end of ["-wal", "-shm"]) rmSync(made.db + end, { force: true });
   copyFileSync(backup, made.db);
   made.store = Store.open(made.db, join(made.data, "archive"));
+  // (a minute on: the generations written again are named after another time than those before)
+  both.now += 60_000;
   await both.reopen();
   both.take();
   await both.drain(nothingTold());
