@@ -404,7 +404,8 @@ const FEISHU_STEPS = ["feishuBind", "feishuWay", "feishuScan", "feishuApp"];
 const COMMA_STEPS = ["commaBind", "commaLine"];
 
 /// Whether `line` reads as the line Comma shows: `comma`, Comma's address, the token.
-const commaLineReady = (line: string) => /^comma\s+https?:\/\/\S+\s+[A-Za-z0-9_-]{8,512}$/.test(line.trim());
+// (Comma shows its connector's address, `wss://…` in production: the station takes either and connects the same way.)
+const commaLineReady = (line: string) => /^comma\s+(https?|wss?):\/\/\S+\s+[A-Za-z0-9_-]{8,512}$/.test(line.trim());
 
 function initial(input: J): J {
   const name = brand.name();
