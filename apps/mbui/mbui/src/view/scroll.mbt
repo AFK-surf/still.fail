@@ -1359,6 +1359,15 @@ pub fn Tree::is_scroller(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
+/// Whether node `id` is the one node a scroller holds and moves (View::scrolls: its `scroll_held`), however far that
+/// scroller can go now: not what stands beside it in the scroller (its bar, a page's list's pinned foot), which stays.
+pub fn Tree::is_scroll_held(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  let p = self.nodes[id.at].parent
+  p >= 0 && self.nodes[p].scroll_held == id.at
+}
+
+///|
 pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
   // (what it holds as tall as it is laid out, less its own: how far it can go, as its Scroll's room says it)
