@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d897d90a8](https://github.com/AFK-surf/still.fail/commit/d897d90a8641b7486b41a54eb5d2fcaeb881b800) android: show the keyboard in multi-window | 1.93 | 2.59 | 11.14 | 30.53 | 39.94 | 27.2 | 51.95 | 93.28 | 182.01 |
 | [fd464f34f](https://github.com/AFK-surf/still.fail/commit/fd464f34fc92d38930aa12fc2921469532caa49f) mbui: a native view as a node of the window's tree | 1.93 | 2.59 | 11.14 | 30.53 | 39.94 | 27.21 | 51.95 | 93.6 | 135.45 |
 | [05dea8b40](https://github.com/AFK-surf/still.fail/commit/05dea8b40b5bb70fb9f1c14e189694816c43df75) mbui app: 添加 station gives Windows' own command (i | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 94.19 | 153.41 |
 | [0ae3596db](https://github.com/AFK-surf/still.fail/commit/0ae3596db79de3bc322c5e2b9ac8b913c8a66ffb) fix(cloud): a deploy takes away MOVING and the for | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.29 | 147.64 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [46e773338](https://github.com/AFK-surf/still.fail/commit/46e7733380e2f5a373184f78049ece3b411b24f0) mbui: what is pressed in a page's list stays where | 1.92 | 2.58 | 11.08 | 30.13 | 39.73 | 26.81 | 51.04 | 94.62 | 182.54 |
 | [50871c7c6](https://github.com/AFK-surf/still.fail/commit/50871c7c6cfd8ec6c46387786423cadc5331bfff) cloud: move one cloud's accounts into another (#57 | 1.92 | 2.58 | 11.07 | 30.12 | 39.66 | 26.8 | 51.01 | 94.45 | 166.32 |
 | [13fc1ac86](https://github.com/AFK-surf/still.fail/commit/13fc1ac86a9e50ec72f2c5e03e772498843ccfd0) station tests: a mirror's clean asked again while  | 1.92 | 2.58 | 11.07 | 30.12 | 39.65 | 26.79 | 51.01 | 94.83 | 180.5 |
-| [cad8dbdff](https://github.com/AFK-surf/still.fail/commit/cad8dbdffe54ba80ae738cddc0e808e1bcc7e2a2) app: a chat's page made as nodes behind a switch t | 1.92 | 2.58 | 11.07 | 30.12 | 39.65 | 26.44 | 49.57 | 94.6 | 186.12 |
