@@ -25,7 +25,9 @@ for fps in ${FPS:-60 120 24 7}; do
   # (how what moves goes and each file's bars, said where the run says them (src/ui/tester_fps.mbt: motion_runs): kept
   # whole, out of what is shown)
   [ -z "${MOTION_OUT:-}" ] || echo "$out" | grep -a '^MOTION ' >> "$MOTION_OUT"
-  out=$(echo "$out" | grep -av '^MOTION ')
+  # (and each frame said (MBUI_TEST_FRAMES=1), kept whole the same: scripts/kept_compare.sh)
+  [ -z "${KEPT_OUT:-}" ] || echo "$out" | grep -a '^KEPT ' >> "$KEPT_OUT"
+  out=$(echo "$out" | grep -av '^MOTION \|^KEPT ')
   echo "$fps fps: $(echo "$out" | grep -a '^Total tests' | tail -1)"
   if [ $st != 0 ]; then
     echo "$out" | grep -a -E 'test .* failed|not built whole|takes no presses|Abort|exited with' | cut -c1-600 | head -40

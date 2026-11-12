@@ -70,6 +70,16 @@ yet and you can add one, add it.
   (`Tester::frame`; a pass that kept rows compared with one built whole, `src/ui/tester_rows.mbt`): a test that changes
   the value and looks sees what a device would, the old (sfdesk's `wide.tape`, a plain field read by the rail's
   corners till 2026-11-11).
+- What rows and parts kept from frame to frame draw is what drawing them anew draws: the whole suite run twice, once
+  keeping as a device does and once keeping none (`MBUI_TEST_KEEP_NONE=1`: `Tester::keep_no_rows` for every Tester),
+  each saying every frame (`MBUI_TEST_FRAMES=1`: `KEPT` lines, `src/ui/tester_rows_kept.mbt`, gathered in `KEPT_OUT`),
+  set side by side by `scripts/kept_compare.sh`. A frame is judged on a 1024th of a device pixel: each place, size and
+  clip times the scale, put on a grid whose edges sit off every whole and half by the golden ratio's part. Not to the
+  bit: a row's place is worked out by two ways of arithmetic, a host keeping groups adding its group's offset to the
+  row's top and one keeping none the sum, the same pixel a float's last bits apart, and a host takes float32 anyway.
+  Not on whole pixels: a layout's places sit on whole and half pixels, where rounding parts two numbers a last bit
+  apart (386.5 px, 2026-11-12). What the app asked of its host and sent its core is compared first, as what is drawn
+  after a frame asked otherwise is not of one walk (the coordinator of the migration, 2026-11-12).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
   is made by the width a node is given, or by how tall something in it comes to, is made in `View::by_room`
   (`src/view/room.mbt`) as that layout comes to it; what it would change outside its room is a fault. Nothing outside

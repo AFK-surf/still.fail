@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   cloud:
+    if: false # (MEASURING ROUND)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

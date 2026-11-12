@@ -199,6 +199,7 @@ fn reset_globals() -> Unit {
   app_change.val = None
   reduce_env.val = -1
   groups_host.val = -1
+  rows_kept_none.val = test_keeps_none()
   rows_on_pixels_said.val = -1
   lines_on_pixels_said.val = -1
   draw_log.val = -1
@@ -551,6 +552,8 @@ pub fn Tester::new(
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  // (its name in what the two runs comparing kept rows say of each frame: tester_rows_kept.mbt)
+  kept_made_now(loc.to_string())
   // (the file each bar of its is held by: motion_runs)
   if motion_runs() {
     let at = loc.to_string()
@@ -1135,6 +1138,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   if @view.key_marks_left() {
     @halt.saying("a list's block's key mark (key_taking, key_taken) left set after a frame at \{at}")
   }
+  // (the frame said, where the two runs comparing kept rows with rows drawn anew ask it; what was kept let go where
+  // the Tester keeps none: tester_rows_kept.mbt)
+  self.frame_kept_said(at)
+  rows_kept_none_after_frame()
   // (what the window's tree keeps held to what working it out whole gives, where the frame changed it: the drawing
   // order and the boxes each node lays out as the frame was presented, kept_at_present; whether each takes input as
   // the frame's own work is done, here, what the next input meets: the old frame's modal layer is told the tree as its

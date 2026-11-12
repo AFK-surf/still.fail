@@ -86,3 +86,24 @@ fn motion_known_said(check : String, file : String, n : Int, bar : Int, what : S
 fn test_corners_looked() -> Bool {
   @env.get_env_var("MBUI_CORNERS_LOOK").unwrap_or("") != "0"
 }
+
+///|
+/// Whether every Tester keeps no rows from one frame to the next (Tester::keep_no_rows): MBUI_TEST_KEEP_NONE `1`, the
+/// suite's second run of the two that compare what kept rows draw with what drawing them anew draws
+/// (tester_rows_kept.mbt).
+fn test_keeps_none() -> Bool {
+  @env.get_env_var("MBUI_TEST_KEEP_NONE").unwrap_or("") == "1"
+}
+
+///|
+/// Whether every Tester says each frame it draws (`KEPT …`, tester_rows_kept.mbt's frame_kept_said): MBUI_TEST_FRAMES
+/// `1`.
+fn test_frames_said() -> Bool {
+  @env.get_env_var("MBUI_TEST_FRAMES").unwrap_or("") == "1"
+}
+
+///|
+/// Which frames are said whole (tester_rows_kept.mbt's kept_dump_keys): MBUI_TEST_FRAME_DUMP.
+fn test_frame_dump() -> String {
+  @env.get_env_var("MBUI_TEST_FRAME_DUMP").unwrap_or("")
+}

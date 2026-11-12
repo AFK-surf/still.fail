@@ -534,9 +534,12 @@ for t in $targets; do
   # (how what moves goes and each file's bars, said where a run says them (mbui's src/ui/tester_fps.mbt: motion_runs, at
   # 60 and 120 and with MBUI_TEST_BARS at the default rate): all of it kept, past LINES_OUT's tail)
   [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
+  # (each frame said, where the two runs comparing kept rows with rows drawn anew say them (MBUI_TEST_FRAMES=1): all of
+  # it kept, out of what is shown: mbui's scripts/kept_compare.sh)
+  [ -z "${KEPT_OUT:-}" ] || grep -a '^KEPT ' "$out" >> "$KEPT_OUT"
   # (each flow's pace passes, where each split from its strict pass (src/sfreplay's orders), past LINES_OUT's tail)
   grep -a '^PACE [^ ]*: ' "$out"
-  grep -v "$F" "$out" | grep -av '^MOTION ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  grep -v "$F" "$out" | grep -av '^MOTION \|^KEPT ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
   # (and each test that failed, whole, its lines under it too, wherever it fell: past LINES_OUT's tail behind a run's
   # CLOCKREAD lines, main df98aad1's words_large failures were in no line of app 2/4's log nor in its What failed,
   # 42956992852, 2026-11-11)
