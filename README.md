@@ -91,3 +91,16 @@
 - **P1（只是换了位置的行不重画）那一轮**：分支 `mbui-row-moved-kept`（两个提交，没变基）。#5664 合了之后变基、自己的测试和六个场景的基准重跑，再跑一轮两遍比（临时提交里关掉 pipeline 自己的 job、`preview`、`desktop-build`、`desktop`、`mbui-web`、`static`；`MBUI_TEST_FRAME_DUMP` 设成 wide 那些地方和时刻）。条件：没有签名之外的差异，已知那几帧的两个哈希在 P1 上不变；P1 的说明里照实写 main 上现有 113 帧差异，几帧查清、几帧没查清。
 
 CI 的两个数，长期挂之前要用：一轮计费 73 分钟（第一轮 90）；`app 4/4` 不留那一半到过 261 秒，`app 1/4` 239、`app corners` 217，长期跑之前这几组要先拆。
+
+## 手机上报里首页列表的两类重帧（「core↔UI 性能」那条线 2026-11-12 给的数；节点列表这边做「一列变化时的重排、重画」时用）
+
+真机 0.1.8486–8625，约 30 万帧，几乎都是 PLP110。首页 217 次卡顿里：
+- 117 次是可见的行一帧里整个重搭，30–55 ms。其中切 workspace 的：made 1000–1140、let_go 610–1070、laid 1450–1600。
+- 27 次是 `chats delta` 只动几行：made 60–129、let_go 6–126，但 **laid 760–980**、measured 50–56，消息处理里 `tree structures` 9–45 ms。
+
+Tester 里（真实规模、按设备的拿法；那条线的分支 `home-rebuild-measure` 本地提交 `2b3662afd9`，`apps/mbui/src/sfapp/home_again_wbtest.mbt`，只打印；峰值帧 made / let_go / laid / measured，60 和 120 帧相同，窗口 360×740）：
+- 切 workspace：467 / 467 / 364 / 61。
+- 整份 `chats` 再到、内容相同：0 / 0 / 0 / 0；一行改标题：0 / 0 / 12 / 1。key 没变的行一个不动。
+- 「一行跳到最前」（第 8 行，经 `@core.apply_delta`）只有 2 / 0 / 20 / 0，+300 ms 再 0 / 2 / 19 / 0。**复现不出手机上 `chats delta` 那一类的 laid ≈ 760**：那一类不是单纯的换位置，是哪种变化还不知道。所以不要拿「一行跳到最前」当那一类的验收；那条线之后每天的读数会把这类帧的 parts 和 `why` 单列。
+
+排版的函数表（instrbench `home`，main `cddb8321cd`）要点：整页重排的帧里 `Tree::laid_out` 约 12K 指令 / 走到的节点（折到 PLP110 约 19 µs，和上报的 15–18 µs 一致）；`flex.layout_flex` 自己占整帧 31%，46 个容器过了 927 个 flex item，而 `Tree::walk` 走到的节点只有 355 个；同一帧没有排第二遍。新进的一行是 `alone_laid_out` 的单节点 relayout 排的（631K）。原表在迁移协调那里。
