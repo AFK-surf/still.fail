@@ -70,7 +70,8 @@ fn card_said_then(j : Json) -> Message {
 
 ///|
 /// Post `m` with its card in place of its words as the old view draws it in a list's row `list` (others_message, the
-/// card by `card`), answered with the settings' core over `src`, `w` wide.
+/// card by `card`), answered with the settings' core over `src`, `w` wide; `begun` done as its run begins, before its
+/// first frame (what the host has: a password manager).
 fn card_old(
   w : Double,
   src : Source,
@@ -78,6 +79,7 @@ fn card_old(
   list : String,
   card : (@ui.Ctx, MessageHere) -> Unit,
   platform? : Int = 0,
+  begun? : () -> Unit = fn() {  },
 ) -> @ui.Tester {
   @settings.reset()
   @sf.set_words(@sfbase.fill)
@@ -118,6 +120,7 @@ fn card_old(
     w~,
     h=420.0,
     platform~,
+    begun~,
   )
 }
 
@@ -144,13 +147,14 @@ let card_phone_corners_known : Array[String] = [
 
 ///|
 /// The same post as the nodes draw it in its row (message_others_node, its words' place by `body`: message_card_node
-/// unless it says otherwise), `m` as it changes.
+/// unless it says otherwise), `m` as it changes; `begun`: card_old's.
 fn card_new(
   w : Double,
   src : Source,
   m : () -> Message,
   platform? : Int = 0,
   body? : ((@view.View, MessageNodeHere, @settings.Core?) -> Unit)? = None,
+  begun? : () -> Unit = fn() {  },
 ) -> @ui.Tester {
   @settings.reset()
   @sf.set_words(@sfbase.fill)
@@ -204,6 +208,7 @@ fn card_new(
     w~,
     h=420.0,
     platform~,
+    begun~,
   )
   t.corners_known(card_phone_corners_known)
   t

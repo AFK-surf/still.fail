@@ -4,9 +4,8 @@
 // pressed for the card read again; the one in the other's place as it is decided, as anything down a column comes and
 // goes (View::pick: the old under_post's fades and the list's turns are not here). The card's insides are the settings'
 // (rig_card_node…), as the old ones are. Made so far: a rig's (P32), a phone's (P31: not the step left on the phone
-// under its line once granted, settings' phone_ask_node says why), a vault item's (P30). Not here yet: a vault item's
-// asking for a file to be picked, a sign-in's (P33): what the system's picker, a password manager and the system's
-// autofill answer is only looked at each frame (@hostapi.polled).
+// under its line once granted, settings' phone_ask_node says why), a vault item's (P30), a sign-in's (P33:
+// message_signin_node.mbt). Not here yet: a vault item's asking for a file to be picked.
 
 ///|
 /// What is in place of a post's words, as the message says it now.
@@ -20,7 +19,9 @@ priv enum InPlace {
   Rig
   /// a request about a vault item
   Vault
-  /// a vault item's asking for a file to be picked, a sign-in's: not made as nodes yet
+  /// an ask to sign in to a site
+  SignIn
+  /// a vault item's asking for a file to be picked: not made as nodes yet
   NotYet
 }
 
@@ -30,7 +31,7 @@ fn in_place_of(m : Message) -> InPlace {
   match m.card {
     Some({ ask: Some(a), .. }) => if a.typed && a.save_kind == "file" { NotYet } else { Vault }
     Some({ phone: Some(_), .. }) => Phone
-    Some({ signin: Some(_), .. }) => NotYet
+    Some({ signin: Some(_), .. }) => SignIn
     Some({ rig: Some(_), .. }) => Rig
     _ => Words
   }
@@ -47,6 +48,7 @@ fn message_card_node(v : @view.View, here : MessageNodeHere, core : @settings.Co
       Phone => phone_ask_node(p, here, core, m)
       Rig => rig_ask_node(p, here, core, m)
       Vault => vault_ask_node(p, here, core, m)
+      SignIn => signin_ask_node(p, here, core, m)
       Words | NotYet => ()
     }
   })

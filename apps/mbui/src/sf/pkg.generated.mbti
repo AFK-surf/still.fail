@@ -287,6 +287,8 @@ pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? 
 
 pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool, on_pick? : (String) -> Unit) -> @kit.Menu
 
+pub fn chooser_button_node(@view.View, () -> String, () -> Array[(String, String)], () -> String, (String) -> Unit, side? : @view.Side, card_words? : Bool) -> @view.View
+
 pub fn chooser_node(@view.View, () -> String, () -> Array[(String, String)], () -> String, (String) -> Unit, press? : () -> Unit, disabled? : () -> Bool) -> @view.View
 
 pub let chooser_chevron : Double
