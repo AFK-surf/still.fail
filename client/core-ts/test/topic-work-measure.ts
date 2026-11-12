@@ -1,8 +1,10 @@
 // What answering each way the app asks reads of the account's database, counted, at one size of the real-size
-// workspace (real-size.ts `SIZE`, this worker thread's `workerData.realSize`): topic-work.test.ts runs it once a size,
-// each in a worker of its own, and holds what it finds to its bars. Counted at the bottom, in the database's own
-// calls (NodeSql's `all`, `run`, `exec`, as the test's host makes them): the statements run, the rows they return and
-// the bytes of text in those rows, by statement as well; and, printed only, the core's `work` counters (work.ts).
+// workspace (real-size.ts `SIZE`, this worker thread's `workerData.realSize`), and what each change the sync writes
+// costs (`CAUSES`, real-size-asked.ts): topic-work.test.ts runs it once a size, each in a worker of its own, and holds
+// what it finds to its bars. Counted at the bottom, in the database's own calls (NodeSql's `all`,
+// `run`, `exec`, as the test's host makes them): the statements run, the rows they return and the bytes of text in
+// those rows, the bytes of text bound to those that write, by statement as well; and, printed only, the core's `work`
+// counters (work.ts).
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { holds } from "../src/data.ts";
 import { NodeSql } from "../src/hosts/node-sql.ts";
@@ -12,32 +14,45 @@ import { EVICT_AFTER_MS } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { work, workSince, type Work } from "../src/work.ts";
 import { CHAT, SIZE, fixture, more, type Size } from "./real-size.ts";
-import { ASKED, LONG, WINDOWS, held, topicOf } from "./real-size-asked.ts";
+import { AGAIN, ASKED, CAUSES, LONG, WINDOWS, held, topicOf, type Cause } from "./real-size-asked.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
 
 /// What a statement did while something was measured: how many times it ran, the rows it returned, the bytes of text
-/// in them.
-export type Statement = { sql: string; runs: number; rows: number; bytes: number };
-/// What answering took: statements run, rows read, bytes of text read; bytes sent (as topic-bytes weighs them); the
-/// statements that read most; each `work` counter that moved.
-export type Measured = { statements: number; rows: number; read: number; sent: number; top: Statement[]; work: Record<string, number>; error?: string };
+/// in them, the bytes of text bound to it where it writes.
+export type Statement = { sql: string; runs: number; rows: number; bytes: number; written: number };
+/// What answering or a change took: statements run, rows read, bytes of text read, bytes of text written; bytes sent (as
+/// topic-bytes weighs them); the statements that read most; each `work` counter that moved.
+export type Measured = { statements: number; rows: number; read: number; written: number; sent: number; top: Statement[]; work: Record<string, number>; error?: string };
 export type Interaction = { name: string; waited: Measured; idle: Measured; unanswered: string[] };
-export type Found = { size: Size; asked: { name: string; cold: Measured; warm: Measured }[]; interactions: Interaction[] };
+/// What a change cost (by its cause's name, `<cause> six pages` done with the chat's six pages loaded): `alone`, on a core
+/// started anew on the device, nothing of the app's asked (the write's own cost); `held`, on a rig holding every way the
+/// app asks, at rest (the write and every reader's reaction).
+export type Changed = { name: string; alone: Measured; held: Measured };
+export type Found = { size: Size; asked: { name: string; cold: Measured; warm: Measured }[]; interactions: Interaction[]; changes: Changed[] };
 
 // ── the instrument ──
 
-const count = { statements: 0, rows: 0, read: 0 };
+const count = { statements: 0, rows: 0, read: 0, written: 0 };
 let by = new Map<string, Statement>();
 const utf8 = (s: string) => Buffer.byteLength(s, "utf8");
 const statementOf = (sql: string): Statement => {
   let s = by.get(sql);
   if (s === undefined) {
-    s = { sql, runs: 0, rows: 0, bytes: 0 };
+    s = { sql, runs: 0, rows: 0, bytes: 0, written: 0 };
     by.set(sql, s);
   }
   return s;
+};
+const textOf = (v: unknown) => (typeof v === "string" ? utf8(v) : v instanceof Uint8Array ? v.byteLength : 0);
+/// The bytes of text bound to a statement that writes (INSERT, UPDATE, REPLACE, DELETE), counted to it.
+const wrote = (s: Statement, sql: string, params: unknown[]) => {
+  if (!/^\s*(INSERT|UPDATE|REPLACE|DELETE)\b/i.test(sql)) return;
+  let bytes = 0;
+  for (const v of params) bytes += textOf(v);
+  s.written += bytes;
+  count.written += bytes;
 };
 {
   const proto = NodeSql.prototype as J;
@@ -45,8 +60,9 @@ const statementOf = (sql: string): Statement => {
   proto.all = function (sql: string, params: unknown[] = []) {
     const rows = all.call(this, sql, params) as unknown[][];
     let bytes = 0;
-    for (const row of rows) for (const v of row) bytes += typeof v === "string" ? utf8(v) : v instanceof Uint8Array ? v.byteLength : 0;
+    for (const row of rows) for (const v of row) bytes += textOf(v);
     const s = statementOf(sql);
+    wrote(s, sql, params);
     s.runs++;
     s.rows += rows.length;
     s.bytes += bytes;
@@ -56,7 +72,9 @@ const statementOf = (sql: string): Statement => {
     return rows;
   };
   proto.run = function (sql: string, params: unknown[] = []) {
-    statementOf(sql).runs++;
+    const s = statementOf(sql);
+    s.runs++;
+    wrote(s, sql, params);
     count.statements++;
     return run.call(this, sql, params);
   };
@@ -81,7 +99,10 @@ const between = (from: Snap, to: Snap, sent: number, error?: string): Measured =
   const moved: Record<string, number> = {};
   for (const k of Object.keys(to.work) as (keyof Work)[]) if (to.work[k] !== from.work[k]) moved[k] = to.work[k] - from.work[k];
   const top = [...to.by].sort((a, b) => b.bytes - a.bytes || b.runs - a.runs).slice(0, TOP).map((s) => ({ ...s, sql: s.sql.replace(/\s+/g, " ").trim().slice(0, 120) }));
-  return { statements: to.count.statements - from.count.statements, rows: to.count.rows - from.count.rows, read: to.count.read - from.count.read, sent, top, work: moved, ...(error !== undefined ? { error } : {}) };
+  return {
+    statements: to.count.statements - from.count.statements, rows: to.count.rows - from.count.rows, read: to.count.read - from.count.read, written: to.count.written - from.count.written,
+    sent, top, work: moved, ...(error !== undefined ? { error } : {}),
+  };
 };
 
 // The moment each first answer goes out: the counters snapshot as the host is handed it (FakeHost's `emit`, wrapped here
@@ -89,12 +110,15 @@ const between = (from: Snap, to: Snap, sent: number, error?: string): Measured =
 const answered = new Map<number, { message: J; at: Snap; n: number }>();
 /// The bytes of every message gone to the app's subscriptions (client 1), first answers and what changed after.
 let sentAll = 0;
+/// The same, a rig `held`'s second subscription of each topic (past `AGAIN`) left out: what topic-bytes weighs.
+let sentOnce = 0;
 {
   const proto = FakeHost.prototype as J;
   const emit = proto.emit;
   proto.emit = function (client: number, message: J) {
     emit.call(this, client, message);
     if (client === 1) sentAll += bytes(message);
+    if (client === 1 && !(typeof message?.id === "number" && message.id > AGAIN)) sentOnce += bytes(message);
     const id = message?.id;
     if (client === 1 && typeof id === "number" && !answered.has(id) && ("value" in message || "error" in message)) answered.set(id, { message, at: snap(), n: answered.size });
   };
@@ -279,12 +303,49 @@ async function interactionsAll(): Promise<Interaction[]> {
   return out;
 }
 
-/// What this size finds: every way of asking but `skip`, and every interaction.
+// ── what each change the sync writes costs ──
+
+/// What `cause` costs on `h`: from its run, as real-size-asked.ts `during` does it (`ms` of the clock in steps of 100),
+/// to the core at rest; what goes out counted as topic-bytes weighs it.
+async function change(h: Started, cause: Cause): Promise<Measured> {
+  const m = mark();
+  const sentFrom = sentOnce;
+  let error: string | undefined;
+  try {
+    cause.run(h);
+    await h.t.host.time.pass(cause.ms ?? 1000, 100);
+    await rest(h);
+  } catch (e) {
+    error = String((e as Error)?.stack ?? e);
+  }
+  return between(m, snap(), sentOnce - sentFrom, error);
+}
+
+/// Each cause of `CAUSES` (again with the chat's six pages loaded where it says `long`), one after another in its order:
+/// alone, on one core started anew on the device, nothing of the app's asked; held, on one rig `held` made, every way of
+/// asking subscribed, at rest. Each is measured on the rig as the causes before it left it.
+async function changesAll(): Promise<Changed[]> {
+  const out: Changed[] = [];
+  for (const long of [false, true]) {
+    const causes = Object.entries(CAUSES).filter(([, c]) => (long ? c.long === true : true));
+    const name = (cause: string) => (long ? `${cause} six pages` : cause);
+    const alone = new Map<string, Measured>();
+    const a = await started(await device(long), long);
+    for (const [cause, c] of causes) alone.set(name(cause), await change(a, c));
+    a.t.store.runner.shutdown();
+    const h = await held(long);
+    for (const [cause, c] of causes) out.push({ name: name(cause), alone: alone.get(name(cause))!, held: await change(h, c) });
+    h.t.store.runner.shutdown();
+  }
+  return out;
+}
+
+/// What this size finds: every way of asking but `skip`, every interaction, every change.
 export async function measure(skip: string[]): Promise<Found> {
   holdLanguage();
-  return { size: SIZE, asked: await askedAll(new Set(skip)), interactions: await interactionsAll() };
+  return { size: SIZE, asked: await askedAll(new Set(skip)), interactions: await interactionsAll(), changes: await changesAll() };
 }
 
 if (!isMainThread && (workerData as J)?.topicWork === true) {
-  measure((workerData as J).skip ?? []).then((found) => parentPort!.postMessage(found), (e) => parentPort!.postMessage({ error: String(e?.stack ?? e) }));
+  measure((workerData as J).skip ?? []).then((f) => parentPort!.postMessage(f), (e) => parentPort!.postMessage({ error: String(e?.stack ?? e) }));
 }

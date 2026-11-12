@@ -26,11 +26,21 @@
 // `ASKED` is measured or there. On failure, and with TOPIC_WORK_PRINT=1, each name's numbers at each size and the five
 // statements that read most at k = 1 and at the knob it fails at; with TOPIC_WORK_PRINT=1, the tables as they would be.
 // The core's `work` counters (work.ts) are printed beside, under no bar.
+//
+// What a change the sync writes makes the core read follows what it writes and sends, the same way (the second test):
+// each cause of real-size-asked.ts `CAUSES` (`<cause> six pages` again where it says `long`), from its run to the core
+// at rest, `alone` (a core started anew on the device, nothing of the app's asked: the write's own cost) and `held`
+// (every way the app asks held, at rest: the write and every reader's reaction), what it reads held to the same two bars
+// against the bytes of text bound to the statements that write and the bytes sent. Those over now are in `OVER_WRITE`
+// (by `<cause> alone` and `<cause> held`) and `GROWS_WRITE`, as `OVER_READ` and `GROWS` are kept. The causes run one
+// after another in `CAUSES`' order, on one rig of each setting at each size (in the worker that measures answering
+// there): a cause is measured on the rig as the causes before it left it (its core warmed by them, what they changed
+// changed), so a cause inserted in the middle can move the numbers of those after it.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import type { Found, Measured } from "./topic-work-measure.ts";
-import { ASKED } from "./real-size-asked.ts";
+import { ASKED, CAUSES } from "./real-size-asked.ts";
 import type { Size } from "./real-size.ts";
 
 const print = process.env.TOPIC_WORK_PRINT === "1";
@@ -154,12 +164,77 @@ const GROWS: Record<string, Partial<Record<Knob, number>>> = {
   "place vault/idle": { stations: 384 },
 };
 
+/// The changes reading more than `READ_PER_SENT` × what they write and send and `READ_FREE_KB` now, by `<cause> alone`
+/// and `<cause> held`: what each reads, KB rounded up to a multiple of 8.
+const OVER_WRITE: Record<string, number> = {
+  "quota alone": 96,
+  "quota held": 120,
+  "message alone": 288,
+  "message held": 328,
+  "edit held": 16,
+  "said held": 16,
+  "thing alone": 288,
+  "thing held": 328,
+  "card alone": 184,
+  "card held": 208,
+  "archived alone": 272,
+  "archived held": 304,
+  "renamed alone": 184,
+  "renamed held": 192,
+  "screen held": 16,
+  "member held": 24,
+  "session alone": 200,
+  "session held": 224,
+  "decided alone": 96,
+  "decided held": 120,
+  "updating alone": 96,
+  "updating held": 120,
+  "machine alone": 96,
+  "machine held": 120,
+  "login alone": 96,
+  "login held": 112,
+  "archiving alone": 96,
+  "archiving held": 112,
+  "off alone": 96,
+  "off held": 112,
+  "quota six pages alone": 96,
+  "quota six pages held": 112,
+  "message six pages alone": 288,
+  "message six pages held": 312,
+};
+/// The changes whose reading grows faster than what they write and send with a knob, by the same names and knob: what
+/// each reads with that thing held three times, KB rounded up to a multiple of 8.
+const GROWS_WRITE: Record<string, Partial<Record<Knob, number>>> = {
+  "message alone": { chats: 848 },
+  "message held": { chats: 888 },
+  "thing alone": { chats: 840 },
+  "thing held": { chats: 888 },
+  "card alone": { chats: 544 },
+  "card held": { chats: 568 },
+  "archived alone": { chats: 808 },
+  "archived held": { chats: 840 },
+  "renamed alone": { chats: 544 },
+  "renamed held": { chats: 552 },
+  "session alone": { chats: 408 },
+  "session held": { chats: 424 },
+  "message six pages alone": { chats: 848 },
+  "message six pages held": { chats: 864 },
+  "decided alone": { profiles: 232 },
+  "updating alone": { profiles: 232 },
+  "updating held": { profiles: 248 },
+  "archiving alone": { profiles: 232 },
+  "off alone": { profiles: 232 },
+  "quota six pages alone": { profiles: 232 },
+  "screen held": { stations: 16 },
+  "member held": { stations: 48 },
+};
+
 // ── measuring ──
 
 /// One size measured, in a worker thread of its own.
-function measure(realSize: Partial<Size>, skip: string[]): Promise<Found> {
+function measure(realSize: Partial<Size>): Promise<Found> {
   return new Promise((resolve, reject) => {
-    const w = new Worker(new URL("./topic-work-measure.ts", import.meta.url), { workerData: { topicWork: true, realSize, skip, step } });
+    const w = new Worker(new URL("./topic-work-measure.ts", import.meta.url), { workerData: { topicWork: true, realSize, skip: Object.keys(NOT_HELD), step } });
     w.once("message", (m) => {
       void w.terminate();
       const e = (m as { error?: string }).error;
@@ -169,6 +244,13 @@ function measure(realSize: Partial<Size>, skip: string[]): Promise<Found> {
     w.once("error", reject);
   });
 }
+
+/// Every size measured (k = 1, then each knob's), once for both tests.
+let found: Promise<Found[]> | undefined;
+const everySize = () => (found ??= Promise.all([measure({}), ...Object.values(KNOBS).map((size) => measure(size))]));
+/// Each size's measures by name, `k = 1` first.
+const bySize = (found: Found[], names: (f: Found) => Map<string, Measured>) =>
+  new Map<string, Map<string, Measured>>([["k = 1", names(found[0]!)], ...Object.keys(KNOBS).map((k, i): [string, Map<string, Measured>] => [k, names(found[i + 1]!)])]);
 
 /// Every measure of a size by its name: `<name>` cold, `<name> again` warm, `<interaction>/waited` and `/idle`.
 function byName(f: Found): Map<string, Measured> {
@@ -184,18 +266,69 @@ function byName(f: Found): Map<string, Measured> {
   return out;
 }
 
+/// Every measure of a size of the changes by its name: `<cause> alone`, `<cause> held`.
+function changesByName(f: Found): Map<string, Measured> {
+  const out = new Map<string, Measured>();
+  for (const c of f.changes) {
+    out.set(`${c.name} alone`, c.alone);
+    out.set(`${c.name} held`, c.held);
+  }
+  return out;
+}
+
+// ── the bars ──
+
 const KB = 1024;
 const kb = (n: number) => n / KB;
 const up8 = (n: number) => Math.max(8, Math.ceil(kb(n) / 8) * 8);
-const overRead = (m: Measured) => m.read > Math.max(READ_PER_SENT * m.sent, READ_FREE_KB * KB);
+/// What a measure gives out, that what it reads is held to: what answering sends; what a change writes and sends.
+type Out = { of: (m: Measured) => number; what: string };
+const SENDS: Out = { of: (m) => m.sent, what: "it sends" };
+const WRITES: Out = { of: (m) => m.written + m.sent, what: "it writes and sends" };
+const overRead = (m: Measured, out: Out) => m.read > Math.max(READ_PER_SENT * out.of(m), READ_FREE_KB * KB);
 const growth = (one: Measured, three: Measured) => three.read / Math.max(one.read, READ_FREE_KB * KB);
-const growsBar = (one: Measured, three: Measured) => GROWS_SLACK * Math.max(1, one.sent > 0 ? three.sent / one.sent : 1);
-const growsOver = (one: Measured, three: Measured) => three.read > READ_FREE_KB * KB && growth(one, three) > growsBar(one, three);
+const outGrowth = (one: Measured, three: Measured, out: Out) => (out.of(one) > 0 ? out.of(three) / out.of(one) : 1);
+const growsBar = (one: Measured, three: Measured, out: Out) => GROWS_SLACK * Math.max(1, outGrowth(one, three, out));
+const growsOver = (one: Measured, three: Measured, out: Out) => three.read > READ_FREE_KB * KB && growth(one, three) > growsBar(one, three, out);
+
+type Fail = (name: string, why: string, knob?: string) => void;
+/// `name`'s measure `m` held to READ, `said` what `table` says of it; whether it is over.
+function readHeld(name: string, m: Measured, said: number | undefined, table: string, out: Out, fail: Fail): boolean {
+  const over = overRead(m, out);
+  if (said === undefined) {
+    if (over) fail(name, `reads ${kb(m.read).toFixed(1)} KB, over ${READ_PER_SENT} × the ${kb(out.of(m)).toFixed(1)} KB ${out.what} (and ${READ_FREE_KB} KB)`);
+  } else if (!over) fail(name, `under the read bar now: take it out of ${table}`);
+  else if (kb(m.read) > said) fail(name, `reads ${kb(m.read).toFixed(1)} KB, more than the ${said} said`);
+  return over;
+}
+/// `name` held to GROWS with `knob` three times (`m1` at k = 1, `m3` there), `said` what `table` says of it; whether it is
+/// over.
+function growsHeld(name: string, knob: Knob, m1: Measured, m3: Measured, said: number | undefined, table: string, out: Out, fail: Fail): boolean {
+  const over = growsOver(m1, m3, out);
+  const grew = `× ${growth(m1, m3).toFixed(2)} (${kb(m1.read).toFixed(1)} → ${kb(m3.read).toFixed(1)} KB) while what ${out.what} grows × ${outGrowth(m1, m3, out).toFixed(2)}`;
+  if (said === undefined) {
+    if (over) fail(name, `with ${knob} × 3 reads ${grew}`, knob);
+  } else if (!over) fail(name, `no longer grows past what ${out.what} with ${knob}: take it out of ${table}`, knob);
+  else if (kb(m3.read) > said) fail(name, `with ${knob} × 3 reads ${kb(m3.read).toFixed(1)} KB, more than the ${said} said (${grew})`, knob);
+  return over;
+}
+/// The faults found, and the names failing with the knobs they fail at.
+function faulted() {
+  const faults: string[] = [];
+  const failing = new Map<string, Set<string>>();
+  const fail: Fail = (name, why, knob) => {
+    faults.push(`${name}: ${why}`);
+    if (!failing.has(name)) failing.set(name, new Set());
+    if (knob !== undefined) failing.get(name)!.add(knob);
+  };
+  return { faults, failing, fail };
+}
 
 /// One measure as the print says it.
 const line = (m: Measured) =>
-  `read ${kb(m.read).toFixed(1)} KB, ${m.rows} rows, ${m.statements} statements; sent ${kb(m.sent).toFixed(1)} KB${m.error ? `; ${m.error}` : ""}${Object.keys(m.work).length ? `; work ${JSON.stringify(m.work)}` : ""}`;
-const tops = (m: Measured) => m.top.map((s) => `      ${(kb(s.bytes).toFixed(1) + " KB").padStart(10)} ${String(s.rows).padStart(5)} rows ${String(s.runs).padStart(4)}× ${s.sql}`).join("\n");
+  `read ${kb(m.read).toFixed(1)} KB, ${m.rows} rows, ${m.statements} statements; ${m.written > 0 ? `written ${kb(m.written).toFixed(1)} KB; ` : ""}sent ${kb(m.sent).toFixed(1)} KB${m.error ? `; ${m.error}` : ""}${Object.keys(m.work).length ? `; work ${JSON.stringify(m.work)}` : ""}`;
+const tops = (m: Measured) =>
+  m.top.map((s) => `      ${(kb(s.bytes).toFixed(1) + " KB").padStart(10)} ${String(s.rows).padStart(5)} rows ${String(s.runs).padStart(4)}×${s.written > 0 ? ` written ${kb(s.written).toFixed(1)} KB` : ""} ${s.sql}`).join("\n");
 
 /// A name's numbers at each size, and its statements that read most at k = 1 and at `knobs`.
 function said(name: string, sizes: Map<string, Map<string, Measured>>, knobs: string[]): string {
@@ -210,21 +343,20 @@ function said(name: string, sizes: Map<string, Map<string, Measured>>, knobs: st
   }
   return out.join("\n");
 }
+/// A table as it would be written, of `wouldRead` and `wouldGrow`.
+const keyed = (name: string) => (/^[A-Za-z_]\w*$/.test(name) ? name : JSON.stringify(name));
+const flat = (o: Record<string, number>) => Object.entries(o).map(([n, v]) => `  ${keyed(n)}: ${v},`).join("\n");
+const nested = (o: Record<string, Partial<Record<Knob, number>>>) =>
+  Object.entries(o).map(([n, v]) => `  ${keyed(n)}: { ${Object.entries(v).map(([kn, r]) => `${kn}: ${r}`).join(", ")} },`).join("\n");
 
 test("what answering each way the app asks reads follows what it sends, not how much the device holds", async () => {
   const skip = Object.keys(NOT_HELD);
   // (every name of ASKED measured, or said why not)
   assert.deepEqual(skip.filter((n) => !(n in ASKED)), [], "NOT_HELD names a way the app asks");
-  const found = await Promise.all([measure({}, skip), ...Object.values(KNOBS).map((size) => measure(size, skip))]);
-  const sizes = new Map<string, Map<string, Measured>>([["k = 1", byName(found[0]!)], ...Object.keys(KNOBS).map((k, i): [string, Map<string, Measured>] => [k, byName(found[i + 1]!)])]);
+  const found = await everySize();
+  const sizes = bySize(found, byName);
   const one = sizes.get("k = 1")!;
-  const faults: string[] = [];
-  const failing = new Map<string, Set<string>>();
-  const fail = (name: string, why: string, knob?: string) => {
-    faults.push(`${name}: ${why}`);
-    if (!failing.has(name)) failing.set(name, new Set());
-    if (knob !== undefined) failing.get(name)!.add(knob);
-  };
+  const { faults, failing, fail } = faulted();
   // Every name measured: each way of asking but those not held, each interaction's two.
   for (const name of Object.keys(ASKED)) if (!skip.includes(name) && !one.has(name)) fail(name, "not measured");
   for (const f of found) {
@@ -239,12 +371,7 @@ test("what answering each way the app asks reads follows what it sends, not how 
   for (const [name, m] of one) {
     const table = name.endsWith(" again") ? OVER_READ_AGAIN : OVER_READ;
     const key = name.endsWith(" again") ? name.slice(0, -" again".length) : name;
-    const said_ = table[key];
-    if (overRead(m)) (name.endsWith(" again") ? wouldReadAgain : wouldRead)[key] = up8(m.read);
-    if (said_ === undefined) {
-      if (overRead(m)) fail(name, `reads ${kb(m.read).toFixed(1)} KB, over ${READ_PER_SENT} × the ${kb(m.sent).toFixed(1)} KB it sends (and ${READ_FREE_KB} KB)`);
-    } else if (!overRead(m)) fail(name, `under the read bar now: take it out of ${table === OVER_READ ? "OVER_READ" : "OVER_READ_AGAIN"}`);
-    else if (kb(m.read) > said_) fail(name, `reads ${kb(m.read).toFixed(1)} KB, more than the ${said_} said`);
+    if (readHeld(name, m, table[key], table === OVER_READ ? "OVER_READ" : "OVER_READ_AGAIN", SENDS, fail)) (name.endsWith(" again") ? wouldReadAgain : wouldRead)[key] = up8(m.read);
   }
   for (const [table, named] of [[OVER_READ, ""], [OVER_READ_AGAIN, " again"]] as const) {
     for (const key of Object.keys(table)) if (!one.has(key + named)) fail(key + named, "in a table, measured nowhere");
@@ -256,15 +383,7 @@ test("what answering each way the app asks reads follows what it sends, not how 
     for (const [name, m1] of one) {
       const m3 = three.get(name);
       if (m3 === undefined) continue;
-      const over = growsOver(m1, m3);
-      const r = growth(m1, m3);
-      if (over) (wouldGrow[name] ??= {})[knob] = up8(m3.read);
-      const said_ = GROWS[name]?.[knob];
-      const grew = `× ${r.toFixed(2)} (${kb(m1.read).toFixed(1)} → ${kb(m3.read).toFixed(1)} KB) while what it sends grows × ${(m1.sent > 0 ? m3.sent / m1.sent : 1).toFixed(2)}`;
-      if (said_ === undefined) {
-        if (over) fail(name, `with ${knob} × 3 reads ${grew}`, knob);
-      } else if (!over) fail(name, `no longer grows past what it sends with ${knob}: take it out of GROWS`, knob);
-      else if (kb(m3.read) > said_) fail(name, `with ${knob} × 3 reads ${kb(m3.read).toFixed(1)} KB, more than the ${said_} said (${grew})`, knob);
+      if (growsHeld(name, knob, m1, m3, GROWS[name]?.[knob], "GROWS", SENDS, fail)) (wouldGrow[name] ??= {})[knob] = up8(m3.read);
     }
   }
   for (const [name, knobs] of Object.entries(GROWS)) if (!one.has(name)) fail(name, `in GROWS (${Object.keys(knobs).join(", ")}), measured nowhere`);
@@ -273,10 +392,45 @@ test("what answering each way the app asks reads follows what it sends, not how 
     console.log(`What answering reads, by name, at each size (and the statements that read most):\n${names.map((n) => said(n, sizes, [...(failing.get(n) ?? [])])).join("\n")}`);
   }
   if (print) {
-    const k = (name: string) => (/^[A-Za-z_]\w*$/.test(name) ? name : JSON.stringify(name));
-    const flat = (o: Record<string, number>) => Object.entries(o).map(([n, v]) => `  ${k(n)}: ${v},`).join("\n");
-    const nested = Object.entries(wouldGrow).map(([n, v]) => `  ${k(n)}: { ${Object.entries(v).map(([kn, r]) => `${kn}: ${r}`).join(", ")} },`).join("\n");
-    console.log(`The tables as they would be:\nconst OVER_READ: Record<string, number> = {\n${flat(wouldRead)}\n};\nconst OVER_READ_AGAIN: Record<string, number> = {\n${flat(wouldReadAgain)}\n};\nconst GROWS: Record<string, Partial<Record<Knob, number>>> = {\n${nested}\n};\nEND TABLES`);
+    console.log(`The tables as they would be:\nconst OVER_READ: Record<string, number> = {\n${flat(wouldRead)}\n};\nconst OVER_READ_AGAIN: Record<string, number> = {\n${flat(wouldReadAgain)}\n};\nconst GROWS: Record<string, Partial<Record<Knob, number>>> = {\n${nested(wouldGrow)}\n};\nEND TABLES`);
   }
+  assert.deepEqual(faults, []);
+});
+
+test("what each change the sync writes makes the core read follows what it writes and sends, not how much the device holds", async () => {
+  const sizes = bySize(await everySize(), changesByName);
+  const one = sizes.get("k = 1")!;
+  const { faults, failing, fail } = faulted();
+  // Every cause measured, both ways, and none failed as it ran.
+  for (const [cause, c] of Object.entries(CAUSES)) {
+    for (const name of c.long ? [cause, `${cause} six pages`] : [cause]) {
+      for (const setting of ["alone", "held"]) if (!one.has(`${name} ${setting}`)) fail(`${name} ${setting}`, "not measured");
+    }
+  }
+  for (const all of sizes.values()) for (const [name, m] of all) if (m.error !== undefined) fail(name, `failed: ${m.error}`);
+  // READ.
+  const wouldRead: Record<string, number> = {};
+  for (const [name, m] of one) if (readHeld(name, m, OVER_WRITE[name], "OVER_WRITE", WRITES, fail)) wouldRead[name] = up8(m.read);
+  for (const name of Object.keys(OVER_WRITE)) if (!one.has(name)) fail(name, "in OVER_WRITE, measured nowhere");
+  // GROWS.
+  const wouldGrow: Record<string, Partial<Record<Knob, number>>> = {};
+  for (const knob of Object.keys(KNOBS) as Knob[]) {
+    const three = sizes.get(knob)!;
+    for (const [name, m1] of one) {
+      const m3 = three.get(name);
+      if (m3 !== undefined && growsHeld(name, knob, m1, m3, GROWS_WRITE[name]?.[knob], "GROWS_WRITE", WRITES, fail)) (wouldGrow[name] ??= {})[knob] = up8(m3.read);
+    }
+  }
+  for (const [name, knobs] of Object.entries(GROWS_WRITE)) if (!one.has(name)) fail(name, `in GROWS_WRITE (${Object.keys(knobs).join(", ")}), measured nowhere`);
+  if (print) {
+    const rows = [...one].sort(([a, x], [b, y]) => y.read - x.read || (a < b ? -1 : 1));
+    const cell = (n: number) => kb(n).toFixed(1).padStart(8);
+    console.log(`What each change makes the core read, at k = 1, by what it reads (KB):\n${"".padEnd(28)}${"statements".padStart(11)}${"read".padStart(8)}${"written".padStart(8)}${"sent".padStart(8)}\n${rows.map(([n, m]) => `${n.padEnd(28)}${String(m.statements).padStart(11)}${cell(m.read)}${cell(m.written)}${cell(m.sent)}`).join("\n")}`);
+  }
+  if (print || faults.length > 0) {
+    const names = print ? [...one.keys()] : [...failing.keys()];
+    console.log(`What each change reads, by name, at each size (and the statements that read most):\n${names.map((n) => said(n, sizes, [...(failing.get(n) ?? [])])).join("\n")}`);
+  }
+  if (print) console.log(`The tables as they would be:\nconst OVER_WRITE: Record<string, number> = {\n${flat(wouldRead)}\n};\nconst GROWS_WRITE: Record<string, Partial<Record<Knob, number>>> = {\n${nested(wouldGrow)}\n};\nEND TABLES`);
   assert.deepEqual(faults, []);
 });
