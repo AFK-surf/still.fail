@@ -1706,7 +1706,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   } else if m.o.x != m.o.to {
     @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
   }
-  if m.vis.value <= 0.0 && !shown {
+  // (gone once its way down has ended, the moment it said it builds again at: its value, sampled, can round to 0 a
+  // fraction before then, and a build kept till then would differ from one made anew)
+  if !shown && now >= m.vis.end() {
     return
   }
   let under = match cand {
@@ -1821,7 +1823,8 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       let bcx = left + bw / 2.0
       let sw = bw * scale
       let sh = bh * scale
-      if m.ball_alpha.value > 0.0 || (ball_going && m.ball_alpha.target > 0.0) {
+      // (made till its fading out has ended, as kept builds have it: its value can round to 0 a fraction before then)
+      if m.ball_alpha.value > 0.0 || m.ball_alpha.end() > now || (ball_going && m.ball_alpha.target > 0.0) {
         let ball = at(c, bcx - sw / 2.0, m.ball_y.x - sh / 2.0, sw, sh, body=fn() {
           c.box(
             w=Fill(1.0),

@@ -504,14 +504,6 @@ fn place_long_open(
 }
 
 ///|
-/// The screens a chat is left and opened again on here: 大屏 alone so far. On 小屏 a chat's page made as nodes opened
-/// again after it was left (back to the chats, then the chat again; opened the first time it is not) gives a frame not
-/// built whole in its slide's second frame: the composer's old view in the list's foot is drawn again at each step of
-/// the slide where that frame is built keeping rows, and not at all where it is built whole. The page's to mend; 小屏
-/// comes in here with it.
-let place_again_screens : Array[(String, Double, Double, Int)] = [("大屏", 1280.0, 800.0, 0)]
-
-///|
 /// The long chat left (back to the chats) and opened again, at rest: each step from outside the frames, as a press's,
 /// and `meanwhile` (what the core says while it is away) between them.
 fn place_left_and_opened(t : @ui.Tester, l : LongChat, meanwhile? : () -> Unit = fn() {  }) -> Unit {
@@ -525,8 +517,8 @@ fn place_left_and_opened(t : @ui.Tester, l : LongChat, meanwhile? : () -> Unit =
 }
 
 ///|
-test "a chat's page made with its inside nodes opens where it was left, on 大屏: left at its end, at its end, what came since too; read up, at the same messages as far down" {
-  for s in place_again_screens {
+test "a chat's page made with its inside nodes opens where it was left, on 小屏 and 大屏: left at its end, at its end, what came since too; read up, at the same messages as far down" {
+  for s in long_screens {
     let (name, w, h, _) = s
     // left at its end, with nothing come since and with a message come since
     for came in [0, 1] {
@@ -600,8 +592,8 @@ test "a chat's page made with its inside nodes opens where the core says it was 
 }
 
 ///|
-test "a chat's page made with its inside nodes opens at its unread line before where it was left, on 大屏" {
-  for s in place_again_screens {
+test "a chat's page made with its inside nodes opens at its unread line before where it was left, on 小屏 and 大屏" {
+  for s in long_screens {
     let (name, w, h, _) = s
     let l = long_chat()
     let line = @signals.signal(0)
