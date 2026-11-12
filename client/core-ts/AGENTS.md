@@ -61,7 +61,10 @@ chat opened, a place of the bar) to its first screen and to rest: at most twice 
 workspace's chats, messages, profiles, people or stations three times (real-size.ts `Size`, a worker thread a size), its
 reading growing no faster than what it sends. Those over now are in its `OVER_READ`, `OVER_READ_AGAIN` and `GROWS` (by
 what each reads, at its size: a ratio would rise as a fixed part of the reading goes), which only fall; a failure prints
-the statements that read most.
+the statements that read most. What the sync writes is held the same way: each cause of `CAUSES`, in turn on one rig
+of each setting, from its run to the core at rest, alone (a core started anew, nothing asked) and held (everything the
+app asks held), reads at most twice what it writes (text bound to statements that write) and sends, or 8 KB, growing
+no faster; `OVER_WRITE` and `GROWS_WRITE` there, which only fall. A new cause is measured by being in `CAUSES`.
 
 ## The chat table is read by what a view shows
 
