@@ -41,6 +41,8 @@ function station(first: Entry, now: () => number) {
       const last = es.at(-1)!;
       if (last.seq < chain.length) return entryHash(chain[last.seq]!) === entryHash(last) ? Effect.succeed({ taken: 0, head: head() }) : Effect.fail(new CoreError("lock_refused", "another entry is at its place", 409));
       for (const e of es) if (e.seq === chain.length && e.prev === entryHash(chain.at(-1)!)) chain.push(e);
+      // (a lock turned off is let go of: the station keeps none after it, and says only that it took it)
+      if (chain.at(-1) === last && last.kind === "disable") return Effect.succeed({ taken: 1, head: null });
       return chain.at(-1) === last ? Effect.succeed({ taken: 1, head: head() }) : Effect.fail(new CoreError("lock_refused", "not on its head", 409));
     }
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
@@ -253,4 +255,13 @@ test("the roster's writes with the cloud never answering: each ends at CLOUD_WRI
       assert.equal(pendingHeld(s.inner, "ws").length, 0, what);
     }
   }
+});
+
+test("the lock turned off with its station up: taken (the station lets the lock go and shows no head), not pending", async () => {
+  const s = await setUp();
+  const a = await s.timed("lock.disable", {});
+  assert.equal(a.error, undefined);
+  assert.equal(a.ok.pending, undefined, JSON.stringify(a.ok));
+  assert.equal(pendingHeld(s.inner, "ws").length, 0);
+  assert.equal(held(s.inner, "ws")!.entries.at(-1)!.kind, "disable");
 });

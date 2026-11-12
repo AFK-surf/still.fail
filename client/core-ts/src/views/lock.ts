@@ -2438,6 +2438,14 @@ export function takeInJoined(inner: Inner, sub: string, ws: string, station: str
   return new Lock(inner, ws, sub, null).addStation(station, shortCode(station));
 }
 
+/// Whether a station's answer to `entries` brought it says it took the last, a `disable`, and so let go of the lock: it
+/// keeps none after it (its head none, station/src/mesh/serve.ts: `taken` and no head), so no head of it can say so by
+/// hash. Taken all the same: without this, a lock turned off with its stations up was held pending, and brought again
+/// refused ("turned off by its owner here"), the lock on here for good (2026-11-12, found by the lock world's model).
+function letGo(entries: readonly Entry[], answer: unknown): boolean {
+  return entries[entries.length - 1]?.kind === "disable" && readHead(get(answer, "head")) === null && Number(get(answer, "taken") ?? 0) > 0;
+}
+
 /// What the stations brought an entry did: one took it, or none did (`refused`: one that keeps this lock refused it,
 /// and which).
 type Brought = { took: boolean; refused: Refused | null };
@@ -3074,7 +3082,7 @@ export class Lock {
       let refused: Refused | null = null;
       for (const id of stations)
         self.#inner.runner.fork(Effect.flatMap(Effect.result(self.#station(id, "POST", "/lock", { entries })), (r) =>
-          Effect.flatMap(r._tag === "Success" ? taken(id, get(r.success, "head")) : Effect.succeed(false), (took) => Effect.sync(() => {
+          Effect.flatMap(r._tag === "Success" ? (letGo(entries, r.success) ? Effect.succeed(true) : taken(id, get(r.success, "head"))) : Effect.succeed(false), (took) => Effect.sync(() => {
             if (took) return void Deferred.doneUnsafe(done, Effect.succeed(true));
             refused ??= self.#refusedBy(id, r, genesis);
             if (--left === 0) Deferred.doneUnsafe(done, Effect.succeed(false));
