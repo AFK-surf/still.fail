@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [6c3e51a27](https://github.com/AFK-surf/still.fail/commit/6c3e51a270589e5f7729072390b5ac758fefe4b5) station: read Antigravity CLI plan usage via agy / | 1.93 | 2.58 | 11.11 | 30.16 | 39.8 | 26.84 | 51.11 | 94.82 | 137.5 |
 | [20e1f4048](https://github.com/AFK-surf/still.fail/commit/20e1f40485b521fc6ef9135ae9cd1129d3725a91) Pin iroh to zzj3720/iroh d349d3ce, the commit Comm | 1.93 | 2.58 | 11.1 | 30.15 | 39.8 | 26.83 | 51.11 | 94.88 | 133.5 |
 | [fe1e8989d](https://github.com/AFK-surf/still.fail/commit/fe1e8989d56857f59dcdfb47b11a554b7c70b7b5) app: Home taken back on 小屏 shows its lists as it l | 1.93 | 2.58 | 11.1 | 30.16 | 39.8 | 26.83 | 51.11 | 94.47 | 166.3 |
 | [fe6d90f2b](https://github.com/AFK-surf/still.fail/commit/fe6d90f2b3cc730886b022bcd142baf4f17ee3dd) mbui-ci: the macos job takes the C units main's la | 1.93 | 2.58 | 11.1 | 30.16 | 39.8 | 26.83 | 51.11 | 94.34 | 157.09 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [031d90e13](https://github.com/AFK-surf/still.fail/commit/031d90e133a9105c05eb13487969fec00e8eff37) app tests: what floats over the old chat page's li | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 94.24 | 174.48 |
 | [5ee283c78](https://github.com/AFK-surf/still.fail/commit/5ee283c7884e3b5d3253e08bfbbdcdfd4be76e93) fix(mbui): keep compact MoonBit diagnostics in dev | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 94.03 | 136.81 |
 | [8a03ff2d0](https://github.com/AFK-surf/still.fail/commit/8a03ff2d0258da25a191097e2942707ae546c65d) Comma connect: take the line Comma's production sh | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 93.41 | 177.86 |
-| [53b5a35c3](https://github.com/AFK-surf/still.fail/commit/53b5a35c302639bfceb213bbc6bb16bf2270dd92) rules: a log's active chain by the fork choice, a  | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 93.5 | 184.15 |
