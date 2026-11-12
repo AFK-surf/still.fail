@@ -113,8 +113,8 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
 }
 
 ///|
-/// What an item's page holds (its item `rv`, in vault `vv`): a library not locked said so, its content (each field's
-/// eye where its value is), how agents may use it, when they used it (`uses`).
+/// What an item's page holds (its item `rv`, in vault `vv`): a library not locked said so, what it is for (its about),
+/// its content (each field's eye where its value is), how agents may use it, when they used it (`uses`).
 fn item_blocks(
   c : @ui.Ctx,
   core : Core,
@@ -156,6 +156,10 @@ fn item_blocks(
         |> ignore
       })
     })
+  }
+  // what it is for and how it is used, where it says (agents are shown it with its name)
+  if text(rv, "about") != "" {
+    blocks.push(fn() { section(@sf.t("web-pages.vault.editor.about"), fn() { c.text(text(rv, "about"), style=vi_fact_value) |> ignore }) })
   }
   // its content: each field's eye where its value is, before it is opened as after
   blocks.push(fn() {

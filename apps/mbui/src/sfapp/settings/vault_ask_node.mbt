@@ -54,6 +54,7 @@ pub fn vault_foot_node(
   typed : () -> Typed?,
   timeout : () -> (String, Int),
   foot~ : Bool,
+  describe? : () -> Bool = fn() { false },
 ) -> Unit {
   let lasts = fn() {
     match answer() {
@@ -167,7 +168,7 @@ pub fn vault_foot_node(
       let sc = scope()
       let t = timed()
       let m = minutes()
-      let what = tr(if s { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
+      let what = tr(if describe() { "android-settings.vault.act.changeWhat" } else if s { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
       let chosen = if !t || sc == "once" { if s { "once" } else { sc } } else if m <= 60 { "hour" } else { "chat" }
       let params : Array[(String, Json)] = [("workspace", str(ws())), ("request", str(request())), ("scope", str(chosen))]
       if t && sc != "once" {
@@ -280,7 +281,7 @@ pub fn vault_foot_node(
       } else {
         @sf.button_node(
           p,
-          fn() { tr(if save() { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }) },
+          fn() { tr(if describe() { "android-settings.vault.act.change" } else if save() { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }) },
           approve,
           tone=Primary,
           busy=fn() { busy(true) },
@@ -291,7 +292,7 @@ pub fn vault_foot_node(
       }
       @sf.button_node(
         p,
-        fn() { tr(if save() { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }) },
+        fn() { tr(if describe() { "android-settings.vault.act.dontChange" } else if save() { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }) },
         fn() {
           let r = @signals.untracked(request)
           act(false, "vault.deny", tr("android-settings.vault.act.denyWhat"), obj([("workspace", str(@signals.untracked(ws))), ("request", str(r))]))
@@ -382,6 +383,7 @@ pub fn vault_actions_node(
       (text(r, "timeoutKind"), count(r, "timeoutSeconds"))
     },
     foot=false,
+    describe=fn() { field(row(), "describe") is Some(_) },
   )
 }
 
@@ -393,7 +395,9 @@ fn vault_title_runs(ask : Asked) -> Array[@ui.Run] {
   let save = ask.save_kind != ""
   let named = fn(n) { @ui.span(n, weight=600, color=t.p.text) }
   let words = fn(w) { @ui.span(w, weight=400, color=t.p.text) }
-  let runs = if save {
+  let runs = if ask.describe {
+    fill_named("android-settings.vault.ask.describe", [("name", ask.name)], named, words)
+  } else if save {
     fill_named(
       "android-settings.vault.ask.save",
       [("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)), ("name", ask.name)],
@@ -414,8 +418,7 @@ fn vault_title_runs(ask : Asked) -> Array[@ui.Run] {
 /// What is out of the ordinary in what is asked (vault_asked's): a command that reads the secret itself, one run on
 /// another station; none where neither is.
 fn vault_odd_runs(ask : Asked) -> Array[@ui.Run] {
-  let save = ask.save_kind != ""
-  let risky = !save && (ask.mode == "env" || ask.mode == "file")
+  let risky = !ask.writes() && (ask.mode == "env" || ask.mode == "file")
   let elsewhere = ask.station != ""
   let runs : Array[@ui.Run] = []
   if risky {
@@ -489,10 +492,11 @@ pub fn vault_card_node(
           ws,
           request,
           fn() { Some(answer()) },
-          fn() { ask().save_kind != "" },
+          fn() { ask().writes() },
           fn() { ask().typed_in() },
           fn() { (ask().timeout_kind, ask().timeout_seconds) },
           foot=true,
+          describe=fn() { ask().describe },
         )
       },
     )

@@ -99,18 +99,21 @@ pub fn vault_editor_dialog(
   let words : Map[String, String] = Map([])
   // a field of its: its label, its line (or lines: `area`), a secret's dotted, what is wrong under it
   let input = fn(c : @ui.Ctx, part : String, label : String, placeholder : String, secret : Bool, area : Bool, error : String) {
-    let value = if part == "name" || part == "hosts" || part == "env" {
+    let value = if part == "name" || part == "about" || part == "hosts" || part == "env" {
       match part {
         "name" => text(was, "name")
+        "about" => text(was, "notes")
         "hosts" => join(strings(row, "hosts"), ", ")
         _ => text(row, "env")
       }
     } else {
       text(field(was, "fields"), part)
     }
-    @sf.field(c, label, error~, fn() {
+    // (its about: that agents are shown it, so no secret goes in it)
+    let hint = if part == "about" { @sf.t("web-pages.vault.editor.aboutNote") } else { "" }
+    @sf.field(c, label, error~, hint~, fn() {
       words[part] = if area {
-        @sf.textarea(c, key(part), rows=5, placeholder~, field=field_for(part, value))
+        @sf.textarea(c, key(part), rows=if part == "about" { 3 } else { 5 }, placeholder~, field=field_for(part, value))
       } else {
         @sf.input(c, key(part), placeholder~, secret~, field=field_for(part, value)).text
       }
@@ -134,6 +137,8 @@ pub fn vault_editor_dialog(
         |> ignore
       }
       input(c, "name", @sf.t("web-pages.vault.editor.name"), @sf.t(if k == "file" { "web-pages.vault.editor.fileNamePlaceholder" } else { "web-pages.vault.editor.namePlaceholder" }), false, false, "")
+      // what it is for and how it is used: agents are shown it with its name, so never a secret in it
+      input(c, "about", @sf.t("web-pages.vault.editor.about"), @sf.t("web-pages.vault.editor.aboutPlaceholder"), false, true, "")
       match k {
         "token" => input(c, "value", @sf.t("web-pages.vault.editor.value"), "ghp_…", true, false, "")
         "ssh_key" => {

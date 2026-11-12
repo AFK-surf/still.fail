@@ -103,9 +103,9 @@ export const VaultLive = Layer.effectDiscard(
           return h === undefined ? null : `A sign-in to ${h.grant.hosts.join(", ")} is granted to this chat already (grant ${h.request.id}, until ${new Date(h.grant.exp * 1000).toISOString()}): it is in this chat's browser.`;
         },
         use: (session, item, reason) => secrets.ask(session, { item, mode: "browser", reason }),
-        keep: (session, site, reason, made) => {
+        keep: (session, site, reason, made, named) => {
           const on = secrets.status(session);
-          return secrets.save(session, { name: `${site} 登录态`, kind: "browser", hosts: [site], reason, cwd: "", ...(on === "on" || on === "plain" ? { quiet: made } : {}) });
+          return secrets.save(session, { name: named?.name ?? `${site} 登录态`, ...(named?.about ? { about: named.about } : {}), kind: "browser", hosts: [site], reason, cwd: "", ...(on === "on" || on === "plain" ? { quiet: made } : {}) });
         },
       },
     });

@@ -1957,6 +1957,19 @@ export interface VaultSave {
 	typed?: boolean;
 }
 
+/**
+ * What an agent asks an item's name and about to become (secret_describe 改名和说明): approving it writes the item so
+ * (`vault.approve`).
+ */
+export interface VaultDescribe {
+	/** Its name as it would be (the same as `name` where it stays). */
+	name: string;
+	/** Its about as it would be ("": none). */
+	about: string;
+	/** Its about as it was when asked ("": none). */
+	wasAbout: string;
+}
+
 /** An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts). */
 export interface VaultAsk {
 	/** The item's name. */
@@ -1971,7 +1984,10 @@ export interface VaultAsk {
 	mode: string;
 	/** By the proxy: the hosts it is sent to. */
 	hosts: string[];
-	/** How a use is given, including the allowed hosts; absent on a request to save. */
+	/**
+	 * How a use is given, including the allowed hosts; a request to save, what it is for as the agent
+	 * said it (absent: nothing said); a request to rename, what would change, a line each.
+	 */
 	howText?: string;
 	/** Decided: granted | denied | expired. Absent while it waits (or before its station said). */
 	status?: string;
@@ -1979,6 +1995,11 @@ export interface VaultAsk {
 	scope?: string;
 	/** A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted). */
 	save?: VaultSave;
+	/**
+	 * A request to rename the item or change its about (secret_describe) rather than use it: approved, the item says
+	 * so (granted); answered as one to keep (`answer` approve or setUp).
+	 */
+	describe?: VaultDescribe;
 	/** Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name. */
 	station?: string;
 	/**

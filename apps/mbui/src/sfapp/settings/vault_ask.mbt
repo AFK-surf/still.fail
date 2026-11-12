@@ -30,6 +30,14 @@ pub(all) struct Asked {
   filename : String
   typed : Bool
   station : String
+  /// one to rename the item or change its about (secret_describe): what would change is `how_text`
+  describe : Bool
+}
+
+///|
+/// Whether what is asked writes the item (one to keep, one to rename): answered once, with no length of use.
+pub fn Asked::writes(self : Asked) -> Bool {
+  self.save_kind != "" || self.describe
 }
 
 ///|
@@ -207,7 +215,8 @@ fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : S
       ),
     )
   }
-  let save = field(row, "save") is Some(_)
+  // (one to rename the item is answered as one to keep: written into the vault, by a device set up)
+  let save = field(row, "save") is Some(_) || field(row, "describe") is Some(_)
   let typed = typed_of(field(row, "save"))
   if save && !flag(view, "plain") && !flag(view, "setUp") {
     Some((SetUp, save, typed))
@@ -235,7 +244,7 @@ pub fn vault_ask(
   @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
     match answer {
-      Some((a, save, _)) => vault_foot(c, core, ws, request, a, save, typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, extra~, foot=a is (Approve(_) | SetUp))
+      Some((a, save, _)) => vault_foot(c, core, ws, request, a, save, typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, extra~, foot=a is (Approve(_) | SetUp), describe=ask.describe)
       None => ()
     }
   })
@@ -259,7 +268,7 @@ pub fn vault_card(
   @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
     answered_in_place(c, "vault/" + request, ended.map(fn(e) { (e.0 == "granted", vault_outcome_words(ask, e.0, e.1)) }), fn() {
-      vault_foot(c, core, ws, request, answer, ask.save_kind != "", typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, foot=answer is (Approve(_) | SetUp))
+      vault_foot(c, core, ws, request, answer, ask.writes(), typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, foot=answer is (Approve(_) | SetUp), describe=ask.describe)
     })
   })
   |> ignore
@@ -334,7 +343,9 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
   c.box(style=@sf.ask_what, fn() {
     let named = fn(n) { @ui.span(n, weight=600, color=t.p.text) }
     let words = fn(w) { @ui.span(w, weight=400, color=t.p.text) }
-    let runs = if save {
+    let runs = if ask.describe {
+      fill_named("android-settings.vault.ask.describe", [("name", ask.name)], named, words)
+    } else if save {
       fill_named(
         "android-settings.vault.ask.save",
         [("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)), ("name", ask.name)],
@@ -358,7 +369,7 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
     if ask.how_text != "" {
       c.text(ask.how_text, style=@sf.ask_note) |> ignore
     }
-    let risky = !save && (ask.mode == "env" || ask.mode == "file")
+    let risky = !ask.writes() && (ask.mode == "env" || ask.mode == "file")
     let elsewhere = ask.station != ""
     if risky || elsewhere {
       let runs : Array[@ui.Run] = []
@@ -422,6 +433,8 @@ pub fn vault_outcome_words(ask : Asked, status : String, scope : String) -> Arra
   let scope = if scope == "once" || scope == "hour" { scope } else { "chat" }
   let said = fn(key, args) { fill_named(key, args, ended_name, fn(w) { @ui.span(w) }) }
   match status {
+    "granted" if ask.describe => said("android-settings.vault.ask.changed", [("name", ask.name)])
+    "denied" if ask.describe => said("android-settings.vault.ask.notChanged", [("name", ask.name)])
     "granted" if save =>
       said("android-settings.vault.ask.kept", [
         ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
@@ -457,7 +470,7 @@ fn ended_name(name : String) -> @ui.Run {
 pub fn vault_actions(c : @ui.Ctx, core : Core, ws : String, request : String, mine : Bool, who? : String? = None) -> Unit {
   let row = items(vaults_of(core, ws), "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
   match topic_answer(core, ws, request, mine, who) {
-    Some((a, save, typed)) => vault_foot(c, core, ws, request, a, save, typed~, timeout_kind=text(row, "timeoutKind"), timeout_seconds=count(row, "timeoutSeconds"))
+    Some((a, save, typed)) => vault_foot(c, core, ws, request, a, save, typed~, timeout_kind=text(row, "timeoutKind"), timeout_seconds=count(row, "timeoutSeconds"), describe=field(row, "describe") is Some(_))
     None => ()
   }
 }
@@ -480,6 +493,7 @@ pub fn vault_foot(
   timeout_seconds? : Int = 0,
   extra? : (() -> Unit)? = None,
   foot? : Bool = false,
+  describe? : Bool = false,
 ) -> Unit {
   let note = fn(words : String) { c.text(words, style=@sf.ask_note) |> ignore }
   let lasts = match answer {
@@ -665,9 +679,9 @@ pub fn vault_foot(
           (core.push)(Route::Vault)
         })
       } else {
-        let yes = if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
+        let yes = if describe { "android-settings.vault.act.change" } else if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
         let approve = fn() {
-          let what = tr(if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
+          let what = tr(if describe { "android-settings.vault.act.changeWhat" } else if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
           let chosen_scope = if !timed || scope == "once" { if save { "once" } else { scope } } else if minutes <= 60 { "hour" } else { "chat" }
           let params : Array[(String, Json)] = [("workspace", str(ws)), ("request", str(request)), ("scope", str(chosen_scope))]
           if timed && scope != "once" {
@@ -684,7 +698,7 @@ pub fn vault_foot(
           c.tell("vault/" + request + "/approve", approve)
         }
       }
-      let no = if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
+      let no = if describe { "android-settings.vault.act.dontChange" } else if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
       @sf.button(c, tr(no), key="vault/" + request + "/no", tone=Ghost, busy=busy(false), disabled=under, on_press=fn() {
         act(false, "vault.deny", tr("android-settings.vault.act.denyWhat"), obj([("workspace", str(ws)), ("request", str(request))]))
       })

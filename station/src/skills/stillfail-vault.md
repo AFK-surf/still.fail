@@ -35,7 +35,7 @@ station's profiles), or anything the person said not to keep.
 ## Keeping one
 
 - `secret_list` first: what is kept already (by name), and whether their vault is on. Do not keep a second copy.
-- `secret_save {name, kind, reason, command | path | value | none, username?, filename?, modes?, hosts?, env?}`:
+- `secret_save {name, about, kind, reason, command | path | value | none, username?, filename?, modes?, hosts?, env?}`:
   - `command` prints the secret and nothing else; it runs here, in your workspace, and you never see what it prints:
     `op read 'op://Personal/Ui/password'`, `op item get <id> --fields password --reveal`, `bw get password <id>`. Its
     approval (1Password's) is asked once. Where the password manager is signed in on another station (1Password's
@@ -53,7 +53,12 @@ station's profiles), or anything the person said not to keep.
     password sent in a login form or JSON body, a database client, a CLI reading a variable. `ssh` for an SSH key.
     `file` for a file: each command gets it written out where only it reads it, removed when it ends, its path in
     `env` (`KUBECONFIG`, `GOOGLE_APPLICATION_CREDENTIALS`) and `$STILLFAIL_SECRET`.
-  - `name`: what the person will recognise (测试服务登录, GitHub deploy token · AFK-surf/still.fail).
+  - `name`: what a person and the next agent know at a glance: the service and the account or site, and where it is
+    reached when that is not plain (测试服务 admin 登录, GitHub deploy token · AFK-surf/still.fail, UniFi 后台登录态（经
+    Studio 转发到 127.0.0.1:8443）). Never a bare host (`127.0.0.1 登录态`): nobody knows what it was.
+  - `about` (required): what it is for and how it is used, in the person's language: what it opens, the steps to reach it
+    (a forward from which station, a tunnel, the page to open), the tool or command that takes it. `secret_list` shows
+    it to every agent after you beside the name; never a secret in it.
 - It does not wait for the person: you are told in your session when they decide. Meanwhile go on with what does not
   need it (answer the chat, other work); with nothing else left, end your turn need_human about the card. Only their
   approval in the app keeps it: a yes written in the chat does not.
@@ -64,6 +69,13 @@ station's profiles), or anything the person said not to keep.
   `secret_save` anyway. The card says so and offers 开启密钥库 in the app; once they turn it on, it keeps the secret.
   Tell them in a line that turning it on takes a minute and shows recovery words to write down once.
 - No security mode in the workspace: it is kept in their library on this station, unencrypted (the card says where).
+
+## Renaming one
+
+An item whose name or about does not say what it is or how it is used (a name made of a host, a step written nowhere):
+`secret_describe {item, name?, about?, reason}`. A card shows its owner the name and about as they are and as they
+would be; approved in the app, the item says so. Do it as soon as you worked out what an item is, so the next agent
+does not have to.
 
 ## Using one
 

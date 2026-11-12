@@ -314,10 +314,10 @@ test("a secret kept for and used by the person the agent names, who wrote in the
   try {
     const tools = vaultTools(h.secrets, () => h.dir);
     const list = tools.find((t) => t.name === "secret_list")!, use = tools.find((t) => t.name === "secret_use")!, save = tools.find((t) => t.name === "secret_save")!;
-    await assert.rejects(save.run("s1", { name: "Kimi key", kind: "token", reason: "keep it", value: "test-key", person: "carol@x.com" }), /carol@x\.com has not written in this chat: name one of the people who wrote in it from still\.fail: bob@x\.com/);
+    await assert.rejects(save.run("s1", { name: "Kimi key", about: "Kimi 的 API key", kind: "token", reason: "keep it", value: "test-key", person: "carol@x.com" }), /carol@x\.com has not written in this chat: name one of the people who wrote in it from still\.fail: bob@x\.com/);
     assert.equal(h.cards.length, 0);
 
-    await save.run("s1", { name: "Kimi key", kind: "token", reason: "keep it", value: "test-key", person: "Bob@x.com" });
+    await save.run("s1", { name: "Kimi key", about: "Kimi 的 API key", kind: "token", reason: "keep it", value: "test-key", person: "Bob@x.com" });
     const request = h.cards[0]!.card.vault.request;
     assert.equal(h.cards[0]!.card.assignee, "bob@x.com", "the card is bob's to decide");
     assert.match(h.secrets.savedPlain(WS, null, "alice@x.com", { request }) as string, /only the person it is kept for/);
@@ -333,7 +333,7 @@ test("a secret kept for and used by the person the agent names, who wrote in the
     assert.equal(h.cards[1]!.card.assignee, "bob@x.com");
 
     // Left out, it is the starter's as before.
-    await save.run("s1", { name: "Other", kind: "token", reason: "keep it", value: "other" });
+    await save.run("s1", { name: "Other", about: "另一个", kind: "token", reason: "keep it", value: "other" });
     assert.equal(h.cards[2]!.card.assignee, "slack:c:u1");
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
@@ -1600,6 +1600,92 @@ test("a request's changes are told to whom decides it: its owner, nobody without
     assert.deepEqual(told(request({})), ["alice"]);
     h.vaults.putVault({ ...w.vault, seq: 1, members: ["alice", "bob"] });
     assert.deepEqual(told(request({})), ["alice", "bob"]);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item's about: asked with the secret to keep, kept as its notes and its listing's about; secret_list says it", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    const about = "家里 UniFi 后台：先在 Studio 上开 8443 转发，再打开 https://127.0.0.1:8443/";
+    const asked = h.secrets.save("s1", { name: "UniFi 后台", about, kind: "token", reason: "post", value: "t-1", hosts: ["unifi.local"], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.equal(r!.save!.about, about);
+    assert.match(h.cards[0]!.text, /说明：家里 UniFi 后台/);
+    assert.equal(h.cards[0]!.card.vault.about, about);
+    const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r!.id });
+    assert.ok(typeof kept !== "string");
+    assert.equal(kept.notes, about);
+    assert.equal(kept.listing!.about, about);
+    await decided(h, asked);
+    const list = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_list")!;
+    assert.equal(JSON.parse(await list.run("s1", {}) as string).secrets[0].about, about);
+    // secret_save asks for it.
+    const save = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_save")!;
+    await assert.rejects(save.run("s1", { name: "x", kind: "token", reason: "r", value: "v" }) as Promise<unknown>, /about is required/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item renamed in the plain library: its card says what would change, its owner's approval writes it here, and it grants nothing", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    void h.secrets.save("s1", { name: "127.0.0.1 登录态", kind: "token", reason: "x", value: "t-1", hosts: ["127.0.0.1"], cwd: h.dir });
+    await tick();
+    const [saving] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(typeof h.secrets.savedPlain(WS, null, "bob@x.com", { request: saving!.id }) !== "string");
+    await assert.rejects(h.secrets.describe("s1", { item: "127.0.0.1 登录态", reason: "r" }), /nothing to change/);
+    await assert.rejects(h.secrets.describe("s1", { item: "none", name: "x", reason: "r" }), /secret_list/);
+    const asked = h.secrets.describe("s1", { item: "127.0.0.1 登录态", name: "UniFi 后台登录态", about: "经 Studio 转发", reason: "认不出来" });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.deepEqual(r!.describe, { name: "UniFi 后台登录态", about: "经 Studio 转发", was: { name: "127.0.0.1 登录态", about: "" } });
+    const { text, card } = h.cards.at(-1)!;
+    assert.equal(text, "申请修改「127.0.0.1 登录态」：认不出来\n\n名字改为：UniFi 后台登录态\n\n说明改为：经 Studio 转发");
+    assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["修改", "不改"]);
+    assert.deepEqual(card.vault.describe, { name: "UniFi 后台登录态", about: "经 Studio 转发", wasAbout: "" });
+    // No grant of the item comes of it, nor anyone's but its owner's word.
+    assert.match(h.secrets.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "once" })!, /grants nothing/);
+    assert.match(h.secrets.describedPlain(WS, null, "carol@x.com", { request: r!.id }) as string, /only the item's owner/);
+    const kept = h.secrets.describedPlain(WS, null, "bob@x.com", { request: r!.id });
+    assert.ok(typeof kept !== "string");
+    assert.deepEqual([kept.version, kept.name, kept.notes, kept.listing!.name, kept.listing!.about, kept.fields], [1, "UniFi 后台登录态", "经 Studio 转发", "UniFi 后台登录态", "经 Studio 转发", { value: "t-1" }]);
+    assert.match(await decided(h, asked), /Changed: the item i_\w+ is 「UniFi 后台登录态」 now, described as: 经 Studio 转发/);
+    assert.deepEqual(h.secrets.held("s1").filter((x) => x.request.id === r!.id), []);
+    assert.deepEqual(h.secrets.listings("s1").map((l) => [l.listing.name, l.listing.about]), [["UniFi 后台登录态", "经 Studio 转发"]]);
+    assert.deepEqual(await h.secrets.uses(WS, null, PLAIN, { sub: "bob", email: "bob@x.com" }), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item of a vault renamed: decided by its vault's members, taken once the item here says so, never granted", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    const item = (version: number, name: string, about?: string): Item => signed(
+      { v: 1 as const, ws: WS, vault: VAULT, id: "i_01HZZZZZZZZZZZZZZZZZZZZZZZ", version, epoch: 0, ct: encryptWith(fill(4), Buffer.from("{}"), itemContext(WS, VAULT, "i_01HZZZZZZZZZZZZZZZZZZZZZZZ", version, 0), fill(5, 12)), listing: { name, kind: "browser" as const, modes: ["browser" as const], hosts: ["127.0.0.1"], ...(about ? { about } : {}) }, at: 1000 },
+      TAG.item, w.alice.signer,
+    );
+    h.vaults.putItem(item(0, "127.0.0.1 登录态"));
+    const asked = h.secrets.describe("s1", { item: "127.0.0.1 登录态", name: "UniFi 后台登录态", about: "经 Studio 转发", reason: "认不出来" });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(r && r.describe && r.box === "" && r.vault === VAULT);
+    assert.equal(h.cards.at(-1)!.card.assignee, "alice@x.com");
+    assert.match(h.secrets.grant(w.state, "alice", { request: r.id } as never)!, /grants nothing/);
+    assert.match(h.secrets.described(w.state, "bob", { request: r.id })!, /vault's members/);
+    assert.match(h.secrets.described(w.state, "alice", { request: r.id })!, /bring its copy first/);
+    h.vaults.putItem(item(1, "UniFi 后台登录态", "经 Studio 转发"));
+    assert.equal(h.secrets.described(w.state, "alice", { request: r.id }), null);
+    assert.match(await decided(h, asked), /Changed: .*「UniFi 后台登录态」/);
+    // (a sign-in's request granted puts nothing into the chat's browser)
+    assert.deepEqual(h.browser.signedIn, []);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }
