@@ -162,7 +162,8 @@ fn chats_pane_node(
         seen.val = days
         stamp.val += 1
       }
-      (stamp.val, held())
+      // (and its page's stay on top: what changed while it was off the top said as it is put back there, RowsMotion::said)
+      (stamp.val, held(), stint())
     },
     fn(at) {
       let days = seen.val
@@ -178,7 +179,7 @@ fn chats_pane_node(
         recorded_rows.val = by_name.length()
         @hostapi.perf_line("chat-list: filter=\{filter} rows=\{recorded_rows.val}")
       }
-      motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched))
+      motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched), at.2)
       ordered.set(shown)
       rows.set(by_name)
       revision.set(revision.untracked() + 1)
@@ -553,6 +554,8 @@ priv struct RowsMotion {
   mut last : Array[String]
   mut last_items : Map[String, ChatItem]
   mut had : Bool
+  // (the page's stay on top it was last said in: Nav's stint)
+  mut stint : Int
   going : Map[String, (ChatItem?, String)]
   moving : Map[String, (Bool, Double)]
   told : @signals.Signal[Int]
@@ -560,7 +563,7 @@ priv struct RowsMotion {
 
 ///|
 fn RowsMotion::new() -> RowsMotion {
-  { last: [], last_items: {}, had: false, going: {}, moving: {}, told: @signals.signal(0) }
+  { last: [], last_items: {}, had: false, stint: 0, going: {}, moving: {}, told: @signals.signal(0) }
 }
 
 ///|
@@ -578,17 +581,21 @@ fn day_keys(days : Array[ChatDay]) -> Array[String] {
 
 ///|
 /// The list's days now said (`shown`, its rows `by_name`) in node `v`'s timeline, `watched` whether it is the list
-/// shown: what came, went and went ahead set off from the cause's moment.
+/// shown, in its page's stay on top `stint`: what came, went and went ahead set off from the cause's moment. What
+/// changed while its page was off the top (on 小屏 kept on the stack's shelf at rest, its list said again only as it is
+/// taken back: a new stint) is there at once, as on a page made anew.
 fn RowsMotion::said(
   self : RowsMotion,
   v : @view.View,
   shown : Array[ChatDay],
   by_name : Map[String, ChatItem],
   watched : Bool,
+  stint : Int,
 ) -> Unit {
   let lines = day_keys(shown)
   let was = self.last
-  let watched = watched && self.had && !lines.is_empty()
+  let watched = watched && self.had && !lines.is_empty() && stint == self.stint
+  self.stint = stint
   if watched && !(was == lines) {
     let now = v.cause_at()
     let here : Set[String] = Set([])
