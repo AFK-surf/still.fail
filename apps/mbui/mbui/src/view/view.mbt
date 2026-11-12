@@ -9251,10 +9251,11 @@ pub fn Tree::input(self : Tree, at : Double, f : () -> Unit) -> Unit {
 /// the event's moment their cause), then `f` taken as Tree::event takes it, finding things as they are with it. Inside
 /// another event, both in that one's, as one change.
 ///
-/// An input (`brings`: a press, a wheel, a key, words typed) finds the tree brought to its moment between `said` and
-/// `f`, outside both batches (Tree::bring_to), as a frame lays it out: what that layout tells (a list's slots set, read
-/// by bindings through what is worked out of them) is told and laid out in it, not marked in `f`'s batch and left there
-/// while `f` finds what it reaches (a row 120 lower than drawn, an input 88 ms after the last frame, 2026-11-12).
+/// An input (`brings`: a pointer's, a wheel's, a back gesture's; ui's view_event `input`) finds the tree brought to its
+/// moment between `said` and `f`, outside both batches (Tree::bring_to), as a frame lays it out: what that layout tells
+/// (a list's slots set, read by bindings through what is worked out of them) is told and laid out in it, not marked in
+/// `f`'s batch and left there while `f` finds what it reaches (a row 120 lower than drawn, an input 88 ms after the
+/// last frame, 2026-11-12). A key and words typed bring nothing of their own (press_stays_ways_test's Page Down).
 pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> Unit, brings? : Bool = false) -> Unit {
   // (in an event already: its moment, settled as it began)
   if self.cause_at >= 0.0 {

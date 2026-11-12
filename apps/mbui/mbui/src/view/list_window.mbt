@@ -1685,8 +1685,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       ai = ai.min(all.length() - 1).max(0)
       // (held by what was pressed in a block: the block's top as far up as what lies over what was pressed grew since,
       // the room under its foot as that asks)
+      let mut pressed_holds = false
       if !asked && pin.val is Some((k, below, over, was)) && laid_at.get(k) is Some(i) && i < all.length() {
         ai = i
+        pressed_holds = true
         aoff = over_h(over) - was - below
         press_room.set(dmax(0.0, all.top(i) + aoff + vh - blocks_foot(all)))
       }
@@ -1729,7 +1731,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           i = i - 1
         }
         from
-      } else if all.top(ai) + all.h(ai) > top && all.top(ai) < top + vh {
+      } else if pressed_holds || (all.top(ai) + all.h(ai) > top && all.top(ai) < top + vh) {
+        // (held by what was pressed in it, the block shows by that alone, where what is over that comes to now: what
+        // shows goes out from it, never found by its place as counted at the last layout. As tall as it was then, what
+        // it opened over the pressed grown since by more than a screen (no frame for 88 ms) put it off what shows: let
+        // go, made anew, what it had opened shut, 2026-11-12. Made, it is measured in this pass and those round it
+        // found again by where it ends now)
         ai
       } else {
         all.first_past(top).min(all.length() - 1)
