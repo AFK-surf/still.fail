@@ -14,7 +14,7 @@
 - No paid runners (GitHub's larger ones): Linux on GitHub's standard runners, the rest on the self-hosted machines
   the workflows name. Those machines' runners share one Mac each, so what a job takes there depends on its
   neighbours: what runs on Linux as well goes to Linux runners, in slices when it is long (the station's tests,
-  `check-station`: more test files, more slices).
+  `check-station`, and the core's, `check-core`: more test files, more slices).
 - A check that failed and passed on the same commit is never rerun green (the root AGENTS.md). Do not rerun an old
   commit's main pipeline: it deploys that commit's beta over the newer one.
 - An artifact uploaded for people to look at (pictures, logs, what moved) says `continue-on-error: true`: a runner's

@@ -10,9 +10,10 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, station, station-tests, core) runs only those parts of it: ts the icons, the
-# clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core:
-# client/core-ts); station the station (station/: its typecheck, its programs in MoonBit) and its native parts' own
+# STILLFAIL_CHECK_PART="<part> …" (ts, core-tests, station, station-tests, core) runs only those parts of it: ts the
+# icons, the clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud);
+# core-tests the core's own tests (client/core-ts/test), all of them or, with STILLFAIL_CORE_SHARD="<i>/<n>", the i-th
+# slice of n; station the station (station/: its typecheck, its programs in MoonBit) and its native parts' own
 # tests (station/native); station-tests the station's tests (station/test), all of them or, with
 # STILLFAIL_STATION_SHARD="<i>/<n>", the i-th slice of n; core client/'s Rust (the core's native shells: iroh for the
 # web and the apps' IO). Unset: all of them.
@@ -423,7 +424,18 @@ if [ $full = 1 ]; then
   # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
   # (core-ts's tests import the station's (test/rigs.test.ts its rig's grants, which import effect): its deps too, or a
   # change that runs core-ts's tests alone fails rigs.test.ts at its import, #5386's check-linux 42962214582, 2026-11-11)
-  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$"; then prep core deps client/core-ts; prep station deps station; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core after station sh -c 'cd client/core-ts && pnpm test'; fi
+  # One slice of them, or all (STILLFAIL_CORE_SHARD="<i>/<n>": the files in order, every n-th from the i-th). CI runs
+  # them in slices on Linux runners of their own (pipeline.yml, check-core), as the station's: in check-linux beside the
+  # rest of ts they went from 3.5 to past its five minutes as files were added (179 files; main 6045382883 cancelled at
+  # 5:05, 43272321433, 2026-11-12), each file small and none worth cutting (212 s of CPU in all on a Mac, the most 17).
+  # (core_test_paths: scripts/plan.sh reads it from this line for CI's check-core)
+  core_test_paths='^client/core-ts/|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$'
+  if part core-tests && touches "$core_test_paths"; then
+    prep core deps client/core-ts; prep station deps station
+    slice=${STILLFAIL_CORE_SHARD:-}
+    # shellcheck disable=SC2016 # the command's own variables, expanded by its shell
+    remembered "tests: core-ts${slice:+ $slice}" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core after station env CORE_SLICE="$slice" sh -c 'cd client/core-ts && files=$(ls test/*.test.ts | awk -v s="${CORE_SLICE:-0/1}" '"'"'BEGIN { split(s, a, "/") } NR % a[2] == a[1]'"'"') && [ -n "$files" ] && node ../../scripts/native.ts run mesh -- node --test --test-force-exit $files'
+  fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station: it and its tests run whenever it, one of its native parts or the words it says changed (station_paths:
   # scripts/plan.sh reads it from this line for CI's check-station).
