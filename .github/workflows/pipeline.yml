@@ -238,6 +238,7 @@ jobs:
   # check.sh), through sccache. The native parts come from macos-ci's cache, the release or the natives job running beside
   # it (scripts/native.ts).
   check:
+    if: false # (MEASURING ROUND: no Tester runs here)
     needs: plan
     runs-on: [self-hosted, macos-ci]
     # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
@@ -292,7 +293,7 @@ jobs:
   # engine); what passed before at the same inputs is kept in the Actions cache (scripts/check.sh, `remembered`).
   check-linux:
     needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() }}
+    if: false # (MEASURING ROUND: no Tester runs here)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
@@ -329,7 +330,7 @@ jobs:
   # STILLFAIL_STATION_SHARD), not a longer job.
   check-station:
     needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() && needs.plan.outputs.station_tests == 'true' }}
+    if: false # (MEASURING ROUND: no Tester runs here)
     strategy:
       fail-fast: false
       matrix:
@@ -364,7 +365,7 @@ jobs:
   # nothing sent, no secrets.
   bundle:
     needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true') }}
+    if: false # (MEASURING ROUND: no Tester runs here)
     # On GitHub's runners, not macos-ci: a dry run of half a minute that queued there behind the builds (2026-10-16).
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -414,7 +415,7 @@ jobs:
   # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
   gate:
     needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-station, check-mbui, bundle, mac-build, mbui-web, static, desktop-build, desktop]
-    if: always() && github.ref != 'refs/heads/main'
+    if: false # (MEASURING ROUND: no Tester runs here)
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions: {}
@@ -1251,7 +1252,7 @@ jobs:
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
     needs: [plan, natives, check, check-linux, check-station, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, deltas, put, changelog, done]
-    if: always()
+    if: false # (MEASURING ROUND: no Tester runs here)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

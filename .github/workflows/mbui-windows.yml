@@ -22,6 +22,7 @@ on:
 
 jobs:
   demo:
+    if: false # (MEASURING ROUND: no Tester runs here)
     runs-on: windows-latest
     timeout-minutes: 5
     # Each builds its own program. In run 41539716977 attempt 2, setup, the demo and textdiff used 294 s before

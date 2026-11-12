@@ -57,7 +57,7 @@ jobs:
   # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, pipeline.yml's desktop and preview.yml's ios). No ThinLTO
   # parts: the apps are not built with it (scripts/mbc's lto_for, 2026-10-24).
   native:
-    name: native (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }})
+    name: native (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.keep && ' keeping none' || '' }})
     runs-on: ubuntu-24.04
     # (a push's 5 minutes, the pipeline's call of a branch's push too; the day's, its pages in one process, 10)
     timeout-minutes: ${{ github.event_name != 'schedule' && 5 || 10 }}
@@ -75,10 +75,19 @@ jobs:
         # PKGS_BUILD_OUT): their runs at 120, 60, 24 and 7 frames a second are app-rates' 1/4's, on them. Each rate
         # had a runner of its own here that built the same programs again, 72-90 s, to run them 21-51 s, 2026-11-11)
         include:
-          - { part: app, group: pkgs, store: app-pkgs }
+          - { part: app, group: pkgs, store: app-pkgs, keep: "" }
+          - { part: app, group: pkgs, store: app-pkgs, keep: none }
           # (the flows at every rate, the default's too: replay-fps below, on the program replay-build makes once)
     env:
       PART: ${{ matrix.part }}
+      # (MEASURING ROUND, not to merge: every frame said, once keeping rows as a device does, once keeping none)
+      MBUI_TEST_FRAMES: "1"
+      # (the frames the first round found drawn otherwise, said whole in both halves: KDUMP lines, in the log)
+      MBUI_TEST_FRAME_DUMP: "src/sfapp/home_wbtest.mbt:6:3-6:92@stillfail#1 1666.6666666666672 1;src/sfapp/preview_wbtest.mbt:17:11-17:103@stillfail#68 1516.6666666666665 6;src/sfapp/preview_wbtest.mbt:17:11-17:103@stillfail#68 1516.6666666666665 7;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 6;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 7;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 8;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 12;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 13;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 17;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 18;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1033.3333333333333 2;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1033.3333333333333 3;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1050 2;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1050 3;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 1;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 2;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 3"
+      MBUI_TEST_KEEP_NONE: ${{ matrix.keep == 'none' && '1' || '' }}
+      KEPT_OUT: ${{ github.workspace }}/kept.txt
+      KEPT_GROUP: ${{ matrix.group || 'pkgs' }}
+      KEPT_WAY: ${{ matrix.keep == 'none' && 'none' || 'kept' }}
       GROUP: ${{ matrix.group }}
       FPS: ${{ matrix.fps }}
       # (at 60 and 120 how what moves goes is counted on every frame too, none failing: mbui's tester_fps.mbt)
@@ -230,7 +239,7 @@ jobs:
           code=0
           for r in ${FPS:-default}; do
             if [ $r = default ]; then unset MBUI_TEST_FPS; else export MBUI_TEST_FPS=$r; echo "=== at $r frames a second"; fi
-            TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ env.PART }} APP_GROUP=${{ env.GROUP == 'build' && '1/4' || env.GROUP }} APP_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'app' && format('{0}/app-test', runner.temp) || '' }} PKGS_BUILD_OUT=${{ env.GROUP == 'pkgs' && format('{0}/pkgs-test', runner.temp) || '' }} REPLAY_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'replay' && format('{0}/replay-test', runner.temp) || '' }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee -a "$RUNNER_TEMP/mbui-test.log" || code=1
+            TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ env.PART }} APP_GROUP=${{ env.GROUP == 'build' && '1/4' || env.GROUP }} APP_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'app' && format('{0}/app-test', runner.temp) || '' }} PKGS_BUILD_OUT=${{ env.GROUP == 'pkgs' && format('{0}/pkgs-test', runner.temp) || '' }} REPLAY_BUILD_OUT=${{ env.GROUP == 'build' && env.PART == 'replay' && format('{0}/replay-test', runner.temp) || '' }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=1000000 bash apps/mbui/scripts/test.sh 2>&1 | tee -a "$RUNNER_TEMP/mbui-test.log" || code=1
           done
           exit $code
       # (sfapp's test program and its tests' list, for the app job's runs)
@@ -319,6 +328,19 @@ jobs:
           key: mbui-moon-build-${{ env.PART }}-${{ github.sha }}
       # (what the run counted of how what moves goes, MBUI_TEST_MOTION=count: in the summary; and that and what it said of
       # the bars, MBUI_TEST_BARS too, whole as an artifact, for motion-bars)
+      - name: What each frame said (MEASURING ROUND)
+        if: always() && env.KEPT_OUT != ''
+        shell: bash
+        run: |
+          n=kept-check-$(printf '%s' "$KEPT_GROUP" | tr '/ ' '--')-$KEPT_WAY
+          echo "KEPT_NAME=$n" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/kept-up"; touch "$KEPT_OUT"
+          gzip -c "$KEPT_OUT" > "$RUNNER_TEMP/kept-up/kept.txt.gz"
+          [ ! -f "$RUNNER_TEMP/mbui-test.log" ] || gzip -c "$RUNNER_TEMP/mbui-test.log" > "$RUNNER_TEMP/kept-up/log.txt.gz"
+          echo "$n: $(wc -l < "$KEPT_OUT") frames, $(wc -c < "$KEPT_OUT") bytes, $(wc -c < "$RUNNER_TEMP/kept-up/kept.txt.gz") gzipped" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: always() && env.KEPT_OUT != ''
+        uses: actions/upload-artifact@v4
+        with: { name: "${{ env.KEPT_NAME }}", path: "${{ runner.temp }}/kept-up", retention-days: 7, compression-level: 0 }
       - name: How what moves goes
         if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
         run: |
@@ -385,7 +407,7 @@ jobs:
   # program replay-build made (REPLAY_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs).
   # Main's own run after a merge at the default rate alone (the file's head)
   replay-fps:
-    name: native (replay${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }})
+    name: native (replay${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.keep && ' keeping none' || '' }})
     needs: replay-build
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -393,8 +415,17 @@ jobs:
       fail-fast: false
       matrix:
         fps: ${{ fromJSON(inputs.rates == 'no' && '[""]' || inputs.rates == 'only' && '["120", "60", "24", "7"]' || '["", "120", "60", "24", "7"]') }}
+        keep: ["", none]
     env:
       MBUI_TEST_FPS: ${{ matrix.fps }}
+      # (MEASURING ROUND, not to merge: every frame said, once keeping rows as a device does, once keeping none)
+      MBUI_TEST_FRAMES: "1"
+      # (the frames the first round found drawn otherwise, said whole in both halves: KDUMP lines, in the log)
+      MBUI_TEST_FRAME_DUMP: "src/sfapp/home_wbtest.mbt:6:3-6:92@stillfail#1 1666.6666666666672 1;src/sfapp/preview_wbtest.mbt:17:11-17:103@stillfail#68 1516.6666666666665 6;src/sfapp/preview_wbtest.mbt:17:11-17:103@stillfail#68 1516.6666666666665 7;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 6;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 7;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 8;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 12;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 13;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 17;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 18;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1033.3333333333333 2;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1033.3333333333333 3;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1050 2;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1050 3;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 1;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 2;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 3"
+      MBUI_TEST_KEEP_NONE: ${{ matrix.keep == 'none' && '1' || '' }}
+      KEPT_OUT: ${{ github.workspace }}/kept.txt
+      KEPT_GROUP: ${{ matrix.group || 'replay' }}
+      KEPT_WAY: ${{ matrix.keep == 'none' && 'none' || 'kept' }}
       FPS: ${{ matrix.fps }}
       MBUI_TEST_MOTION: ${{ (matrix.fps == '120' || matrix.fps == '60') && 'count' || '' }}
       # (and at the default rate each file's bars and what was found under them said too, where motion-bars sets them
@@ -412,9 +443,22 @@ jobs:
           chmod +x "$RUNNER_TEMP/replay-test/flows.blackbox_test.exe" "$RUNNER_TEMP/replay-test/testexe"
           TESTEXE="$RUNNER_TEMP/replay-test/testexe" \
           REPLAY_EXE="$RUNNER_TEMP/replay-test/flows.blackbox_test.exe" REPLAY_INFO="$RUNNER_TEMP/replay-test/__blackbox_test_info.json" \
-            TIMES=1 TARGETS=native PARTS=replay LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+            TIMES=1 TARGETS=native PARTS=replay LINES_OUT=1000000 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       # (what the run counted of how what moves goes, MBUI_TEST_MOTION=count: in the summary; and that and what it said of
       # the bars, MBUI_TEST_BARS too, whole as an artifact, for motion-bars)
+      - name: What each frame said (MEASURING ROUND)
+        if: always() && env.KEPT_OUT != ''
+        shell: bash
+        run: |
+          n=kept-check-$(printf '%s' "$KEPT_GROUP" | tr '/ ' '--')-$KEPT_WAY
+          echo "KEPT_NAME=$n" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/kept-up"; touch "$KEPT_OUT"
+          gzip -c "$KEPT_OUT" > "$RUNNER_TEMP/kept-up/kept.txt.gz"
+          [ ! -f "$RUNNER_TEMP/mbui-test.log" ] || gzip -c "$RUNNER_TEMP/mbui-test.log" > "$RUNNER_TEMP/kept-up/log.txt.gz"
+          echo "$n: $(wc -l < "$KEPT_OUT") frames, $(wc -c < "$KEPT_OUT") bytes, $(wc -c < "$RUNNER_TEMP/kept-up/kept.txt.gz") gzipped" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: always() && env.KEPT_OUT != ''
+        uses: actions/upload-artifact@v4
+        with: { name: "${{ env.KEPT_NAME }}", path: "${{ runner.temp }}/kept-up", retention-days: 7, compression-level: 0 }
       - name: How what moves goes
         if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
         run: |
@@ -439,7 +483,7 @@ jobs:
   # (APP_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs); at the default rate here, at
   # the others in app-rates below, the same steps
   app:
-    name: native (app ${{ matrix.group }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.part && format(' part {0}', matrix.part) || '' }})
+    name: native (app ${{ matrix.group }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.part && format(' part {0}', matrix.part) || '' }}${{ matrix.keep && ' keeping none' || '' }})
     needs: app-build
     # (arch/next's run keeps its units: its tests are its pipeline's; a call with rates: only runs the rates alone)
     if: github.event_name != 'workflow_run' && inputs.rates != 'only'
@@ -451,7 +495,16 @@ jobs:
       matrix:
         group: [1/4, 2/4, 3/4, 4/4, contrast, corners]
         fps: [""]
+        keep: ["", none]
     env: &app-env
+      # (MEASURING ROUND, not to merge: every frame said, once keeping rows as a device does, once keeping none)
+      MBUI_TEST_FRAMES: "1"
+      # (the frames the first round found drawn otherwise, said whole in both halves: KDUMP lines, in the log)
+      MBUI_TEST_FRAME_DUMP: "src/sfapp/home_wbtest.mbt:6:3-6:92@stillfail#1 1666.6666666666672 1;src/sfapp/preview_wbtest.mbt:17:11-17:103@stillfail#68 1516.6666666666665 6;src/sfapp/preview_wbtest.mbt:17:11-17:103@stillfail#68 1516.6666666666665 7;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 6;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 7;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 8;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 12;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 13;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 17;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1016.6666666666666 18;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1033.3333333333333 2;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1033.3333333333333 3;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1050 2;src/sfapp/wide_wbtest.mbt:29:11-29:120@stillfail#11 1050 3;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 1;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 2;src/sfapp/press_waits_wbtest.mbt:27:11-27:89@stillfail#1 2116.666666666667 3"
+      MBUI_TEST_KEEP_NONE: ${{ matrix.keep == 'none' && '1' || '' }}
+      KEPT_OUT: ${{ github.workspace }}/kept.txt
+      KEPT_GROUP: ${{ matrix.group || 'app' }}
+      KEPT_WAY: ${{ matrix.keep == 'none' && 'none' || 'kept' }}
       FPS: ${{ matrix.fps }}
       APP_PART: ${{ matrix.part }}
       # (the first's at a rate runs the small packages' programs native built too, beside its pages: PKGS_EXE)
@@ -481,12 +534,25 @@ jobs:
             TESTEXE="$RUNNER_TEMP/app-test/testexe" \
             APP_EXE="$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" APP_INFO="$RUNNER_TEMP/app-test/__whitebox_test_info.json" \
             PKGS_EXE=${{ env.PKGS == 'yes' && format('{0}/pkgs-test', runner.temp) || '' }} \
-              TIMES=1 TARGETS=native PARTS=app APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 \
+              TIMES=1 TARGETS=native PARTS=app APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=1000000 \
               bash apps/mbui/scripts/test.sh 2>&1 | tee -a "$RUNNER_TEMP/mbui-test.log" || code=1
           done
           exit $code
       # (what the run counted of how what moves goes, MBUI_TEST_MOTION=count: in the summary; and that and what it said of
       # the bars, MBUI_TEST_BARS too, whole as an artifact, for motion-bars)
+      - name: What each frame said (MEASURING ROUND)
+        if: always() && env.KEPT_OUT != ''
+        shell: bash
+        run: |
+          n=kept-check-$(printf '%s' "$KEPT_GROUP" | tr '/ ' '--')-$KEPT_WAY
+          echo "KEPT_NAME=$n" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/kept-up"; touch "$KEPT_OUT"
+          gzip -c "$KEPT_OUT" > "$RUNNER_TEMP/kept-up/kept.txt.gz"
+          [ ! -f "$RUNNER_TEMP/mbui-test.log" ] || gzip -c "$RUNNER_TEMP/mbui-test.log" > "$RUNNER_TEMP/kept-up/log.txt.gz"
+          echo "$n: $(wc -l < "$KEPT_OUT") frames, $(wc -c < "$KEPT_OUT") bytes, $(wc -c < "$RUNNER_TEMP/kept-up/kept.txt.gz") gzipped" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: always() && env.KEPT_OUT != ''
+        uses: actions/upload-artifact@v4
+        with: { name: "${{ env.KEPT_NAME }}", path: "${{ runner.temp }}/kept-up", retention-days: 7, compression-level: 0 }
       - name: How what moves goes
         if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
         run: |
@@ -606,3 +672,31 @@ jobs:
       - uses: actions/checkout@v5
       - env: { GH_TOKEN: "${{ github.token }}" }
         run: bash scripts/rates-said.sh mbui-check
+
+  # MEASURING ROUND, not to merge: what the two runs said of each frame set side by side (mbui's scripts/kept_compare.sh)
+  kept-compare:
+    name: kept rows against rows drawn anew (measuring round)
+    needs: [native, replay-fps, app]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with: { pattern: "kept-check-*", path: "${{ runner.temp }}/kept" }
+      - name: Set side by side
+        run: |
+          C=$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/kept_compare.sh
+          cd "$RUNNER_TEMP/kept"
+          for d in kept-check-*; do echo "$d: $(zcat $d/kept.txt.gz | wc -l) frames"; done | tee runs.txt
+          for d in $(ls -d kept-check-*-kept | sort); do zcat $d/kept.txt.gz; done > all-kept.txt
+          for d in $(ls -d kept-check-*-none | sort); do zcat $d/kept.txt.gz; done > all-none.txt
+          for d in $(ls -d kept-check-*-none | sort); do [ ! -f $d/log.txt.gz ] || zcat $d/log.txt.gz; done > log-none.txt
+          for w in kept none; do for d in $(ls -d kept-check-*-$w | sort); do [ ! -f $d/log.txt.gz ] || zcat $d/log.txt.gz | grep -a '^KDUMP ' || true; done > kdump-$w.txt; done
+          echo "frames said whole: $(grep -c ' built=' kdump-kept.txt) kept, $(grep -c ' built=' kdump-none.txt) none" | tee -a "$GITHUB_STEP_SUMMARY"
+          sh "$C" all-kept.txt all-none.txt log-none.txt > compare.txt || true
+          { echo '```'; cat runs.txt; KEPT_SAID_MOST=50 sh "$C" all-kept.txt all-none.txt log-none.txt | cut -c1-400; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
+          echo "kept $(wc -c < all-kept.txt) bytes, $(gzip -9c all-kept.txt | wc -c) gzipped; none $(wc -c < all-none.txt) bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          mkdir -p out && mv compare.txt runs.txt out/ && gzip -c all-kept.txt > out/all-kept.txt.gz && gzip -c all-none.txt > out/all-none.txt.gz && gzip -c log-none.txt > out/log-none.txt.gz && gzip -c kdump-kept.txt > out/kdump-kept.txt.gz && gzip -c kdump-none.txt > out/kdump-none.txt.gz
+      - uses: actions/upload-artifact@v4
+        with: { name: "kept-compare-app", path: "${{ runner.temp }}/kept/out", retention-days: 7, compression-level: 0 }

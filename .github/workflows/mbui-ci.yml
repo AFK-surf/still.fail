@@ -24,6 +24,7 @@ concurrency:
 
 jobs:
   test:
+    if: false # (MEASURING ROUND: no Tester runs here)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     # (every step's script run with no network: a test that reaches for it fails every time, scripts/offline.sh)
@@ -91,7 +92,7 @@ jobs:
     # mbui/hostapi), so it builds anywhere
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    name: native${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}
+    name: native${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.keep && ' keeping none' || '' }}
     # (and the same tests again with frames drawn on run_for's way while the app asks for them (scripts/fps_check.sh),
     # at 120, at 60, and at 24 then 7, a runner each beside it: what a test asserts at a moment the same however many
     # frames came before it. On main after a merge (the user, 2026-11-11: 「直接合，帧率在 main 上合并后跑」, as
@@ -100,6 +101,7 @@ jobs:
       fail-fast: false
       matrix:
         fps: ${{ fromJSON(github.event_name == 'pull_request' && '[""]' || '["", "120", "60", "24 7"]') }}
+        keep: ["", none]
     # (what it builds kept between runs, as mbui-check's native job keeps the app's: moon's own build (moonc's C) and the
     # units each test's C is split into, by content (MBC_STORE: main's newest and a branch's own together). Without,
     # every run compiled all of mbui's C again: a change to ui 154 units of ui's blackbox tests and 230 of its whitebox
@@ -114,6 +116,12 @@ jobs:
       MBUI_TEST_BARS: ${{ matrix.fps == '' && inputs.rates != 'no' && github.event_name != 'pull_request' && '1' || '' }}
       MOTION_OUT: ${{ github.workspace }}/motion.txt
       OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
+      # (MEASURING ROUND, not to merge: every frame said, once keeping rows as a device does, once keeping none)
+      MBUI_TEST_FRAMES: "1"
+      MBUI_TEST_KEEP_NONE: ${{ matrix.keep == 'none' && '1' || '' }}
+      KEPT_OUT: ${{ github.workspace }}/kept.txt
+      KEPT_GROUP: ${{ matrix.group || 'mbui' }}
+      KEPT_WAY: ${{ matrix.keep == 'none' && 'none' || 'kept' }}
     steps:
       - uses: actions/checkout@v4
       - name: "A network namespace of its own for the steps (Ubuntu 24.04's AppArmor keeps them from a user's: let)"
@@ -165,9 +173,23 @@ jobs:
         shell: bash scripts/offline.sh {0}
         run: |
           touch "$RUNNER_TEMP/start"
-          if [ -z "${{ matrix.fps }}" ]; then scripts/test_native.sh; else FPS="${{ matrix.fps }}" bash scripts/fps_check.sh; fi
+          set -o pipefail
+          if [ -z "${{ matrix.fps }}" ]; then LINES_OUT=1000000 scripts/test_native.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"; else FPS="${{ matrix.fps }}" bash scripts/fps_check.sh; fi
       # (what the run counted of how what moves goes, MBUI_TEST_MOTION=count: in the summary; and that and what it said of
       # the bars, MBUI_TEST_BARS too, whole as an artifact, for motion-bars)
+      - name: What each frame said (MEASURING ROUND)
+        if: always() && env.KEPT_OUT != ''
+        shell: bash
+        run: |
+          n=kept-ci-$(printf '%s' "$KEPT_GROUP" | tr '/ ' '--')-$KEPT_WAY
+          echo "KEPT_NAME=$n" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/kept-up"; touch "$KEPT_OUT"
+          gzip -c "$KEPT_OUT" > "$RUNNER_TEMP/kept-up/kept.txt.gz"
+          [ ! -f "$RUNNER_TEMP/mbui-test.log" ] || gzip -c "$RUNNER_TEMP/mbui-test.log" > "$RUNNER_TEMP/kept-up/log.txt.gz"
+          echo "$n: $(wc -l < "$KEPT_OUT") frames, $(wc -c < "$KEPT_OUT") bytes, $(wc -c < "$RUNNER_TEMP/kept-up/kept.txt.gz") gzipped" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: always() && env.KEPT_OUT != ''
+        uses: actions/upload-artifact@v4
+        with: { name: "${{ env.KEPT_NAME }}", path: "${{ runner.temp }}/kept-up", retention-days: 7, compression-level: 0 }
       - name: How what moves goes
         if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
         shell: bash
@@ -244,6 +266,7 @@ jobs:
       - env: { GH_TOKEN: "${{ github.token }}" }
         run: bash scripts/rates-said.sh mbui-ci
   macos:
+    if: false # (MEASURING ROUND: no Tester runs here)
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -279,6 +302,7 @@ jobs:
           if-no-files-found: ignore
 
   android:
+    if: false # (MEASURING ROUND: no Tester runs here)
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -423,3 +447,28 @@ jobs:
         with:
           name: android-streams-real
           path: apps/mbui/mbui/out/android/streams-real/
+
+  # MEASURING ROUND, not to merge: mbui's own two runs set side by side (scripts/kept_compare.sh)
+  kept-compare:
+    name: kept rows against rows drawn anew (measuring round)
+    needs: [native]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: "kept-ci-*", path: "${{ runner.temp }}/kept" }
+      - name: Set side by side
+        run: |
+          C=$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/kept_compare.sh
+          cd "$RUNNER_TEMP/kept"
+          for d in kept-ci-*; do echo "$d: $(zcat $d/kept.txt.gz | wc -l) frames"; done | tee runs.txt
+          zcat kept-ci-mbui-kept/kept.txt.gz > all-kept.txt; zcat kept-ci-mbui-none/kept.txt.gz > all-none.txt
+          [ ! -f kept-ci-mbui-none/log.txt.gz ] || zcat kept-ci-mbui-none/log.txt.gz > log-none.txt; touch log-none.txt
+          sh "$C" all-kept.txt all-none.txt log-none.txt > compare.txt || true
+          { echo '```'; cat runs.txt; KEPT_SAID_MOST=50 sh "$C" all-kept.txt all-none.txt log-none.txt | cut -c1-400; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
+          echo "kept $(wc -c < all-kept.txt) bytes, $(gzip -9c all-kept.txt | wc -c) gzipped" | tee -a "$GITHUB_STEP_SUMMARY"
+          mkdir -p out && mv compare.txt runs.txt out/ && gzip -c all-kept.txt > out/all-kept.txt.gz && gzip -c all-none.txt > out/all-none.txt.gz && gzip -c log-none.txt > out/log-none.txt.gz
+      - uses: actions/upload-artifact@v4
+        with: { name: "kept-compare-mbui", path: "${{ runner.temp }}/kept/out", retention-days: 7, compression-level: 0 }
