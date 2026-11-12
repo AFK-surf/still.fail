@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c53c9b785](https://github.com/AFK-surf/still.fail/commit/c53c9b785a4e389ea32dd7ae069242cdc6a8028b) core tests: the test clock takes the steps that wo | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 94.6 | 188.29 |
 | [839854c0e](https://github.com/AFK-surf/still.fail/commit/839854c0edea3b18e32c202c449042027a66ad97) cloud: push to both products' apps from one cloud  | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 95.26 | 175.58 |
 | [04650114d](https://github.com/AFK-surf/still.fail/commit/04650114d5241c9192a7403f6926868b2430afe0) core tests: what answering each way the app asks r | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 95.26 | 175.58 |
 | [1916c2b23](https://github.com/AFK-surf/still.fail/commit/1916c2b23a0070b62aec34280763fa475d0ee580) core: a lock's entries are signed one at a time, t | 1.88 | 2.51 | 10.74 | 29.71 | 37.97 | 26.44 | 49.57 | 94.29 | 180.06 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e02e43d2a](https://github.com/AFK-surf/still.fail/commit/e02e43d2a6b8e36ea270c769eabd1c433f7e2891) Install the Antigravity CLI from the app, by its o | 1.86 | 2.49 | 10.42 | 29.19 | 36.85 | 25.99 | 48.55 | 94.14 | 127.3 |
 | [e0220aca7](https://github.com/AFK-surf/still.fail/commit/e0220aca7876c7a632209df99c9caf77239a495a) mbui: 正在发送 counted from when the message was sent, | 1.86 | 2.49 | 10.42 | 29.19 | 36.85 | 25.99 | 48.55 | 93.6 | 174.89 |
 | [627960c24](https://github.com/AFK-surf/still.fail/commit/627960c243efddcd2134db194779e3f65e8f5dad) core: every lock call and roster write in each way | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.18 | 180.46 |
-| [b310ef4c6](https://github.com/AFK-surf/still.fail/commit/b310ef4c6e94a4c6a2e9b4e18ab67e173a632d9a) mbui: a scripted run's step comes where a device's | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 93.91 | 183.33 |
