@@ -5,6 +5,9 @@
 ///|
 fn init {
   @ui.sizes_steady_known([
+    // (小屏, a new chat's first words, the core answering a frame or more after: 预设's column comes 52 in a frame, at 60
+    // and 120)
+    ("src/sfapp/core_pace_presets_wbtest.mbt", 1),
     // (小屏, a new chat's long first words sent, at both sizes of words: the composer's field steps 31 points in a frame
     // at 2157 ms, between -13 and 26 round it; at 60 and 120 a frame it stops dead from 40 a frame as well, and 预设's
     // column comes 52 in a frame at 1583)
