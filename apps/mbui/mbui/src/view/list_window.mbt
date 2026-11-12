@@ -1160,7 +1160,42 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let window_found : Ref[(Array[K], Int, Int)] = Ref(([], 0, -1))
   // (the slots that hold `need` (what shows) and as much round it as where the column shows from `top`, `vh` tall,
   // asks; a block put by in a slot that leaves them taken out of it first, held by no node (View::park), kept)
-  let slots_cover = fn(all : Places[K], need : Array[K], top : Double, vh : Double) {
+  // (how tall the spacer over the slots and the one under them are: as the blocks over the first slot made and under the
+  // last are counted, put by what makes and lets go the slots and what counts the blocks (spacers_put), not worked out
+  // by a binding of the keys slots are asked for: in an input's change what it set came in its own layout, its slots
+  // still those made before it (let go as the change ends), and the slots were laid out under a spacer as tall as for
+  // the keys asked for (a block 120 lower than the frame at that moment drew it, the row over it pressed, 2026-11-12))
+  let over_slots : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let under_slots : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+  // (the keys whose slots are made now, whatever the slots asked for are, each with how many (one let go after another
+  // made for it))
+  let slots_made : Map[K, Int] = Map([])
+  let spacers_put = fn() {
+    @signals.untracked(fn() {
+      let all = laid.get()
+      let n = all.length()
+      let mut lo = n
+      let mut hi = -1
+      for k, _ in slots_made {
+        match laid_at.get(k) {
+          Some(i) if i < n => {
+            lo = lo.min(i)
+            hi = hi.max(i)
+          }
+          _ => ()
+        }
+      }
+      let foot = counted(all).foot()
+      if hi < 0 {
+        over_slots.set(0.0)
+        under_slots.set(foot)
+      } else {
+        over_slots.set(all.top(lo))
+        under_slots.set(dmax(0.0, foot - (all.top(hi) + all.h(hi))))
+      }
+    })
+  }
+  let slots_set = fn(all : Places[K], need : Array[K], top : Double, vh : Double) {
     let n = all.length()
     if n == 0 {
       if slot_keys.untracked().length() > 0 {
@@ -1289,6 +1324,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     slots_found.val = if a <= b { Some((all.col, all.col.refills, a)) } else { None }
     slot_keys.set(ks)
   }
+  // (the slots that hold `need` and as much round it as where the column shows from `top`, `vh` tall, asks (slots_set),
+  // and the spacers over and under those made as they are counted then)
+  let slots_cover = fn(all : Places[K], need : Array[K], top : Double, vh : Double) {
+    slots_set(all, need, top, vh)
+    spacers_put()
+  }
+  spacers_put()
   seen_before.val = fn(col) {
     @signals.untracked(fn() {
       let out = []
@@ -1934,26 +1976,28 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if from_end {
       held.min_height_share(Is(Some(1.0))).lies_along(Is(Lies::End)) |> ignore
     }
-    // (over the slots, as tall as the blocks over them are counted: on the grid, as their tops are)
+    // (over the slots, as tall as the blocks over them are counted: on the grid, as their tops are; put as the slots are
+    // set and the blocks counted, spacers_put)
     held.box(fn(o) {
       o
-      .height(By(fn() {
-        let all = laid.get()
-        match slot_keys.get().get(0) {
-          Some(k) =>
-            match laid_at.get(k) {
-              Some(i) if i < all.length() => Some(all.top(i))
-              _ => Some(0.0)
-            }
-          None => Some(0.0)
-        }
-      }))
+      .height(By(fn() { Some(over_slots.get()) }))
       .shrink(Is(0.0))
       |> ignore
     })
     |> ignore
     held.each_by(fn() { slot_keys.get() }, fn(k) { k }, way_of~, fn(slot, item) {
       let k = item.untracked()
+      // (made: the spacers round the slots made put again, as when it is let go)
+      slots_made[k] = slots_made.get(k).unwrap_or(0) + 1
+      spacers_put()
+      slot.owns(fn() {
+        match slots_made.get(k) {
+          Some(c) if c > 1 => slots_made[k] = c - 1
+          _ => slots_made.remove(k)
+        }
+        spacers_put()
+      })
+      |> ignore
       let cell = @signals.signal(shown_now.contains(k), same=fn(a, b) { a == b })
       shown[k] = cell
       slot.owns(fn() { if shown.get(k) is Some(c) && physical_equal(c, cell) { shown.remove(k) } }) |> ignore
@@ -2122,21 +2166,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           slot.show(shows, fn(v) { block(v, fn() { k }, fn(v) { make(v, k) }) }, at_once=true)
       }
     })
-    // (under the slots, as tall as the blocks under them are counted)
+    // (under the slots, as tall as the blocks under them are counted: spacers_put)
     held.box(fn(o) {
       o
-      .height(By(fn() {
-        let all = laid.get()
-        let foot = counted(all).foot()
-        match slot_keys.get().last() {
-          Some(k) =>
-            match laid_at.get(k) {
-              Some(i) if i < all.length() => Some(dmax(0.0, foot - (all.top(i) + all.h(i))))
-              _ => Some(foot)
-            }
-          None => Some(foot)
-        }
-      }))
+      .height(By(fn() { Some(under_slots.get()) }))
       .shrink(Is(0.0))
       |> ignore
     })
