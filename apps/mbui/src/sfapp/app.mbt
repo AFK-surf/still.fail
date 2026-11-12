@@ -1239,7 +1239,10 @@ fn first_page_node(v : @view.View, src : Source) -> Unit {
             // (what the first page waits for that its shell's function does not say: followed by nothing, so read
             // as not answered, never told when it is)
             // (one the function comes to say as this change answers what it read, declared in it too (opens_ahead_node):
-            // told again then; one still not declared as the change is told whole, a fault)
+            // told again then; one still not declared as the change is told whole, a fault: under a Tester it stops
+            // the test, on a device it is told as a ui_fault report (src/stillfail/reports.mbt) and the app goes on,
+            // the first page waiting for it as not answered till first_page_ms. A read the first page comes to have
+            // goes in its shell's function, sfapp's home_opens or sfdesk's frame_opens, never here)
             let params = p.copy()
             @signals.after_flush(fn() {
               if @sfbase.read_held_found(src)(n, params) is None {
