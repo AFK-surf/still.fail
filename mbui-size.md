@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [50871c7c6](https://github.com/AFK-surf/still.fail/commit/50871c7c6cfd8ec6c46387786423cadc5331bfff) cloud: move one cloud's accounts into another (#57 | 1.92 | 2.58 | 11.07 | 30.12 | 39.66 | 26.8 | 51.01 | 94.45 | 166.32 |
 | [13fc1ac86](https://github.com/AFK-surf/still.fail/commit/13fc1ac86a9e50ec72f2c5e03e772498843ccfd0) station tests: a mirror's clean asked again while  | 1.92 | 2.58 | 11.07 | 30.12 | 39.65 | 26.79 | 51.01 | 94.83 | 180.5 |
 | [cad8dbdff](https://github.com/AFK-surf/still.fail/commit/cad8dbdffe54ba80ae738cddc0e808e1bcc7e2a2) app: a chat's page made as nodes behind a switch t | 1.92 | 2.58 | 11.07 | 30.12 | 39.65 | 26.44 | 49.57 | 94.6 | 186.12 |
 | [b98a38608](https://github.com/AFK-surf/still.fail/commit/b98a386088b756a26bdfc673e0ff40d7ab660696) cloud: one cloud answering as the other product to | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 94.6 | 188.29 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a70e5f3b4](https://github.com/AFK-surf/still.fail/commit/a70e5f3b4c475a4fefed4042a18942bcdf937494) station: the agents' memory and the machine's own  | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 94.05 | 189.94 |
 | [9f77c9f7d](https://github.com/AFK-surf/still.fail/commit/9f77c9f7dbc853f017a2478b71757bfd0969376f) app: the workspaces' sheet closes as the switch is | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 93.93 | 158.3 |
 | [aa6562ab0](https://github.com/AFK-surf/still.fail/commit/aa6562ab09792f0fa89a6ec430ed89cbc4f539e2) mbui: a page's list's foot at rest: a short list s | 1.86 | 2.49 | 10.43 | 29.2 | 36.86 | 26 | 48.57 | 93.8 | 176.25 |
-| [20027072d](https://github.com/AFK-surf/still.fail/commit/20027072d5fa229a5ba6fee7c204f4c22b55a1c2) mbui: a page's list scrolled with nothing laid out | 1.86 | 2.49 | 10.42 | 29.19 | 36.86 | 26 | 48.55 | 93.95 | 179.41 |
