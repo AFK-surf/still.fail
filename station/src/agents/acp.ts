@@ -20,6 +20,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { LiveFromAcp, acpNamed, chars, type AcpLiveState } from "./live.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, type ProcessSnapshot, parseLine } from "./own-process.ts";
+import { profileModel } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { runtimeLabel, stationTool, unreachable, uuid, type FailureReason, type OpenOptions, type PlanItem, type RuntimeKind, type TurnOutcome } from "./runtime.ts";
 
@@ -404,14 +405,16 @@ export abstract class AcpSession extends OwnProcessSession {
       if (message.id === OPEN) {
         open = true;
         if (typeof message.result?.sessionId === "string") this.sessionId = message.result.sessionId;
+        const configured = this.model;
         if (message.result !== undefined) this.opened(message.result);
+        if (configured !== null) this.model = configured;
       } else if (open && message.method === "session/update" && (this.sessionId === "" || message.params?.sessionId === this.sessionId)) {
         const update = this.normalized(message.params?.update);
         if (turnStep(update)) {
           this.turn.busy = true;
           this.live.feed(update);
           partial.push(update);
-        } else if (this.turn.busy) {
+        } else if (this.turn.busy || update?.sessionUpdate === "usage_update") {
           partial.push(update);
         }
       } else if (this.endsTurn(message.id)) {
@@ -519,6 +522,7 @@ export abstract class AcpDriver<S extends AcpSession> extends OwnProcessDriver<S
 
   protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, _info: RunnerInfo, events: Events): Promise<S> {
     const session = this.session(options, events);
+    session.model = options.model ?? profileModel(options.profile) ?? session.model;
     await session.replay(lines, options.resume);
     session.toolsUrl = options.mcpUrl;
     return session;

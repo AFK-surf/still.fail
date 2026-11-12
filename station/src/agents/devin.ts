@@ -233,7 +233,7 @@ export class DevinSession extends AcpSession {
   /// Each call's counts are said twice (the second time as its agent's): counted once, and written as it comes so a
   /// long turn's spend and context are live and survive a handover or crash.
   protected updated(update: Json) {
-    if (!this.turn.busy || update?.sessionUpdate !== "usage_update") return;
+    if (update?.sessionUpdate !== "usage_update") return;
     const counts = callOf(update);
     const said = JSON.stringify(counts);
     const run = this.owner !== null ? this.owner.slice(this.owner.indexOf(":") + 1) : uuid();

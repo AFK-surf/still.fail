@@ -130,23 +130,34 @@ test("models are read without a turn, the station's tools or a transcript", asyn
   assert.equal(readFileSync(dump, "utf8").includes(options.mcpToken), false);
 });
 
-test("a handover keeps the running turn, ended once by the next station", async () => {
-  const { options, events, driver } = setup();
-  const s = await driver.open(options, (e) => events.push(e));
-  await s.prompt("hold");
-  await until(() => events.some((e) => e.type === "live" && e.event.kind === "delta" && e.event.text === "first "));
-  const snapshot = s.snapshot();
-  s.detach();
-  await allLeft();
-  const next = new AgyDriver({ data });
-  drivers.push(next);
-  const later: RuntimeEvent[] = [];
-  const adopted = await next.adopt(options, snapshot, (e) => later.push(e));
-  await adopted.abort();
-  await until(() => ended(later).length === 1);
-  assert.equal(ended(events).length, 0);
-  await adopted.dispose();
-});
+for (const crashed of [false, true]) {
+  test(`taking up a running session ${crashed ? "after a crash" : "from a handover"} keeps its turn, configured model and catalog`, async () => {
+    const { options, events, driver } = setup();
+    const configured = { ...options, model: "gemini-3.1-pro" };
+    const s = await driver.open(configured, (e) => events.push(e));
+    await s.prompt("hold");
+    await until(() => events.some((e) => e.type === "live" && e.event.kind === "delta" && e.event.text === "first "));
+    const snapshot = crashed ? null : s.snapshot();
+    s.detach();
+    await allLeft();
+    const next = new AgyDriver({ data });
+    drivers.push(next);
+    const later: RuntimeEvent[] = [];
+    const adopted = await next.adopt(configured, snapshot, (e) => later.push(e));
+    assert.equal(adopted.model, "gemini-3.1-pro");
+    await adopted.abort();
+    await until(() => ended(later).length === 1);
+    assert.equal(ended(events).length, 0);
+    await adopted.prompt("after");
+    await until(() => ended(later).length === 2);
+    const path = transcriptPath("agy", options.profile.home, adopted.id())!;
+    const calls = callsOf("agy", readFileSync(path, "utf8"), false, { model: null, codexId: null });
+    assert.equal(calls.at(-1)?.model, "gemini-3.1-pro");
+    assert.equal(adopted.retune!({ ...options, model: "not-offered" }), false);
+    assert.equal(adopted.retune!({ ...options, model: "gemini-3.5-flash" }), true);
+    await adopted.dispose();
+  });
+}
 
 test("which profiles run it, and none of the machine's Google accounts", (t) => {
   const { options } = setup();

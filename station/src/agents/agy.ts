@@ -177,6 +177,16 @@ export class AgySession extends AcpSession {
     if (typeof current === "string" && current !== "") this.model = current;
   }
 
+  protected kept() {
+    return { availableModels: this.availableModels, context: this.context };
+  }
+
+  protected taken(snapshot: Json) {
+    this.availableModels = Array.isArray(snapshot.availableModels) ? snapshot.availableModels.filter((m: unknown): m is string => typeof m === "string") : [];
+    const c = snapshot.context;
+    if (c && typeof c === "object") this.context = { used: typeof c.used === "number" ? c.used : 0, size: typeof c.size === "number" ? c.size : 0 };
+  }
+
   protected updated(update: Json) {
     if (update?.sessionUpdate !== "usage_update") return;
     const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
