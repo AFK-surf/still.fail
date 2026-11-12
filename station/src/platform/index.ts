@@ -163,6 +163,9 @@ export type Platform = {
   claudeInstall: How;
   /// How the Devin CLI is installed where it is not (its own installer, into ~/.local/bin).
   devinInstall: How;
+  /// How the Antigravity CLI is installed where it is not (its own installer: its binary into ~/.local/bin on macOS and
+  /// Linux, %LOCALAPPDATA%\\agy\\bin on Windows; it writes no shell profile).
+  agyInstall: How;
   /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
   installerExt: "sh" | "ps1";
   /// Starts `script` (the installer the running release carries, scripts/release-sign.ts) apart from the station, run

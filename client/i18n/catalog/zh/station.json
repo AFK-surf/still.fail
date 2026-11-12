@@ -654,6 +654,5 @@
   "station.failure.denied": "模型服务拒绝了请求",
   "station.notice.blocked": "模型服务的防火墙拦截了此 station 的网络出口，换一个出口后重试",
   "station.failure.blocked": "网络出口被模型服务拦截",
-  "station.updates.agyExternal": "请先在这台机器上按 antigravity.google/cli 的说明安装 Antigravity CLI，之后由 station 负责更新。",
   "station.profile.agyFailed": "无法启动 Antigravity CLI：{error}"
 }
