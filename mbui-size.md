@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c9847417a](https://github.com/AFK-surf/still.fail/commit/c9847417a98223dfe0fc08b1854e36b6ca51a911) core: a document written reads none of itself back | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.47 | 157.59 |
 | [5ea6ac79f](https://github.com/AFK-surf/still.fail/commit/5ea6ac79f724b7a7404ef70355f84a9d1cbd3b11) mbui: measure only scroll_held from its top in siz | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.54 | 165.21 |
 | [604538288](https://github.com/AFK-surf/still.fail/commit/6045382883fe5cc156a9b957eac3a0c13314df1d) core tests: what each change the sync writes makes | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.54 | 151.85 |
 | [f55d44fbd](https://github.com/AFK-surf/still.fail/commit/f55d44fbd3bb9aa39c30c521b8547a12f64af8e5) locks: a change no station took is pending, said s | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.44 | 195.46 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [4c4afd5c0](https://github.com/AFK-surf/still.fail/commit/4c4afd5c0c57c40f35e8f258924d0d499c1d7f7b) app fixture: a chat's outline is of all its device | 1.88 | 2.51 | 10.74 | 29.7 | 37.97 | 26.43 | 49.57 | 94.88 | 187.13 |
 | [568c44c5d](https://github.com/AFK-surf/still.fail/commit/568c44c5dfe2236d6718e478fe4f8b62f8b3be4c) app: what changed in Home's chats' list while it r | 1.88 | 2.51 | 10.74 | 29.69 | 37.98 | 26.42 | 49.57 | 94.7 | 191.35 |
 | [d1a62d3cd](https://github.com/AFK-surf/still.fail/commit/d1a62d3cd8eee3463b2bb4006a1bf2f74f899662) mbui: at_cause says where key_taking held in turn  | 1.88 | 2.51 | 10.74 | 29.7 | 37.97 | 26.42 | 49.57 | 94.27 | 172.83 |
-| [97e43caca](https://github.com/AFK-surf/still.fail/commit/97e43cacab55b1c942f136c91f094f1fb6fb9c4e) mbui: the structures one change marks are committe | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.67 | 176.55 |
