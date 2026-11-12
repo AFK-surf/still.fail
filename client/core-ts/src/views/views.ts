@@ -2023,6 +2023,9 @@ export class Views implements Owner {
               deepFreeze(made);
               if (keeps) this.#keepMade(s.address, raw, key, made);
             }
+            // (one read as kept is its JSON: when it was pinned, as #chatRow says of one it makes, or a list made again
+            // of it puts it among its day's)
+            if (made !== null && typeof shown.pinned === "number") pinnedAt.set(made, shown.pinned);
             if (keepable) this.#rowsMade.set(shown, { sig: own(), list: sig, row: made });
             return made;
           };

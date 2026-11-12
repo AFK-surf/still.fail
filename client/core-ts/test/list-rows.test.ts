@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { textKey } from "../src/conform.ts";
 import { dbName, holds } from "../src/data.ts";
-import { holdLanguage, setCurrent } from "../src/i18n.ts";
+import { holdLanguage, setCurrent, t as words } from "../src/i18n.ts";
 import type { Topic } from "../src/protocol.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { LIST_ROW_MAKING } from "../src/views/views.ts";
@@ -302,4 +302,37 @@ test("rows_are_made_as_list_row_making_says", async () => {
   }
   const digest = textKey(out.join("\n"));
   assert.equal(digest, MADE[LIST_ROW_MAKING], `rows are made otherwise than LIST_ROW_MAKING ${LIST_ROW_MAKING} says (${digest}): raise it and write the digest`);
+});
+
+test("a_pinned_chat_whose_row_was_kept_stays_with_the_pinned_as_the_list_is_made_again", async () => {
+  // A row read as kept beside its record is made of its JSON (one the list's first answer did not read, #chats
+  // `keptRow`): as the list was made again of rows it made before (a chat pinned or archived here: not quiet), a pinned
+  // one's row was taken as it was read, no longer known pinned, and went down among its day's (2026-11-12).
+  const { host, base } = await written();
+  await listAnew(host, base);
+  const t = setup({ all: true, host });
+  // The viewer's own first (小屏's 我参与的): the rows of the others, pinned or not, read of the database as the whole
+  // list is shown after it, not by its first answer.
+  const MINE: Topic = { ...LIST, mine: true };
+  const m = ui();
+  t.window(MINE, WINDOW);
+  t.subscribe(2, MINE);
+  for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
+  await t.read(m, 2);
+  const u = ui();
+  t.window(LIST, WINDOW);
+  t.subscribe(1, LIST);
+  await t.read(u, 1);
+  // (the pinned above the days, as their label says: a day's `pinned` goes no further than the core)
+  const PINNED = words("core-views.pinned");
+  const pinnedOf = (value: J): string[] => (value.days.find((d: J) => d.label === PINNED)?.items ?? []).map((r: J) => `${r.station} ${r.id}`);
+  const pinned = pinnedOf(u.value);
+  assert.ok(pinned.length > 1, "some pinned");
+  // Another pinned here (as `chat.pin` does, views/calls.ts): its station's rows no longer quiet, the list is made again.
+  const other = rowsOf(u.value).find((r: J) => !pinned.includes(`${r.station} ${r.id}`) && typeof r.session === "string")!;
+  t.views.local.changing(other.station, typeof other.thread === "number" ? other.thread : null, other.session, { pinned: t.host.nowMs() }, null);
+  await t.read(u, 1);
+  t.store.runner.shutdown();
+  assert.deepEqual(pinnedOf(u.value), [`${other.station} ${other.id}`, ...pinned], "the one pinned here first, the pinned before it after it");
+  for (const d of u.value.days) if (d.label !== PINNED) assert.ok(d.items.every((r: J) => r.pinned !== true), `no pinned row in ${d.label}`);
 });
