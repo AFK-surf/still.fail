@@ -7,7 +7,7 @@
 // (`rig.proof`); each station checks it against the lock it pinned.
 import type { DatabaseSync } from "node:sqlite";
 import { type AddBody, type Signed, wellFormed } from "../../../client/core-ts/src/rig-form.ts";
-import { type Entry, type LockState, entryHash, personFold, rank, signer } from "../cloud/lock.ts";
+import { type Entry, type LockState, entryHash, personFold, rank, signer, stateWord } from "../cloud/lock.ts";
 import type { Cloud, Rig } from "../cloud/state.ts";
 import { signatureHolds } from "../rig/grants.ts";
 
@@ -91,10 +91,11 @@ export class RigAdds {
     if (lock.stations.has(rig.id)) return true;
     const key = `${ws}\0${rig.id}`;
     const was = this.#checked.get(key);
-    // (a person's own lock moving on is heard as the workspace's does: bound there, its head is what admits them)
+    // (a person's own lock moving on is heard as the workspace's does: bound there, its head is what admits them; a state
+    // in force where the chain moved says its word, cloud/lock.ts `stateWord`)
     // (its head's hash: the chain gone by moves to another branch of the same length too, cloud/log-keep.ts)
     const own = lock.persons.get(rig.owner) === undefined ? null : this.#chain(lock.persons.get(rig.owner)!);
-    const head = `${lock.head}\0${rig.owner}\0${own === null || own.length === 0 ? "" : `${own.length}:${entryHash(own.at(-1) as Entry)}`}`;
+    const head = `${stateWord(lock)}\0${rig.owner}\0${own === null || own.length === 0 ? "" : `${own.length}:${entryHash(own.at(-1) as Entry)}`}`;
     if (was !== undefined && was.head === head) return was.holds;
     const signed = this.get(ws, rig.id);
     const holds = signed !== null && addRefusal(signed, ws, rig, lock, (genesis, sub) => this.#keys(genesis, sub), this.#now()) === null;

@@ -203,9 +203,9 @@ export function planeTeller(s: CloudState, send: (frame: unknown) => void, open:
   const tell = () => {
     for (const m of s.memberships()) {
       const ws = m.home ? null : m.workspace;
-      const seq = s.locked(ws)?.state?.seq;
+      const seq = s.chain(ws)?.state?.seq;
       const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
-      const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
+      const was = told.get(m.workspace) ?? (s.chain(ws)?.state?.seq ?? -1);
       if (!told.has(m.workspace)) told.set(m.workspace, was);
       if (seq === undefined || !open() || plane === null) continue;
       // (a plane whose chain parted from the one gone by here, this station's having moved to another branch since the
@@ -280,11 +280,11 @@ function applyFrame(s: CloudState, body: any, send: (frame: unknown) => unknown)
     // be left behind and the workspace taken as the plane says.
     const was = s.state;
     const moved = was !== null && typeof body.workspace === "string" && body.workspace !== was.workspace;
-    const keptThere = moved && s.locked() === null && (s.locked(body.workspace) !== null || s.pendingLock(body.workspace) !== null);
+    const keptThere = moved && s.chain() === null && (s.chain(body.workspace) !== null || s.pendingLock(body.workspace) !== null);
     const took = moved
       && (keptThere || ((was.joined ?? []).some((j) => j.workspace === body.workspace) && !joinedOf(body.workspaces).some((j) => j.workspace === was.workspace)))
       && s.succeed(body.workspace);
-    const locked = s.locked() !== null;
+    const locked = s.chain() !== null;
     if (locked && s.state && ((typeof body.workspace === "string" && body.workspace !== s.state.workspace && !took) || (typeof body.origin === "string" && body.origin !== s.state.origin))) {
       log.warn("lock", "the control plane moves this station; the workspace lock keeps it where it is", { workspace: body.workspace, origin: body.origin });
     }
@@ -392,7 +392,7 @@ function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, w
   const hashes = (s.planeLockHashes ??= new Map());
   if (theirs >= 0 && typeof head?.hash === "string") hashes.set(ws ?? "", head.hash);
   else hashes.delete(ws ?? "");
-  const mine = s.locked(ws)?.state?.seq;
+  const mine = s.chain(ws)?.state?.seq;
   if (mine === undefined) {
     const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
     // (a joined workspace that turned its lock on after this station joined it, this station not in it then: its lock,
@@ -402,7 +402,7 @@ function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, w
   }
   // The plane's lock another than the one pinned here: turned off and on again while this station was not there to hear
   // it. Asked for the rest of its own (the plane keeps a chain turned off): its `disable` lets it go.
-  const genesis = s.locked(ws)?.state?.genesis;
+  const genesis = s.chain(ws)?.state?.genesis;
   if (head !== null && typeof head === "object" && typeof head.genesis === "string" && genesis !== undefined && head.genesis !== genesis) send({ type: "lock.get", after: mine, genesis, ...which });
   else if (!planeOnChain(s, ws, theirs)) planeParted(s, ws, send);
   else if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
@@ -445,7 +445,7 @@ function planeParted(s: CloudState, ws: string | null, send: (frame: unknown) =>
   let at = kept.get(hash);
   while (at !== undefined && !on.has(hashOf(at))) at = at.prev === null ? undefined : kept.get(at.prev);
   const entries = at !== undefined ? chain.filter((e) => e.seq > at!.seq).slice(0, PUT_MOST) : chain.slice(-PUT_MOST);
-  log.warn("lock", "the control plane's copy of the lock parted from the chain this station goes by; it is given this station's", { plane: hash.slice(0, 12), seq: s.locked(ws)?.state?.seq, from: entries[0]?.seq, ...which });
+  log.warn("lock", "the control plane's copy of the lock parted from the chain this station goes by; it is given this station's", { plane: hash.slice(0, 12), seq: s.chain(ws)?.state?.seq, from: entries[0]?.seq, ...which });
   if (entries.length > 0) send({ type: "lock.put", entries, keep: true, ...which });
 }
 
@@ -455,7 +455,7 @@ function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null, 
   const entries = raw.map(asEntry);
   if (entries.some((e) => e === null)) return log.warn("lock", "the control plane sent a malformed lock entry");
   try {
-    if (s.locked(ws) === null) {
+    if (s.chain(ws) === null) {
       const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
       // A joined workspace that turned its lock on after this station joined it: it takes none of its members (leftOut
       // `unpinned`) until it pins a lock, which no device of it can bring (it refuses them all). Its lock as the plane
@@ -482,7 +482,7 @@ function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null, 
       } finally {
         // What it brought did not bring its head here: its chain parted below the one gone by here.
         const hash = s.planeLockHashes?.get(ws ?? "");
-        if (hash !== undefined && s.locked(ws) !== null && !s.lockKept(ws).some((e) => hashOf(e) === hash)) planeParted(s, ws, send);
+        if (hash !== undefined && s.chain(ws) !== null && !s.lockKept(ws).some((e) => hashOf(e) === hash)) planeParted(s, ws, send);
       }
     }
   } catch (e) {

@@ -8,8 +8,11 @@ import { wall } from "../ops/fibers.ts";
 import { readJsonFile } from "../ops/json-file.ts";
 import { log } from "../ops/log.ts";
 import { setStationCloud } from "../ops/i18n.ts";
-import { type Entry, type LockState, apply, asEntry, entryHash, fold, genesis, lockChain } from "./lock.ts";
+import { createHash } from "node:crypto";
+import { type Entry, type LockState, apply, asEntry, canonical, entryHash, fold, genesis, lockChain, sayWord, state4, wsTag } from "./lock.ts";
+import { type BodyRefused, LockBodies } from "./lock-bodies.ts";
 import { type Kept, type LogRules, type OffChain, hashOf, keep, rechoose } from "./log-keep.ts";
+import { PersonChains } from "../mesh/person-chains.ts";
 import { type Provider, providerOf } from "./provider.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
@@ -110,6 +113,9 @@ export const joinedLockPath = (data: string, ws: string) => join(meshDir(data), 
 /// and where what a device brings later makes the chain the rules choose one that is not turned off, it is on again here
 /// (Cloud.keepLock), as it is at the stations that took the other first.
 const turnedOffPath = (path: string) => `${path}.off`;
+/// How far ahead of this station's clock a web device's `at` may be and still count (rules/src/lock/state4.mbt
+/// `web_skew_secs`).
+const WEB_SKEW = 600;
 /// How many locks turned off keep what was kept of them beside.
 const OFF_LOGS = 4;
 function readOff(path: string): { genesis: string[]; logs: Record<string, Kept> } {
@@ -134,6 +140,39 @@ function writeOff(path: string, off: { genesis: string[]; logs: Record<string, K
   writePrivate(turnedOffPath(path), JSON.stringify({ genesis, ...(kept.length > 0 ? { logs: Object.fromEntries(kept.map((h) => [h, off.logs[h]])) } : {}) }));
 }
 export const joinedPendingPath = (data: string, ws: string) => join(meshDir(data), "locks", `${fileOf(ws)}.pending.json`);
+/// The bodies of a workspace's statements kept here (cloud/lock-bodies.ts), beside its lock, by the workspace's id (the
+/// home one's too: it stays where it is when a joined workspace takes over as home).
+export const bodiesPath = (data: string, ws: string) => join(meshDir(data), "locks", `${fileOf(ws)}.bodies.json`);
+
+/// What a device is told where a workspace's chain moved to its people's logs and this station has not the root's log
+/// or its `open` in force yet (Cloud `locked`'s `waiting`): nobody is let in until a trusted device or another station
+/// of the workspace brings them, the next one that does mending it.
+export const NOT_GIVEN = "this station has not yet been given this workspace's settings by a trusted device: connect from a device of the workspace's owner, or wait for another of its stations to bring them";
+
+/// The person logs of each Cloud (mesh/person-chains.ts), made on first use: a Cloud made without its constructor, as
+/// tests make one, has its own too.
+const personChains = new WeakMap<object, PersonChains>();
+export function personChainsOf(cloud: Cloud): PersonChains {
+  let c = personChains.get(cloud);
+  if (c === undefined) {
+    personChains.set(cloud, (c = new PersonChains(cloud.data === undefined ? null : join(meshDir(cloud.data), "person-chains.json"))));
+    if (cloud instanceof Cloud) cloud.heardPersons(c);
+  }
+  return c;
+}
+
+/// A workspace's state where its chain moved, as made last (Cloud `forceOf`): of which kept lock, which logs and
+/// bodies, good from `from` until `until` by this station's clock (a web device counting or run out between).
+type InForce = {
+  lock: KeptLock;
+  ver: string;
+  from: number;
+  until: number;
+  on: "on" | "off" | "not on" | "no root";
+  out: { state: LockState; waiting?: true };
+  needs: Set<string>;
+  word: string;
+};
 
 /// A pinned lock as kept: its active chain (`entries`, from its genesis), the entries the rules take that are off it
 /// (`aside`), and the state of the chain (null: its file is broken, nobody is admitted).
@@ -391,6 +430,13 @@ export class Cloud {
   private planePeers: any[] | null = null;
   private planeGateways: string[] | undefined;
   private listeners = new Set<(s: CloudState | null) => void>();
+  /// The bodies kept of each workspace's statements, by its id (read on first use).
+  private lockBodies = new Map<string, LockBodies>();
+  /// Each moved workspace's state as made last, by its id, and the word of each as last told.
+  private inForce = new Map<string, InForce>();
+  private toldWords = new Map<string, string>();
+  /// Counts each change of the person logs kept.
+  private personsVer = 0;
   private writing = false;
   private watcher: FSWatcher | undefined;
   private locksWatcher: FSWatcher | undefined;
@@ -496,11 +542,179 @@ export class Cloud {
   }
 
   /// The lock in force in `ws` (the home one when none is named): null when none is pinned (or it was turned off). A
-  /// broken lock file is in force and admits nobody (`state` null).
-  locked(ws?: string | null): { state: LockState | null } | null {
+  /// broken lock file is in force and admits nobody (`state` null). Where its chain moved (`moved {root}` on the active
+  /// chain, whichever branch the fork choice leaves there: on another, the folded chain is the state again), the state
+  /// its people's logs and the bodies kept say by this station's clock (`state4`): off as a lock turned off is, nothing
+  /// let go; without the root's log or an `open` in force (`waiting`), a state that names nobody, never the folded
+  /// chain's or the control plane's word. What reads the chain itself (its seq, head, genesis: the sync, the cloud's
+  /// copy) reads `chain`.
+  locked(ws?: string | null): { state: LockState | null; waiting?: true } | null {
+    const l = this.lockOf(ws);
+    if (l === null || l.state?.disabled) return null;
+    const root = l.state?.moved;
+    if (root === undefined) return l;
+    const f = this.forceOf(ws ?? null, l, root);
+    return f.on === "off" ? null : f.out;
+  }
+
+  /// The workspace lock's own chain pinned in `ws` as kept (its fold: seq, head and genesis are the chain's), whether
+  /// it moved or not: null when none is pinned (or it was turned off).
+  chain(ws?: string | null): { state: LockState | null } | null {
     const l = this.lockOf(ws);
     if (l === null || l.state?.disabled) return null;
     return l;
+  }
+
+  /// The id of workspace `ws` (the home one when null).
+  private idOf(ws: string | null | undefined): string {
+    return this.isHome(ws) ? (this.state?.workspace ?? "") : ws!;
+  }
+
+  /// The bodies of `ws`'s statements kept here (cloud/lock-bodies.ts).
+  bodies(ws: string | null): LockBodies {
+    const id = this.idOf(ws);
+    const bodies = (this.lockBodies ??= new Map());
+    let b = bodies.get(id);
+    if (b === undefined) bodies.set(id, (b = new LockBodies(this.data === undefined || id === "" ? null : bodiesPath(this.data, id))));
+    return b;
+  }
+
+  /// Bodies of `ws`'s statements given by a device or a station of it, each taken where the rules find an entry kept
+  /// here that commits to it under the workspace's tag (a lock pinned there: else none); each not, and why. Whatever
+  /// is made of them is made again and told.
+  takeBodies(ws: string | null, bodies: unknown[]): { taken: number; refused: BodyRefused[] } {
+    if (this.lockOf(ws) === null) return { taken: 0, refused: bodies.map(() => ({ hash: null, why: "it names no workspace this keeper keeps" })) };
+    const chains = personChainsOf(this);
+    this.writing = true;
+    let t: { taken: number; refused: BodyRefused[] };
+    try {
+      t = this.bodies(ws).take(this.idOf(ws), bodies, (h) => chains.commitsTo(h));
+    } finally {
+      wall.after(100, () => (this.writing = false));
+    }
+    if (t.taken > 0) this.forceChanged();
+    return t;
+  }
+
+  /// The person logs `ws`'s state is made of where its chain moved (the root's, each a statement binds a member by,
+  /// each holding an entry of its tag): none where it did not.
+  needs(ws: string | null): ReadonlySet<string> {
+    const l = this.lockOf(ws);
+    const root = l?.state?.disabled ? undefined : l?.state?.moved;
+    if (l === null || root === undefined) return new Set();
+    return this.forceOf(ws, l, root).needs;
+  }
+
+  /// The person logs a device of `ws` is given to work out its state itself (GET /lock/logs): those it is made of where
+  /// its chain moved (`needs`), else each holding a statement of the workspace; none without a lock pinned there.
+  logsOf(ws: string | null): string[] {
+    const l = this.lockOf(ws);
+    if (l === null || l.state === null) return [];
+    const needed = this.needs(ws);
+    if (needed.size > 0) return [...needed];
+    const id = this.idOf(ws);
+    return personChainsOf(this).every().filter(([g, es]) => {
+      const t = wsTag(id, g);
+      return es.some((e) => e.kind === "ws" && (e.body as { t?: unknown } | null)?.t === t);
+    }).map(([g]) => g);
+  }
+
+  /// The statements of `ws` on the active chain of a log kept here whose body is not kept, by the body's hash (what a
+  /// commitment carries as `h`; the rules' `lacking` names their entries): what this station asks the others for, and
+  /// tells devices, so the one that signed one brings it again.
+  lacking(ws: string | null): string[] {
+    if (this.lockOf(ws) === null) return [];
+    const id = this.idOf(ws), bodies = this.bodies(ws), out: string[] = [];
+    for (const [g, es] of personChainsOf(this).every()) {
+      const t = wsTag(id, g);
+      for (const e of es) {
+        const b = e.body as { t?: unknown; h?: unknown } | null;
+        if (e.kind === "ws" && b?.t === t && typeof b.h === "string" && !bodies.has(b.h)) out.push(b.h);
+      }
+    }
+    return [...new Set(out)];
+  }
+
+  /// A word that changes whenever the state in force in `ws` does where its chain moved ("" where it did not): told
+  /// to devices with the chain's head (mesh/lock-events.ts), so they read again as a member's log or a body comes.
+  forceWord(ws: string | null): string {
+    const l = this.lockOf(ws);
+    const root = l?.state?.disabled ? undefined : l?.state?.moved;
+    if (l === null || root === undefined) return "";
+    return this.forceOf(ws, l, root).word;
+  }
+
+  /// Told by the person logs as they are made (personChainsOf): a change of any log makes every moved state again, and
+  /// what each of them now says, said; the logs a state needs count as heard in its workspace.
+  heardPersons(chains: PersonChains) {
+    chains.needs = (ws) => this.needs(this.isHome(ws) ? null : ws);
+    chains.watch(() => {
+      this.personsVer = (this.personsVer ?? 0) + 1;
+      this.forceChanged();
+    });
+  }
+
+  /// Each moved workspace's state made again where what it is made of changed; where what one says did, told (the
+  /// home one's stations through the roster, as a lock's change is).
+  private forceChanged() {
+    let told = false, home = false;
+    const locks: [string | null, KeptLock | null][] = [[null, this.lock], ...[...(this.joinedLocks ?? new Map())].map(([ws, l]) => [ws, l] as [string | null, KeptLock | null])];
+    for (const [ws, l] of locks) {
+      const root = l?.state?.disabled ? undefined : l?.state?.moved;
+      if (l === null || l === undefined || root === undefined) continue;
+      const id = this.idOf(ws);
+      const f = this.forceOf(ws, l, root);
+      const word = `${f.on}:${f.word}`;
+      if (this.toldWords.get(id) === word) continue;
+      this.toldWords.set(id, word);
+      told = true;
+      if (ws === null) home = true;
+    }
+    if (home) this.refilter();
+    else if (told) this.tell();
+  }
+
+  /// `ws`'s state where its chain `l` moved to the log of genesis `root`: made again when the chain, a log kept or a
+  /// body changed, or this station's clock passed the next web device's `at - SKEW` or `exp` (no timer: the next one
+  /// to ask makes it).
+  private forceOf(ws: string | null, l: KeptLock, root: string): InForce {
+    const id = this.idOf(ws);
+    const now = nowSecs();
+    const bodies = this.bodies(ws);
+    const ver = `${this.personsVer}:${bodies.version}`;
+    const forces = (this.inForce ??= new Map());
+    const was = forces.get(id);
+    if (was !== undefined && was.lock === l && was.ver === ver && now >= was.from && now < was.until) return was;
+    const logs = personChainsOf(this).every();
+    const kept = [...bodies.all().values()];
+    const s = state4(id, root, logs.map(([, es]) => es), kept, now);
+    const out = s.on === "on" || s.on === "off" ? { state: s.state } : { state: state4(id, root, [], [], now).state, waiting: true as const };
+    const st = out.state;
+    const word = createHash("sha256").update(canonical({
+      on: s.on, origins: st.origins, rp_id: st.rp_id, cloud_keys: st.cloud_keys ?? null,
+      members: [...st.members].sort(([a], [b]) => (a < b ? -1 : 1)), persons: [...st.persons].sort(([a], [b]) => (a < b ? -1 : 1)),
+      devices: [...st.devices.keys()].sort(), stations: [...st.stations.keys()].sort(),
+    })).digest("hex");
+    sayWord(st, word);
+    // (what the state is made of: the root's log, each one a member is bound by, each holding a statement of this
+    // workspace)
+    const needs = new Set<string>([root, ...s.state.persons.values()]);
+    let from = -Infinity, until = Infinity;
+    for (const [g, es] of logs) {
+      const t = wsTag(id, g);
+      for (const e of es) {
+        if (e.kind === "ws" && (e.body as { t?: unknown } | null)?.t === t) needs.add(g);
+        if (e.kind !== "web") continue;
+        for (const x of [e.at - WEB_SKEW, Number((e.body as { exp?: unknown } | null)?.exp)]) {
+          if (!Number.isFinite(x)) continue;
+          if (x <= now) from = Math.max(from, x);
+          else until = Math.min(until, x);
+        }
+      }
+    }
+    const f: InForce = { lock: l, ver, from, until, on: s.on, out, needs, word };
+    forces.set(id, f);
+    return f;
   }
 
   /// The credential keys that count in `ws`: its lock's once pinned, else the control plane's.
@@ -533,7 +747,7 @@ export class Cloud {
   /// forgotten. Refused (false) while the home one is locked and that workspace's lock is not pinned here: the station
   /// stays where its lock keeps it.
   succeed(ws: string): boolean {
-    if (this.locked() !== null && this.locked(ws) === null) return false;
+    if (this.chain() !== null && this.chain(ws) === null) return false;
     this.writing = true;
     try {
       for (const [from, to] of [[joinedLockPath(this.data, ws), lockPath(this.data)], [joinedPendingPath(this.data, ws), pendingLockPath(this.data)]] as const) {

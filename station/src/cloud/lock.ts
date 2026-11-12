@@ -53,6 +53,9 @@ export type LockState = {
   /// The person's own lock each member bound themselves to (`person` entries): its genesis's hash.
   persons: Map<string, string>;
   disabled: boolean;
+  /// Where the chain went (`moved {root}`, its owner's): the genesis hash of the person log the workspace is said in
+  /// from then on (state4). Absent: it did not.
+  moved?: string;
 };
 
 export const ROLES: Role[] = ["viewer", "member", "admin", "owner"];
@@ -320,6 +323,45 @@ export function admitPerson(s: LockState, who: { sub: string; endpoint: string; 
   if ("refusal" in out) throw new LockRefusal(out.refusal);
   return out;
 }
+
+/// A workspace said in its people's own logs (rules/src/lock/state4.mbt), once its chain moved there: `on` (the root's
+/// newest of `open` and `off` in force is an `open`), `off`, `not on` (neither in force here yet), `no root` (the root's
+/// log not among those given); `state` in the shape of a folded chain's, so that `admit` and `admitPerson` take it.
+/// `genesis`, `head` and `seq` are the root log's: no place in a workspace chain. `chains`: each person log's active
+/// chain, genesis first; `bodies`: the statements' bodies kept; `now`: this station's clock (web devices).
+export function state4(ws: string, root: string, chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState } {
+  const out = rules.state4_js(ws, root, chains, bodies, now, crypto);
+  return { on: out.on, state: taken(out) };
+}
+
+/// Workspace `ws`'s list as the rules work it out of the same (rules/src/lock/roster.mbt): what is in force (`in_force`,
+/// each `{entry, body}` hash), the entries of its tag whose body is not kept (`lacking`), and the rest `roster_js` says.
+export function roster4(ws: string, root: string, chains: unknown[][], bodies: unknown[]): { in_force: { entry: string; body: string }[]; lacking: string[]; members: { sub: string; lock: string }[] } {
+  const out = rules.roster_js(ws, root, chains, bodies, crypto);
+  if ("error" in out) throw new Error(out.error);
+  return out;
+}
+
+/// Workspace `ws`'s tag in the person log of genesis hash `genesis` (what its commitments there carry as `t`).
+export const wsTag = (ws: string, genesis: string): string => rules.ws_tag_js(ws, genesis, crypto);
+
+/// A statement's body's hash (what its commitment carries as `h`); null where it has none.
+export function bodyHash(body: unknown): string | null {
+  const h: string = rules.body_hash_js(body, crypto);
+  return h.startsWith("!") ? null : h;
+}
+
+/// Why a keeper of workspace `ws` does not take `body`, or null: `commits` every `ws` entry it keeps that commits to the
+/// body's hash, each with its log from the genesis to that entry (rules/src/lock/body.mbt `body_refusal`).
+export function bodyRefusal(ws: string, body: unknown, commits: { genesis: string; chain: Entry[] }[]): string | null {
+  return rules.body_refusal_js(ws, body, commits, crypto);
+}
+
+/// What changes whenever what a state says may have: a folded chain's head, or the word a state in force was made
+/// with (`stateWord`), whose root log's head does not move with the bodies or the other logs.
+const words = new WeakMap<LockState, string>();
+export const stateWord = (s: LockState): string => words.get(s) ?? s.head;
+export const sayWord = (s: LockState, word: string): void => void words.set(s, word);
 
 /// A refusal by the lock (the client asks to be confirmed), not a bad credential.
 export class LockRefusal extends Error {

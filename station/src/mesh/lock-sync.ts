@@ -33,7 +33,7 @@ export function answerLock(cloud: Cloud, request: any, workspace: string | null 
   // A person's own lock, as heard in the workspace (person-sync.ts).
   if (typeof request?.method === "string" && request.method.startsWith("lock.person.")) return answerPerson(personChainsOf(cloud), request, workspace ?? cloud.home() ?? "");
   const ws = workspace && workspace !== cloud.home() ? workspace : null;
-  const locked = cloud.locked(ws);
+  const locked = cloud.chain(ws);
   const seq = locked?.state?.seq ?? -1;
   switch (request?.method) {
     case "lock.head":
@@ -50,7 +50,7 @@ export function answerLock(cloud: Cloud, request: any, workspace: string | null 
     case "lock.put": {
       // Only more of the lock this station pinned: a peer never pins one here.
       if (locked === null) throw new Error("this station has no workspace lock");
-      return { taken: cloud.takeLock(entriesOf(request.entries), ws, true), seq: cloud.locked(ws)?.state?.seq ?? seq };
+      return { taken: cloud.takeLock(entriesOf(request.entries), ws, true), seq: cloud.chain(ws)?.state?.seq ?? seq };
     }
     case "lock.offer": {
       // (none pinned: only one turned off here, whose `disable` may have lost its place, Cloud.keepLock)
@@ -60,14 +60,14 @@ export function answerLock(cloud: Cloud, request: any, workspace: string | null 
         if (off === null || entries.length === 0 || entries[0]!.prev === null) throw new Error("this station has no workspace lock");
         try {
           const t = cloud.keepLock([off.entries[0]!, ...entries], ws, true);
-          return { taken: t.taken, seq: cloud.locked(ws)?.state?.seq ?? -1, hash: cloud.locked(ws)?.state?.head ?? null };
+          return { taken: t.taken, seq: cloud.chain(ws)?.state?.seq ?? -1, hash: cloud.chain(ws)?.state?.head ?? null };
         } catch {
           return { taken: 0, seq: -1, hash: null };
         }
       }
       // What the rules refuse of them is left out, and says nothing to the one offering: it gave what it keeps.
       const t = cloud.keepLock(entriesOf(request.entries), ws, true);
-      const s = cloud.locked(ws)?.state;
+      const s = cloud.chain(ws)?.state;
       return { taken: t.taken, seq: s?.seq ?? seq, hash: s?.head ?? null };
     }
   }
@@ -77,7 +77,7 @@ export function answerLock(cloud: Cloud, request: any, workspace: string | null 
 /// Brings one peer and this station level in workspace `ws` (null: the home one): gives it every entry it lacks, takes
 /// every one it has more; with a station from before, gives it what follows its head and takes what goes further.
 export async function syncWith(cloud: Cloud, call: PeerCall, peer: string, ws: string | null = null): Promise<void> {
-  const mine = cloud.locked(ws)?.state;
+  const mine = cloud.chain(ws)?.state;
   if (!mine) return;
   let kept: any;
   try {
@@ -96,7 +96,7 @@ export async function syncWith(cloud: Cloud, call: PeerCall, peer: string, ws: s
   const want = [...theirs].filter((h) => !have.has(h as string));
   if (want.length === 0) return;
   const got: any = await call(peer, ws, { method: "lock.get", hashes: want });
-  if (cloud.locked(ws)?.state) cloud.keepLock(entriesOf(got?.entries), ws, true);
+  if (cloud.chain(ws)?.state) cloud.keepLock(entriesOf(got?.entries), ws, true);
 }
 
 /// A lock turned off here (`off`, what was kept of it) and a peer that keeps it on: gives it what it lacks (the
@@ -128,7 +128,7 @@ async function offerOff(cloud: Cloud, call: PeerCall, peer: string, ws: string |
 
 /// As stations brought each other level before every entry was kept (a peer that knows none of the methods above).
 async function asBefore(cloud: Cloud, call: PeerCall, peer: string, ws: string | null): Promise<void> {
-  const mine = cloud.locked(ws)?.state;
+  const mine = cloud.chain(ws)?.state;
   if (!mine) return;
   const head: any = await call(peer, ws, { method: "lock.head" });
   const theirs = Number.isSafeInteger(head?.seq) ? head.seq : -1;
@@ -191,7 +191,7 @@ export function followLock(cloud: Cloud, call: PeerCall, after: (ms: number, f: 
     const offJoined = (st.joined ?? []).filter((j) => j.workspace !== st.workspace && !listed.some((m) => m.workspace === j.workspace) && cloud.lockOff(j.workspace) !== null);
     for (const m of [...listed, ...offJoined.map((j) => ({ ...j, home: false }))]) {
       const ws = m.home ? null : m.workspace;
-      const s = cloud.locked(ws)?.state;
+      const s = cloud.chain(ws)?.state;
       const off = s === undefined ? cloud.lockOff(ws) : null;
       if (off !== null) {
         // Turned off here: the stations it named hear the `disable`, or bring the entry that beat it.
@@ -238,7 +238,7 @@ function stationsOf(off: Kept): Set<string> {
 /// What this station keeps of the lock in `ws`, as a word that changes when any of it does: its head, and how many it
 /// keeps aside and the last kept so (kept aside in the order they came, the oldest going first).
 function keptWord(cloud: Cloud, ws: string | null): string {
-  const s = cloud.locked(ws)?.state;
+  const s = cloud.chain(ws)?.state;
   if (!s) return "";
   const aside = cloud.lockKept(ws).slice(s.seq + 1);
   return `${s.seq}:${s.head}:${aside.length}:${aside.length === 0 ? "" : hashOf(aside.at(-1)!)}`;
