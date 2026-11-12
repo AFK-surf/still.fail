@@ -82,3 +82,116 @@ test "words and files' paths let go on a field of the tree's itself: in where th
   t.frame()
   assert_eq((words, f.text()), (("acdb", (3, 3), true), "/a.txtacdb"))
 }
+
+///|
+/// A window 300 by 300 whose whole is an old view's (as the app's shell under its pages), a box of it taking files let
+/// go on it (what it is given counted in `old`); over its top 150 a page of the tree's (`page`: shown as it says) whose
+/// words take no press, the page taking files by their paths (put in `taken`); a modal layer of the tree's at the foot,
+/// 20 high, as `modal` says. The Tester.
+fn drops_over_old(
+  taken : Array[String],
+  old : Ref[Int],
+  page : @signals.Signal[Bool],
+  modal : @signals.Signal[Bool],
+) -> @ui.Tester {
+  let f = @ui.Field::new(text="")
+  let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=300.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(300.0))).height(Is(Some(300.0))) |> ignore
+      @ui.old(b, fn(c) {
+        let here = c.id("old box")
+        c.on_files(here, held=fn(_) {  }, take=fn(_, _) { Some(fn(_) { old.val = old.val + 1 }) })
+        c.box(id=here, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() { c.text("old words") |> ignore }) |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.show(fn() { page.get() }, at_once=true, fn(s) {
+      s.box(fn(p) {
+        p.over(Is(true)).width(Is(Some(300.0))).height(Is(Some(150.0))).ground(Is(0xFFFFFFFFL)) |> ignore
+        p.box(fn(w) { w.words(Is("a message")).height(Is(Some(20.0))) |> ignore }) |> ignore
+        @ui.paths_into(p, f, fn(ps) {
+          for x in ps {
+            taken.push(x.path)
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    root.show(fn() { modal.get() }, at_once=true, fn(s) {
+      s.box(fn(m) {
+        m.over(Is(true)).offset(Is((0.0, 280.0))).width(Is(Some(300.0))).height(Is(Some(20.0))).modal(Is(true)) |> ignore
+      })
+      |> ignore
+    })
+  })
+  t.draw()
+  t
+}
+
+///|
+test "files let go on a page's words, which take no press, over an old view filling the window: the page's (paths_into), not the old view's; beside the page, the old view's; under a modal layer, nobody's" {
+  let taken : Array[String] = []
+  let old = Ref(0)
+  let page = @signals.signal(true, same=fn(a, b) { a == b })
+  let modal = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = drops_over_old(taken, old, page, modal)
+  let (wx, wy, _, wh) = t.rect_of("a message").unwrap()
+  // (on the page's words: the page takes them by their paths)
+  t.drop_files(wx + 5.0, wy + wh / 2.0, [("a.txt", b"x")], paths=["/a.txt"])
+  t.frame()
+  t.frame()
+  let on_words = (taken.copy(), old.val)
+  // (on the page where it draws only its ground: the page's too)
+  t.drop_files(150.0, 120.0, [("b.txt", b"x")], paths=["/b.txt"])
+  t.frame()
+  t.frame()
+  let on_ground = (taken.copy(), old.val)
+  // (below the page, on the old view: the old view's)
+  t.drop_files(150.0, 220.0, [("c.txt", b"x")], paths=["/c.txt"])
+  t.frame()
+  t.frame()
+  let on_old = (taken.copy(), old.val)
+  // (a modal layer of the tree's up: the page under it takes none)
+  modal.set(true)
+  t.draw()
+  t.drop_files(wx + 5.0, wy + wh / 2.0, [("d.txt", b"x")], paths=["/d.txt"])
+  t.frame()
+  t.frame()
+  assert_eq((on_words, on_ground, on_old, (taken.length(), old.val)), (
+    (["/a.txt"], 0),
+    (["/a.txt", "/b.txt"], 0),
+    (["/a.txt", "/b.txt"], 1),
+    (2, 1),
+  ))
+}
+
+///|
+test "words let go on a page's words, which take no press, over an old view: into the field the page takes them for (words_into)" {
+  let f = @ui.Field::new(text="ab")
+  let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=300.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(300.0))).height(Is(Some(300.0))) |> ignore
+      @ui.old(b, fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {  }) |> ignore }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(p) {
+      p.over(Is(true)).width(Is(Some(300.0))).height(Is(Some(150.0))) |> ignore
+      p.box(fn(w) { w.words(Is("a message")).height(Is(Some(20.0))) |> ignore }) |> ignore
+      @ui.field(p, f, placeholder="the field", font_size=10.0, max_lines=1) |> ignore
+      @ui.words_into(p, f) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let (wx, wy, _, wh) = t.rect_of("a message").unwrap()
+  t.drop_words(wx + 5.0, wy + wh / 2.0, "cd")
+  t.frame()
+  assert_eq(f.text(), "abcd")
+}
