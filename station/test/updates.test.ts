@@ -1,6 +1,7 @@
 // The station's and its runtimes' versions and updating them, with fake release
 // servers, fake installers and fake npm/vp/curl commands in temporary directories: nothing real is installed or read.
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
@@ -330,8 +331,10 @@ describe("updates", { concurrency: true }, () => {
     writeFileSync(join(runDir, "update.exit"), "1\n");
     await until("failed", () => station(updates).state === "failed", t.signal);
     assert.equal(station(updates).message, "two\nthree\nfour\nfive");
-    const ended = lines.find((l) => l.message === "the station's update ended");
-    assert.deepEqual(ended?.fields, { failed: true, why: "two\nthree\nfour\nfive" });
+    // (the log is the process's, heard by one listener: this suite's other tests, run beside this one, say their updates
+    // ended there too, one of them well)
+    const ended = lines.filter((l) => l.message === "the station's update ended").map((l) => l.fields);
+    assert.ok(ended.some((f) => isDeepStrictEqual(f, { failed: true, why: "two\nthree\nfour\nfive" })), JSON.stringify(ended));
   });
 
   test("switched back from the beta the stable release is offered and kept in the config", async (t) => {
