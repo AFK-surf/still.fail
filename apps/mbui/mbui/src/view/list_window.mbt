@@ -1080,6 +1080,30 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         true
       }
       p.laid_again = laid_again
+      // (what it has in sight, counted by its keys' blocks as they come to rest: their heights as counted, not as a way
+      // has them, the scroll where it rests (at its foot where it follows it, where a notch eases to; where it is as a
+      // fling goes), and told to the place's handlers at the hand's moments (Tree::sights_now), as that differs)
+      p.sight_of = fn() {
+        @signals.untracked(fn() { sight_counted(Places::counted(laid.get()), s, self.tree.logic_said(), room_under()) })
+      }
+      // (told it only once something listens (ListPlace::on_sight): till then nothing of it is worked out or owed)
+      let sight_tree = self.tree
+      let sight_at = self.at
+      let listened = Ref(false)
+      p.sight_listened = fn() {
+        guard !listened.val && self.alive() else { return }
+        listened.val = true
+        sight_tree.sight_tellers[sight_at] = fn() { p.sight_tell() }
+        sight_tree.sight_owe(sight_tree.logic_said())
+      }
+      self.owns(fn() {
+        sight_tree.sight_tellers.remove(sight_at)
+        p.sight_listened = fn() {  }
+      })
+      |> ignore
+      if !p.sight_fns.is_empty() {
+        (p.sight_listened)()
+      }
       p.glide = fn(ask) {
         let all = places(laid.untracked())
         let vh = match s.seen.untracked() {
@@ -1666,6 +1690,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if asked {
       s.held = false
       held = false
+      // (what it has in sight owed as of then, told once this layout is done: ListPlace::on_sight)
+      self.tree.sight_owe(self.tree.logic_said())
     }
     match (pin.val, pin_node.val) {
       (Some((_, _, over, _)), Some(v)) if !v.alive() || over.iter().any(fn(o) { !o.alive() }) => {
@@ -2314,15 +2340,18 @@ pub struct ListPlace[K] {
   priv mut from : (K, Double)?
   priv mut laid_again : () -> Unit
   priv mut glide : (ListAsk[K]) -> Bool
-  /// what is told what is in sight as that changes (ListPlace::on_sight), and what was told last (ListPlace::sight_now)
+  /// what is told what is in sight as that changes (ListPlace::on_sight), what was told last (ListPlace::sight_now),
+  /// and what its list has in sight as it is counted now (none before it is made)
   priv sight_fns : Array[(Sight[K]) -> Unit]
-  priv sight : Sight[K]?
+  priv mut sight : Sight[K]?
+  priv mut sight_of : () -> Sight[K]?
+  priv mut sight_listened : () -> Unit
 }
 
 ///|
 /// One for a page's list, asking nothing yet.
 pub fn[K] ListPlace::new() -> ListPlace[K] {
-  { asked: None, from: None, laid_again: fn() {  }, glide: fn(_) { false }, sight_fns: [], sight: None }
+  { asked: None, from: None, laid_again: fn() {  }, glide: fn(_) { false }, sight_fns: [], sight: None, sight_of: fn() { None }, sight_listened: fn() {  } }
 }
 
 ///|

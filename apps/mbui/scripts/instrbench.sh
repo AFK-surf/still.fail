@@ -30,6 +30,7 @@ table scroll-table chat-md 390x844
 send send chat-done-live 390x844
 list30 list list:30 390x844
 list1500 list list:1500 390x844
+sight30 list list-sight:30 390x844
 col17 col col:17 390x844
 col170 col col:170 390x844
 switch15 switch-ws switch-real:15 390x844

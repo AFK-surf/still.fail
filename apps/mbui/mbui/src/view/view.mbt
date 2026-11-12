@@ -1029,6 +1029,13 @@ pub struct Tree {
   /// moment, not yet told to what follows the hand (Tree::on_hand); and that being told now
   mut hand_owed : Bool
   mut hand_owed_at : Double
+  /// the page's lists telling handlers what they have in sight (ListPlace::on_sight), by the list's node, each there
+  /// only once one is told it (none listening: nothing of it worked out or owed); owed to be told at the moments the hand is (list_sight.mbt): at the change of an input
+  /// or of data as it is told whole, at a way's end, the window given another size, its first layout
+  sight_tellers : Map[Int, () -> Unit]
+  mut sight_owed : Bool
+  mut sight_owed_at : Double
+  mut sights_telling : Bool
   mut handing : Bool
   mut hand_at : Double
   /// the moments a way that may move something ends, each told once (Tree::hand_at_end)
@@ -1377,6 +1384,10 @@ pub fn Tree::new(
     bound_by_clock: false,
     hand_owed: false,
     hand_owed_at: -1.0,
+    sight_tellers: {},
+    sight_owed: true,
+    sight_owed_at: -1.0,
+    sights_telling: false,
     handing: false,
     hand_at: -1.0,
     hand_ends: Set([]),
@@ -3193,6 +3204,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   if was < 0.0 {
     self.pairs_after(at)
     self.hand_now()
+    self.sights_now()
   }
   if changed {
     self.marked()
@@ -9370,6 +9382,12 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   if was < 0.0 {
     self.settle_now(at)
     self.hand_now()
+    // (what the page's lists have in sight owed as of this change, an input's or data's: not a binding's the clock or a
+    // frame's laying out told (Tree::at_cause's), nor the one that tells it)
+    if !self.sights_telling {
+      self.sight_owe(at)
+    }
+    self.sights_now()
   }
 }
 
@@ -9643,6 +9661,8 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
         @signals.start_batch()
         @signals.untracked(fn() { (o.f)() })
         @signals.end_batch()
+        // (a change at its moment (View::at_moment's): what the page's lists have in sight owed as of then)
+        self.sight_owe(next_at)
       }
       Holds(h, _) => {
         self.timeline.remove(next) |> ignore
@@ -9669,6 +9689,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if was < 0.0 {
       self.settle_now(next_at)
       self.hand_now()
+      self.sights_now()
     }
   }
 }
@@ -9770,6 +9791,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
       self.hand_owed_at = upto
     }
     self.hand_owed = true
+    self.sight_owe(upto)
   }
   self.brought(upto)
   let drawn = self.drawn_due
@@ -9831,6 +9853,7 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   }
   // (what a change told in this frame's bindings left under a still pointer, at that change's moment)
   self.hand_now()
+  self.sights_now()
 }
 
 ///|
@@ -12888,6 +12911,7 @@ pub fn Tree::hand_at_end(self : Tree, at : Double) -> Unit {
           if at > self.hand_owed_at {
             self.hand_owed_at = at
           }
+          self.sight_owe(at)
         },
         live,
         later: true,
@@ -12956,4 +12980,44 @@ pub fn View::hand_at_end(self : View, at : Double) -> Unit {
     return
   }
   self.tree.hand_at_end(at)
+}
+
+///|
+/// What the page's lists have in sight owed to be told as of moment `at` (list_sight.mbt): at the hand's moments alone.
+fn Tree::sight_owe(self : Tree, at : Double) -> Unit {
+  // (no list told it: nothing owed, nothing kept)
+  if self.sight_tellers.is_empty() {
+    return
+  }
+  if !self.sight_owed || at > self.sight_owed_at {
+    self.sight_owed_at = at
+  }
+  self.sight_owed = true
+}
+
+///|
+/// What the page's lists have in sight told to what is told it where that is owed, as the change or the way's end it
+/// is owed for is told whole (where Tree::hand_now tells the hand): in a change of its own at that moment, read off
+/// their blocks as they are counted and their scrolls, nothing laid out or measured for it; nothing where no list is
+/// told it.
+fn Tree::sights_now(self : Tree) -> Unit {
+  if self.sight_tellers.is_empty() ||
+    !self.sight_owed ||
+    self.sights_telling ||
+    self.handing ||
+    self.advancing ||
+    self.committing > 0 ||
+    self.cause_at >= 0.0 {
+    return
+  }
+  self.sight_owed = false
+  let at = if self.sight_owed_at >= 0.0 { self.sight_owed_at } else { self.logic_said() }
+  self.sight_owed_at = -1.0
+  self.sights_telling = true
+  self.event(at, fn() {
+    for _, t in self.sight_tellers {
+      t()
+    }
+  })
+  self.sights_telling = false
 }

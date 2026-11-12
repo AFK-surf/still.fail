@@ -545,7 +545,11 @@ fn lint_mbt(
     }
     // what the layout came to told back as a change to make things by: the framework's (the view's own, src/view, as
     // what it lays out) not counted, its tests not
-    if layout_told.contains(c.name) && c.kind == "method" && !under(f.rel, ["src/view"]) && !in_t {
+    if layout_told.contains(c.name) &&
+      !layout_told_handlers.contains(c.name) &&
+      c.kind == "method" &&
+      !under(f.rel, ["src/view"]) &&
+      !in_t {
       add("layout-told", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
