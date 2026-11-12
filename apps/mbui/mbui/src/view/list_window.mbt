@@ -278,7 +278,15 @@ fn[K] Column::first_past(self : Column[K], y : Double) -> Int {
 /// so it is laid out as it changes wherever the column is). `holds`: whether a block holds what shows where it is as
 /// what is over it changes (none that does not: the first after it that does; a head that stands over what comes in
 /// under it, which goes on down with what shows). `follows`: while it says so, a column at its foot (made there, or
-/// scrolled back to it) is kept there as what it holds grows, till it is moved off it (a chat's newest end). `place`:
+/// scrolled back to it) is kept there as what it holds grows, till it is moved off it (a chat's newest end).
+/// `from_end`: its blocks, where they come short of what shows, at its foot, the room left over them (an old view's
+/// list's `from_end`: a short chat's few messages at the foot, over the composer), what comes after them pushing up what
+/// is over it; laid out so by its column alone, at least as tall as what shows, its blocks at its end, in the same
+/// layout whether they come short of it, just fill it or go past it. A switch of its own, not what `follows` says
+/// (the coordinator of the migration, 2026-11-12): `follows` is read again at every moment and may stop (an agent's
+/// history stops following once an entry is gone to), and a short list would then be laid out anew from its top; and
+/// tied to it, the two lists that follow their foot already (a job's output, that history) would come to sit at it,
+/// which nobody decided. `place`:
 /// what asks it to show a block or its foot at a cause (ListPlace: a block brought to the middle or to its top, back
 /// to its foot, its foot followed no further than a block), done as it is next laid out; held there as what is over it
 /// is laid out, till the column is moved otherwise (the hand, the wheel). `near_foot`: (screens,
@@ -305,6 +313,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   foot_room? : () -> Double = fn() { 0.0 },
   holds? : (K) -> Bool = fn(_) { true },
   follows? : () -> Bool = fn() { false },
+  from_end? : Bool = false,
   place? : ListPlace[K],
   near_foot? : (Double, () -> Bool, () -> Unit),
   near_top? : (Double, () -> Bool, () -> Unit),
@@ -516,6 +525,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let all = laid.get()
     top_now(all, at()) >= foot_top(all, vh) - 0.5 && s.rest_now() is None && s.glides_till() is None
   }, same=fn(a, b) { a == b })
+  // (at its foot as Scroll::at_foot_now tells it, told only as that changes: following it there, however far that comes
+  // to be; else where the top of what shows is by its anchor, as its blocks are counted now, within half a point of
+  // where it would be at its foot. By its own blocks, so in the same layout as one measured anew or grown there, as
+  // its near_foot is; not by how far the scroll went as last laid out, which a block come or grown has not reached yet)
+  let at_foot_now = @signals.computed(fn(_) {
+    if s.x.get() == @double.infinity {
+      return true
+    }
+    guard s.seen.get() is Some((_, vh)) else { return false }
+    let all = laid.get()
+    top_now(all, at()) >= foot_top(all, vh) - 0.5
+  }, same=fn(a, b) { a == b })
+  s.at_foot_said = Some(fn() { at_foot_now.get() })
   self.reacts(fn() { at_most.get() }, fn(foot) {
     if foot && @signals.untracked(follows) && !s.at_foot() {
       // (back at its foot, having left it: followed again, whatever held it where it was, Scroll::holds_here)
@@ -1171,6 +1193,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   s.whole = Some(whole_now)
   let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room() + s.tuck_room.get()) })) |> ignore
+    // (short of what shows, its blocks at its foot: at least as tall as the room it shows them in, they at its end)
+    if from_end {
+      held.min_height_share(Is(Some(1.0))).lies_along(Is(Lies::End)) |> ignore
+    }
     held.each(keys, fn(k) { k }, fn(slot, item) {
       let k = item.untracked()
       let cell = @signals.signal(shown_now.contains(k), same=fn(a, b) { a == b })
