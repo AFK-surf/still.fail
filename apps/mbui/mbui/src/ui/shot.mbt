@@ -527,6 +527,9 @@ fn Ctx::tree_shot_paint(self : Ctx, tree : @view.Tree) -> Unit {
   view_shape_bands.swap(bands)
   let fields = tree_fields.copy()
   tree_fields.clear()
+  // (the window's native views none of this one's: a picture shows none, NativeView::paint_in)
+  let natives = tree_natives.copy()
+  tree_natives.clear()
   let words = inst_owners.tree_words.copy()
   let work = { ..view_paint_work }
   tree.set_pixel_grid(self.scale)
@@ -603,6 +606,10 @@ fn Ctx::tree_shot_paint(self : Ctx, tree : @view.Tree) -> Unit {
   tree_fields.clear()
   for id, f in fields {
     tree_fields[id] = f
+  }
+  tree_natives.clear()
+  for id, n in natives {
+    tree_natives[id] = n
   }
   inst_owners.tree_words.clear()
   for id, w in words {

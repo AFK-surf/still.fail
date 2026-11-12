@@ -44,10 +44,8 @@ pub struct NativeView {
   priv mut decode_since : Double
   /// when the grab going was asked for, by the app's clock (-1: none going)
   priv mut grab_since : Double
-  /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1, its corners (top left, then round it)
-  priv mut painted : Int
-  /// where in that frame's paint it was (how many instances were before it): the views are stacked so
-  priv mut seq : Int
+  /// where it was last painted: content x y w h, clip x0 y0 x1 y1, its corners (top left, then round it); shown in a
+  /// frame whose instances hold its hole (Ctx::holes_drawn), stacked as they hold them
   priv at : FixedArray[Double]
   /// its hole as painted there (x y w h; w 0: none), to follow it to where the frame took it after (Ctx::follow_holes)
   priv hole : FixedArray[Double]
@@ -244,8 +242,6 @@ fn NativeView::make(
     state: @signals.signal(0, same=fn(a, b) { a == b }),
     decode_since: -1.0,
     grab_since: -1.0,
-    painted: -1,
-    seq: 0,
     at: FixedArray::make(12, 0.0),
     hole: FixedArray::make(4, 0.0),
     told: FixedArray::make(12, -1.0),
@@ -781,24 +777,46 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
     Some(x) => x
     None => return
   }
+  if v.paint_in(self, n.x, n.y, n.fw, n.fh, content, radii) && !dr.targets_said {
+    v.island = None
+  }
+}
+
+///|
+/// Where `v` shows painted this frame: a node at (nx, ny), `nw` × `nh` where it is drawn, the view's content at
+/// `content` within it (the whole node when None), its corners `radii` (top left, then round it), seen within the node
+/// and the clip it is painted in: its hole among the frame's instances, and where the host is told it is
+/// (Ctx::sync_views); true where its hole was drawn. None where none of it is seen: told hidden. An old view's node
+/// (Ctx::paint_native) and a node of the window's tree (tree_native.mbt) alike.
+fn NativeView::paint_in(
+  self : NativeView,
+  c : Ctx,
+  nx : Double,
+  ny : Double,
+  nw : Double,
+  nh : Double,
+  content : (Double, Double, Double, Double)?,
+  radii : FixedArray[Double],
+) -> Bool {
+  let v = self
   if v.closed || v.id == 0 {
-    return
+    return false
   }
   let (x, y, w, h) = match content {
-    Some((cx, cy, cw, ch)) => (n.x + cx, n.y + cy, cw, ch)
-    None => (n.x, n.y, n.fw, n.fh)
+    Some((cx, cy, cw, ch)) => (nx + cx, ny + cy, cw, ch)
+    None => (nx, ny, nw, nh)
   }
   // seen within the node and the clip it is painted in, as that shows (not a recording's band: clip_shown)
   let ((cx0, cy0, cx1, cy1), _) = clip_shown()
-  let x0 = dmax(n.x, cx0)
-  let y0 = dmax(n.y, cy0)
-  let x1 = dmin(n.x + n.fw, cx1)
-  let y1 = dmin(n.y + n.fh, cy1)
+  let x0 = dmax(nx, cx0)
+  let y0 = dmax(ny, cy0)
+  let x1 = dmin(nx + nw, cx1)
+  let y1 = dmin(ny + nh, cy1)
   if x1 <= x0 || y1 <= y0 {
-    return
+    return false
   }
   // where it shows: where the content is, within that, on whole device pixels (no edge row half covered)
-  let snap = fn(v : Double) { device_px(v, self.scale) }
+  let snap = fn(v : Double) { device_px(v, c.scale) }
   let hx0 = snap(dmax(x, x0))
   let hy0 = snap(dmax(y, y0))
   let hx1 = snap(dmin(x + w, x1))
@@ -818,7 +836,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
       (hx0, hy0, hx1 - hx0, hy1 - hy0)
     }
     // (its image the view's, the part of its content there: a host that draws the view's picture draws that)
-    self.push_inst(
+    c.push_inst(
       sx,
       sy,
       sw,
@@ -834,23 +852,20 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
       sw / cw,
       sh / ch,
     )
-    self.corners_last_each(radii[0], radii[1], radii[2], radii[3])
-    self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.view_tex_base + v.id).to_double()
+    c.corners_last_each(radii[0], radii[1], radii[2], radii[3])
+    c.inst[(c.ninst - 1) * inst_size + 20] = (@hostapi.view_tex_base + v.id).to_double()
     v.hole[0] = sx
     v.hole[1] = sy
     v.hole[2] = sw
     v.hole[3] = sh
   } else {
     v.hole[2] = 0.0
+    return false
   }
-  // (by build: a frame built again paints again, and what the last build did not paint is not shown)
-  v.painted = self.build_no
-  v.seq = self.ninst
   // (where it is among the frame's targets: what is over it after it, its covers; found with them where they are found
   // alone, Ctx::node_targets)
   if !dr.targets_said {
-    v.hits_before = self.next_hit_ids.length()
-    v.island = None
+    v.hits_before = c.next_hit_ids.length()
   }
   // (its content on whole device pixels too, as where it shows is: placed between pixels, the row its edge half
   // covers shows what is under the canvas, a line along the picture's edge)
@@ -865,6 +880,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   for k in 0..<4 {
     v.at[8 + k] = radii[k]
   }
+  true
 }
 
 ///|
@@ -954,13 +970,17 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
   if open_views.length() == 0 {
     return
   }
-  self.follow_holes()
-  self.stack_views()
+  let holes = self.holes_drawn()
+  self.follow_holes(holes)
+  self.stack_views(holes)
   for v in open_views.copy() {
     if v.closed {
       continue
     }
-    let shown = v.painted == self.build_no
+    // (shown where this frame draws its hole, wherever that was painted: a row kept and drawn again copies it, its
+    // paint not run; a paint of the frame alone, its build the last one's, that did not come to it (scrolled out of
+    // its clip, its node put by) has none: not where an earlier paint of the same build had it)
+    let shown = holes.contains(v.id)
     let z = window_zoom_drawn.val
     let mut moved = shown != v.told_shown || z != v.told_zoom
     if z != v.told_zoom && v.touch != All {
@@ -1080,9 +1100,10 @@ fn NativeView::take_reads(self : NativeView) -> Unit {
 /// them in the order they were opened (or first placed), which is not the order they are painted in once one is opened
 /// while another shows, or one comes back into view under another. Each shown view is raised to the top in turn
 /// (`view_tell` 5) when the order of those shown is not the one told last; one alone is over nothing.
-fn Ctx::stack_views(self : Ctx) -> Unit {
-  let shown = open_views.filter(fn(v) { !v.closed && v.id != 0 && v.painted == self.build_no })
-  shown.sort_by_key(fn(v) { v.seq })
+fn Ctx::stack_views(self : Ctx, holes : Map[Int, Int]) -> Unit {
+  ignore(self)
+  let shown = open_views.filter(fn(v) { !v.closed && v.id != 0 && holes.contains(v.id) })
+  shown.sort_by_key(fn(v) { holes.get(v.id).unwrap_or(0) })
   let ids = shown.map(fn(v) { v.id })
   if ids == stacked_views {
     return
@@ -1103,11 +1124,8 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
 }
 
 ///|
-/// Each view painted this frame put where its hole ended up: what was painted is moved after (a look on what holds it,
-/// as a list's rows sliding while words sent fly; a row drawn again lower), its hole with it; the view, placed where its
-/// node was laid out, stayed there, out of step with its hole. The hole's move (and scale) taken to the view's content
-/// and clip, the clip cut by where the hole's own clip was taken.
-fn Ctx::follow_holes(self : Ctx) -> Unit {
+/// The native views whose holes the frame's instances hold, as it ends: where each is among them (its first number).
+fn Ctx::holes_drawn(self : Ctx) -> Map[Int, Int] {
   let at : Map[Int, Int] = Map([])
   let a = self.inst
   let mut k = 0
@@ -1118,11 +1136,21 @@ fn Ctx::follow_holes(self : Ctx) -> Unit {
     }
     k = inst_after(a, k)
   }
+  at
+}
+
+///|
+/// Each view painted this frame put where its hole ended up: what was painted is moved after (a look on what holds it,
+/// as a list's rows sliding while words sent fly; a row drawn again lower), its hole with it; the view, placed where its
+/// node was laid out, stayed there, out of step with its hole. The hole's move (and scale) taken to the view's content
+/// and clip, the clip cut by where the hole's own clip was taken.
+fn Ctx::follow_holes(self : Ctx, at : Map[Int, Int]) -> Unit {
   if at.is_empty() {
     return
   }
+  let a = self.inst
   for v in open_views {
-    if v.closed || v.painted != self.build_no || v.hole[2] <= 0.0 || v.hole[3] <= 0.0 {
+    if v.closed || v.hole[2] <= 0.0 || v.hole[3] <= 0.0 {
       continue
     }
     let b = match at.get(v.id) {

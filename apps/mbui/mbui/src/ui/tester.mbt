@@ -1542,6 +1542,14 @@ pub fn Tester::site_says(self : Tester, event : String) -> Unit {
 }
 
 ///|
+/// Where the fake host has native view `view` now, as it was last told (view_place): the part of it seen, in the
+/// window's points (x0, y0, x1, y1: its rect cut by its clip), and whether it is shown; None where it was never placed
+/// or is closed.
+pub fn Tester::view_stands(self : Tester, view : NativeView) -> (Double, Double, Double, Double, Bool)? {
+  self.fake.view_at.get(view.id())
+}
+
+///|
 /// The holes (kind 9: where a native view shows) in the last frame, as (x, y, w, h).
 pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
   self.reads_own()
