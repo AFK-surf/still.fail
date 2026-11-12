@@ -2314,12 +2314,15 @@ pub struct ListPlace[K] {
   priv mut from : (K, Double)?
   priv mut laid_again : () -> Unit
   priv mut glide : (ListAsk[K]) -> Bool
+  /// what is told what is in sight as that changes (ListPlace::on_sight), and what was told last (ListPlace::sight_now)
+  priv sight_fns : Array[(Sight[K]) -> Unit]
+  priv sight : Sight[K]?
 }
 
 ///|
 /// One for a page's list, asking nothing yet.
 pub fn[K] ListPlace::new() -> ListPlace[K] {
-  { asked: None, from: None, laid_again: fn() {  }, glide: fn(_) { false } }
+  { asked: None, from: None, laid_again: fn() {  }, glide: fn(_) { false }, sight_fns: [], sight: None }
 }
 
 ///|
