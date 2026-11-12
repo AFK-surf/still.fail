@@ -93,9 +93,10 @@ priv struct ScreenUi {
   /// open from the bar as it is next built (a fixture's: as if pressed); "" none
   mut asked_panel : String
   /// the panel this page opened over itself (控制中心 "center", 按键 "keys", the view's figures "stats", a simulator's
-  /// "logs" or "apps") and the serial it was presented as: what is a step further in from it, presented after it, is
-  /// its too (screen_panel_open_from); none since it was closed
-  mut native_panel : (String, Int)?
+  /// "logs" or "apps"), the serial it was presented as (what is a step further in from it, presented after it, is its
+  /// too: screen_panel_open_from) and whether the system's bars were down the side then (@sf.native_side); none since
+  /// it was closed
+  mut native_panel : (String, Int, Bool)?
 }
 
 ///|
@@ -407,7 +408,7 @@ fn screen_panel_open_from(root : Int) -> Int {
 /// Whether the panel this page opened as `id` is up, or one a step further in from it.
 fn screen_panel_on(u : ScreenUi, id : String) -> Bool {
   match u.native_panel {
-    Some((key, root)) => key == id && screen_panel_open_from(root) > 0
+    Some((key, root, _)) => key == id && screen_panel_open_from(root) > 0
     None => false
   }
 }
@@ -415,10 +416,11 @@ fn screen_panel_on(u : ScreenUi, id : String) -> Bool {
 ///|
 /// What this page opened over itself closed, and what a step further in from it shows: so it never outlives what it
 /// was opened for (the page closed or let go, 全屏, 只看/控制 changed, the keyboard toggled, another of the system bar's
-/// actions pressed: the reviewer with pengxiao, 2026-11-12).
+/// actions pressed: the reviewer with pengxiao, 2026-11-12; the system's bars turned to another edge, where the item it
+/// was opened at is no longer: screen_native).
 fn screen_panels_close(u : ScreenUi) -> Unit {
   match u.native_panel {
-    Some((_, root)) => {
+    Some((_, root, _)) => {
       let open = screen_panel_open_from(root)
       if open > 0 {
         @sf.close_presented_of(open)
@@ -439,7 +441,7 @@ fn screen_panel_toggle(u : ScreenUi, id : String, open : () -> Unit) -> Unit {
     return
   }
   open()
-  u.native_panel = Some((id, @sf.last_presented()))
+  u.native_panel = Some((id, @sf.last_presented(), @sf.native_side()))
 }
 
 ///|
@@ -455,8 +457,12 @@ fn screen_native_anchor(c : @ui.Ctx) -> @sf.Anchor {
 /// The screen's actions handed to the system's bars (an iPhone Duo's), the least needed last, as the system folds those
 /// it has not the room for from the end (the keyboard up, it keeps three): close, 只看/控制, the keyboard, 控制中心, 按键.
 /// What else there is is 控制中心's (the reviewer with pengxiao, 2026-11-12). Each but a panel's own closes what this
-/// page opened over itself before it acts.
+/// page opened over itself before it acts. What it opened closes as the bars turn to another edge (down the side, or
+/// across): the system says where an item is only as it is pressed, so what was opened at it would stay where it was.
 fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, catching : Bool, catcher : String, close : () -> Unit) -> Unit {
+  if u.native_panel is Some((_, _, side)) && side != @sf.native_side() {
+    screen_panels_close(u)
+  }
   @sf.native_over_act("screen-close", @sf.t("android-misc.screen.close"), "close", close, lead=true)
   if s.choosable() {
     // (as mode_button: what it is now, on while driving)
