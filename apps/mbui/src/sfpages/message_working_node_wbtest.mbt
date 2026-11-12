@@ -208,4 +208,41 @@ test "an agent at work's segments as nodes are drawn as the old view's: eight ar
   assert_eq(t.audit(), [])
 }
 
+///|
+/// The fixture's agent with no clock as the nodes draw it, steadied in `steadies`, come into its list as `came` says.
+fn work_unclocked(src : Source, steadies : ActivitySteadies, came : @signals.Signal[Double?]) -> @ui.Tester {
+  let view = work_view([work_agent_json(since=None)])
+  dec_new(760.0, fn() { view }, fn(f, here) {
+    working_said_node(f, src, here, "act:s-c1", fn() { row_side(760.0) }, fn() { 0.0 }, fn() { (here.view)().agents[0] }, fn() {
+      came.get()
+    }, steadies)
+    |> ignore
+  })
+}
 
+///|
+test "its words cut into their cells once as they are said, not again as each frame draws them coming in or giving way" {
+  let live = @signals.signal(Some(work_live("改 chat_rows_node.mbt 和 decision.mbt")))
+  let came : @signals.Signal[Double?] = @signals.signal(None)
+  let steadies = ActivitySteadies::new()
+  let made = working_cells_made.val
+  let t = work_unclocked(work_src(live, []), steadies, came)
+  t.run_for(@ui.move_most_ms)
+  // (its words at rest: cut once)
+  assert_eq(working_cells_made.val - made, 1)
+  // (coming in glyph by glyph, drawn on the way: cut no more)
+  came.set(Some(t.time()))
+  let seen : Array[String] = []
+  for _ in 0..<8 {
+    t.run_for(activity_glyph_in_ms / 8.0)
+    seen.push(glyphs_drawn(t))
+  }
+  assert_true(seen[3].contains(" a0."), msg=seen[3])
+  assert_eq(working_cells_made.val - made, 1)
+  // (giving way to a step of other words: the two cut as it begins, then nothing as it goes, the new words at rest
+  // once more as it is over)
+  let (changed, _) = glyphs_walk(t, live, [work_live("读 a.mbt", key="read2")], 0.0, fn() { glyphs_new_due(steadies) })
+  assert_true(changed[3].contains(" a0."), msg=changed[3])
+  assert_eq(working_cells_made.val - made, 4)
+  assert_eq(t.audit(), [])
+}

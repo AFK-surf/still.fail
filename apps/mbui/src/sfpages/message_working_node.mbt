@@ -83,6 +83,15 @@ fn working_said_node(
         @sf.style_node(area, fn() { activity_row_box })
         // the clock's words as they show now ("" none): what they take of the line
         let clock_said : @signals.Signal[String] = @signals.signal("")
+        // (how wide they are with the gap before them, worked out as they change, not as what reads it is drawn)
+        let clock_w = @signals.computed(fn(_) {
+          let clock = clock_said.get()
+          if clock == "" {
+            0.0
+          } else {
+            cells_wide(working_cells(clock, @ui.style_words(activity_clock), area.words_scale())) + @ui.Space::S2.px()
+          }
+        })
         // (what of the row its words have: the row's width less where they start, a stop that shows, its clock and the
         // gap before it)
         let visible = fn() {
@@ -93,16 +102,13 @@ fn working_said_node(
           } else {
             0.0
           }
-          let clock = clock_said.get()
-          let clock_w = if clock == "" {
-            0.0
-          } else {
-            cells_wide(@ui.glyph_cells(clock, @ui.style_words(activity_clock), area.words_scale())) + @ui.Space::S2.px()
-          }
-          dmax(room.width() - start - stop - clock_w, 0.0)
+          dmax(room.width() - start - stop - clock_w.get(), 0.0)
         }
         area.box(fn(line) {
           @sf.style_node(line, fn() { if message_inline(here) { activity_line_narrow } else { activity_line } })
+          // (giving way where the row has not the room, down to nothing: what it does now is cut short, as its stop
+          // shows beside it, the rest whole)
+          line.cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
           line.says(By(fn() { Some(@view.said(Button, label=a().who + "：" + said().words)) })) |> ignore
           @sf.presses_node(line, fn() {
             open_detail(src, message_node_ref(here), @signals.untracked(a).key)
@@ -129,6 +135,9 @@ fn working_said_node(
           // what it does now, and how long
           line.box(fn(tail) {
             @sf.style_node(tail, fn() { activity_tail }, in_row=true)
+            // (giving way as the line does, its words cut short and its clock whole: a box in a row that says nothing
+            // of it is laid out as wide as what it holds, whatever the room)
+            tail.cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
             let shown = activity_steady_node(tail, steadies, key, said, came)
             let style = fn() { if @sf.hovered_node(line) { now_words_hot } else { now_words } }
             tail.box(fn(words) { working_words_node(words, shown, came, style, visible, key.length()) }) |> ignore
@@ -228,6 +237,18 @@ struct WorkingChange {
   salt : Int
   from : Double?
   set_out : Array[(Double, Double)]
+}
+
+///|
+/// How many times an agent's line has cut words into their cells (working_cells), for its tests to hold how often.
+// kept across runs: only counted on, read by its tests alone
+let working_cells_made : Ref[Int] = Ref(0)
+
+///|
+/// The cells `words` on one line are cut into as an agent's line draws them (@ui.glyph_cells), counted.
+fn working_cells(words : String, look : @view.WordsLook, scale : Double, mono? : Bool = false) -> Array[(Double, Double)] {
+  working_cells_made.val = working_cells_made.val + 1
+  @ui.glyph_cells(words, look, scale, mono~)
 }
 
 ///|
@@ -374,8 +395,8 @@ fn working_words_node(
         }
         _ => (s.was, s.was_mono, None, [])
       }
-      let was_cells = @ui.glyph_cells(was, look, scale, mono=was_mono)
-      let now_cells = @ui.glyph_cells(s.said.words, look, scale, mono=s.said.mono)
+      let was_cells = working_cells(was, look, scale, mono=was_mono)
+      let now_cells = working_cells(s.said.words, look, scale, mono=s.said.mono)
       let ch : WorkingChange = {
         was,
         was_mono,
@@ -411,18 +432,20 @@ fn working_words_node(
       None => {
         k.cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
         k.box(fn(w) {
+          // (how wide its words are whole, worked out as they, their face, their style or their size change, not as
+          // they are drawn: what shows told again from another moment, the same words, changes none of those)
+          let said = @signals.computed(fn(_) { (shown().said.words, shown().said.mono) }, same=fn(a, b) { a == b })
+          let whole = @signals.computed(fn(_) {
+            let (words, mono) = said.get()
+            cells_wide(working_cells(words, @ui.style_words(style()), w.words_scale(), mono~))
+          })
           working_words(w, fn() { shown().said.words }, fn() { shown().said.mono }, style)
-          // (cut short where the line has not the room: now_words' w=Cut, at what of the row its words have)
+          // (cut short where the line has not the room: now_words' w=Cut, what holds it giving way with it)
           .cuts(Is(true))
           .min_width(Is(Some(0.0)))
-          .max_width(By(fn() { Some(visible()) }))
           .allow_ellipsis(Is(true))
           .glyphs_by(
-            By(fn() {
-              let s = shown().said
-              let wide = dmin(cells_wide(@ui.glyph_cells(s.words, @ui.style_words(style()), w.words_scale(), mono=s.mono)), visible())
-              (arrive.shown_on(w), wide)
-            }),
+            By(fn() { (arrive.shown_on(w), dmin(whole.get(), visible())) }),
             fn(st, at) { working_glyph_in(st.0, st.1, salt, at) },
           )
           |> ignore
