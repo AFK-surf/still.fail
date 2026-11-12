@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { Adb } from "../src/adb.ts";
 import { CoreError, HostError } from "../src/error.ts";
-import type { Entry } from "../src/lock.ts";
+import { type Entry, entryHash } from "../src/lock.ts";
 import type { Mesh } from "../src/mesh.ts";
 import { PersonalLock, checkChain, grantHolds } from "../src/personal-lock.ts";
 import { Runner } from "../src/runtime.ts";
@@ -612,32 +612,47 @@ test("an entry a station took, read of it again before its answer came, is on th
   }
 });
 
-test("an entry a station took, another device's entry heard at its place before its answer came: refused as a station's 409 is, the lock pinned holding", async () => {
-  const c = cloud();
-  const st = stations();
-  // (b's stations: another of the person's, that took b's entry where a's station took a's)
-  const st2 = stations();
-  const a = device(c, "a", st);
-  const b = device(c, "b", st2);
-  const other = (n: string) => ({ key: `ed25519:${n.repeat(32)}`, id: n.repeat(32), label: n });
-  try {
-    c.say.down = true;
-    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
-    const bKey = await b.runner.run(b.lock.makeKey());
-    const whole = await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: b.id, label: "b" }, "why"));
-    for (const [k, ch] of st.kept) st2.kept.set(k, ch);
-    await b.runner.run(b.lock.joined(SUB, whole));
-    await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
-    const theirs = [...st2.kept.values()][0]!;
-    st.say.taking = () => a.lock.heardFrom(SUB, [theirs]);
-    const out = await a.runner.run(Effect.result(a.lock.addDevice(SUB, other("44"), "why")));
-    assert.equal(st.say.taking, null, "the other chain was heard while the entry was being brought");
-    const pinned = a.lock.entries(SUB);
-    assert.notEqual(checkChain(pinned, SUB), null, `the lock pinned holds: ${kinds(pinned)}`);
-    assert.deepEqual(pinned, theirs, "the chain heard is the one pinned, the entry that lost its place not on it");
-    assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused", JSON.stringify(out));
-  } finally {
-    a.runner.shutdown();
-    b.runner.shutdown();
-  }
-});
+// Which of the two entries keeps the place is the rules' fork choice (src/lock-keep.ts), the stations' too: here by its
+// second step, a removal winning at equal weight (2026-11-12; before, any other entry at the place refused this one,
+// and the case was built of two device entries, whose order is the two signers' tie values).
+for (const lost of [true, false])
+  test(`an entry a station took, another device's entry heard at its place before its answer came: ${lost ? "refused as a station's 409 is where it loses, the lock pinned holding" : "pinned where it wins by the rules, the other kept aside"}`, async () => {
+    const c = cloud();
+    const st = stations();
+    // (b's stations: another of the person's, that took b's entry where a's station took a's)
+    const st2 = stations();
+    const a = device(c, "a", st);
+    const b = device(c, "b", st2);
+    const other = (n: string) => ({ key: `ed25519:${n.repeat(32)}`, id: n.repeat(32), label: n });
+    try {
+      c.say.down = true;
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await a.runner.run(a.lock.addDevice(SUB, other("22"), "why"));
+      const bKey = await b.runner.run(b.lock.makeKey());
+      const whole = await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: b.id, label: "b" }, "why"));
+      for (const [k, ch] of st.kept) st2.kept.set(k, ch);
+      await b.runner.run(b.lock.joined(SUB, whole));
+      // b's entry: the removal of 22 (it wins) where a's is a device put on; else the other way round.
+      if (lost) await b.runner.run(b.lock.removeDevice(SUB, other("22").key, "why"));
+      else await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
+      const theirs = [...st2.kept.values()][0]!;
+      st.say.taking = () => a.lock.heardFrom(SUB, [theirs]);
+      const out = await a.runner.run(Effect.result(lost ? a.lock.addDevice(SUB, other("44"), "why") : a.lock.removeDevice(SUB, other("22").key, "why")));
+      assert.equal(st.say.taking, null, "the other chain was heard while the entry was being brought");
+      const pinned = a.lock.entries(SUB);
+      assert.notEqual(checkChain(pinned, SUB), null, `the lock pinned holds: ${kinds(pinned)}`);
+      if (lost) {
+        assert.deepEqual(pinned, theirs, "the chain heard is the one pinned, the entry that lost its place not on it");
+        assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused", JSON.stringify(out));
+      } else {
+        assert.equal(out._tag, "Success", JSON.stringify(out));
+        assert.deepEqual(pinned.slice(0, 3), theirs.slice(0, 3));
+        assert.equal(pinned.length, 4, `the entry once: ${kinds(pinned)}`);
+        assert.equal(pinned[3]!.kind, "device.remove");
+        assert.notEqual(entryHash(pinned[3]!), entryHash(theirs[3]!));
+      }
+    } finally {
+      a.runner.shutdown();
+      b.runner.shutdown();
+    }
+  });

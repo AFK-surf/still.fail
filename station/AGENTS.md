@@ -117,9 +117,9 @@
   (what an older station reads), `aside` the rest, at most `ASIDE_MOST`. It changes branch only for entries another
   keeper took (another station of the lock; a device saying `keep`): what a device, a hello or the control plane
   brings itself is taken only where it goes on from the head, else answered as a fork was before and not kept, its
-  signer at hand to sign it after the head. Today's cores never follow a station that changes branch: they take only
-  what goes on from the chain they hold (`client/core-ts/src/views/lock.ts` readLockOnce, 2026-11-12); refusing a
-  fresh entry decides nothing for any other keeper.
+  signer at hand to sign it after the head. A device keeps what a station showed it and goes by the same fork choice
+  (`client/core-ts/src/lock-keep.ts`), so it follows a station that changes branch; refusing a fresh entry decides
+  nothing for any other keeper.
 
 ## Screens
 

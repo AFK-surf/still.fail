@@ -39,7 +39,8 @@ import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import { get, isObject } from "../util.ts";
-import { type Checked, checkLock, signerIn } from "../vault/lock-check.ts";
+import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
+import { hashOf, keep, links } from "../lock-keep.ts";
 import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
@@ -174,7 +175,10 @@ export const tookOrRefused = (r: Result.Result<unknown, unknown>): number => (r.
 /// others their own; none from a cloud that would not say): when each was last used and what it calls itself now.
 /// A device is approved only face to face (views/pair.ts): the cloud's requests of older clients, approved there with
 /// a press, are neither read nor answered (2026-11-02 the user: a tap let a device in without its code typed on it).
-type Held = { head: Head | null; entries: Entry[]; seen?: J[] | null };
+/// `entries` is the chain gone by, from the genesis (what every reader reads, a core from before too); `aside`, absent
+/// from records of before 2026-11-12 and while none is, the entries of this lock a station showed that are off it
+/// (src/lock-keep.ts): the chain is the rules' choice among all of them (`hold`).
+type Held = { head: Head | null; entries: Entry[]; aside?: Entry[]; seen?: J[] | null };
 
 /// What this device keeps of a workspace's lock this run.
 type Part = {
@@ -491,11 +495,33 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     if (head === null && was?.head && !fold(was.entries).disabled) return;
     const more = arr(get(said, "entries")) as Entry[];
     const same = was?.head && head && was.head.genesis === head.genesis;
-    let entries = same ? [...was!.entries, ...more.filter((e) => e.seq > was!.head!.seq)] : more;
+    // Of the same lock, its entries are signed entries as a station's are (it only carries them): what goes on from the
+    // head held is taken, one behind changes nothing, and a chain gone another way is read whole and kept with what is
+    // held, the rules choosing (`hold`), as a station's is (readLockOnce).
+    const how = same ? ahead(was!, head!, more, get(said, "after_hash")) : null;
+    let entries = same ? (Array.isArray(how) ? [...was!.entries, ...how] : was!.entries) : more;
+    let parted: Entry[] = [];
+    if (how === "parts") parted = arr(get(yield* cloud("/lock"), "entries")) as Entry[];
     if (!same && head && (more.length === 0 || more[0]!.seq !== 0)) entries = arr(get(yield* cloud("/lock"), "entries")) as Entry[];
     const seen = head === null ? null : yield* Effect.orElseSucceed(Effect.map(cloud("/devices"), (r) => arr(get(r, "devices"))), () => was?.seen ?? null);
-    yield* hold(inner, ws, sub, head, entries, seen);
+    yield* hold(inner, ws, sub, how === "behind" || how === "parts" ? was!.head : head, entries, seen, parted);
   });
+}
+
+/// How a keeper's chain of the lock held stands to it, by its head (`theirs`) and its entries after the head held
+/// (`more`, as `GET /lock?after=` answers; `after_hash`, where it says one, the hash of its entry at the head held's
+/// place): behind on it or level (its head the entry held at that place), going on from its head (the entries after,
+/// each at its place and each `prev` the hash of the one before), or parted from it: another entry at a place held, an
+/// `after_hash` that differs, a `prev` that does not hold. Only the second is put after what is held as it is; one that
+/// parts is read whole and kept with it, the rules choosing (`hold`).
+function ahead(was: Held, theirs: Head, more: Entry[], afterHash: unknown): Entry[] | "behind" | "parts" {
+  const head = was.head!;
+  const mine = was.entries[theirs.seq];
+  if (theirs.seq <= head.seq) return mine !== undefined && hashOf(mine) === theirs.hash ? "behind" : "parts";
+  if (typeof afterHash === "string" && afterHash !== head.hash) return "parts";
+  const after = more.filter((e) => e.seq > head.seq);
+  const chain = [...was.entries, ...after];
+  return after.length > 0 && links(chain, head.seq + 1) && hashOf(chain[chain.length - 1]!) === theirs.hash ? after : "parts";
 }
 
 /// The stations a lock is read of: those it names, then the workspace's others.
@@ -566,15 +592,21 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           p.heads.set(id, head);
           const more = arr(get(r.success, "entries")) as Entry[];
           let entries: Entry[] | null = null;
+          // (of the lock held and on: whether its chain parts from the one held, read whole then, its entries kept with
+          // what is held and the rules choosing, `hold`)
+          let parts = false;
+          const how = was?.head && !off && head !== null && head.genesis === was.head.genesis ? ahead(was, head, more, get(r.success, "after_hash")) : null;
           if (head === null) entries = [];
-          else if (was?.head && !off && head.genesis === was.head.genesis) entries = head.seq <= was.head.seq ? null : [...was.entries, ...more.filter((e) => e.seq > was.head!.seq)];
-          else if (more[0]?.seq === 0) entries = more;
+          else if (how === "behind") entries = null;
+          else if (Array.isArray(how)) entries = [...was!.entries, ...how];
+          else if (how === null && more[0]?.seq === 0) entries = more;
           else {
             const all = yield* ask(id, "/lock");
             entries = all._tag === "Success" ? (arr(get(all.success, "entries")) as Entry[]) : null;
+            parts = how === "parts";
           }
           const devices = yield* ask(id, "/lock/devices");
-          return { id, head, entries, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
+          return { id, head, entries, parts, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
         }),
       ),
       () => OTHERS_MS,
@@ -582,16 +614,26 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     );
     const served = answers.flatMap((r) => (r._tag === "Success" && r.success !== null ? [r.success] : []));
     if (served.length === 0) return false;
-    // The longest chain that goes on from the one held (all of them agree on it as far as they go, or it is another
-    // lock); none longer, what is held stays.
+    // Of the lock held: the longest chain that goes on from the one held, where all that do agree as far as they go and
+    // none parts from it; else every entry they showed is kept with what is held and the rules choose (`hold`). Never
+    // spliced: an entry is put after one only where it says that one's hash. Another lock's is not taken; none longer
+    // and none parting, what is held stays.
     let head = was?.head ?? null;
     let entries = was?.entries ?? [];
+    const parted: Entry[] = [];
     if (!off) {
+      const on: { head: Head; entries: Entry[] }[] = [];
       for (const a of served) {
-        if (a.head === null || a.entries === null || a.entries.length !== a.head.seq + 1) continue;
-        if (a.head.genesis !== head!.genesis || a.head.seq <= head!.seq || entryHash(a.entries[head!.seq]!) !== head!.hash) continue;
-        head = a.head;
-        entries = a.entries;
+        if (a.head === null || a.entries === null || a.head.genesis !== head!.genesis) continue;
+        if (a.parts) parted.push(...a.entries);
+        else if (a.entries.length === a.head.seq + 1 && a.head.seq > head!.seq) on.push({ head: a.head, entries: a.entries });
+      }
+      on.sort((x, y) => y.entries.length - x.entries.length);
+      for (const a of on) {
+        if (head!.seq < a.head.seq) {
+          head = a.head;
+          entries = a.entries;
+        } else if (hashOf(entries[a.head.seq]!) !== a.head.hash) parted.push(...a.entries.slice(was!.head!.seq + 1));
       }
     } else {
       // None held (or the one held turned off, whose own chain is not taken again): which lock of those the stations
@@ -643,7 +685,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     // read (one read alone as its link opened told only who came to it, and the others' devices lost their last use
     // on 设置 › 安全 until all were read again).
     const whole = lockStations(inner, ws).every((id) => served.some((a) => a.id === id));
-    yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]));
+    yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]), head === null ? [] : parted);
     return true;
   });
 }
@@ -664,14 +706,16 @@ function mergeSeen(lists: J[][]): J[] {
 /// while it was read (another read landed first: a station asked alone as its link opened, on a slow line, answers
 /// what it kept as it was asked): a chain that goes only as far as some entry of the one held now is behind it, and
 /// the one held stays. Held as read, it took the entries since back off this device until the lock next moved.
-function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries: Entry[], seen: J[] | null): Effect.Effect<void> {
+/// Of the lock held and on, what does not go on from its head (a chain read that parts from it, `parted` the entries of
+/// those that do) is kept with it, and the chain gone by is the rules' choice among all (`chosen`).
+function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries: Entry[], seen: J[] | null, parted: Entry[] = []): Effect.Effect<void> {
   return Effect.gen(function* () {
     if (said !== null && inner.provider.kind === "stillfail") yield* Effect.ignore(new Lock(inner, ws, sub, null).base());
     // (as held now, not as it was when the read began)
     const was = held(inner, ws);
-    const ahead = said !== null && was?.head != null && said.seq < was.head.seq && onChain(was, said) ? was : null;
-    const head = ahead !== null ? ahead.head : said;
-    inner.data.put("lock", ws, { head, entries: head === null ? [] : ahead !== null ? ahead.entries : entries, ...(seen ? { seen } : {}) });
+    const now = chosen(was, said, entries, parted);
+    const head = now.head;
+    inner.data.put("lock", ws, { head, entries: now.entries, ...(now.aside.length > 0 ? { aside: now.aside } : {}), ...(seen ? { seen } : {}) });
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
@@ -684,6 +728,33 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
     // This device not in the lock: it waits, and asks to be approved only by hand (`lock.pair`, its waiting page):
     // the person who will type the code is the one who asks (2026-10-19).
   });
+}
+
+/// What `hold` writes of a read (`said`, `entries`, `parted`) with what is held now (`was`): a chain read that goes only
+/// as far as some entry of the one held, the one held; none read, none; another lock's, or one read where the lock held
+/// is off or none is, as read. Of the lock held and on: a chain that goes on from its head, taken as it is; else all of
+/// it kept with what is held (and kept aside), the chain gone by the rules' choice among them (src/lock-keep.ts), what
+/// is held staying where the rules find none (what was read does not hold by them).
+function chosen(was: Held | null, said: Head | null, entries: Entry[], parted: Entry[]): { head: Head | null; entries: Entry[]; aside: Entry[] } {
+  const aside = was?.aside ?? [];
+  if (said !== null && was?.head != null && parted.length === 0 && said.seq < was.head.seq && onChain(was, said)) return { head: was.head, entries: was.entries, aside };
+  if (said === null) return { head: null, entries: [], aside: [] };
+  if (was?.head == null || said.genesis !== was.head.genesis || fold(was.entries).disabled) return { head: said, entries, aside: [] };
+  const at = entries[was.head.seq];
+  if (parted.length === 0 && at !== undefined && hashOf(at) === was.head.hash && links(entries, was.head.seq + 1)) {
+    const on = new Set(entries.map(hashOf));
+    return { head: said, entries, aside: aside.filter((e) => !on.has(hashOf(e))) };
+  }
+  const genesis = was.head.genesis;
+  const ws = was.entries[0]?.ws;
+  try {
+    const t = keep({ entries: was.entries, aside }, [...entries, ...parted], { chain: (all) => lockChain(all, genesis), pre: (e) => (e?.ws !== ws ? "an entry of another lock" : null) });
+    if (!t.changed) return { head: was.head, entries: was.entries, aside };
+    const es = t.kept.entries;
+    return { head: { seq: es.length - 1, hash: hashOf(es[es.length - 1]!), genesis }, entries: es, aside: t.kept.aside };
+  } catch {
+    return { head: was.head, entries: was.entries, aside };
+  }
 }
 
 /// The lock moved on: the stations that refused this device before are tried again now.
@@ -1396,8 +1467,9 @@ function heardRefused(inner: Inner, ws: string, person: unknown): void {
   inner.runner.fork(Effect.ignore(inner.adb.personal().heardFrom(sub, chains), { log: "Unhandled", message: "personal lock heard of a refusal" }));
 }
 
-/// The last entries of the lock a station refusing this device told: held, as they go on from the lock held here (the
-/// station took each), so a device taken out hears so with no cloud to read it of.
+/// The last entries of the lock a station refusing this device told, as they go on from an entry of the lock held here
+/// (the station took each), so a device taken out hears so with no cloud to read it of: held where they go on from its
+/// head, else kept with it, the rules choosing (`hold`), as a read's are.
 function heardTail(inner: Inner, ws: string, raw: unknown): void {
   const sub = inner.workspaces.owner(ws);
   const was = held(inner, ws);
@@ -1410,7 +1482,8 @@ function heardTail(inner: Inner, ws: string, raw: unknown): void {
     if (tail[i]!.seq !== first + i || (prev !== undefined && tail[i]!.prev !== entryHash(prev))) return;
   }
   const entries = [...was.entries.slice(0, first), ...tail];
-  if (entries.length <= was.entries.length || entryHash(entries[0]!) !== was.head.genesis) return;
+  const known = new Set([...was.entries, ...(was.aside ?? [])].map(hashOf));
+  if (tail.every((e) => known.has(hashOf(e))) || entryHash(entries[0]!) !== was.head.genesis) return;
   const last = entries[entries.length - 1]!;
   inner.runner.fork(hold(inner, ws, sub, { seq: last.seq, hash: entryHash(last), genesis: was.head.genesis }, entries, was.seen ?? null));
 }

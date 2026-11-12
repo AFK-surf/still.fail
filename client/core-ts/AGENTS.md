@@ -68,6 +68,13 @@ test makes each surrounding otherwise and fails where a row changes under the sa
 made raises `LIST_ROW_MAKING` (its digest there says so). What a kept row cannot hold is the list's as it reads it:
 what is changing or asked here (`src/views/local.ts`), a message that did not go (`#unsentRow`), a chat opened from another.
 
+## A lock held here
+
+- A lock's chain held (the workspace's `lock` record, a person's pinned chain) is written only through `src/views/lock.ts`
+  `hold` (its `chosen`) and `src/personal-lock.ts` `#heard`/`#pin`: what goes on from the head is taken, anything else
+  is kept with it and the rules' fork choice decides (`src/lock-keep.ts`). Never put an entry after one whose hash is not
+  its `prev`, and never drop one a station showed but past `ASIDE_MOST` (2026-11-12).
+
 ## Contracts made from here
 
 - `src/ops.ts` `PARAMS` declares each operation's parameters; `scripts/operations.ts` writes the UIs' bindings from
