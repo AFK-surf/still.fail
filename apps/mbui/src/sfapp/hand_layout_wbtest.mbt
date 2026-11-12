@@ -92,6 +92,71 @@ test "待处理's rows, a long job's and a chat's, start their words on one line
 }
 
 ///|
+/// 待处理 beside the rail's bell holding 40 unread chats, more than the window has room for: what it lists scrolls,
+/// its foot (全部已读, 通知设置) stays at the panel's foot in the window, where it was at first (pengxiao, 2026-11-12:
+/// 全部已读 was the last thing of the list, out of sight till scrolled to its end).
+test "待处理 longer than the window: its list scrolls, 全部已读 stays in sight at its foot" {
+  let src : Ref[Source?] = Ref(None)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        let base = fixture_app("home-attention")
+        let s = {
+          ..base,
+          topic_read: fn(name, params) {
+            let t = base.topic(name, params).get().snapshot()
+            guard name == "workspaceMarks" else { return t }
+            let list : Array[Json] = []
+            for i in 0..<40 {
+              list.push({
+                "kind": "done",
+                "title": Json::string("长对话 " + i.to_string()),
+                "what": "写好了",
+                "station": "ws1/st1",
+                "stationName": "Willow",
+                "thread": Json::number(100.0 + i.to_double()),
+                "session": Json::string("s-long-" + i.to_string()),
+                "seq": Json::number(5.0),
+                "workspaceName": "家里",
+              })
+            }
+            let v : Json = {
+              "workspaces": { "ws1": { "unread": 40, "tone": "done", "items": Json::array(list), "others": "done" } },
+              "badge": 40,
+            }
+            { ..t, value: Some(v) }
+          },
+        }
+        src.val = Some(s)
+        s
+      }
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, made()) },
+    tree=fn(root) { app_tree(made())(root) },
+    w=1280.0,
+    h=800.0,
+    env=[("MBUI_REDUCE_MOTION", "1")],
+  )
+  t.run_for(squeeze_opening)
+  t.frame()
+  let (_, foot_y, _, foot_h) = t.rect_of("全部已读").unwrap()
+  assert_true(foot_y + foot_h <= 800.0)
+  let (x, first_y, _, _) = t.rect_of("长对话 0").unwrap()
+  let wheels = [400.0, 400.0, 400.0, 400.0, 400.0, 400.0, 400.0, 400.0]
+  for _, dy in wheels {
+    t.wheel(x, first_y, dy)
+    t.frame()
+  }
+  let (_, last_y, _, last_h) = t.rect_of("长对话 39").unwrap()
+  assert_true(last_y + last_h <= foot_y)
+  let (_, foot_after, _, _) = t.rect_of("全部已读").unwrap()
+  assert_eq(foot_after, foot_y)
+}
+
+///|
 /// Page `mode` in window `win`, pointed at by `hand`, as laid out once it has opened.
 fn hand_layout(mode : String, win : (String, Double, Double, Int), hand : @ui.Pointing) -> String {
   let (_, w, h, platform) = win
