@@ -11,3 +11,10 @@ export const BETA = Boolean(BETA_META) || (typeof location !== "undefined" && lo
 
 /** The name the product goes by here: on the test channel's web its own, youdid.wtf (still.fail's dual). */
 export const NAME = BETA ? "youdid.wtf" : "still.fail";
+
+declare const __PREVIEW_ORIGIN__: string;
+
+/** Where a station's web services are shown (cloud/src/preview.ts): the preview host the page names with
+ * <meta name="stillfail-preview" content="<origin>"> (a self-hosted cloud's, named as it runs: cloud/selfhost/static.ts),
+ * else the one this build was made for. */
+export const PREVIEW_ORIGIN = (typeof document === "undefined" ? null : document.querySelector<HTMLMetaElement>('meta[name="stillfail-preview"]')?.content) || __PREVIEW_ORIGIN__;

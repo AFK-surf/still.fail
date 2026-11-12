@@ -10,9 +10,9 @@ import type { Job } from "../core/shapes.ts";
 import { bridge, fromPreview, toPreview } from "../previewBridge.ts";
 import { accounts, signInHere, takeSignedIn } from "./core.ts";
 import * as css from "./service.css.ts";
+import { PREVIEW_ORIGIN } from "../channel.ts";
 
-declare const __PREVIEW_ORIGIN__: string;
-const ORIGIN = __PREVIEW_ORIGIN__;
+const ORIGIN = PREVIEW_ORIGIN;
 
 function Frame({ station, port, name }: { station: string; port: number; name: string }) {
   const frame = useRef<HTMLIFrameElement>(null);

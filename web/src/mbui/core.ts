@@ -4,7 +4,7 @@
 // on the native hosts (src/core/core_native.c there); what the worker says back goes to mbui's queue on the channel
 // "core" (the host's `post`), its bytes beside its JSON.
 import { BUILT_AT } from "../core/built.ts";
-import { BETA } from "../channel.ts";
+import { BETA, PREVIEW_ORIGIN } from "../channel.ts";
 import { takeShare } from "./share.ts";
 import { putBack, take } from "../login/signin.ts";
 // the app's words' face in a browser: the web's own Inter (its Latin, as the web's pages have it), not the whole face
@@ -18,7 +18,6 @@ interface MbHost {
   post(channel: string, json: string, bytes?: Uint8Array): void;
 }
 
-declare const __PREVIEW_ORIGIN__: string;
 const host = (): MbHost | undefined => (globalThis as { __mbhost?: MbHost }).__mbhost;
 
 /// The id of the call that hands the core the accounts signed in on the sign-in page (handOver): past any of the app's.
@@ -165,7 +164,7 @@ const starting = fetchCarried("inter.woff2", interLatin);
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
 // where a web service's page is shown (cloud/src/preview.ts, the host's site view)
-(host() as { siteFrame?: string } | undefined)!.siteFrame = `${__PREVIEW_ORIGIN__}/_stillfail/frame`;
+(host() as { siteFrame?: string } | undefined)!.siteFrame = `${PREVIEW_ORIGIN}/_stillfail/frame`;
 // what /share was given, for the app to take (share.ts), said before the app runs
 takeShare((channel, json) => host()?.post(channel, json), (open) => {
   const h = host() as { openUrl?(url: string): boolean } | undefined;

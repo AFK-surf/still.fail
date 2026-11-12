@@ -57,6 +57,7 @@
   "cloud.login.password.submit": "Sign in",
   "cloud.login.password.wrong": "Wrong email or password",
   "cloud.login.device.continue": "Continue with Google",
+  "cloud.login.oidc.continue": "Continue with {name}",
   "cloud.login.device.reach": "Once signed in, it can reach stations in your workspaces.",
   "cloud.login.device.signingIn": "Signing in to still.fail for {name}.",
   "cloud.login.device.title": "Allow device to connect remotely",

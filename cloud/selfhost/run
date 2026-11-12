@@ -1,0 +1,15 @@
+#!/bin/sh
+# Starts a self-hosted still.fail cloud as build.ts left it (README.md). What names it, and its keys, are the
+# environment's (cloud.env.example says each); STILLFAIL_DATA is where it keeps what it holds (its objects' SQLite, the
+# releases), LISTEN and SETUP_LISTEN where its two sockets are.
+#   set -a; . ./cloud.env; set +a; STILLFAIL_DATA=/var/lib/stillfail-cloud ./run
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+data=${STILLFAIL_DATA:?the directory the cloud keeps what it holds in}
+: "${PUBLIC_ORIGIN:?https://<the cloud name>}" "${ADMIN_ORIGIN:?https://admin.<the cloud name>}" "${RELAY_URL:?https://relay.<the cloud name>, iroh-relay}"
+: "${AUTH_SIGNING_KEY:?43 characters or more}" "${GRANT_SIGNING_JWK:?an Ed25519 private JWK}"
+mkdir -p "$data/objects" "$data/releases/icons"
+exec "$here/bin/workerd" serve "$here/config.capnp" \
+  --directory-path "objects=$data/objects" --directory-path "releases-files=$data/releases" \
+  --directory-path "web-files=$here/sites/web" --directory-path "admin-files=$here/sites/admin" --directory-path "preview-files=$here/sites/preview" \
+  --socket-addr "http=${LISTEN:-127.0.0.1:8080}" --socket-addr "setup=${SETUP_LISTEN:-127.0.0.1:8081}" "$@"

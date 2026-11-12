@@ -31,6 +31,10 @@
   monoid's cloud, both apps staying, each its own name): still.fail's hosts stay in still.fail's account, its API
   Worker forwarding there (`FORWARD_TO`), monoid's answering a forwarded request as still.fail's (`GUESTS`, under
   `FORWARD_SECRET`). The move itself is `src/move.ts`, run by `.github/workflows/move-cloud.yml`.
+- `selfhost/` runs the same Workers on workerd outside Cloudflare (its README.md). Its config is made from the
+  wrangler files, so a Worker, Durable Object, var or route added there is self-hosted too; a binding of a kind it has
+  no stand-in for (only R2 and send_email have one) needs one there. Whatever names the cloud stays a var, never a
+  host written in code: a self-hosted cloud's names are only known as it runs.
 - The control plane's contract is shared with Comma (AFK-surf/Cue): `station/src/cloud/provider.ts` holds what differs.
   A change to a station-facing route keeps both working.
 - Tests run in Miniflare with everything outside mocked: `pnpm run types && pnpm run check && pnpm test`, one file
