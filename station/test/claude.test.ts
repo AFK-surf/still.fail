@@ -4,7 +4,7 @@
 // after a crash) with its turn's end told once and no live event twice.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -12,6 +12,7 @@ import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
 import { REPO_RULES_HOOK } from "../src/agents/repo-rules.ts";
+import { claudeProject } from "../src/read/transcript.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import { modelLimitOf } from "../src/agents/runtime.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
@@ -228,7 +229,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(env.ANTHROPIC_BASE_URL, "https://opencode.ai/zen/go");
     assert.equal(env.ANTHROPIC_API_KEY, "k1");
     assert.equal(env.ANTHROPIC_CUSTOM_HEADERS, `x-opencode-session: ${o.route}`);
-    assert.equal(env.ANTHROPIC_SMALL_FAST_MODEL, "deepseek-flash");
+    assert.equal(env.ANTHROPIC_SMALL_FAST_MODEL, "claude-haiku-5-5");
     if (process.platform === "darwin") assert.match(env.PATH.split(":")[0], /stillfail-no-keychain-\d+$/, "a security that holds nothing of Claude Code's");
 
     // The user's message, as stream-json input.
@@ -351,6 +352,36 @@ describe("the Claude Code driver", { concurrency: true }, () => {
       }
     }
     assert.equal(classifyResult("5-hour limit configuration is invalid"), "model");
+  });
+
+  test("a session that ran in another directory is resumed from where claude looks, its cwd's project; none at all is refused", async () => {
+    // Claude Code 2.1.63 resumes only from the project of the directory it runs in (FB-16: a chat whose turns all ended
+    // at once with error_during_execution, "No conversation found with session ID").
+    const d = driver();
+    const o = options({ cwd: mkdtempSync(join(data, "cwd-")) });
+    const id = "0c0c0c0c-0000-4000-8000-000000000001";
+    const before = join(o.profile.home, "projects", "-somewhere-else");
+    mkdirSync(before, { recursive: true });
+    writeFileSync(join(before, `${id}.jsonl`), '{"type":"user"}\n');
+    const session = await d.open({ ...o, resume: id }, listen().push);
+    const here = join(o.profile.home, "projects", claudeProject(realpathSync(o.cwd))!, `${id}.jsonl`);
+    assert.equal(readFileSync(here, "utf8"), '{"type":"user"}\n');
+    appendFileSync(here, '{"type":"assistant"}\n');
+    assert.equal(readFileSync(join(before, `${id}.jsonl`), "utf8"), '{"type":"user"}\n{"type":"assistant"}\n', "one file, under both names");
+    await session.dispose();
+    await assert.rejects(d.open({ ...options(), resume: "0c0c0c0c-0000-4000-8000-000000000002" }, listen().push), /no claude transcript/);
+  });
+
+  test("a turn that failed with no result says claude's errors, not just error_during_execution", () => {
+    // As claude 2.1.321 ends a turn it could not run (here --resume of a session it has not).
+    const said = "No conversation found with session ID: 11111111-1111-1111-1111-111111111111";
+    const { events, push } = listen();
+    const turn: Turn = { busy: true, aborting: false, authFailure: null, closed: false };
+    onFrame({ type: "result", subtype: "error_during_execution", is_error: true, num_turns: 0, errors: [said] }, turn, push, () => {});
+    assert.deepEqual(outcome(events), { kind: "failed", reason: classifyResult(said), message: said });
+    const none = listen();
+    onFrame({ type: "result", subtype: "error_during_execution", is_error: true, errors: [] }, { busy: true, aborting: false, authFailure: null, closed: false }, none.push, () => {});
+    assert.equal((outcome(none.events) as { message: string }).message, "error_during_execution");
   });
 
   test("the first api_retry 401 interrupts the turn, which fails as auth", async () => {

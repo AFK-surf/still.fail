@@ -69,6 +69,8 @@ export function apiSource(via: Via): [Source, Endpoints] | undefined {
 /// The key the runtimes are given where the profile has none (a provider that works without): they ask for one.
 const NO_KEY = "none";
 export const OPENCODE = "https://opencode.ai/zen/go";
+/// What Claude Code's background calls run on an OpenCode Go profile that names no model (`accessEnv`).
+export const OPENCODE_SMALL = "claude-haiku-5-5";
 /// The variable a Codex provider config reads an API provider's key from.
 const CODEX_KEY = "STILLFAIL_API_KEY";
 /// The variable DeepSeek Harness reads a profile's key from (its route's `apiKeyEnv`, dsh.ts); DeepSeek's own route
@@ -78,7 +80,9 @@ export const DSH_KEY = "STILLFAIL_DSH_KEY";
 /// Environment an access kind needs. `{route}` is expanded per session later.
 export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model: string | undefined, via: Via): Record<string, string> {
   if (kind === "opencode-go" && runtime === "claude") {
-    const small = model ?? "deepseek-flash";
+    // Claude Code's own small model where the profile names none: one the gateway lists today (an id it no longer
+    // has fails every background call with 400 "Model is unavailable": deepseek-flash, gone by 2026-11).
+    const small = model ?? OPENCODE_SMALL;
     return {
       ANTHROPIC_BASE_URL: OPENCODE,
       ANTHROPIC_API_KEY: key,

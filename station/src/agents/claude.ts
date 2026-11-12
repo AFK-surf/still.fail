@@ -15,6 +15,7 @@
 //   with it later) and as it ends (task_notification, or task_updated with a final status); a subagent's own commands
 //   say owned_by_subagent. They all end with the process.
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { link, mkdir, realpath, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { REPO_RULES_COMMAND } from "./repo-rules.ts";
 import { log } from "../ops/log.ts";
@@ -94,22 +95,43 @@ export const userMessage = (text: string) => JSON.stringify({ type: "user", mess
 
 /// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl: looked for in the directory of `cwd`
 /// (where it runs on), then in every project's (it ran elsewhere before: many directories on a station, each looked at).
-export function transcriptExists(home: string, sessionId: string, cwd: string): boolean {
+/// Where it is, or null.
+export function transcriptAt(home: string, sessionId: string, cwd: string): string | null {
   const project = claudeProject(cwd);
-  if (project !== null && existsSync(join(home, "projects", project, `${sessionId}.jsonl`))) return true;
+  const here = project === null ? null : join(home, "projects", project, `${sessionId}.jsonl`);
+  if (here !== null && existsSync(here)) return here;
   let dirs: string[];
   try {
     dirs = readdirSync(join(home, "projects"));
   } catch {
-    return false;
+    return null;
   }
-  return dirs.some((d) => {
+  for (const d of dirs) {
+    const path = join(home, "projects", d, `${sessionId}.jsonl`);
     try {
-      return statSync(join(home, "projects", d)).isDirectory() && existsSync(join(home, "projects", d, `${sessionId}.jsonl`));
-    } catch {
-      return false;
-    }
-  });
+      if (statSync(join(home, "projects", d)).isDirectory() && existsSync(path)) return path;
+    } catch {}
+  }
+  return null;
+}
+
+/// A session found in another directory's project (it ran elsewhere before) is linked into `cwd`'s, where `--resume`
+/// looks: an older Claude Code looks only there (2.1.63, on FB-16's station; 2.1.321 looks in every project's) and ends
+/// at once with `error_during_execution` ("No conversation found with session ID"), never reaching the model. Named by
+/// the directory as the process sees it (symbolic links resolved). A hard link, else a symbolic one: the one file goes
+/// on either way, whichever name it is written by. Nothing done where neither can be made.
+export async function bringTranscript(home: string, sessionId: string, cwd: string, found: string): Promise<void> {
+  const project = claudeProject(await realpath(cwd).catch(() => cwd));
+  if (project === null) return;
+  const dir = join(home, "projects", project);
+  const here = join(dir, `${sessionId}.jsonl`);
+  if (here === found) return;
+  try {
+    await mkdir(dir, { recursive: true });
+    await link(found, here).catch(() => symlink(found, here));
+  } catch (e) {
+    log.warn("agents::claude", "could not bring a session's transcript to where claude resumes it", { session: sessionId, error: (e as Error).message });
+  }
 }
 
 /// Anthropic turning the request away before any account is looked at (a region it does not serve, a proxy's address
@@ -259,7 +281,10 @@ function frameDoes(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void,
   } else if (kind === "system" && subtype === "compact_boundary") {
     emit({ type: "compacted" });
   } else if (kind === "result") {
-    const text = typeof frame.result === "string" ? frame.result : subtype;
+    // A turn that failed outside the model's reply (`error_during_execution`: a session it could not resume, a request
+    // it could not make) has no `result`; what went wrong is in `errors`, the subtype only says that something did.
+    const errors = Array.isArray(frame.errors) ? frame.errors.filter((e: unknown): e is string => typeof e === "string" && e.trim() !== "") : [];
+    const text = typeof frame.result === "string" && frame.result.trim() !== "" ? frame.result : errors.length > 0 ? errors.join("\n") : subtype;
     let outcome: TurnOutcome;
     if (turn.authFailure !== null) outcome = { kind: "failed", reason: refused(turn.authFailure) ? "refused" : "auth", message: turn.authFailure };
     else if (turn.aborting) outcome = { kind: "aborted" };
@@ -304,9 +329,11 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   async open(options: OpenOptions, events: Events): Promise<ClaudeSession> {
     const home = options.profile.home;
     mkdirSync(home, { recursive: true });
-    if (options.resume !== undefined && !transcriptExists(home, options.resume, options.cwd)) {
+    if (options.resume !== undefined) {
+      const found = transcriptAt(home, options.resume, options.cwd);
       // claude would start and exit at once; failing here lets the caller start fresh.
-      throw new Error(`no claude transcript for session ${options.resume}`);
+      if (found === null) throw new Error(`no claude transcript for session ${options.resume}`);
+      await bringTranscript(home, options.resume, options.cwd, found);
     }
     const sessionId = options.resume ?? uuid();
     const mcpConfig = options.textOnly ? { mcpServers: {} } : { mcpServers: { stillfail: { type: "http", url: options.mcpUrl, headers: { Authorization: `Bearer \${${MCP_TOKEN_VAR}}` } } } };
