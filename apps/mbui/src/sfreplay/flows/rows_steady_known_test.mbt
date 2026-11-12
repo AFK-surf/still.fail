@@ -42,7 +42,8 @@ fn init {
     // (+1, the fourth, seen once the third was held: the same two ways of the same causes (the composer emptied at
     // 1580.9, the answers and the agent's state going at 1610.8) on that message's state row, taken across the run's
     // display's frames at 1681.0, 1689.4 and 1706.6, uneven as a device's are: "went -1.98 a frame between 4.63 and
-    // -1.69". Goes with the third)
+    // -1.69". main's app (src/sfapp/app.mbt, src/sfbase/source.mbt, src/sfbase/workspace_switch.mbt, src/sfdesk/frame.mbt
+    // as main has them) on the same replay shows the same four, the same row and words. Goes with the third)
     ("src/sfreplay/flows/share_test.mbt", 4),
     ("src/sfreplay/flows/share_files_test.mbt", 1),
   ])

@@ -25,5 +25,11 @@ fn init {
     ("src/sfreplay/flows/wide_resize_test.mbt", 1),
     ("src/sfreplay/flows/wide_answer_reply_test.mbt", 1),
     ("src/sfreplay/flows/wide_send_test.mbt", 1),
+    // (recorded again for bell_lit, the same leave seen in two more: the new chat's scene leaving (src/sfbase/fresh.mbt's
+    // new/leave, the old view) still over the chat come in its place, its 「描述要做的事。它会在 … 上使用所选模型新建会话。」
+    // under the chat's 「以下是新消息」 (wide-newline) and its first line (wide-switcher). main's app shows the same
+    // pair at the same place over these traces. Goes as the chat page's shell is made as nodes)
+    ("src/sfreplay/flows/wide_newline_test.mbt", 1),
+    ("src/sfreplay/flows/wide_switcher_test.mbt", 1),
   ])
 }

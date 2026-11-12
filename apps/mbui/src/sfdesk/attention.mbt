@@ -202,7 +202,13 @@ fn bell_trouble(src : Source, w : Workspace) -> String {
 /// Whether the rail's bell has its dot: something in its panel, the chats (less what was let go here), the stations'
 /// trouble not looked at or services left up long it has not shown yet.
 pub fn bell_lit(src : Source, w : Workspace) -> Bool {
-  attention_groups(src, w, true).length() > 0 || bell_trouble(src, w) != "" || long_jobs_lit(src, w)
+  // (each read whatever the others hold: what it reads never comes and goes with another's value, its topics held
+  // all along, not let go of as 待处理 comes to list a chat and asked again as it lists none; sfapp's
+  // bell_reads_wbtest)
+  let chats = attention_groups(src, w, true).length() > 0
+  let trouble = bell_trouble(src, w) != ""
+  let jobs = long_jobs_lit(src, w)
+  chats || trouble || jobs
 }
 
 ///|

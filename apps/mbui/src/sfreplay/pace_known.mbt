@@ -76,7 +76,12 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "settings-device-pages": [7],
   "settings-vault-item": [7],
   // 3: sub {"query":…,"scope":…,"topic":"shareIn","source":…} | strict sub {"topic":"notify"}
-  "share": [7],
+  // (120, seen once its rows were held: shareIn let go of before driveTransfers in the strict pass, after it at 120.
+  // shareIn is read by the share sheet's old view as its frame builds (src/sfapp/share.mbt:445, share_parts,
+  // MB_OUTSIDE_SHARE's cause), so it is let go of by the first frame that no longer builds it: probed, at 1999.98 in the
+  // strict pass (the run's frame) and 1991.67 at 120 a second, each a frame's moment; driveTransfers, the shell's,
+  // declared, at 2000 and 1983.33. Goes with share_in_frame)
+  "share": [7, 120],
   "share-files": [7],
   "share-new-chat": [7],
   // 2: unsub {"topic":"status"} | strict sub {"topic":"workspace","workspace":…}
@@ -84,8 +89,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "places": [7],
   // 1: sub {"scope":…,"topic":"newChat"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
   "draft-restart": [7],
-  // 1: sub {"topic":"filesTabs","workspace":…} | strict sub {"topic":"doing"}
-  "drive-download-many": [7],
   // 1: - | strict call lock.pair {"workspace":…}
   "lock-wait": [7],
   // 1: sub {"scope":…,"topic":"stations"} | strict sub {"scope":…,"topic":"newChat"}
@@ -129,11 +132,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
 let pace_splits_untraced : Map[String, Array[Int]] = {
   // (each split as PACE says it in the flow's run)
   "drive-sheet-closing": [7],
-  // (seen once its rows were held: shareIn let go of after driveTransfers, the strict pass's the other way)
-  "share": [120],
-  "wide-newline": [120],
-  "wide-places": [120],
-  "wide-send": [120],
   "wide-switcher": [120],
 }
 
@@ -144,6 +142,18 @@ let pace_splits_untraced : Map[String, Array[Int]] = {
 /// again over one).
 // kept across runs: a value
 let strict_diverged_known : Map[String, Array[(Double, String)]] = {
+  // drive-download-many (recorded again for bell_lit): its run's app was started on the files' page (the trace's
+  // `MBUI_OPEN_PAGE=files`), the replay's opens it as a step (Flow::open_page) once the first screen is up. So the
+  // replay's app first lands the wide frame's pane, declaring the new chat as the marks are answered (1093.9), and lets
+  // go of it as the files' page comes on top, a frame's moment there, the shell's `doing` handed over from the page
+  // before let go of and asked again with it. The run's app asked none of it. The replay's way of opening the page, not
+  // the app's: goes as Flow::open_page starts the replay's app on the page as its run's was
+  "drive-download-many": [
+    (1093.92529296875, "{\"id\":19,\"subscribe\":{\"topic\":\"newChat\",\"scope\":\"01M76NSCTQ86BGR7W0YS3R5G21\"},\"keyed\":true}"),
+    (1566.6666666666665, "{\"id\":19,\"unsubscribe\":true}"),
+    (1566.6666666666665, "{\"id\":12,\"unsubscribe\":true}"),
+    (1583.3333333333333, "{\"id\":26,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
+  ],
   // lock-wait (#5519; anew with what the first screen reads declared, #5589; anew with notify.permission told as
   // notify is answered, between frames, #5613: it takes the id before doing's and driveTransfers', and what the
   // replay held for it comes a frame sooner): at 22116.7 the lock's delta (safe mode off) takes the waiting page away
@@ -156,16 +166,6 @@ let strict_diverged_known : Map[String, Array[(Double, String)]] = {
     (23096.97412109375, "{\"id\":13,\"unsubscribe\":true}"),
     (23096.97412109375, "{\"id\":14,\"unsubscribe\":true}"),
     (23100.0, "{\"id\":24,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
-  ],
-  // wide-newline (the first page's status let go of at its moment: opens_ahead_node declares the page the wide
-  // frame's pane lands on at the moment the marks that say which are answered, a new chat here): the run's chat is
-  // pressed within the frame after, before the pane lands, so what was declared for the new chat no reader takes and
-  // it is let go of at once. The run's app landed the pane in a frame and asked nothing for it before the press. Gone
-  // as the trace is recorded again (the coordinator of the migration, 2026-11-12: not before, a take now carries much
-  // else of main's since and is a frame late on its first step, the display's frames not the run's)
-  "wide-newline": [
-    (1100.0, "{\"id\":19,\"subscribe\":{\"topic\":\"newChat\",\"scope\":\"01M6WAM7VZHF0BF7YTBFKJC8BS\"},\"keyed\":true}"),
-    (1101.26513671875, "{\"id\":19,\"unsubscribe\":true}"),
   ],
 }
 
@@ -204,7 +204,6 @@ let frames_unrecorded_known : Array[String] = [
   "draft",
   "draft-restart",
   "drive-delete",
-  "drive-download-many",
   "drive-lend",
   "drive-list",
   "drive-play",
@@ -260,14 +259,8 @@ let frames_unrecorded_known : Array[String] = [
   "station-rename",
   "video-frames",
   "viewer",
-  "wide-answer-reply",
-  "wide-new-chat",
-  "wide-newline",
-  "wide-places",
   "wide-resize",
   "wide-row-menu",
-  "wide-send",
-  "wide-switcher",
   "workspace-members",
 ]
 
@@ -276,8 +269,18 @@ let frames_unrecorded_known : Array[String] = [
 /// trace: its first failure as it says it, and what it is, traced to its line, or "untraced". A new measure's baseline
 /// as it came in (the coordinator of the migration, 2026-11-12), only falls: a flow failing otherwise, or one here that
 /// fails no more, fails. The flow's own checks are the lenient pass's, whole, whatever its strict pass came to.
+/// drive-download-many's and wide-places' are one kind, untraced yet: nothing moves at the run's moment, and what the
+/// step waits for is the core's next answers, which the replay gives later than the run's moment; which of the replay's
+/// steps makes them late is to be found (the coordinator of the migration, 2026-11-12), both to go with it.
 // kept across runs: a value
 let strict_known : Map[String, (String, String)] = Map([
+  (
+    "drive-download-many",
+    (
+      "src/sfreplay/flows/drive_download_many_test.mbt:38:5-38:22@stillfail: not so at 3544.971435546875 ms, the run's moment for it (its timeline 0 ms later from its first step): so at 3665.17822265625 ms, 120.206787109375 ms later",
+      "untraced (probed frame by frame): nothing moving but the download's toast; what it waits for is the core's answers to the folder opened, which the replay gives later than the run's moment (3580.1 to 3649.2 ms): the replay's moment of giving, it seems, not the app's",
+    ),
+  ),
   (
     "chat-audio",
     (
@@ -318,6 +321,20 @@ let strict_known : Map[String, (String, String)] = Map([
     (
       "its motion at rest at 1466.6666666666665 ms, 6.895670572916515 ms after the run's next step (1459.77099609375 ms; its timeline 0 ms later from its first step); said since the last step that acted: the bar's springs, told at src/sfapp/bar.mbt:170:12-170:102@stillfail (at rest at 1096.608154296875 ms) | image \"mem:share-in/1\" fading in, told at src/ui/image.mbt:741:5-741:63@mbui (at rest at 1300 ms)",
       "untraced: the bar's springs and an image fading in as the run's next step came",
+    ),
+  ),
+  (
+    "wide-answer-reply",
+    (
+      "src/sfreplay/flows/wide_answer_reply_test.mbt:14:5-14:17@stillfail: not so at 1230.647216796875 ms, the run's moment for it (its timeline 0 ms later from its first step): so at 1246.647216796875 ms, 16 ms later",
+      "traced: as the new chat's page leaves for the chat (src/sfbase/fresh.mbt:81, :84, the old view), the chat page's composer is drawn a frame late; goes as the chat page's shell is made as nodes",
+    ),
+  ),
+  (
+    "wide-places",
+    (
+      "src/sfreplay/flows/wide_places_test.mbt:12:5-12:17@stillfail: not so at 1132.15087890625 ms, the run's moment for it (its timeline 11.18603515625 ms later from its first step): so at 1149.0439453125 ms, 16.89306640625 ms later",
+      "untraced (probed frame by frame): nothing moving at that moment; what it waits for is the core's next message, which the replay gives later than the run's moment (1132.9 ms): the replay's moment of giving, it seems, not the app's",
     ),
   ),
 ])
