@@ -207,8 +207,9 @@ pub fn place_page(place : String) -> Page {
 /// A place gone to (the bottom bar's, the rail's, back to the chats from another place's top), in every tier: what is
 /// over the pages put down (Shell's `close_overlays`), the stack back to its root and the place's page that root, in
 /// place; `way` the side it comes in from (the bar's order: -1 its left, 1 its right, 0 none). The same place again
-/// changes nothing. Whether it went.
-pub fn go_place(place : String, way? : Int = 0) -> Bool {
+/// changes nothing. Whether it went. `kept`: the page that leaves the root put on the stack's shelf and the place's taken
+/// back from it (nav_root_kept: the bottom bar's on 小屏), not let go and made anew.
+pub fn go_place(place : String, way? : Int = 0, kept? : Bool = false) -> Bool {
   let page = place_page(place)
   if app.nav.depth() == 1 && app.nav.top() == page {
     return false
@@ -217,7 +218,11 @@ pub fn go_place(place : String, way? : Int = 0) -> Bool {
     (shell.val.close_overlays)()
     app.switch_way = way
     nav_home()
-    app.nav.replace(page)
+    if kept {
+      nav_root_kept(page)
+    } else {
+      app.nav.replace(page)
+    }
   })
   true
 }

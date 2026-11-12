@@ -1450,6 +1450,10 @@ pub fn Tree::new(
       order_copied: 0,
     },
   }
+  // (the clock held while it is read, as a core's topic is: what reads it at rest (put by, View::park; rested in place,
+  // View::rests) lets go of it, so the tree is not moving for a way nothing draws, and reads it anew as it wakes,
+  // where the clock has it then: @signals.rest)
+  t.clock.on_unwatched(fn() {  })
   let root = t.made(-1)
   root.owning(fn() { make(root) })
   t
@@ -7960,7 +7964,8 @@ pub fn[K : Eq] View::pick(
 /// its data, not by which object it is): a row whose item is the same runs nothing. Down a column a row makes its way
 /// in as it comes and closes it as it goes (View::comes, View::goes), but those made with what holds them, or
 /// `at_once`, or where they are said to go over a time (`leave`: their coming and going their own); along a
-/// row the same across where `along_row` is said (Tree::along_row_at).
+/// row the same across where `along_row` is said (Tree::along_row_at). `keeps`: the keys whose rows are kept as they
+/// leave, put by at rest and taken in again as their keys come back, read with the items (each_kept.mbt).
 #callsite(autofill(loc))
 pub fn[T : Eq, K : Hash + Eq] View::each(
   self : View,
@@ -7970,9 +7975,10 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   leave? : Double = 0.0,
   at_once? : Bool = false,
   along_row? : Bool = false,
+  keeps? : () -> Array[K],
   loc~ : SourceLoc,
 ) -> Unit {
-  self.each_by(items, key, row, leave~, at_once~, along_row~, loc~)
+  self.each_by(items, key, row, leave~, at_once~, along_row~, keeps?, loc~)
 }
 
 ///|
@@ -7989,6 +7995,7 @@ fn[T : Eq, K : Hash + Eq] View::each_by(
   at_once? : Bool = false,
   along_row? : Bool = false,
   way_of? : (K, View, Bool) -> Bool,
+  keeps? : () -> Array[K],
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
@@ -8006,11 +8013,26 @@ fn[T : Eq, K : Hash + Eq] View::each_by(
       None => true
     })
   }
-  let stop = slot.tree.structured(items, fn(all) {
-    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, ways, loc) })
-  })
+  let kept : EachKept[K, T]? = keeps.map(EachKept::new)
+  let change = fn(all) {
+    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, ways, loc, kept) })
+  }
+  let stop = match kept {
+    None => slot.tree.structured(items, change)
+    // (what is kept read where the items are: a change of it is a change of them)
+    Some(e) =>
+      slot.tree.structured(fn() { (items(), (e.keys_of)()) }, fn(both) {
+        e.keys = both.1
+        change(both.0)
+      })
+  }
   way.val = !at_once && leave <= 0.0
   slot.owns(stop) |> ignore
+  // (what it put by let go with it: held by nothing, let go by nothing else)
+  match kept {
+    Some(e) => slot.owns(fn() { e.let_go_all() }) |> ignore
+    None => ()
+  }
 }
 
 ///|
@@ -8026,6 +8048,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   leave : Double,
   way : (K, View, Bool) -> Bool,
   loc : SourceLoc,
+  kept : EachKept[K, T]?,
 ) -> Unit {
   guard slot.live() is Some(sn) else { return }
   slot.tree.work.structure = slot.tree.work.structure + 1
@@ -8050,6 +8073,11 @@ fn[T : Eq, K : Hash + Eq] each_change(
             item.set(it)
             rows[k] = (v, item)
             order.push(v.at)
+          }
+          // (put by as its key left, kept: taken in again, no way in: each_kept.mbt)
+          _ if each_kept_takes(slot, kept, k, it) is Some(r) => {
+            rows[k] = r
+            order.push(r.0.at)
           }
           _ => {
             gone_rows.remove(k)
@@ -8076,7 +8104,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   for k, r in rows {
     if !seen.contains(k) {
       gone.push(k)
-      if slot.goes(r.0, leave, !way(k, r.0, false)) {
+      if !each_kept_parks(slot, kept, k, r) && slot.goes(r.0, leave, !way(k, r.0, false)) {
         gone_rows[k] = r
       }
     }
@@ -8090,6 +8118,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
     gone_rows.remove(k)
   }
   each_place(slot, sn, order, made=made_now)
+  each_kept_settle(kept)
 }
 
 ///|

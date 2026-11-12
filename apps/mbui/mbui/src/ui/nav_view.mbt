@@ -45,13 +45,16 @@ fn[P] Nav::p_at(self : Nav[P], now : Double) -> Double {
 }
 
 ///|
-/// The page `serial` (on the stack, or leaving it).
+/// The page `serial` (on the stack, leaving it, or on its shelf: Nav::replace_kept).
 fn[P] Nav::entry(self : Nav[P], serial : Int) -> NavPage[P]? {
   match self.leaving {
     Some(e) if e.serial == serial => return Some(e)
     _ => ()
   }
-  self.pages.iter().find_first(fn(e) { e.serial == serial })
+  match self.pages.iter().find_first(fn(e) { e.serial == serial }) {
+    Some(e) => Some(e)
+    None => self.shelf.iter().find_first(fn(e) { e.serial == serial })
+  }
 }
 
 ///|
@@ -86,15 +89,16 @@ pub fn[P] Nav::root_shows(self : Nav[P]) -> Bool {
 }
 
 ///|
-/// Whether page `serial` takes presses: not as it goes back off the stack, nor under a page coming in over it (read:
-/// told as that changes).
+/// Whether page `serial` takes presses: not as it goes back off the stack, nor under a page coming in over it, nor on
+/// the shelf (read: told as that changes).
 fn[P] Nav::takes(self : Nav[P], serial : Int) -> Bool {
   self.said.get() |> ignore
   self.shown.get() |> ignore
   let n = self.pages.length()
   let leaving = self.leaving is Some(l) && l.serial == serial
   let top = !leaving && self.pages[n - 1].serial == serial
-  !(leaving || (self.mode == 1 && !top))
+  let shelved = self.shelf.iter().any(fn(e) { e.serial == serial })
+  !(leaving || shelved || (self.mode == 1 && !top))
 }
 
 ///|
@@ -161,7 +165,9 @@ fn nav_views_framed(c : Ctx) -> Unit {
 /// it is now) and what makes its nodes, in the node given, given what it is as that changes, the page under it (its
 /// own, whatever is on top when what they bind is read: not Nav::under), its time on top (its entry's, as it is put
 /// there again: Ctx::page_stint's) and its entry's number (what the frame keeps of the page by, as long as the entry
-/// is: nav_flat_view's `head`, `gone`); none, its old view.
+/// is: nav_flat_view's `head`, `gone`); none, its old view. `keeps_made`: a root page made as nodes that another takes
+/// the place of (Nav::replace_kept) put on the shelf, its nodes put by at rest (View::each's `keeps`) and taken in again
+/// as it is put back; the shelf emptied, each on it left for good, as this node is let go.
 pub fn[P] nav_view(
   v : @view.View,
   nav : Nav[P],
@@ -173,10 +179,20 @@ pub fn[P] nav_view(
   page_key? : (P) -> String = fn(_) { "" },
   page_for? : (@view.View, Int) -> (@view.View) -> (Ctx, P) -> Unit,
   made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
+  keeps_made? : Bool = false,
 ) -> @view.View {
   v.box(fn(s) {
     s.grow(Is(1.0)) |> ignore
     nav.floor = 0
+    if keeps_made {
+      nav.shelves = Some(fn(p) { made(p) is Some(_) })
+      // (its shelf this node's: let go with it, what it put by let go by the each below, each left for good)
+      s.owns(fn() {
+        nav.shelves = None
+        nav.shelf.clear()
+      })
+      |> ignore
+    }
     nav.held_by(s, fn() { s.laid_size() }, ready, most)
     let k = nav_views_made.val
     nav_views_made.val = k + 1
@@ -264,7 +280,12 @@ pub fn[P] nav_view(
                     shown.val
                   },
                   fn(m) {
-                    m.grow(Is(1.0)).laid_nowhere(By(fn() { !nav.shows(k) })) |> ignore
+                    // (laid out nowhere while it does not show, but on the shelf: there it is held by no node, put
+                    // by as it was laid out, and taken back so, laid out again nowhere and then whole for nothing)
+                    m
+                    .grow(Is(1.0))
+                    .laid_nowhere(By(fn() { !nav.shows(k) && !nav.shelf.iter().any(fn(e) { e.serial == k }) }))
+                    |> ignore
                     nav.made(m, k, e, f, bg, edge)
                   },
                 )
@@ -289,6 +310,15 @@ pub fn[P] nav_view(
             }
           },
         )
+      },
+      // (those on the shelf kept, put by at rest: Nav::replace_kept)
+      keeps?=if keeps_made {
+        Some(fn() {
+          nav.said.get() |> ignore
+          nav.shelf.map(fn(e) { e.serial })
+        })
+      } else {
+        None
       },
     )
   })

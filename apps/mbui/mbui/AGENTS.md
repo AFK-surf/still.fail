@@ -67,6 +67,13 @@ yet and you can add one, add it.
   The rows' other structures (`apps/mbui`'s, 133 found by the screens' sweep) are looked at one by one once
   the chat's page is made as nodes, then rows make their way by default and `along_row` goes: a switch a page must
   say is a debt of 方案 A, not its end (the coordinator of the migration, 2026-11-11).
+- A structure can keep what it switches off, at rest: `View::each`'s `keeps` puts a row whose key left by
+  (`View::park`: held by no node, so not laid out, drawn, pressed, focused or read out; what it binds `@signals.rest`ed)
+  and takes the same nodes in again as the key comes back, at once, no way in (`src/view/each_kept.mbt`); a stack's
+  root does so through `Nav::replace_kept` and `nav_view`'s `keeps_made`. At rest is not stopped: a watch that holds
+  what it reads lets go of it and reads it anew as it wakes, but a `View::at_moment` still comes due and a way read by
+  the clock is where the clock has it on waking (`src/view/at_rest_today_wbtest.mbt`), and a bare `@signals.effect`
+  rests not at all: what a kept part holds is held by watches (`View::reacts`, a binding), never by an effect.
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.

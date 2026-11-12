@@ -174,6 +174,11 @@ struct Nav[P] {
   // it (which pages, and how they move) as a signal, told as that changes
   mut hosted : NavHosted?
   shown : @signals.Signal[Int]
+  // root entries put by as another took the stack's root (Nav::replace_kept), each known by its serial still, out of
+  // the stack: taken back as its page is put at the root again; and whether what holds the stack shelves a page (its
+  // page made once as nodes, nav_view's `keeps_made`), none where nothing keeps them (an old view's frame, a flat one)
+  shelf : Array[NavPage[P]]
+  mut shelves : ((P) -> Bool)?
 }
 
 ///|
@@ -238,6 +243,8 @@ pub fn[P] Nav::new(
     floor: 0,
     hosted: None,
     shown: @signals.signal(0),
+    shelf: [],
+    shelves: None,
   }
 }
 
@@ -864,6 +871,59 @@ fn[P] Nav::replace_now(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
+/// The root page replaced by `page` in place, as Nav::replace does, the one it replaces put on the shelf where what
+/// holds the stack shelves it (its page made as nodes: Nav's `shelves`): known by its serial still, out of the stack
+/// (not shown, taking no press), its keyboard's focus given up; and where `page` is on the shelf, that entry taken back
+/// in the new one's place (its time on top anew, over as the one it replaces was). Where nothing shelves, or the stack
+/// is more than its root, it is Nav::replace. What a place of a bar switched to is (the bottom bar's on 小屏).
+pub fn[P : Eq] Nav::replace_kept(self : Nav[P], page : P) -> Unit {
+  self.told_focus(fn() { self.replace_kept_now(page) })
+}
+
+///|
+fn[P : Eq] Nav::replace_kept_now(self : Nav[P], page : P) -> Unit {
+  self.settle()
+  guard self.shelves is Some(shelves) && self.pages.length() == 1 else { return self.replace_now(page) }
+  let was = self.pages.pop().unwrap()
+  if shelves(was.page) {
+    was.focus_kept = 0
+    self.shelf.push(was)
+  } else {
+    self.gone.push(was)
+  }
+  let e = match self.shelf.search_by(fn(e) { e.page == page }) {
+    Some(i) => {
+      let e = self.shelf.remove(i)
+      e.stint = next_stint()
+      e
+    }
+    None => nav_page(page, None)
+  }
+  e.over = was.over
+  self.pages.push(e)
+  self.told()
+  wake()
+}
+
+///|
+/// The serial of the entry on the shelf whose page is `page` (Nav::replace_kept), if one is: what putting it at the
+/// root takes back.
+pub fn[P : Eq] Nav::shelved(self : Nav[P], page : P) -> Int? {
+  self.shelf.iter().find_first(fn(e) { e.page == page }).map(fn(e) { e.serial })
+}
+
+///|
+/// The shelf emptied (Nav::replace_kept): each entry on it left for good, as one let go of is (what holds the stack
+/// lets go of its page: forgotten, Nav's `on_leave` told). As the workspace in view changes.
+pub fn[P] Nav::shelf_empty(self : Nav[P]) -> Unit {
+  if self.shelf.length() > 0 {
+    self.shelf.clear()
+    self.told()
+    wake()
+  }
+}
+
+///|
 /// The pages over the stack's first `keep` replaced by `pages` (the first of them over the last kept; `keep` 0, the root
 /// too), in place (nothing slides), told once as it is so: never seen with those taken off and these not on yet (a
 /// list's row choosing the page beside it in place of whatever was open over the list). Never with no page: `pages`
@@ -882,6 +942,8 @@ fn[P] Nav::replace_above_now(self : Nav[P], keep : Int, pages : Array[P]) -> Uni
   while self.pages.length() > keep {
     self.gone.push(self.pages.pop().unwrap())
   }
+  // (another workspace's pages, or a page in place of a place: none put by is taken back, Nav::replace_kept)
+  self.shelf.clear()
   for page in pages {
     self.pages.push(nav_page(page, self.pages.last().map(fn(e) { e.page })))
   }
