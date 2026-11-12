@@ -101,7 +101,7 @@ fn screen_ui(key : String) -> ScreenUi {
     None => {
       let u : ScreenUi = {
         zoom: screen_zoom(),
-        pad: { x: 0.5, y: 0.5 },
+        pad: { x: 0.5, y: 0.5, placed: false },
         held: { mods: 0 },
         full: @signals.signal(false),
         fulled: false,
@@ -411,7 +411,7 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
   }
   if s.driving() {
     if !s.simulator() {
-      @sf.native_over_act("screen-pad", @sf.t("android-misc.screen.trackpad"), "trackpad", fn() { pad_chosen(c, s, !s.pad(s.src)) })
+      @sf.native_over_act("screen-pad", @sf.t("android-misc.screen.trackpad"), "trackpad", fn() { pad_chosen(c, s, u, !s.pad(s.src)) })
     }
     @sf.native_over_act("screen-keyboard", @sf.t("android-misc.screen.keyboard"), "keyboard", fn() { keyboard_toggled(c, catcher, typing) })
   }
@@ -653,8 +653,11 @@ fn screen_picked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 }
 
 ///|
-/// Trackpad or direct, said as it is chosen: how a finger drives it now.
-fn pad_chosen(c : @ui.Ctx, s : ScreenSess, on : Bool) -> Unit {
+/// Trackpad or direct, said as it is chosen: how a finger drives it now. A trackpad starts where the screen's pointer is.
+fn pad_chosen(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, on : Bool) -> Unit {
+  if on {
+    u.pad.start_at(s.cursor())
+  }
   say(c, @sf.t(if on { "android-misc.screen.padOn" } else { "android-misc.screen.padOff" }))
   c.tell("screen-pad/" + s.view, fn() {
     s.choose_pad(s.src, on, screen_act(c, @sf.t("android-misc.screen.touchWhat")))
@@ -859,13 +862,13 @@ fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
 
 ///|
 /// Trackpad (on) or direct, as a round button that is on while it is a trackpad.
-fn pad_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
+fn pad_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   if s.simulator() {
     return
   }
   let on = s.pad(s.src)
   round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~, on_press=fn() {
-    pad_chosen(c, s, !on)
+    pad_chosen(c, s, u, !on)
   })
 }
 
@@ -922,7 +925,7 @@ fn full_tools(
         mode_button(c, s)
       }
       if s.driving() {
-        pad_button(c, s)
+        pad_button(c, s, u)
       }
       paste_button(c, s, u)
       if s.driving() {
@@ -986,7 +989,7 @@ fn screen_rail(
         mode_button(c, s)
       }
       if s.driving() {
-        pad_button(c, s)
+        pad_button(c, s, u)
       }
       paste_button(c, s, u)
       if s.driving() {
@@ -1013,7 +1016,7 @@ let rail_badge_up : Double = 2.0
 /// Upright, under the frame while driving it: trackpad or direct, the keys row, the keyboard.
 fn foot(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catcher : String) -> Unit {
   c.box(style=screen_foot, fn() {
-    pad_button(c, s)
+    pad_button(c, s, u)
     c.box(style=screen_fill_w, fn() { keys_row(c, s, u) }) |> ignore
     keyboard_button(c, catcher, typing)
   })

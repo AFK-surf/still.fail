@@ -143,8 +143,10 @@ fn mods_of_held(held : Int) -> Int {
 
 ///|
 /// The modifier keys of `mods`, each its key going `kind` ("down" before a press, "up" after it), so a click with ⇧ or
-/// ⌘ held is one there too (a key held alone never comes to a key catcher).
+/// ⌘ held is one there too (a key held alone never comes to a key catcher). Each key's event says the modifiers held
+/// after it, as a keyboard's do: a down with itself, an up without itself.
 fn mods_round(send : (Json) -> Unit, mods : Int, kind : String) -> Unit {
+  let mut held = if kind == "down" { 0 } else { mods }
   for k in [
     (mod_meta, "Meta", "MetaLeft"),
     (mod_ctrl, "Control", "ControlLeft"),
@@ -152,7 +154,8 @@ fn mods_round(send : (Json) -> Unit, mods : Int, kind : String) -> Unit {
     (mod_shift, "Shift", "ShiftLeft"),
   ] {
     if (mods & k.0) != 0 {
-      send(key_input(kind, k.1, k.2, mods))
+      held = if kind == "down" { held | k.0 } else { held & k.0.lnot() }
+      send(key_input(kind, k.1, k.2, held))
     }
   }
 }
@@ -294,10 +297,22 @@ fn pad_gain(dp_per_ms : Double) -> Double {
 }
 
 ///|
-/// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so.
+/// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; `placed` once it
+/// was moved or started where the station said its pointer is. Never set again from the station as it goes: that lags
+/// the pad by the way there and back, and a quick second stroke would jump back.
 priv struct PadPointer {
   mut x : Double
   mut y : Double
+  mut placed : Bool
+}
+
+///|
+/// Started where the station says its pointer is (`at`), when it says.
+fn PadPointer::start_at(self : PadPointer, at : (Double, Double)?) -> Unit {
+  guard at is Some((x, y)) else { return }
+  self.x = clamp01(x)
+  self.y = clamp01(y)
+  self.placed = true
 }
 
 ///|
@@ -307,6 +322,7 @@ fn PadPointer::at(self : PadPointer) -> (Double, Double) {
 
 ///|
 fn PadPointer::by(self : PadPointer, dx : Double, dy : Double) -> Unit {
+  self.placed = true
   self.x = clamp01(self.x + dx)
   self.y = clamp01(self.y + dy)
 }

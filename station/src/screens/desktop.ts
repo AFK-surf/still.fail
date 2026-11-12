@@ -230,8 +230,8 @@ export function helperMessage(kind: number, payload: Buffer = Buffer.alloc(0)): 
 export type HelperPipe = { write(data: Buffer): unknown; destroy(): unknown; on(event: "data", listener: (chunk: Buffer) => void): unknown; on(event: "error" | "close", listener: () => void): unknown };
 
 /// How a view's input is posted on the machine: the ops its helper takes for one person's event (mac-input.ts,
-/// win-input.ts), at `now` (ms).
-export type InputOps = { ops(event: ScreenInput, now: number): object[] };
+/// win-input.ts), at `now` (ms); `release`, those that let go of what it holds down, as the view ends.
+export type InputOps = { ops(event: ScreenInput, now: number): object[]; release?(): object[] };
 
 /// One view: a connection to the helper, asked for each frame.
 export class HelperView implements ScreenView {
@@ -252,6 +252,8 @@ export class HelperView implements ScreenView {
   #sentRegion: Region | null = null;
   #regions = false;
   #ended = false;
+  /// Its connection ended or broke: nothing more reaches the helper.
+  #cut = false;
   #settle!: { resolve: (v: { width: number; height: number }) => void; reject: (e: Error) => void };
   readonly #gone: () => void;
   /// Who hears the clipboard as it changes, while it is watched.
@@ -280,8 +282,12 @@ export class HelperView implements ScreenView {
     this.#gone = gone;
     this.ready = new Promise((resolve, reject) => (this.#settle = { resolve, reject }));
     socket.on("data", (chunk: Buffer) => this.#heard(chunk));
-    socket.on("error", () => this.close());
+    socket.on("error", () => {
+      this.#cut = true;
+      this.close();
+    });
     socket.on("close", () => {
+      this.#cut = true;
       this.#settle.reject(new Error("the screen's helper ended the view"));
       this.close();
     });
@@ -485,6 +491,8 @@ export class HelperView implements ScreenView {
 
   close() {
     if (this.#ended) return;
+    // What its person holds down is let go of on the machine, else it stays held after them (x11-desktop.ts the same).
+    if (!this.#cut) for (const op of this.#input.release?.() ?? []) this.#send(TO_HELPER.input, Buffer.from(JSON.stringify(op)));
     this.#ended = true;
     this.#socket.destroy();
     for (const resolve of this.#waiting.splice(0)) resolve(null);
