@@ -529,6 +529,33 @@ sim("a_link_lost_soon_after_it_replaced_one_gone_quiet_is_not_traded_for_that_on
   await close(s, station, mesh);
 });
 
+/// A station ending the connection a reply came on says why to the one reading it (WireReply `ended`): a device taken out
+/// of its lock is told so (station/src/mesh/serve.ts `gone`), not only that its stream went (station/link.ts LOCK_ENDED).
+sim("a_reply_says_why_its_station_ended_its_connection", async (s) => {
+  const { mesh, station } = await setup(s);
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(`w/${station.id()}`);
+  const get: RequestHead = { method: "GET", path: "/admin/api/events", headers: [["accept", "text/event-stream"]] };
+  const [before, after] = await s.run(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const r = yield* wire.request(addr, get, new Uint8Array());
+        assert.ok((yield* r.body.take) !== null);
+        const before = r.ended!();
+        station.conns.at(-1)!.close(3, "lock_unconfirmed");
+        for (;;) {
+          const chunk = yield* Effect.result(r.body.take);
+          if (chunk._tag === "Failure" || chunk.success === null) break;
+        }
+        return [before, r.ended!()] as const;
+      }),
+    ),
+  );
+  assert.equal(before, null);
+  assert.equal(after, "lock_unconfirmed");
+  await close(s, station, mesh);
+});
+
 /// The side run, seed 143365259 (2026-10-17): the station dropped both its connections to the device at once (a restart);
 /// the read asked then failed on its link, was asked again on the other way, which was gone too though the device was
 /// not told so yet, and failed. It is asked again until a link holds.
