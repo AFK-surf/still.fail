@@ -90,6 +90,14 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export { SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME };
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+/// The sessions whose latest turn ended asking for a person (Store.waitingForPeople): the turns ended since ?1 by
+/// turns_ended, each the latest of its session (turns_by_session), with nothing undelivered (deliveries_pending).
+export const WAITING_FOR_PEOPLE = `SELECT t.session_key AS key, s.title, t.need, t.ended_at FROM turns t INDEXED BY turns_ended
+  JOIN sessions s ON s.key = t.session_key
+  WHERE t.ended_at >= ?1 AND t.declared IN ('block', 'need_help', 'need_human', 'need_decision') AND s.archived_at IS NULL
+    AND t.id = (SELECT u.id FROM turns u WHERE u.session_key = t.session_key ORDER BY u.started_at DESC, u.rowid DESC LIMIT 1)
+    AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.session = t.session_key AND d.delivered_at IS NULL)
+  ORDER BY t.ended_at DESC LIMIT ?2`;
 /// The closest failure in a notice's time window, breaking ties in listTurns' order.
 export const FAILED_TURN_NEAR = `SELECT * FROM turns INDEXED BY turns_by_end
   WHERE session_key = ?1 AND ended_at >= ?2 AND ended_at <= ?3 AND outcome = 'failed'
@@ -3345,6 +3353,13 @@ export class Store {
       if (r !== undefined) out.set(key, r.started_at === null ? null : toTurnSummary(r));
     }
     return out;
+  }
+
+  /// The sessions waiting for a person now (the local status, api/status.ts): their latest turn ended since `since`
+  /// asking for one (need_human, or what it was called before), nothing undelivered to them since, not archived; the
+  /// latest first, at most `limit`.
+  waitingForPeople(since: number, limit: number): { key: string; title: string | null; need: string | null; endedAt: number }[] {
+    return this.#all(WAITING_FOR_PEOPLE, since, limit).map((r) => ({ key: r.key, title: r.title ?? null, need: r.need ?? null, endedAt: r.ended_at }));
   }
 
   /// A session's latest turn and whether anything is undelivered, including orphaned deliveries, without counting them.

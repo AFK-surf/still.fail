@@ -63,6 +63,7 @@ import { becomeOther } from "./ops/restart.ts";
 import { RigLive, RigMeshLive, RigSide } from "./rig/main.ts";
 import { RigsLive } from "./rigs/module.ts";
 import { DevicesLive } from "./devices/module.ts";
+import { StatusLive } from "./api/status.ts";
 
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
@@ -218,7 +219,7 @@ function run() {
     Layer.provideMerge(Parts.layer),
     Layer.provideMerge(parts),
   );
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, CheckpointsLive, BecameRig).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), StatusLive, AwakeLive, CheckpointsLive, BecameRig).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
     Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive, RigsLive, DevicesLive, CopiesLive)),
     Layer.provideMerge(AdminApi.layer),
