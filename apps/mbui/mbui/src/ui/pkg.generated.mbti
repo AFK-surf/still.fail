@@ -1324,6 +1324,7 @@ pub fn Ctx::overlay(Self, String, modal? : Bool, trap? : Bool, escape? : Bool, o
 pub fn Ctx::own_colours(Self, Int32) -> Unit
 pub fn Ctx::own_ground(Self, Int32) -> Bool
 pub fn Ctx::page(Self, Pages, Int32) -> Int32
+pub fn Ctx::page_owner(Self) -> Int32
 pub fn Ctx::page_stint(Self) -> Int32
 pub fn Ctx::pager(Self, String, Int32, Int32, (Int32) -> Unit, w? : Size, h? : Size, on_edge? : (Int32) -> Unit, on_middle? : () -> Unit) -> Int32
 pub fn Ctx::pager_rest(Self, String) -> Double

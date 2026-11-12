@@ -1332,6 +1332,14 @@ fn Ctx::own(self : Ctx, id : Int) -> Unit {
 }
 
 ///|
+/// The page of a stack what is built now belongs to (0: none, outside a stack): the same through all of the page's
+/// builds, whatever row of a list it is built in, so what is made once for a page is found again by it after rows came
+/// before it (a list's rows' ids are by their index).
+pub fn Ctx::page_owner(self : Ctx) -> Int {
+  self.owner
+}
+
+///|
 struct OwnedReleases {
   ids : Array[Int]
   callbacks : Map[Int, () -> Unit]

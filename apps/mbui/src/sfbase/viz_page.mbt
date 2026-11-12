@@ -167,7 +167,10 @@ pub fn viz_frame(
   if !viz_left_chats.is_empty() {
     viz_shown_again(key)
   }
-  let owner = c.id("viz/owner/" + key)
+  // (by the page it is drawn in, not by an id of where it is built: a chat's row is scoped by its index, and older
+  // messages come in before it as its chat is read back, which made the page again, loaded anew, the one before kept
+  // hidden; outside a page, by where it is built)
+  let owner = if c.page_owner() != 0 { c.page_owner() } else { c.id("viz/owner/" + key) }
   let f = match viz_frame_for(key, owner) {
     Some(f) => f
     None => {

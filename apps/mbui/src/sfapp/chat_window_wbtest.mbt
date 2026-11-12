@@ -65,8 +65,11 @@ fn long_value(base : Json, l : LongChat) -> Json {
     m["ts"] = Json::string("ts\{n}")
     m["text"] = Json::string(words)
     m["words"] = Json::array([{ "text": Json::string(words) }])
+    // (its tree as the core gives it, a line of words: nothing asked of the core's `markdown` for it)
+    let md : Json = [["p", [[0, Json::number(words.length().to_double())]]]]
+    m["md"] = md
     if l.notices {
-      m["notice"] = { "failed": false, "words": Json::string(words) }
+      m["notice"] = { "failed": false, "words": Json::string(words), "md": md }
     }
     m["joined"] = Json::boolean(n > first && (l.notices || n % 4 != 1))
     for k in ["said", "attachments", "card", "options", "quotes"] {
@@ -249,6 +252,10 @@ let long_ref : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理�
 let long_screens : Array[(String, Double, Double, Int)] = [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)]
 
 ///|
+/// How many frames running what shows of a chat stands still before its glide is taken for over.
+let long_still_frames : Int = 6
+
+///|
 /// How long a chat is let open before a test looks: its slide in, what it asks answered.
 let long_opened_ms : Double = @ui.move_most_ms * 2.0
 
@@ -279,12 +286,7 @@ test "a chat's first ask on 小屏 and 大屏: how many of its last messages it 
     for s in long_screens {
       let l = long_chat(notices~)
       let t = long_open(l, s)
-      let mut drawn = 0
-      for n in l.first.get()..=long_count {
-        if long_drawn(t, n, s.2) {
-          drawn += 1
-        }
-      }
+      let drawn = long_places(t.words(), s.2).length()
       said.push("\{s.0}\{if notices { " notices" } else { "" }}: \{@ui.list_text(l.asked)} held \{long_count - l.first.get() + 1}, drawn \{drawn}, bones \{t.bones_drawn()}")
     }
   }
@@ -328,10 +330,11 @@ test "a row the core counts is never shorter than the least a chat's first windo
 }
 
 ///|
-/// Where each of the long chat's messages drawn in the window's height `h` is now, by its number (its words' top).
-fn long_places(t : @ui.Tester, h : Double) -> Map[Int, Double] {
+/// Where each of the long chat's messages drawn in the window's height `h` is, by its number (its words' top), of
+/// `words` (a Tester's `words()`).
+fn long_places(words : Array[(String, Double, Double, Double, Double, Double)], h : Double) -> Map[Int, Double] {
   let out : Map[Int, Double] = Map([])
-  for w in t.words() {
+  for w in words {
     guard w.2 + w.4 > 0.0 && w.2 < h && w.5 > 0.0 && w.0.has_prefix("第") else { continue }
     let digits = w.0.exact_view(start=1).to_owned()
     let mut n = 0
@@ -361,7 +364,8 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
       let t = long_open(l, s)
       let frames = Ref(0)
       let fastest = Ref(0.0)
-      let was : Ref[Map[Int, Double]] = Ref(long_places(t, h))
+      let still = Ref(0)
+      let was : Ref[Map[Int, Double]] = Ref(long_places(t.words(), h))
       // (each frame: no bones, and while the core has more before it, the first message held not drawn: the top never
       // comes down empty; how far what shows moved since the frame before, the most of it kept)
       let look = fn() {
@@ -369,28 +373,41 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
         if t.bones_drawn() > 0 {
           faults.push("\{name} frame \{frames.val}: bones")
         }
-        if l.first.get() > 1 && long_drawn(t, l.first.get(), h) {
+        let now = long_places(t.words(), h)
+        if l.first.get() > 1 && now.contains(l.first.get()) {
           faults.push("\{name} frame \{frames.val}: its first message of \{long_count - l.first.get() + 1} drawn with more before it")
         }
-        let now = long_places(t, h)
+        let mut most = 0.0
         for n, y in now {
           match was.val.get(n) {
             Some(y0) => {
               let moved = (y - y0).abs()
-              if moved > fastest.val {
-                fastest.val = moved
+              if moved > most {
+                most = moved
               }
             }
             None => ()
           }
         }
+        if most > fastest.val {
+          fastest.val = most
+        }
+        still.val = if most == 0.0 { still.val + 1 } else { 0 }
         was.val = now
       }
+      // (at rest after a stroke once what shows has not moved for some frames: its glide over)
+      let resting = fn(rest : Double) { t.time() - rest < long_rest_ms - 1.0e-6 && still.val < long_still_frames }
+      // (read back through two growths after it opened, what came as it opened aside)
+      let olders = fn() { l.asked.filter(fn(a) { a.has_prefix("older") }).length() }
+      let opened = olders()
       if platform == 2 {
         // strokes of a finger down the chat, 40 points a move (2400 points a second at 60 frames a second, 4800 at
         // 120), let go moving (a fling), the list at rest after each: every frame looked at, the core's answers given
         // between them
         for _ in 0..<12 {
+          if olders() - opened >= 2 {
+            break
+          }
           t.hold_drag(195.0, 160.0, 195.0, 175.0, steps=1)
           long_answered(l)
           look()
@@ -405,7 +422,8 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
           long_answered(l)
           look()
           let rest = t.time()
-          while t.time() - rest < long_rest_ms - 1.0e-6 {
+          still.val = 0
+          while resting(rest) {
             long_frame(t, l)
             look()
           }
@@ -414,13 +432,17 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
         // the wheel of a trackpad over the chat, five turns of 30 points at one moment (each looked at), then the list
         // at rest, every frame of it looked at
         for _ in 0..<40 {
+          if olders() - opened >= 2 {
+            break
+          }
           for _ in 0..<5 {
             t.wheel(800.0, 400.0, -30.0)
             long_answered(l)
             look()
           }
           let rest = t.time()
-          while t.time() - rest < long_rest_ms - 1.0e-6 {
+          still.val = 0
+          while resting(rest) {
             long_frame(t, l)
             look()
           }
@@ -433,12 +455,13 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
   assert_eq(faults, [])
   assert_eq(fastests.map(fn(f) { f.round().to_int() }), [41, 30, 41, 30])
   // (20 more each time less than a screen was above what showed: 760 points at the least, while what shows moved 40.5
-  // points a frame at the most under the finger and 30 a turn of the wheel, the core answering in a frame)
+  // points a frame at the most under the finger and 30 a turn of the wheel, the core answering in a frame; read back
+  // through two of them, a chat of notices topped up once more as it opened)
   assert_eq(said, [
-    "小屏: [window 30, sub, older 20, older 20, older 20, older 20, older 20, older 20, older 20, older 20, older 20] held 200",
-    "大屏: [window 30, sub, older 20, older 20, older 20, older 20, older 20] held 130",
-    "小屏 notices: [window 30, sub, older 20, older 20, older 20, older 20, older 20, older 20, older 20, older 20, older 20] held 200",
-    "大屏 notices: [window 30, sub, older 20, older 20, older 20, older 20, older 20, older 20, older 20, older 20, older 20] held 200",
+    "小屏: [window 30, sub, older 20, older 20] held 70",
+    "大屏: [window 30, sub, older 20, older 20] held 70",
+    "小屏 notices: [window 30, sub, older 20, older 20, older 20] held 90",
+    "大屏 notices: [window 30, sub, older 20, older 20, older 20] held 90",
   ])
 }
 
