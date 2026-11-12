@@ -2212,21 +2212,21 @@ test "old-list" {
 
 ///|
 test "list-comes-off" {
-  // a page's list all of whose keys are there or gone at once (`comes=fn(_) { false }`, `goes=fn(_) { false }`, either
-  // or both): counted (a call once); one that answers by its key, one in a test, in the framework (src/host here) not
+  // a page's list said at once (`at_once=true`): counted (a call each); one said not, a show's at_once, one in a test,
+  // in the framework (src/host here) not
   let fs = found(
     [
       (
         "src/sfpages/page.mbt",
-        "fn p(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n  v.scrolls_window(s, keys, comes=fn(k) { k > 0 }, make) |> ignore\n  v.scrolls_window(\n    s,\n    keys,\n    comes=fn(_) { false },\n    goes=fn(_) { false },\n    make,\n  )\n  |> ignore\n  v.scrolls_window(s, keys, goes=fn(_) { false }, make) |> ignore\n}\n",
+        "fn p(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, at_once=true, make) |> ignore\n  v.scrolls_window(s, keys, at_once=false, make) |> ignore\n  v.scrolls_window(\n    s,\n    keys,\n    at_once=true,\n    make,\n  )\n  |> ignore\n  v.show(on, make, at_once=true)\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n}\n",
       ),
-      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n}\n"),
-      ("src/host/y.mbt", "fn y(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n}\n"),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  v.scrolls_window(s, keys, at_once=true, make) |> ignore\n}\n"),
+      ("src/host/y.mbt", "fn y(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, at_once=true, make) |> ignore\n}\n"),
     ],
     "list-comes-off",
-    3,
+    2,
   )
-  assert_eq(lines(fs), [2, 4, 12])
+  assert_eq(lines(fs), [2, 4])
 }
 
 ///|

@@ -742,6 +742,10 @@ pub struct Tree {
   /// what comes or goes down a column at one moment, with what was on its way there then: one way for all of it
   /// (flex's ComeGroup), and the nodes in it (Tree::come_group_join), by the column
   priv come_groups : Map[Int, (@flex.ComeGroup, Array[View])]
+  /// the held columns of the page's lists whose blocks' insides make their way in the list's one way
+  /// (View::scrolls_window, not said at once), each with what in its blocks was set coming or going since: what is on
+  /// its way in them as the list's group is said (Tree::come_group_settle), none of their subtrees walked
+  priv list_inner : Map[Int, Array[View]]
   /// what is due being done (Tree::advance)
   mut advancing : Bool
   /// where its logic stands: what is due by then done (Tree::advance), what is said from then on said as of then at the
@@ -1254,6 +1258,7 @@ pub fn Tree::new(
     leave_holders: [],
     swaps: [],
     come_groups: {},
+    list_inner: {},
     told: 0,
     advancing: false,
     logic: start,
@@ -8563,8 +8568,26 @@ fn View::comes(
 fn Tree::come_group_join(self : Tree, v : View, st : @flex.Style, at : Double) -> Unit {
   // (its own way from here, whatever group it went in before: a way said once is that way's alone)
   st.come_group = None
-  let col = self.column_of(v.at)
-  guard col >= 0 else { return }
+  let own = self.column_of(v.at)
+  guard own >= 0 else { return }
+  // (down a column inside a block of a page's list whose insides join it: the list's group, and kept among what is on
+  // its way in its blocks till it is let go or its way ends; along a row, its row's own)
+  let col = if st.come_across || self.list_inner.is_empty() {
+    own
+  } else {
+    let list = self.list_holding(own)
+    match self.list_inner.get(list) {
+      Some(inner) if list != own => {
+        // (those let go or come to their way's end forgotten as one more is kept)
+        let kept = inner.filter(fn(w) { w.live() is Some(m) && m.coming && w.at != v.at })
+        inner.clear()
+        inner.append(kept)
+        inner.push(v)
+        list
+      }
+      _ => own
+    }
+  }
   let (_, views) = match self.come_groups.get(col) {
     Some((g, views)) if g.at == at && !g.set => (g, views)
     _ => {
@@ -8578,6 +8601,29 @@ fn Tree::come_group_join(self : Tree, v : View, st : @flex.Style, at : Double) -
   if !views.iter().any(fn(w) { w.at == v.at }) {
     views.push(v)
   }
+}
+
+///|
+/// The held column of the page's list whose blocks' insides join its way (Tree's list_inner) that column `col` is or
+/// lies in; `col` where none is (lists do not nest: one at most).
+fn Tree::list_holding(self : Tree, col : Int) -> Int {
+  let mut p = col
+  while p >= 0 {
+    if self.list_inner.contains(p) {
+      return p
+    }
+    p = self.nodes[p].parent
+  }
+  col
+}
+
+///|
+/// The held column `at` of a page's list (View::scrolls_window) joining what its blocks hold to its way from now, till
+/// `self` goes: what comes or goes down a column in one of them goes in its group (Tree::come_group_join).
+fn View::list_joins_inner(self : View, at : Int) -> Unit {
+  let tree = self.tree
+  tree.list_inner[at] = []
+  self.owns(fn() { tree.list_inner.remove(at) }) |> ignore
 }
 
 ///|
@@ -8613,18 +8659,37 @@ fn Tree::come_group_settle(self : Tree, col : Int, g : @flex.ComeGroup, views : 
   let live = views.filter(fn(w) {
     w.live() is Some(m) && m.coming && m.flex.style.come_at == at
   })
-  // (what is on its way down the column now, set off before)
+  // (what is on its way down the column now, set off before: in it, and where it is a page's list's, in its blocks,
+  // those of them let go or come to their way's end forgotten)
   let under_way = []
-  for k in self.column_items(col) {
-    if live.iter().any(fn(w) { w.at == k }) {
-      continue
+  let on_way = fn(k : Int) {
+    if live.iter().any(fn(w) { w.at == k }) || under_way.contains(k) {
+      return
     }
     let m = self.nodes[k]
-    guard m.live && m.coming else { continue }
+    guard m.live && m.coming else { return }
     let ms = m.flex.style
     if ms.come_at < at && at < ms.come_ends {
       under_way.push(k)
     }
+  }
+  for k in self.column_items(col) {
+    on_way(k)
+  }
+  match self.list_inner.get(col) {
+    Some(inner) => {
+      let kept = inner.filter(fn(w) {
+        w.live() is Some(m) &&
+        m.coming &&
+        !(m.flex.style.come_ends == m.flex.style.come_ends && m.flex.style.come_ends <= at)
+      })
+      inner.clear()
+      inner.append(kept)
+      for w in inner {
+        on_way(w.at)
+      }
+    }
+    None => ()
   }
   // (one alone goes its own way, as it always did)
   if live.length() + under_way.length() < 2 {

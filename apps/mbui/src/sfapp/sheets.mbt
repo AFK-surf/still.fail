@@ -1552,9 +1552,8 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
     b.scrolls_window(
       scroll,
       keys,
-      // (its keys there and gone as they change: a debt of 方案 A, given their way list by list, shown to the owner: list-comes-off)
-      comes=fn(_) { false },
-      goes=fn(_) { false },
+      // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
+      at_once=true,
       fn(row, n) {
         // (its own line's runs, read again only as that line changes: the same while it is the same line)
         let runs = @signals.computed(
