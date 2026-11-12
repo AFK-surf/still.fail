@@ -35,6 +35,9 @@ libcrux-ed25519 = { version = "=0.0.10", default-features = false }
 libcrux-ecdsa = { version = "=0.0.9", default-features = false }
 # A station's replies are decompressed here, off the core's JS thread (zstd.*).
 zstd = { version = "0.13", default-features = false }
+# What the station's programs write and hash (fs.write, fs.hash) and draw at random (crypto.random).
+sha2 = "0.10"
+getrandom = "0.3"
 # A screen view's sound asked as Opus (ScreenTap), decoded here into the PCM every host plays, one decoder for every
 # platform (the hosts' own differ, and Windows may have none). Pure Rust, a port of libopus 1.6: on the Mac's helper's
 # packets 20 µs a packet on an M5 Max and within 84 dB of AudioToolbox's own decode (opus-decoder 0.1.1, the same to

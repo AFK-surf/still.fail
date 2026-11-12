@@ -1383,12 +1383,16 @@ impl Inner {
                 sqls.insert(id, (path, conn));
                 Ok(json!({ "id": id }))
             }
-            // A database another process keeps (the station's, by its path) and writes as well: never made here, never
-            // held for this process alone, waited for `wait` ms when it is busy.
+            // A database another process keeps (the station's, by its path) and writes as well: never made here (but with
+            // `create`), never held for this process alone, waited for `wait` ms when it is busy.
             "sql.attach" => {
                 let path = PathBuf::from(str_of(a, "path")?);
                 let wait = a.get("wait").and_then(Value::as_u64).unwrap_or(0);
-                let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+                let mut flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+                // `create`: one of the program's own, made where it is not (station/mb src/replica's export.db).
+                if a.get("create").and_then(Value::as_bool).unwrap_or(false) {
+                    flags |= rusqlite::OpenFlags::SQLITE_OPEN_CREATE;
+                }
                 let conn = rusqlite::Connection::open_with_flags(&path, flags).map_err(err)?;
                 conn.busy_timeout(std::time::Duration::from_millis(wait)).map_err(err)?;
                 conn.set_prepared_statement_cache_capacity(256);
@@ -1669,8 +1673,87 @@ impl Inner {
             }
             return Ok(Value::Array(out));
         }
+        // What the station's programs write (station/mb src/replica, as station/src/replica/export.ts writes): `text`
+        // as a whole file at `path`, zstd's frame of it with `zstd` (level 3, as Node's zstdCompressSync), written beside
+        // it, synced and renamed into place, its folders made; the SHA-256 of the bytes written and how many.
+        if op == "fs.write" {
+            use sha2::Digest;
+            use std::io::Write;
+            let path = PathBuf::from(str_of(a, "path")?);
+            let text = str_of(a, "text")?.as_bytes();
+            let bytes = if a.get("zstd").and_then(Value::as_bool).unwrap_or(false) { zstd::encode_all(text, 3).map_err(err)? } else { text.to_vec() };
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir).map_err(err)?;
+            }
+            let mut random = [0u8; 4];
+            getrandom::fill(&mut random).map_err(err)?;
+            let tmp = PathBuf::from(format!("{}.{}.{}.tmp", path.display(), std::process::id(), hex::encode(random)));
+            let written = (|| {
+                let mut file = std::fs::File::create(&tmp)?;
+                file.write_all(&bytes)?;
+                file.sync_all()
+            })();
+            if let Err(e) = written.and_then(|_| std::fs::rename(&tmp, &path)) {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(err(e));
+            }
+            return Ok(json!({ "sha256": hex::encode(sha2::Sha256::digest(&bytes)), "size": bytes.len() }));
+        }
+        // A file's SHA-256 (hex), read a MiB at a time; null when it does not open.
+        if op == "fs.hash" {
+            use sha2::Digest;
+            use std::io::Read;
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let mut hash = sha2::Sha256::new();
+            let mut buf = vec![0u8; 1 << 20];
+            loop {
+                let n = file.read(&mut buf).map_err(err)?;
+                if n == 0 {
+                    break;
+                }
+                hash.update(&buf[..n]);
+            }
+            return Ok(json!(hex::encode(hash.finalize())));
+        }
+        // A folder and those it is in, made where they are not (mkdirSync's `recursive`).
+        if op == "fs.mkdir" {
+            std::fs::create_dir_all(str_of(a, "path")?).map_err(err)?;
+            return Ok(Value::Null);
+        }
+        // What is at `path` let go, a folder with all it holds with `recursive`; nothing there is no failure (rmSync's
+        // `force`).
+        if op == "fs.remove" {
+            let path = PathBuf::from(str_of(a, "path")?);
+            let recursive = a.get("recursive").and_then(Value::as_bool).unwrap_or(false);
+            let gone = match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(e),
+                Ok(m) if m.is_dir() && recursive => std::fs::remove_dir_all(&path),
+                Ok(m) if m.is_dir() => std::fs::remove_dir(&path),
+                Ok(_) => std::fs::remove_file(&path),
+            };
+            return gone.map(|_| Value::Null).map_err(err);
+        }
+        if op == "fs.rename" {
+            std::fs::rename(str_of(a, "from")?, str_of(a, "to")?).map_err(err)?;
+            return Ok(Value::Null);
+        }
+        if op == "fs.copy" {
+            std::fs::copy(str_of(a, "from")?, str_of(a, "to")?).map_err(err)?;
+            return Ok(Value::Null);
+        }
+        // `bytes` random bytes (hex), from the system's source.
+        if op == "crypto.random" {
+            let mut bytes = vec![0u8; a.get("bytes").and_then(Value::as_u64).unwrap_or(0).min(1024) as usize];
+            getrandom::fill(&mut bytes).map_err(err)?;
+            return Ok(json!(hex::encode(bytes)));
+        }
         if op == "fs.read" {
-            let Ok(bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let Ok(mut bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
+            // `zstd`: a file that is zstd's frames, read as what they hold (a copy's batch: station/mb src/replica).
+            if a.get("zstd").and_then(Value::as_bool).unwrap_or(false) {
+                bytes = zstd::decode_all(bytes.as_slice()).map_err(err)?;
+            }
             if a.get("strict").and_then(Value::as_bool).unwrap_or(false) {
                 let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
                 return Ok(std::str::from_utf8(body).map_or(Value::Null, |s| json!(s)));
@@ -2344,6 +2427,43 @@ mod tests {
         let missing = serde_json::to_string(&dir.path().join("none.db").display().to_string()).unwrap();
         assert!(sync("sql.attach", &format!(r#"{{"path":{missing}}}"#))["error"].is_string());
         assert!(!dir.path().join("none.db").exists());
+    }
+
+    #[test]
+    fn writes_hashes_and_moves_the_station_programs_files() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().join("shell"), complete, std::ptr::null_mut()).unwrap();
+        let sync = |op: &str, a: Value| -> Value { serde_json::from_slice(&shell.call_sync(op, a.to_string().as_bytes())).unwrap() };
+        let at = |p: &str| dir.path().join(p).display().to_string();
+        // written whole, its folders made, nothing left beside it; zstd's frame of it read back as what it holds
+        let plain = sync("fs.write", json!({ "path": at("a/b/plain.txt"), "text": "中\n" }));
+        use sha2::Digest;
+        assert_eq!(plain["value"]["sha256"], json!(hex::encode(sha2::Sha256::digest("中\n".as_bytes()))));
+        assert_eq!(plain["value"]["size"], json!(4));
+        assert_eq!(std::fs::read(dir.path().join("a/b/plain.txt")).unwrap(), "中\n".as_bytes());
+        let packed = sync("fs.write", json!({ "path": at("a/packed.zst"), "text": "x".repeat(1000), "zstd": true }));
+        let bytes = std::fs::read(dir.path().join("a/packed.zst")).unwrap();
+        assert!(bytes.len() < 100);
+        assert_eq!(packed["value"], json!({ "sha256": hex::encode(sha2::Sha256::digest(&bytes)), "size": bytes.len() }));
+        assert_eq!(sync("fs.read", json!({ "path": at("a/packed.zst"), "zstd": true }))["value"], json!("x".repeat(1000)));
+        assert_eq!(std::fs::read_dir(dir.path().join("a")).unwrap().count(), 2);
+        assert_eq!(sync("fs.hash", json!({ "path": at("a/b/plain.txt") }))["value"], plain["value"]["sha256"]);
+        assert_eq!(sync("fs.hash", json!({ "path": at("none") }))["value"], Value::Null);
+        // copied, renamed, a folder made, then let go with what it holds; nothing there is no failure
+        assert_eq!(sync("fs.copy", json!({ "from": at("a/b/plain.txt"), "to": at("a/copy.txt") }))["value"], Value::Null);
+        assert_eq!(sync("fs.rename", json!({ "from": at("a/copy.txt"), "to": at("a/moved.txt") }))["value"], Value::Null);
+        assert_eq!(std::fs::read(dir.path().join("a/moved.txt")).unwrap(), "中\n".as_bytes());
+        assert_eq!(sync("fs.mkdir", json!({ "path": at("c/d") }))["value"], Value::Null);
+        assert!(dir.path().join("c/d").is_dir());
+        assert!(sync("fs.remove", json!({ "path": at("a") }))["error"].is_string());
+        assert_eq!(sync("fs.remove", json!({ "path": at("a"), "recursive": true }))["value"], Value::Null);
+        assert!(!dir.path().join("a").exists());
+        assert_eq!(sync("fs.remove", json!({ "path": at("a") }))["value"], Value::Null);
+        assert_eq!(sync("crypto.random", json!({ "bytes": 4 }))["value"].as_str().unwrap().len(), 8);
+        // a database of the program's own, made with `create`
+        assert!(sync("sql.attach", json!({ "path": at("own.db") }))["error"].is_string());
+        assert!(sync("sql.attach", json!({ "path": at("own.db"), "create": true }))["value"]["id"].is_u64());
+        assert!(dir.path().join("own.db").exists());
     }
 
     #[test]

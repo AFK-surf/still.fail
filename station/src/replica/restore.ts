@@ -6,6 +6,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { Worker } from "node:worker_threads";
 import { dirname, join, sep } from "node:path";
+import { MbProcess, mbReaderBinary } from "../read/mb-reader.ts";
 import { DatabaseSync } from "node:sqlite";
 import { type Head, type Rec, type Row, Folded, RESTORE_ORDER, asHead, attachedPaths, decodeBatch } from "./format.ts";
 import { headFile } from "./export.ts";
@@ -250,9 +251,23 @@ export function addFormerly(data: string, origin: string): void {
   renameSync(`${file}.tmp`, file); // sync: in the restore's own thread (restore-worker.ts)
 }
 
-/// `takeBack` in a thread of its own, where a restore waits (null: none did).
-export function takeBackSoon(data: string, db: string, now: number): Promise<Ready | null> {
+/// `takeBack` off the main thread, where a restore waits (null: none did): by the MoonBit program (station/mb's
+/// src/replica, `--builder replica-restore`) where it is built, else in a worker thread.
+export function takeBackSoon(data: string, db: string, now: number, binary = mbReaderBinary()): Promise<Ready | null> {
   if (!existsSync(readyFile(data))) return Promise.resolve(null); // sync: before the station serves (its store not open yet)
+  if (binary !== null) {
+    return new Promise((resolve, reject) => {
+      const p = new MbProcess(binary, ["--builder", "replica-restore", "--db", db, "--data", data, "--now", String(now), "--sep", sep]);
+      let said = false;
+      p.once("message", (m: { ready?: Ready | null; error?: string }) => {
+        said = true;
+        if (m.error !== undefined) reject(new Error(m.error));
+        else resolve(m.ready ?? null);
+      });
+      p.once("error", reject);
+      p.once("exit", (code: number) => { if (!said) reject(new Error(`the restore ended saying nothing (${code})`)); });
+    });
+  }
   const file = new URL(import.meta.url.endsWith(".ts") ? "./restore-worker.ts" : "./replica/restore-worker.js", import.meta.url);
   return new Promise((resolve, reject) => {
     const w = new Worker(file, { workerData: { data, db, now } });

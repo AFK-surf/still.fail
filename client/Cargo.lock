@@ -3785,6 +3785,7 @@ version = "0.1.0"
 dependencies = [
  "embedded-io-async",
  "futures",
+ "getrandom 0.3.4",
  "hex",
  "iroh",
  "iroh-mainline-address-lookup",
@@ -3801,6 +3802,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tokio-tungstenite",
  "webpki-roots 1.0.9",
