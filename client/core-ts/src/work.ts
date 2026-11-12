@@ -56,8 +56,8 @@ export const work = {
   /// Chats' pages made (views.ts `chat`): each made again only as something it is made of changed, not as a UI's focus
   /// moves or a pref it does not read is written.
   chats: 0,
-  /// Topics' values hashed whole for their version (store.ts, digest.ts `version`): as a client lets one go keeping it,
-  /// and as it asks it again where what it holds is not remembered.
+  /// Topics' values hashed for their token (store.ts, digest.ts `token`): those that are no object alone (a value that
+  /// is one goes by the object itself, nothing of it read), as a client lets one go keeping it and asks it again.
   versions: 0,
   /// A chat's messages looked through for the chats they link to (views.ts #linkedStations), for the lists it watches:
   /// once its first value has gone out, not before.
@@ -71,6 +71,9 @@ export const work = {
   overviewsRead: 0,
   /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.
   overviews: 0,
+  /// What the workspace's profiles read of a station's overview (its kept part, station_part.profiled) decorated
+  /// (views.ts #stationShownOf `profile`), not taken as made for it: never the whole overview.
+  profiledParts: 0,
   /// Stations' models listed from an overview's profiles (views/models.ts `models`), each with what every account of it
   /// runs and has left: a new chat's page makes its one station's, a model control's panel every station's it could
   /// borrow from too.

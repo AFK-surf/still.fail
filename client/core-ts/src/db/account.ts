@@ -717,6 +717,12 @@ export class AccountDb {
     return this.#overviewColumn(station, "formerly");
   }
 
+  /// What the workspace's profiles read of a station's overview (schema.ts overviewProfiledOf), undefined while no
+  /// overview is held: kept beside its part (`station_part.profiled`).
+  overviewProfiled(station: string): J {
+    return this.#overviewColumn(station, "profiled");
+  }
+
   /// The profile `id` of a station's overview, whole, undefined where it has none such (schema.ts overviewProfilesOf):
   /// that one alone read out of the column of its profiles by SQLite, not the overview, nor its other profiles.
   overviewProfile(station: string, id: string): J {

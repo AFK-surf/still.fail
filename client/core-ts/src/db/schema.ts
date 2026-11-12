@@ -236,8 +236,23 @@ export const overviewFormerlyOf = (j: string) => `CASE WHEN json_type(${j}, '$.c
     THEN json((SELECT json_group_array(f.value ORDER BY f.key) FROM json_each(${j}, '$.copies.formerly') AS f WHERE f.type = 'text'))
     ELSE json_array() END`;
 
+/// What the workspace's profiles read of a station's overview, the JSON `j` (views.ts `#profilesView`: profiles.ts
+/// `workspaceProfiles`, and the machines' own logins offered beside them), as SQL: its `profiles` in their order, its
+/// `sharing`, its `mesh` (whether still.fail cloud reached it) and its `machineLogins`, each as the overview has it, one
+/// absent left out; NULL where the overview is not an object. Kept in a column of its own (`station_part.profiled`):
+/// the list read every station's whole overview and decorated a copy of it for these (15 of the 32 ms the core spent
+/// after a workspace was switched to on 小屏, in Hermes on a Mac Studio, 2026-11-12).
+export const overviewProfiledOf = (j: string) => `CASE WHEN json_type(${j}) = 'object'
+    THEN json((SELECT json_group_object(o.key, ${j} -> o.fullkey) FROM json_each(${j}) AS o
+      WHERE o.key IN ('profiles', 'sharing', 'mesh', 'machineLogins')))
+    END`;
+
+/// The fields of an overview the workspace's profiles read (overviewProfiledOf), for where they are made of an overview
+/// in the core (one shown with what is being done to it here: data.ts overviewProfiled).
+export const OVERVIEW_PROFILED = ["profiles", "sharing", "mesh", "machineLogins"] as const;
+
 /// Each column of an overview's part (`station_part`) and how SQLite makes it of the overview's JSON.
-export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overviewPartOf], ["row", overviewRowOf], ["chat", overviewChatOf], ["formerly", overviewFormerlyOf], ["profiles", overviewProfilesOf]];
+export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overviewPartOf], ["row", overviewRowOf], ["chat", overviewChatOf], ["formerly", overviewFormerlyOf], ["profiles", overviewProfilesOf], ["profiled", overviewProfiledOf]];
 /// What makes each column of a station's part of the overview `j` (the triggers', and where one is missing).
 const partInsert = (j: string, address: string) =>
   `INSERT INTO station_part (address, ${PART_COLUMNS.map(([c]) => c).join(", ")}) SELECT ${address}, ${PART_COLUMNS.map(([, of]) => of(j)).join(", ")}`;
@@ -278,8 +293,9 @@ const overviewTriggers = (): [string, string][] => [
 const spaced = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /// Each station's overview's part the chat list reads (overviewPartOf), what a station's row reads (overviewRowOf, its
-/// own column), what a chat's page reads (overviewChatOf), the stations it took the place of (overviewFormerlyOf) and
-/// its profiles by id (overviewProfilesOf), each its own column, beside it in a table of its own: they
+/// own column), what a chat's page reads (overviewChatOf), the stations it took the place of (overviewFormerlyOf), its
+/// profiles by id (overviewProfilesOf) and what the workspace's profiles read of it (overviewProfiledOf), each its own
+/// column, beside it in a table of its own: they
 /// read a few hundred bytes, or a chat's page some of the overview, not an overview of some 150 KB (nor walk its pages
 /// to a column after it). Kept by triggers on `station`, as `said` is, so a core that knows nothing of it (a web page
 /// still open from before, an app put back to an older one) keeps it too: nothing it holds is older than its overview.

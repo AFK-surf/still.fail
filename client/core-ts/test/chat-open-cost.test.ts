@@ -146,7 +146,7 @@ test("a_chat_opens_the_same_on_a_database_from_before_its_part_and_while_a_core_
   // Brought to it as it opens: the column added, the triggers and every part made again, by SQLite.
   const anew = await chatAnew(host, base);
   assert.deepEqual(sql.all("SELECT count(*), count(chat) FROM station_part")[0], [5, 5]);
-  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly, profiles)"));
+  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly, profiles, profiled)"));
   assert.deepEqual([anew.made.overviewsRead, anew.made.overviews], [0, 0]);
   assert.deepEqual(anew.value, kept.value);
   // A core from before it opening the database meanwhile (a web page still open from before) keeps the parts by its
@@ -200,7 +200,8 @@ test("a_chat_let_go_of_keeping_it_and_asked_again_is_answered_by_what_changed_no
   // Back to a workspace within seconds, the app asks its chat again with the version of what it kept (`have`, as it
   // let it go with `keep`: sfbase's topic_kept). The core hashed the chat whole to answer (digest.ts `version`, 4-5 ms
   // in Hermes for a chat of 46 KB, and as much again as it was let go of), though it remembered what the client holds:
-  // what changed from that is worked out by its items, and none changed is the same version.
+  // what changed from that is worked out by its items, and none changed is the same version. Since, its version is a
+  // token of the value object (digest.ts `token`): hashed neither as it is let go of nor as it is asked again.
   const { host, core } = await started();
   const client = core.connect();
   const values = new Map();
@@ -217,6 +218,6 @@ test("a_chat_let_go_of_keeping_it_and_asked_again_is_answered_by_what_changed_no
   await host.settle();
   const again = host.takeEmitted().map(([, m]) => m as Record<string, unknown>).filter((m) => m.id === 2);
   assert.deepEqual(again[0], { id: 2, same: true });
-  assert.equal(workSince(before).versions, 1, "hashed once, as it was let go of");
+  assert.equal(workSince(before).versions, 0, "nothing hashed: its token is the value object's (digest.ts token)");
   core.close();
 });

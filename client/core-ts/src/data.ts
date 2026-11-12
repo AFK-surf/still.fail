@@ -6,7 +6,7 @@
 // Topics of this data have no value of their own: their value is read from here (`shared`), by query, when it goes
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
-import { OVERVIEW_CHAT } from "./db/schema.ts";
+import { OVERVIEW_CHAT, OVERVIEW_PROFILED } from "./db/schema.ts";
 import { AccountDb, LIST_OF, type Changes, type Derive, type HeadRow, type ListKind, type ListRow, type ListRowMaker, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
@@ -759,6 +759,7 @@ export class Data {
     this.#tellQuery({ topic: "$overview-fit", station });
     this.#tellQuery({ topic: "$overview-chat", station });
     this.#tellQuery({ topic: "$overview-profiles", station });
+    this.#tellQuery({ topic: "$overview-profiled", station });
   }
 
   /// The steps an overview of the station has gone past (or that it no longer has where they were): let go.
@@ -780,6 +781,7 @@ export class Data {
     this.#tellQuery({ topic: "$overview-fit", station });
     this.#tellQuery({ topic: "$overview-chat", station });
     this.#tellQuery({ topic: "$overview-profiles", station });
+    this.#tellQuery({ topic: "$overview-profiled", station });
     return true;
   }
 
@@ -789,6 +791,7 @@ export class Data {
     this.#tellQuery({ topic: "$overview-fit", station });
     this.#tellQuery({ topic: "$overview-chat", station });
     this.#tellQuery({ topic: "$overview-profiles", station });
+    this.#tellQuery({ topic: "$overview-profiled", station });
   }
 
   /// A held topic's new value (read, or as an event left it). `confirmed`: it came from its source just now (else it
@@ -1159,6 +1162,20 @@ export class Data {
     const shown = this.shown({ topic: "overview", station });
     const found = isObject(shown) && Array.isArray(shown.profiles) ? shown.profiles.find((p) => isObject(p) && p.id === id) : undefined;
     return found === undefined ? undefined : frozen(found);
+  }
+
+  /// What the workspace's profiles read of a station's overview (account.ts overviewProfiled, schema.ts
+  /// OVERVIEW_PROFILED), kept beside it: read in a computed, it is made again only as that changes, not with the rest of
+  /// the overview. Where the overview is shown with what is being done to it here (overlaid), made of that, anew.
+  overviewProfiled(station: string): unknown {
+    this.#readQuery({ topic: "$overview-profiled", station });
+    if (!this.#overlaid(station)) return this.of(station)?.overviewProfiled(station);
+    const shown = this.shown({ topic: "overview", station });
+    if (!isObject(shown)) return undefined;
+    const out: Record<string, unknown> = {};
+    // (in the overview's order, as SQLite keeps the part: json_each)
+    for (const k of Object.keys(shown)) if ((OVERVIEW_PROFILED as readonly string[]).includes(k)) out[k] = shown[k];
+    return frozen(out);
   }
 
   /// The stations a station took the place of (account.ts overviewFormerly), kept beside its overview: read in a
