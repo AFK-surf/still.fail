@@ -29,6 +29,8 @@ fn chat_page_reset() -> Unit {
   chat_own.jobs_open.set(false)
   chat_bar_from.info_node = None
   chat_bar_from.jobs_node = None
+  chat_pops.info = 0
+  chat_pops.jobs = 0
 }
 
 ///|

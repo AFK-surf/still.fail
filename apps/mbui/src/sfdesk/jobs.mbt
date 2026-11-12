@@ -4,20 +4,20 @@
 // time in words are the core's (its `chatJobs` view, `jobLog`); what is done goes through its calls.
 
 ///|
-/// What the jobs keep of their own: the job open in the popover ("" none), the one picked in the 任务 tab ("" the
-/// first), whether the tab shows its output (else what it said).
+/// What the jobs keep of their own: the job open in the popover ("" none: a signal, what the popover's nodes read,
+/// jobs_pop_node), the one picked in the 任务 tab ("" the first), whether the tab shows its output (else what it said).
 priv struct JobsOwn {
-  mut open : String
+  open : @signals.Signal[String]
   mut picked : String
   mut output : Bool
 }
 
 ///|
-let jobs_own : JobsOwn = { open: "", picked: "", output: false }
+let jobs_own : JobsOwn = { open: @signals.signal("", same=fn(a, b) { a == b }), picked: "", output: false }
 
 ///|
 fn jobs_reset() -> Unit {
-  jobs_own.open = ""
+  jobs_own.open.set("")
   jobs_own.picked = ""
   jobs_own.output = false
 }
@@ -31,7 +31,7 @@ pub fn pick_job(id : String) -> Unit {
 ///|
 /// The job opened in the popover (a screen's fixture).
 pub fn open_job_pop(id : String) -> Unit {
-  jobs_own.open = id
+  jobs_own.open.set(id)
 }
 
 ///|
@@ -294,7 +294,7 @@ pub fn jobs_popover(
         for j in plain {
           let jv = Some(j)
           let id = text(jv, "id")
-          let open = jobs_own.open == id
+          let open = jobs_own.open.get() == id
           c.box(style=if open { jobs_fold_open } else { jobs_fold }, fn() {
             job_row(
               c,
@@ -305,7 +305,7 @@ pub fn jobs_popover(
               inset=true,
               grounded=open,
               on_press=fn() {
-                jobs_own.open = if open { "" } else { id }
+                jobs_own.open.set(if open { "" } else { id })
               },
             )
             if open {

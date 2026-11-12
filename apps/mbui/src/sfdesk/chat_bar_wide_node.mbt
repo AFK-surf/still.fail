@@ -57,6 +57,12 @@ pub fn chat_bar_wide_node(
 /// page's ground; its empty part dragging the window where the window's buttons are the app's), its rooms at its ends.
 fn wide_bar_of(b : @view.View, src : Source, r : ChatRef, ends : ChatBarEnds, tips : @sf.TipLayer, stint : () -> Int) -> Unit {
   let view = fn() { view_of_chat(src, r).0 }
+  // (what opens under it where the chat's page is made as nodes, as the bar is made: chat_pops_node; else the old
+  // page's, beside its buttons as chat_bar_from says)
+  let pops = @signals.untracked(fn() { @sfbase.chat_page_nodes.get() })
+  if pops {
+    chat_pops_node(b, src, r, view, stint)
+  }
   let finding = fn() {
     match view() {
       Some(v) => @sfpages.find_chat() == chat_key(r) && v.thread is Some(_)
@@ -110,7 +116,7 @@ fn wide_bar_of(b : @view.View, src : Source, r : ChatRef, ends : ChatBarEnds, ti
             )
             |> ignore
           } else {
-            wide_bar_keys(e, src, r, view, ends, tips)
+            wide_bar_keys(e, src, r, view, ends, tips, pops, stint)
           }
         })
       })
@@ -639,6 +645,8 @@ fn wide_bar_keys(
   view : () -> ChatView?,
   ends : ChatBarEnds,
   tips : @sf.TipLayer,
+  pops : Bool,
+  stint : () -> Int,
 ) -> Unit {
   e.box(fn(k) {
     @sf.style_node(k, fn() { @sf.keys_row() }, in_row=true)
@@ -673,10 +681,13 @@ fn wide_bar_keys(
     let jobs = fn() { src.topic("chatJobs", chat_jobs_summary_params(r)).get().value }
     let has_jobs = fn() { flag(jobs(), "hasJobs") || items(jobs(), "jobs").length() > 0 }
     k.show(fn() { own() && has_jobs() }, fn(b) {
-      // (what its popover opens beside, where it is as that is drawn: chat_page's chat_bar_by)
-      chat_bar_from.jobs_node = Some(
-        @sf.icon_button_node(b, "web", fn() { @sf.t("web-pages.chat.services") }, fn() { jobs_toggle() }, tips~, linked=ends.linked, shortcut="chat.jobs"),
-      )
+      let button = @sf.icon_button_node(b, "web", fn() { @sf.t("web-pages.chat.services") }, fn() { jobs_toggle() }, tips~, linked=ends.linked, shortcut="chat.jobs")
+      // (its popover beside it, where it is as that is drawn: the nodes' (chat_pops_node), or the old page's
+      // (chat_page's chat_bar_by))
+      chat_bar_from.jobs_node = Some(button)
+      if pops {
+        chat_jobs_pop_node(b, src, r, Some(button))
+      }
     })
     // (a dot on the row's first button, as the old bar's layer stood, drawn after its services' button: red while a
     // job died lately, amber while a service restarts)
@@ -740,14 +751,16 @@ fn wide_bar_keys(
         |> ignore
       },
     )
-    // what it is (its info's popover, the old view's: opened or closed as it is let go), what is done with it ("…": the
-    // menu a row of the sidebar has)
+    // what it is (its info's popover beside it: the nodes' (chat_pops_node), or the old view's, opened or closed as it is
+    // let go), what is done with it ("…": the menu a row of the sidebar has)
     k.show(own, fn(b) {
-      chat_bar_from.info_node = Some(
-        @sf.icon_button_node(b, "info", fn() { @sf.t("web-pages.chat.info") }, fn() {
-          chat_own.info_open.set(!chat_own.info_open.untracked())
-        }, tips~, linked=ends.linked),
-      )
+      let button = @sf.icon_button_node(b, "info", fn() { @sf.t("web-pages.chat.info") }, fn() {
+        chat_own.info_open.set(!chat_own.info_open.untracked())
+      }, tips~, linked=ends.linked)
+      chat_bar_from.info_node = Some(button)
+      if pops {
+        chat_info_pop_node(b, src, r, view, stint, Some(button))
+      }
     })
     k.show(own, fn(b) {
       let me : Ref[@view.View?] = Ref(None)

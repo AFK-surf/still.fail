@@ -363,6 +363,20 @@ fn bar_anchor(id : Int, side : @ui.Side, along : @ui.Along) -> (Int, @ui.Side, @
 }
 
 ///|
+/// bar_anchor's for a popover of nodes (chat_pops_node's, chat_page_nodes on): the mark where it was chosen; where the
+/// page has its own, beside its own button (`own`, a node: as it is drawn) on `side`, lined up `along` it; none where
+/// that is not made.
+fn bar_anchor_node(own : @view.View?, side : @ui.Side, along : @ui.Along) -> (@sf.Anchor, @ui.Side, @ui.Along)? {
+  if @sf.native_on() && native_mark.val != 0 {
+    return Some(if @sf.native_side() { (Of(native_mark.val), Left, Start) } else { (Of(native_mark.val), Bottom, End) })
+  }
+  match own {
+    Some(v) if v.alive() => Some((Node(v), side, along))
+    _ => None
+  }
+}
+
+///|
 /// What opens from one of the page's actions as a menu of the page's (a station's screens): as bar_anchor's. A menu goes
 /// under what opened it, so beside the column down the side it opens from the point left of the item, ending there,
 /// not under the item and over the column (the user, 2026-11-04); `id` where the page has its own.

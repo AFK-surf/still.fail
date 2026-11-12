@@ -5,7 +5,7 @@
 ///|
 /// The fixture's chat (`mode`) on 大屏 (中屏 where `w` is one's), a window `w` × `h` of `platform`, the system's bars handed it where `able`;
 /// its calls kept in `calls` and answered with nothing; each topic as `over` makes it; `inset`: a Windows 11 window's
-/// (its corners 8, its own buttons the app's, in its top row).
+/// (its corners 8, its own buttons the app's, in its top row); `nodes`: the chat's page made with its inside nodes.
 fn wide_bar_at(
   calls : Array[Made],
   mode? : String = "chat",
@@ -16,8 +16,13 @@ fn wide_bar_at(
   able? : Bool = false,
   room? : String = "",
   inset? : Bool = false,
+  nodes? : Bool = false,
 ) -> @ui.Tester {
   new_run()
+  // (the chat's page made with its inside nodes: sfbase's chat_page_nodes)
+  if nodes {
+    @sfbase.chat_page_nodes.set(true)
+  }
   let base = fixture(mode)
   let src : Source = {
     ..base,
