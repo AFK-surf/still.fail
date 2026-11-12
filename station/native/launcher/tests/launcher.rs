@@ -86,6 +86,7 @@ impl Station {
             .env("STILLFAIL_NODE", node())
             .env("STILLFAIL_LAUNCHER_TIMES", times)
             .env_remove("STILLFAIL_DATA")
+            .env_remove("STILLFAIL_MB_READER")
             .env_remove("STILLFAIL_CONFIG")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -632,4 +633,89 @@ fn with_parent_it_stops_once_the_parent_is_gone() {
     until("the launcher to end", || (!alive(launcher)).then_some(()));
     assert!(station.said(node, "got stop"));
     until("Node to end", || (!alive(node)).then_some(()));
+}
+
+/// A stand-in for the front (front.rs) in the release: it says where it listens, appends its pid to <data>/fronts and
+/// runs until its stdin (the launcher's) ends.
+fn release_front(station: &Station) {
+    let path = station.app.join("station/stillfail-reader");
+    let fronts = station.data.join("fronts");
+    std::fs::write(&path, format!("#!/bin/sh\n# --builder mesh --socket S --shell-dir D\necho $$ >> '{}'\nprintf '{{\"listening\":\"%s\"}}\\n' \"$4\"\nexec cat > /dev/null\n", fronts.display())).unwrap();
+    std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+}
+
+impl Station {
+    /// The fronts started so far.
+    fn fronts(&self) -> Vec<i32> {
+        std::fs::read_to_string(self.data.join("fronts")).unwrap_or_default().lines().map(|l| l.parse().unwrap()).collect()
+    }
+}
+
+#[test]
+fn one_front_serves_every_node_across_handovers_and_ends_with_the_launcher() {
+    let mut station = Station::new("front");
+    release_front(&station);
+    station.start("");
+    station.up();
+    let socket = station.data.join("run/front.sock");
+    let first = station.started()[0];
+    until("the Node to say its front", || station.log().into_iter().any(|(_, p, w)| p == first && w.starts_with("front ")).then_some(()));
+    assert!(station.said(first, &format!("front {}", socket.display())), "{:?}", station.log());
+    let fronts = station.fronts();
+    assert_eq!(fronts.len(), 1);
+    // a handover: the same front, told to the new Node
+    station.conf("version=0.2.0\n");
+    station.signal(libc::SIGUSR2);
+    until("station.json of the new version", || station.station_json().filter(|s| s["version"] == "0.2.0"));
+    let new = *station.started().last().unwrap();
+    assert!(station.said(new, &format!("front {}", socket.display())));
+    assert_eq!(station.fronts(), fronts);
+    assert!(alive(fronts[0]));
+    // the launcher becoming the release's (renew): the same front still
+    release_launcher(&station, "exec \"$BUILT\" \"$@\"\n");
+    station.conf("version=0.3.0\n");
+    station.signal(libc::SIGUSR2);
+    until("station.json of the next version", || station.station_json().filter(|s| s["version"] == "0.3.0"));
+    let next = *station.started().last().unwrap();
+    assert!(station.said(next, &format!("front {}", socket.display())));
+    assert_eq!(station.fronts(), fronts);
+    assert!(alive(fronts[0]));
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+    until("the front to end with the launcher", || (!alive(fronts[0])).then_some(()));
+}
+
+#[test]
+fn a_front_that_ends_is_started_again_unless_it_ended_as_it_started() {
+    let mut station = Station::new("frontends");
+    release_front(&station);
+    station.start("front=0");
+    station.up();
+    let first = station.fronts()[0];
+    // SAFETY: a signal to the stand-in this test's launcher started.
+    unsafe { libc::kill(first, libc::SIGKILL) };
+    let second = until("another front", || station.fronts().get(1).copied());
+    assert!(alive(second));
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+    until("the front to end with the launcher", || (!alive(second)).then_some(()));
+
+    // one that ends as soon as it started: not again, and the Nodes from then on bind the endpoint themselves
+    let mut station = Station::new("frontquits");
+    release_front(&station);
+    station.start("front=3600000");
+    station.up();
+    let first = station.fronts()[0];
+    // SAFETY: as above.
+    unsafe { libc::kill(first, libc::SIGKILL) };
+    until("the front's end said", || std::fs::read_to_string(station.dir.join("launcher.log")).ok().filter(|l| l.contains("not started again")));
+    assert_eq!(station.fronts().len(), 1);
+    station.conf("version=0.2.0\n");
+    station.signal(libc::SIGUSR2);
+    until("station.json of the new version", || station.station_json().filter(|s| s["version"] == "0.2.0"));
+    let new = *station.started().last().unwrap();
+    until("the new Node to say its front", || station.log().into_iter().any(|(_, p, w)| p == new && w.starts_with("front ")).then_some(()));
+    assert!(station.said(new, "front none"));
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
 }

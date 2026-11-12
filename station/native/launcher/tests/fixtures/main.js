@@ -4,7 +4,8 @@
 // after ready), crash=once (the data directory's first Node exits 1 once ready), start=crash (exits 1 at once),
 // take=no|failed (never takes over: says nothing of the agents' door, or that it failed). What
 // happens is appended to <data>/fake.log: "<ms> <pid> <what>", among it "ports <mcp> <admin>" once both serve (the
-// launcher binds them where it finds them free) and "malloc <MallocSpaceEfficient>" as it starts.
+// launcher binds them where it finds them free), "malloc <MallocSpaceEfficient>" and "front <STILLFAIL_MESH_FRONT>"
+// as it starts.
 "use strict";
 const fs = require("fs");
 const net = require("net");
@@ -32,6 +33,7 @@ const log = (what) => fs.appendFileSync(path.join(data, "fake.log"), `${Date.now
 
 log(`start ${args.join(" ")}`);
 log(`malloc ${process.env.MallocSpaceEfficient ?? "as it is"}`);
+log(`front ${process.env.STILLFAIL_MESH_FRONT ?? "none"}`);
 if (conf.start === "crash") {
   log("crash");
   process.exit(1);

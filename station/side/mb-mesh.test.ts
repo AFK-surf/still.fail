@@ -3,7 +3,8 @@
 // side saw compared, step for step: who connected and on what, a stream's bytes both ways, its end, a reset and its
 // code, what a stream's end is acknowledged with, a stream one way, why a connection went. Then what only the front
 // does: a second Node binding takes the connections that come from then on, the first keeps its own, and closing its
-// endpoint closes only those. Real processes and sockets: the side run's.
+// endpoint closes only those. And a front that ended, another started in its place: the Node links to it again, bound
+// as before, and takes what comes. Real processes and sockets: the side run's.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
@@ -12,6 +13,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { MbProcess, mbReaderBinary } from "../src/read/mb-reader.ts";
 import { withFront } from "../src/mesh/front.ts";
+import { hearLines } from "../src/ops/log.ts";
 import { type Connection, type Endpoint, type Mesh, type Stream, loadMesh } from "../src/mesh/native.ts";
 
 const binary = mbReaderBinary();
@@ -19,8 +21,8 @@ const skip = binary === null ? "the MoonBit program is not built here (station/m
 const ALPN = Buffer.from("stillfail/test/1");
 
 /// The front, listening at a socket of its own; what stops it.
-async function front(): Promise<{ socket: string; stop: () => Promise<number> }> {
-  const dir = mkdtempSync(join(tmpdir(), "mbm-"));
+async function front(at?: string): Promise<{ socket: string; stop: () => Promise<number> }> {
+  const dir = at ?? mkdtempSync(join(tmpdir(), "mbm-"));
   const socket = join(dir, "front.sock");
   const p = new MbProcess(binary!, ["--builder", "mesh", "--socket", socket, "--shell-dir", join(dir, "shell")]);
   await new Promise<void>((resolve, reject) => {
@@ -148,6 +150,33 @@ test("a Node binding again takes what comes from then on; the first keeps its ow
     await device2.close();
     await second.close();
   } finally {
+    await f.stop();
+  }
+});
+
+test("a front that ended, another in its place: the Node links to it again and takes what comes", { skip }, async () => {
+  const addon = loadMesh();
+  const dir = mkdtempSync(join(tmpdir(), "mbm-"));
+  let f = await front(dir);
+  const key = randomBytes(32);
+  const station = await bindOn(withFront(addon, f.socket), key);
+  const id = station.id();
+  const device = await bindOn(addon, randomBytes(32));
+  try {
+    const accepting = station.accept();
+    // told as it links again (its log's line)
+    const linked = new Promise<void>((resolve) => hearLines((l) => void (l.message === "linked to the front again" && resolve())));
+    await f.stop();
+    f = await front(dir);
+    await linked;
+    const dialed = await device.connect(addrOf(station), ALPN);
+    const conn = (await accepting)!;
+    assert.equal(conn.remoteId(), device.id());
+    dialed.close(0, "");
+    assert.equal(station.id(), id);
+  } finally {
+    await device.close();
+    await station.close();
     await f.stop();
   }
 });
