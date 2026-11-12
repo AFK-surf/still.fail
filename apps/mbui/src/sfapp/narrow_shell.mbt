@@ -586,14 +586,9 @@ fn narrow_made_as(
         @sfpages.completion_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
       })
     Setting(Usage) =>
-      // (what it does in its place's top bar as a place; at its head as a page of the stack; as a place, what puts it
-      // as made now said for its putting back: sfbase's nav_root_kept)
-      made_at("usage", place, fn(p, core, here, frame, _stint, acts, serial) {
-        @sfpages.usage_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None }, anew?=if place {
-          Some(fn(f) { @sfbase.place_anew_said(p, serial, f) })
-        } else {
-          None
-        })
+      // (what it does in its place's top bar as a place; at its head as a page of the stack)
+      made("usage", fn(p, core, here, frame, _stint, acts) {
+        @sfpages.usage_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
       })
     Setting(Shortcuts) =>
       // (recording while it is the one on top of the stack: its stay there, stint's)
@@ -629,12 +624,8 @@ fn narrow_made_as(
     // (by its station: another station's another page; as a place of the bottom bar's, its ＋ the bar's notch:
     // connects_add)
     Setting(Connects(only)) =>
-      made_at("connects/" + only, place, fn(p, core, here, frame, stint, _acts, serial) {
-        @sfpages.connects_node(p, src, core, here, only, on_back=core.pop, frame~, stint~, anew?=if place {
-          Some(fn(f) { @sfbase.place_anew_said(p, serial, f) })
-        } else {
-          None
-        })
+      made("connects/" + only, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.connects_node(p, src, core, here, only, on_back=core.pop, frame~, stint~)
       })
     Setting(Connect(station, id)) =>
       made("connect/" + station + "/" + id, fn(p, core, here, frame, stint, _acts) {
