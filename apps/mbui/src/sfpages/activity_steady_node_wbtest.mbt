@@ -45,7 +45,7 @@ test "steadied: a routine step shows once what shows has had steady_dwell_ms and
   let t = steady_tester(steadies, said, came, log)
   assert_eq(log.length(), 1)
   let t0 = log[0].at
-  assert_eq(log[0], { said: a, was: "", at: t0 })
+  assert_eq(log[0], { said: a, was: "", was_mono: false, at: t0 })
   // a routine step said soon after: its turn once what shows has had its dwell
   t.run_for(steady_candidate_ms / 2.0)
   let t1 = t.time()
@@ -53,7 +53,7 @@ test "steadied: a routine step shows once what shows has had steady_dwell_ms and
   said.set(b)
   t.run_for(steady_dwell_ms * 2.0)
   let b_at = dmax(t0 + steady_dwell_ms, t1 + steady_candidate_ms)
-  assert_eq(log, [{ said: a, was: "", at: t0 }, { said: b, was: a.words, at: b_at }])
+  assert_eq(log, [{ said: a, was: "", was_mono: false, at: t0 }, { said: b, was: a.words, was_mono: false, at: b_at }])
   // one said and another after it before its turn: the first never shows, the second from when it was said
   let c = steady_said("test", "跑测试")
   said.set(c)
@@ -64,14 +64,14 @@ test "steadied: a routine step shows once what shows has had steady_dwell_ms and
   t.run_for(steady_dwell_ms * 2.0)
   let d_at = dmax(b_at + steady_dwell_ms, t3 + steady_candidate_ms)
   assert_eq(log.length(), 3)
-  assert_eq(log[2], { said: d, was: b.words, at: d_at })
+  assert_eq(log[2], { said: d, was: b.words, was_mono: false, at: d_at })
   // an important step: at once, what shows having had its own change's time
   let t4 = t.time()
   let e = steady_said("ask", "等你确认", important=true)
   said.set(e)
   t.draw()
   let e_at = dmax(d_at + @sfbase.glyph_change_in_ms, t4)
-  assert_eq(log[3], { said: e, was: d.words, at: e_at })
+  assert_eq(log[3], { said: e, was: d.words, was_mono: false, at: e_at })
   // a routine one after an important one: once that has had its dwell
   t.run_for(steady_candidate_ms / 2.0)
   let t5 = t.time()
@@ -79,13 +79,13 @@ test "steadied: a routine step shows once what shows has had steady_dwell_ms and
   said.set(f)
   t.run_for(steady_dwell_ms * 2.0)
   let f_at = dmax(e_at + steady_dwell_ms, t5 + steady_candidate_ms)
-  assert_eq(log[4], { said: f, was: e.words, at: f_at })
+  assert_eq(log[4], { said: f, was: e.words, was_mono: false, at: f_at })
   // the same step's new words: at once, from when it began
   let f2 = steady_said("read2", "读 decision.mbt 第 2 段")
   said.set(f2)
   t.draw()
   assert_eq(log.length(), 6)
-  assert_eq(log[5], { said: f2, was: e.words, at: f_at })
+  assert_eq(log[5], { said: f2, was: e.words, was_mono: false, at: f_at })
   assert_eq(t.audit(), [])
 }
 
@@ -110,11 +110,11 @@ test "steadied: kept by its row's key, a row made again goes on from where it wa
   on.set(true)
   t.draw()
   let b_at = dmax(t0 + steady_dwell_ms, t1 + steady_candidate_ms)
-  assert_eq(log[log.length() - 1], { said: b, was: a.words, at: b_at })
+  assert_eq(log[log.length() - 1], { said: b, was: a.words, was_mono: false, at: b_at })
   // come into its list anew: what is said now, from then
   let t2 = t.time()
   came.set(Some(t2))
   t.draw()
-  assert_eq(log[log.length() - 1], { said: b, was: "", at: t2 })
+  assert_eq(log[log.length() - 1], { said: b, was: "", was_mono: false, at: t2 })
   assert_eq(t.audit(), [])
 }

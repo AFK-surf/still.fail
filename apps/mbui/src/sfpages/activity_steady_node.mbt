@@ -3,8 +3,8 @@
 // shows a while before the next takes its place. Its state is kept by its row's key in what its caller gives
 // (ActivitySteadies, a row made again for the same key going on from where it was), what shows a signal; each change
 // is worked out at the moment of its cause (what the core said, a row coming into the list) or at a moment declared
-// from one (View::at_moment), never at a frame's. How one step's words give way to the next's, glyph by glyph, is not
-// here yet (xfer/rd-glyphs-gap.md): the new step's words take the old's place whole.
+// from one (View::at_moment), never at a frame's. How one step's words give way to the next's, glyph by glyph, from the
+// moment it began showing: message_working_node.mbt's working_words_node.
 
 ///|
 /// What an agent says it does, as its row reads it: the step's key, its words, whether in the monospaced face, whether
@@ -18,12 +18,13 @@ pub(all) struct ActivitySaid {
 }
 
 ///|
-/// What shows, steadied: the step (`said`), the words it took the place of ("" none: the row's first), and the moment it
-/// began showing.
+/// What shows, steadied: the step (`said`), the words it took the place of ("" none: the row's first) and whether in the
+/// monospaced face, and the moment it began showing.
 #derive(Eq, Debug)
 pub(all) struct ActivityShown {
   said : ActivitySaid
   was : String
+  was_mono : Bool
   at : Double
 }
 
@@ -59,7 +60,7 @@ fn ActivitySteadies::of(self : ActivitySteadies, key : String, said : ActivitySa
     Some(s) => s
     None => {
       let s = {
-        shown: @signals.signal({ said, was: "", at }),
+        shown: @signals.signal({ said, was: "", was_mono: false, at }),
         pending: None,
         pending_at: 0.0,
         important_next: None,
@@ -112,7 +113,7 @@ fn steady_step(st : ActivitySteady, said : ActivitySaid, came : Double?, now : D
       st.came = Some(at)
       st.pending = None
       st.important_next = None
-      st.shown.set({ said, was: "", at })
+      st.shown.set({ said, was: "", was_mono: false, at })
       return None
     }
     _ => ()
@@ -189,7 +190,7 @@ fn steady_step(st : ActivitySteady, said : ActivitySaid, came : Double?, now : D
   }
   match next {
     Some((n, at)) => {
-      st.shown.set({ said: n, was: cur.said.words, at })
+      st.shown.set({ said: n, was: cur.said.words, was_mono: cur.said.mono, at })
       // (taken: what is said now worked out again from there)
       match wait {
         Some(w) => Some(w)
