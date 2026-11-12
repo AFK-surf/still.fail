@@ -20,9 +20,14 @@ pub fn avatar_node(
   let half = size / 2.0
   parent.box(made_for=loc, fn(d) {
     let px = fn() { size * d.pixel_scale() }
+    // (its picture's node made only once it is decoded: its decode asked here, nothing drawn of it asking it before)
     let decoded = fn() {
       let p = picture()
-      p != "" && d.image_ready(p, px())
+      if p == "" {
+        return false
+      }
+      d.image_ask(p, px())
+      d.image_ready(p, px())
     }
     d
     .width(Is(Some(size)))
@@ -205,9 +210,14 @@ pub fn tile_avatar_node(
   let corner = corner.unwrap_or(size * 0.3)
   parent.box(made_for=loc, words_as_said=true, fn(d) {
     let key = fn() { data_image(picture()) }
+    // (its picture's node made only once it is decoded: its decode asked here, nothing drawn of it asking it before)
     let decoded = fn() {
       let k = key()
-      k != "" && d.image_ready(k, size * d.pixel_scale())
+      if k == "" {
+        return false
+      }
+      d.image_ask(k, size * d.pixel_scale())
+      d.image_ready(k, size * d.pixel_scale())
     }
     d
     .width(Is(Some(size)))

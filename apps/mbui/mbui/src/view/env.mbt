@@ -12,6 +12,7 @@ struct Env {
   mut glass_solid : () -> Bool
   mut keyboard_inset : () -> Double
   mut image_ready : (String, Double) -> Bool
+  mut image_ask : (String, Double) -> Unit
   mut focus_let_go : (() -> Unit)?
 }
 
@@ -23,6 +24,7 @@ fn Env::new() -> Env {
     glass_solid: fn() { false },
     keyboard_inset: fn() { 0.0 },
     image_ready: fn(_, _) { false },
+    image_ask: fn(_, _) {  },
     focus_let_go: None,
   }
 }
@@ -32,7 +34,8 @@ fn Env::new() -> Env {
 /// `words_scale` the system's size of words its words are drawn at (as they are measured: ui's Ctx::sp); `pixel_scale`
 /// how many pixels a point is; `glass_solid` whether glass is drawn solid; `keyboard_inset` how far the soft keyboard
 /// reaches over the window's foot, in points; `image_ready` whether a picture is decoded ready to show so many pixels on
-/// its long side (its decode asked for where it is not); `focus_let_go` the window's focus let go of, on either side.
+/// its long side, asking for nothing; `image_ask` its decode asked for that large where none is ready or coming;
+/// `focus_let_go` the window's focus let go of, on either side.
 pub fn Tree::drawn_by(
   self : Tree,
   words_scale? : () -> Double,
@@ -40,6 +43,7 @@ pub fn Tree::drawn_by(
   glass_solid? : () -> Bool,
   keyboard_inset? : () -> Double,
   image_ready? : (String, Double) -> Bool,
+  image_ask? : (String, Double) -> Unit,
   focus_let_go? : () -> Unit,
 ) -> Unit {
   let e = self.env
@@ -57,6 +61,9 @@ pub fn Tree::drawn_by(
   }
   if image_ready is Some(f) {
     e.image_ready = f
+  }
+  if image_ask is Some(f) {
+    e.image_ask = f
   }
   if focus_let_go is Some(f) {
     e.focus_let_go = Some(f)
@@ -127,10 +134,39 @@ pub fn View::keyboard_inset(self : View) -> Double {
 }
 
 ///|
-/// Whether the picture `src` is decoded, ready to show `px` pixels on its long side where its tree is drawn (its decode
-/// asked for where it is not), followed as the host says a decode is ready.
+/// Whether the picture `src` is decoded, ready to show `px` pixels on its long side where its tree is drawn, followed as
+/// the host says a decode is ready. It asks for none: a picture is decoded as what draws the tree comes to it (its node
+/// drawn, or gone through outside what shows), or where View::image_ask asks it; so a node made and let go of in one
+/// change, never drawn, has nothing decoded for it. What that costs, taken: a node drawing its picture itself made
+/// between frames, outside a list, has its decode asked by the next frame's paint, a frame's wait later at most than
+/// when this asked it as the node was made; made in a frame's layout
+/// (every block of a page's list) nothing differs. Under the Tester's host, which decodes by the frame after it is
+/// asked, that is a frame of what stands in for it at the node's moment, its reveal setting out at the same moment
+/// (the app's sf/image_reveal_node_wbtest, sfpages/message_media_cmp_wbtest, message_media_node_wbtest and
+/// message_video_node_wbtest, each a chat's message made as nodes). One made so that is to show at once (a card opening)
+/// asks for it as it is made (View::image_ask).
 pub fn View::image_ready(self : View, src : String, px : Double) -> Bool {
   (self.tree.env.image_ready)(src, px)
+}
+
+///|
+/// The picture `src` asked to be decoded to show `px` pixels on its long side where its tree is drawn, where no decode
+/// that large is ready or coming: for a picture wanted before any node of it is drawn (one whose node is made only once
+/// it is decoded, or one fetched ahead on purpose). Its bytes are held from then, as a drawn one's are. Said in a change,
+/// it is asked as that change ends, the outermost (Tree::change_ended); said in a frame's layout (View::by_room, a page's
+/// list's fill), as that layout ends, before its paint (Tree::brought); in either only where this node still stands
+/// then: one made and let go of in it (a page's list's block in one pass of its fill, gone in a later) asks nothing.
+/// A frame's layout always ends so; one laid out outside a frame (Tree::measured_now, View::grows_now) leaves what it
+/// asked to the next of the two. Outside every change and layout, at once. Said again it asks nothing more: a read
+/// that says it each time it runs (a face's, whose node waits for its decode) relies on what hosts the tree asking
+/// nothing where a decode that large is ready or coming (Tree::drawn_by's `image_ask`); one that asked each time
+/// would have those ask in a loop.
+pub fn View::image_ask(self : View, src : String, px : Double) -> Unit {
+  if self.tree.in_change() {
+    self.tree.images_wanted.push((self.id(), src, px))
+  } else {
+    (self.tree.env.image_ask)(src, px)
+  }
 }
 
 ///|

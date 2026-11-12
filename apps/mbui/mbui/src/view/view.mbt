@@ -1172,6 +1172,9 @@ pub struct Tree {
   priv departures : Array[Departure]
   priv arrivals : Array[NodeId]
   priv mut pairs_asked : Bool
+  /// the pictures asked for in a change or a frame's layout (View::image_ask), each by the node that asked: asked of
+  /// what hosts the tree as that ends, where that node still stands (Tree::change_ended, Tree::brought)
+  priv images_wanted : Array[(NodeId, String, Double)]
   priv flights : Array[Flying]
   priv mut lifting : Bool
   /// how many times its nodes' flex places were worked out (a layout of all of it, one laid out to be read, one laid
@@ -1443,6 +1446,7 @@ pub fn Tree::new(
     departures: [],
     arrivals: [],
     pairs_asked: false,
+    images_wanted: [],
     flights: [],
     lifting: false,
     laids: 0,
@@ -3029,6 +3033,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
     self.bound_by_clock = by_clock_was
     self.binding_running = self.binding_running - 1
     self.cause_at = was
+    self.change_ended()
   }
   (b.run)()
   self.bindings = self.bindings + 1
@@ -3153,6 +3158,7 @@ fn[T : Eq] Tree::structured(
   if self.committing == 0 && self.cause_at < 0.0 {
     self.pairs_after(self.logic)
   }
+  self.change_ended()
   stop
 }
 
@@ -3204,6 +3210,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   self.modals_settled()
   self.cause_at = was
   // (paired once all of the change it is of is committed: shared.mbt)
+  self.change_ended()
   if was < 0.0 {
     self.pairs_after(at)
     self.hand_now()
@@ -9381,6 +9388,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
     self.pairs_now()
   }
   self.cause_at = was
+  self.change_ended()
   // (where things stand once it is told whole, for the next change: Tree::settle_after_change)
   if was < 0.0 {
     self.settle_now(at)
@@ -9448,6 +9456,8 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   }
   self.standing = false
   self.withins_restored()
+  // (what the bindings it ran asked for, a change told outside every event so ending: Tree::change_ended)
+  self.change_ended()
 }
 
 ///|
@@ -9688,6 +9698,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
       self.pairs_now()
     }
     self.cause_at = was
+    self.change_ended()
     // (where things stand once it is told whole, as of its moment, for the next change: Tree::settle_after_change)
     if was < 0.0 {
       self.settle_now(next_at)
@@ -9847,6 +9858,10 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   self.laying = true
   self.laid_out(upto)
   self.laying = laying_was
+  // (what was asked for in its layout, where it still stands: View::image_ask; in a change, as it is committed)
+  if !self.in_change() {
+    self.images_asked_now()
+  }
   // (a binding told and left for a frame nobody was asked for (told again by every layout of the passes it is given, or
   // told where no pass is made): a fault, never drawn a frame late or not at all, nor laid out again without end; a
   // frame asked for it where faults do not stop)

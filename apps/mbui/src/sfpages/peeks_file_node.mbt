@@ -140,6 +140,9 @@ fn file_shown_node(parent : @view.View, picture : () -> String, v : () -> Json?)
               .ground(By(fn() {
                 let w = room.width()
                 let side = if w > peek_file_image_h { w } else { peek_file_image_h }
+                // (its decode asked as the card is made, a pointer resting on a link opening it: there by the frame
+                // after, as drawn; View::image_ask)
+                g.image_ask(picture(), side * g.pixel_scale())
                 if g.image_ready(picture(), side * g.pixel_scale()) {
                   0L
                 } else {

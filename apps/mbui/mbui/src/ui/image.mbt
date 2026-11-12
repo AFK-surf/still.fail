@@ -955,3 +955,18 @@ fn image_decoded(id : Int, at : Double) -> Unit {
 /// the cache, those of pictures no longer in the frame not among them.
 // kept across runs: emptied as each frame is painted (frame_paint)
 let frame_failed_images : Array[Int] = []
+
+///|
+/// Whether Ctx::image_ready would say `src` is ready, asking for no decode and marking none used: a decode of it of any
+/// size ready (the one it would draw, or one standing in for it), its bytes here where they are handed over. Followed
+/// as the host's word on its decodes comes (image_decoded). What a node of the window's tree reads (View::image_ready).
+fn image_ready_asking_none(src : String) -> Bool {
+  image_decodes_read(src)
+  if src.has_prefix("mem:") && !image_data.contains(src) {
+    return false
+  }
+  match image_cache.get(src) {
+    Some(list) => list.iter().any(fn(e) { e.state == 1 })
+    None => false
+  }
+}

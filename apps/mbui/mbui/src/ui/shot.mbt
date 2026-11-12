@@ -119,7 +119,8 @@ pub fn take_picture(
           words_scale=fn() { font_scale() },
           pixel_scale=fn() { if scale > 0.0 { scale } else { g().scale } },
           glass_solid=fn() { true },
-          image_ready=fn(src, px) { g().image_ready(src, px) },
+          image_ready=fn(src, _) { image_ready_asking_none(src) },
+          image_ask=fn(src, px) { g().image_ready(src, px) |> ignore },
         )
         root.box(fn(b) {
           b.width(Is(Some(w))) |> ignore

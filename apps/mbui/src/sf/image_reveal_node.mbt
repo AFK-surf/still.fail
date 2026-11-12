@@ -36,6 +36,9 @@ pub fn image_reveal_node(
   parent.box(made_for=loc, fn(b) {
     b.width(Is(Some(w))).height(Is(Some(h))).clips(Is(true)) |> ignore
     let px = fn() { reveal_px(w, h, b.pixel_scale()) }
+    // (read only: its picture's node, made from the first, has its decode asked by what draws it as it comes to it, in
+    // sight or outside its clip; one made and let go of before anything drew it, a page's list's block in one layout,
+    // has nothing decoded)
     let ready = fn() { key() != "" && b.image_ready(key(), px()) }
     let phase = @signals.signal(Waiting)
     let way = EdgeWay::new(0.0)
