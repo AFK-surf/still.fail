@@ -62,7 +62,7 @@ async function met(inLock?: { sign_key?: string }, others: Record<string, unknow
   const run = async <A>(e: Effect.Effect<A, any>): Promise<{ ok: A } | { err: any }> => {
     const out: ({ ok: A } | { err: any })[] = [];
     r.core.inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x._tag === "Success" ? { ok: x.success } : { err: x.failure })));
-    for (let i = 0; i < 500 && out.length === 0; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => out.length !== 0);
     return out[0] ?? { err: "no answer" };
   };
   const hello = (credential = g.credential("ws", PHONE, "s2")) =>
@@ -453,7 +453,7 @@ test("someone the lock has not heard of: a member's device shows no code, nor do
     await Effect.runPromise(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }));
     const out: unknown[] = [];
     r.core.inner.runner.fork(Effect.map(phone.next(), (x) => out.push(x)));
-    for (let i = 0; i < 500 && out.length === 0; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => out.length !== 0);
     return out[0];
   };
   assert.deepEqual(await asks(g.credential("ws", PHONE, "s3")), { t: "no", error: "not_here" });
@@ -686,7 +686,7 @@ async function servedAlone(finishFails: boolean) {
   const connection = { remoteId: () => PHONE, acceptBi: () => Effect.succeed(stream), close: (code: number, why: string) => void said.push(`close ${code} ${why}`) };
   served(r.core.inner, connection as never);
   const until = async (f: () => boolean) => {
-    for (let i = 0; i < 50 && !f(); i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(500, () => f());
     await r.host.time.pass(10);
   };
   return { said, until, ack: () => Deferred.doneUnsafe(acked, Effect.succeed(null)) };
@@ -730,7 +730,7 @@ test("over iroh: the trusted device takes the new one on its endpoint, and the c
   const code = (await prompts()).pairing[0].code;
   const done: any[] = [];
   r.core.inner.runner.fork(Effect.map(Effect.result(tryOne(r.core.inner, { id: trustedEnd.id(), d, workspaces: ["ws"] }, newEnd.id(), code)), (x) => done.push(x)));
-  for (let i = 0; i < 500 && done.length === 0; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(5000, () => done.length !== 0);
   assert.equal(done[0]?._tag, "Success", String(done[0]?.failure?.message));
   const entry = r.cloud.chains.get("ws")!.at(-1)!;
   assert.equal((entry.body as { id: string }).id, newEnd.id());
@@ -796,7 +796,7 @@ test("a new device asking into its person's own lock makes the key it signs the 
   assert.equal(Effect.runSync(Signer.load(s.host)), null, "a device new to every lock keeps no such key");
   const out: unknown[] = [];
   inner.runner.fork(Effect.map(Effect.result(personalBegin(inner, ["s1"])), (r) => out.push(r)));
-  for (let i = 0; i < 100 && out.length === 0; i++) await s.host.time.pass(10);
+  await s.host.time.passUntil(1000, () => out.length !== 0);
   assert.equal((out[0] as { _tag: string })?._tag, "Success", JSON.stringify(out));
   const made = Effect.runSync(Signer.load(s.host));
   assert.ok(made, "made as it asks");
@@ -970,7 +970,7 @@ test("a device on the person's own lock that a second workspace bound to it hold
   const run = async <A>(e: Effect.Effect<A, any>) => {
     const out: unknown[] = [];
     inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x)));
-    for (let i = 0; i < 500 && out.length === 0; i++) await m.host.time.pass(10);
+    await m.host.time.passUntil(5000, () => out.length !== 0);
   };
   const kept: { entries: Entry[] } = { entries: [] };
   const personal = new PersonalLock({
@@ -1018,7 +1018,7 @@ test("a device on the person's own lock that no workspace's lock holds with its 
   const run = async <A>(e: Effect.Effect<A, any>) => {
     const out: unknown[] = [];
     inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x)));
-    for (let i = 0; i < 500 && out.length === 0; i++) await m.host.time.pass(10);
+    await m.host.time.passUntil(5000, () => out.length !== 0);
   };
   const kept: { entries: Entry[] } = { entries: [] };
   const personal = new PersonalLock({
@@ -1071,7 +1071,7 @@ test("a station of the lock that does not say it knows the entry, or does not an
     let done = false;
     let out: X | undefined;
     inner.runner.fork(Effect.map(e, (x) => { out = x; done = true; }));
-    for (let i = 0; i < 500 && !done; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => done);
     assert.ok(done, "no answer");
     return out as X;
   };

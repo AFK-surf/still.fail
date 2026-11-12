@@ -92,7 +92,7 @@ async function setUp(silent = false, { seen = false, keyMade = true, unnamed = f
     let out: X | undefined;
     let failed: unknown;
     inner.runner.fork(Effect.match(e, { onSuccess: (x) => { out = x; done = true; }, onFailure: (f) => { failed = f; done = true; } }));
-    for (let i = 0; i < 500 && !done; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => done);
     assert.ok(done, "no answer");
     if (failed !== undefined) throw failed;
     return out as X;
@@ -142,7 +142,7 @@ test("a station that tells its lock moved is read again", async () => {
   await run(read(inner, "ws"));
   st.chain.push(signer().sign(next("ws", st.head(), 1001, "member", { sub: "s3", email: "c@x.com", role: "member" })));
   inner.stations.onEvent(`ws/${A}`, "lock", JSON.stringify({ workspace: "ws", head: st.head() }));
-  for (let i = 0; i < 50 && held(inner, "ws")?.head?.seq !== 1; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => held(inner, "ws")?.head?.seq === 1);
   assert.equal(held(inner, "ws")?.head?.seq, 1);
 });
 
@@ -187,7 +187,7 @@ test("a station the lock does not name, keeping none, read alone does not make t
   // S tells its lock moved: it alone is read.
   atS.length = 0;
   inner.stations.onEvent(`ws/${S}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
-  for (let i = 0; i < 50 && !atS.includes("GET /lock/devices"); i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => atS.includes("GET /lock/devices"));
   assert.ok(atS.includes("GET /lock/devices"), atS.join());
   await r.host.time.pass(100);
   assert.equal(held(inner, "ws")?.head?.hash, h.head!.hash);
@@ -210,7 +210,7 @@ test("a station read alone tells who came to it: the devices that came to the ot
   // S, to which none came, tells its lock moved and is read alone: the Mac that came to A is listed still.
   atS.length = 0;
   inner.stations.onEvent(`ws/${S}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
-  for (let i = 0; i < 50 && !atS.includes("GET /lock/devices"); i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => atS.includes("GET /lock/devices"));
   assert.ok(atS.includes("GET /lock/devices"), atS.join());
   await r.host.time.pass(100);
   assert.deepEqual(held(inner, "ws")?.seen?.map((d) => d.label), ["Mac"]);
@@ -223,7 +223,7 @@ test("every station the lock names keeping none, this device lets the lock go", 
   // A, the one station the lock names, reset on its own machine, tells it: read alone, its word is the lock's end.
   reset.A = true;
   inner.stations.onEvent(`ws/${A}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
-  for (let i = 0; i < 50 && held(inner, "ws")?.head != null; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => held(inner, "ws")?.head == null);
   assert.equal(held(inner, "ws")?.head, null);
   assert.deepEqual(held(inner, "ws")?.entries, []);
 });
@@ -243,7 +243,7 @@ test("one of the lock's two stations keeping none is not the lock's end: the oth
   reset.A = true;
   let asked = asleep.asked;
   inner.stations.onEvent(`ws/${A}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
-  for (let i = 0; i < 50 && asleep.asked === asked; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => asleep.asked !== asked);
   assert.ok(asleep.asked > asked, "S was asked as A said it keeps none");
   await r.host.time.pass(100);
   assert.equal(held(inner, "ws")?.head?.hash, h.head!.hash);
@@ -251,7 +251,7 @@ test("one of the lock's two stations keeping none is not the lock's end: the oth
   // S reset too, telling it alone: A is asked with it, and with both keeping none the lock is let go.
   reset.S = true;
   inner.stations.onEvent(`ws/${S}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
-  for (let i = 0; i < 50 && held(inner, "ws")?.head != null; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => held(inner, "ws")?.head == null);
   assert.equal(held(inner, "ws")?.head, null);
   assert.deepEqual(held(inner, "ws")?.entries, []);
 });
@@ -302,7 +302,7 @@ test("the page to turn safe mode on, asked where none is held and the cloud's vi
   // (#5540's device: the lock let go, the stations keeping it still)
   inner.data.put("lock", "ws", { head: null, entries: [] });
   await r.watch({ topic: "lockDraft", workspace: "ws" });
-  for (let i = 0; i < 50 && held(inner, "ws")?.head == null; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => held(inner, "ws")?.head != null);
   assert.equal(held(inner, "ws")?.head?.hash, st.head().hash);
   assert.deepEqual(held(inner, "ws")?.entries, h.entries);
 });
@@ -314,7 +314,7 @@ test("a station refusing this device tells its lock's last entries: one taken ou
   // This device taken out (the lock's devices without it), told only by the refusal.
   st.chain.push(signer().sign(next("ws", st.head(), 1001, "device.remove", { id: ME })));
   hooks.lockRefused!(inner, "ws", A, st.head(), { entries: st.chain.slice(1) });
-  for (let i = 0; i < 50 && held(inner, "ws")?.head?.seq !== 1; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(500, () => held(inner, "ws")?.head?.seq === 1);
   assert.equal(held(inner, "ws")?.head?.seq, 1);
   assert.equal(fold(held(inner, "ws")!.entries).devices.has(ME), false);
   // Read again while refused (the workspace said the lock moved): the stations asked, the cloud not.
@@ -381,7 +381,7 @@ test("the one to begin its person's lock, held back for a station asleep, begins
   // Alone in the workspace's lock and signing there, this device is the one to begin; the silent station, seen lately,
   // has not answered a read of the person's lock, so it begins nothing. (Its read of A asked, and its wait for the
   // silent one over, so that nothing is still to come of it.)
-  for (let i = 0; i < 500 && !atA.includes("GET /lock/person"); i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(5000, () => atA.includes("GET /lock/person"));
   assert.ok(atA.includes("GET /lock/person"), "the person's lock read of A");
   await r.host.time.pass(2 * OTHERS_MS + 200);
   assert.equal(personal.standing("s1"), "none");
@@ -390,7 +390,7 @@ test("the one to begin its person's lock, held back for a station asleep, begins
   // of their stations answered, and the one held back for it begins now, nothing else moving.
   asleep.now = false;
   await run(personal.refresh("s1", `ws/${S}`));
-  for (let i = 0; i < 1000 && personal.standing("s1") !== "member"; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(10000, () => personal.standing("s1") === "member");
   assert.equal(personal.standing("s1"), "member");
   assert.equal(personal.entries("s1")[0]?.kind, "genesis");
   assert.ok(atA.includes("POST /lock/person"), atA.join());

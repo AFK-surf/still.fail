@@ -18,6 +18,8 @@ export interface HostTime {
   readonly sleeps: number[];
   now(): number;
   pass(ms: number, step?: number): Promise<void>;
+  /// As `pass`, ending as soon as `done()` says (looked at first and after each step): whether it did.
+  passUntil(ms: number, done: () => boolean, step?: number): Promise<boolean>;
 }
 
 /// A test's clock: a TestClock, with every sleep asked of it noted.
@@ -79,7 +81,16 @@ export class TestTime implements HostTime {
   /// What is woken is so at the same step as one at a time, so at the same moment; only fewer empty turns are run (a
   /// pairing code's five minutes in 10 ms steps were 30,000 of them, most of lock-pair.test.ts's 21 s, 2026-11-12).
   async pass(ms: number, step = 10): Promise<void> {
+    await this.passUntil(ms, () => false, step);
+  }
+
+  /// A test waiting on an answer passes its time here rather than in a loop of short `pass`es: each of those began
+  /// anew with no quiet steps behind it, so it never skipped (answer-timing.test.ts's 30 s cells in 10 ms passes were
+  /// 68,000 steps of its 20 s, 2026-11-12). Nothing runs in the steps skipped, so `done` turns only after a step taken,
+  /// and is seen there as it would be after that step's own short `pass`.
+  async passUntil(ms: number, done: () => boolean, step = 10): Promise<boolean> {
     await flush();
+    if (done()) return true;
     let left = ms;
     let quiet = 0;
     while (left > 0) {
@@ -93,6 +104,7 @@ export class TestTime implements HostTime {
           await Effect.runPromise(this.#test.adjust(empty * step));
           left -= empty * step;
           await flush();
+          if (done()) return true;
           continue;
         }
       }
@@ -104,7 +116,9 @@ export class TestTime implements HostTime {
       left -= d;
       await flush();
       quiet = wakes || this.#changes !== changes || busy() ? 0 : quiet + 1;
+      if (done()) return true;
     }
+    return false;
   }
 }
 
