@@ -67,6 +67,8 @@ const str = (v: J): string | null => (typeof v === "string" ? v : null);
 const u64 = (v: J): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
 /// Database values are frozen all through and can be shared; copy an unfrozen value before a view keeps it.
+/// The reasons a failed turn's notice offers 重试 for (station actor.ts `AGAIN`).
+const AGAIN = ["network", "model", "other", "exited"];
 const sharedOrCopied = (v: J): J => v !== null && typeof v === "object" && Object.isFrozen(v) ? v : structuredClone(v);
 
 const DAY_MS = 86_400_000;
@@ -3063,18 +3065,24 @@ export class Views implements Owner {
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
     const written = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
     let messages = timed("chat.shown", () => this.#shown(station, thread, agents, said, waits));
-    // The station binds a capacity retry to the notice that announced it. Only that notice offers cancellation, and
-    // only while that agent is still waiting: an old notice must never stop later work in the same chat.
+    // The station binds a capacity retry, and a failed turn, to the notice that announced it. Only that notice offers
+    // cancelling the retry, or trying again, and only while that agent still stands there: an old notice must never
+    // stop or start later work in the same chat.
     for (const agent of agents) {
       const session = get(agent, "session");
       const turn = get(session, "lastTurn");
       const about = get(turn, "about");
       const key = str(get(session, "key"));
       const detail = str(get(turn, "detail")) ?? "";
-      if (key === undefined || get(turn, "outcome") !== "failed" || !detail.startsWith("overloaded:") || present.waiting(session) === null || get(about, "thread") !== id) continue;
+      if (key === undefined || get(turn, "outcome") !== "failed" || get(about, "thread") !== id) continue;
+      // Waiting to retry at capacity: 取消; else one that failed for the provider or the connection and is still where
+      // the session stands (nothing ran or was sent since): 重试, as a reply would (station actor.ts `retryable`).
+      const mark = detail.startsWith("overloaded:") && present.waiting(session) !== null ? "retrySession"
+        : present.sessionStatus(session) === "failed" && AGAIN.some((reason) => detail.startsWith(`${reason}:`)) ? "againSession" : null;
+      if (mark === null) continue;
       const at = messages.findIndex((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
       const notice = messages[at];
-      if (notice && isObject(notice.notice)) messages[at] = { ...notice, notice: { ...notice.notice, retrySession: key } };
+      if (notice && isObject(notice.notice)) messages[at] = { ...notice, notice: { ...notice.notice, [mark]: key } };
     }
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.

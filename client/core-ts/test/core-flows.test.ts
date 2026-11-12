@@ -291,6 +291,39 @@ test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_f
   core.close();
 });
 
+test("a failed turn's notice and its 重试 pass through the real core", async () => {
+  const failed = {
+    id: "turn-1", kind: "input", outcome: "failed", declared: null, detail: "network: fetch failed",
+    about: { thread: 7, seq: 1, ts: "1.0" }, startedAt: 1, endedAt: 2,
+  };
+  const agent = { ...session("k1", 1), lastTurn: failed };
+  const notice = { ...entry(1, "⚠️ 与模型服务的连接中断，回复即可重试"), authorKind: "ember", author: "ember" };
+  const { host, core } = await started({
+    ...base(),
+    "GET /sessions": [agent],
+    "GET /sessions/k1": { session: agent, threads: [], turns: [], jobs: [] },
+    "GET /threads": [threadView(7, 1)],
+    "GET /threads/7/entries?limit=50": { last: 1, entries: [notice] },
+  });
+  try {
+    stationReplies(host, (req) => req.method === "POST" && req.url.endsWith("/sessions/k1/retry") ? { ok: true } : undefined);
+    const ui = core.connect();
+    const values = new Map();
+    subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7, session: null });
+    await host.settle();
+    await host.settle();
+    apply(host, values);
+    assert.equal(v(values, 1).messages[0].notice.againSession, "k1");
+    call(core, ui, 2, "session.retry", { station: "ws/st", key: "k1", thread: 7, seq: 1 });
+    await host.settle();
+    const sent = host.requests.find((req) => req.method === "POST" && req.url.endsWith("/sessions/k1/retry"));
+    assert.ok(sent);
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(sent.body!)), { thread: 7, seq: 1 });
+  } finally {
+    core.close();
+  }
+});
+
 const header = (r: { headers: [string, string][] }, name: string) => r.headers.find(([k]) => k === name)?.[1];
 const exports = (host: FakeHost) => host.requests.filter((r) => r.url.endsWith("/v1/telemetry/traces"));
 const spansOf = (r: { body?: Uint8Array | null }) => JSON.parse(new TextDecoder().decode(r.body!)).resourceSpans[0].scopeSpans[0].spans as J[];

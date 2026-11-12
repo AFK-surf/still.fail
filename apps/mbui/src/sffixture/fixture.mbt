@@ -2048,6 +2048,13 @@ pub fn fixture(mode : String) -> Source {
         None => ()
       }
       match name {
+        "session.retry" => {
+          if f.mode == "chat-turn-failed" {
+            f.step += 1
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
         "session.cancelRetry" => {
           if f.mode == "chat-overload-after" {
             f.step += 1

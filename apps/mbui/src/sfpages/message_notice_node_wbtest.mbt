@@ -1,13 +1,13 @@
 // What still.fail said as nodes (message_notice_node.mbt's notice_said_node) set beside the old view's (message.mbt
 // message_row: system_notice) on the same fixture: closed on one line and open, a failure in red with what failed said
-// of it, · 安装 and · 上报 (and each under way), 取消 while its agent waits to retry (and under way, and read only), a
-// chat's run changed (whole, what changed, open), a profile's link, a chat opened; wide and narrow, at 1.3; and what
-// each press asks of the core.
+// of it, · 安装 and · 上报 (and each under way), 取消 while its agent waits to retry and 重试 on a failed turn (and under
+// way, and read only), a chat's run changed (whole, what changed, open), a profile's link, a chat opened; wide and
+// narrow, at 1.3; and what each press asks of the core.
 
 ///|
 /// One of the fixture's notices (seq 9, ts9): `words` (its Markdown's tree, `md`), a failure (`failed`), what failed
 /// said (`detail`); about a profile (`link` where its link starts); a runtime the station lacks (`install`); reportable;
-/// its agent waiting to retry (`retry`); a chat's run changed (`short`, `lines`).
+/// its agent waiting to retry (`retry`), or its failed turn to try again (`again`); a chat's run changed (`short`, `lines`).
 fn nt_msg(
   words? : String = "Willow 的 codex 这一轮超时了，已经停下",
   md? : Json? = None,
@@ -17,6 +17,7 @@ fn nt_msg(
   install? : Bool = false,
   reportable? : Bool = false,
   retry? : Bool = false,
+  again? : Bool = false,
   short? : String = "",
   lines? : Array[String] = [],
 ) -> Message {
@@ -31,6 +32,9 @@ fn nt_msg(
   }
   if retry {
     n["retrySession"] = "s-c1"
+  }
+  if again {
+    n["againSession"] = "s-c1"
   }
   if short != "" {
     n["short"] = Json::string(short)
@@ -73,7 +77,7 @@ fn nt_opened() -> Message {
 /// The core's doing with `call` (session.cancelRetry, chat.report, software.update) on the fixture's notice.
 fn nt_doing(call : String) -> Json {
   let params : Json = match call {
-    "session.cancelRetry" => { "station": "ws1/st1", "key": "s-c1" }
+    "session.cancelRetry" | "session.retry" => { "station": "ws1/st1", "key": "s-c1" }
     "software.update" => { "station": "ws1/st1", "id": "codex" }
     _ => { "station": "ws1/st1", "thread": "7", "seq": "9" }
   }
@@ -218,6 +222,10 @@ fn nt_cases() -> Array[(String, Message, Json?, Bool)] {
     ("reporting", nt_msg(failed=true, reportable=true), Some(nt_doing("chat.report")), false),
     ("retry", nt_msg(words="模型满载，自动重试，与额度无关", failed=true, retry=true), None, false),
     ("cancelling", nt_msg(words="模型满载，自动重试，与额度无关", failed=true, retry=true), Some(nt_doing("session.cancelRetry")), false),
+    // (the model's failure's words: the connection's, longer, are cut otherwise by the nodes than by the old view at
+    // 390 and 1.3, as 取消's are with words as long, with or without either)
+    ("again", nt_msg(words="模型服务出错，回复即可重试", failed=true, again=true), None, false),
+    ("trying again", nt_msg(words="模型服务出错，回复即可重试", failed=true, again=true), Some(nt_doing("session.retry")), false),
     ("run changed", run, None, false),
     ("run changed open", run, None, true),
     ("profile", nt_msg(words="Willow 上 codex 的登录已失效：请在设置里重新登录", failed=true, link=22), None, false),
@@ -472,6 +480,29 @@ test "取消 while its agent waits to retry cancels it (session.cancelRetry); no
     let faults = nt_audit(t, 0, 0, 0, 0)
     assert_true(faults.is_empty(), msg=faults.join(" | "))
   }
+}
+
+///|
+test "重试 on a failed turn's notice tries it again (session.retry); gone once its agent goes on" {
+  let calls : Array[(String, Json)] = []
+  let again = @signals.signal(true)
+  let m = fn() { nt_msg(words="与模型服务的连接中断，回复即可重试", failed=true, again=again.get()) }
+  let t = nt_new(760.0, nt_src(None, calls), m)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="取消") is None)
+  t.click(Button, label="重试")
+  t.frame()
+  let sent = calls.filter(fn(c) { c.0 == "session.retry" })
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].1), "key"), "s-c1")
+  assert_eq(number(Some(sent[0].1), "thread"), 7.0)
+  assert_eq(number(Some(sent[0].1), "seq"), 9.0)
+  again.set(false)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重试") is None, msg="gone once its agent goes on")
+  assert_true(t.query(Button, label="取消") is None, msg="never 取消 on its way out")
+  let faults = nt_audit(t, 0, 0, 0, 0)
+  assert_true(faults.is_empty(), msg=faults.join(" | "))
 }
 
 ///|

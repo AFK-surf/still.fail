@@ -46,7 +46,19 @@ fn notice_body_node(
   pill_made : (@view.View) -> Unit,
 ) -> Unit {
   let open = fn() { opened.get(m().ts).unwrap_or(false) }
-  let retry = fn() { m().notice_retry_session != "" }
+  let retry = fn() { notice_after(m()) is Some(_) }
+  // its 取消 or 重试, as it was last offered: what it stays while it goes along the row
+  // (a plain cell, no signal: what binds through `after` reads `m` and changes with it already)
+  let last = Ref(("", @sf.t("common.cancel"), "session.cancelRetry"))
+  let after = fn() {
+    match notice_after(m()) {
+      Some(a) => {
+        last.val = a
+        a
+      }
+      None => last.val
+    }
+  }
   v.box(fn(across) {
     @sf.style_node(across, fn() { notice_across })
     across.box(fn(beside) {
@@ -58,20 +70,21 @@ fn notice_body_node(
         @sf.style_node(a, fn() { notice_action_room }, in_row=true)
         a.box(fn(inner) {
           @sf.style_node(inner, fn() { notice_action_in })
-          let on = fn() { [("station", here.station), ("key", m().notice_retry_session)] }
+          let on = fn() { [("station", here.station), ("key", after().0)] }
           @sf.button_node(
             inner,
-            fn() { @sf.t("common.cancel") },
+            fn() { after().1 },
             fn() {
               let now = @signals.untracked(m)
-              act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
+              let (session, label, call) = @signals.untracked(after)
+              act(src, label, "", call, {
                 "station": Json::string(here.station),
-                "key": Json::string(now.notice_retry_session),
+                "key": Json::string(session),
                 "thread": Json::number(now.thread),
                 "seq": Json::number(now.seq),
               })
             },
-            busy=fn() { core_doing(src, ["session.cancelRetry"], on()) },
+            busy=fn() { core_doing(src, [after().2], on()) },
             disabled=fn() { !retry() || src.read_only || (here.view)().offline },
           )
           |> ignore

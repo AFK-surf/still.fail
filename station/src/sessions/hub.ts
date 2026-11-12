@@ -1073,6 +1073,13 @@ export class Hub {
     await this.actor(row).cancelRetry(thread, seq);
   }
 
+  /// Takes up again the failed turn this particular notice is about (its 重试), if it is still the last.
+  async retryFailed(key: string, thread: number, seq: number) {
+    const row = this.store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    await this.actor(row).retryFailed(thread, seq);
+  }
+
   /// Compacts the session's context between turns, as `-compact` in a thread would (SessionActor.compact): why not,
   /// when it cannot now.
   async compact(key: string): Promise<string | null> {

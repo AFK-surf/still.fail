@@ -934,6 +934,7 @@ fn message_reset() -> Unit {
   named_open_serial.val += 1
   reveals.clear()
   notices_open.clear()
+  notice_after_last.clear()
 }
 
 ///|
