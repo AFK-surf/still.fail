@@ -586,16 +586,19 @@ pub fn View::gap(self : View, g : Live[Double], loc~ : SourceLoc) -> View {
 ///|
 /// Whether what it holds, laid out in a row, goes on in another line where the row has not the room (Some: the lines
 /// that far apart, its gap along each line as View::gap says; None: one line), as an old view's box's `flow` (with
-/// its `line_gap`), as it changes: layout's.
+/// its `line_gap`), as it changes: layout's. `reverse`: each line it goes on to over the one before it, the first at
+/// its foot (an old view's `flow_reverse`, flex's WrapReverse: a card's buttons, the first kept at the foot), what each
+/// line holds in its order along it; read out and stepped through by the keyboard in the order it is held, as ever,
+/// not by where it is drawn.
 #callsite(autofill(loc))
-pub fn View::wraps(self : View, lines : Live[Double?], loc~ : SourceLoc) -> View {
+pub fn View::wraps(self : View, lines : Live[Double?], reverse? : Bool = false, loc~ : SourceLoc) -> View {
   self.bind(loc~, Wraps, lines, Layout, fn(lines) {
     let n = self.tree.nodes[self.at]
     let st = n.flex.style
     n.line_gap = lines
     match lines {
       Some(g) => {
-        st.wrap = Wrap
+        st.wrap = if reverse { WrapReverse } else { Wrap }
         st.set_gap_row(Pt(g))
       }
       None => {

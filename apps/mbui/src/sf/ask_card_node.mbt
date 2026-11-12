@@ -45,14 +45,14 @@ pub fn ask_words_node(
 
 ///|
 /// Its answer's buttons in `parent` (ask_buttons', as nodes), made by `body` in a row 10 apart, out in the card's foot
-/// corners (foot_reach), going on to another line where it has not the room (ask_foot_lines apart). Its buttons say
-/// `card_words` (button_node's), as each in the old one's is. Where they go on to another line, the old one's later
-/// lines go above its first (its flow_reverse); here under it: the window's tree has no such wrapping yet. The node.
+/// corners (foot_reach), going on to another line where it has not the room (ask_foot_lines apart), each line over the
+/// one before it, the first kept at the foot (the old one's flow_reverse: View::wraps' `reverse`). Its buttons say
+/// `card_words` (button_node's), as each in the old one's is. The node.
 #callsite(autofill(loc))
 pub fn ask_buttons_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> @view.View {
   parent.box(made_for=loc, fn(f) {
     style_node(f, fn() { ask_foot.then(foot_reach(button_height())) })
-    f.wraps(By(fn() { Some(ask_foot_lines()) })) |> ignore
+    f.wraps(By(fn() { Some(ask_foot_lines()) }), reverse=true) |> ignore
     body(f)
   })
 }
