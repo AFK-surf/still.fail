@@ -2,20 +2,49 @@
 // frame it is sent, before the core has it), by chat: what both frames' composers put in and both lists draw.
 
 ///|
-/// What was sent from each chat (its station and session, `\u{1}` between), not in the core's view yet.
-let local_sending : Map[String, Array[LocalSent]] = Map([])
+/// What was sent from each chat (its station and session, `\u{1}` between), not in the core's view yet: what reads it
+/// follows it (a chat's list made of nodes reads it as its keys, sending_now), each change of it told (`touched` where
+/// a chat's array of it is changed in place).
+// kept across runs: let go by sent_reset
+let local_sending : @sf.LiveMap[String, Array[LocalSent]] = @sf.LiveMap::new()
 
 ///|
-/// What was sent from chat `rk` and is not in its view yet, as its list takes it over.
+/// What was sent from chat `rk` and is not in its view yet, as its list takes it over: the chat's own array of it, which
+/// its writers change in place and then say so (sending_changed); where nothing was sent from it, an empty one of its
+/// own, kept nowhere (what reads it in a frame's build writes nothing: sending_kept makes the chat's on its first send).
 pub fn sending_of(rk : String) -> Array[LocalSent] {
-  match local_sending.get(rk) {
+  match @signals.untracked(fn() { local_sending.get(rk) }) {
+    Some(a) => a
+    None => []
+  }
+}
+
+///|
+/// Chat `rk`'s own array of what was sent from it (sending_of's), kept from its first send on.
+fn sending_kept(rk : String) -> Array[LocalSent] {
+  match @signals.untracked(fn() { local_sending.get(rk) }) {
     Some(a) => a
     None => {
       let a : Array[LocalSent] = []
-      local_sending[rk] = a
+      local_sending.set(rk, a)
       a
     }
   }
+}
+
+///|
+/// What was sent from chat `rk` and is not in its view yet, as it is now, followed as it changes (a copy: read only).
+pub fn sending_now(rk : String) -> Array[LocalSent] {
+  match local_sending.get(rk) {
+    Some(a) => a.copy()
+    None => []
+  }
+}
+
+///|
+/// What was sent from a chat changed in place (sending_of's array: one pushed, one taken over, one gone).
+fn sending_changed() -> Unit {
+  local_sending.touched()
 }
 
 ///|
@@ -139,7 +168,7 @@ pub fn sent_local(
   let id = "local:\{local_sent_n.val}"
   let (images, cards) = going_up(going)
   let joined = sent_joins(rk, v, now)
-  sending_of(rk).push({
+  sending_kept(rk).push({
     row: {
       id,
       text: words,
@@ -168,6 +197,7 @@ pub fn sent_local(
       None => -@double.infinity
     },
   })
+  sending_changed()
   "o:" + id
 }
 
@@ -210,7 +240,10 @@ fn sent_among(all : Array[Entry], keys : Array[String], at : Int, still : Array[
 pub fn sent_local_gone(rk : String, key : String) -> Unit {
   let sending = sending_of(rk)
   match sending.search_by(fn(l) { "o:" + l.row.id == key }) {
-    Some(i) => sending.remove(i) |> ignore
+    Some(i) => {
+      sending.remove(i) |> ignore
+      sending_changed()
+    }
     None => ()
   }
 }

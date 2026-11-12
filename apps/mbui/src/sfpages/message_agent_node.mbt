@@ -8,9 +8,7 @@
 // Each read through what it is given, as that changes.
 // Not here yet, each where it comes in:
 // - a Mermaid chart: as its code till then; `code` takes viz_mermaid_node once it is in main (#5525).
-// - a card in its words' place (vault, phone, signin, rig): nothing drawn for it yet. A rig's is message_card_node
-//   (#5536), which answers with the settings' core the row does not take yet; a vault item's and a phone's come with
-//   mbui-message-vault-node and mbui-message-cards-node; a sign-in's is not made yet.
+// - a vault item's card asking for a file to be picked (message_card_node's NotYet): nothing drawn for it yet.
 // - its pictures placed side by side in its words: once its pictures are nodes (#5552, #5553); each its box till then.
 // - an HTML page it places drawn as a page: its file's card till the window's tree holds a host's web view.
 // - its picture held under the pane's top as a long one scrolls past (c.stick), and its coming out of its agent's picture
@@ -52,6 +50,7 @@ fn agent_said_node(
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
+  core? : @settings.Core? = None,
 ) -> MessageRowNode {
   let menu_on : Ref[() -> Bool] = Ref(fn() { false })
   let row = message_row_frame_node(v, key, side, top, over~, fn(r) {
@@ -77,14 +76,29 @@ fn agent_said_node(
       fn(b) {
         // (what it quotes ahead of its words, as the old body's)
         message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)))
-        // (a card in its words' place: not here yet, nothing drawn for it)
-        b.show(fn() { agent_card_kind(m()) == "" }, fn(p) {
-          // (its words and its files 4 apart, as the body's are: msg_main's)
-          @sf.style_node(p, fn() { msg_main })
-          agent_prose_node(p, src, here, m, found~, code~, screens=screens.unwrap_or(@sfbase.screen_links_node(src)), shown?)
+        // (its words, or the card in their place: one in the other's place as the post says)
+        b.pick(fn() { agent_card_kind(m()) == "" }, fn(p, words) {
+          if words {
+            // (its words and its files one piece, none apart, as the old list holds them to be picked: pickable's
+            // pick_fill; a letter's, drawn by the old view alone, has them 4 apart)
+            @sf.style_node(p, fn() { agent_prose_piece })
+            agent_prose_node(p, src, here, m, found~, code~, screens=screens.unwrap_or(@sfbase.screen_links_node(src)), shown?)
+          } else {
+            message_card_node(p, here, core, m)
+          }
         })
-        // (what it asks under it, where it asks anything: nothing else made, as no gap is wanted for nothing)
-        b.show(fn() { decision_asks(m()) is (Alone | Options) }, fn(d) { message_decision_node(d, src, here, m) })
+        // (what it asks under it, where it asks anything: nothing else made, as no gap is wanted for nothing; a login's
+        // card where there is a core to read it with)
+        b.show(
+          fn() {
+            match decision_asks(m()) {
+              Nothing => false
+              Login => core is Some(_)
+              _ => true
+            }
+          },
+          fn(d) { message_decision_node(d, src, here, m, core~) },
+        )
       },
       share~,
     )
@@ -187,6 +201,12 @@ fn agent_prose_node(
   })
   message_files_node(v, src, here.tips, place, rest, fn() { false }, by, at)
 }
+
+///|
+/// What an agent said and its files under it in a chat's list: one piece, none apart (sfbase's pick_fill, pickable's
+/// box round them).
+// kept across runs: a value (no field of it changes)
+let agent_prose_piece : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A file a message names by its path (`path`, its agent `agent`'s on `station`) held (or right clicked: path_held's),

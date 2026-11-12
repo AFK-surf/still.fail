@@ -107,14 +107,16 @@ fn said_view() -> ChatView {
 }
 
 ///|
-/// What the old view draws by `draw` (its Ctx, the fixture's source, where it is: out of a list, inline where `w` is
-/// narrow), `w` wide (`h` high), in a row's room; the source `src` where it is given (else history's).
+/// What the old view draws by `draw` (its Ctx, the fixture's source, where it is: out of a list, or in a chat's list
+/// where `listed`, as the nodes' rows are; inline where `w` is narrow), `w` wide (`h` high), in a row's room; the
+/// source `src` where it is given (else history's).
 fn said_old(
   w : Double,
   draw : (@ui.Ctx, Source, MessageHere) -> Unit,
   platform? : Int = 0,
   src? : Source,
   h? : Double = 320.0,
+  listed? : Bool = false,
 ) -> @ui.Tester {
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
@@ -127,7 +129,11 @@ fn said_old(
     go: None,
     inline: w <= chat_narrow_w,
     gutter: 0.0,
-    list: None,
+    list: if listed {
+      Some({ rk: "said", turns: @sfbase.turns_of("said"), emits: @sfbase.emits_of("said"), flight: None })
+    } else {
+      None
+    },
     core: None,
   }
   @ui.Tester::new(
@@ -143,8 +149,8 @@ fn said_old(
 
 ///|
 /// A message `m` as the old view draws it in its row (message_row in row_box).
-fn said_old_row(w : Double, m : Message, platform? : Int = 0, src? : Source, h? : Double = 320.0) -> @ui.Tester {
-  said_old(w, platform~, src?, h~, fn(c, src, here) { row_box(c, row_side(w), 0.0, fn() { message_row(c, src, here, m) }) |> ignore })
+fn said_old_row(w : Double, m : Message, platform? : Int = 0, src? : Source, h? : Double = 320.0, listed? : Bool = false) -> @ui.Tester {
+  said_old(w, platform~, src?, h~, listed~, fn(c, src, here) { row_box(c, row_side(w), 0.0, fn() { message_row(c, src, here, m) }) |> ignore })
 }
 
 ///|
@@ -630,4 +636,39 @@ test "a name pressed shorter than a press's room has room of its own, its time a
   let (nx, _, nw, _) = t.rect_of("Ana").unwrap()
   let (tx, _, _, _) = t.rect_of("2 分钟前").unwrap()
   assert_true((tx - (nx + nw + msg_head_gap)).abs() < 0.5, msg="\{Repr((nx, nw, tx))}")
+}
+
+///|
+/// One of the fixture's messages (said_msg's: the viewer's where `mine`) with files `names` (none a picture: their cards).
+fn said_with_files(mine : Bool, names : Array[String]) -> Message {
+  {
+    ..said_msg(mine~),
+    attachments: names.map(fn(n) {
+      @sfbase.attachment_of({
+        "name": Json::string(n),
+        "path": Json::string("/w/uploads/" + n),
+        "size": Json::number(12345.0),
+      })
+    }),
+  }
+}
+
+///|
+test "what a person wrote with files, made once as nodes, is drawn as the old view drew it: the viewer's between what it quotes and its words, another's under their words, wide and narrow" {
+  for mine in [true, false] {
+    for w in [760.0, 390.0] {
+      let at = "\{if mine { "mine" } else { "ana" }} at \{w}"
+      let m = said_with_files(mine, ["notes.pdf", "release.zip"])
+      let old = said_old_row(w, m)
+      old.run_for(@ui.move_most_ms)
+      let was = head_drawn(old)
+      // (a file's card says its name's stem and its kind apart: message_file_card's)
+      assert_true(was.contains("notes@") && was.contains(".pdf@"), msg=at + ": the old view draws its file")
+      let t = said_new_row(w, fn() { m })
+      t.run_for(@ui.move_most_ms)
+      assert_eq(head_drawn(t), was, msg=at)
+      let faults = said_audit(t, 0)
+      assert_true(faults.is_empty(), msg=at + ": " + faults.join(" | "))
+    }
+  }
 }
