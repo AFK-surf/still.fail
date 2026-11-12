@@ -128,7 +128,7 @@ async function setUp(state: State, order: "A first" | "S first", says?: "A" | "n
     let done = false;
     let failed: unknown;
     inner.runner.fork(Effect.match(e, { onSuccess: () => { done = true; }, onFailure: (f) => { failed = f; done = true; } }));
-    for (let i = 0; i < 500 && !done; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => done);
     assert.ok(done, "no answer");
     if (failed !== undefined) throw failed;
   };
@@ -273,7 +273,7 @@ test("S unnamed-none, S's link opens then closes as every station is read, A's l
   await w.r.host.time.pass(10);
   assert.equal(lockReads(w.atA).length, 1, `A asked by the first read: ${w.atA.join()}`);
   await w.inner.runner.run(Fiber.interrupt(first));
-  for (let i = 0; i < 50 && !done; i++) await w.r.host.time.pass(10);
+  await w.r.host.time.passUntil(500, () => done);
   assert.ok(done, "A's link's read ended");
   await w.r.host.time.pass(100);
   w.holds(w.aChain, "after the first asker went away");

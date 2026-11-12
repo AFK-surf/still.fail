@@ -442,7 +442,7 @@ test("people added to a locked workspace are in its lock with the role given: by
   const admitted = r.core.inner.runner.run(new Lock(r.core.inner, "ws", "s1", null).admit("s5", "d@x.com"));
   let over = false;
   void admitted.then(() => (over = true));
-  for (let i = 0; i < 2000 && !over; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(20000, () => over);
   await admitted;
   assert.deepEqual(last(2), [["member", { sub: "s5", email: "d@x.com", role: "admin" }], ["member.remove", { sub: "pending:d@x.com" }]]);
 

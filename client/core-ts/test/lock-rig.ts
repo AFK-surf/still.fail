@@ -127,10 +127,7 @@ export async function rig(locks: (signer: Signer) => Record<string, Entry>, befo
   const ask = async (name: string, params: Record<string, unknown>): Promise<any> => {
     const n = ++id;
     call(s.core, ui, n, name, params);
-    for (let i = 0; i < 4000 && !done.has(n); i++) {
-      await s.host.time.pass(10);
-      take();
-    }
+    await s.host.time.passUntil(40_000, () => (take(), done.has(n)));
     const a = done.get(n);
     if (!a) throw new Error(`${name}: no answer`);
     await s.host.time.pass(100);

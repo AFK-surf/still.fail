@@ -144,7 +144,7 @@ async function setUp() {
     let failed: unknown;
     let out: X | undefined;
     inner.runner.fork(Effect.match(e, { onSuccess: (x) => { out = x; finished = true; }, onFailure: (f) => { failed = f; finished = true; } }));
-    for (let i = 0; i < 500 && !finished; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => finished);
     assert.ok(finished, "no answer");
     if (failed !== undefined) throw failed;
     return out as X;
@@ -193,14 +193,10 @@ function cloudAs(r: Rig, how: Cloud) {
   });
 }
 
-/// Steps the clock 10 ms at a time until `done()` says, or LIMIT_MS: the time it took, or null.
+/// Steps the clock 10 ms at a time until `ready()` says, or LIMIT_MS: the time it took, or null.
 async function until(r: Rig, ready: () => boolean): Promise<number | null> {
   const t0 = r.host.nowMs();
-  while (r.host.nowMs() - t0 < LIMIT_MS) {
-    await r.host.time.pass(10);
-    if (ready()) return r.host.nowMs() - t0;
-  }
-  return null;
+  return (await r.host.time.passUntil(LIMIT_MS, ready)) ? r.host.nowMs() - t0 : null;
 }
 
 /// A call made as the app makes it, on its own connection.

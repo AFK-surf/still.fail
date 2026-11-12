@@ -132,7 +132,7 @@ async function begun() {
     let out: X | undefined;
     let failed: unknown;
     inner.runner.fork(Effect.match(e, { onSuccess: (x) => { out = x; done = true; }, onFailure: (f) => { failed = f; done = true; } }));
-    for (let i = 0; i < 500 && !done; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => done);
     assert.ok(done, "no answer");
     if (failed !== undefined) throw failed;
     return out as X;
@@ -141,7 +141,7 @@ async function begun() {
   await run(inner.adb.personal().makeKey());
   await run(read(inner, "ws"));
   // The link to A up, its stream open.
-  for (let i = 0; i < 500 && st.at.streams === 0; i++) await r.host.time.pass(10);
+  await r.host.time.passUntil(5000, () => st.at.streams !== 0);
   assert.ok(st.at.streams > 0, "the link's stream is open");
   assert.ok(fold(held(inner, "ws")!.entries).devices.has(ME), "this device is in the lock as held");
   /// Moves the clock on in steps of 10 ms until `cond` holds; how long that took.

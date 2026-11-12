@@ -75,7 +75,7 @@ async function setUp(more: Record<string, unknown>[]) {
     let failed: unknown;
     let out: X | undefined;
     inner.runner.fork(Effect.match(e, { onSuccess: (x) => { out = x; done = true; }, onFailure: (f) => { failed = f; done = true; } }));
-    for (let i = 0; i < 500 && !done; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => done);
     assert.ok(done, "no answer");
     if (failed !== undefined) throw failed;
     return out as X;

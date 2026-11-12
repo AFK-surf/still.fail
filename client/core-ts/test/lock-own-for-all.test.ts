@@ -124,7 +124,7 @@ async function first(locks?: (me: Key, keys: unknown) => Record<string, Entry>, 
   const chain = (ws = "ws") => r.cloud.chains.get(ws)!;
   const put = (by: Key, kind: string, body: unknown, ws = "ws") => r.cloud.chains.set(ws, then(chain(ws), by, kind, body, Math.floor(r.host.nowMs() / 1000)));
   const until = async (ok: () => boolean, what: string) => {
-    for (let i = 0; i < 1000 && !ok(); i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(10000, () => ok());
     assert.ok(ok(), what);
   };
   /// An effect run on the core's runner, on its clock, waited for.
@@ -534,7 +534,7 @@ test("the person's stations answered: not while one seen within 31 days has not;
   const settle = async <X>(e: Effect.Effect<X>) => {
     const out: { done: boolean; value?: X } = { done: false };
     runner.fork(Effect.map(e, (v) => void ((out.value = v), (out.done = true))));
-    for (let i = 0; i < 2000 && !out.done; i++) await host.time.pass(10);
+    await host.time.passUntil(20000, () => out.done);
     assert.ok(out.done, "read");
     // (the asks still going, what came meanwhile noted)
     await host.time.pass(10);
