@@ -402,7 +402,7 @@ export class Choose implements Owner {
     const raw: J = this.#env.store.get({ topic: "overview", station: addr });
     const served = servingIn(raw, scope, station.joined === true);
     const options = overview !== null ? models(served, this.#env.now()) : [];
-    const r = resolve(options, this.#choice(scope, id));
+    const r = resolve(options, this.#choice(scope, id), raw !== undefined ? get(raw, "accountSubsets") === true : overview === null || get(overview, "accountSubsets") === true);
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
     // A station this workspace joined runs its chats on the profiles open to it: with some, but
     // none open, one is turned on rather than added.
@@ -669,7 +669,7 @@ export class Choose implements Owner {
         const ov = overview();
         if (ov === undefined) return undefined;
         const options = models(ov, now);
-        const r = resolve(options, this.#adding.get(`${station}\u0001${o.form}`) ?? {});
+        const r = resolve(options, this.#adding.get(`${station}\u0001${o.form}`) ?? {}, get(ov, "accountSubsets") === true);
         return [options, picked(r), null, false, false, 0];
       }
       case "connect": {

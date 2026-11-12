@@ -469,8 +469,6 @@ export function overviewOf(now: number, station: number): J {
     ],
     sharing: true,
     consoleSignIn: true,
-    sessionRuntimeChange: true,
-    connectRuntimeChange: true,
     accountSubsets: true,
     updates: [
       VERSION("station", "still.fail", "0.1.7018", "0.1.7020", { channel: "beta", auto: true, idleOnly: true }),

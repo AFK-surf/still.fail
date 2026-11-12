@@ -1726,6 +1726,7 @@ test("multi_account_guards_older_stations_and_saved_subset_repick_to_all", async
   const ui2 = r2.core.connect();
   subscribe(r2.core, ui2, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
   subscribe(r2.core, ui2, 2, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(r2.core, ui2, 3, { topic: "newChat", scope: "ws" });
   await r2.host.settle();
   const vals2 = new Map();
   apply(r2.host, vals2);
@@ -1740,6 +1741,8 @@ test("multi_account_guards_older_stations_and_saved_subset_repick_to_all", async
   await ask(r2.host, r2.core, ui2, 12, "newChat.migrate", { choices: { st: { model: "claude-opus-5-5", runtime: "claude", profiles: ["p1", "p2"] } } });
   apply(r2.host, vals2);
   assert.equal(v(vals2, 2).account.text, "p1@x.com");
+  assert.equal((r2.core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).profile, "p1");
+  assert.equal(v(vals2, 3).pick.account.text, "p1@x.com");
   await ask(r2.host, r2.core, ui2, 13, "newChat.create", { station: "ws/st" });
   await r2.host.settle();
   const created = stationPosted(r2.host, "/sessions").at(-1);
