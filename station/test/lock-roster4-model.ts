@@ -262,7 +262,9 @@ export type W4Options = World3Options & {
   /// (client/core-ts/src/lock-keep.ts: not where the chain since the place it hung already says it, or says otherwise
   /// about the same subject); `any`, round three's model (not where any entry of the same kind and body is on the chain,
   /// so a statement made again after its opposite, lost, is not signed again).
-  again?: "since" | "any";
+  /// `batch`: as `since`, each lost entry decided against the chain as it was before the device signed any of them again
+  /// (with `since`, its own signing again of a removal makes the add it had signed after it read as said otherwise).
+  again?: "since" | "any" | "batch";
   /// M1: when each statement first was ready at a keeper (on the active chain, its body kept) and first in force.
   track?: boolean;
 };
@@ -651,16 +653,19 @@ export class World4 extends World3 {
     if (this.v.resign === "off" || d.compromised || this.resigning) return;
     this.resigning = true;
     try {
+      const batch = this.x.o.again === "batch";
+      const before = new Map([...d.h.logs].map(([g, k]) => [g, [...k.active]]));
       for (const h of [...d.mine]) {
         const k = d.h.logs.get(this.logOf.get(h)!)!;
         if (d.superseded.has(h) || k.on.has(h)) continue;
         const key = this.honest.get(h)!, it = this.intents.get(key)!;
         d.superseded.add(h);
         if (it.void !== null) continue;
+        const chain = batch ? before.get(this.logOf.get(h)!)! : k.active, on = new Set(chain);
         let p = this.entry(h).prev;
-        while (p !== null && !k.on.has(p)) p = this.entry(p).prev;
-        if (p === null || p === k.head()) continue;
-        const since = k.active.slice(k.active.indexOf(p) + 1);
+        while (p !== null && !on.has(p)) p = this.entry(p).prev;
+        if (p === null || p === chain.at(-1)) continue;
+        const since = chain.slice(chain.indexOf(p) + 1);
         if (since.some((x) => this.honest.get(x) === key)) continue;
         const about = this.about(it.kind, it.body);
         if (about !== null && since.some((x) => this.aboutEntry(x) === about)) {
