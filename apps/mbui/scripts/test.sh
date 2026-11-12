@@ -471,12 +471,14 @@ for t in $targets; do
     esac
   }
   # exe_run EXE INFO JOBS PKG FILE… | FILE --index FROM-TO: a run on a test program built already, JOBS of it side by
-  # side, each taking the next part when done with one (xargs -P); tools/testexe says what to ask it and what it said
+  # side, each taking the next part when done with one (xargs -P); tools/testexe says what to ask it and what it said.
+  # JOBS as Neach: a process a file even on one (testexe says each file's seconds only of a run in more than one part)
   exe_run() {
-    local exe=$1 info=$2 j=$3 pkg=$4 d c
+    local exe=$1 info=$2 j=$3 pkg=$4 d c split=$3
     shift 4
+    case $j in *each) j=${j%each} split=$((j > 1 ? j : 2)) ;; esac
     d=$(mktemp -d)
-    "$TESTEXE" parts "$info" "$j" "$@" > "$d/parts" || { rm -rf "$d"; return 2; }
+    "$TESTEXE" parts "$info" "$split" "$@" > "$d/parts" || { rm -rf "$d"; return 2; }
     [ ! -s "$d/parts" ] || sed "s|^|$d/|" "$d/parts" | xargs -P "$j" -L 1 sh -c \
       's=$(date +%s); "$0" "$2" > "$1.out" 2>&1; echo "$? $(($(date +%s) - s))" > "$1.code"' "$exe"
     "$TESTEXE" said "$info" "$d" "$pkg"
@@ -521,7 +523,12 @@ for t in $targets; do
         pkgs_run "$PKGS_EXE" > "$out.$i" 2>&1
       elif [ "${runs[i]%% *}" = @pages ]; then
         set -- ${runs[i]}
-        exe_run "$APP_EXE" "$APP_INFO" $3 stillfail/sfapp "${@:4}" > "$out.$i" 2>&1
+        # (a process a file on one program too: the third's pages, on one at every rate, ran as one process and said no
+        # file's time, so page-seconds.txt kept times of before for them (quote_image 99 s at 120 a second, unknown
+        # ones at the median's) and app 3/4 at 120 fps part 1/2 was dealt 274-304 s of pages where its part 2/2 had
+        # 114-149, cut at its 5 minutes once, main b310ef4c 43127552002, 3aa695f5 43121556932, f4d86e2a 43129595300,
+        # 2026-11-12)
+        exe_run "$APP_EXE" "$APP_INFO" "$3each" stillfail/sfapp "${@:4}" > "$out.$i" 2>&1
       elif [ -n "${APP_EXE:-}" ] && [[ " ${runs[i]} " != *" -p "* ]]; then
         exe_run "$APP_EXE" "$APP_INFO" ${APP_JOBS:-1} stillfail/sfapp ${runs[i]} > "$out.$i" 2>&1
       else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
