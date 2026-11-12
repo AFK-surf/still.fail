@@ -7,8 +7,19 @@ import { header } from "./compat";
 import { CLOSE, SILENT_MS, sockets, type Delivery } from "./directory";
 import type { Env } from "./env";
 
-/** `gen`: as the Directory counted this socket's opening (stationConnected), said back as it closes. */
-type Attachment = { station: string; at: number; gen: number; dropped?: boolean };
+/** `gen`: as the Directory counted this socket's opening (stationConnected), said back as it closes. `origin`: a
+ * guest's it connected on (guests.ts), which its state frames name in this cloud's place, so it stays where it is. */
+type Attachment = { station: string; at: number; gen: number; dropped?: boolean; origin?: string };
+
+/** `frame` for a socket of `origin`: a state frame naming that origin (the Directory names this cloud's own). */
+function framed(frame: string, origin: string | undefined): string {
+  if (!origin || !frame.startsWith('{"type":"state"')) return frame;
+  try {
+    return JSON.stringify({ ...(JSON.parse(frame) as Record<string, unknown>), origin });
+  } catch {
+    return frame;
+  }
+}
 
 export class Station extends DurableObject<Env> {
   /**
@@ -71,8 +82,9 @@ export class Station extends DurableObject<Env> {
     for (const old of this.#open()) this.#drop(old, CLOSE.replaced, "replaced");
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1]);
-    pair[1].serializeAttachment({ station, at: Date.now(), gen: said.gen } satisfies Attachment);
-    pair[1].send(said.frame);
+    const origin = header(request, "origin") ?? undefined;
+    pair[1].serializeAttachment({ station, at: Date.now(), gen: said.gen, ...(origin ? { origin } : {}) } satisfies Attachment);
+    pair[1].send(framed(said.frame, origin));
     for (const frame of this.#framesMeanwhile) this.#send(frame);
     if (this.#toldMeanwhile) await this.#sendState(station);
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS); // timer: a heartbeat's check, the station's pings
@@ -117,7 +129,7 @@ export class Station extends DurableObject<Env> {
   #send(frame: string): void {
     for (const ws of this.#open()) {
       try {
-        ws.send(frame);
+        ws.send(framed(frame, (ws.deserializeAttachment() as Attachment).origin));
       } catch {
         // Closing already: it hears all of it when it connects again.
       }
@@ -142,8 +154,8 @@ export class Station extends DurableObject<Env> {
   /** "ping" is answered by the runtime; what else a station says is of the workspace locks, answered by the Directory. */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     if (typeof message !== "string") return;
-    const { station } = ws.deserializeAttachment() as Attachment;
-    for (const frame of await this.#directory().stationSaid(station, message)) ws.send(frame);
+    const { station, origin } = ws.deserializeAttachment() as Attachment;
+    for (const frame of await this.#directory().stationSaid(station, message)) ws.send(framed(frame, origin));
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {

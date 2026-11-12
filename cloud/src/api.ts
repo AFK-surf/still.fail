@@ -7,6 +7,7 @@
 import { consoleAdmin, isAdmin } from "./admin";
 import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
+import { guestOf } from "./guests";
 import type { Live } from "./account";
 import { EVENTS_PROTOCOLS, ROLES, sockets, type Role } from "./directory";
 import type { Env } from "./env";
@@ -166,6 +167,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - clock.now() / 1000) > 300) return reply({ error: "invalid_request" }, 400);
     if (!(await verifyAnySignature(station, signature, signedMessages("station-connect-v1", publicOrigins(env), `${station}:${ts}`)))) return reply({ error: "invalid_signature" }, 401);
     const headers = new Headers({ upgrade: "websocket", "x-stillfail-station": station });
+    // On a guest's origin (guests.ts): its state frames name that origin, so the station stays on it.
+    if (guestOf(env, env.PUBLIC_ORIGIN)) headers.set("x-stillfail-origin", env.PUBLIC_ORIGIN);
     const version = header(request, "version");
     if (version) headers.set("x-stillfail-version", version.slice(0, 40));
     if (sockets.where(env) === "primary") return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
