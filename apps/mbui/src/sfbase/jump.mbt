@@ -7,6 +7,12 @@
 pub let go_tos : Map[String, Double] = Map([])
 
 ///|
+/// Told as a chat is given a message to go to (go_to, go_back_to): what goes there as it is told (a chat's page made as
+/// nodes, chat_goes_to) looks again.
+// kept across runs: a count, only compared
+pub let go_tos_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// The chat `r`, once open and in place, goes to its message `seq` (the pages before it brought in until it is
 /// there), which flashes: only the `passage` of it a quote quoted, where its words
 /// have it (Chat.tsx Quotes' jump); the whole message else.
@@ -19,6 +25,7 @@ pub fn go_to(r : ChatRef, seq : Double, passage? : String = "", keep_place? : Bo
     keep_place_of(k)
   }
   go_tos[k] = seq
+  go_tos_said.set(go_tos_said.untracked() + 1)
   if passage.trim(chars=" \n\t") != "" {
     go_to_passages[k] = passage
   } else {
@@ -67,10 +74,17 @@ pub let go_back_offsets : Map[String, Double] = Map([])
 ///|
 /// Where the reader was is kept for chat `k` (go_to's): its list showing, placed, more than its own height from the
 /// chat's end as it was last laid out (Reading's `far`: the window short of the chat's end, or its last row that far
-/// under the view), none kept yet.
+/// under the view), none kept yet. A page made as nodes (chat_page_nodes) says its list is placed only while it shows
+/// (sfpages' chat_goes_to), the old page's `shown` none of its.
 fn keep_place_of(k : String) -> Unit {
   guard !places_back.contains(k) else { return }
-  guard readings.get(k) is Some(rd) && rd.placed && rd.shown && rd.top_seq >= 0.0 && rd.far else { return }
+  guard readings.get(k) is Some(rd) &&
+    rd.placed &&
+    (rd.shown || chat_page_nodes.untracked()) &&
+    rd.top_seq >= 0.0 &&
+    rd.far else {
+    return
+  }
   places_back[k] = (rd.top_seq, rd.top_off)
   places_back_said.set(places_back_said.untracked() + 1)
 }
@@ -103,6 +117,7 @@ pub fn go_back_to(r : ChatRef) -> Bool {
       go_to_passages.remove(k) |> ignore
       go_to_words.remove(k) |> ignore
       go_back_offsets[k] = off
+      go_tos_said.set(go_tos_said.untracked() + 1)
       true
     }
     None => false

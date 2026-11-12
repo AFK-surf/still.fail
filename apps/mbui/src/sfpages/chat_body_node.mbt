@@ -6,7 +6,8 @@
 // the list's width lays it out (row_side), narrow or wide by that width alone.
 // Not here, each where it comes in: what moves (a row coming in or going on the list's way, words sent flying in, a
 // message coming out of its agent's picture, the room an agent's line leaves; the list's line's), the composer and
-// what floats over the list (the way to the newest, the bell, the outline), what is laid over a row (words picked,
+// what floats over the list (the bell, the outline; the way to the newest and a message gone to are chat_jump_node's,
+// the page's), what is laid over a row (words picked,
 // words found marked, the flash of one gone to, the band of one whose menu is open: the overlays' line's, through each
 // row's `over`), where the list opens (chat_open_place, asked here once as it is made) and what the core is told of
 // what is read: those the page's, whether the list is at its foot read of its scroll (Scroll::at_foot_now), which rows
@@ -260,7 +261,9 @@ priv struct ChatBodyKeeps {
 /// left, else at its end, followed there), and at an unread line come after while it is still at its end; a chat too short to fill what shows at its foot, over the composer (the old
 /// list's from_end); the page before asked as it nears its top. `made`, told each row's key and what holds it as its row
 /// is made (a block made, or made again as its key comes to be another kind of row). `read`, given `place` and its rows,
-/// for what is told the core of what is read (chat_read_node).
+/// for what is told the core of what is read (chat_read_node). `to`: the chat it is (none in a list's own tests), its
+/// way to the newest in the list's foot over the composer and the message it is told to go to brought in
+/// (chat_jump_node's), while `shows` (it is drawn) where the reader is kept for a go-to inside it.
 fn chat_body_node(
   v : @view.View,
   src : Source,
@@ -277,7 +280,10 @@ fn chat_body_node(
   keeps? : ChatBodyKeeps = { opened: notices_open, copied: @sf.LiveMap::new(), steadies: ActivitySteadies::new() },
   made? : (String, @view.View) -> Unit = fn(_, _) {  },
   read? : (@view.ListPlace[String], () -> ChatBodyRows) -> Unit = fn(_, _) {  },
+  to? : ChatRef,
+  shows? : () -> Bool = fn() { true },
 ) -> @view.View {
+  let jump = ChatJump::new()
   let kept : ChatBodyKept = { sent: {}, sent_as: {} }
   // (worked out once as the view, its entries or what is on its way change; the keys only change as rows come, go or
   // are taken over: each row reads its own by its key)
@@ -328,6 +334,10 @@ fn chat_body_node(
         made("top", h)
       },
       foot=fn(f) {
+        match to {
+          Some(r) => chat_to_newest_node(f, src, r, jump, place, here.view, width, here.tips)
+          None => ()
+        }
         f.box(fn(g) { g.height(By(fn() { Some(foot()) })) |> ignore }) |> ignore
         match composer {
           Some(build) => build(f)
@@ -346,13 +356,18 @@ fn chat_body_node(
     |> ignore
   })
   |> ignore
-  // (put in place once, as it is made: chat_open_place's; else at its end, where it is made)
+  // (put in place once, as it is made: chat_open_place's; else at its end, where it is made; at a message the chat is
+  // to go to first, chat_goes_to's)
   let chat = here.station + "\u{1}" + here.session
   let opens = @signals.untracked(fn() {
     chat_open_place(rows.get(), (here.view)(), @sfbase.kept_places.get(chat), v.pixel_scale(), top(), lead)
   })
-  if opens is Some((k, offset)) {
+  if opens is Some((k, offset)) && !@sfbase.go_tos.contains(chat) {
     place.bring(k, offset~)
+  }
+  match to {
+    Some(r) => chat_goes_to(v, r, jump, place, fn() { rows.get() }, here.view, top, ask_older, shows)
+    None => ()
   }
   // the unread line come after it was made (what came while the app was away, read after the chat opened): there once,
   // as at a chat opened with it, while the list is still at its end and no message is asked to be gone to

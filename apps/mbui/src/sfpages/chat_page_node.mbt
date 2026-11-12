@@ -1,6 +1,7 @@
 // A chat's page made with its inside nodes (sfbase's chat_page_nodes on; chat_page_made's `body`): its messages the
-// page's list (chat_body_node), the composer in the list's foot the page's old view as yet. What the old page floats
-// over its list, puts over its rows and flies over it is not here yet.
+// page's list (chat_body_node), the composer in the list's foot the page's old view as yet, the way to the newest over
+// it (chat_jump_node). What else the old page floats over its list, puts over its rows and flies over it is not here
+// yet.
 
 ///|
 /// Chat `r`'s messages as `src` reads them (view_of_chat), in node `v`, growing to what the column it is in leaves
@@ -94,6 +95,8 @@ pub fn chat_page_body_node(
         composer?,
         lead~,
         read=fn(place, rows) { chat_read_node(o, src, r, view, place, rows, shows) },
+        to=r,
+        shows~,
       )
       |> ignore
     })
