@@ -231,6 +231,15 @@ fn site(args : Array[String]) -> Int {
     }
     need
   }
+  // (Android: a page of 3/10 of the app's Java heap opens, read to its end, the host holding it no more than once over:
+  // #5737; host_contract.sh asks it by MBUI_SITECHECK_BIG)
+  if h == "android" {
+    if steps.iter().any(fn(s) { s.has_prefix("big asked ") }) {
+      need.append(["page big-start", "page big-end"])
+    } else {
+      bad.push("the large page was not asked (MBUI_SITECHECK_BIG)")
+    }
+  }
   for n in need {
     if !steps.contains(n) {
       bad.push("missing: " + n)
