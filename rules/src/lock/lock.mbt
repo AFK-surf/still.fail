@@ -85,6 +85,9 @@ pub(all) struct LockState {
   /// The person's own lock each member bound themselves to (`person` entries): its genesis's hash.
   persons : Map[String, String]
   disabled : Bool
+  /// Where the workspace went (`moved {root}`, its owner's): the genesis hash of the person log it is rooted in from
+  /// then on (station/test/lock-roster4-model.ts D5). Nothing follows it in this chain.
+  moved : String?
 }
 
 ///|
@@ -412,6 +415,7 @@ pub fn genesis(e : Json, c : &Crypto) -> LockState raise LockError {
     gateways: Map([]),
     persons: Map([]),
     disabled: false,
+    moved: None,
   }
   for m in arr(field(b, "members")) {
     let m = member(Some(m))
@@ -471,6 +475,9 @@ fn safe_num(v : Json?) -> Double? {
 /// signing devices that ran out; none for entries taken before (kept in lock.json).
 pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockState raise LockError {
   let v = Some(e)
+  if prev.moved is Some(_) {
+    refuse("the lock moved to a person's own log: nothing follows it here")
+  }
   if prev.disabled {
     refuse("the lock is turned off")
   }
@@ -614,6 +621,18 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
     "disable" => {
       need(@role.may(who, Disable), "only owners turn the lock off")
       out = { ..s, disabled: true }
+    }
+    "moved" => {
+      // (an owner's own app device: what only the person it is rooted in could say of the workspace from then on)
+      need(by.role == "owner" && by.own && !by.passkey, "only an owner's own app device hands the lock over")
+      let one = match b {
+        Some(Object(m)) => m.length() == 1
+        _ => false
+      }
+      guard one && text_of(field(b, "root")) is Some(root) && is_hex32(root) else {
+        raise Refused("a handover names the person log it goes to, by its genesis's hash")
+      }
+      out = { ..s, moved: Some(root) }
     }
     _ => refuse("unknown entry kind " + kind_text(field(v, "kind")))
   }

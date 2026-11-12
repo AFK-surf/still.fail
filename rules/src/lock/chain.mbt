@@ -247,15 +247,15 @@ pub fn lock_chain(entries : Array[Json], root : String, votes : Votes, now : Dou
 
 ///|
 /// A person log's active chain among `entries` (any order, branching) from its genesis of hash `root`: what follows
-/// by the person's rules with a workspace's statements (`fold_person_ws`), chosen by the fork choice with one vote a
-/// device; a removal is a `device.remove`. Raises why there is none.
+/// by the person's rules (`fold_person`), chosen by the fork choice with one vote a device; a removal is a
+/// `device.remove`. Raises why there is none.
 pub fn person_chain(entries : Array[Json], root : String, c : &Crypto) -> Chain raise LockError {
   active(entries, root, {
     start: fn(e) {
       let sub = text_of(field(Some(e), "body") |> field("sub")).unwrap_or("")
-      person_step(None, e, sub, true, c)
+      person_step(None, e, sub, c)
     },
-    next: fn(p, e) { person_step(Some(p), e, p.sub, true, c) },
+    next: fn(p, e) { person_step(Some(p), e, p.sub, c) },
     weight: fn(_, _) { 1 },
     removal: fn(_, e) { text_of(field(Some(e), "kind")) == Some("device.remove") },
   }, c)

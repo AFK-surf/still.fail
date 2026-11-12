@@ -57,7 +57,7 @@ const _M0FPB19int__to__string__js = (x, radix) => {
   return x.toString(radix);
 };
 const _M0FPB21int64__to__string__js = (num, radix) => BigInt.asIntN(64, num).toString(radix);
-function _M0TPB4IterGUsRPB5ArrayGiEEE(param0, param1) {
+function _M0TPB4IterGUsRP39stillfail5rules4lock9PersonWebEE(param0, param1) {
   this.f = param0;
   this.size_hint = param1;
 }
@@ -128,10 +128,6 @@ function _M0TPB5ArrayGiE(param0, param1) {
   this.buf = param0;
   this.len = param1;
 }
-function _M0TPB5ArrayGRPC14json4JsonE(param0, param1) {
-  this.buf = param0;
-  this.len = param1;
-}
 function _M0TPB3MapGsiE(param0, param1, param2, param3, param4, param5, param6) {
   this.entries = param0;
   this.size = param1;
@@ -141,7 +137,7 @@ function _M0TPB3MapGsiE(param0, param1, param2, param3, param4, param5, param6) 
   this.head = param5;
   this.tail = param6;
 }
-function _M0TPB3MapGsRP39stillfail5rules4lock12PersonDeviceE(param0, param1, param2, param3, param4, param5, param6) {
+function _M0TPB3MapGsUssOsEE(param0, param1, param2, param3, param4, param5, param6) {
   this.entries = param0;
   this.size = param1;
   this.capacity = param2;
@@ -176,7 +172,7 @@ function _M0TPB5EntryGsiE(param0, param1, param2, param3, param4, param5) {
   this.key = param4;
   this.value = param5;
 }
-function _M0TPB5EntryGsRP39stillfail5rules4lock12PersonDeviceE(param0, param1, param2, param3, param4, param5) {
+function _M0TPB5EntryGsUssOsEE(param0, param1, param2, param3, param4, param5) {
   this.prev = param0;
   this.next = param1;
   this.psl = param2;
@@ -192,7 +188,7 @@ function _M0TPB5EntryGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9Lo
   this.key = param4;
   this.value = param5;
 }
-function _M0TPB5EntryGsUssOsEE(param0, param1, param2, param3, param4, param5) {
+function _M0TPB5EntryGsRP39stillfail5rules4lock12PersonDeviceE(param0, param1, param2, param3, param4, param5) {
   this.prev = param0;
   this.next = param1;
   this.psl = param2;
@@ -328,13 +324,18 @@ function _M0TPB5EntryGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rul
   this.key = param4;
   this.value = param5;
 }
+function _M0TPB5EntryGsRP39stillfail5rules4lock9PersonWebE(param0, param1, param2, param3, param4, param5) {
+  this.prev = param0;
+  this.next = param1;
+  this.psl = param2;
+  this.hash = param3;
+  this.key = param4;
+  this.value = param5;
+}
 function _M0TPB8MutLocalGORPB5EntryGsRP39stillfail5rules4lock12PersonDeviceEE(param0) {
   this.val = param0;
 }
 function _M0TPB8MutLocalGORPB5EntryGsuEE(param0) {
-  this.val = param0;
-}
-function _M0TPB8MutLocalGORPB5EntryGsRPC14json4JsonEE(param0) {
   this.val = param0;
 }
 function _M0TPB12MutArrayViewGUssEE(param0, param1, param2) {
@@ -417,6 +418,10 @@ function _M0DTPC14json4Json6Object(param0) {
   this._0 = param0;
 }
 _M0DTPC14json4Json6Object.prototype.$tag = 6;
+function _M0TPB5ArrayGRPC14json4JsonE(param0, param1) {
+  this.buf = param0;
+  this.len = param1;
+}
 function _M0DTPC16result6ResultGsRP39stillfail5rules4lock9LockErrorE3Err(param0) {
   this._0 = param0;
 }
@@ -465,6 +470,11 @@ function _M0TPB9ArrayViewGUsRP39stillfail5rules4lock7PasskeyEE(param0, param1, p
   this.start = param1;
   this.end = param2;
 }
+function _M0TPB9ArrayViewGUsRP39stillfail5rules4lock9PersonWebEE(param0, param1, param2) {
+  this.buf = param0;
+  this.start = param1;
+  this.end = param2;
+}
 function _M0DTPC16result6ResultGRP39stillfail5rules4lock12PersonDeviceRP39stillfail5rules4lock9LockErrorE3Err(param0) {
   this._0 = param0;
 }
@@ -478,14 +488,6 @@ function _M0TP39stillfail5rules4lock12PersonDevice(param0, param1, param2) {
   this.id = param1;
   this.label = param2;
 }
-function _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(param0) {
-  this._0 = param0;
-}
-_M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
-function _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok(param0) {
-  this._0 = param0;
-}
-_M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
 function _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(param0) {
   this._0 = param0;
 }
@@ -494,12 +496,19 @@ function _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rul
   this._0 = param0;
 }
 _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
-function _M0TP39stillfail5rules4lock6Person(param0, param1, param2, param3, param4) {
+function _M0TP39stillfail5rules4lock9PersonWeb(param0, param1, param2, param3) {
+  this.id = param0;
+  this.label = param1;
+  this.at = param2;
+  this.exp = param3;
+}
+function _M0TP39stillfail5rules4lock6Person(param0, param1, param2, param3, param4, param5) {
   this.sub = param0;
   this.genesis = param1;
   this.head = param2;
   this.seq = param3;
   this.devices = param4;
+  this.webs = param5;
 }
 function _M0TPB9ArrayViewGUsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEEE(param0, param1, param2) {
   this.buf = param0;
@@ -514,7 +523,19 @@ function _M0DTPB6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9
   this._0 = param0;
 }
 _M0DTPB6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
-function _M0TP39stillfail5rules4lock6Roster(param0, param1, param2, param3, param4, param5, param6, param7, param8) {
+function _M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE3Err(param0) {
+  this._0 = param0;
+}
+_M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
+function _M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE2Ok(param0) {
+  this._0 = param0;
+}
+_M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
+function _M0TPB5ArrayGUssRPC14json4JsonsEE(param0, param1) {
+  this.buf = param0;
+  this.len = param1;
+}
+function _M0TP39stillfail5rules4lock6Roster(param0, param1, param2, param3, param4, param5, param6, param7, param8, param9, param10, param11, param12) {
   this.rooted = param0;
   this.members = param1;
   this.stations = param2;
@@ -524,6 +545,10 @@ function _M0TP39stillfail5rules4lock6Roster(param0, param1, param2, param3, para
   this.statements = param6;
   this.labels = param7;
   this.refused = param8;
+  this.in_force = param9;
+  this.lacking = param10;
+  this.newest = param11;
+  this.settings = param12;
 }
 function _M0TPB5ArrayGRP39stillfail5rules4lock5BoundE(param0, param1) {
   this.buf = param0;
@@ -584,35 +609,30 @@ function _M0TP39stillfail5rules4lock5Bound(param0, param1, param2, param3, param
   this.admit = param3;
   this.keys = param4;
 }
-function _M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE3Err(param0) {
-  this._0 = param0;
+function _M0TP39stillfail5rules4lock9LockState(param0, param1, param2, param3, param4, param5, param6, param7, param8, param9, param10, param11, param12, param13, param14, param15, param16) {
+  this.ws = param0;
+  this.seq = param1;
+  this.head = param2;
+  this.genesis = param3;
+  this.origins = param4;
+  this.rp_id = param5;
+  this.cloud_keys = param6;
+  this.members = param7;
+  this.devices = param8;
+  this.sign_keys = param9;
+  this.passkeys = param10;
+  this.signed = param11;
+  this.stations = param12;
+  this.gateways = param13;
+  this.persons = param14;
+  this.disabled = param15;
+  this.moved = param16;
 }
-_M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
-function _M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE2Ok(param0) {
-  this._0 = param0;
-}
-_M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
-function _M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE3Err(param0) {
-  this._0 = param0;
-}
-_M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
-function _M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE2Ok(param0) {
-  this._0 = param0;
-}
-_M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
 function _M0TP39stillfail5rules4lock6Member(param0, param1, param2) {
   this.sub = param0;
   this.email = param1;
   this.role = param2;
 }
-function _M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE3Err(param0) {
-  this._0 = param0;
-}
-_M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
-function _M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE2Ok(param0) {
-  this._0 = param0;
-}
-_M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
 function _M0TP39stillfail5rules4lock6Device(param0, param1, param2, param3, param4, param5, param6, param7, param8) {
   this.id = param0;
   this.sub = param1;
@@ -624,6 +644,46 @@ function _M0TP39stillfail5rules4lock6Device(param0, param1, param2, param3, para
   this.by = param7;
   this.own = param8;
 }
+function _M0TP39stillfail5rules4lock7Station(param0, param1) {
+  this.key = param0;
+  this.name = param1;
+}
+function _M0TP39stillfail5rules4lock6State4(param0, param1) {
+  this.on = param0;
+  this.lock = param1;
+}
+function _M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE3Err(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
+function _M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE2Ok(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGURP39stillfail5rules4lock12PersonDevicesRP39stillfail5rules4lock6PersonERP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
+function _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
+function _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
+function _M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE3Err(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
+function _M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE2Ok(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGRP39stillfail5rules4lock6MemberRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
+function _M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE3Err(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE3Err.prototype.$tag = 0;
+function _M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE2Ok(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGRP39stillfail5rules4lock6DeviceRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
 function _M0DTPC16result6ResultGRP39stillfail5rules4lock7PasskeyRP39stillfail5rules4lock9LockErrorE3Err(param0) {
   this._0 = param0;
 }
@@ -647,33 +707,11 @@ function _M0DTPC16result6ResultGRP39stillfail5rules4lock7StationRP39stillfail5ru
   this._0 = param0;
 }
 _M0DTPC16result6ResultGRP39stillfail5rules4lock7StationRP39stillfail5rules4lock9LockErrorE2Ok.prototype.$tag = 1;
-function _M0TP39stillfail5rules4lock7Station(param0, param1) {
-  this.key = param0;
-  this.name = param1;
-}
 function _M0TP39stillfail5rules4lock6Signer(param0, param1, param2, param3) {
   this.sub = param0;
   this.role = param1;
   this.passkey = param2;
   this.own = param3;
-}
-function _M0TP39stillfail5rules4lock9LockState(param0, param1, param2, param3, param4, param5, param6, param7, param8, param9, param10, param11, param12, param13, param14, param15) {
-  this.ws = param0;
-  this.seq = param1;
-  this.head = param2;
-  this.genesis = param3;
-  this.origins = param4;
-  this.rp_id = param5;
-  this.cloud_keys = param6;
-  this.members = param7;
-  this.devices = param8;
-  this.sign_keys = param9;
-  this.passkeys = param10;
-  this.signed = param11;
-  this.stations = param12;
-  this.gateways = param13;
-  this.persons = param14;
-  this.disabled = param15;
 }
 function _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE3Err(param0) {
   this._0 = param0;
@@ -785,6 +823,10 @@ function _M0TP39stillfail5rules4lock3LogGRP39stillfail5rules4lock6PersonE(param0
   this.weight = param2;
   this.removal = param3;
 }
+function _M0TPB5ArrayGRP39stillfail5rules4lock6CommitE(param0, param1) {
+  this.buf = param0;
+  this.len = param1;
+}
 const _M0FP39stillfail5rules2js8js__kind = (v) => v === null ? 0 : typeof v === "boolean" ? 1 : typeof v === "number" ? 2 : typeof v === "string" ? 3 : Array.isArray(v) ? 4 : typeof v === "object" ? 5 : 6;
 const _M0FP39stillfail5rules2js8js__bool = (v) => v;
 const _M0FP39stillfail5rules2js7js__num = (v) => v;
@@ -841,9 +883,29 @@ function _M0TP39stillfail5rules5vault8LockView(param0, param1, param2, param3) {
   this.devices = param2;
   this.sign_keys = param3;
 }
+function _M0DTPB6ResultGRPC14json4JsonRP39stillfail5rules4form7InvalidE3Err(param0) {
+  this._0 = param0;
+}
+_M0DTPB6ResultGRPC14json4JsonRP39stillfail5rules4form7InvalidE3Err.prototype.$tag = 0;
+function _M0DTPB6ResultGRPC14json4JsonRP39stillfail5rules4form7InvalidE2Ok(param0) {
+  this._0 = param0;
+}
+_M0DTPB6ResultGRPC14json4JsonRP39stillfail5rules4form7InvalidE2Ok.prototype.$tag = 1;
 function _M0TPB5ArrayGRPB5ArrayGRPC14json4JsonEE(param0, param1) {
   this.buf = param0;
   this.len = param1;
+}
+function _M0DTPC16result6ResultGRPB5ArrayGRPB5ArrayGRPC14json4JsonEERP39stillfail5rules4form7InvalidE3Err(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGRPB5ArrayGRPB5ArrayGRPC14json4JsonEERP39stillfail5rules4form7InvalidE3Err.prototype.$tag = 0;
+function _M0DTPC16result6ResultGRPB5ArrayGRPB5ArrayGRPC14json4JsonEERP39stillfail5rules4form7InvalidE2Ok(param0) {
+  this._0 = param0;
+}
+_M0DTPC16result6ResultGRPB5ArrayGRPB5ArrayGRPC14json4JsonEERP39stillfail5rules4form7InvalidE2Ok.prototype.$tag = 1;
+function _M0TP39stillfail5rules4lock6Commit(param0, param1) {
+  this.genesis = param0;
+  this.chain = param1;
 }
 const _M0FP078stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2fvault_2eCrypto = { method_0: _M0IP39stillfail5rules2js8JsCryptoP39stillfail5rules5vault6Crypto18record__sig__valid };
 const _M0FP092moonbitlang_2fcore_2fbuiltin_2fStringBuilder_24as_24_40moonbitlang_2fcore_2fbuiltin_2eLogger = { method_0: _M0IPB13StringBuilderPB6Logger13write__string, method_1: _M0IP016_24default__implPB6Logger16write__substringGRPB13StringBuilderE, method_2: _M0IPB13StringBuilderPB6Logger11write__view, method_3: _M0IPB13StringBuilderPB6Logger11write__char, method_4: _M0IP016_24default__implPB6Logger28write__string__interpolationGRPB13StringBuilderE, method_5: _M0IP016_24default__implPB6Logger5writeGRPB13StringBuilderE };
@@ -856,111 +918,126 @@ const _M0FP15Error13_2amethods__0 = { _0: "stillfail/rules/form.Invalid.Invalid"
 const _M0FP15Error13_2amethods__1 = { _0: "stillfail/rules/lock.LockError.Refusal", _1: (_e) => _M0FP15Error10_2amethods[_e.$tag]._0 };
 const _M0FP15Error13_2amethods__2 = { _0: "stillfail/rules/lock.LockError.Refused", _1: (_e) => _M0FP15Error10_2amethods[_e.$tag]._0 };
 const _M0FP15Error10_2amethods = [_M0FP15Error13_2amethods__0, _M0FP15Error13_2amethods__1, _M0FP15Error13_2amethods__2];
-const _M0MPB4Iter4nextN6constrS480GUsRPB5ArrayGiEEE = 0;
-const _M0MPB4Iter4nextN6constrS481GUsRPB5ArrayGiEEE = 0;
-const _M0MPB4Iter4nextN6constrS560GORPC14json4JsonE = 0;
-const _M0MPB4Iter4nextN6constrS561GORPC14json4JsonE = 0;
-const _M0MPB4Iter4nextN6constrS568GcE = 0;
-const _M0MPB4Iter4nextN6constrS569GcE = 0;
-const _M0MPB4Iter3newN6constrS652GUsRPB5ArrayGiEEE = 0;
-const _M0MPB4Iter3newN6constrS706GORPC14json4JsonE = 0;
-const _M0MPB4Iter3newN6constrS718GcE = 0;
+const _M0MPB4Iter4nextN6constrS538GUsRP39stillfail5rules4lock9PersonWebEE = 0;
+const _M0MPB4Iter4nextN6constrS539GUsRP39stillfail5rules4lock9PersonWebEE = 0;
+const _M0MPB4Iter4nextN6constrS626GORPC14json4JsonE = 0;
+const _M0MPB4Iter4nextN6constrS627GORPC14json4JsonE = 0;
+const _M0MPB4Iter4nextN6constrS634GcE = 0;
+const _M0MPB4Iter4nextN6constrS635GcE = 0;
+const _M0MPB4Iter3newN6constrS726GUsRP39stillfail5rules4lock9PersonWebEE = 0;
+const _M0MPB4Iter3newN6constrS792GORPC14json4JsonE = 0;
+const _M0MPB4Iter3newN6constrS798GcE = 0;
 const _M0FP39stillfail5rules4form11hex__digits = "0123456789abcdef";
-const _M0FP39stillfail5rules4lock8role__ofN6constrS5478 = 3;
-const _M0FP39stillfail5rules4lock8role__ofN6constrS5479 = 2;
-const _M0FP39stillfail5rules4lock8role__ofN6constrS5480 = 1;
-const _M0FP39stillfail5rules4lock8role__ofN6constrS5481 = 0;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS6006 = 3;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS6007 = 2;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS6008 = 1;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS6009 = 0;
 const _M0FP39stillfail5rules5vault6scopes = new _M0TPB5ArrayGsE(["once", "hour", "chat"], 3);
 const _M0FP39stillfail5rules5vault5kinds = new _M0TPB5ArrayGsE(["token", "ssh_key", "login", "file", "browser"], 5);
 const _M0FP39stillfail5rules5vault5modes = new _M0TPB5ArrayGsE(["proxy", "ssh", "env", "file", "browser"], 5);
 let _M0FPB4seed__held;
 const _M0FPB4seed__drawn = () => (_M0FPB4seed__held === undefined ? (_M0FPB4seed__held = _M0FPB12random__seed()) : _M0FPB4seed__held);
-const _M0FP39stillfail5rules4lock7passkeyN6recordS5534 = new _M0TPC16string10StringView("p256:", 0, 5);
-const _M0FP39stillfail5rules4lock5applyN6constrS5709 = new _M0DTPC16option6OptionGdE4Some(1);
-const _M0FP39stillfail5rules4lock7genesisN6constrS5610 = "genesis";
-const _M0FP39stillfail5rules4lock7genesisN6constrS5611 = new _M0DTPC16option6OptionGdE4Some(0);
-const _M0FP39stillfail5rules4lock7genesisN6constrS5612 = new _M0DTPC16option6OptionGdE4Some(1);
-const _M0FP39stillfail5rules4lock14person__deviceN6recordS5024 = new _M0TPC16string10StringView("ed25519:", 0, 8);
-const _M0FP39stillfail5rules4lock9statementN6recordS5057 = new _M0TPC16string10StringView("ws.member", 0, 9);
-const _M0FP39stillfail5rules4lock9statementN6constrS5058 = "owner";
-const _M0FP39stillfail5rules4lock9statementN6constrS5059 = "admin";
-const _M0FP39stillfail5rules4lock9statementN6constrS5060 = "member";
-const _M0FP39stillfail5rules4lock9statementN6recordS5061 = new _M0TPC16string10StringView(".remove", 0, 7);
-const _M0FP39stillfail5rules4lock12person__stepN6constrS5077 = new _M0DTPC16option6OptionGdE4Some(1);
-const _M0FP39stillfail5rules5vault8box__keyN6recordS6333 = new _M0TPC16string10StringView("x25519:", 0, 7);
-const _M0FP39stillfail5rules5vault10sig__shapeN6constrS6374 = "Ed25519";
-const _M0FP39stillfail5rules5vault10sig__shapeN6constrS6375 = "ES256";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS6408 = "the box certificate's device is not an app device in the lock";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS6409 = "the box certificate's device was put in the lock by someone else, not its person";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS6410 = "a box certificate is signed by its own device's key";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS6411 = "the box certificate's signature is invalid";
-const _M0FP39stillfail5rules5vault8cert__okN5shapeS6412 = "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6436 = "a vault is {v: 1, ws, …} of this workspace";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6437 = "a vault's id is v_<ULID>";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6438 = "seq, epoch and at are whole numbers";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6439 = "a vault has an owner and a name";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6440 = "members are distinct subs";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6441 = "the owner is a member";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6442 = "keys is a list";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6443 = "recovery is a seal";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6444 = "lasts is once, hour or chat";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6445 = "a deleted vault is sealed to no one";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6446 = "a vault is signed";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6447 = "a vault's first version is seq 0";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6448 = "another vault";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6449 = "a vault's owner does not change";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6450 = "a deleted vault stays deleted";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6451 = "the epoch does not go back";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6452 = "removing a member or device takes a new epoch (a new vault key)";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6453 = "a key is {cert, wrapped}";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6454 = "the vault's signature is invalid";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS6455 = "a vault is signed by one of its owner's devices in the lock";
-const _M0MPC16string10StringView4findN6constrS908 = 0;
-const _M0FP39stillfail5rules5vault4hostN6recordS6339 = new _M0TPC16string10StringView("*.", 0, 2);
-const _M0FP39stillfail5rules5vault4hostN6recordS6340 = new _M0TPC16string10StringView(".", 0, 1);
-const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS6550 = "a sign-in (kind browser) is given into a chat's browser (modes: [\"browser\"]), and only a sign-in is";
-const _M0FP39stillfail5rules5vault20browser__listing__okN6recordS6551 = new _M0TPC16string10StringView("*.", 0, 2);
-const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS6552 = "a sign-in names the sites it is for (github.com: its subdomains with it)";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS6558 = "a listing is {name, kind, modes, hosts, env?}";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS6559 = "modes are proxy, ssh, env, file or browser";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS6560 = "hosts are domain names (*.example.com allowed)";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS6561 = "env is a variable name";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS6562 = "lasts is once, hour or chat";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6606 = "an item is {v: 1, ws, vault, …} of this vault";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6607 = "an item's id is i_<ULID>";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6608 = "version, epoch and at are whole numbers";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6609 = "deleted is true or absent";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6610 = "ct is base64url";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6611 = "a deleted item has no ciphertext or listing";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6612 = "an item holds a ciphertext";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6613 = "an item is signed";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6614 = "an item's first version is 0";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6615 = "another item";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6616 = "the item was deleted";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6617 = "the item's signature is invalid";
-const _M0FP39stillfail5rules5vault8item__okN6constrS6618 = "an item is signed by a vault member's device in the lock";
-const _M0FP39stillfail5rules4fork4stepN6constrS4758 = 0;
-const _M0FP39stillfail5rules4fork4stepN6constrS4759 = 1;
-const _M0FP39stillfail5rules4fork4stepN6constrS4760 = 2;
-const _M0FP39stillfail5rules4fork4stepN6constrS4761 = 3;
-const _M0FP39stillfail5rules4lock6beforeN5tupleS5840 = { _0: 0, _1: 1 };
-const _M0FP39stillfail5rules4lock6beforeN5tupleS5841 = { _0: 1, _1: 0 };
-const _M0FP39stillfail5rules4lock6beforeN5tupleS5842 = { _0: 0, _1: 0 };
-const _M0FP39stillfail5rules4lock6activeN6constrS5871GRP39stillfail5rules4lock9LockStateE = new _M0DTP39stillfail5rules4lock3Off8NotValid("not the genesis this log is pinned to");
-const _M0FP39stillfail5rules4lock11lock__chainN6constrS6237 = "device.remove";
-const _M0FP39stillfail5rules4lock13person__chainN6constrS6258 = "device.remove";
-const _M0FP39stillfail5rules4lock3mgrN6constrS4912 = "owner";
-const _M0FP39stillfail5rules4lock3mgrN6constrS4913 = "admin";
-const _M0FP39stillfail5rules4lock6rosterN6recordS5136 = new _M0TPC16string10StringView("ws.", 0, 3);
-const _M0FP39stillfail5rules4lock6rosterN6constrS5137 = "in";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5138 = "out";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5139 = "in";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5140 = "in";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5141 = "admit cancelled";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5142 = "its signer may not give that role";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5143 = "another admit of the person outranks it (a lower role given later changes nothing)";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5144 = "its cancellations are undecided (a circle of removals)";
-const _M0FP39stillfail5rules4lock6rosterN6constrS5145 = "station cancelled";
+const _M0FP39stillfail5rules4lock7passkeyN6recordS6062 = new _M0TPC16string10StringView("p256:", 0, 5);
+const _M0FP39stillfail5rules4lock5applyN6constrS6238 = new _M0DTPC16option6OptionGdE4Some(1);
+const _M0FP39stillfail5rules4lock7genesisN6constrS6138 = "genesis";
+const _M0FP39stillfail5rules4lock7genesisN6constrS6139 = new _M0DTPC16option6OptionGdE4Some(0);
+const _M0FP39stillfail5rules4lock7genesisN6constrS6140 = new _M0DTPC16option6OptionGdE4Some(1);
+const _M0FP39stillfail5rules4lock14person__deviceN6recordS5366 = new _M0TPC16string10StringView("ed25519:", 0, 8);
+const _M0FP39stillfail5rules4lock12person__stepN6constrS5395 = new _M0DTPC16option6OptionGdE4Some(1);
+const _M0FP39stillfail5rules5vault8box__keyN6recordS6918 = new _M0TPC16string10StringView("x25519:", 0, 7);
+const _M0FP39stillfail5rules5vault10sig__shapeN6constrS6959 = "Ed25519";
+const _M0FP39stillfail5rules5vault10sig__shapeN6constrS6960 = "ES256";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS6993 = "the box certificate's device is not an app device in the lock";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS6994 = "the box certificate's device was put in the lock by someone else, not its person";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS6995 = "a box certificate is signed by its own device's key";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS6996 = "the box certificate's signature is invalid";
+const _M0FP39stillfail5rules5vault8cert__okN5shapeS6997 = "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7021 = "a vault is {v: 1, ws, …} of this workspace";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7022 = "a vault's id is v_<ULID>";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7023 = "seq, epoch and at are whole numbers";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7024 = "a vault has an owner and a name";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7025 = "members are distinct subs";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7026 = "the owner is a member";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7027 = "keys is a list";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7028 = "recovery is a seal";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7029 = "lasts is once, hour or chat";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7030 = "a deleted vault is sealed to no one";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7031 = "a vault is signed";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7032 = "a vault's first version is seq 0";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7033 = "another vault";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7034 = "a vault's owner does not change";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7035 = "a deleted vault stays deleted";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7036 = "the epoch does not go back";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7037 = "removing a member or device takes a new epoch (a new vault key)";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7038 = "a key is {cert, wrapped}";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7039 = "the vault's signature is invalid";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS7040 = "a vault is signed by one of its owner's devices in the lock";
+const _M0MPC16string10StringView4findN6constrS994 = 0;
+const _M0FP39stillfail5rules5vault4hostN6recordS6924 = new _M0TPC16string10StringView("*.", 0, 2);
+const _M0FP39stillfail5rules5vault4hostN6recordS6925 = new _M0TPC16string10StringView(".", 0, 1);
+const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS7135 = "a sign-in (kind browser) is given into a chat's browser (modes: [\"browser\"]), and only a sign-in is";
+const _M0FP39stillfail5rules5vault20browser__listing__okN6recordS7136 = new _M0TPC16string10StringView("*.", 0, 2);
+const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS7137 = "a sign-in names the sites it is for (github.com: its subdomains with it)";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS7143 = "a listing is {name, kind, modes, hosts, env?}";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS7144 = "modes are proxy, ssh, env, file or browser";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS7145 = "hosts are domain names (*.example.com allowed)";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS7146 = "env is a variable name";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS7147 = "lasts is once, hour or chat";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7191 = "an item is {v: 1, ws, vault, …} of this vault";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7192 = "an item's id is i_<ULID>";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7193 = "version, epoch and at are whole numbers";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7194 = "deleted is true or absent";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7195 = "ct is base64url";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7196 = "a deleted item has no ciphertext or listing";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7197 = "an item holds a ciphertext";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7198 = "an item is signed";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7199 = "an item's first version is 0";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7200 = "another item";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7201 = "the item was deleted";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7202 = "the item's signature is invalid";
+const _M0FP39stillfail5rules5vault8item__okN6constrS7203 = "an item is signed by a vault member's device in the lock";
+const _M0FP39stillfail5rules4fork4stepN6constrS5020 = 0;
+const _M0FP39stillfail5rules4fork4stepN6constrS5021 = 1;
+const _M0FP39stillfail5rules4fork4stepN6constrS5022 = 2;
+const _M0FP39stillfail5rules4fork4stepN6constrS5023 = 3;
+const _M0FP39stillfail5rules4lock6beforeN5tupleS6379 = { _0: 0, _1: 1 };
+const _M0FP39stillfail5rules4lock6beforeN5tupleS6380 = { _0: 1, _1: 0 };
+const _M0FP39stillfail5rules4lock6beforeN5tupleS6381 = { _0: 0, _1: 0 };
+const _M0FP39stillfail5rules4lock6activeN6constrS6410GRP39stillfail5rules4lock9LockStateE = new _M0DTP39stillfail5rules4lock3Off8NotValid("not the genesis this log is pinned to");
+const _M0FP39stillfail5rules4lock11lock__chainN6constrS6776 = "device.remove";
+const _M0FP39stillfail5rules4lock13person__chainN6constrS6797 = "device.remove";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5222 = "a body is {ws, kind, …, salt}";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5223 = "a body is {ws, kind, …, salt}";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5224 = "a body names the statement before it";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5225 = "no such statement";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5226 = "an admit names a person, their email, a lock and a role";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5227 = "a removal names whom and what it cancels";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5228 = "a station is named by its key";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5229 = "a removal names whom and what it cancels";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5230 = "open names the settings";
+const _M0FP39stillfail5rules4lock9body__whyN6constrS5231 = "off says nothing more";
+const _M0FP39stillfail5rules4lock3mgrN6constrS5462 = "owner";
+const _M0FP39stillfail5rules4lock3mgrN6constrS5463 = "admin";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5478 = "ws";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5479 = "open";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5480 = "off";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5481 = "in";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5482 = "out";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5483 = "in";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5484 = "in";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5485 = "admit cancelled";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5486 = "its signer may not give that role";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5487 = "another admit of the person outranks it (a lower role given later changes nothing)";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5488 = "its cancellations are undecided (a circle of removals)";
+const _M0FP39stillfail5rules4lock10roster__ofN6constrS5489 = "station cancelled";
+const _M0FP39stillfail5rules4lock6state4N6constrS5874 = "off";
+const _M0FP39stillfail5rules4lock13body__refusalN6constrS6810 = "no entry it keeps commits to it";
+const _M0FP39stillfail5rules4lock13body__refusalN6constrS6811 = "ws";
+const _M0FP39stillfail5rules4lock13body__refusalN6constrS6812 = "ws";
+const _M0FP39stillfail5rules4lock13body__refusalN6constrS6813 = "its prev is not a statement before it in that log";
+const _M0FP39stillfail5rules4lock13body__refusalN6constrS6814 = "its entry's tag is not its workspace's in that log";
+const _M0FP39stillfail5rules4lock13body__refusalN6constrS6815 = "no entry it keeps commits to it";
+const _M0FP39stillfail5rules4lock13body__refusalN6constrS6816 = "it names no workspace this keeper keeps";
 function _M0MPC16string10StringView12unsafe__view(self, start, end) {
   return new _M0TPC16string10StringView(self.str, self.start + start | 0, self.start + end | 0);
 }
@@ -1052,15 +1129,15 @@ function _M0MPC15array10FixedArray12unsafe__blitGRPB17UnsafeMaybeUninitGiEE(dst,
     }
   }
 }
-function _M0MPB18UninitializedArray12unsafe__blitGUsRPC14json4JsonEE(dst, dst_offset, src, src_offset, len) {
+function _M0MPB18UninitializedArray12unsafe__blitGRP39stillfail5rules4lock4StmtE(dst, dst_offset, src, src_offset, len) {
   _M0MPC15array10FixedArray12unsafe__blitGRPB17UnsafeMaybeUninitGRPC16string10StringViewEE(dst, dst_offset, src, src_offset, len);
 }
 function _M0MPB18UninitializedArray12unsafe__blitGiE(dst, dst_offset, src, src_offset, len) {
   _M0MPC15array10FixedArray12unsafe__blitGRPB17UnsafeMaybeUninitGiEE(dst, dst_offset, src, src_offset, len);
 }
-function _M0MPB18UninitializedArray23unsafe__make__and__blitGUsRPC14json4JsonEE(src, allocate_len, src_offset, dst_offset, blit_len) {
+function _M0MPB18UninitializedArray23unsafe__make__and__blitGRP39stillfail5rules4lock4StmtE(src, allocate_len, src_offset, dst_offset, blit_len) {
   const dst = new Array(allocate_len);
-  _M0MPB18UninitializedArray12unsafe__blitGUsRPC14json4JsonEE(dst, dst_offset, src, src_offset, blit_len);
+  _M0MPB18UninitializedArray12unsafe__blitGRP39stillfail5rules4lock4StmtE(dst, dst_offset, src, src_offset, blit_len);
   return dst;
 }
 function _M0MPB18UninitializedArray23unsafe__make__and__blitGiE(src, allocate_len, src_offset, dst_offset, blit_len) {
@@ -1071,7 +1148,7 @@ function _M0MPB18UninitializedArray23unsafe__make__and__blitGiE(src, allocate_le
 function _M0MPB13StringBuilder13write__objectGiE(self, obj) {
   _M0IP016_24default__implPB4Show6outputGiE(obj, { self: self, method_table: _M0FP092moonbitlang_2fcore_2fbuiltin_2fStringBuilder_24as_24_40moonbitlang_2fcore_2fbuiltin_2eLogger });
 }
-function _M0MPB18UninitializedArray23make__and__blit_2einnerGUsRPC14json4JsonEE(src, allocate_len, len, src_offset, dst_offset) {
+function _M0MPB18UninitializedArray23make__and__blit_2einnerGRP39stillfail5rules4lock4StmtE(src, allocate_len, len, src_offset, dst_offset) {
   let _tmp;
   if (allocate_len >= 0) {
     let _tmp$2;
@@ -1092,7 +1169,7 @@ function _M0MPB18UninitializedArray23make__and__blit_2einnerGUsRPC14json4JsonEE(
     _tmp = false;
   }
   if (_tmp) {
-    return _M0MPB18UninitializedArray23unsafe__make__and__blitGUsRPC14json4JsonEE(src, allocate_len, src_offset, dst_offset, len);
+    return _M0MPB18UninitializedArray23unsafe__make__and__blitGRP39stillfail5rules4lock4StmtE(src, allocate_len, src_offset, dst_offset, len);
   } else {
     const _string_builder = _M0MPB13StringBuilder21StringBuilder_2einner(89);
     _M0IPB13StringBuilderPB6Logger13write__string(_string_builder, "bounds check failed: allocate_len = ");
@@ -1269,18 +1346,18 @@ function _M0IP016_24default__implPB6Logger16write__substringGRPB13StringBuilderE
 function _M0IP016_24default__implPB4Show6outputGiE(self, logger) {
   logger.method_table.method_0(logger.self, _M0IPC13int3IntPB4Show10to__string(self));
 }
-function _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(self) {
+function _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(self) {
   const _func = self.f;
   const result = _func();
   const _bind = self.size_hint;
   if (result === undefined) {
-    self.size_hint = _M0MPB4Iter4nextN6constrS481GUsRPB5ArrayGiEEE;
+    self.size_hint = _M0MPB4Iter4nextN6constrS539GUsRP39stillfail5rules4lock9PersonWebEE;
   } else {
     if (_bind === undefined) {
     } else {
       const _Some = _bind;
       const _n = _Some;
-      self.size_hint = _n > 0 ? _n - 1 | 0 : _M0MPB4Iter4nextN6constrS480GUsRPB5ArrayGiEEE;
+      self.size_hint = _n > 0 ? _n - 1 | 0 : _M0MPB4Iter4nextN6constrS538GUsRP39stillfail5rules4lock9PersonWebEE;
     }
   }
   return result;
@@ -1294,10 +1371,10 @@ function _M0MPB4Iter4nextGORPC14json4JsonE(self) {
     } else {
       const _Some = _bind;
       const _n = _Some;
-      self.size_hint = _n > 0 ? _n - 1 | 0 : _M0MPB4Iter4nextN6constrS560GORPC14json4JsonE;
+      self.size_hint = _n > 0 ? _n - 1 | 0 : _M0MPB4Iter4nextN6constrS626GORPC14json4JsonE;
     }
   } else {
-    self.size_hint = _M0MPB4Iter4nextN6constrS561GORPC14json4JsonE;
+    self.size_hint = _M0MPB4Iter4nextN6constrS627GORPC14json4JsonE;
   }
   return result;
 }
@@ -1306,13 +1383,13 @@ function _M0MPB4Iter4nextGcE(self) {
   const result = _func();
   const _bind = self.size_hint;
   if (result === -1) {
-    self.size_hint = _M0MPB4Iter4nextN6constrS569GcE;
+    self.size_hint = _M0MPB4Iter4nextN6constrS635GcE;
   } else {
     if (_bind === undefined) {
     } else {
       const _Some = _bind;
       const _n = _Some;
-      self.size_hint = _n > 0 ? _n - 1 | 0 : _M0MPB4Iter4nextN6constrS568GcE;
+      self.size_hint = _n > 0 ? _n - 1 | 0 : _M0MPB4Iter4nextN6constrS634GcE;
     }
   }
   return result;
@@ -1323,16 +1400,16 @@ function _M0MPC13int3Int18to__string_2einner(self, radix) {
 function _M0MPC15int645Int6418to__string_2einner(self, radix) {
   return _M0FPB21int64__to__string__js(self, radix);
 }
-function _M0MPB4Iter3newGUsRPB5ArrayGiEEE(f, size_hint) {
+function _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(f, size_hint) {
   let size_hint$2;
   if (size_hint === undefined) {
     size_hint$2 = undefined;
   } else {
     const _Some = size_hint;
     const _n = _Some;
-    size_hint$2 = _n > 0 ? _n : _M0MPB4Iter3newN6constrS652GUsRPB5ArrayGiEEE;
+    size_hint$2 = _n > 0 ? _n : _M0MPB4Iter3newN6constrS726GUsRP39stillfail5rules4lock9PersonWebEE;
   }
-  return new _M0TPB4IterGUsRPB5ArrayGiEEE(f, size_hint$2);
+  return new _M0TPB4IterGUsRP39stillfail5rules4lock9PersonWebEE(f, size_hint$2);
 }
 function _M0MPB4Iter3newGORPC14json4JsonE(f, size_hint) {
   let size_hint$2;
@@ -1341,7 +1418,7 @@ function _M0MPB4Iter3newGORPC14json4JsonE(f, size_hint) {
   } else {
     const _Some = size_hint;
     const _n = _Some;
-    size_hint$2 = _n > 0 ? _n : _M0MPB4Iter3newN6constrS706GORPC14json4JsonE;
+    size_hint$2 = _n > 0 ? _n : _M0MPB4Iter3newN6constrS792GORPC14json4JsonE;
   }
   return new _M0TPB4IterGORPC14json4JsonE(f, size_hint$2);
 }
@@ -1352,7 +1429,7 @@ function _M0MPB4Iter3newGcE(f, size_hint) {
   } else {
     const _Some = size_hint;
     const _n = _Some;
-    size_hint$2 = _n > 0 ? _n : _M0MPB4Iter3newN6constrS718GcE;
+    size_hint$2 = _n > 0 ? _n : _M0MPB4Iter3newN6constrS798GcE;
   }
   return new _M0TPB4IterGcE(f, size_hint$2);
 }
@@ -1620,7 +1697,7 @@ function _M0MPC16string10StringView4find(self, str) {
   const pattern_len = str.end - str.start | 0;
   switch (pattern_len) {
     case 0: {
-      return _M0MPC16string10StringView4findN6constrS908;
+      return _M0MPC16string10StringView4findN6constrS994;
     }
     case 1: {
       const found = _M0FPB28find__code__unit__from__view(self, 0, self.end - self.start | 0, str.str.charCodeAt(str.start));
@@ -1630,19 +1707,6 @@ function _M0MPC16string10StringView4find(self, str) {
       return pattern_len > (self.end - self.start | 0) ? undefined : _M0FPB13find__pattern(self, str);
     }
   }
-}
-function _M0MPC16string10StringView11has__suffix(self, str) {
-  const self_len = self.end - self.start | 0;
-  const str_len = str.end - str.start | 0;
-  if (str_len <= self_len) {
-    const start = self_len - str_len | 0;
-    return str_len === 0 || self.str.charCodeAt(self.start + start | 0) === str.str.charCodeAt(str.start) ? _M0MPC16string6String20unsafe__range__equal(self.str, self.start + start | 0, str.str, str.start, str_len) : false;
-  } else {
-    return false;
-  }
-}
-function _M0MPC16string6String11has__suffix(self, str) {
-  return _M0MPC16string10StringView11has__suffix(new _M0TPC16string10StringView(self, 0, self.length), str);
 }
 function _M0MPC16string10StringView11has__prefix(self, str) {
   const str_len = str.end - str.start | 0;
@@ -1674,18 +1738,18 @@ function _M0FPB23array__growth__capacity(current, len, required) {
     }
   }
 }
-function _M0MPC15array5Array8capacityGUsRPC14json4JsonEE(self) {
+function _M0MPC15array5Array8capacityGRP39stillfail5rules4lock4StmtE(self) {
   return self.buf.length;
 }
 function _M0MPC15array5Array8capacityGiE(self) {
   return self.buf.length;
 }
-function _M0MPC15array5Array14resize__bufferGUsRPC14json4JsonEE(self, new_capacity) {
+function _M0MPC15array5Array14resize__bufferGRP39stillfail5rules4lock4StmtE(self, new_capacity) {
   const old_buf = self.buf;
   self.buf = [];
   const len = self.len;
   const copy_len = len < new_capacity ? len : new_capacity;
-  const new_buf = _M0MPB18UninitializedArray23make__and__blit_2einnerGUsRPC14json4JsonEE(old_buf, new_capacity, copy_len, 0, 0);
+  const new_buf = _M0MPB18UninitializedArray23make__and__blit_2einnerGRP39stillfail5rules4lock4StmtE(old_buf, new_capacity, copy_len, 0, 0);
   self.buf = new_buf;
 }
 function _M0MPC15array5Array14resize__bufferGiE(self, new_capacity) {
@@ -1696,19 +1760,19 @@ function _M0MPC15array5Array14resize__bufferGiE(self, new_capacity) {
   const new_buf = _M0MPB18UninitializedArray23make__and__blit_2einnerGiE(old_buf, new_capacity, copy_len, 0, 0);
   self.buf = new_buf;
 }
-function _M0MPC15array5Array7reallocGUsRPC14json4JsonEE(self, required) {
-  const old_cap = _M0MPC15array5Array8capacityGUsRPC14json4JsonEE(self);
+function _M0MPC15array5Array7reallocGRP39stillfail5rules4lock4StmtE(self, required) {
+  const old_cap = _M0MPC15array5Array8capacityGRP39stillfail5rules4lock4StmtE(self);
   const new_cap = _M0FPB23array__growth__capacity(old_cap, self.len, required);
-  _M0MPC15array5Array14resize__bufferGUsRPC14json4JsonEE(self, new_cap);
+  _M0MPC15array5Array14resize__bufferGRP39stillfail5rules4lock4StmtE(self, new_cap);
 }
 function _M0MPC15array5Array7reallocGiE(self, required) {
   const old_cap = _M0MPC15array5Array8capacityGiE(self);
   const new_cap = _M0FPB23array__growth__capacity(old_cap, self.len, required);
   _M0MPC15array5Array14resize__bufferGiE(self, new_cap);
 }
-function _M0MPC15array5Array4pushGUsRPC14json4JsonEE(self, value) {
+function _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(self, value) {
   if (self.len === self.buf.length) {
-    _M0MPC15array5Array7reallocGUsRPC14json4JsonEE(self, self.len + 1 | 0);
+    _M0MPC15array5Array7reallocGRP39stillfail5rules4lock4StmtE(self, self.len + 1 | 0);
   }
   const length = self.len;
   self.buf[length] = value;
@@ -1724,7 +1788,7 @@ function _M0MPC15array5Array4pushGiE(self, value) {
 }
 function _M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(self, f) {
   return new _M0TPB4IterGRPC14json4JsonE(() => {
-    const _bind = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(self);
+    const _bind = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(self);
     if (_bind === undefined) {
       return undefined;
     } else {
@@ -1758,7 +1822,7 @@ function _M0MPC16string10StringView5split(self, sep) {
     });
   }
   const remaining = new _M0TPB8MutLocalGORPC16string10StringViewE(self);
-  return _M0MPB4Iter3newGUsRPB5ArrayGiEEE(() => {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
     const _bind = remaining.val;
     if (_bind === undefined) {
       return undefined;
@@ -1792,13 +1856,13 @@ function _M0MPB4Iter9to__arrayGUssEE(self) {
     result = _M0MPC15array5Array13Array_2einnerGUssEE(_n);
   }
   while (true) {
-    const _bind$2 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(self);
+    const _bind$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(self);
     if (_bind$2 === undefined) {
       break;
     } else {
       const _Some = _bind$2;
       const _x = _Some;
-      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(result, _x);
+      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(result, _x);
       continue;
     }
   }
@@ -1834,7 +1898,7 @@ function _M0IPC13int3IntPB4Show10to__string(self) {
 function _M0MPC15array9ArrayView4iterGRP39stillfail5rules4lock4StmtE(self) {
   const i = new _M0TPB8MutLocalGiE(0);
   const len = self.end - self.start | 0;
-  return _M0MPB4Iter3newGUsRPB5ArrayGiEEE(() => {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
     if (i.val < len) {
       const elem = self.buf[self.start + i.val | 0];
       i.val = i.val + 1 | 0;
@@ -1863,14 +1927,14 @@ function _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(self) {
 function _M0MPC15array5Array4iterGORPC14json4JsonE(self) {
   return _M0MPC15array9ArrayView4iterGORPC14json4JsonE(new _M0TPB9ArrayViewGORPC14json4JsonE(self.buf, 0, self.len));
 }
+function _M0MPC15array5Array20unsafe__make__uninitGUssEE(len) {
+  return new _M0TPB5ArrayGUssEE(new Array(len), len);
+}
 function _M0MPC15array5Array20unsafe__make__uninitGORPC14json4JsonE(len) {
   return new _M0TPB5ArrayGORPC14json4JsonE(new Array(len), len);
 }
 function _M0MPC15array5Array20unsafe__make__uninitGiE(len) {
   return new _M0TPB5ArrayGiE(new Array(len), len);
-}
-function _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(len) {
-  return new _M0TPB5ArrayGRPC14json4JsonE(new Array(len), len);
 }
 function _M0IPC16option6OptionPB2Eq5equalGRPC14json4JsonE(self, other) {
   if (self === undefined) {
@@ -2016,13 +2080,13 @@ function _M0FPB8new__mapGsiE(capacity) {
   const _bind$4 = undefined;
   return new _M0TPB3MapGsiE(_bind$3, 0, capacity$2, _bind, _bind$2, _bind$4, -1);
 }
-function _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity) {
+function _M0FPB8new__mapGsUssOsEE(capacity) {
   const capacity$2 = _M0MPC13int3Int20next__power__of__two(capacity);
   const _bind = capacity$2 - 1 | 0;
   const _bind$2 = _M0FPB21calc__grow__threshold(capacity$2);
   const _bind$3 = $make_array_len_and_init(capacity$2, undefined);
   const _bind$4 = undefined;
-  return new _M0TPB3MapGsRP39stillfail5rules4lock12PersonDeviceE(_bind$3, 0, capacity$2, _bind, _bind$2, _bind$4, -1);
+  return new _M0TPB3MapGsUssOsEE(_bind$3, 0, capacity$2, _bind, _bind$2, _bind$4, -1);
 }
 function _M0FPB8new__mapGsuE(capacity) {
   const capacity$2 = _M0MPC13int3Int20next__power__of__two(capacity);
@@ -2071,7 +2135,7 @@ function _M0MPB3Map20add__entry__to__tailGsiE(self, idx, entry) {
   self.entries[idx] = entry;
   self.size = self.size + 1 | 0;
 }
-function _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry) {
+function _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry) {
   const _bind = self.tail;
   if (_bind === -1) {
     self.head = entry;
@@ -2142,7 +2206,7 @@ function _M0MPB3Map10set__entryGsiE(self, entry, new_idx) {
   }
   self.entries[new_idx] = entry;
 }
-function _M0MPB3Map10set__entryGsRP39stillfail5rules4lock12PersonDeviceE(self, entry, new_idx) {
+function _M0MPB3Map10set__entryGsUssOsEE(self, entry, new_idx) {
   const _bind = entry.next;
   if (_bind === undefined) {
     self.tail = new_idx;
@@ -2206,7 +2270,7 @@ function _M0MPB3Map10push__awayGsiE(self, idx, entry) {
     }
   }
 }
-function _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry) {
+function _M0MPB3Map10push__awayGsUssOsEE(self, idx, entry) {
   let _tmp = entry.psl + 1 | 0;
   let _tmp$2 = idx + 1 & self.capacity_mask;
   let _tmp$3 = entry;
@@ -2217,14 +2281,14 @@ function _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, i
     const _bind = self.entries[idx$2];
     if (_bind === undefined) {
       entry$2.psl = psl;
-      _M0MPB3Map10set__entryGsRP39stillfail5rules4lock12PersonDeviceE(self, entry$2, idx$2);
+      _M0MPB3Map10set__entryGsUssOsEE(self, entry$2, idx$2);
       return;
     } else {
       const _Some = _bind;
       const _curr_entry = _Some;
       if (psl > _curr_entry.psl) {
         entry$2.psl = psl;
-        _M0MPB3Map10set__entryGsRP39stillfail5rules4lock12PersonDeviceE(self, entry$2, idx$2);
+        _M0MPB3Map10set__entryGsUssOsEE(self, entry$2, idx$2);
         _tmp = _curr_entry.psl + 1 | 0;
         _tmp$2 = idx$2 + 1 & self.capacity_mask;
         _tmp$3 = _curr_entry;
@@ -2329,7 +2393,7 @@ function _M0MPB3Map20rehash__place__entryGsiE(self, outer) {
     }
   }
 }
-function _M0MPB3Map20rehash__place__entryGsRP39stillfail5rules4lock12PersonDeviceE(self, outer) {
+function _M0MPB3Map20rehash__place__entryGsUssOsEE(self, outer) {
   const hash = outer.hash;
   let _tmp = 0;
   let _tmp$2 = hash & self.capacity_mask;
@@ -2340,16 +2404,16 @@ function _M0MPB3Map20rehash__place__entryGsRP39stillfail5rules4lock12PersonDevic
     if (_bind === undefined) {
       outer.psl = psl;
       outer.prev = self.tail;
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, outer);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, outer);
       return undefined;
     } else {
       const _Some = _bind;
       const _curr = _Some;
       if (psl > _curr.psl) {
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr);
         outer.psl = psl;
         outer.prev = self.tail;
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, outer);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, outer);
         return undefined;
       } else {
         _tmp = psl + 1 | 0;
@@ -2445,7 +2509,7 @@ function _M0MPB3Map4growGsiE(self) {
     }
   }
 }
-function _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self) {
+function _M0MPB3Map4growGsUssOsEE(self) {
   const old_head = self.head;
   const new_capacity = self.capacity << 1;
   self.entries = $make_array_len_and_init(new_capacity, undefined);
@@ -2465,7 +2529,7 @@ function _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self) {
       const _e = _Some;
       const next_in_chain = _e.next;
       _e.next = undefined;
-      _M0MPB3Map20rehash__place__entryGsRP39stillfail5rules4lock12PersonDeviceE(self, _e);
+      _M0MPB3Map20rehash__place__entryGsUssOsEE(self, _e);
       _tmp = next_in_chain;
       continue;
     }
@@ -2569,7 +2633,7 @@ function _M0MPB3Map15set__with__hashGsiE(self, key, value, hash) {
     }
   }
 }
-function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock12PersonDeviceE(self, key, value, hash) {
+function _M0MPB3Map15set__with__hashGsUssOsEE(self, key, value, hash) {
   let _tmp = 0;
   let _tmp$2 = hash & self.capacity_mask;
   while (true) {
@@ -2578,15 +2642,15 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock12PersonDeviceE(se
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
       }
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
-      const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock12PersonDeviceE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      const entry = new _M0TPB5EntryGsUssOsEE(_bind$2, _bind$3, psl, hash, key, value);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2597,16 +2661,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock12PersonDeviceE(se
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
-        const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock12PersonDeviceE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        const entry = new _M0TPB5EntryGsUssOsEE(_bind$2, _bind$3, psl, hash, key, value);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -2624,7 +2688,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4NodeGRP39stillfai
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -2632,7 +2696,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4NodeGRP39stillfai
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2643,16 +2707,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4NodeGRP39stillfai
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -2661,7 +2725,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4NodeGRP39stillfai
     }
   }
 }
-function _M0MPB3Map15set__with__hashGsUssOsEE(self, key, value, hash) {
+function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock12PersonDeviceE(self, key, value, hash) {
   let _tmp = 0;
   let _tmp$2 = hash & self.capacity_mask;
   while (true) {
@@ -2670,15 +2734,15 @@ function _M0MPB3Map15set__with__hashGsUssOsEE(self, key, value, hash) {
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
       }
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
-      const entry = new _M0TPB5EntryGsUssOsEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock12PersonDeviceE(_bind$2, _bind$3, psl, hash, key, value);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2689,16 +2753,16 @@ function _M0MPB3Map15set__with__hashGsUssOsEE(self, key, value, hash) {
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
-        const entry = new _M0TPB5EntryGsUssOsEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock12PersonDeviceE(_bind$2, _bind$3, psl, hash, key, value);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -2716,7 +2780,7 @@ function _M0MPB3Map15set__with__hashGssE(self, key, value, hash) {
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -2724,7 +2788,7 @@ function _M0MPB3Map15set__with__hashGssE(self, key, value, hash) {
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGssE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2735,16 +2799,16 @@ function _M0MPB3Map15set__with__hashGssE(self, key, value, hash) {
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGssE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -2762,7 +2826,7 @@ function _M0MPB3Map15set__with__hashGsRPC14json4JsonE(self, key, value, hash) {
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -2770,7 +2834,7 @@ function _M0MPB3Map15set__with__hashGsRPC14json4JsonE(self, key, value, hash) {
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRPC14json4JsonE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2781,16 +2845,16 @@ function _M0MPB3Map15set__with__hashGsRPC14json4JsonE(self, key, value, hash) {
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRPC14json4JsonE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -2808,7 +2872,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock6DeviceE(self, key
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -2816,7 +2880,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock6DeviceE(self, key
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock6DeviceE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2827,16 +2891,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock6DeviceE(self, key
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock6DeviceE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -2854,7 +2918,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules5vault6DeviceE(self, ke
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -2862,7 +2926,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules5vault6DeviceE(self, ke
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRP39stillfail5rules5vault6DeviceE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2873,16 +2937,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules5vault6DeviceE(self, ke
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRP39stillfail5rules5vault6DeviceE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -2946,7 +3010,7 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGiEE(self, key, value, hash) {
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -2954,7 +3018,7 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGiEE(self, key, value, hash) {
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRPB5ArrayGiEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -2965,16 +3029,16 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGiEE(self, key, value, hash) {
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRPB5ArrayGiEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3038,7 +3102,7 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGsEE(self, key, value, hash) {
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3046,7 +3110,7 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGsEE(self, key, value, hash) {
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRPB5ArrayGsEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3057,16 +3121,16 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGsEE(self, key, value, hash) {
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRPB5ArrayGsEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3084,7 +3148,7 @@ function _M0MPB3Map15set__with__hashGsURP39stillfail5rules4lock6PersonRPB5ArrayG
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3092,7 +3156,7 @@ function _M0MPB3Map15set__with__hashGsURP39stillfail5rules4lock6PersonRPB5ArrayG
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3103,16 +3167,16 @@ function _M0MPB3Map15set__with__hashGsURP39stillfail5rules4lock6PersonRPB5ArrayG
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3130,7 +3194,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock6MemberE(self, key
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3138,7 +3202,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock6MemberE(self, key
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock6MemberE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3149,16 +3213,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock6MemberE(self, key
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock6MemberE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3176,7 +3240,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock7StationE(self, ke
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3184,7 +3248,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock7StationE(self, ke
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock7StationE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3195,16 +3259,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock7StationE(self, ke
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock7StationE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3222,7 +3286,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock7PasskeyE(self, ke
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3230,7 +3294,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock7PasskeyE(self, ke
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock7PasskeyE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3241,16 +3305,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock7PasskeyE(self, ke
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock7PasskeyE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3268,7 +3332,7 @@ function _M0MPB3Map15set__with__hashGsUssEE(self, key, value, hash) {
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3276,7 +3340,7 @@ function _M0MPB3Map15set__with__hashGsUssEE(self, key, value, hash) {
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsUssEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3287,16 +3351,16 @@ function _M0MPB3Map15set__with__hashGsUssEE(self, key, value, hash) {
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsUssEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3314,7 +3378,7 @@ function _M0MPB3Map15set__with__hashGsUsssEE(self, key, value, hash) {
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3322,7 +3386,7 @@ function _M0MPB3Map15set__with__hashGsUsssEE(self, key, value, hash) {
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsUsssEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3333,16 +3397,16 @@ function _M0MPB3Map15set__with__hashGsUsssEE(self, key, value, hash) {
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsUsssEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3360,7 +3424,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4StmtE(self, key, 
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3368,7 +3432,7 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4StmtE(self, key, 
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock4StmtE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3379,16 +3443,16 @@ function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4StmtE(self, key, 
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock4StmtE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3406,7 +3470,7 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP
     const _bind = self.entries[idx];
     if (_bind === undefined) {
       if (self.size >= self.grow_at) {
-        _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+        _M0MPB3Map4growGsUssOsEE(self);
         _tmp = 0;
         _tmp$2 = hash & self.capacity_mask;
         continue;
@@ -3414,7 +3478,7 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP
       const _bind$2 = self.tail;
       const _bind$3 = undefined;
       const entry = new _M0TPB5EntryGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_bind$2, _bind$3, psl, hash, key, value);
-      _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
       return undefined;
     } else {
       const _Some = _bind;
@@ -3425,16 +3489,62 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP
       }
       if (psl > _curr_entry.psl) {
         if (self.size >= self.grow_at) {
-          _M0MPB3Map4growGsRP39stillfail5rules4lock12PersonDeviceE(self);
+          _M0MPB3Map4growGsUssOsEE(self);
           _tmp = 0;
           _tmp$2 = hash & self.capacity_mask;
           continue;
         }
-        _M0MPB3Map10push__awayGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, _curr_entry);
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
         const _bind$2 = self.tail;
         const _bind$3 = undefined;
         const entry = new _M0TPB5EntryGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_bind$2, _bind$3, psl, hash, key, value);
-        _M0MPB3Map20add__entry__to__tailGsRP39stillfail5rules4lock12PersonDeviceE(self, idx, entry);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
+        return undefined;
+      }
+      _tmp = psl + 1 | 0;
+      _tmp$2 = idx + 1 & self.capacity_mask;
+      continue;
+    }
+  }
+}
+function _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock9PersonWebE(self, key, value, hash) {
+  let _tmp = 0;
+  let _tmp$2 = hash & self.capacity_mask;
+  while (true) {
+    const psl = _tmp;
+    const idx = _tmp$2;
+    const _bind = self.entries[idx];
+    if (_bind === undefined) {
+      if (self.size >= self.grow_at) {
+        _M0MPB3Map4growGsUssOsEE(self);
+        _tmp = 0;
+        _tmp$2 = hash & self.capacity_mask;
+        continue;
+      }
+      const _bind$2 = self.tail;
+      const _bind$3 = undefined;
+      const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock9PersonWebE(_bind$2, _bind$3, psl, hash, key, value);
+      _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
+      return undefined;
+    } else {
+      const _Some = _bind;
+      const _curr_entry = _Some;
+      if (_curr_entry.hash === hash && _curr_entry.key === key) {
+        _curr_entry.value = value;
+        return undefined;
+      }
+      if (psl > _curr_entry.psl) {
+        if (self.size >= self.grow_at) {
+          _M0MPB3Map4growGsUssOsEE(self);
+          _tmp = 0;
+          _tmp$2 = hash & self.capacity_mask;
+          continue;
+        }
+        _M0MPB3Map10push__awayGsUssOsEE(self, idx, _curr_entry);
+        const _bind$2 = self.tail;
+        const _bind$3 = undefined;
+        const entry = new _M0TPB5EntryGsRP39stillfail5rules4lock9PersonWebE(_bind$2, _bind$3, psl, hash, key, value);
+        _M0MPB3Map20add__entry__to__tailGsUssOsEE(self, idx, entry);
         return undefined;
       }
       _tmp = psl + 1 | 0;
@@ -3446,14 +3556,14 @@ function _M0MPB3Map15set__with__hashGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP
 function _M0MPB3Map3setGsiE(self, key, value) {
   _M0MPB3Map15set__with__hashGsiE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
 }
-function _M0MPB3Map3setGsRP39stillfail5rules4lock12PersonDeviceE(self, key, value) {
-  _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock12PersonDeviceE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
+function _M0MPB3Map3setGsUssOsEE(self, key, value) {
+  _M0MPB3Map15set__with__hashGsUssOsEE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
 }
 function _M0MPB3Map3setGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(self, key, value) {
   _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
 }
-function _M0MPB3Map3setGsUssOsEE(self, key, value) {
-  _M0MPB3Map15set__with__hashGsUssOsEE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
+function _M0MPB3Map3setGsRP39stillfail5rules4lock12PersonDeviceE(self, key, value) {
+  _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock12PersonDeviceE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
 }
 function _M0MPB3Map3setGssE(self, key, value) {
   _M0MPB3Map15set__with__hashGssE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
@@ -3503,6 +3613,9 @@ function _M0MPB3Map3setGsRP39stillfail5rules4lock4StmtE(self, key, value) {
 function _M0MPB3Map3setGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(self, key, value) {
   _M0MPB3Map15set__with__hashGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
 }
+function _M0MPB3Map3setGsRP39stillfail5rules4lock9PersonWebE(self, key, value) {
+  _M0MPB3Map15set__with__hashGsRP39stillfail5rules4lock9PersonWebE(self, key, value, _M0IPC16string6StringPB4Hash4hash(key));
+}
 function _M0MPB3Map3MapGsiE(arr, capacity) {
   const length = arr.end - arr.start | 0;
   let capacity$2;
@@ -3529,7 +3642,7 @@ function _M0MPB3Map3MapGsiE(arr, capacity) {
   }
   return m;
 }
-function _M0MPB3Map3MapGsRP39stillfail5rules4lock12PersonDeviceE(arr, capacity) {
+function _M0MPB3Map3MapGsUssOsEE(arr, capacity) {
   const length = arr.end - arr.start | 0;
   let capacity$2;
   if (capacity === undefined) {
@@ -3539,14 +3652,14 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock12PersonDeviceE(arr, capacity) 
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
     const _ = _tmp;
     if (_ < _bind) {
       const e = arr.buf[arr.start + _ | 0];
-      _M0MPB3Map3setGsRP39stillfail5rules4lock12PersonDeviceE(m, e._0, e._1);
+      _M0MPB3Map3setGsUssOsEE(m, e._0, e._1);
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -3565,7 +3678,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3581,7 +3694,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9
   }
   return m;
 }
-function _M0MPB3Map3MapGsUssOsEE(arr, capacity) {
+function _M0MPB3Map3MapGsRP39stillfail5rules4lock12PersonDeviceE(arr, capacity) {
   const length = arr.end - arr.start | 0;
   let capacity$2;
   if (capacity === undefined) {
@@ -3591,14 +3704,14 @@ function _M0MPB3Map3MapGsUssOsEE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
     const _ = _tmp;
     if (_ < _bind) {
       const e = arr.buf[arr.start + _ | 0];
-      _M0MPB3Map3setGsUssOsEE(m, e._0, e._1);
+      _M0MPB3Map3setGsRP39stillfail5rules4lock12PersonDeviceE(m, e._0, e._1);
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -3617,7 +3730,7 @@ function _M0MPB3Map3MapGssE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3643,7 +3756,7 @@ function _M0MPB3Map3MapGsRPC14json4JsonE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3669,7 +3782,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules5vault6DeviceE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3695,7 +3808,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock6DeviceE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3747,7 +3860,7 @@ function _M0MPB3Map3MapGsRPB5ArrayGiEE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3799,7 +3912,7 @@ function _M0MPB3Map3MapGsRPB5ArrayGsEE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3825,7 +3938,7 @@ function _M0MPB3Map3MapGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4Jso
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3851,7 +3964,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock6MemberE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3877,7 +3990,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock7StationE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3903,7 +4016,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock7PasskeyE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3929,7 +4042,7 @@ function _M0MPB3Map3MapGsUsssEE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3955,7 +4068,7 @@ function _M0MPB3Map3MapGsUssEE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -3981,7 +4094,7 @@ function _M0MPB3Map3MapGsRP39stillfail5rules4lock4StmtE(arr, capacity) {
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -4007,7 +4120,7 @@ function _M0MPB3Map3MapGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5r
     const _capacity = _Some;
     capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
   }
-  const m = _M0FPB8new__mapGsRP39stillfail5rules4lock12PersonDeviceE(capacity$2);
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
   const _bind = arr.end - arr.start | 0;
   let _tmp = 0;
   while (true) {
@@ -4015,6 +4128,32 @@ function _M0MPB3Map3MapGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5r
     if (_ < _bind) {
       const e = arr.buf[arr.start + _ | 0];
       _M0MPB3Map3setGsRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(m, e._0, e._1);
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return m;
+}
+function _M0MPB3Map3MapGsRP39stillfail5rules4lock9PersonWebE(arr, capacity) {
+  const length = arr.end - arr.start | 0;
+  let capacity$2;
+  if (capacity === undefined) {
+    capacity$2 = length === 0 ? 8 : _M0FPB21capacity__for__length(length);
+  } else {
+    const _Some = capacity;
+    const _capacity = _Some;
+    capacity$2 = _M0FPB21capacity__for__length(_capacity > length ? _capacity : length);
+  }
+  const m = _M0FPB8new__mapGsUssOsEE(capacity$2);
+  const _bind = arr.end - arr.start | 0;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const e = arr.buf[arr.start + _ | 0];
+      _M0MPB3Map3setGsRP39stillfail5rules4lock9PersonWebE(m, e._0, e._1);
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -4048,7 +4187,7 @@ function _M0MPB3Map3getGsiE(self, key) {
     }
   }
 }
-function _M0MPB3Map3getGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(self, key) {
+function _M0MPB3Map3getGsUssOsEE(self, key) {
   const hash = _M0IPC16string6StringPB4Hash4hash(key);
   let _tmp = 0;
   let _tmp$2 = hash & self.capacity_mask;
@@ -4073,7 +4212,7 @@ function _M0MPB3Map3getGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9
     }
   }
 }
-function _M0MPB3Map3getGsUssOsEE(self, key) {
+function _M0MPB3Map3getGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(self, key) {
   const hash = _M0IPC16string6StringPB4Hash4hash(key);
   let _tmp = 0;
   let _tmp$2 = hash & self.capacity_mask;
@@ -4448,7 +4587,7 @@ function _M0MPB3Map8containsGsiE(self, key) {
     }
   }
 }
-function _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(self, key) {
+function _M0MPB3Map8containsGssE(self, key) {
   const hash = _M0IPC16string6StringPB4Hash4hash(key);
   let _tmp = 0;
   let _tmp$2 = hash & self.capacity_mask;
@@ -4473,7 +4612,7 @@ function _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(self, key)
     }
   }
 }
-function _M0MPB3Map8containsGssE(self, key) {
+function _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(self, key) {
   const hash = _M0IPC16string6StringPB4Hash4hash(key);
   let _tmp = 0;
   let _tmp$2 = hash & self.capacity_mask;
@@ -4719,7 +4858,7 @@ function _M0MPB3Map11shift__backGsRP39stillfail5rules4lock12PersonDeviceE(self, 
           break _L;
         } else {
           _x.psl = _x.psl - 1 | 0;
-          _M0MPB3Map10set__entryGsRP39stillfail5rules4lock12PersonDeviceE(self, _x, cur);
+          _M0MPB3Map10set__entryGsUssOsEE(self, _x, cur);
           _tmp = next;
           continue;
         }
@@ -4972,6 +5111,33 @@ function _M0MPB3Map18remove__with__hashGsUssEE(self, key, hash) {
     }
   }
 }
+function _M0MPB3Map18remove__with__hashGsRP39stillfail5rules4lock9PersonWebE(self, key, hash) {
+  let _tmp = 0;
+  let _tmp$2 = hash & self.capacity_mask;
+  while (true) {
+    const i = _tmp;
+    const idx = _tmp$2;
+    const _bind = self.entries[idx];
+    if (_bind === undefined) {
+      return;
+    } else {
+      const _Some = _bind;
+      const _entry = _Some;
+      if (_entry.hash === hash && _entry.key === key) {
+        _M0MPB3Map13remove__entryGsRP39stillfail5rules4lock12PersonDeviceE(self, _entry);
+        _M0MPB3Map11shift__backGsRP39stillfail5rules4lock12PersonDeviceE(self, idx);
+        self.size = self.size - 1 | 0;
+        return;
+      }
+      if (i > _entry.psl) {
+        return;
+      }
+      _tmp = i + 1 | 0;
+      _tmp$2 = idx + 1 & self.capacity_mask;
+      continue;
+    }
+  }
+}
 function _M0MPB3Map6removeGsRP39stillfail5rules4lock12PersonDeviceE(self, key) {
   _M0MPB3Map18remove__with__hashGsRP39stillfail5rules4lock12PersonDeviceE(self, key, _M0IPC16string6StringPB4Hash4hash(key));
 }
@@ -4996,11 +5162,14 @@ function _M0MPB3Map6removeGsRP39stillfail5rules4lock7PasskeyE(self, key) {
 function _M0MPB3Map6removeGsUssEE(self, key) {
   _M0MPB3Map18remove__with__hashGsUssEE(self, key, _M0IPC16string6StringPB4Hash4hash(key));
 }
+function _M0MPB3Map6removeGsRP39stillfail5rules4lock9PersonWebE(self, key) {
+  _M0MPB3Map18remove__with__hashGsRP39stillfail5rules4lock9PersonWebE(self, key, _M0IPC16string6StringPB4Hash4hash(key));
+}
 function _M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(self) {
   const curr_entry = new _M0TPB8MutLocalGORPB5EntryGsRP39stillfail5rules4lock12PersonDeviceEE(self.head);
   const len = self.size;
   const remaining = new _M0TPB8MutLocalGiE(len);
-  return _M0MPB4Iter3newGUsRPB5ArrayGiEEE(() => {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
     _L: {
       if (remaining.val > 0) {
         const _bind = curr_entry.val;
@@ -5027,7 +5196,7 @@ function _M0MPB3Map4iterGsuE(self) {
   const curr_entry = new _M0TPB8MutLocalGORPB5EntryGsuEE(self.head);
   const len = self.size;
   const remaining = new _M0TPB8MutLocalGiE(len);
-  return _M0MPB4Iter3newGUsRPB5ArrayGiEEE(() => {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
     _L: {
       if (remaining.val > 0) {
         const _bind = curr_entry.val;
@@ -5056,11 +5225,11 @@ function _M0MPB3Map5iter2GssE(self) {
 function _M0MPB3Map5iter2GsuE(self) {
   return _M0MPB3Map4iterGsuE(self);
 }
-function _M0MPB3Map4keysGsRPC14json4JsonE(self) {
-  const curr_entry = new _M0TPB8MutLocalGORPB5EntryGsRPC14json4JsonEE(self.head);
+function _M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(self) {
+  const curr_entry = new _M0TPB8MutLocalGORPB5EntryGsRP39stillfail5rules4lock12PersonDeviceEE(self.head);
   const len = self.size;
   const remaining = new _M0TPB8MutLocalGiE(len);
-  return _M0MPB4Iter3newGUsRPB5ArrayGiEEE(() => {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
     _L: {
       if (remaining.val > 0) {
         const _bind = curr_entry.val;
@@ -5086,7 +5255,7 @@ function _M0MPB3Map4keysGsuE(self) {
   const curr_entry = new _M0TPB8MutLocalGORPB5EntryGsuEE(self.head);
   const len = self.size;
   const remaining = new _M0TPB8MutLocalGiE(len);
-  return _M0MPB4Iter3newGUsRPB5ArrayGiEEE(() => {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
     _L: {
       if (remaining.val > 0) {
         const _bind = curr_entry.val;
@@ -5112,7 +5281,7 @@ function _M0MPB3Map6valuesGsRP39stillfail5rules4lock12PersonDeviceE(self) {
   const curr_entry = new _M0TPB8MutLocalGORPB5EntryGsRP39stillfail5rules4lock12PersonDeviceEE(self.head);
   const len = self.size;
   const remaining = new _M0TPB8MutLocalGiE(len);
-  return _M0MPB4Iter3newGUsRPB5ArrayGiEEE(() => {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
     _L: {
       if (remaining.val > 0) {
         const _bind = curr_entry.val;
@@ -5157,11 +5326,28 @@ function _M0IPB3MapPB2Eq5equalGsRPC14json4JsonE(self, that) {
     return false;
   }
 }
+function _M0MPB4Iter6filterGsE(self, f) {
+  return _M0MPB4Iter3newGUsRP39stillfail5rules4lock9PersonWebEE(() => {
+    while (true) {
+      const _bind = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(self);
+      if (_bind === undefined) {
+        return undefined;
+      } else {
+        const _Some = _bind;
+        const _x = _Some;
+        if (f(_x)) {
+          return _x;
+        }
+        continue;
+      }
+    }
+  }, undefined);
+}
 function _M0MPB5Iter24nextGssE(self) {
-  return _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(self);
+  return _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(self);
 }
 function _M0MPB5Iter24nextGsuE(self) {
-  return _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(self);
+  return _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(self);
 }
 function _M0IPC16string6StringPB4Hash4hash(self) {
   let acc = (_M0FPB4seed__drawn() >>> 0) + (374761393 >>> 0) | 0;
@@ -5300,7 +5486,7 @@ function _M0FPB19fixed__bubble__sortGsE(arr) {
     }
   }
 }
-function _M0FPB20fixed__choose__pivotN7sort__2S3929GsE(_env, a, b) {
+function _M0FPB20fixed__choose__pivotN7sort__2S4174GsE(_env, a, b) {
   const arr = _env._1;
   const swaps = _env._0;
   if (_M0IP016_24default__implPB7Compare6op__gtGsE(arr.buf[arr.start + a | 0], arr.buf[arr.start + b | 0])) {
@@ -5311,10 +5497,10 @@ function _M0FPB20fixed__choose__pivotN7sort__2S3929GsE(_env, a, b) {
     return;
   }
 }
-function _M0FPB20fixed__choose__pivotN7sort__3S3930GsE(_env, a, b, c) {
-  _M0FPB20fixed__choose__pivotN7sort__2S3929GsE(_env, a, b);
-  _M0FPB20fixed__choose__pivotN7sort__2S3929GsE(_env, b, c);
-  _M0FPB20fixed__choose__pivotN7sort__2S3929GsE(_env, a, b);
+function _M0FPB20fixed__choose__pivotN7sort__3S4175GsE(_env, a, b, c) {
+  _M0FPB20fixed__choose__pivotN7sort__2S4174GsE(_env, a, b);
+  _M0FPB20fixed__choose__pivotN7sort__2S4174GsE(_env, b, c);
+  _M0FPB20fixed__choose__pivotN7sort__2S4174GsE(_env, a, b);
 }
 function _M0FPB20fixed__choose__pivotGsE(arr) {
   const len = arr.end - arr.start | 0;
@@ -5325,11 +5511,11 @@ function _M0FPB20fixed__choose__pivotGsE(arr) {
     const c = Math.imul(len / 4 | 0, 3) | 0;
     const _env = { _0: swaps, _1: arr };
     if (len > 50) {
-      _M0FPB20fixed__choose__pivotN7sort__3S3930GsE(_env, a - 1 | 0, a, a + 1 | 0);
-      _M0FPB20fixed__choose__pivotN7sort__3S3930GsE(_env, b - 1 | 0, b, b + 1 | 0);
-      _M0FPB20fixed__choose__pivotN7sort__3S3930GsE(_env, c - 1 | 0, c, c + 1 | 0);
+      _M0FPB20fixed__choose__pivotN7sort__3S4175GsE(_env, a - 1 | 0, a, a + 1 | 0);
+      _M0FPB20fixed__choose__pivotN7sort__3S4175GsE(_env, b - 1 | 0, b, b + 1 | 0);
+      _M0FPB20fixed__choose__pivotN7sort__3S4175GsE(_env, c - 1 | 0, c, c + 1 | 0);
     }
-    _M0FPB20fixed__choose__pivotN7sort__3S3930GsE(_env, a, b, c);
+    _M0FPB20fixed__choose__pivotN7sort__3S4175GsE(_env, a, b, c);
   }
   if (swaps.val === 12) {
     _M0MPC15array12MutArrayView14rev__in__placeGUssEE(arr);
@@ -5599,7 +5785,7 @@ function _M0FPB23fixed__bubble__sort__byGiE(arr, cmp) {
     }
   }
 }
-function _M0FPB24fixed__choose__pivot__byN7sort__2S4042GUssEE(_env, a, b) {
+function _M0FPB24fixed__choose__pivot__byN7sort__2S4287GUssEE(_env, a, b) {
   const swaps = _env._2;
   const cmp = _env._1;
   const arr = _env._0;
@@ -5611,12 +5797,12 @@ function _M0FPB24fixed__choose__pivot__byN7sort__2S4042GUssEE(_env, a, b) {
     return;
   }
 }
-function _M0FPB24fixed__choose__pivot__byN7sort__3S4043GUssEE(_env, a, b, c) {
-  _M0FPB24fixed__choose__pivot__byN7sort__2S4042GUssEE(_env, a, b);
-  _M0FPB24fixed__choose__pivot__byN7sort__2S4042GUssEE(_env, b, c);
-  _M0FPB24fixed__choose__pivot__byN7sort__2S4042GUssEE(_env, a, b);
+function _M0FPB24fixed__choose__pivot__byN7sort__3S4288GUssEE(_env, a, b, c) {
+  _M0FPB24fixed__choose__pivot__byN7sort__2S4287GUssEE(_env, a, b);
+  _M0FPB24fixed__choose__pivot__byN7sort__2S4287GUssEE(_env, b, c);
+  _M0FPB24fixed__choose__pivot__byN7sort__2S4287GUssEE(_env, a, b);
 }
-function _M0FPB24fixed__choose__pivot__byN7sort__2S4082GiE(_env, a, b) {
+function _M0FPB24fixed__choose__pivot__byN7sort__2S4327GiE(_env, a, b) {
   const swaps = _env._2;
   const cmp = _env._1;
   const arr = _env._0;
@@ -5628,10 +5814,10 @@ function _M0FPB24fixed__choose__pivot__byN7sort__2S4082GiE(_env, a, b) {
     return;
   }
 }
-function _M0FPB24fixed__choose__pivot__byN7sort__3S4083GiE(_env, a, b, c) {
-  _M0FPB24fixed__choose__pivot__byN7sort__2S4082GiE(_env, a, b);
-  _M0FPB24fixed__choose__pivot__byN7sort__2S4082GiE(_env, b, c);
-  _M0FPB24fixed__choose__pivot__byN7sort__2S4082GiE(_env, a, b);
+function _M0FPB24fixed__choose__pivot__byN7sort__3S4328GiE(_env, a, b, c) {
+  _M0FPB24fixed__choose__pivot__byN7sort__2S4327GiE(_env, a, b);
+  _M0FPB24fixed__choose__pivot__byN7sort__2S4327GiE(_env, b, c);
+  _M0FPB24fixed__choose__pivot__byN7sort__2S4327GiE(_env, a, b);
 }
 function _M0FPB24fixed__choose__pivot__byGUssEE(arr, cmp) {
   const len = arr.end - arr.start | 0;
@@ -5642,11 +5828,11 @@ function _M0FPB24fixed__choose__pivot__byGUssEE(arr, cmp) {
     const c = Math.imul(len / 4 | 0, 3) | 0;
     const _env = { _0: arr, _1: cmp, _2: swaps };
     if (len > 50) {
-      _M0FPB24fixed__choose__pivot__byN7sort__3S4043GUssEE(_env, a - 1 | 0, a, a + 1 | 0);
-      _M0FPB24fixed__choose__pivot__byN7sort__3S4043GUssEE(_env, b - 1 | 0, b, b + 1 | 0);
-      _M0FPB24fixed__choose__pivot__byN7sort__3S4043GUssEE(_env, c - 1 | 0, c, c + 1 | 0);
+      _M0FPB24fixed__choose__pivot__byN7sort__3S4288GUssEE(_env, a - 1 | 0, a, a + 1 | 0);
+      _M0FPB24fixed__choose__pivot__byN7sort__3S4288GUssEE(_env, b - 1 | 0, b, b + 1 | 0);
+      _M0FPB24fixed__choose__pivot__byN7sort__3S4288GUssEE(_env, c - 1 | 0, c, c + 1 | 0);
     }
-    _M0FPB24fixed__choose__pivot__byN7sort__3S4043GUssEE(_env, a, b, c);
+    _M0FPB24fixed__choose__pivot__byN7sort__3S4288GUssEE(_env, a, b, c);
   }
   if (swaps.val === 12) {
     _M0MPC15array12MutArrayView14rev__in__placeGUssEE(arr);
@@ -5664,11 +5850,11 @@ function _M0FPB24fixed__choose__pivot__byGiE(arr, cmp) {
     const c = Math.imul(len / 4 | 0, 3) | 0;
     const _env = { _0: arr, _1: cmp, _2: swaps };
     if (len > 50) {
-      _M0FPB24fixed__choose__pivot__byN7sort__3S4083GiE(_env, a - 1 | 0, a, a + 1 | 0);
-      _M0FPB24fixed__choose__pivot__byN7sort__3S4083GiE(_env, b - 1 | 0, b, b + 1 | 0);
-      _M0FPB24fixed__choose__pivot__byN7sort__3S4083GiE(_env, c - 1 | 0, c, c + 1 | 0);
+      _M0FPB24fixed__choose__pivot__byN7sort__3S4328GiE(_env, a - 1 | 0, a, a + 1 | 0);
+      _M0FPB24fixed__choose__pivot__byN7sort__3S4328GiE(_env, b - 1 | 0, b, b + 1 | 0);
+      _M0FPB24fixed__choose__pivot__byN7sort__3S4328GiE(_env, c - 1 | 0, c, c + 1 | 0);
     }
-    _M0FPB24fixed__choose__pivot__byN7sort__3S4083GiE(_env, a, b, c);
+    _M0FPB24fixed__choose__pivot__byN7sort__3S4328GiE(_env, a, b, c);
   }
   if (swaps.val === 12) {
     _M0MPC15array12MutArrayView14rev__in__placeGiE(arr);
@@ -6119,10 +6305,10 @@ function _M0MPC15array5Array12unsafe__blitGsE(dst, dst_offset, src, src_offset, 
   _M0MPC15array10FixedArray12unsafe__blitGRPB17UnsafeMaybeUninitGRPC16string10StringViewEE(dst.buf, dst_offset, src.buf, src_offset, len);
 }
 function _M0MPC15array5Array17reserve__capacityGsE(self, capacity) {
-  if (_M0MPC15array5Array8capacityGUsRPC14json4JsonEE(self) >= capacity) {
+  if (_M0MPC15array5Array8capacityGRP39stillfail5rules4lock4StmtE(self) >= capacity) {
     return undefined;
   }
-  _M0MPC15array5Array14resize__bufferGUsRPC14json4JsonEE(self, capacity);
+  _M0MPC15array5Array14resize__bufferGRP39stillfail5rules4lock4StmtE(self, capacity);
 }
 function _M0MPC15array5Array3popGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(self) {
   const len = self.len;
@@ -6140,7 +6326,7 @@ function _M0MPC15array5Array4copyGsE(self) {
   if (len === 0) {
     return new _M0TPB5ArrayGsE([], 0);
   }
-  const arr = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(len);
+  const arr = _M0MPC15array5Array20unsafe__make__uninitGUssEE(len);
   _M0MPC15array5Array12unsafe__blitGsE(arr, 0, self, 0, len);
   return arr;
 }
@@ -6193,13 +6379,13 @@ function _M0MPC15array5Array10push__iterGsE(self, iter) {
     _M0MPC15array5Array17reserve__capacityGsE(self, self.len + _n | 0);
   }
   while (true) {
-    const _bind$2 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(iter);
+    const _bind$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(iter);
     if (_bind$2 === undefined) {
       return;
     } else {
       const _Some = _bind$2;
       const _x = _Some;
-      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(self, _x);
+      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(self, _x);
       continue;
     }
   }
@@ -6277,7 +6463,7 @@ function _M0FP39stillfail5rules4fork5ahead(wa, ra, ta, ha, wb, rb, tb, hb) {
   return wa > wb ? true : wa < wb ? false : ra && !rb ? true : rb && !ra ? false : ta < tb ? true : ta > tb ? false : ha < hb;
 }
 function _M0FP39stillfail5rules4fork4step(wa, ra, ta, ha, wb, rb, tb, hb) {
-  return !_M0FP39stillfail5rules4fork5ahead(wa, ra, ta, ha, wb, rb, tb, hb) ? undefined : wa !== wb ? _M0FP39stillfail5rules4fork4stepN6constrS4758 : !(ra === rb) ? _M0FP39stillfail5rules4fork4stepN6constrS4759 : ta !== tb ? _M0FP39stillfail5rules4fork4stepN6constrS4760 : _M0FP39stillfail5rules4fork4stepN6constrS4761;
+  return !_M0FP39stillfail5rules4fork5ahead(wa, ra, ta, ha, wb, rb, tb, hb) ? undefined : wa !== wb ? _M0FP39stillfail5rules4fork4stepN6constrS5020 : !(ra === rb) ? _M0FP39stillfail5rules4fork4stepN6constrS5021 : ta !== tb ? _M0FP39stillfail5rules4fork4stepN6constrS5022 : _M0FP39stillfail5rules4fork4stepN6constrS5023;
 }
 function _M0FP39stillfail5rules4fork4best(ws, rs, ts, hs) {
   let b = 0;
@@ -6480,7 +6666,7 @@ function _M0FP39stillfail5rules4form5write(b, v) {
     default: {
       const _Object = v;
       const _m = _Object._0;
-      const keys = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRPC14json4JsonE(_m));
+      const keys = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(_m));
       _M0MPC15array5Array8sort__byGUssEE(keys, _M0FP39stillfail5rules4form11code__units);
       _M0IPB13StringBuilderPB6Logger11write__char(b, 123);
       const _bind$3 = keys.len;
@@ -6637,28 +6823,6 @@ function _M0FP39stillfail5rules4role9admission(found, theirs, live, member) {
 function _M0FP39stillfail5rules4role13device__signs(app, holds, own, member) {
   return !app ? false : !holds ? false : !own ? false : member;
 }
-function _M0FP39stillfail5rules4lock11role__named(s) {
-  switch (s) {
-    case "owner": {
-      return 3;
-    }
-    case "admin": {
-      return 2;
-    }
-    case "member": {
-      return 1;
-    }
-    default: {
-      return 0;
-    }
-  }
-}
-function _M0FP39stillfail5rules4lock8rank__of(role) {
-  return _M0FP39stillfail5rules4role4rank(_M0FP39stillfail5rules4lock11role__named(role));
-}
-function _M0FP39stillfail5rules4lock3mgr(role) {
-  return _M0IPC16option6OptionPB2Eq5equalGsE(role, _M0FP39stillfail5rules4lock3mgrN6constrS4912) || _M0IPC16option6OptionPB2Eq5equalGsE(role, _M0FP39stillfail5rules4lock3mgrN6constrS4913);
-}
 function _M0FP39stillfail5rules4lock3arr(v) {
   _L: {
     if (v === undefined) {
@@ -6676,12 +6840,12 @@ function _M0FP39stillfail5rules4lock3arr(v) {
   }
   return new _M0TPB5ArrayGRPC14json4JsonE([], 0);
 }
-function _M0FP39stillfail5rules4lock11entry__hash(e, c) {
+function _M0FP39stillfail5rules4lock10body__hash(b, c) {
   let text;
   let _try_err;
   _L: {
     _L$2: {
-      const _bind = _M0FP39stillfail5rules4form11entry__text(e);
+      const _bind = _M0FP39stillfail5rules4form9canonical(b);
       if (_bind.$tag === 1) {
         const _ok = _bind;
         text = _ok._0;
@@ -6715,6 +6879,329 @@ function _M0FP39stillfail5rules4lock5field(v, k) {
     }
   }
   return undefined;
+}
+function _M0FP39stillfail5rules4lock9is__hex32(s) {
+  if (s.length !== 64) {
+    return false;
+  }
+  let _tmp = 0;
+  while (true) {
+    const i = _tmp;
+    if (i < 64) {
+      const c = i >>> 0 < s.length ? s.charCodeAt(i) : $oob();
+      if (!(c >= 48 && c <= 57 || c >= 97 && c <= 102)) {
+        return false;
+      }
+      _tmp = i + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return true;
+}
+function _M0FP39stillfail5rules4lock6is__id(v) {
+  if (v === undefined) {
+    return false;
+  } else {
+    const _Some = v;
+    const _x = _Some;
+    if (_x.$tag === 4) {
+      const _String = _x;
+      const _s = _String._0;
+      return _M0FP39stillfail5rules4lock9is__hex32(_s);
+    } else {
+      return false;
+    }
+  }
+}
+function _M0FP39stillfail5rules4lock8is__role(v) {
+  if (v === undefined) {
+    return false;
+  } else {
+    const _Some = v;
+    const _x = _Some;
+    if (_x.$tag === 4) {
+      const _String = _x;
+      const _x$2 = _String._0;
+      switch (_x$2) {
+        case "owner": {
+          return true;
+        }
+        case "admin": {
+          return true;
+        }
+        case "member": {
+          return true;
+        }
+        case "viewer": {
+          return true;
+        }
+        default: {
+          return false;
+        }
+      }
+    } else {
+      return false;
+    }
+  }
+}
+function _M0FP39stillfail5rules4lock8is__salt(v) {
+  if (v === undefined) {
+    return false;
+  } else {
+    const _Some = v;
+    const _x = _Some;
+    if (_x.$tag === 4) {
+      const _String = _x;
+      const _s = _String._0;
+      if (_s.length === 32) {
+        let _tmp = 0;
+        while (true) {
+          const i = _tmp;
+          if (i < 32) {
+            const c = i >>> 0 < _s.length ? _s.charCodeAt(i) : $oob();
+            if (!(c >= 48 && c <= 57 || c >= 97 && c <= 102)) {
+              return false;
+            }
+            _tmp = i + 1 | 0;
+            continue;
+          } else {
+            break;
+          }
+        }
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+}
+function _M0FP39stillfail5rules4lock8text__of(v) {
+  _L: {
+    if (v === undefined) {
+      break _L;
+    } else {
+      const _Some = v;
+      const _x = _Some;
+      if (_x.$tag === 4) {
+        const _String = _x;
+        const _s = _String._0;
+        return _s;
+      } else {
+        break _L;
+      }
+    }
+  }
+  return undefined;
+}
+function _M0FP39stillfail5rules4lock9body__whyN4onlyS5219(keys, want) {
+  if (keys.len === want.len) {
+    const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(want);
+    let _tmp;
+    while (true) {
+      const _p$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p);
+      if (_p$2 === undefined) {
+        _tmp = true;
+        break;
+      } else {
+        const _p$3 = _p$2;
+        const _p$4 = _p$3;
+        if (_M0MPC15array5Array8containsGsE(keys, _p$4)) {
+        } else {
+          _tmp = false;
+          break;
+        }
+        continue;
+      }
+    }
+    return _tmp;
+  } else {
+    return false;
+  }
+}
+function _M0FP39stillfail5rules4lock9body__whyN5hexesS5220(x) {
+  if (x === undefined) {
+    return false;
+  } else {
+    const _Some = x;
+    const _x = _Some;
+    if (_x.$tag === 5) {
+      const _Array = _x;
+      const _xs = _Array._0;
+      const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_xs);
+      while (true) {
+        const _p$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p);
+        if (_p$2 === undefined) {
+          return true;
+        } else {
+          const _p$3 = _p$2;
+          const _p$4 = _p$3;
+          if (_M0FP39stillfail5rules4lock6is__id(_p$4)) {
+          } else {
+            return false;
+          }
+          continue;
+        }
+      }
+    } else {
+      return false;
+    }
+  }
+}
+function _M0FP39stillfail5rules4lock9body__whyN5namedS5221(v, k) {
+  const _bind = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, k));
+  return !(_bind === undefined);
+}
+function _M0FP39stillfail5rules4lock9body__why(b) {
+  const v = b;
+  let m;
+  if (b.$tag === 6) {
+    const _Object = b;
+    m = _Object._0;
+  } else {
+    return _M0FP39stillfail5rules4lock9body__whyN6constrS5222;
+  }
+  _L: {
+    const _bind = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws"));
+    if (_bind === undefined) {
+      break _L;
+    } else {
+      if (_M0FP39stillfail5rules4lock8is__salt(_M0FP39stillfail5rules4lock5field(v, "salt"))) {
+        _L$2: {
+          _L$3: {
+            const _bind$2 = _M0MPB3Map3getGsRPC14json4JsonE(m, "prev");
+            if (_bind$2 === undefined) {
+              break _L$3;
+            } else {
+              const _Some = _bind$2;
+              const _x = _Some;
+              switch (_x.$tag) {
+                case 0: {
+                  break;
+                }
+                case 4: {
+                  const _String = _x;
+                  const _s = _String._0;
+                  if (_M0FP39stillfail5rules4lock9is__hex32(_s)) {
+                  } else {
+                    break _L$3;
+                  }
+                  break;
+                }
+                default: {
+                  break _L$3;
+                }
+              }
+            }
+            break _L$2;
+          }
+          return _M0FP39stillfail5rules4lock9body__whyN6constrS5224;
+        }
+        const keys = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter6filterGsE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(m), (k) => {
+          const _p = "prev";
+          return !(k === _p);
+        }));
+        _L$3: {
+          const _bind$2 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "kind"));
+          if (_bind$2 === undefined) {
+            break _L$3;
+          } else {
+            const _Some = _bind$2;
+            const _x = _Some;
+            switch (_x) {
+              case "member": {
+                return _M0FP39stillfail5rules4lock9body__whyN4onlyS5219(keys, new _M0TPB5ArrayGsE(["email", "kind", "lock", "role", "salt", "sub", "ws"], 7)) && (_M0FP39stillfail5rules4lock9body__whyN5namedS5221(v, "sub") && (_M0FP39stillfail5rules4lock9body__whyN5namedS5221(v, "email") && (_M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(v, "lock")) && _M0FP39stillfail5rules4lock8is__role(_M0FP39stillfail5rules4lock5field(v, "role"))))) ? undefined : _M0FP39stillfail5rules4lock9body__whyN6constrS5226;
+              }
+              case "member.remove": {
+                return _M0FP39stillfail5rules4lock9body__whyN4onlyS5219(keys, new _M0TPB5ArrayGsE(["cancels", "kind", "salt", "sub", "ws"], 5)) && (_M0FP39stillfail5rules4lock9body__whyN5namedS5221(v, "sub") && _M0FP39stillfail5rules4lock9body__whyN5hexesS5220(_M0FP39stillfail5rules4lock5field(v, "cancels"))) ? undefined : _M0FP39stillfail5rules4lock9body__whyN6constrS5227;
+              }
+              case "station": {
+                return _M0FP39stillfail5rules4lock9body__whyN4onlyS5219(keys, new _M0TPB5ArrayGsE(["key", "kind", "salt", "ws"], 4)) && _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(v, "key")) ? undefined : _M0FP39stillfail5rules4lock9body__whyN6constrS5228;
+              }
+              case "station.remove": {
+                return _M0FP39stillfail5rules4lock9body__whyN4onlyS5219(keys, new _M0TPB5ArrayGsE(["cancels", "key", "kind", "salt", "ws"], 5)) && (_M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(v, "key")) && _M0FP39stillfail5rules4lock9body__whyN5hexesS5220(_M0FP39stillfail5rules4lock5field(v, "cancels"))) ? undefined : _M0FP39stillfail5rules4lock9body__whyN6constrS5229;
+              }
+              case "open": {
+                const _bind$3 = _M0FP39stillfail5rules4lock5field(v, "origins");
+                let origins;
+                if (_bind$3 === undefined) {
+                  origins = false;
+                } else {
+                  const _Some$2 = _bind$3;
+                  const _x$2 = _Some$2;
+                  if (_x$2.$tag === 5) {
+                    const _Array = _x$2;
+                    const _xs = _Array._0;
+                    const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_xs);
+                    while (true) {
+                      const _p$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p);
+                      if (_p$2 === undefined) {
+                        origins = true;
+                        break;
+                      } else {
+                        const _p$3 = _p$2;
+                        const _p$4 = _p$3;
+                        let _tmp;
+                        if (_p$4.$tag === 4) {
+                          _tmp = true;
+                        } else {
+                          _tmp = false;
+                        }
+                        if (_tmp) {
+                        } else {
+                          origins = false;
+                          break;
+                        }
+                        continue;
+                      }
+                    }
+                  } else {
+                    origins = false;
+                  }
+                }
+                return _M0FP39stillfail5rules4lock9body__whyN4onlyS5219(keys, new _M0TPB5ArrayGsE(["cloud_keys", "email", "kind", "origins", "rp_id", "salt", "ws"], 7)) && (_M0FP39stillfail5rules4lock9body__whyN5namedS5221(v, "email") && (origins && _M0FP39stillfail5rules4lock9body__whyN5namedS5221(v, "rp_id"))) ? undefined : _M0FP39stillfail5rules4lock9body__whyN6constrS5230;
+              }
+              case "off": {
+                return _M0FP39stillfail5rules4lock9body__whyN4onlyS5219(keys, new _M0TPB5ArrayGsE(["kind", "salt", "ws"], 3)) ? undefined : _M0FP39stillfail5rules4lock9body__whyN6constrS5231;
+              }
+              default: {
+                break _L$3;
+              }
+            }
+          }
+        }
+        return _M0FP39stillfail5rules4lock9body__whyN6constrS5225;
+      } else {
+        break _L;
+      }
+    }
+  }
+  return _M0FP39stillfail5rules4lock9body__whyN6constrS5223;
+}
+function _M0FP39stillfail5rules4lock11entry__hash(e, c) {
+  let text;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FP39stillfail5rules4form11entry__text(e);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        text = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    const _Invalid = _try_err;
+    const _why = _Invalid._0;
+    return new _M0DTPC16result6ResultGsRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused(_why));
+  }
+  return new _M0DTPC16result6ResultGsRP39stillfail5rules4lock9LockErrorE2Ok(c.method_table.method_0(c.self, text));
 }
 function _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock12PersonDeviceE(m) {
   const _bind = [];
@@ -6868,43 +7355,24 @@ function _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock7PasskeyE(m) 
   }
   return out;
 }
-function _M0FP39stillfail5rules4lock9is__hex32(s) {
-  if (s.length !== 64) {
-    return false;
-  }
-  let _tmp = 0;
+function _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock9PersonWebE(m) {
+  const _bind = [];
+  const out = _M0MPB3Map3MapGsRP39stillfail5rules4lock9PersonWebE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock9PersonWebEE(_bind, 0, 0), undefined);
+  const _it = _M0MPB3Map5iter2GssE(m);
   while (true) {
-    const i = _tmp;
-    if (i < 64) {
-      const c = i >>> 0 < s.length ? s.charCodeAt(i) : $oob();
-      if (!(c >= 48 && c <= 57 || c >= 97 && c <= 102)) {
-        return false;
-      }
-      _tmp = i + 1 | 0;
-      continue;
-    } else {
+    const _bind$2 = _M0MPB5Iter24nextGssE(_it);
+    if (_bind$2 === undefined) {
       break;
-    }
-  }
-  return true;
-}
-function _M0FP39stillfail5rules4lock8text__of(v) {
-  _L: {
-    if (v === undefined) {
-      break _L;
     } else {
-      const _Some = v;
+      const _Some = _bind$2;
       const _x = _Some;
-      if (_x.$tag === 4) {
-        const _String = _x;
-        const _s = _String._0;
-        return _s;
-      } else {
-        break _L;
-      }
+      const _k = _x._0;
+      const _v = _x._1;
+      _M0MPB3Map3setGsRP39stillfail5rules4lock9PersonWebE(out, _k, _v);
+      continue;
     }
   }
-  return undefined;
+  return out;
 }
 function _M0FP39stillfail5rules4lock14person__device(v, c) {
   _L: {
@@ -6926,7 +7394,7 @@ function _M0FP39stillfail5rules4lock14person__device(v, c) {
         } else {
           const _Some$3 = _bind$3;
           const _label = _Some$3;
-          if (_M0MPC16string6String11has__prefix(_key, _M0FP39stillfail5rules4lock14person__deviceN6recordS5024) && (c.method_table.method_2(c.self, _key) && _M0FP39stillfail5rules4lock9is__hex32(_id))) {
+          if (_M0MPC16string6String11has__prefix(_key, _M0FP39stillfail5rules4lock14person__deviceN6recordS5366) && (c.method_table.method_2(c.self, _key) && _M0FP39stillfail5rules4lock9is__hex32(_id))) {
             return new _M0DTPC16result6ResultGRP39stillfail5rules4lock12PersonDeviceRP39stillfail5rules4lock9LockErrorE2Ok(new _M0TP39stillfail5rules4lock12PersonDevice(_key, _id, _label));
           } else {
             return new _M0DTPC16result6ResultGRP39stillfail5rules4lock12PersonDeviceRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a person's device signs with an ed25519 key, and goes by its base key"));
@@ -6983,99 +7451,34 @@ function _M0FP39stillfail5rules4lock8sig__key(e) {
 function _M0FP39stillfail5rules4lock7sig__of(e) {
   return _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock5field(e, "sig"), _M0DTPC14json4Json4Null__);
 }
-function _M0FP39stillfail5rules4lock6is__id(v) {
-  if (v === undefined) {
-    return false;
-  } else {
-    const _Some = v;
-    const _x = _Some;
-    if (_x.$tag === 4) {
-      const _String = _x;
-      const _s = _String._0;
-      return _M0FP39stillfail5rules4lock9is__hex32(_s);
-    } else {
-      return false;
-    }
-  }
-}
-function _M0FP39stillfail5rules4lock9statement(kind, b, held) {
-  if (held) {
-    const _bind = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "ws"));
-    if (_bind === undefined) {
-      return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a statement names its workspace"));
-    } else {
-      let named;
-      if (_M0MPC16string6String11has__prefix(kind, _M0FP39stillfail5rules4lock9statementN6recordS5057)) {
-        const _bind$2 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "sub"));
-        named = !(_bind$2 === undefined);
+function _M0FP39stillfail5rules4lock12person__stepN4onlyS5394(keys, want) {
+  if (keys.len === want.len) {
+    const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(want);
+    let _tmp;
+    while (true) {
+      const _p$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p);
+      if (_p$2 === undefined) {
+        _tmp = true;
+        break;
       } else {
-        named = _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "key"));
-      }
-      if (named) {
-        if (kind === "ws.member") {
-          const role = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "role"));
-          if (_M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "lock")) && (_M0IPC16option6OptionPB2Eq5equalGsE(role, _M0FP39stillfail5rules4lock9statementN6constrS5058) || (_M0IPC16option6OptionPB2Eq5equalGsE(role, _M0FP39stillfail5rules4lock9statementN6constrS5059) || _M0IPC16option6OptionPB2Eq5equalGsE(role, _M0FP39stillfail5rules4lock9statementN6constrS5060)))) {
-          } else {
-            return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("an admit names a lock and a role"));
-          }
-        }
-        if (_M0MPC16string6String11has__suffix(kind, _M0FP39stillfail5rules4lock9statementN6recordS5061)) {
-          _L: {
-            _L$2: {
-              const _bind$2 = _M0FP39stillfail5rules4lock5field(b, "cancels");
-              if (_bind$2 === undefined) {
-                break _L$2;
-              } else {
-                const _Some = _bind$2;
-                const _x = _Some;
-                if (_x.$tag === 5) {
-                  const _Array = _x;
-                  const _xs = _Array._0;
-                  const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_xs);
-                  let _tmp;
-                  while (true) {
-                    const _p$2 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p);
-                    if (_p$2 === undefined) {
-                      _tmp = true;
-                      break;
-                    } else {
-                      const _p$3 = _p$2;
-                      const _p$4 = _p$3;
-                      if (_M0FP39stillfail5rules4lock6is__id(_p$4)) {
-                      } else {
-                        _tmp = false;
-                        break;
-                      }
-                      continue;
-                    }
-                  }
-                  if (_tmp) {
-                    return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok(undefined);
-                  } else {
-                    break _L;
-                  }
-                } else {
-                  break _L$2;
-                }
-              }
-            }
-            break _L;
-          }
-          return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a removal names what it cancels"));
+        const _p$3 = _p$2;
+        const _p$4 = _p$3;
+        if (_M0MPC15array5Array8containsGsE(keys, _p$4)) {
         } else {
-          return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok(undefined);
+          _tmp = false;
+          break;
         }
-      } else {
-        return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a statement names whom it is about"));
+        continue;
       }
     }
+    return _tmp;
   } else {
-    return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device on the lock"));
+    return false;
   }
 }
-function _M0FP39stillfail5rules4lock12person__step(was, e, sub, statements, c) {
+function _M0FP39stillfail5rules4lock12person__step(was, e, sub, c) {
   const v = e;
-  if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock12person__stepN6constrS5077) && _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws")), `person:${sub}`)) {
+  if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock12person__stepN6constrS5395) && _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws")), `person:${sub}`)) {
     const _bind = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at"));
     if (_bind.$tag === 1) {
       const _bind$2 = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "seq"));
@@ -7135,6 +7538,15 @@ function _M0FP39stillfail5rules4lock12person__step(was, e, sub, statements, c) {
           const _w = _Some;
           devices = _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock12PersonDeviceE(_w.devices);
         }
+        let webs;
+        if (was === undefined) {
+          const _bind$4 = [];
+          webs = _M0MPB3Map3MapGsRP39stillfail5rules4lock9PersonWebE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock9PersonWebEE(_bind$4, 0, 0), undefined);
+        } else {
+          const _Some = was;
+          const _w = _Some;
+          webs = _w.webs;
+        }
         if (was === undefined) {
           if (kind === "genesis" && _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "sub")), sub)) {
             const _bind$4 = _M0FP39stillfail5rules4lock14person__device(_M0FP39stillfail5rules4lock5field(b, "device"), c);
@@ -7156,109 +7568,169 @@ function _M0FP39stillfail5rules4lock12person__step(was, e, sub, statements, c) {
         } else {
           _L: {
             _L$2: {
-              _L$3: {
-                _L$4: {
-                  switch (kind) {
-                    case "device": {
-                      const _p = _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, key);
-                      if (!!_p) {
-                        const _bind$4 = _M0FP39stillfail5rules4lock14person__device(b, c);
-                        let d;
-                        if (_bind$4.$tag === 1) {
-                          const _ok = _bind$4;
-                          d = _ok._0;
-                        } else {
-                          return _bind$4;
-                        }
-                        _M0MPB3Map3setGsRP39stillfail5rules4lock12PersonDeviceE(devices, d.key, d);
-                      } else {
-                        return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device on the lock"));
-                      }
-                      break;
+              switch (kind) {
+                case "device": {
+                  const _p = _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, key);
+                  if (!!_p) {
+                    const _bind$4 = _M0FP39stillfail5rules4lock14person__device(b, c);
+                    let d;
+                    if (_bind$4.$tag === 1) {
+                      const _ok = _bind$4;
+                      d = _ok._0;
+                    } else {
+                      return _bind$4;
                     }
-                    case "device.remove": {
-                      _L$5: {
-                        _L$6: {
-                          const _bind$4 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
-                          if (_bind$4 === undefined) {
-                            break _L$6;
-                          } else {
-                            const _Some = _bind$4;
-                            const _gone = _Some;
-                            if (_M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, _gone)) {
-                              const _p$2 = _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, key);
-                              const _p$3 = devices.size === 1;
-                              if (!_p$2 ? false : !_p$3) {
-                                _M0MPB3Map6removeGsRP39stillfail5rules4lock12PersonDeviceE(devices, _gone);
-                              } else {
-                                return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device on the lock, or its last"));
-                              }
-                            } else {
-                              break _L$6;
-                            }
-                          }
-                          break _L$5;
-                        }
-                        return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("no such device"));
-                      }
-                      break;
-                    }
-                    case "ws.member": {
-                      if (statements) {
-                        break _L$4;
-                      } else {
-                        break _L$2;
-                      }
-                    }
-                    case "ws.member.remove": {
-                      if (statements) {
-                        break _L$4;
-                      } else {
-                        break _L$2;
-                      }
-                    }
-                    case "ws.station": {
-                      if (statements) {
-                        break _L$4;
-                      } else {
-                        break _L$2;
-                      }
-                    }
-                    case "ws.station.remove": {
-                      if (statements) {
-                        break _L$4;
-                      } else {
-                        break _L$2;
-                      }
-                    }
-                    default: {
-                      break _L$2;
-                    }
+                    _M0MPB3Map3setGsRP39stillfail5rules4lock12PersonDeviceE(devices, d.key, d);
+                  } else {
+                    return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device on the lock"));
                   }
-                  break _L$3;
+                  break;
                 }
-                const _bind$4 = _M0FP39stillfail5rules4lock9statement(kind, b, _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, key));
-                if (_bind$4.$tag === 1) {
-                  const _ok = _bind$4;
-                  _ok._0;
-                } else {
-                  return _bind$4;
+                case "device.remove": {
+                  _L$3: {
+                    _L$4: {
+                      const _bind$4 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
+                      if (_bind$4 === undefined) {
+                        break _L$4;
+                      } else {
+                        const _Some = _bind$4;
+                        const _gone = _Some;
+                        if (_M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, _gone)) {
+                          const _p$2 = _M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, key);
+                          const _p$3 = devices.size === 1;
+                          if (!_p$2 ? false : !_p$3) {
+                            _M0MPB3Map6removeGsRP39stillfail5rules4lock12PersonDeviceE(devices, _gone);
+                          } else {
+                            return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device on the lock, or its last"));
+                          }
+                        } else {
+                          break _L$4;
+                        }
+                      }
+                      break _L$3;
+                    }
+                    return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("no such device"));
+                  }
+                  break;
+                }
+                case "ws": {
+                  break _L$2;
+                }
+                case "web": {
+                  break _L$2;
+                }
+                case "web.remove": {
+                  break _L$2;
+                }
+                default: {
+                  return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused(`unknown entry kind ${kind}`));
                 }
               }
               break _L;
             }
-            return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused(`unknown entry kind ${kind}`));
+            if (_M0MPB3Map8containsGsRP39stillfail5rules4lock12PersonDeviceE(devices, key)) {
+              let keys;
+              _L$3: {
+                _L$4: {
+                  if (b === undefined) {
+                    break _L$4;
+                  } else {
+                    const _Some = b;
+                    const _x = _Some;
+                    if (_x.$tag === 6) {
+                      const _Object = _x;
+                      const _m = _Object._0;
+                      keys = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(_m));
+                    } else {
+                      break _L$4;
+                    }
+                  }
+                  break _L$3;
+                }
+                keys = new _M0TPB5ArrayGsE([], 0);
+              }
+              if (kind === "ws") {
+                if (_M0FP39stillfail5rules4lock12person__stepN4onlyS5394(keys, new _M0TPB5ArrayGsE(["t", "h"], 2)) && (_M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "t")) && _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "h")))) {
+                } else {
+                  return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a statement is {t, h}"));
+                }
+              } else {
+                if (kind === "web") {
+                  _L$4: {
+                    _L$5: {
+                      if (_M0FP39stillfail5rules4lock12person__stepN4onlyS5394(keys, new _M0TPB5ArrayGsE(["id", "label", "exp"], 3))) {
+                        if (_M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "id"))) {
+                          const _bind$4 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "label"));
+                          if (_bind$4 === undefined) {
+                            break _L$5;
+                          } else {
+                            const _Some = _bind$4;
+                            const _label = _Some;
+                            const _bind$5 = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(b, "exp"));
+                            if (_bind$5.$tag === 1) {
+                              const _Some$2 = _bind$5;
+                              const _exp = _Some$2._0;
+                              const at = _M0MPC16option6Option6unwrapGdE(_M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at")));
+                              if (_exp <= at + 2678400) {
+                                webs = _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock9PersonWebE(webs);
+                                const _p = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "id"));
+                                let id;
+                                if (_p === undefined) {
+                                  id = $panic();
+                                } else {
+                                  const _p$2 = _p;
+                                  id = _p$2;
+                                }
+                                _M0MPB3Map3setGsRP39stillfail5rules4lock9PersonWebE(webs, id, new _M0TP39stillfail5rules4lock9PersonWeb(id, _label, at, _exp));
+                              } else {
+                                return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a web device lasts 31 days at most"));
+                              }
+                            } else {
+                              break _L$5;
+                            }
+                          }
+                        } else {
+                          break _L$5;
+                        }
+                      } else {
+                        break _L$5;
+                      }
+                      break _L$4;
+                    }
+                    return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a web device is {id, label, exp}"));
+                  }
+                } else {
+                  if (_M0FP39stillfail5rules4lock12person__stepN4onlyS5394(keys, new _M0TPB5ArrayGsE(["id"], 1)) && _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "id"))) {
+                    webs = _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock9PersonWebE(webs);
+                    const _tmp = webs;
+                    const _p = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "id"));
+                    let _tmp$2;
+                    if (_p === undefined) {
+                      _tmp$2 = $panic();
+                    } else {
+                      const _p$2 = _p;
+                      _tmp$2 = _p$2;
+                    }
+                    _M0MPB3Map6removeGsRP39stillfail5rules4lock9PersonWebE(_tmp, _tmp$2);
+                  } else {
+                    return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a web device is taken off by its id"));
+                  }
+                }
+              }
+            } else {
+              return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device on the lock"));
+            }
           }
         }
         if (!c.method_table.method_1(c.self, _M0FP39stillfail5rules4lock7sig__of(e), hash, new _M0TPB5ArrayGsE([], 0), "", false)) {
           return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("signature invalid"));
         }
         if (was === undefined) {
-          return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE2Ok(new _M0TP39stillfail5rules4lock6Person(sub, hash, hash, 0, devices));
+          return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE2Ok(new _M0TP39stillfail5rules4lock6Person(sub, hash, hash, 0, devices, webs));
         } else {
           const _Some = was;
           const _w = _Some;
-          return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE2Ok(new _M0TP39stillfail5rules4lock6Person(sub, _w.genesis, hash, _w.seq + 1, devices));
+          return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE2Ok(new _M0TP39stillfail5rules4lock6Person(sub, _w.genesis, hash, _w.seq + 1, devices, webs));
         }
       } else {
         return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("the entry does not follow this lock's head"));
@@ -7270,7 +7742,7 @@ function _M0FP39stillfail5rules4lock12person__step(was, e, sub, statements, c) {
     return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("an entry of another lock"));
   }
 }
-function _M0FP39stillfail5rules4lock16fold__person__of(entries, sub, statements, c) {
+function _M0FP39stillfail5rules4lock12fold__person(entries, sub, c) {
   if (entries.len === 0) {
     return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("no lock"));
   }
@@ -7282,7 +7754,7 @@ function _M0FP39stillfail5rules4lock16fold__person__of(entries, sub, statements,
     const _ = _tmp;
     if (_ < _bind) {
       const e = _bind$2[_];
-      const _bind$3 = _M0FP39stillfail5rules4lock12person__step(p, e, sub, statements, c);
+      const _bind$3 = _M0FP39stillfail5rules4lock12person__step(p, e, sub, c);
       let _tmp$2;
       if (_bind$3.$tag === 1) {
         const _ok = _bind$3;
@@ -7307,13 +7779,32 @@ function _M0FP39stillfail5rules4lock16fold__person__of(entries, sub, statements,
   }
   return new _M0DTPC16result6ResultGRP39stillfail5rules4lock6PersonRP39stillfail5rules4lock9LockErrorE2Ok(_tmp$2);
 }
-function _M0FP39stillfail5rules4lock16fold__person__ws(entries, sub, c) {
-  return _M0FP39stillfail5rules4lock16fold__person__of(entries, sub, true, c);
+function _M0FP39stillfail5rules4lock3mgr(role) {
+  return _M0IPC16option6OptionPB2Eq5equalGsE(role, _M0FP39stillfail5rules4lock3mgrN6constrS5462) || _M0IPC16option6OptionPB2Eq5equalGsE(role, _M0FP39stillfail5rules4lock3mgrN6constrS5463);
 }
-function _M0FP39stillfail5rules4lock6rosterN3txtS5128(s, k) {
+function _M0FP39stillfail5rules4lock11role__named(s) {
+  switch (s) {
+    case "owner": {
+      return 3;
+    }
+    case "admin": {
+      return 2;
+    }
+    case "member": {
+      return 1;
+    }
+    default: {
+      return 0;
+    }
+  }
+}
+function _M0FP39stillfail5rules4lock8rank__of(role) {
+  return _M0FP39stillfail5rules4role4rank(_M0FP39stillfail5rules4lock11role__named(role));
+}
+function _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(s, k) {
   return _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(s.body, k)), "");
 }
-function _M0FP39stillfail5rules4lock6rosterN3argS5130(attackers, id) {
+function _M0FP39stillfail5rules4lock10roster__ofN3argS5472(attackers, id) {
   const _bind = _M0MPB3Map3getGsRPB5ArrayGsEE(attackers, id);
   if (_bind === undefined) {
     const xs = new _M0TPB5ArrayGsE([], 0);
@@ -7324,28 +7815,28 @@ function _M0FP39stillfail5rules4lock6rosterN3argS5130(attackers, id) {
     return _Some;
   }
 }
-function _M0FP39stillfail5rules4lock6rosterN4lackS5131(_env, s, role) {
+function _M0FP39stillfail5rules4lock10roster__ofN4lackS5473(_env, s, role) {
   const attackers = _env._1;
   const lacks = _env._0;
   const need = role === "owner" ? "owner" : "admin";
   const id = `n:${s.by}|${s.log}|${need}`;
-  _M0FP39stillfail5rules4lock6rosterN3argS5130(attackers, id);
+  _M0FP39stillfail5rules4lock10roster__ofN3argS5472(attackers, id);
   _M0MPB3Map3setGsUssEE(lacks, id, { _0: `${s.by}|${s.log}`, _1: need });
   return id;
 }
-function _M0FP39stillfail5rules4lock6rosterN6countsS5132(label, r, a) {
-  return _M0IPC16option6OptionPB2Eq5equalGsE(_M0MPB3Map3getGssE(label, `c:${r.hash}|${a.hash}`), _M0FP39stillfail5rules4lock6rosterN6constrS5139);
+function _M0FP39stillfail5rules4lock10roster__ofN6countsS5474(label, r, a) {
+  return _M0IPC16option6OptionPB2Eq5equalGsE(_M0MPB3Map3getGssE(label, `c:${r.hash}|${a.hash}`), _M0FP39stillfail5rules4lock10roster__ofN6constrS5483);
 }
-function _M0FP39stillfail5rules4lock6rosterN14role__of__pairS5133(pairs, s) {
+function _M0FP39stillfail5rules4lock10roster__ofN14role__of__pairS5475(pairs, s) {
   return _M0MPC16option6Option3mapGUsssEsE(_M0MPB3Map3getGsUsssEE(pairs, `${s.by}|${s.log}`), (p) => p._2);
 }
-function _M0FP39stillfail5rules4lock6rosterN15undecided__pairS5134(undecided, s) {
+function _M0FP39stillfail5rules4lock10roster__ofN15undecided__pairS5476(undecided, s) {
   return _M0MPB3Map8containsGsUssEE(undecided, `${s.by}|${s.log}`);
 }
-function _M0FP39stillfail5rules4lock6rosterN7not__inS5135(undecided, s) {
-  return _M0FP39stillfail5rules4lock6rosterN15undecided__pairS5134(undecided, s) ? "its signer is undecided (a circle of removals)" : "its signer is not in the list";
+function _M0FP39stillfail5rules4lock10roster__ofN7not__inS5477(undecided, s) {
+  return _M0FP39stillfail5rules4lock10roster__ofN15undecided__pairS5476(undecided, s) ? "its signer is undecided (a circle of removals)" : "its signer is not in the list";
 }
-function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
+function _M0FP39stillfail5rules4lock10roster__of(ws, root, chains, bodies, c) {
   const refused = new _M0TPB5ArrayGUssEE([], 0);
   const _bind = [];
   const logs = _M0MPB3Map3MapGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(new _M0TPB9ArrayViewGUsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEEE(_bind, 0, 0), undefined);
@@ -7398,7 +7889,7 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
             let _try_err;
             _L$4: {
               _L$5: {
-                const _bind$5 = _M0FP39stillfail5rules4lock16fold__person__ws(chain, sub, c);
+                const _bind$5 = _M0FP39stillfail5rules4lock12fold__person(chain, sub, c);
                 let _tmp$2;
                 if (_bind$5.$tag === 1) {
                   const _ok = _bind$5;
@@ -7433,7 +7924,7 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
             }
             break _L$2;
           }
-          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(refused, { _0: g, _1: why });
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(refused, { _0: g, _1: why });
           break _L;
         }
         const _bind$4 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, p.genesis);
@@ -7444,9 +7935,9 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
           const _x = _Some;
           const _q = _x._0;
           if (_q.seq > p.seq || _q.seq === p.seq && _M0IP016_24default__implPB7Compare6op__leGsE(_q.head, p.head)) {
-            _M0MPC15array5Array4pushGUsRPC14json4JsonEE(refused, { _0: p.genesis, _1: "another chain of the same log was taken" });
+            _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(refused, { _0: p.genesis, _1: "another chain of the same log was taken" });
           } else {
-            _M0MPC15array5Array4pushGUsRPC14json4JsonEE(refused, { _0: p.genesis, _1: "another chain of the same log was taken" });
+            _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(refused, { _0: p.genesis, _1: "another chain of the same log was taken" });
             _M0MPB3Map3setGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, p.genesis, { _0: p, _1: chain });
           }
         }
@@ -7459,150 +7950,252 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
     }
   }
   _M0MPC15array5Array8sort__byGUssEE(refused, (a, b) => _M0IPC15tuple6Tuple2PB7Compare7compareGssE(a, b));
-  const empty = new _M0TP39stillfail5rules4lock6Roster(false, new _M0TPB5ArrayGRP39stillfail5rules4lock5BoundE([], 0), new _M0TPB5ArrayGsE([], 0), new _M0TPB5ArrayGUsssEE([], 0), new _M0TPB5ArrayGUssEE([], 0), new _M0TPB5ArrayGsE([], 0), new _M0TPB5ArrayGRP39stillfail5rules4lock4SaidE([], 0), new _M0TPB5ArrayGUssEE([], 0), refused);
-  const _bind$4 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, root);
-  if (_bind$4 === undefined) {
-    return empty;
-  } else {
-    const _Some = _bind$4;
-    const _x = _Some;
-    const _root_person = _x._0;
-    const root_sub = _root_person.sub;
-    const root_pair = `${root_sub}|${root}`;
-    const stmts = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
-    const gs = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRPC14json4JsonE(logs));
-    _M0MPC15array5Array4sortGsE(gs);
-    const _bind$5 = gs.len;
-    const _bind$6 = gs.buf;
-    let _tmp$2 = 0;
-    while (true) {
-      const _ = _tmp$2;
-      if (_ < _bind$5) {
-        const g = _bind$6[_];
-        const _p = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, g);
-        let _bind$7;
-        if (_p === undefined) {
-          _bind$7 = $panic();
-        } else {
-          const _p$2 = _p;
-          _bind$7 = _p$2;
+  const _bind$4 = [];
+  const kept = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$4, 0, 0), undefined);
+  const _bind$5 = bodies.len;
+  const _bind$6 = bodies.buf;
+  let _tmp$2 = 0;
+  while (true) {
+    const _ = _tmp$2;
+    if (_ < _bind$5) {
+      const b = _bind$6[_];
+      const _bind$7 = _M0FP39stillfail5rules4lock9body__why(b);
+      if (_bind$7 === undefined) {
+        let _bind$8;
+        let _try_err;
+        _L: {
+          _L$2: {
+            const _bind$9 = _M0FP39stillfail5rules4lock10body__hash(b, c);
+            let _tmp$3;
+            if (_bind$9.$tag === 1) {
+              const _ok = _bind$9;
+              _tmp$3 = _ok._0;
+            } else {
+              const _err = _bind$9;
+              _try_err = _err._0;
+              break _L$2;
+            }
+            _bind$8 = new _M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE2Ok(_tmp$3);
+            break _L;
+          }
+          _bind$8 = new _M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE3Err(_try_err);
         }
-        const _p$2 = _bind$7._0;
-        const _chain = _bind$7._1;
-        const _bind$8 = _chain.len;
-        let _tmp$3 = 1;
-        while (true) {
-          const i = _tmp$3;
-          if (i < _bind$8) {
+        if (_bind$8.$tag === 1) {
+          const _Ok = _bind$8;
+          const _h = _Ok._0;
+          _M0MPB3Map3setGsRPC14json4JsonE(kept, _h, b);
+        }
+      }
+      _tmp$2 = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  const gs = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(logs));
+  _M0MPC15array5Array4sortGsE(gs);
+  const in_force = new _M0TPB5ArrayGUssRPC14json4JsonsEE([], 0);
+  const lacking = new _M0TPB5ArrayGsE([], 0);
+  const _bind$7 = gs.len;
+  const _bind$8 = gs.buf;
+  let _tmp$3 = 0;
+  while (true) {
+    const _ = _tmp$3;
+    if (_ < _bind$7) {
+      const g = _bind$8[_];
+      const _p = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, g);
+      let _bind$9;
+      if (_p === undefined) {
+        _bind$9 = $panic();
+      } else {
+        const _p$2 = _p;
+        _bind$9 = _p$2;
+      }
+      const _chain = _bind$9._1;
+      const t = c.method_table.method_0(c.self, `stillfail/ws-tag/1\n${ws}\n${g}`);
+      const _bind$10 = _chain.len;
+      let _tmp$4 = 1;
+      while (true) {
+        const i = _tmp$4;
+        if (i < _bind$10) {
+          _L: {
             if (i < 0 || i >= _chain.len) {
               $panic();
             }
             const e = _chain.buf[i];
-            const kind = _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(e, "kind")), "");
-            const b = _M0FP39stillfail5rules4lock5field(e, "body");
-            if (_M0MPC16string6String11has__prefix(kind, _M0FP39stillfail5rules4lock6rosterN6recordS5136) && _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "ws")), ws)) {
-              let _tmp$4;
+            if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(e, "kind")), _M0FP39stillfail5rules4lock10roster__ofN6constrS5478) && _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(e, "body"), "t")), t)) {
+              let x;
               let _try_err;
-              _L: {
-                _L$2: {
-                  const _bind$9 = _M0FP39stillfail5rules4lock11entry__hash(e, c);
-                  if (_bind$9.$tag === 1) {
-                    const _ok = _bind$9;
-                    _tmp$4 = _ok._0;
-                  } else {
-                    const _err = _bind$9;
-                    _try_err = _err._0;
-                    break _L$2;
+              _L$2: {
+                _L$3: {
+                  if (i < 0 || i >= _chain.len) {
+                    $panic();
                   }
-                  break _L;
+                  const _bind$11 = _M0FP39stillfail5rules4lock11entry__hash(_chain.buf[i], c);
+                  if (_bind$11.$tag === 1) {
+                    const _ok = _bind$11;
+                    x = _ok._0;
+                  } else {
+                    const _err = _bind$11;
+                    _try_err = _err._0;
+                    break _L$3;
+                  }
+                  break _L$2;
                 }
-                _tmp$4 = "";
+                break _L;
               }
-              _M0MPC15array5Array4pushGUsRPC14json4JsonEE(stmts, new _M0TP39stillfail5rules4lock4Stmt(_tmp$4, kind, b, g, _p$2.sub));
+              const hb = _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(e, "body"), "h")), "");
+              _L$3: {
+                _L$4: {
+                  const _bind$11 = _M0MPB3Map3getGsRPC14json4JsonE(kept, hb);
+                  if (_bind$11 === undefined) {
+                    break _L$4;
+                  } else {
+                    const _Some = _bind$11;
+                    const _b = _Some;
+                    if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_b, "ws")), ws)) {
+                      let _tmp$5;
+                      let _return_value;
+                      _L$5: {
+                        _L$6: {
+                          let p = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_b, "prev"));
+                          let n = 0;
+                          while (true) {
+                            const _bind$12 = p;
+                            if (_bind$12 === undefined) {
+                              break;
+                            } else {
+                              const _Some$2 = _bind$12;
+                              const _x = _Some$2;
+                              if (n < 10000) {
+                                const _bind$13 = _M0MPB3Map3getGsRPC14json4JsonE(kept, _x);
+                                if (_bind$13 === undefined) {
+                                  _return_value = false;
+                                  break _L$6;
+                                } else {
+                                  const _Some$3 = _bind$13;
+                                  const _q = _Some$3;
+                                  p = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_q, "prev"));
+                                }
+                                n = n + 1 | 0;
+                                continue;
+                              } else {
+                                break;
+                              }
+                            }
+                          }
+                          _tmp$5 = true;
+                          break _L$5;
+                        }
+                        _tmp$5 = _return_value;
+                      }
+                      if (_tmp$5) {
+                        _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(in_force, { _0: x, _1: hb, _2: _b, _3: g });
+                      }
+                    } else {
+                      break _L$4;
+                    }
+                  }
+                  break _L$3;
+                }
+                _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(lacking, x);
+              }
+            } else {
+              break _L;
             }
-            _tmp$3 = i + 1 | 0;
-            continue;
-          } else {
-            break;
+            break _L;
+          }
+          _tmp$4 = i + 1 | 0;
+          continue;
+        } else {
+          break;
+        }
+      }
+      _tmp$3 = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  _M0MPC15array5Array4sortGsE(lacking);
+  const _p = _M0MPC15array5Array20unsafe__make__uninitGUssEE(in_force.len);
+  const _p$2 = in_force.len;
+  const _p$3 = in_force.buf;
+  let _tmp$4 = 0;
+  while (true) {
+    const _p$4 = _tmp$4;
+    if (_p$4 < _p$2) {
+      const _p$5 = _p$3[_p$4];
+      const _p$6 = { _0: _p$5._0, _1: _p$5._1 };
+      _p.buf[_p$4] = _p$6;
+      _tmp$4 = _p$4 + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  const forced = _p;
+  _M0MPC15array5Array8sort__byGUssEE(forced, (a, b) => _M0IPC15tuple6Tuple2PB7Compare7compareGssE(a, b));
+  let newest = undefined;
+  let settings = undefined;
+  const _bind$9 = in_force.len;
+  const _bind$10 = in_force.buf;
+  let _tmp$5 = 0;
+  while (true) {
+    const _ = _tmp$5;
+    if (_ < _bind$9) {
+      const f = _bind$10[_];
+      if (f._3 === root) {
+        const _bind$11 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(f._2, "kind"));
+        if (_bind$11 === undefined) {
+        } else {
+          const _Some = _bind$11;
+          const _x = _Some;
+          switch (_x) {
+            case "open": {
+              newest = _M0FP39stillfail5rules4lock10roster__ofN6constrS5479;
+              settings = f._2;
+              break;
+            }
+            case "off": {
+              newest = _M0FP39stillfail5rules4lock10roster__ofN6constrS5480;
+              break;
+            }
           }
         }
-        _tmp$2 = _ + 1 | 0;
-        continue;
-      } else {
-        break;
       }
+      _tmp$5 = _ + 1 | 0;
+      continue;
+    } else {
+      break;
     }
-    const _p = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
-    const _p$2 = stmts.len;
-    const _p$3 = stmts.buf;
-    let admits;
-    let _tmp$3 = 0;
-    while (true) {
-      const _p$4 = _tmp$3;
-      if (_p$4 < _p$2) {
-        const _p$5 = _p$3[_p$4];
-        if (_p$5.kind === "ws.member") {
-          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_p, _p$5);
-        }
-        _tmp$3 = _p$4 + 1 | 0;
-        continue;
-      } else {
-        admits = _p;
-        break;
-      }
-    }
-    const _p$4 = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
-    const _p$5 = stmts.len;
-    const _p$6 = stmts.buf;
-    let removes;
-    let _tmp$4 = 0;
-    while (true) {
-      const _p$7 = _tmp$4;
-      if (_p$7 < _p$5) {
-        const _p$8 = _p$6[_p$7];
-        if (_p$8.kind === "ws.member.remove") {
-          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_p$4, _p$8);
-        }
-        _tmp$4 = _p$7 + 1 | 0;
-        continue;
-      } else {
-        removes = _p$4;
-        break;
-      }
-    }
-    const _bind$7 = [];
-    const admit_at = _M0MPB3Map3MapGsRP39stillfail5rules4lock4StmtE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock4StmtEE(_bind$7, 0, 0), undefined);
-    const _bind$8 = admits.len;
-    const _bind$9 = admits.buf;
-    let _tmp$5 = 0;
-    while (true) {
-      const _ = _tmp$5;
-      if (_ < _bind$8) {
-        const a = _bind$9[_];
-        _M0MPB3Map3setGsRP39stillfail5rules4lock4StmtE(admit_at, a.hash, a);
-        _tmp$5 = _ + 1 | 0;
-        continue;
-      } else {
-        break;
-      }
-    }
-    const _bind$10 = [];
-    const attackers = _M0MPB3Map3MapGsRPB5ArrayGsEE(new _M0TPB9ArrayViewGUsRPB5ArrayGsEEE(_bind$10, 0, 0), undefined);
-    const _bind$11 = [];
-    const lacks = _M0MPB3Map3MapGsUssEE(new _M0TPB9ArrayViewGUsUssEEE(_bind$11, 0, 0), undefined);
-    const _env = { _0: lacks, _1: attackers };
-    const _bind$12 = admits.len;
-    const _bind$13 = admits.buf;
+  }
+  const empty = new _M0TP39stillfail5rules4lock6Roster(false, new _M0TPB5ArrayGRP39stillfail5rules4lock5BoundE([], 0), new _M0TPB5ArrayGsE([], 0), new _M0TPB5ArrayGUsssEE([], 0), new _M0TPB5ArrayGUssEE([], 0), new _M0TPB5ArrayGsE([], 0), new _M0TPB5ArrayGRP39stillfail5rules4lock4SaidE([], 0), new _M0TPB5ArrayGUssEE([], 0), refused, forced, lacking, newest, settings);
+  const _bind$11 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, root);
+  if (_bind$11 === undefined) {
+    return { _0: empty, _1: logs };
+  } else {
+    const _Some = _bind$11;
+    const _x = _Some;
+    const _root_person = _x._0;
+    const root_sub = _root_person.sub;
+    const root_pair = `${root_sub}|${root}`;
+    const _bind$12 = [];
+    const by_body = _M0MPB3Map3MapGsRPB5ArrayGsEE(new _M0TPB9ArrayViewGUsRPB5ArrayGsEEE(_bind$12, 0, 0), undefined);
+    const _bind$13 = in_force.len;
+    const _bind$14 = in_force.buf;
     let _tmp$6 = 0;
     while (true) {
       const _ = _tmp$6;
-      if (_ < _bind$12) {
-        const a = _bind$13[_];
-        const id = `a:${a.hash}`;
-        const xs = _M0FP39stillfail5rules4lock6rosterN3argS5130(attackers, id);
-        const _p$7 = `${a.by}|${a.log}`;
-        if (!(_p$7 === root_pair)) {
-          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(xs, _M0FP39stillfail5rules4lock6rosterN4lackS5131(_env, a, _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "role")));
+      if (_ < _bind$13) {
+        const f = _bind$14[_];
+        const _bind$15 = _M0MPB3Map3getGsRPB5ArrayGsEE(by_body, f._1);
+        if (_bind$15 === undefined) {
+          _M0MPB3Map3setGsRPB5ArrayGsEE(by_body, f._1, new _M0TPB5ArrayGsE([f._0], 1));
+        } else {
+          const _Some$2 = _bind$15;
+          const _xs = _Some$2;
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_xs, f._0);
         }
         _tmp$6 = _ + 1 | 0;
         continue;
@@ -7610,46 +8203,223 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
         break;
       }
     }
-    const _bind$14 = [];
-    const cancels_of = _M0MPB3Map3MapGsRPB5ArrayGsEE(new _M0TPB9ArrayViewGUsRPB5ArrayGsEEE(_bind$14, 0, 0), undefined);
-    const _bind$15 = removes.len;
-    const _bind$16 = removes.buf;
+    const stmts = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
+    const _bind$15 = in_force.len;
+    const _bind$16 = in_force.buf;
     let _tmp$7 = 0;
     while (true) {
       const _ = _tmp$7;
       if (_ < _bind$15) {
-        const r = _bind$16[_];
+        const f = _bind$16[_];
+        _L: {
+          const _x$2 = f._0;
+          const _b = f._2;
+          const _g = f._3;
+          const kind = _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_b, "kind")), "");
+          if (kind === "member" || (kind === "member.remove" || (kind === "station" || kind === "station.remove"))) {
+            let body;
+            if (_b.$tag === 6) {
+              const _Object = _b;
+              const _m = _Object._0;
+              const _bind$17 = [];
+              const out = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$17, 0, 0), undefined);
+              const _it = _M0MPB3Map5iter2GssE(_m);
+              while (true) {
+                const _bind$18 = _M0MPB5Iter24nextGssE(_it);
+                if (_bind$18 === undefined) {
+                  break;
+                } else {
+                  const _Some$2 = _bind$18;
+                  const _x$3 = _Some$2;
+                  const _k = _x$3._0;
+                  const _v = _x$3._1;
+                  _M0MPB3Map3setGsRPC14json4JsonE(out, _k, _v);
+                  continue;
+                }
+              }
+              const _bind$18 = _M0MPB3Map3getGsRPC14json4JsonE(_m, "cancels");
+              if (_bind$18 === undefined) {
+              } else {
+                const _Some$2 = _bind$18;
+                const _x$3 = _Some$2;
+                if (_x$3.$tag === 5) {
+                  const _Array = _x$3;
+                  const _cs = _Array._0;
+                  const named = new _M0TPB5ArrayGRPC14json4JsonE([], 0);
+                  const _bind$19 = _cs.len;
+                  const _bind$20 = _cs.buf;
+                  let _tmp$8 = 0;
+                  while (true) {
+                    const _$2 = _tmp$8;
+                    if (_$2 < _bind$19) {
+                      const y = _bind$20[_$2];
+                      const _bind$21 = _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0MPB3Map3getGsRPB5ArrayGsEE(by_body, _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(y), "")), new _M0TPB5ArrayGsE([], 0));
+                      const _bind$22 = _bind$21.len;
+                      const _bind$23 = _bind$21.buf;
+                      let _tmp$9 = 0;
+                      while (true) {
+                        const _$3 = _tmp$9;
+                        if (_$3 < _bind$22) {
+                          const z = _bind$23[_$3];
+                          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(named, new _M0DTPC14json4Json6String(z));
+                          _tmp$9 = _$3 + 1 | 0;
+                          continue;
+                        } else {
+                          break;
+                        }
+                      }
+                      _tmp$8 = _$2 + 1 | 0;
+                      continue;
+                    } else {
+                      break;
+                    }
+                  }
+                  _M0MPB3Map3setGsRPC14json4JsonE(out, "cancels", new _M0DTPC14json4Json5Array(named));
+                }
+              }
+              body = new _M0DTPC14json4Json6Object(out);
+            } else {
+              body = _b;
+            }
+            const _tmp$8 = `ws.${kind}`;
+            const _p$4 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, _g);
+            let _tmp$9;
+            if (_p$4 === undefined) {
+              _tmp$9 = $panic();
+            } else {
+              const _p$5 = _p$4;
+              _tmp$9 = _p$5;
+            }
+            _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(stmts, new _M0TP39stillfail5rules4lock4Stmt(_x$2, _tmp$8, body, _g, _tmp$9._0.sub));
+          } else {
+            break _L;
+          }
+          break _L;
+        }
+        _tmp$7 = _ + 1 | 0;
+        continue;
+      } else {
+        break;
+      }
+    }
+    const _p$4 = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
+    const _p$5 = stmts.len;
+    const _p$6 = stmts.buf;
+    let admits;
+    let _tmp$8 = 0;
+    while (true) {
+      const _p$7 = _tmp$8;
+      if (_p$7 < _p$5) {
+        const _p$8 = _p$6[_p$7];
+        if (_p$8.kind === "ws.member") {
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_p$4, _p$8);
+        }
+        _tmp$8 = _p$7 + 1 | 0;
+        continue;
+      } else {
+        admits = _p$4;
+        break;
+      }
+    }
+    const _p$7 = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
+    const _p$8 = stmts.len;
+    const _p$9 = stmts.buf;
+    let removes;
+    let _tmp$9 = 0;
+    while (true) {
+      const _p$10 = _tmp$9;
+      if (_p$10 < _p$8) {
+        const _p$11 = _p$9[_p$10];
+        if (_p$11.kind === "ws.member.remove") {
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_p$7, _p$11);
+        }
+        _tmp$9 = _p$10 + 1 | 0;
+        continue;
+      } else {
+        removes = _p$7;
+        break;
+      }
+    }
+    const _bind$17 = [];
+    const admit_at = _M0MPB3Map3MapGsRP39stillfail5rules4lock4StmtE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock4StmtEE(_bind$17, 0, 0), undefined);
+    const _bind$18 = admits.len;
+    const _bind$19 = admits.buf;
+    let _tmp$10 = 0;
+    while (true) {
+      const _ = _tmp$10;
+      if (_ < _bind$18) {
+        const a = _bind$19[_];
+        _M0MPB3Map3setGsRP39stillfail5rules4lock4StmtE(admit_at, a.hash, a);
+        _tmp$10 = _ + 1 | 0;
+        continue;
+      } else {
+        break;
+      }
+    }
+    const _bind$20 = [];
+    const attackers = _M0MPB3Map3MapGsRPB5ArrayGsEE(new _M0TPB9ArrayViewGUsRPB5ArrayGsEEE(_bind$20, 0, 0), undefined);
+    const _bind$21 = [];
+    const lacks = _M0MPB3Map3MapGsUssEE(new _M0TPB9ArrayViewGUsUssEEE(_bind$21, 0, 0), undefined);
+    const _env = { _0: lacks, _1: attackers };
+    const _bind$22 = admits.len;
+    const _bind$23 = admits.buf;
+    let _tmp$11 = 0;
+    while (true) {
+      const _ = _tmp$11;
+      if (_ < _bind$22) {
+        const a = _bind$23[_];
+        const id = `a:${a.hash}`;
+        const xs = _M0FP39stillfail5rules4lock10roster__ofN3argS5472(attackers, id);
+        const _p$10 = `${a.by}|${a.log}`;
+        if (!(_p$10 === root_pair)) {
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(xs, _M0FP39stillfail5rules4lock10roster__ofN4lackS5473(_env, a, _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "role")));
+        }
+        _tmp$11 = _ + 1 | 0;
+        continue;
+      } else {
+        break;
+      }
+    }
+    const _bind$24 = [];
+    const cancels_of = _M0MPB3Map3MapGsRPB5ArrayGsEE(new _M0TPB9ArrayViewGUsRPB5ArrayGsEEE(_bind$24, 0, 0), undefined);
+    const _bind$25 = removes.len;
+    const _bind$26 = removes.buf;
+    let _tmp$12 = 0;
+    while (true) {
+      const _ = _tmp$12;
+      if (_ < _bind$25) {
+        const r = _bind$26[_];
         const ids = new _M0TPB5ArrayGsE([], 0);
-        const _bind$17 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(r.body, "cancels"));
-        const _bind$18 = _bind$17.len;
-        const _bind$19 = _bind$17.buf;
-        let _tmp$8 = 0;
+        const _bind$27 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(r.body, "cancels"));
+        const _bind$28 = _bind$27.len;
+        const _bind$29 = _bind$27.buf;
+        let _tmp$13 = 0;
         while (true) {
-          const _$2 = _tmp$8;
-          if (_$2 < _bind$18) {
-            const x = _bind$19[_$2];
+          const _$2 = _tmp$13;
+          if (_$2 < _bind$28) {
+            const x = _bind$29[_$2];
             _L: {
-              const _bind$20 = _M0FP39stillfail5rules4lock8text__of(x);
-              if (_bind$20 === undefined) {
+              const _bind$30 = _M0FP39stillfail5rules4lock8text__of(x);
+              if (_bind$30 === undefined) {
                 break _L;
               } else {
-                const _Some$2 = _bind$20;
+                const _Some$2 = _bind$30;
                 const _h = _Some$2;
-                const _bind$21 = _M0MPB3Map3getGsRP39stillfail5rules4lock4StmtE(admit_at, _h);
-                if (_bind$21 === undefined) {
+                const _bind$31 = _M0MPB3Map3getGsRP39stillfail5rules4lock4StmtE(admit_at, _h);
+                if (_bind$31 === undefined) {
                   break _L;
                 } else {
-                  const _Some$3 = _bind$21;
+                  const _Some$3 = _bind$31;
                   const _a = _Some$3;
-                  if (_M0FP39stillfail5rules4lock6rosterN3txtS5128(_a, "sub") === _M0FP39stillfail5rules4lock6rosterN3txtS5128(r, "sub")) {
+                  if (_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(_a, "sub") === _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(r, "sub")) {
                     const id = `c:${r.hash}|${_a.hash}`;
-                    const xs = _M0FP39stillfail5rules4lock6rosterN3argS5130(attackers, id);
-                    const _p$7 = `${r.by}|${r.log}`;
-                    if (!(_p$7 === root_pair)) {
-                      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(xs, _M0FP39stillfail5rules4lock6rosterN4lackS5131(_env, r, _M0FP39stillfail5rules4lock6rosterN3txtS5128(_a, "role")));
+                    const xs = _M0FP39stillfail5rules4lock10roster__ofN3argS5472(attackers, id);
+                    const _p$10 = `${r.by}|${r.log}`;
+                    if (!(_p$10 === root_pair)) {
+                      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(xs, _M0FP39stillfail5rules4lock10roster__ofN4lackS5473(_env, r, _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(_a, "role")));
                     }
-                    _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_M0FP39stillfail5rules4lock6rosterN3argS5130(attackers, `a:${_a.hash}`), id);
-                    _M0MPC15array5Array4pushGUsRPC14json4JsonEE(ids, id);
+                    _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_M0FP39stillfail5rules4lock10roster__ofN3argS5472(attackers, `a:${_a.hash}`), id);
+                    _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(ids, id);
                   } else {
                     break _L;
                   }
@@ -7657,14 +8427,14 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
               }
               break _L;
             }
-            _tmp$8 = _$2 + 1 | 0;
+            _tmp$13 = _$2 + 1 | 0;
             continue;
           } else {
             break;
           }
         }
         _M0MPB3Map3setGsRPB5ArrayGsEE(cancels_of, r.hash, ids);
-        _tmp$7 = _ + 1 | 0;
+        _tmp$12 = _ + 1 | 0;
         continue;
       } else {
         break;
@@ -7672,35 +8442,35 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
     }
     const _it = _M0MPB3Map5iter2GssE(lacks);
     while (true) {
-      const _bind$17 = _M0MPB5Iter24nextGssE(_it);
-      if (_bind$17 === undefined) {
+      const _bind$27 = _M0MPB5Iter24nextGssE(_it);
+      if (_bind$27 === undefined) {
         break;
       } else {
-        const _Some$2 = _bind$17;
+        const _Some$2 = _bind$27;
         const _x$2 = _Some$2;
         const _id = _x$2._0;
         const _x$3 = _x$2._1;
         const _pair = _x$3._0;
         const _role = _x$3._1;
-        const _bind$18 = admits.len;
-        const _bind$19 = admits.buf;
-        let _tmp$8 = 0;
+        const _bind$28 = admits.len;
+        const _bind$29 = admits.buf;
+        let _tmp$13 = 0;
         while (true) {
-          const _ = _tmp$8;
-          if (_ < _bind$18) {
-            const a = _bind$19[_];
-            if (`${_M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "sub")}|${_M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "lock")}` === _pair && _M0FP39stillfail5rules4lock8rank__of(_M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "role")) >= _M0FP39stillfail5rules4lock8rank__of(_role)) {
-              const _p$7 = _M0MPB3Map3getGsRPB5ArrayGsEE(attackers, _id);
-              let _tmp$9;
-              if (_p$7 === undefined) {
-                _tmp$9 = $panic();
+          const _ = _tmp$13;
+          if (_ < _bind$28) {
+            const a = _bind$29[_];
+            if (`${_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "sub")}|${_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "lock")}` === _pair && _M0FP39stillfail5rules4lock8rank__of(_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "role")) >= _M0FP39stillfail5rules4lock8rank__of(_role)) {
+              const _p$10 = _M0MPB3Map3getGsRPB5ArrayGsEE(attackers, _id);
+              let _tmp$14;
+              if (_p$10 === undefined) {
+                _tmp$14 = $panic();
               } else {
-                const _p$8 = _p$7;
-                _tmp$9 = _p$8;
+                const _p$11 = _p$10;
+                _tmp$14 = _p$11;
               }
-              _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_tmp$9, `a:${a.hash}`);
+              _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_tmp$14, `a:${a.hash}`);
             }
-            _tmp$8 = _ + 1 | 0;
+            _tmp$13 = _ + 1 | 0;
             continue;
           } else {
             break;
@@ -7709,65 +8479,65 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
         continue;
       }
     }
-    const _bind$17 = [];
-    const label = _M0MPB3Map3MapGssE(new _M0TPB9ArrayViewGUssEE(_bind$17, 0, 0), undefined);
+    const _bind$27 = [];
+    const label = _M0MPB3Map3MapGssE(new _M0TPB9ArrayViewGUssEE(_bind$27, 0, 0), undefined);
     let changed = true;
     while (true) {
       if (changed) {
         changed = false;
         const _it$2 = _M0MPB3Map5iter2GssE(attackers);
         while (true) {
-          const _bind$18 = _M0MPB5Iter24nextGssE(_it$2);
-          if (_bind$18 === undefined) {
+          const _bind$28 = _M0MPB5Iter24nextGssE(_it$2);
+          if (_bind$28 === undefined) {
             break;
           } else {
-            const _Some$2 = _bind$18;
+            const _Some$2 = _bind$28;
             const _x$2 = _Some$2;
             const _id = _x$2._0;
             const _by = _x$2._1;
             if (_M0MPB3Map8containsGssE(label, _id)) {
               continue;
             }
-            const _p$7 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_by);
-            let _tmp$8;
+            const _p$10 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_by);
+            let _tmp$13;
             while (true) {
-              const _p$8 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$7);
-              if (_p$8 === undefined) {
-                _tmp$8 = false;
+              const _p$11 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$10);
+              if (_p$11 === undefined) {
+                _tmp$13 = false;
                 break;
               } else {
-                const _p$9 = _p$8;
-                const _p$10 = _p$9;
-                if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0MPB3Map3getGssE(label, _p$10), _M0FP39stillfail5rules4lock6rosterN6constrS5137)) {
-                  _tmp$8 = true;
+                const _p$12 = _p$11;
+                const _p$13 = _p$12;
+                if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0MPB3Map3getGssE(label, _p$13), _M0FP39stillfail5rules4lock10roster__ofN6constrS5481)) {
+                  _tmp$13 = true;
                   break;
                 }
                 continue;
               }
             }
-            if (_tmp$8) {
+            if (_tmp$13) {
               _M0MPB3Map3setGssE(label, _id, "out");
               changed = true;
             } else {
-              const _p$8 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_by);
-              let _tmp$9;
+              const _p$11 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_by);
+              let _tmp$14;
               while (true) {
-                const _p$9 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$8);
-                if (_p$9 === undefined) {
-                  _tmp$9 = true;
+                const _p$12 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$11);
+                if (_p$12 === undefined) {
+                  _tmp$14 = true;
                   break;
                 } else {
-                  const _p$10 = _p$9;
-                  const _p$11 = _p$10;
-                  if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0MPB3Map3getGssE(label, _p$11), _M0FP39stillfail5rules4lock6rosterN6constrS5138)) {
+                  const _p$13 = _p$12;
+                  const _p$14 = _p$13;
+                  if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0MPB3Map3getGssE(label, _p$14), _M0FP39stillfail5rules4lock10roster__ofN6constrS5482)) {
                   } else {
-                    _tmp$9 = false;
+                    _tmp$14 = false;
                     break;
                   }
                   continue;
                 }
               }
-              if (_tmp$9) {
+              if (_tmp$14) {
                 _M0MPB3Map3setGssE(label, _id, "in");
                 changed = true;
               }
@@ -7782,11 +8552,11 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
     }
     const _it$2 = _M0MPB3Map5iter2GssE(attackers);
     while (true) {
-      const _bind$18 = _M0MPB5Iter24nextGssE(_it$2);
-      if (_bind$18 === undefined) {
+      const _bind$28 = _M0MPB5Iter24nextGssE(_it$2);
+      if (_bind$28 === undefined) {
         break;
       } else {
-        const _Some$2 = _bind$18;
+        const _Some$2 = _bind$28;
         const _x$2 = _Some$2;
         const _id = _x$2._0;
         if (!_M0MPB3Map8containsGssE(label, _id)) {
@@ -7795,78 +8565,78 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
         continue;
       }
     }
-    const _bind$18 = [];
-    const pairs = _M0MPB3Map3MapGsUsssEE(new _M0TPB9ArrayViewGUsUsssEEE(_bind$18, 0, 0), undefined);
-    const _bind$19 = [];
-    const undecided = _M0MPB3Map3MapGsUssEE(new _M0TPB9ArrayViewGUsUssEEE(_bind$19, 0, 0), undefined);
+    const _bind$28 = [];
+    const pairs = _M0MPB3Map3MapGsUsssEE(new _M0TPB9ArrayViewGUsUsssEEE(_bind$28, 0, 0), undefined);
+    const _bind$29 = [];
+    const undecided = _M0MPB3Map3MapGsUssEE(new _M0TPB9ArrayViewGUsUssEEE(_bind$29, 0, 0), undefined);
     const cancelled = new _M0TPB5ArrayGsE([], 0);
-    const _bind$20 = admits.len;
-    const _bind$21 = admits.buf;
-    let _tmp$8 = 0;
+    const _bind$30 = admits.len;
+    const _bind$31 = admits.buf;
+    let _tmp$13 = 0;
     while (true) {
-      const _ = _tmp$8;
-      if (_ < _bind$20) {
-        const a = _bind$21[_];
-        const _p$7 = _M0MPB3Map3getGssE(label, `a:${a.hash}`);
+      const _ = _tmp$13;
+      if (_ < _bind$30) {
+        const a = _bind$31[_];
+        const _p$10 = _M0MPB3Map3getGssE(label, `a:${a.hash}`);
         let l;
-        if (_p$7 === undefined) {
+        if (_p$10 === undefined) {
           l = $panic();
         } else {
-          const _p$8 = _p$7;
-          l = _p$8;
+          const _p$11 = _p$10;
+          l = _p$11;
         }
-        const k = `${_M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "sub")}|${_M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "lock")}`;
+        const k = `${_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "sub")}|${_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "lock")}`;
         if (l === "in") {
           _L: {
             _L$2: {
-              const _bind$22 = _M0MPB3Map3getGsUsssEE(pairs, k);
-              if (_bind$22 === undefined) {
+              const _bind$32 = _M0MPB3Map3getGsUsssEE(pairs, k);
+              if (_bind$32 === undefined) {
                 break _L$2;
               } else {
-                const _Some$2 = _bind$22;
+                const _Some$2 = _bind$32;
                 const _x$2 = _Some$2;
                 const _was = _x$2._2;
-                if (_M0FP39stillfail5rules4lock8rank__of(_M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "role")) <= _M0FP39stillfail5rules4lock8rank__of(_was)) {
+                if (_M0FP39stillfail5rules4lock8rank__of(_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "role")) <= _M0FP39stillfail5rules4lock8rank__of(_was)) {
                 } else {
                   break _L$2;
                 }
               }
               break _L;
             }
-            _M0MPB3Map3setGsUsssEE(pairs, k, { _0: _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "sub"), _1: _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "lock"), _2: _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "role") });
+            _M0MPB3Map3setGsUsssEE(pairs, k, { _0: _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "sub"), _1: _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "lock"), _2: _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "role") });
           }
         } else {
-          if (l === "undec" && _M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "role"))) {
-            _M0MPB3Map3setGsUssEE(undecided, k, { _0: _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "sub"), _1: _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "lock") });
+          if (l === "undec" && _M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "role"))) {
+            _M0MPB3Map3setGsUssEE(undecided, k, { _0: _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "sub"), _1: _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "lock") });
           }
         }
-        let _tmp$9;
+        let _tmp$14;
         if (l === "out") {
-          const _p$8 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(removes);
-          let _tmp$10;
+          const _p$11 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(removes);
+          let _tmp$15;
           while (true) {
-            const _p$9 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$8);
-            if (_p$9 === undefined) {
-              _tmp$10 = false;
+            const _p$12 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$11);
+            if (_p$12 === undefined) {
+              _tmp$15 = false;
               break;
             } else {
-              const _p$10 = _p$9;
-              const _p$11 = _p$10;
-              if (_M0FP39stillfail5rules4lock6rosterN6countsS5132(label, _p$11, a)) {
-                _tmp$10 = true;
+              const _p$13 = _p$12;
+              const _p$14 = _p$13;
+              if (_M0FP39stillfail5rules4lock10roster__ofN6countsS5474(label, _p$14, a)) {
+                _tmp$15 = true;
                 break;
               }
               continue;
             }
           }
-          _tmp$9 = _tmp$10;
+          _tmp$14 = _tmp$15;
         } else {
-          _tmp$9 = false;
+          _tmp$14 = false;
         }
-        if (_tmp$9) {
-          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(cancelled, a.hash);
+        if (_tmp$14) {
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(cancelled, a.hash);
         }
-        _tmp$8 = _ + 1 | 0;
+        _tmp$13 = _ + 1 | 0;
         continue;
       } else {
         break;
@@ -7875,102 +8645,102 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
     _M0MPB3Map3setGsUsssEE(pairs, root_pair, { _0: root_sub, _1: root, _2: "owner" });
     const _it$3 = _M0MPB3Map5iter2GssE(pairs);
     while (true) {
-      const _bind$22 = _M0MPB5Iter24nextGssE(_it$3);
-      if (_bind$22 === undefined) {
+      const _bind$32 = _M0MPB5Iter24nextGssE(_it$3);
+      if (_bind$32 === undefined) {
         break;
       } else {
-        const _Some$2 = _bind$22;
+        const _Some$2 = _bind$32;
         const _x$2 = _Some$2;
         const _k = _x$2._0;
         _M0MPB3Map6removeGsUssEE(undecided, _k);
         continue;
       }
     }
-    const _bind$22 = [{ _0: root_sub, _1: { _0: "owner", _1: root, _2: undefined } }];
-    const best = _M0MPB3Map3MapGsUssOsEE(new _M0TPB9ArrayViewGUsUssOsEEE(_bind$22, 0, 1), undefined);
-    const _bind$23 = admits.len;
-    const _bind$24 = admits.buf;
-    let _tmp$9 = 0;
+    const _bind$32 = [{ _0: root_sub, _1: { _0: "owner", _1: root, _2: undefined } }];
+    const best = _M0MPB3Map3MapGsUssOsEE(new _M0TPB9ArrayViewGUsUssOsEEE(_bind$32, 0, 1), undefined);
+    const _bind$33 = admits.len;
+    const _bind$34 = admits.buf;
+    let _tmp$14 = 0;
     while (true) {
-      const _ = _tmp$9;
-      if (_ < _bind$23) {
-        const a = _bind$24[_];
+      const _ = _tmp$14;
+      if (_ < _bind$33) {
+        const a = _bind$34[_];
         _L: {
-          if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0MPB3Map3getGssE(label, `a:${a.hash}`), _M0FP39stillfail5rules4lock6rosterN6constrS5140) || _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "sub") === root_sub) {
+          if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0MPB3Map3getGssE(label, `a:${a.hash}`), _M0FP39stillfail5rules4lock10roster__ofN6constrS5484) || _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "sub") === root_sub) {
             break _L;
           }
-          const role = _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "role");
-          const _bind$25 = _M0MPB3Map3getGsUssOsEE(best, _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "sub"));
+          const role = _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "role");
+          const _bind$35 = _M0MPB3Map3getGsUssOsEE(best, _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "sub"));
           let takes;
-          if (_bind$25 === undefined) {
+          if (_bind$35 === undefined) {
             takes = true;
           } else {
-            const _Some$2 = _bind$25;
+            const _Some$2 = _bind$35;
             const _x$2 = _Some$2;
             const _was = _x$2._0;
             const _admit = _x$2._2;
             if (_M0FP39stillfail5rules4lock8rank__of(role) > _M0FP39stillfail5rules4lock8rank__of(_was)) {
               takes = true;
             } else {
-              let _tmp$10;
+              let _tmp$15;
               if (role === _was) {
-                let _tmp$11;
+                let _tmp$16;
                 if (_admit === undefined) {
-                  _tmp$11 = false;
+                  _tmp$16 = false;
                 } else {
                   const _Some$3 = _admit;
                   const _x$3 = _Some$3;
-                  _tmp$11 = _M0IP016_24default__implPB7Compare6op__ltGsE(a.hash, _x$3);
+                  _tmp$16 = _M0IP016_24default__implPB7Compare6op__ltGsE(a.hash, _x$3);
                 }
-                _tmp$10 = _tmp$11;
+                _tmp$15 = _tmp$16;
               } else {
-                _tmp$10 = false;
+                _tmp$15 = false;
               }
-              takes = _tmp$10;
+              takes = _tmp$15;
             }
           }
           if (takes) {
-            _M0MPB3Map3setGsUssOsEE(best, _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "sub"), { _0: role, _1: _M0FP39stillfail5rules4lock6rosterN3txtS5128(a, "lock"), _2: a.hash });
+            _M0MPB3Map3setGsUssOsEE(best, _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "sub"), { _0: role, _1: _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(a, "lock"), _2: a.hash });
           }
           break _L;
         }
-        _tmp$9 = _ + 1 | 0;
+        _tmp$14 = _ + 1 | 0;
         continue;
       } else {
         break;
       }
     }
-    const _bind$25 = [];
-    const st_cancelled = _M0MPB3Map3MapGssE(new _M0TPB9ArrayViewGUssEE(_bind$25, 0, 0), undefined);
-    const _bind$26 = stmts.len;
-    const _bind$27 = stmts.buf;
-    let _tmp$10 = 0;
+    const _bind$35 = [];
+    const st_cancelled = _M0MPB3Map3MapGssE(new _M0TPB9ArrayViewGUssEE(_bind$35, 0, 0), undefined);
+    const _bind$36 = stmts.len;
+    const _bind$37 = stmts.buf;
+    let _tmp$15 = 0;
     while (true) {
-      const _ = _tmp$10;
-      if (_ < _bind$26) {
-        const r = _bind$27[_];
-        if (r.kind === "ws.station.remove" && _M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock6rosterN14role__of__pairS5133(pairs, r))) {
-          const _bind$28 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(r.body, "cancels"));
-          const _bind$29 = _bind$28.len;
-          const _bind$30 = _bind$28.buf;
-          let _tmp$11 = 0;
+      const _ = _tmp$15;
+      if (_ < _bind$36) {
+        const r = _bind$37[_];
+        if (r.kind === "ws.station.remove" && _M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock10roster__ofN14role__of__pairS5475(pairs, r))) {
+          const _bind$38 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(r.body, "cancels"));
+          const _bind$39 = _bind$38.len;
+          const _bind$40 = _bind$38.buf;
+          let _tmp$16 = 0;
           while (true) {
-            const _$2 = _tmp$11;
-            if (_$2 < _bind$29) {
-              const x = _bind$30[_$2];
-              const _bind$31 = _M0FP39stillfail5rules4lock8text__of(x);
-              if (_bind$31 === undefined) {
+            const _$2 = _tmp$16;
+            if (_$2 < _bind$39) {
+              const x = _bind$40[_$2];
+              const _bind$41 = _M0FP39stillfail5rules4lock8text__of(x);
+              if (_bind$41 === undefined) {
               } else {
-                const _Some$2 = _bind$31;
+                const _Some$2 = _bind$41;
                 const _h = _Some$2;
-                const k = `${_h}|${_M0FP39stillfail5rules4lock6rosterN3txtS5128(r, "key")}`;
+                const k = `${_h}|${_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(r, "key")}`;
                 _L: {
                   _L$2: {
-                    const _bind$32 = _M0MPB3Map3getGssE(st_cancelled, k);
-                    if (_bind$32 === undefined) {
+                    const _bind$42 = _M0MPB3Map3getGssE(st_cancelled, k);
+                    if (_bind$42 === undefined) {
                       break _L$2;
                     } else {
-                      const _Some$3 = _bind$32;
+                      const _Some$3 = _bind$42;
                       const _was = _Some$3;
                       if (_M0IP016_24default__implPB7Compare6op__leGsE(_was, r.hash)) {
                       } else {
@@ -7982,137 +8752,137 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
                   _M0MPB3Map3setGssE(st_cancelled, k, r.hash);
                 }
               }
-              _tmp$11 = _$2 + 1 | 0;
+              _tmp$16 = _$2 + 1 | 0;
               continue;
             } else {
               break;
             }
           }
         }
-        _tmp$10 = _ + 1 | 0;
+        _tmp$15 = _ + 1 | 0;
         continue;
       } else {
         break;
       }
     }
-    const _bind$28 = [];
-    const stations = _M0MPB3Map3MapGsuE(new _M0TPB9ArrayViewGUsuEE(_bind$28, 0, 0), undefined);
-    const _bind$29 = stmts.len;
-    const _bind$30 = stmts.buf;
-    let _tmp$11 = 0;
+    const _bind$38 = [];
+    const stations = _M0MPB3Map3MapGsuE(new _M0TPB9ArrayViewGUsuEE(_bind$38, 0, 0), undefined);
+    const _bind$39 = stmts.len;
+    const _bind$40 = stmts.buf;
+    let _tmp$16 = 0;
     while (true) {
-      const _ = _tmp$11;
-      if (_ < _bind$29) {
-        const s = _bind$30[_];
-        if (s.kind === "ws.station" && (_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock6rosterN14role__of__pairS5133(pairs, s)) && !_M0MPB3Map8containsGssE(st_cancelled, `${s.hash}|${_M0FP39stillfail5rules4lock6rosterN3txtS5128(s, "key")}`))) {
-          _M0MPB3Map3setGsuE(stations, _M0FP39stillfail5rules4lock6rosterN3txtS5128(s, "key"), undefined);
+      const _ = _tmp$16;
+      if (_ < _bind$39) {
+        const s = _bind$40[_];
+        if (s.kind === "ws.station" && (_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock10roster__ofN14role__of__pairS5475(pairs, s)) && !_M0MPB3Map8containsGssE(st_cancelled, `${s.hash}|${_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(s, "key")}`))) {
+          _M0MPB3Map3setGsuE(stations, _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(s, "key"), undefined);
         }
-        _tmp$11 = _ + 1 | 0;
+        _tmp$16 = _ + 1 | 0;
         continue;
       } else {
         break;
       }
     }
     const said = new _M0TPB5ArrayGRP39stillfail5rules4lock4SaidE([], 0);
-    const _bind$31 = stmts.len;
-    const _bind$32 = stmts.buf;
-    let _tmp$12 = 0;
+    const _bind$41 = stmts.len;
+    const _bind$42 = stmts.buf;
+    let _tmp$17 = 0;
     while (true) {
-      const _ = _tmp$12;
-      if (_ < _bind$31) {
-        const s = _bind$32[_];
+      const _ = _tmp$17;
+      if (_ < _bind$41) {
+        const s = _bind$42[_];
         let l = "in";
         let why = undefined;
         let decided = undefined;
-        const _bind$33 = s.kind;
-        switch (_bind$33) {
+        const _bind$43 = s.kind;
+        switch (_bind$43) {
           case "ws.member": {
-            const _p$7 = _M0MPB3Map3getGssE(label, `a:${s.hash}`);
-            let _tmp$13;
-            if (_p$7 === undefined) {
-              _tmp$13 = $panic();
+            const _p$10 = _M0MPB3Map3getGssE(label, `a:${s.hash}`);
+            let _tmp$18;
+            if (_p$10 === undefined) {
+              _tmp$18 = $panic();
             } else {
-              const _p$8 = _p$7;
-              _tmp$13 = _p$8;
+              const _p$11 = _p$10;
+              _tmp$18 = _p$11;
             }
-            l = _tmp$13;
+            l = _tmp$18;
             if (l === "undec") {
-              why = _M0FP39stillfail5rules4lock6rosterN15undecided__pairS5134(undecided, s) ? "its signer is undecided (a circle of removals)" : "the admit is undecided (named by an undecided removal)";
+              why = _M0FP39stillfail5rules4lock10roster__ofN15undecided__pairS5476(undecided, s) ? "its signer is undecided (a circle of removals)" : "the admit is undecided (named by an undecided removal)";
             } else {
               if (l === "out") {
-                const _p$8 = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
-                const _p$9 = removes.len;
-                const _p$10 = removes.buf;
-                let _p$11;
-                let _tmp$14 = 0;
+                const _p$11 = new _M0TPB5ArrayGRP39stillfail5rules4lock4StmtE([], 0);
+                const _p$12 = removes.len;
+                const _p$13 = removes.buf;
+                let _p$14;
+                let _tmp$19 = 0;
                 while (true) {
-                  const _p$12 = _tmp$14;
-                  if (_p$12 < _p$9) {
-                    const _p$13 = _p$10[_p$12];
-                    if (_M0FP39stillfail5rules4lock6rosterN6countsS5132(label, _p$13, s)) {
-                      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_p$8, _p$13);
+                  const _p$15 = _tmp$19;
+                  if (_p$15 < _p$12) {
+                    const _p$16 = _p$13[_p$15];
+                    if (_M0FP39stillfail5rules4lock10roster__ofN6countsS5474(label, _p$16, s)) {
+                      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_p$11, _p$16);
                     }
-                    _tmp$14 = _p$12 + 1 | 0;
+                    _tmp$19 = _p$15 + 1 | 0;
                     continue;
                   } else {
-                    _p$11 = _p$8;
+                    _p$14 = _p$11;
                     break;
                   }
                 }
-                const _p$12 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$11.len);
-                const _p$13 = _p$11.len;
-                const _p$14 = _p$11.buf;
-                let _tmp$15 = 0;
+                const _p$15 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$14.len);
+                const _p$16 = _p$14.len;
+                const _p$17 = _p$14.buf;
+                let _tmp$20 = 0;
                 while (true) {
-                  const _p$15 = _tmp$15;
-                  if (_p$15 < _p$13) {
-                    const _p$16 = _p$14[_p$15];
-                    const _p$17 = _p$16.hash;
-                    _p$12.buf[_p$15] = _p$17;
-                    _tmp$15 = _p$15 + 1 | 0;
+                  const _p$18 = _tmp$20;
+                  if (_p$18 < _p$16) {
+                    const _p$19 = _p$17[_p$18];
+                    const _p$20 = _p$19.hash;
+                    _p$15.buf[_p$18] = _p$20;
+                    _tmp$20 = _p$18 + 1 | 0;
                     continue;
                   } else {
                     break;
                   }
                 }
-                const by = _p$12;
+                const by = _p$15;
                 _M0MPC15array5Array4sortGsE(by);
                 if (by.len > 0) {
-                  why = _M0FP39stillfail5rules4lock6rosterN6constrS5141;
+                  why = _M0FP39stillfail5rules4lock10roster__ofN6constrS5485;
                   if (0 >= by.len) {
                     $panic();
                   }
                   decided = by.buf[0];
                 } else {
-                  if (!_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock6rosterN14role__of__pairS5133(pairs, s))) {
-                    why = _M0FP39stillfail5rules4lock6rosterN7not__inS5135(undecided, s);
+                  if (!_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock10roster__ofN14role__of__pairS5475(pairs, s))) {
+                    why = _M0FP39stillfail5rules4lock10roster__ofN7not__inS5477(undecided, s);
                   } else {
-                    why = _M0FP39stillfail5rules4lock6rosterN6constrS5142;
+                    why = _M0FP39stillfail5rules4lock10roster__ofN6constrS5486;
                   }
                 }
               } else {
-                const _bind$34 = _M0MPB3Map3getGsUssOsEE(best, _M0FP39stillfail5rules4lock6rosterN3txtS5128(s, "sub"));
-                if (_bind$34 === undefined) {
+                const _bind$44 = _M0MPB3Map3getGsUssOsEE(best, _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(s, "sub"));
+                if (_bind$44 === undefined) {
                 } else {
-                  const _Some$2 = _bind$34;
+                  const _Some$2 = _bind$44;
                   const _x$2 = _Some$2;
                   const _role = _x$2._0;
                   const _lock = _x$2._1;
                   const _admit = _x$2._2;
                   _L: {
                     _L$2: {
-                      const _p$8 = _M0FP39stillfail5rules4lock6rosterN3txtS5128(s, "role");
-                      if (!(_role === _p$8)) {
+                      const _p$11 = _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(s, "role");
+                      if (!(_role === _p$11)) {
                         break _L$2;
                       } else {
-                        const _p$9 = _M0FP39stillfail5rules4lock6rosterN3txtS5128(s, "lock");
-                        if (!(_lock === _p$9)) {
+                        const _p$12 = _M0FP39stillfail5rules4lock10roster__ofN3txtS5470(s, "lock");
+                        if (!(_lock === _p$12)) {
                           break _L$2;
                         }
                       }
                       break _L;
                     }
-                    why = _M0FP39stillfail5rules4lock6rosterN6constrS5143;
+                    why = _M0FP39stillfail5rules4lock10roster__ofN6constrS5487;
                     decided = _admit;
                   }
                 }
@@ -8121,71 +8891,71 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
             break;
           }
           case "ws.member.remove": {
-            const _p$8 = _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0MPB3Map3getGsRPB5ArrayGsEE(cancels_of, s.hash), new _M0TPB5ArrayGsE([], 0));
-            const _p$9 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$8.len);
-            const _p$10 = _p$8.len;
-            const _p$11 = _p$8.buf;
-            let _tmp$14 = 0;
+            const _p$11 = _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0MPB3Map3getGsRPB5ArrayGsEE(cancels_of, s.hash), new _M0TPB5ArrayGsE([], 0));
+            const _p$12 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$11.len);
+            const _p$13 = _p$11.len;
+            const _p$14 = _p$11.buf;
+            let _tmp$19 = 0;
             while (true) {
-              const _p$12 = _tmp$14;
-              if (_p$12 < _p$10) {
-                const _p$13 = _p$11[_p$12];
-                const _p$14 = _M0MPB3Map3getGssE(label, _p$13);
-                let _p$15;
-                if (_p$14 === undefined) {
-                  _p$15 = $panic();
+              const _p$15 = _tmp$19;
+              if (_p$15 < _p$13) {
+                const _p$16 = _p$14[_p$15];
+                const _p$17 = _M0MPB3Map3getGssE(label, _p$16);
+                let _p$18;
+                if (_p$17 === undefined) {
+                  _p$18 = $panic();
                 } else {
-                  const _p$16 = _p$14;
-                  _p$15 = _p$16;
+                  const _p$19 = _p$17;
+                  _p$18 = _p$19;
                 }
-                _p$9.buf[_p$12] = _p$15;
-                _tmp$14 = _p$12 + 1 | 0;
+                _p$12.buf[_p$15] = _p$18;
+                _tmp$19 = _p$15 + 1 | 0;
                 continue;
               } else {
                 break;
               }
             }
-            const cs = _p$9;
+            const cs = _p$12;
             if (_M0MPC15array5Array8containsGsE(cs, "in")) {
             } else {
               if (_M0MPC15array5Array8containsGsE(cs, "undec")) {
                 l = "undec";
-                why = _M0FP39stillfail5rules4lock6rosterN6constrS5144;
+                why = _M0FP39stillfail5rules4lock10roster__ofN6constrS5488;
               } else {
                 if (cs.len > 0) {
                   l = "out";
-                  why = _M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock6rosterN14role__of__pairS5133(pairs, s)) ? "it may cancel none of what it names" : _M0FP39stillfail5rules4lock6rosterN7not__inS5135(undecided, s);
+                  why = _M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock10roster__ofN14role__of__pairS5475(pairs, s)) ? "it may cancel none of what it names" : _M0FP39stillfail5rules4lock10roster__ofN7not__inS5477(undecided, s);
                 }
               }
             }
             break;
           }
           case "ws.station": {
-            if (!_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock6rosterN14role__of__pairS5133(pairs, s))) {
+            if (!_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock10roster__ofN14role__of__pairS5475(pairs, s))) {
               l = "out";
-              why = _M0FP39stillfail5rules4lock6rosterN7not__inS5135(undecided, s);
+              why = _M0FP39stillfail5rules4lock10roster__ofN7not__inS5477(undecided, s);
             } else {
-              const _bind$34 = _M0MPB3Map3getGssE(st_cancelled, `${s.hash}|${_M0FP39stillfail5rules4lock6rosterN3txtS5128(s, "key")}`);
-              if (_bind$34 === undefined) {
+              const _bind$44 = _M0MPB3Map3getGssE(st_cancelled, `${s.hash}|${_M0FP39stillfail5rules4lock10roster__ofN3txtS5470(s, "key")}`);
+              if (_bind$44 === undefined) {
               } else {
-                const _Some$2 = _bind$34;
+                const _Some$2 = _bind$44;
                 const _r = _Some$2;
                 l = "out";
-                why = _M0FP39stillfail5rules4lock6rosterN6constrS5145;
+                why = _M0FP39stillfail5rules4lock10roster__ofN6constrS5489;
                 decided = _r;
               }
             }
             break;
           }
           default: {
-            if (!_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock6rosterN14role__of__pairS5133(pairs, s))) {
+            if (!_M0FP39stillfail5rules4lock3mgr(_M0FP39stillfail5rules4lock10roster__ofN14role__of__pairS5475(pairs, s))) {
               l = "out";
-              why = _M0FP39stillfail5rules4lock6rosterN7not__inS5135(undecided, s);
+              why = _M0FP39stillfail5rules4lock10roster__ofN7not__inS5477(undecided, s);
             }
           }
         }
-        _M0MPC15array5Array4pushGUsRPC14json4JsonEE(said, new _M0TP39stillfail5rules4lock4Said(s.hash, s.kind, s.log, s.by, l, why, decided));
-        _tmp$12 = _ + 1 | 0;
+        _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(said, new _M0TP39stillfail5rules4lock4Said(s.hash, s.kind, s.log, s.by, l, why, decided));
+        _tmp$17 = _ + 1 | 0;
         continue;
       } else {
         break;
@@ -8193,38 +8963,38 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
     }
     _M0MPC15array5Array8sort__byGUssEE(said, (a, b) => _M0IPC16string6StringPB7Compare7compare(a.hash, b.hash));
     const members = new _M0TPB5ArrayGRP39stillfail5rules4lock5BoundE([], 0);
-    const subs = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRPC14json4JsonE(best));
+    const subs = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(best));
     _M0MPC15array5Array4sortGsE(subs);
-    const _bind$33 = subs.len;
-    const _bind$34 = subs.buf;
-    let _tmp$13 = 0;
+    const _bind$43 = subs.len;
+    const _bind$44 = subs.buf;
+    let _tmp$18 = 0;
     while (true) {
-      const _ = _tmp$13;
-      if (_ < _bind$33) {
-        const sub = _bind$34[_];
-        const _p$7 = _M0MPB3Map3getGsUssOsEE(best, sub);
-        let _bind$35;
-        if (_p$7 === undefined) {
-          _bind$35 = $panic();
+      const _ = _tmp$18;
+      if (_ < _bind$43) {
+        const sub = _bind$44[_];
+        const _p$10 = _M0MPB3Map3getGsUssOsEE(best, sub);
+        let _bind$45;
+        if (_p$10 === undefined) {
+          _bind$45 = $panic();
         } else {
-          const _p$8 = _p$7;
-          _bind$35 = _p$8;
+          const _p$11 = _p$10;
+          _bind$45 = _p$11;
         }
-        const _role = _bind$35._0;
-        const _lock = _bind$35._1;
-        const _admit = _bind$35._2;
+        const _role = _bind$45._0;
+        const _lock = _bind$45._1;
+        const _admit = _bind$45._2;
         let keys;
         _L: {
           _L$2: {
-            const _bind$36 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, _lock);
-            if (_bind$36 === undefined) {
+            const _bind$46 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(logs, _lock);
+            if (_bind$46 === undefined) {
               break _L$2;
             } else {
-              const _Some$2 = _bind$36;
+              const _Some$2 = _bind$46;
               const _x$2 = _Some$2;
-              const _p$8 = _x$2._0;
-              if (_p$8.sub === sub) {
-                const ks = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRPC14json4JsonE(_p$8.devices));
+              const _p$11 = _x$2._0;
+              if (_p$11.sub === sub) {
+                const ks = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(_p$11.devices));
                 _M0MPC15array5Array4sortGsE(ks);
                 keys = ks;
               } else {
@@ -8235,8 +9005,8 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
           }
           keys = undefined;
         }
-        _M0MPC15array5Array4pushGUsRPC14json4JsonEE(members, new _M0TP39stillfail5rules4lock5Bound(sub, _role, _lock, _admit, keys));
-        _tmp$13 = _ + 1 | 0;
+        _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(members, new _M0TP39stillfail5rules4lock5Bound(sub, _role, _lock, _admit, keys));
+        _tmp$18 = _ + 1 | 0;
         continue;
       } else {
         break;
@@ -8251,11 +9021,248 @@ function _M0FP39stillfail5rules4lock6roster(ws, root, chains, c) {
     _M0MPC15array5Array4sortGsE(cancelled);
     const ls = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(label));
     _M0MPC15array5Array8sort__byGUssEE(ls, (a, b) => _M0IPC16string6StringPB7Compare7compare(a._0, b._0));
-    return new _M0TP39stillfail5rules4lock6Roster(true, members, sts, ps, us, cancelled, said, ls, refused);
+    return { _0: new _M0TP39stillfail5rules4lock6Roster(true, members, sts, ps, us, cancelled, said, ls, refused, forced, lacking, newest, settings), _1: logs };
   }
 }
-function _M0FP39stillfail5rules4lock12fold__person(entries, sub, c) {
-  return _M0FP39stillfail5rules4lock16fold__person__of(entries, sub, false, c);
+function _M0FP39stillfail5rules4lock6state4(ws, root, chains, bodies, now, c) {
+  const _bind = _M0FP39stillfail5rules4lock10roster__of(ws, root, chains, bodies, c);
+  const _r = _bind._0;
+  const _logs = _bind._1;
+  const _tmp = new _M0TPB5ArrayGsE([], 0);
+  const _bind$2 = [];
+  const _tmp$2 = _M0MPB3Map3MapGsRP39stillfail5rules4lock6MemberE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock6MemberEE(_bind$2, 0, 0), undefined);
+  const _bind$3 = [];
+  const _tmp$3 = _M0MPB3Map3MapGsRP39stillfail5rules4lock6DeviceE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock6DeviceEE(_bind$3, 0, 0), undefined);
+  const _bind$4 = [];
+  const _tmp$4 = _M0MPB3Map3MapGsRPB5ArrayGsEE(new _M0TPB9ArrayViewGUsRPB5ArrayGsEEE(_bind$4, 0, 0), undefined);
+  const _bind$5 = [];
+  const _tmp$5 = _M0MPB3Map3MapGsRP39stillfail5rules4lock7PasskeyE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock7PasskeyEE(_bind$5, 0, 0), undefined);
+  const _bind$6 = [];
+  const _tmp$6 = _M0MPB3Map3MapGsuE(new _M0TPB9ArrayViewGUsuEE(_bind$6, 0, 0), undefined);
+  const _bind$7 = [];
+  const _tmp$7 = _M0MPB3Map3MapGsRP39stillfail5rules4lock7StationE(new _M0TPB9ArrayViewGUsRP39stillfail5rules4lock7StationEE(_bind$7, 0, 0), undefined);
+  const _bind$8 = [];
+  const _tmp$8 = _M0MPB3Map3MapGsuE(new _M0TPB9ArrayViewGUsuEE(_bind$8, 0, 0), undefined);
+  const _bind$9 = [];
+  const s = new _M0TP39stillfail5rules4lock9LockState(ws, 0, root, root, _tmp, "", _M0DTPC14json4Json4Null__, _tmp$2, _tmp$3, _tmp$4, _tmp$5, _tmp$6, _tmp$7, _tmp$8, _M0MPB3Map3MapGssE(new _M0TPB9ArrayViewGUssEE(_bind$9, 0, 0), undefined), false, undefined);
+  _L: {
+    if (_r.rooted) {
+      const _bind$10 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(_logs, root);
+      if (_bind$10 === undefined) {
+        break _L;
+      } else {
+        const _Some = _bind$10;
+        const _x = _Some;
+        const _rp = _x._0;
+        const set = _r.settings;
+        const _tmp$9 = _rp.seq;
+        const _tmp$10 = _rp.head;
+        const _p = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(set, "origins"));
+        const _p$2 = new _M0TPB5ArrayGsE([], 0);
+        const _p$3 = _p.len;
+        const _p$4 = _p.buf;
+        let _tmp$11;
+        let _tmp$12 = 0;
+        while (true) {
+          const _p$5 = _tmp$12;
+          if (_p$5 < _p$3) {
+            const _p$6 = _p$4[_p$5];
+            const _p$7 = _M0FP39stillfail5rules4lock8text__of(_p$6);
+            if (_p$7 === undefined) {
+            } else {
+              const _p$8 = _p$7;
+              const _p$9 = _p$8;
+              _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_p$2, _p$9);
+            }
+            _tmp$12 = _p$5 + 1 | 0;
+            continue;
+          } else {
+            _tmp$11 = _p$2;
+            break;
+          }
+        }
+        const s$2 = new _M0TP39stillfail5rules4lock9LockState(s.ws, _tmp$9, _tmp$10, s.genesis, _tmp$11, _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(set, "rp_id")), ""), _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock5field(set, "cloud_keys"), _M0DTPC14json4Json4Null__), s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, s.persons, _M0IPC16option6OptionPB2Eq5equalGsE(_r.newest, _M0FP39stillfail5rules4lock6state4N6constrS5874), s.moved);
+        const _bind$11 = [];
+        const forced = _M0MPB3Map3MapGssE(new _M0TPB9ArrayViewGUssEE(_bind$11, 0, 0), undefined);
+        const _bind$12 = _r.in_force;
+        const _bind$13 = _bind$12.len;
+        const _bind$14 = _bind$12.buf;
+        let _tmp$13 = 0;
+        while (true) {
+          const _ = _tmp$13;
+          if (_ < _bind$13) {
+            const f = _bind$14[_];
+            _M0MPB3Map3setGssE(forced, f._0, f._1);
+            _tmp$13 = _ + 1 | 0;
+            continue;
+          } else {
+            break;
+          }
+        }
+        const _bind$15 = [];
+        const bodies_by = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$15, 0, 0), undefined);
+        const _bind$16 = bodies.len;
+        const _bind$17 = bodies.buf;
+        let _tmp$14 = 0;
+        while (true) {
+          const _ = _tmp$14;
+          if (_ < _bind$16) {
+            const b = _bind$17[_];
+            let _bind$18;
+            let _try_err;
+            _L$2: {
+              _L$3: {
+                const _bind$19 = _M0FP39stillfail5rules4lock10body__hash(b, c);
+                let _tmp$15;
+                if (_bind$19.$tag === 1) {
+                  const _ok = _bind$19;
+                  _tmp$15 = _ok._0;
+                } else {
+                  const _err = _bind$19;
+                  _try_err = _err._0;
+                  break _L$3;
+                }
+                _bind$18 = new _M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE2Ok(_tmp$15);
+                break _L$2;
+              }
+              _bind$18 = new _M0DTPB6ResultGsRP39stillfail5rules4lock9LockErrorE3Err(_try_err);
+            }
+            if (_bind$18.$tag === 1) {
+              const _Ok = _bind$18;
+              const _h = _Ok._0;
+              _M0MPB3Map3setGsRPC14json4JsonE(bodies_by, _h, b);
+            }
+            _tmp$14 = _ + 1 | 0;
+            continue;
+          } else {
+            break;
+          }
+        }
+        const _bind$18 = _r.members;
+        const _bind$19 = _bind$18.len;
+        const _bind$20 = _bind$18.buf;
+        let _tmp$15 = 0;
+        while (true) {
+          const _ = _tmp$15;
+          if (_ < _bind$19) {
+            const m = _bind$20[_];
+            _L$2: {
+              const _bind$21 = m.admit;
+              let email;
+              if (_bind$21 === undefined) {
+                email = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(set, "email"));
+              } else {
+                const _Some$2 = _bind$21;
+                const _x$2 = _Some$2;
+                const _bind$22 = _M0MPB3Map3getGssE(forced, _x$2);
+                if (_bind$22 === undefined) {
+                  email = undefined;
+                } else {
+                  const _Some$3 = _bind$22;
+                  const _h = _Some$3;
+                  email = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0MPB3Map3getGsRPC14json4JsonE(bodies_by, _h), "email"));
+                }
+              }
+              _M0MPB3Map3setGsRP39stillfail5rules4lock6MemberE(s$2.members, m.sub, new _M0TP39stillfail5rules4lock6Member(m.sub, _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(email, ""), m.role));
+              _M0MPB3Map3setGssE(s$2.persons, m.sub, m.lock);
+              const _bind$22 = _M0MPB3Map3getGsURP39stillfail5rules4lock6PersonRPB5ArrayGRPC14json4JsonEEE(_logs, m.lock);
+              if (_bind$22 === undefined) {
+                break _L$2;
+              } else {
+                const _Some$2 = _bind$22;
+                const _x$2 = _Some$2;
+                const _p$5 = _x$2._0;
+                if (_p$5.sub === m.sub) {
+                  const _p$6 = _p$5.devices;
+                  if (_p$6.size > 0) {
+                    const _it = _M0MPB3Map5iter2GssE(_p$5.devices);
+                    while (true) {
+                      const _bind$23 = _M0MPB5Iter24nextGssE(_it);
+                      if (_bind$23 === undefined) {
+                        break;
+                      } else {
+                        const _Some$3 = _bind$23;
+                        const _x$3 = _Some$3;
+                        const _d = _x$3._1;
+                        _M0MPB3Map3setGsRP39stillfail5rules4lock6DeviceE(s$2.devices, _d.id, new _M0TP39stillfail5rules4lock6Device(_d.id, m.sub, "app", _d.label, _d.key, undefined, _M0DTPC16option6OptionGdE4None__, undefined, true));
+                        _M0MPB3Map3setGsRPB5ArrayGsEE(s$2.sign_keys, _d.id, new _M0TPB5ArrayGsE([_d.key], 1));
+                        continue;
+                      }
+                    }
+                    _M0MPB3Map3setGsuE(s$2.signed, m.sub, undefined);
+                    const _it$2 = _M0MPB3Map5iter2GssE(_p$5.webs);
+                    while (true) {
+                      const _bind$23 = _M0MPB5Iter24nextGssE(_it$2);
+                      if (_bind$23 === undefined) {
+                        break;
+                      } else {
+                        const _Some$3 = _bind$23;
+                        const _x$3 = _Some$3;
+                        const _w = _x$3._1;
+                        if (_w.at <= now + 600 && now < _w.exp) {
+                          _M0MPB3Map3setGsRP39stillfail5rules4lock6DeviceE(s$2.devices, _w.id, new _M0TP39stillfail5rules4lock6Device(_w.id, m.sub, "web", _w.label, undefined, undefined, new _M0DTPC16option6OptionGdE4Some(_w.exp), undefined, true));
+                        }
+                        continue;
+                      }
+                    }
+                  } else {
+                    break _L$2;
+                  }
+                } else {
+                  break _L$2;
+                }
+              }
+              break _L$2;
+            }
+            _tmp$15 = _ + 1 | 0;
+            continue;
+          } else {
+            break;
+          }
+        }
+        const _bind$21 = _r.stations;
+        const _bind$22 = _bind$21.len;
+        const _bind$23 = _bind$21.buf;
+        let _tmp$16 = 0;
+        while (true) {
+          const _ = _tmp$16;
+          if (_ < _bind$22) {
+            const k = _bind$23[_];
+            _M0MPB3Map3setGsRP39stillfail5rules4lock7StationE(s$2.stations, k, new _M0TP39stillfail5rules4lock7Station(k, ""));
+            _tmp$16 = _ + 1 | 0;
+            continue;
+          } else {
+            break;
+          }
+        }
+        const _bind$24 = _r.newest;
+        let on;
+        if (_bind$24 === undefined) {
+          on = "not on";
+        } else {
+          const _Some$2 = _bind$24;
+          const _x$2 = _Some$2;
+          switch (_x$2) {
+            case "off": {
+              on = "off";
+              break;
+            }
+            case "open": {
+              on = "on";
+              break;
+            }
+            default: {
+              on = "not on";
+            }
+          }
+        }
+        return new _M0TP39stillfail5rules4lock6State4(on, s$2);
+      }
+    } else {
+      break _L;
+    }
+  }
+  return new _M0TP39stillfail5rules4lock6State4("no root", s);
 }
 function _M0FP39stillfail5rules4lock13admit__person(s, sub, endpoint, base, proof, entries, c) {
   const _bind = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(s.members, sub);
@@ -8387,16 +9394,16 @@ function _M0FP39stillfail5rules4lock8role__of(v) {
         const _x$2 = _String._0;
         switch (_x$2) {
           case "owner": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS5478;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS6006;
           }
           case "admin": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS5479;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS6007;
           }
           case "member": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS5480;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS6008;
           }
           case "viewer": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS5481;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS6009;
           }
           default: {
             break _L;
@@ -8520,7 +9527,7 @@ function _M0FP39stillfail5rules4lock6device(v, at, c) {
                       const _p$2 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_xs);
                       let _tmp$2;
                       while (true) {
-                        const _p$3 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$2);
+                        const _p$3 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$2);
                         if (_p$3 === undefined) {
                           _tmp$2 = true;
                           break;
@@ -8540,7 +9547,7 @@ function _M0FP39stillfail5rules4lock6device(v, at, c) {
                       _tmp = false;
                     }
                     if (_tmp) {
-                      const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_xs.len);
+                      const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_xs.len);
                       const _p$3 = _xs.len;
                       const _p$4 = _xs.buf;
                       let _tmp$2 = 0;
@@ -8654,7 +9661,7 @@ function _M0FP39stillfail5rules4lock7passkey(v, c) {
             let _tmp$2;
             const _p$2 = "";
             if (!(_sub === _p$2)) {
-              _tmp$2 = _M0MPC16string6String11has__prefix(_key, _M0FP39stillfail5rules4lock7passkeyN6recordS5534) && (_key.length <= 200 && c.method_table.method_2(c.self, _key));
+              _tmp$2 = _M0MPC16string6String11has__prefix(_key, _M0FP39stillfail5rules4lock7passkeyN6recordS6062) && (_key.length <= 200 && c.method_table.method_2(c.self, _key));
             } else {
               _tmp$2 = false;
             }
@@ -8817,7 +9824,7 @@ function _M0FP39stillfail5rules4lock3add(s, d) {
       const _tmp$2 = d.id;
       const _self = new _M0TPB5ArrayGsE([], 0);
       _M0MPC15array5Array10push__iterGsE(_self, _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(had));
-      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_self, _k);
+      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_self, _k);
       _M0MPB3Map3setGsRPB5ArrayGsEE(_tmp, _tmp$2, _self);
     }
     return d.own ? new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok(_M0MPB3Map3setGsuE(s.signed, d.sub, undefined)) : new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE2Ok(undefined);
@@ -8836,8 +9843,8 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
   const v = e;
   const ws = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws"));
   _L: {
-    if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "kind")), _M0FP39stillfail5rules4lock7genesisN6constrS5610)) {
-      if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "seq")), _M0FP39stillfail5rules4lock7genesisN6constrS5611)) {
+    if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "kind")), _M0FP39stillfail5rules4lock7genesisN6constrS6138)) {
+      if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "seq")), _M0FP39stillfail5rules4lock7genesisN6constrS6139)) {
         _L$2: {
           const _bind = _M0FP39stillfail5rules4lock5field(v, "prev");
           if (_bind === undefined) {
@@ -8846,7 +9853,7 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
             const _Some = _bind;
             const _x = _Some;
             if (_x.$tag === 0) {
-              if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock7genesisN6constrS5612)) {
+              if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock7genesisN6constrS6140)) {
                 if (ws === undefined) {
                   break _L;
                 } else {
@@ -8890,7 +9897,7 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
                         } else {
                           const _p$9 = _p$8;
                           const _p$10 = _p$9;
-                          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_p$3, _p$10);
+                          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_p$3, _p$10);
                         }
                         _tmp = _p$6 + 1 | 0;
                         continue;
@@ -8932,22 +9939,23 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
                     const _bind$19 = _M0MPB3Map3MapGsuE(new _M0TPB9ArrayViewGUsuEE(_bind$18, 0, 0), undefined);
                     const _bind$20 = [];
                     const _bind$21 = _M0MPB3Map3MapGssE(new _M0TPB9ArrayViewGUssEE(_bind$20, 0, 0), undefined);
-                    const s = new _M0TP39stillfail5rules4lock9LockState(_ws, 0, hash, hash, origins, _bind$3, _bind$5, _bind$7, _bind$9, _bind$11, _bind$13, _bind$15, _bind$17, _bind$19, _bind$21, false);
-                    const _bind$22 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "members"));
-                    const _bind$23 = _bind$22.len;
-                    const _bind$24 = _bind$22.buf;
+                    const _bind$22 = undefined;
+                    const s = new _M0TP39stillfail5rules4lock9LockState(_ws, 0, hash, hash, origins, _bind$3, _bind$5, _bind$7, _bind$9, _bind$11, _bind$13, _bind$15, _bind$17, _bind$19, _bind$21, false, _bind$22);
+                    const _bind$23 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "members"));
+                    const _bind$24 = _bind$23.len;
+                    const _bind$25 = _bind$23.buf;
                     let _tmp$2 = 0;
                     while (true) {
                       const _ = _tmp$2;
-                      if (_ < _bind$23) {
-                        const m = _bind$24[_];
-                        const _bind$25 = _M0FP39stillfail5rules4lock6member(m);
+                      if (_ < _bind$24) {
+                        const m = _bind$25[_];
+                        const _bind$26 = _M0FP39stillfail5rules4lock6member(m);
                         let m$2;
-                        if (_bind$25.$tag === 1) {
-                          const _ok = _bind$25;
+                        if (_bind$26.$tag === 1) {
+                          const _ok = _bind$26;
                           m$2 = _ok._0;
                         } else {
-                          return _bind$25;
+                          return _bind$26;
                         }
                         _M0MPB3Map3setGsRP39stillfail5rules4lock6MemberE(_bind$7, m$2.sub, m$2);
                         _tmp$2 = _ + 1 | 0;
@@ -8957,29 +9965,29 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
                       }
                     }
                     const owner = _M0FP39stillfail5rules4lock11str_2einner(_M0FP39stillfail5rules4lock5field(b, "owner"), 200);
-                    const _bind$25 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "devices"));
-                    const _bind$26 = _bind$25.len;
-                    const _bind$27 = _bind$25.buf;
+                    const _bind$26 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "devices"));
+                    const _bind$27 = _bind$26.len;
+                    const _bind$28 = _bind$26.buf;
                     let _tmp$3 = 0;
                     while (true) {
                       const _ = _tmp$3;
-                      if (_ < _bind$26) {
-                        const d = _bind$27[_];
-                        const _bind$28 = _M0FP39stillfail5rules4lock6device(d, 0, c);
+                      if (_ < _bind$27) {
+                        const d = _bind$28[_];
+                        const _bind$29 = _M0FP39stillfail5rules4lock6device(d, 0, c);
                         let _tmp$4;
-                        if (_bind$28.$tag === 1) {
-                          const _ok = _bind$28;
-                          _tmp$4 = _ok._0;
-                        } else {
-                          return _bind$28;
-                        }
-                        const _tmp$5 = _tmp$4;
-                        const _bind$29 = _M0FP39stillfail5rules4lock3add(s, new _M0TP39stillfail5rules4lock6Device(_tmp$5.id, _tmp$5.sub, _tmp$5.kind, _tmp$5.label, _tmp$5.sign_key, _tmp$5.endpoints, _tmp$5.exp, owner, true));
                         if (_bind$29.$tag === 1) {
                           const _ok = _bind$29;
-                          _ok._0;
+                          _tmp$4 = _ok._0;
                         } else {
                           return _bind$29;
+                        }
+                        const _tmp$5 = _tmp$4;
+                        const _bind$30 = _M0FP39stillfail5rules4lock3add(s, new _M0TP39stillfail5rules4lock6Device(_tmp$5.id, _tmp$5.sub, _tmp$5.kind, _tmp$5.label, _tmp$5.sign_key, _tmp$5.endpoints, _tmp$5.exp, owner, true));
+                        if (_bind$30.$tag === 1) {
+                          const _ok = _bind$30;
+                          _ok._0;
+                        } else {
+                          return _bind$30;
                         }
                         _tmp$3 = _ + 1 | 0;
                         continue;
@@ -8987,44 +9995,44 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
                         break;
                       }
                     }
-                    const _bind$28 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "passkeys"));
-                    const _bind$29 = _bind$28.len;
-                    const _bind$30 = _bind$28.buf;
+                    const _bind$29 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "passkeys"));
+                    const _bind$30 = _bind$29.len;
+                    const _bind$31 = _bind$29.buf;
                     let _tmp$4 = 0;
                     while (true) {
                       const _ = _tmp$4;
-                      if (_ < _bind$29) {
-                        const p = _bind$30[_];
-                        const _bind$31 = _M0FP39stillfail5rules4lock7passkey(p, c);
-                        let _bind$32;
-                        if (_bind$31.$tag === 1) {
-                          const _ok = _bind$31;
-                          _bind$32 = _ok._0;
+                      if (_ < _bind$30) {
+                        const p = _bind$31[_];
+                        const _bind$32 = _M0FP39stillfail5rules4lock7passkey(p, c);
+                        let _bind$33;
+                        if (_bind$32.$tag === 1) {
+                          const _ok = _bind$32;
+                          _bind$33 = _ok._0;
                         } else {
-                          return _bind$31;
+                          return _bind$32;
                         }
-                        _M0FP39stillfail5rules4lock12add__passkey(s, new _M0TP39stillfail5rules4lock7Passkey(_bind$32.id, _bind$32.sub, _bind$32.key, _bind$32.label, true));
+                        _M0FP39stillfail5rules4lock12add__passkey(s, new _M0TP39stillfail5rules4lock7Passkey(_bind$33.id, _bind$33.sub, _bind$33.key, _bind$33.label, true));
                         _tmp$4 = _ + 1 | 0;
                         continue;
                       } else {
                         break;
                       }
                     }
-                    const _bind$31 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "stations"));
-                    const _bind$32 = _bind$31.len;
-                    const _bind$33 = _bind$31.buf;
+                    const _bind$32 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "stations"));
+                    const _bind$33 = _bind$32.len;
+                    const _bind$34 = _bind$32.buf;
                     let _tmp$5 = 0;
                     while (true) {
                       const _ = _tmp$5;
-                      if (_ < _bind$32) {
-                        const st = _bind$33[_];
-                        const _bind$34 = _M0FP39stillfail5rules4lock7station(st);
+                      if (_ < _bind$33) {
+                        const st = _bind$34[_];
+                        const _bind$35 = _M0FP39stillfail5rules4lock7station(st);
                         let st$2;
-                        if (_bind$34.$tag === 1) {
-                          const _ok = _bind$34;
+                        if (_bind$35.$tag === 1) {
+                          const _ok = _bind$35;
                           st$2 = _ok._0;
                         } else {
-                          return _bind$34;
+                          return _bind$35;
                         }
                         _M0MPB3Map3setGsRP39stillfail5rules4lock7StationE(_bind$17, st$2.key, st$2);
                         _tmp$5 = _ + 1 | 0;
@@ -9033,14 +10041,14 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
                         break;
                       }
                     }
-                    const _bind$34 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "gateways"));
-                    const _bind$35 = _bind$34.len;
-                    const _bind$36 = _bind$34.buf;
+                    const _bind$35 = _M0FP39stillfail5rules4lock3arr(_M0FP39stillfail5rules4lock5field(b, "gateways"));
+                    const _bind$36 = _bind$35.len;
+                    const _bind$37 = _bind$35.buf;
                     let _tmp$6 = 0;
                     while (true) {
                       const _ = _tmp$6;
-                      if (_ < _bind$35) {
-                        const g = _bind$36[_];
+                      if (_ < _bind$36) {
+                        const g = _bind$37[_];
                         if (_M0FP39stillfail5rules4lock6is__id(g)) {
                           const _p$6 = _M0FP39stillfail5rules4lock8text__of(g);
                           let _tmp$7;
@@ -9058,54 +10066,54 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
                         break;
                       }
                     }
-                    const _bind$37 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "owner"));
+                    const _bind$38 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "owner"));
                     let owns;
-                    if (_bind$37 === undefined) {
+                    if (_bind$38 === undefined) {
                       owns = false;
                     } else {
-                      const _Some$3 = _bind$37;
+                      const _Some$3 = _bind$38;
                       const _o = _Some$3;
-                      const _bind$38 = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(_bind$7, _o);
-                      if (_bind$38 === undefined) {
+                      const _bind$39 = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(_bind$7, _o);
+                      if (_bind$39 === undefined) {
                         owns = false;
                       } else {
-                        const _Some$4 = _bind$38;
+                        const _Some$4 = _bind$39;
                         const _m = _Some$4;
                         owns = _m.role === "owner";
                       }
                     }
                     if (!owns) {
-                      const _bind$38 = _M0FP39stillfail5rules4lock6refuse("the genesis names its owner among its members");
-                      if (_bind$38.$tag === 1) {
-                        const _ok = _bind$38;
+                      const _bind$39 = _M0FP39stillfail5rules4lock6refuse("the genesis names its owner among its members");
+                      if (_bind$39.$tag === 1) {
+                        const _ok = _bind$39;
                         _ok._0;
                       } else {
-                        return _bind$38;
+                        return _bind$39;
                       }
                     }
                     const by = _M0FP39stillfail5rules4lock6signer(s, _M0FP39stillfail5rules4lock8sig__key(e), new _M0DTPC16option6OptionGdE4Some(_M0MPC16option6Option10unwrap__orGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "at")), 1 / 0)));
-                    const _bind$38 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "owner"));
+                    const _bind$39 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "owner"));
                     let signed_by_owner;
                     if (by === undefined) {
                       signed_by_owner = false;
                     } else {
                       const _Some$3 = by;
                       const _by = _Some$3;
-                      if (_bind$38 === undefined) {
+                      if (_bind$39 === undefined) {
                         signed_by_owner = false;
                       } else {
-                        const _Some$4 = _bind$38;
+                        const _Some$4 = _bind$39;
                         const _o = _Some$4;
                         signed_by_owner = _by.sub === _o && c.method_table.method_1(c.self, _M0FP39stillfail5rules4lock7sig__of(e), hash, origins, _bind$3, _by.passkey);
                       }
                     }
                     if (!signed_by_owner) {
-                      const _bind$39 = _M0FP39stillfail5rules4lock6refuse("the genesis is not signed by its owner");
-                      if (_bind$39.$tag === 1) {
-                        const _ok = _bind$39;
+                      const _bind$40 = _M0FP39stillfail5rules4lock6refuse("the genesis is not signed by its owner");
+                      if (_bind$40.$tag === 1) {
+                        const _ok = _bind$40;
                         _ok._0;
                       } else {
-                        return _bind$39;
+                        return _bind$40;
                       }
                     }
                     return new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE2Ok(s);
@@ -9183,7 +10191,7 @@ function _M0FP39stillfail5rules4lock10kind__text(v) {
     }
   }
 }
-function _M0FP39stillfail5rules4lock5applyN4needS5708(ok, why) {
+function _M0FP39stillfail5rules4lock5applyN4needS6237(ok, why) {
   if (!ok) {
     return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused(why));
   } else {
@@ -9192,28 +10200,39 @@ function _M0FP39stillfail5rules4lock5applyN4needS5708(ok, why) {
 }
 function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
   const v = e;
+  const _bind = prev.moved;
+  if (_bind === undefined) {
+  } else {
+    const _bind$2 = _M0FP39stillfail5rules4lock6refuse("the lock moved to a person's own log: nothing follows it here");
+    if (_bind$2.$tag === 1) {
+      const _ok = _bind$2;
+      _ok._0;
+    } else {
+      return _bind$2;
+    }
+  }
   if (prev.disabled) {
-    const _bind = _M0FP39stillfail5rules4lock6refuse("the lock is turned off");
-    if (_bind.$tag === 1) {
-      const _ok = _bind;
+    const _bind$2 = _M0FP39stillfail5rules4lock6refuse("the lock is turned off");
+    if (_bind$2.$tag === 1) {
+      const _ok = _bind$2;
       _ok._0;
     } else {
-      return _bind;
+      return _bind$2;
     }
   }
-  if (_M0IP016_24default__implPB2Eq10not__equalGOdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock5applyN6constrS5709) || _M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws")), prev.ws)) {
-    const _bind = _M0FP39stillfail5rules4lock6refuse("an entry of another lock");
-    if (_bind.$tag === 1) {
-      const _ok = _bind;
+  if (_M0IP016_24default__implPB2Eq10not__equalGOdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock5applyN6constrS6238) || _M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws")), prev.ws)) {
+    const _bind$2 = _M0FP39stillfail5rules4lock6refuse("an entry of another lock");
+    if (_bind$2.$tag === 1) {
+      const _ok = _bind$2;
       _ok._0;
     } else {
-      return _bind;
+      return _bind$2;
     }
   }
-  const _bind = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "seq"));
+  const _bind$2 = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "seq"));
   let follows;
-  if (_bind.$tag === 1) {
-    const _Some = _bind;
+  if (_bind$2.$tag === 1) {
+    const _Some = _bind$2;
     const _seq = _Some._0;
     const _p = $i64_trunc_f64(prev.seq);
     const _p$2 = $i64_trunc_f64(_seq);
@@ -9222,17 +10241,7 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
     follows = false;
   }
   if (!follows || _M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "prev")), prev.head)) {
-    const _bind$2 = _M0FP39stillfail5rules4lock6refuse("the entry does not follow this lock's head");
-    if (_bind$2.$tag === 1) {
-      const _ok = _bind$2;
-      _ok._0;
-    } else {
-      return _bind$2;
-    }
-  }
-  const _bind$2 = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at"));
-  if (_bind$2.$tag === 0) {
-    const _bind$3 = _M0FP39stillfail5rules4lock6refuse("at is unix seconds");
+    const _bind$3 = _M0FP39stillfail5rules4lock6refuse("the entry does not follow this lock's head");
     if (_bind$3.$tag === 1) {
       const _ok = _bind$3;
       _ok._0;
@@ -9240,50 +10249,60 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
       return _bind$3;
     }
   }
+  const _bind$3 = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at"));
+  if (_bind$3.$tag === 0) {
+    const _bind$4 = _M0FP39stillfail5rules4lock6refuse("at is unix seconds");
+    if (_bind$4.$tag === 1) {
+      const _ok = _bind$4;
+      _ok._0;
+    } else {
+      return _bind$4;
+    }
+  }
   const at = _M0MPC16option6Option6unwrapGdE(_M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at")));
-  const _bind$3 = _M0FP39stillfail5rules4lock11entry__hash(e, c);
+  const _bind$4 = _M0FP39stillfail5rules4lock11entry__hash(e, c);
   let hash;
-  if (_bind$3.$tag === 1) {
-    const _ok = _bind$3;
+  if (_bind$4.$tag === 1) {
+    const _ok = _bind$4;
     hash = _ok._0;
   } else {
-    return _bind$3;
+    return _bind$4;
   }
-  const _bind$4 = _M0FP39stillfail5rules4lock6signer(prev, _M0FP39stillfail5rules4lock8sig__key(e), now);
-  if (_bind$4 === undefined) {
+  const _bind$5 = _M0FP39stillfail5rules4lock6signer(prev, _M0FP39stillfail5rules4lock8sig__key(e), now);
+  if (_bind$5 === undefined) {
     return new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device or passkey in the lock"));
   } else {
-    const _Some = _bind$4;
+    const _Some = _bind$5;
     const _by = _Some;
     if (!c.method_table.method_1(c.self, _M0FP39stillfail5rules4lock7sig__of(e), hash, prev.origins, prev.rp_id, _by.passkey)) {
-      const _bind$5 = _M0FP39stillfail5rules4lock6refuse("signature invalid");
-      if (_bind$5.$tag === 1) {
-        const _ok = _bind$5;
+      const _bind$6 = _M0FP39stillfail5rules4lock6refuse("signature invalid");
+      if (_bind$6.$tag === 1) {
+        const _ok = _bind$6;
         _ok._0;
       } else {
-        return _bind$5;
+        return _bind$6;
       }
     }
-    const s = new _M0TP39stillfail5rules4lock9LockState(prev.ws, prev.seq + 1, hash, prev.genesis, prev.origins, prev.rp_id, prev.cloud_keys, _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock6MemberE(prev.members), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock6DeviceE(prev.devices), _M0FP39stillfail5rules4lock4copyGsRPB5ArrayGsEE(prev.sign_keys), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock7PasskeyE(prev.passkeys), _M0FP39stillfail5rules4lock4copyGsuE(prev.signed), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock7StationE(prev.stations), _M0FP39stillfail5rules4lock4copyGsuE(prev.gateways), _M0FP39stillfail5rules4lock4copyGssE(prev.persons), prev.disabled);
+    const s = new _M0TP39stillfail5rules4lock9LockState(prev.ws, prev.seq + 1, hash, prev.genesis, prev.origins, prev.rp_id, prev.cloud_keys, _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock6MemberE(prev.members), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock6DeviceE(prev.devices), _M0FP39stillfail5rules4lock4copyGsRPB5ArrayGsEE(prev.sign_keys), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock7PasskeyE(prev.passkeys), _M0FP39stillfail5rules4lock4copyGsuE(prev.signed), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock7StationE(prev.stations), _M0FP39stillfail5rules4lock4copyGsuE(prev.gateways), _M0FP39stillfail5rules4lock4copyGssE(prev.persons), prev.disabled, prev.moved);
     let b;
     _L: {
       _L$2: {
-        const _bind$5 = _M0FP39stillfail5rules4lock5field(v, "body");
-        if (_bind$5 === undefined) {
+        const _bind$6 = _M0FP39stillfail5rules4lock5field(v, "body");
+        if (_bind$6 === undefined) {
           break _L$2;
         } else {
-          const _Some$2 = _bind$5;
+          const _Some$2 = _bind$6;
           const _x = _Some$2;
           if (_x.$tag === 0) {
             break _L$2;
           } else {
-            b = _bind$5;
+            b = _bind$6;
           }
         }
         break _L;
       }
-      const _bind$5 = [];
-      const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$5, 0, 0), undefined);
+      const _bind$6 = [];
+      const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$6, 0, 0), undefined);
       b = new _M0DTPC14json4Json6Object(_p);
     }
     const who = _M0FP39stillfail5rules4lock11role__named(_by.role);
@@ -9291,40 +10310,40 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
     let out = s;
     switch (kind) {
       case "member": {
-        const _bind$5 = _M0FP39stillfail5rules4lock6member(b);
+        const _bind$6 = _M0FP39stillfail5rules4lock6member(b);
         let m;
-        if (_bind$5.$tag === 1) {
-          const _ok = _bind$5;
+        if (_bind$6.$tag === 1) {
+          const _ok = _bind$6;
           m = _ok._0;
         } else {
-          return _bind$5;
+          return _bind$6;
         }
-        const _bind$6 = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(s.members, m.sub);
+        const _bind$7 = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(s.members, m.sub);
         let was_owner;
-        if (_bind$6 === undefined) {
+        if (_bind$7 === undefined) {
           was_owner = false;
         } else {
-          const _Some$2 = _bind$6;
+          const _Some$2 = _bind$7;
           const _w = _Some$2;
           was_owner = _w.role === "owner";
         }
-        const _bind$7 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change9MemberSet(was_owner, m.role === "owner")), _M0FP39stillfail5rules4role4rank(who) >= 2 ? "only owners make or change owners" : "only owners and admins change members");
-        if (_bind$7.$tag === 1) {
-          const _ok = _bind$7;
-          _ok._0;
-        } else {
-          return _bind$7;
-        }
-        const _p = _M0FP39stillfail5rules4lock6owners(s);
-        const _p$2 = m.role === "owner";
-        const kept = _p$2 ? true : was_owner ? _p >= 2 : _p >= 1;
-        _M0MPB3Map3setGsRP39stillfail5rules4lock6MemberE(s.members, m.sub, m);
-        const _bind$8 = _M0FP39stillfail5rules4lock5applyN4needS5708(kept, "a lock keeps an owner");
+        const _bind$8 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change9MemberSet(was_owner, m.role === "owner")), _M0FP39stillfail5rules4role4rank(who) >= 2 ? "only owners make or change owners" : "only owners and admins change members");
         if (_bind$8.$tag === 1) {
           const _ok = _bind$8;
           _ok._0;
         } else {
           return _bind$8;
+        }
+        const _p = _M0FP39stillfail5rules4lock6owners(s);
+        const _p$2 = m.role === "owner";
+        const kept = _p$2 ? true : was_owner ? _p >= 2 : _p >= 1;
+        _M0MPB3Map3setGsRP39stillfail5rules4lock6MemberE(s.members, m.sub, m);
+        const _bind$9 = _M0FP39stillfail5rules4lock5applyN4needS6237(kept, "a lock keeps an owner");
+        if (_bind$9.$tag === 1) {
+          const _ok = _bind$9;
+          _ok._0;
+        } else {
+          return _bind$9;
         }
         break;
       }
@@ -9347,30 +10366,30 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
                   _tmp = _p$4;
                 }
                 const was_owner$2 = _tmp.role === "owner";
-                const _bind$9 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change12MemberRemove(was_owner$2)), "only owners and admins remove members, owners owners");
-                if (_bind$9.$tag === 1) {
-                  const _ok = _bind$9;
-                  _ok._0;
-                } else {
-                  return _bind$9;
-                }
-                const _p$4 = _M0FP39stillfail5rules4lock6owners(s);
-                const _bind$10 = _M0FP39stillfail5rules4lock5applyN4needS5708(was_owner$2 ? _p$4 >= 2 : _p$4 >= 1, "a lock keeps an owner");
+                const _bind$10 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change12MemberRemove(was_owner$2)), "only owners and admins remove members, owners owners");
                 if (_bind$10.$tag === 1) {
                   const _ok = _bind$10;
                   _ok._0;
                 } else {
                   return _bind$10;
                 }
+                const _p$4 = _M0FP39stillfail5rules4lock6owners(s);
+                const _bind$11 = _M0FP39stillfail5rules4lock5applyN4needS6237(was_owner$2 ? _p$4 >= 2 : _p$4 >= 1, "a lock keeps an owner");
+                if (_bind$11.$tag === 1) {
+                  const _ok = _bind$11;
+                  _ok._0;
+                } else {
+                  return _bind$11;
+                }
                 _M0MPB3Map6removeGsRP39stillfail5rules4lock6MemberE(s.members, _sub);
-                const _bind$11 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRPC14json4JsonE(s.devices));
-                const _bind$12 = _bind$11.len;
-                const _bind$13 = _bind$11.buf;
+                const _bind$12 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(s.devices));
+                const _bind$13 = _bind$12.len;
+                const _bind$14 = _bind$12.buf;
                 let _tmp$2 = 0;
                 while (true) {
                   const _ = _tmp$2;
-                  if (_ < _bind$12) {
-                    const k = _bind$13[_];
+                  if (_ < _bind$13) {
+                    const k = _bind$14[_];
                     const _p$5 = _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(s.devices, k);
                     let _tmp$3;
                     if (_p$5 === undefined) {
@@ -9388,14 +10407,14 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
                     break;
                   }
                 }
-                const _bind$14 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRPC14json4JsonE(s.passkeys));
-                const _bind$15 = _bind$14.len;
-                const _bind$16 = _bind$14.buf;
+                const _bind$15 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB3Map4keysGsRP39stillfail5rules4lock12PersonDeviceE(s.passkeys));
+                const _bind$16 = _bind$15.len;
+                const _bind$17 = _bind$15.buf;
                 let _tmp$3 = 0;
                 while (true) {
                   const _ = _tmp$3;
-                  if (_ < _bind$15) {
-                    const k = _bind$16[_];
+                  if (_ < _bind$16) {
+                    const k = _bind$17[_];
                     const _p$5 = _M0MPB3Map3getGsRP39stillfail5rules4lock7PasskeyE(s.passkeys, k);
                     let _tmp$4;
                     if (_p$5 === undefined) {
@@ -9426,37 +10445,37 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         break;
       }
       case "device": {
-        const _bind$9 = _M0FP39stillfail5rules4lock6device(b, at, c);
+        const _bind$10 = _M0FP39stillfail5rules4lock6device(b, at, c);
         let d;
-        if (_bind$9.$tag === 1) {
-          const _ok = _bind$9;
-          d = _ok._0;
-        } else {
-          return _bind$9;
-        }
-        const _bind$10 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(d.sub === _by.sub)), "members add only their own devices");
         if (_bind$10.$tag === 1) {
           const _ok = _bind$10;
-          _ok._0;
+          d = _ok._0;
         } else {
           return _bind$10;
         }
-        const _bind$11 = _M0FP39stillfail5rules4lock3add(s, new _M0TP39stillfail5rules4lock6Device(d.id, d.sub, d.kind, d.label, d.sign_key, d.endpoints, d.exp, _by.sub, _M0FP39stillfail5rules4lock7own__of(prev, d.sub, _by, _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(prev.devices, d.id), d.sign_key)));
+        const _bind$11 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(d.sub === _by.sub)), "members add only their own devices");
         if (_bind$11.$tag === 1) {
           const _ok = _bind$11;
           _ok._0;
         } else {
           return _bind$11;
         }
+        const _bind$12 = _M0FP39stillfail5rules4lock3add(s, new _M0TP39stillfail5rules4lock6Device(d.id, d.sub, d.kind, d.label, d.sign_key, d.endpoints, d.exp, _by.sub, _M0FP39stillfail5rules4lock7own__of(prev, d.sub, _by, _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(prev.devices, d.id), d.sign_key)));
+        if (_bind$12.$tag === 1) {
+          const _ok = _bind$12;
+          _ok._0;
+        } else {
+          return _bind$12;
+        }
         break;
       }
       case "device.remove": {
-        const _bind$12 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "id"));
+        const _bind$13 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "id"));
         let d$2;
-        if (_bind$12 === undefined) {
+        if (_bind$13 === undefined) {
           d$2 = undefined;
         } else {
-          const _Some$2 = _bind$12;
+          const _Some$2 = _bind$13;
           const _id = _Some$2;
           d$2 = _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(s.devices, _id);
         }
@@ -9465,50 +10484,50 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         } else {
           const _Some$2 = d$2;
           const _d = _Some$2;
-          const _bind$13 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_d.sub === _by.sub)), "members remove only their own devices");
-          if (_bind$13.$tag === 1) {
-            const _ok = _bind$13;
+          const _bind$14 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_d.sub === _by.sub)), "members remove only their own devices");
+          if (_bind$14.$tag === 1) {
+            const _ok = _bind$14;
             _ok._0;
           } else {
-            return _bind$13;
+            return _bind$14;
           }
           _M0MPB3Map6removeGsRP39stillfail5rules4lock6DeviceE(s.devices, _d.id);
         }
         break;
       }
       case "passkey": {
-        const _bind$13 = _M0FP39stillfail5rules4lock7passkey(b, c);
+        const _bind$14 = _M0FP39stillfail5rules4lock7passkey(b, c);
         let p;
-        if (_bind$13.$tag === 1) {
-          const _ok = _bind$13;
-          p = _ok._0;
-        } else {
-          return _bind$13;
-        }
-        const _bind$14 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0MPB3Map8containsGsRP39stillfail5rules4lock6MemberE(s.members, p.sub), "a passkey is a member's");
         if (_bind$14.$tag === 1) {
           const _ok = _bind$14;
-          _ok._0;
+          p = _ok._0;
         } else {
           return _bind$14;
         }
-        const _bind$15 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(p.sub === _by.sub)), "members add only their own passkeys");
+        const _bind$15 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0MPB3Map8containsGsRP39stillfail5rules4lock6MemberE(s.members, p.sub), "a passkey is a member's");
         if (_bind$15.$tag === 1) {
           const _ok = _bind$15;
           _ok._0;
         } else {
           return _bind$15;
         }
+        const _bind$16 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(p.sub === _by.sub)), "members add only their own passkeys");
+        if (_bind$16.$tag === 1) {
+          const _ok = _bind$16;
+          _ok._0;
+        } else {
+          return _bind$16;
+        }
         _M0FP39stillfail5rules4lock12add__passkey(s, new _M0TP39stillfail5rules4lock7Passkey(p.id, p.sub, p.key, p.label, _M0FP39stillfail5rules4lock7own__of(prev, p.sub, _by, undefined, undefined)));
         break;
       }
       case "passkey.remove": {
-        const _bind$16 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
+        const _bind$17 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
         let p$2;
-        if (_bind$16 === undefined) {
+        if (_bind$17 === undefined) {
           p$2 = undefined;
         } else {
-          const _Some$2 = _bind$16;
+          const _Some$2 = _bind$17;
           const _k = _Some$2;
           p$2 = _M0MPB3Map3getGsRP39stillfail5rules4lock7PasskeyE(s.passkeys, _k);
         }
@@ -9517,12 +10536,12 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         } else {
           const _Some$2 = p$2;
           const _p$3 = _Some$2;
-          const _bind$17 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_p$3.sub === _by.sub)), "members remove only their own passkeys");
-          if (_bind$17.$tag === 1) {
-            const _ok = _bind$17;
+          const _bind$18 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_p$3.sub === _by.sub)), "members remove only their own passkeys");
+          if (_bind$18.$tag === 1) {
+            const _ok = _bind$18;
             _ok._0;
           } else {
-            return _bind$17;
+            return _bind$18;
           }
           _M0MPB3Map6removeGsRP39stillfail5rules4lock7PasskeyE(s.passkeys, _p$3.key);
         }
@@ -9540,21 +10559,21 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
               if (_M0MPB3Map8containsGsRP39stillfail5rules4lock6MemberE(s.members, _sub)) {
                 _L$5: {
                   _L$6: {
-                    const _bind$17 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "person"));
-                    if (_bind$17 === undefined) {
+                    const _bind$18 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "person"));
+                    if (_bind$18 === undefined) {
                       break _L$6;
                     } else {
-                      const _Some$3 = _bind$17;
+                      const _Some$3 = _bind$18;
                       const _person = _Some$3;
                       if (_M0FP39stillfail5rules4lock9is__hex32(_person)) {
                         const _p$3 = _sub === _by.sub;
                         const _p$4 = _by.own;
-                        const _bind$18 = _M0FP39stillfail5rules4lock5applyN4needS5708(!_p$3 ? false : _p$4, "members bind only themselves to a lock of their own, from their own device");
-                        if (_bind$18.$tag === 1) {
-                          const _ok = _bind$18;
+                        const _bind$19 = _M0FP39stillfail5rules4lock5applyN4needS6237(!_p$3 ? false : _p$4, "members bind only themselves to a lock of their own, from their own device");
+                        if (_bind$19.$tag === 1) {
+                          const _ok = _bind$19;
                           _ok._0;
                         } else {
-                          return _bind$18;
+                          return _bind$19;
                         }
                         _M0MPB3Map3setGssE(s.persons, _sub, _person);
                       } else {
@@ -9576,48 +10595,48 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         break;
       }
       case "station": {
-        const _bind$17 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins add stations");
-        if (_bind$17.$tag === 1) {
-          const _ok = _bind$17;
-          _ok._0;
-        } else {
-          return _bind$17;
-        }
-        const _bind$18 = _M0FP39stillfail5rules4lock7station(b);
-        let st;
+        const _bind$18 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins add stations");
         if (_bind$18.$tag === 1) {
           const _ok = _bind$18;
-          st = _ok._0;
+          _ok._0;
         } else {
           return _bind$18;
+        }
+        const _bind$19 = _M0FP39stillfail5rules4lock7station(b);
+        let st;
+        if (_bind$19.$tag === 1) {
+          const _ok = _bind$19;
+          st = _ok._0;
+        } else {
+          return _bind$19;
         }
         _M0MPB3Map3setGsRP39stillfail5rules4lock7StationE(s.stations, st.key, st);
         break;
       }
       case "station.remove": {
-        const _bind$19 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove stations");
-        if (_bind$19.$tag === 1) {
-          const _ok = _bind$19;
+        const _bind$20 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove stations");
+        if (_bind$20.$tag === 1) {
+          const _ok = _bind$20;
           _ok._0;
         } else {
-          return _bind$19;
+          return _bind$20;
         }
-        const _bind$20 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
-        if (_bind$20 === undefined) {
+        const _bind$21 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
+        if (_bind$21 === undefined) {
         } else {
-          const _Some$2 = _bind$20;
+          const _Some$2 = _bind$21;
           const _k = _Some$2;
           _M0MPB3Map6removeGsRP39stillfail5rules4lock7StationE(s.stations, _k);
         }
         break;
       }
       case "gateway": {
-        const _bind$21 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__) && _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "key")), "only owners and admins add gateways, by iroh id");
-        if (_bind$21.$tag === 1) {
-          const _ok = _bind$21;
+        const _bind$22 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__) && _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "key")), "only owners and admins add gateways, by iroh id");
+        if (_bind$22.$tag === 1) {
+          const _ok = _bind$22;
           _ok._0;
         } else {
-          return _bind$21;
+          return _bind$22;
         }
         const _tmp = s.gateways;
         const _p$3 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
@@ -9632,17 +10651,17 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         break;
       }
       case "gateway.remove": {
-        const _bind$22 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove gateways");
-        if (_bind$22.$tag === 1) {
-          const _ok = _bind$22;
+        const _bind$23 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove gateways");
+        if (_bind$23.$tag === 1) {
+          const _ok = _bind$23;
           _ok._0;
         } else {
-          return _bind$22;
+          return _bind$23;
         }
-        const _bind$23 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
-        if (_bind$23 === undefined) {
+        const _bind$24 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
+        if (_bind$24 === undefined) {
         } else {
-          const _Some$2 = _bind$23;
+          const _Some$2 = _bind$24;
           const _k = _Some$2;
           _M0MPB3Map6removeGsuE(s.gateways, _k);
         }
@@ -9651,17 +10670,17 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
       case "cloud_keys": {
         let _tmp$3;
         if (_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change9CloudKeys__)) {
-          const _bind$24 = _M0FP39stillfail5rules4lock5field(b, "keys");
-          _tmp$3 = !(_bind$24 === undefined);
+          const _bind$25 = _M0FP39stillfail5rules4lock5field(b, "keys");
+          _tmp$3 = !(_bind$25 === undefined);
         } else {
           _tmp$3 = false;
         }
-        const _bind$24 = _M0FP39stillfail5rules4lock5applyN4needS5708(_tmp$3, "only owners change the control plane's keys");
-        if (_bind$24.$tag === 1) {
-          const _ok = _bind$24;
+        const _bind$25 = _M0FP39stillfail5rules4lock5applyN4needS6237(_tmp$3, "only owners change the control plane's keys");
+        if (_bind$25.$tag === 1) {
+          const _ok = _bind$25;
           _ok._0;
         } else {
-          return _bind$24;
+          return _bind$25;
         }
         const _p$4 = _M0FP39stillfail5rules4lock5field(b, "keys");
         let _tmp$4;
@@ -9671,31 +10690,77 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
           const _p$5 = _p$4;
           _tmp$4 = _p$5;
         }
-        out = new _M0TP39stillfail5rules4lock9LockState(s.ws, s.seq, s.head, s.genesis, s.origins, s.rp_id, _tmp$4, s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, s.persons, s.disabled);
+        out = new _M0TP39stillfail5rules4lock9LockState(s.ws, s.seq, s.head, s.genesis, s.origins, s.rp_id, _tmp$4, s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, s.persons, s.disabled, s.moved);
         break;
       }
       case "disable": {
-        const _bind$25 = _M0FP39stillfail5rules4lock5applyN4needS5708(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change7Disable__), "only owners turn the lock off");
-        if (_bind$25.$tag === 1) {
-          const _ok = _bind$25;
-          _ok._0;
-        } else {
-          return _bind$25;
-        }
-        out = new _M0TP39stillfail5rules4lock9LockState(s.ws, s.seq, s.head, s.genesis, s.origins, s.rp_id, s.cloud_keys, s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, s.persons, true);
-        break;
-      }
-      default: {
-        const _bind$26 = _M0FP39stillfail5rules4lock6refuse(`unknown entry kind ${_M0FP39stillfail5rules4lock10kind__text(_M0FP39stillfail5rules4lock5field(v, "kind"))}`);
+        const _bind$26 = _M0FP39stillfail5rules4lock5applyN4needS6237(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change7Disable__), "only owners turn the lock off");
         if (_bind$26.$tag === 1) {
           const _ok = _bind$26;
           _ok._0;
         } else {
           return _bind$26;
         }
+        out = new _M0TP39stillfail5rules4lock9LockState(s.ws, s.seq, s.head, s.genesis, s.origins, s.rp_id, s.cloud_keys, s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, s.persons, true, s.moved);
+        break;
+      }
+      case "moved": {
+        const _bind$27 = _M0FP39stillfail5rules4lock5applyN4needS6237(_by.role === "owner" && (_by.own && !_by.passkey), "only an owner's own app device hands the lock over");
+        if (_bind$27.$tag === 1) {
+          const _ok = _bind$27;
+          _ok._0;
+        } else {
+          return _bind$27;
+        }
+        let one;
+        if (b === undefined) {
+          one = false;
+        } else {
+          const _Some$2 = b;
+          const _x = _Some$2;
+          if (_x.$tag === 6) {
+            const _Object = _x;
+            const _m = _Object._0;
+            one = _m.size === 1;
+          } else {
+            one = false;
+          }
+        }
+        _L$4: {
+          _L$5: {
+            if (one) {
+              const _bind$28 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "root"));
+              if (_bind$28 === undefined) {
+                break _L$5;
+              } else {
+                const _Some$2 = _bind$28;
+                const _root = _Some$2;
+                if (_M0FP39stillfail5rules4lock9is__hex32(_root)) {
+                  out = new _M0TP39stillfail5rules4lock9LockState(s.ws, s.seq, s.head, s.genesis, s.origins, s.rp_id, s.cloud_keys, s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, s.persons, s.disabled, _root);
+                } else {
+                  break _L$5;
+                }
+              }
+            } else {
+              break _L$5;
+            }
+            break _L$4;
+          }
+          return new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("a handover names the person log it goes to, by its genesis's hash"));
+        }
+        break;
+      }
+      default: {
+        const _bind$28 = _M0FP39stillfail5rules4lock6refuse(`unknown entry kind ${_M0FP39stillfail5rules4lock10kind__text(_M0FP39stillfail5rules4lock5field(v, "kind"))}`);
+        if (_bind$28.$tag === 1) {
+          const _ok = _bind$28;
+          _ok._0;
+        } else {
+          return _bind$28;
+        }
       }
     }
-    return _by.own ? new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE2Ok(out) : new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE2Ok(new _M0TP39stillfail5rules4lock9LockState(prev.ws, prev.seq + 1, hash, prev.genesis, prev.origins, prev.rp_id, prev.cloud_keys, prev.members, prev.devices, prev.sign_keys, prev.passkeys, prev.signed, prev.stations, prev.gateways, prev.persons, prev.disabled));
+    return _by.own ? new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE2Ok(out) : new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE2Ok(new _M0TP39stillfail5rules4lock9LockState(prev.ws, prev.seq + 1, hash, prev.genesis, prev.origins, prev.rp_id, prev.cloud_keys, prev.members, prev.devices, prev.sign_keys, prev.passkeys, prev.signed, prev.stations, prev.gateways, prev.persons, prev.disabled, prev.moved));
   }
 }
 function _M0FP39stillfail5rules4lock4fold(entries, now, c) {
@@ -9875,14 +10940,14 @@ function _M0FP39stillfail5rules4lock5admit(s, sub, endpoint, base, proof, now, c
     }
   }
 }
-function _M0FP39stillfail5rules4lock6beforeN5placeS5839(x, y) {
-  return _M0IP016_24default__implPB7Compare6op__ltGsE(x, y) ? _M0FP39stillfail5rules4lock6beforeN5tupleS5840 : _M0IP016_24default__implPB7Compare6op__gtGsE(x, y) ? _M0FP39stillfail5rules4lock6beforeN5tupleS5841 : _M0FP39stillfail5rules4lock6beforeN5tupleS5842;
+function _M0FP39stillfail5rules4lock6beforeN5placeS6378(x, y) {
+  return _M0IP016_24default__implPB7Compare6op__ltGsE(x, y) ? _M0FP39stillfail5rules4lock6beforeN5tupleS6379 : _M0IP016_24default__implPB7Compare6op__gtGsE(x, y) ? _M0FP39stillfail5rules4lock6beforeN5tupleS6380 : _M0FP39stillfail5rules4lock6beforeN5tupleS6381;
 }
 function _M0FP39stillfail5rules4lock6before(wa, ra, ta, ha, wb, rb, tb, hb) {
-  const _bind = _M0FP39stillfail5rules4lock6beforeN5placeS5839(ta, tb);
+  const _bind = _M0FP39stillfail5rules4lock6beforeN5placeS6378(ta, tb);
   const _pta = _bind._0;
   const _ptb = _bind._1;
-  const _bind$2 = _M0FP39stillfail5rules4lock6beforeN5placeS5839(ha, hb);
+  const _bind$2 = _M0FP39stillfail5rules4lock6beforeN5placeS6378(ha, hb);
   const _pha = _bind$2._0;
   const _phb = _bind$2._1;
   return _M0FP39stillfail5rules4fork4step(wa, ra, _pta, _pha, wb, rb, _ptb, _phb);
@@ -9921,7 +10986,7 @@ function _M0FP39stillfail5rules4lock6places(xs) {
     }
   });
 }
-function _M0FP39stillfail5rules4lock6activeN9sig__textS5869GRP39stillfail5rules4lock9LockStateE(entries, i) {
+function _M0FP39stillfail5rules4lock6activeN9sig__textS6408GRP39stillfail5rules4lock9LockStateE(entries, i) {
   let _try_err;
   _L: {
     if (i < 0 || i >= entries.len) {
@@ -9939,10 +11004,10 @@ function _M0FP39stillfail5rules4lock6activeN9sig__textS5869GRP39stillfail5rules4
   }
   return "";
 }
-function _M0FP39stillfail5rules4lock6activeN5firstS5870GRP39stillfail5rules4lock9LockStateE(_env, h, take) {
-  const entries = _env._2;
-  const off = _env._1;
-  const by_hash = _env._0;
+function _M0FP39stillfail5rules4lock6activeN5firstS6409GRP39stillfail5rules4lock9LockStateE(_env, h, take) {
+  const by_hash = _env._2;
+  const entries = _env._1;
+  const off = _env._0;
   let got = undefined;
   const _p = _M0MPB3Map3getGsRPB5ArrayGiEE(by_hash, h);
   let _bind;
@@ -10067,7 +11132,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
         _M0MPB3Map3setGiRP39stillfail5rules4lock3OffE(off, i, new _M0DTP39stillfail5rules4lock3Off8NotValid(why));
         h = "";
       }
-      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(hashes, h);
+      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(hashes, h);
       _tmp = i + 1 | 0;
       continue;
     } else {
@@ -10106,7 +11171,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
             } else {
               const _Some$2 = _bind$10;
               const _ks = _Some$2;
-              _M0MPC15array5Array4pushGUsRPC14json4JsonEE(_ks, h);
+              _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_ks, h);
             }
           }
         } else {
@@ -10131,13 +11196,13 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
       const _Some = _bind$8;
       const _x = _Some;
       const _xs = _x._1;
-      _M0MPC15array5Array8sort__byGiE(_xs, (a, b) => _M0IPC16string6StringPB7Compare7compare(_M0FP39stillfail5rules4lock6activeN9sig__textS5869GRP39stillfail5rules4lock9LockStateE(entries, a), _M0FP39stillfail5rules4lock6activeN9sig__textS5869GRP39stillfail5rules4lock9LockStateE(entries, b)));
+      _M0MPC15array5Array8sort__byGiE(_xs, (a, b) => _M0IPC16string6StringPB7Compare7compare(_M0FP39stillfail5rules4lock6activeN9sig__textS6408GRP39stillfail5rules4lock9LockStateE(entries, a), _M0FP39stillfail5rules4lock6activeN9sig__textS6408GRP39stillfail5rules4lock9LockStateE(entries, b)));
       continue;
     }
   }
-  const _env = { _0: by_hash, _1: off, _2: entries };
+  const _env = { _0: off, _1: entries, _2: by_hash };
   if (_M0MPB3Map8containsGsRPB5ArrayGiEE(by_hash, genesis)) {
-    const _bind$8 = _M0FP39stillfail5rules4lock6activeN5firstS5870GRP39stillfail5rules4lock9LockStateE(_env, genesis, log.start);
+    const _bind$8 = _M0FP39stillfail5rules4lock6activeN5firstS6409GRP39stillfail5rules4lock9LockStateE(_env, genesis, log.start);
     let root;
     if (_bind$8 === undefined) {
       _L: {
@@ -10193,7 +11258,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
           const _ = _tmp$3;
           if (_ < _bind$13) {
             const h = _bind$14[_];
-            const _bind$15 = _M0FP39stillfail5rules4lock6activeN5firstS5870GRP39stillfail5rules4lock9LockStateE(_env, h, (e) => {
+            const _bind$15 = _M0FP39stillfail5rules4lock6activeN5firstS6409GRP39stillfail5rules4lock9LockStateE(_env, h, (e) => {
               const _func = log.next;
               return _func(_p.state, e);
             });
@@ -10202,8 +11267,8 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
               const _Some$2 = _bind$15;
               const _n = _Some$2;
               _M0MPB3Map3setGsRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEE(nodes, h, _n);
-              _M0MPC15array5Array4pushGUsRPC14json4JsonEE(ks, _n);
-              _M0MPC15array5Array4pushGUsRPC14json4JsonEE(todo, _n);
+              _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(ks, _n);
+              _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(todo, _n);
             }
             _tmp$3 = _ + 1 | 0;
             continue;
@@ -10256,7 +11321,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
                 }
                 return _func(_tmp$3, entries.buf[_bind$13]);
               });
-              const _p = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_ks.len);
+              const _p = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_ks.len);
               const _p$2 = _ks.len;
               const _p$3 = _ks.buf;
               let _tmp$3 = 0;
@@ -10280,7 +11345,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
               }
               const ties = _p;
               const ts = _M0FP39stillfail5rules4lock6places(ties);
-              const _p$4 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_ks.len);
+              const _p$4 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_ks.len);
               const _p$5 = _ks.len;
               const _p$6 = _ks.buf;
               let _tmp$4 = 0;
@@ -10312,7 +11377,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
                       $panic();
                     }
                     _M0MPB3Map3setGiRP39stillfail5rules4lock3OffE(off, _tmp$6, new _M0DTP39stillfail5rules4lock3Off6Beaten(_ks.buf[b].hash, by));
-                    _M0MPC15array5Array4pushGUsRPC14json4JsonEE(beaten, k.hash);
+                    _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(beaten, k.hash);
                   }
                   _tmp$5 = i + 1 | 0;
                   continue;
@@ -10323,7 +11388,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
               if (b < 0 || b >= _ks.len) {
                 $panic();
               }
-              _M0MPC15array5Array4pushGUsRPC14json4JsonEE(chain, _ks.buf[b]);
+              _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(chain, _ks.buf[b]);
             } else {
               break _L$2;
             }
@@ -10358,7 +11423,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
               const _$2 = _tmp$4;
               if (_$2 < _bind$15) {
                 const k = _bind$16[_$2];
-                _M0MPC15array5Array4pushGUsRPC14json4JsonEE(below, k);
+                _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(below, k);
                 _tmp$4 = _$2 + 1 | 0;
                 continue;
               } else {
@@ -10417,7 +11482,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
                 const _Some = _bind$15;
                 const _x = _Some;
                 if (_x.$tag === 0) {
-                  _tmp$6 = _M0FP39stillfail5rules4lock6activeN6constrS5871GRP39stillfail5rules4lock9LockStateE;
+                  _tmp$6 = _M0FP39stillfail5rules4lock6activeN6constrS6410GRP39stillfail5rules4lock9LockStateE;
                 } else {
                   break _L$2;
                 }
@@ -10445,7 +11510,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
         } else {
           const _Some = _bind$16;
           const _o = _Some;
-          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(out, { _0: i, _1: _o });
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(out, { _0: i, _1: _o });
         }
         _tmp$5 = i + 1 | 0;
         continue;
@@ -10453,7 +11518,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
         break;
       }
     }
-    const _p = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(chain.len);
+    const _p = _M0MPC15array5Array20unsafe__make__uninitGUssEE(chain.len);
     const _p$2 = chain.len;
     const _p$3 = chain.buf;
     let _tmp$6 = 0;
@@ -10489,7 +11554,7 @@ function _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(
         break;
       }
     }
-    const _p$7 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(chain.len);
+    const _p$7 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(chain.len);
     const _p$8 = chain.len;
     const _p$9 = chain.buf;
     let _tmp$8 = 0;
@@ -10526,7 +11591,7 @@ function _M0FP39stillfail5rules4lock11lock__chain(entries, root, votes, now, c) 
     }
   }, (s, e) => {
     const v = e;
-    if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "kind")), _M0FP39stillfail5rules4lock11lock__chainN6constrS6237)) {
+    if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "kind")), _M0FP39stillfail5rules4lock11lock__chainN6constrS6776)) {
       const _bind = _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(s.devices, _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(v, "body"), "id")), ""));
       let _tmp;
       if (_bind === undefined) {
@@ -10546,8 +11611,149 @@ function _M0FP39stillfail5rules4lock11lock__chain(entries, root, votes, now, c) 
 function _M0FP39stillfail5rules4lock13person__chain(entries, root, c) {
   return _M0FP39stillfail5rules4lock6activeGRP39stillfail5rules4lock9LockStateE(entries, root, new _M0TP39stillfail5rules4lock3LogGRP39stillfail5rules4lock6PersonE((e) => {
     const sub = _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(e, "body"), "sub")), "");
-    return _M0FP39stillfail5rules4lock12person__step(undefined, e, sub, true, c);
-  }, (p, e) => _M0FP39stillfail5rules4lock12person__step(p, e, p.sub, true, c), (_discard_, _discard_$2) => 1, (_discard_, e) => _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(e, "kind")), _M0FP39stillfail5rules4lock13person__chainN6constrS6258)), c);
+    return _M0FP39stillfail5rules4lock12person__step(undefined, e, sub, c);
+  }, (p, e) => _M0FP39stillfail5rules4lock12person__step(p, e, p.sub, c), (_discard_, _discard_$2) => 1, (_discard_, e) => _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(e, "kind")), _M0FP39stillfail5rules4lock13person__chainN6constrS6797)), c);
+}
+function _M0FP39stillfail5rules4lock13body__refusalN3tagS6809(_env, x) {
+  const ws = _env._1;
+  const c = _env._0;
+  const _p = x.genesis;
+  return c.method_table.method_0(c.self, `stillfail/ws-tag/1\n${ws}\n${_p}`);
+}
+function _M0FP39stillfail5rules4lock13body__refusal(ws, b, commits, c) {
+  if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "ws")), ws)) {
+    let h;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FP39stillfail5rules4lock10body__hash(b, c);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          h = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      return _M0FP39stillfail5rules4lock13body__refusalN6constrS6810;
+    }
+    const _p = new _M0TPB5ArrayGRP39stillfail5rules4lock6CommitE([], 0);
+    const _p$2 = commits.len;
+    const _p$3 = commits.buf;
+    let mine;
+    let _tmp = 0;
+    while (true) {
+      const _p$4 = _tmp;
+      if (_p$4 < _p$2) {
+        const _p$5 = _p$3[_p$4];
+        let _tmp$2;
+        if (_p$5.chain.len > 0) {
+          const _p$6 = _p$5.chain;
+          const _p$7 = _p$5.chain.len - 1 | 0;
+          if (_p$7 < 0 || _p$7 >= _p$6.len) {
+            $panic();
+          }
+          const _p$8 = _p$6.buf[_p$7];
+          _tmp$2 = _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_p$8, "kind")), _M0FP39stillfail5rules4lock13body__refusalN6constrS6811) && _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(_p$8, "body"), "h")), h);
+        } else {
+          _tmp$2 = false;
+        }
+        if (_tmp$2) {
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_p, _p$5);
+        }
+        _tmp = _p$4 + 1 | 0;
+        continue;
+      } else {
+        mine = _p;
+        break;
+      }
+    }
+    if (mine.len > 0) {
+      const _env = { _0: c, _1: ws };
+      const _p$4 = new _M0TPB5ArrayGRP39stillfail5rules4lock6CommitE([], 0);
+      const _p$5 = mine.len;
+      const _p$6 = mine.buf;
+      let tagged;
+      let _tmp$2 = 0;
+      while (true) {
+        const _p$7 = _tmp$2;
+        if (_p$7 < _p$5) {
+          const _p$8 = _p$6[_p$7];
+          const _p$9 = _p$8.chain;
+          const _p$10 = _p$8.chain.len - 1 | 0;
+          if (_p$10 < 0 || _p$10 >= _p$9.len) {
+            $panic();
+          }
+          if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(_p$9.buf[_p$10], "body"), "t")), _M0FP39stillfail5rules4lock13body__refusalN3tagS6809(_env, _p$8))) {
+            _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(_p$4, _p$8);
+          }
+          _tmp$2 = _p$7 + 1 | 0;
+          continue;
+        } else {
+          tagged = _p$4;
+          break;
+        }
+      }
+      if (tagged.len > 0) {
+        const _bind = _M0FP39stillfail5rules4lock9body__why(b);
+        if (_bind === undefined) {
+        } else {
+          const _Some = _bind;
+          const _why = _Some;
+          return `its shape: ${_why}`;
+        }
+        const prev = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "prev"));
+        if (prev === undefined) {
+          return undefined;
+        } else {
+          const _Some = prev;
+          const _p$7 = _Some;
+          const _bind$2 = tagged.len;
+          const _bind$3 = tagged.buf;
+          let _tmp$3 = 0;
+          while (true) {
+            const _ = _tmp$3;
+            if (_ < _bind$2) {
+              const x = _bind$3[_];
+              const t = _M0FP39stillfail5rules4lock13body__refusalN3tagS6809(_env, x);
+              const _bind$4 = x.chain.len - 1 | 0;
+              let _tmp$4 = 0;
+              while (true) {
+                const i = _tmp$4;
+                if (i < _bind$4) {
+                  const _bind$5 = x.chain;
+                  if (i < 0 || i >= _bind$5.len) {
+                    $panic();
+                  }
+                  const e = _bind$5.buf[i];
+                  if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(e, "kind")), _M0FP39stillfail5rules4lock13body__refusalN6constrS6812) && (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(e, "body"), "t")), t) && _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(_M0FP39stillfail5rules4lock5field(e, "body"), "h")), _p$7))) {
+                    return undefined;
+                  }
+                  _tmp$4 = i + 1 | 0;
+                  continue;
+                } else {
+                  break;
+                }
+              }
+              _tmp$3 = _ + 1 | 0;
+              continue;
+            } else {
+              break;
+            }
+          }
+          return _M0FP39stillfail5rules4lock13body__refusalN6constrS6813;
+        }
+      } else {
+        return _M0FP39stillfail5rules4lock13body__refusalN6constrS6814;
+      }
+    } else {
+      return _M0FP39stillfail5rules4lock13body__refusalN6constrS6815;
+    }
+  } else {
+    return _M0FP39stillfail5rules4lock13body__refusalN6constrS6816;
+  }
 }
 function _M0FP39stillfail5rules5vault5field(v, k) {
   _L: {
@@ -10756,7 +11962,7 @@ function _M0FP39stillfail5rules5vault5hex32(s) {
   return s.length === 64 && _M0FP39stillfail5rules5vault10all__units(s, (c) => c >= 48 && c <= 57 || c >= 97 && c <= 102);
 }
 function _M0FP39stillfail5rules5vault8box__key(s) {
-  return _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault8box__keyN6recordS6333) && _M0FP39stillfail5rules5vault5hex32(_M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 7, undefined)));
+  return _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault8box__keyN6recordS6918) && _M0FP39stillfail5rules5vault5hex32(_M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 7, undefined)));
 }
 function _M0FP39stillfail5rules5vault8ulid__id(s, prefix) {
   if (!_M0MPC16string6String11has__prefix(s, new _M0TPC16string10StringView(prefix, 0, prefix.length)) || s.length !== (prefix.length + 26 | 0)) {
@@ -10764,12 +11970,12 @@ function _M0FP39stillfail5rules5vault8ulid__id(s, prefix) {
   }
   return _M0FP39stillfail5rules5vault10all__units(_M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, prefix.length, undefined)), (c) => c >= 48 && c <= 57 || c >= 65 && c <= 90 && (c !== 73 && (c !== 76 && (c !== 79 && c !== 85))));
 }
-function _M0FP39stillfail5rules5vault4hostN2lcS6338(c) {
+function _M0FP39stillfail5rules5vault4hostN2lcS6923(c) {
   return c >= 97 && c <= 122 || c >= 48 && c <= 57;
 }
 function _M0FP39stillfail5rules5vault4host(s) {
-  const name = _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault4hostN6recordS6339) ? _M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 2, undefined)) : s;
-  const labels = _M0MPB4Iter9to__arrayGUssEE(_M0MPC16string6String5split(name, _M0FP39stillfail5rules5vault4hostN6recordS6340));
+  const name = _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault4hostN6recordS6924) ? _M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 2, undefined)) : s;
+  const labels = _M0MPB4Iter9to__arrayGUssEE(_M0MPC16string6String5split(name, _M0FP39stillfail5rules5vault4hostN6recordS6925));
   const _bind = labels.len;
   const _bind$2 = labels.buf;
   let _tmp = 0;
@@ -10784,7 +11990,7 @@ function _M0FP39stillfail5rules5vault4host(s) {
       const first = 0 >>> 0 < l$2.length ? l$2.charCodeAt(0) : $oob();
       const _tmp$2 = l$2.length - 1 | 0;
       const last = _tmp$2 >>> 0 < l$2.length ? l$2.charCodeAt(_tmp$2) : $oob();
-      if (!_M0FP39stillfail5rules5vault4hostN2lcS6338(first) || (!_M0FP39stillfail5rules5vault4hostN2lcS6338(last) || !_M0FP39stillfail5rules5vault10all__units(l$2, (c) => _M0FP39stillfail5rules5vault4hostN2lcS6338(c) || c === 45))) {
+      if (!_M0FP39stillfail5rules5vault4hostN2lcS6923(first) || (!_M0FP39stillfail5rules5vault4hostN2lcS6923(last) || !_M0FP39stillfail5rules5vault10all__units(l$2, (c) => _M0FP39stillfail5rules5vault4hostN2lcS6923(c) || c === 45))) {
         return false;
       }
       _tmp = _ + 1 | 0;
@@ -10829,7 +12035,7 @@ function _M0FP39stillfail5rules5vault7strings(v) {
 function _M0FP39stillfail5rules5vault9has__text(xs, s) {
   const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(xs);
   while (true) {
-    const _p$2 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p);
+    const _p$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p);
     if (_p$2 === undefined) {
       return false;
     } else {
@@ -10918,7 +12124,7 @@ function _M0FP39stillfail5rules5vault10sig__shape(s) {
       _tmp = false;
     } else {
       const _bind$2 = _M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "sig"));
-      _tmp = _bind$2 === undefined ? false : _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS6374) || _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS6375);
+      _tmp = _bind$2 === undefined ? false : _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS6959) || _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS6960);
     }
     return _tmp;
   } else {
@@ -11042,11 +12248,11 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
     _tmp = _tmp$2;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault8cert__okN5shapeS6412;
+    return _M0FP39stillfail5rules5vault8cert__okN5shapeS6997;
   }
   const device = _M0FP39stillfail5rules5vault10js__string(_M0FP39stillfail5rules5vault5field(cert, "device"));
   if (!_M0FP39stillfail5rules5vault5hex32(device) || (!_M0FP39stillfail5rules5vault8box__key(_M0FP39stillfail5rules5vault10js__string(_M0FP39stillfail5rules5vault5field(cert, "box"))) || (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(cert, "at")) || !_M0FP39stillfail5rules5vault10sig__shape(_M0FP39stillfail5rules5vault5field(cert, "sig"))))) {
-    return _M0FP39stillfail5rules5vault8cert__okN5shapeS6412;
+    return _M0FP39stillfail5rules5vault8cert__okN5shapeS6997;
   }
   let d;
   _L: {
@@ -11079,7 +12285,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
         if (_M0MPB3Map8containsGsuE(lock.members, _d.sub)) {
           const _p = _d.own;
           if (!(_p ? true : ever)) {
-            return _M0FP39stillfail5rules5vault8cert__okN6constrS6409;
+            return _M0FP39stillfail5rules5vault8cert__okN6constrS6994;
           }
           const _p$2 = _M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_M0FP39stillfail5rules5vault5field(cert, "sig"), "key"));
           let key;
@@ -11093,7 +12299,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
           const _p$3 = _M0IPC16option6OptionPB2Eq5equalGsE(_d.sign_key, key);
           const _p$4 = _M0MPC15array5Array8containsGsE(had, key);
           if (!(_p$3 ? true : ever ? _p$4 : false)) {
-            return _M0FP39stillfail5rules5vault8cert__okN6constrS6410;
+            return _M0FP39stillfail5rules5vault8cert__okN6constrS6995;
           }
           let _tmp$2;
           if (cert === undefined) {
@@ -11103,7 +12309,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
             _tmp$2 = _p$5;
           }
           if (!_M0FP39stillfail5rules5vault10signed__ok(_tmp$2, "stillfail-vault-box/1", c)) {
-            return _M0FP39stillfail5rules5vault8cert__okN6constrS6411;
+            return _M0FP39stillfail5rules5vault8cert__okN6constrS6996;
           }
           return undefined;
         } else {
@@ -11114,7 +12320,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
       }
     }
   }
-  return _M0FP39stillfail5rules5vault8cert__okN6constrS6408;
+  return _M0FP39stillfail5rules5vault8cert__okN6constrS6993;
 }
 function _M0FP39stillfail5rules5vault5whole(n) {
   let _try_err;
@@ -11166,7 +12372,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
     _tmp = _tmp$2;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault9vault__okN6constrS6436;
+    return _M0FP39stillfail5rules5vault9vault__okN6constrS7021;
   }
   _L: {
     _L$2: {
@@ -11181,7 +12387,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
           const _id = _String._0;
           if (_M0FP39stillfail5rules5vault8ulid__id(_id, "v_")) {
             if (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(v, "seq")) || (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(v, "epoch")) || !_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(v, "at")))) {
-              return _M0FP39stillfail5rules5vault9vault__okN6constrS6438;
+              return _M0FP39stillfail5rules5vault9vault__okN6constrS7023;
             }
             _L$3: {
               _L$4: {
@@ -11216,7 +12422,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                                     const _p$2 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_xs);
                                     let _tmp$4;
                                     while (true) {
-                                      const _p$3 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$2);
+                                      const _p$3 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$2);
                                       if (_p$3 === undefined) {
                                         _tmp$4 = true;
                                         break;
@@ -11254,7 +12460,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                                     _tmp$2 = false;
                                   }
                                   if (_tmp$2) {
-                                    const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_xs.len);
+                                    const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_xs.len);
                                     const _p$3 = _xs.len;
                                     const _p$4 = _xs.buf;
                                     let _tmp$3 = 0;
@@ -11287,10 +12493,10 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               }
                               break _L$5;
                             }
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS6440;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS7025;
                           }
                           if (!_M0MPC15array5Array8containsGsE(members, _owner)) {
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS6441;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS7026;
                           }
                           let keys;
                           _L$6: {
@@ -11315,13 +12521,13 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               }
                               break _L$6;
                             }
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS6442;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS7027;
                           }
                           const _bind$3 = _M0FP39stillfail5rules5vault5field(v, "recovery");
                           if (_bind$3 === undefined) {
                           } else {
                             if (!_M0FP39stillfail5rules5vault3b64(_M0FP39stillfail5rules5vault5field(v, "recovery"), 200)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6443;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7028;
                             }
                           }
                           const _bind$4 = _M0FP39stillfail5rules5vault5field(v, "lasts");
@@ -11338,7 +12544,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               _tmp$2 = false;
                             }
                             if (!_tmp$2) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6444;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7029;
                             }
                           }
                           const _bind$5 = _M0FP39stillfail5rules5vault5field(v, "deleted");
@@ -11374,22 +12580,22 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                                 }
                                 break _L$7;
                               }
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6445;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7030;
                             }
                           }
                           if (!_M0FP39stillfail5rules5vault10sig__shape(_M0FP39stillfail5rules5vault5field(v, "sig"))) {
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS6446;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS7031;
                           }
                           const seq = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(v, "seq"));
                           const epoch = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(v, "epoch"));
                           if (prev === undefined) {
                             if (seq !== 0 && !copy) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6447;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7032;
                             }
                           } else {
                             const _Some$3 = prev;
                             if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_Some$3, "id")), _id)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6448;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7033;
                             }
                             const held = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$3, "seq"));
                             const _p$2 = $i64_trunc_f64(held);
@@ -11398,7 +12604,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               return copy ? `a copy is later than seq ${_M0FP39stillfail5rules5vault5whole(held)}` : `seq ${_M0FP39stillfail5rules5vault5whole(held + 1)} follows ${_M0FP39stillfail5rules5vault5whole(held)}`;
                             }
                             if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_Some$3, "owner")), _owner)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6449;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7034;
                             }
                             const _bind$7 = _M0FP39stillfail5rules5vault5field(_Some$3, "deleted");
                             let _p$4;
@@ -11414,12 +12620,12 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               }
                             }
                             if (!(!_p$4 || deleted)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6450;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7035;
                             }
                             const held_epoch = $i64_trunc_f64(_M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$3, "epoch")));
                             const _p$5 = $i64_trunc_f64(epoch);
                             if (!(BigInt.asIntN(64, _p$5) < BigInt.asIntN(64, held_epoch) ? false : !(false && BigInt.asUintN(64, _p$5) === BigInt.asUintN(64, held_epoch)))) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6451;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7036;
                             }
                             const _p$6 = _M0MPC15array5Array20unsafe__make__uninitGORPC14json4JsonE(keys.len);
                             const _p$7 = keys.len;
@@ -11442,7 +12648,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                             const _p$9 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_M0FP39stillfail5rules5vault7strings(_M0FP39stillfail5rules5vault5field(_Some$3, "members")));
                             let _tmp$3;
                             while (true) {
-                              const _p$10 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$9);
+                              const _p$10 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$9);
                               if (_p$10 === undefined) {
                                 _tmp$3 = false;
                                 break;
@@ -11470,7 +12676,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               const _p$10 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_M0FP39stillfail5rules5vault7strings(_M0FP39stillfail5rules5vault5field(_Some$3, "keys")));
                               let _tmp$4;
                               while (true) {
-                                const _p$11 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$10);
+                                const _p$11 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$10);
                                 if (_p$11 === undefined) {
                                   _tmp$4 = false;
                                   break;
@@ -11506,7 +12712,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                             }
                             const _p$10 = $i64_trunc_f64(epoch);
                             if (!(BigInt.asIntN(64, _p$10) < BigInt.asIntN(64, held_epoch) ? false : !(gone && BigInt.asUintN(64, _p$10) === BigInt.asUintN(64, held_epoch)))) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6452;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7037;
                             }
                           }
                           const _bind$7 = members.len;
@@ -11536,7 +12742,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               const k = _bind$11[_];
                               const k$2 = k;
                               if (!_M0FP39stillfail5rules5vault10is__object(k$2) || !_M0FP39stillfail5rules5vault3b64(_M0FP39stillfail5rules5vault5field(k$2, "wrapped"), 200)) {
-                                return _M0FP39stillfail5rules5vault9vault__okN6constrS6453;
+                                return _M0FP39stillfail5rules5vault9vault__okN6constrS7038;
                               }
                               const _bind$12 = _M0FP39stillfail5rules5vault8cert__ok(lock, _M0FP39stillfail5rules5vault5field(k$2, "cert"), true, c);
                               if (_bind$12 === undefined) {
@@ -11586,11 +12792,11 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                           const _p$4 = _M0MPC16option6Option10unwrap__orGbE(_M0MPC16option6Option3mapGUssEbE(by, (b) => b._0 === _owner), false);
                           if (_p$3 ? _p$4 : false) {
                             if (!_M0FP39stillfail5rules5vault10signed__ok(next, "stillfail-vault/1", c)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS6454;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS7039;
                             }
                             return undefined;
                           } else {
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS6455;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS7040;
                           }
                         } else {
                           break _L$3;
@@ -11608,7 +12814,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
               }
               break _L$3;
             }
-            return _M0FP39stillfail5rules5vault9vault__okN6constrS6439;
+            return _M0FP39stillfail5rules5vault9vault__okN6constrS7024;
           } else {
             break _L;
           }
@@ -11619,7 +12825,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
     }
     break _L;
   }
-  return _M0FP39stillfail5rules5vault9vault__okN6constrS6437;
+  return _M0FP39stillfail5rules5vault9vault__okN6constrS7022;
 }
 function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) {
   const sign = kind === "browser";
@@ -11631,7 +12837,7 @@ function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) 
     _tmp = sign && modes.len !== 1;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS6550;
+    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS7135;
   }
   let _tmp$2;
   if (sign) {
@@ -11642,14 +12848,14 @@ function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) 
       const _p$2 = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(hosts);
       let _tmp$4;
       while (true) {
-        const _p$3 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p$2);
+        const _p$3 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p$2);
         if (_p$3 === undefined) {
           _tmp$4 = false;
           break;
         } else {
           const _p$4 = _p$3;
           const _p$5 = _p$4;
-          if (_M0MPC16string6String11has__prefix(_p$5, _M0FP39stillfail5rules5vault20browser__listing__okN6recordS6551)) {
+          if (_M0MPC16string6String11has__prefix(_p$5, _M0FP39stillfail5rules5vault20browser__listing__okN6recordS7136)) {
             _tmp$4 = true;
             break;
           }
@@ -11663,7 +12869,7 @@ function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) 
     _tmp$2 = false;
   }
   if (_tmp$2) {
-    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS6552;
+    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS7137;
   }
   return undefined;
 }
@@ -11698,7 +12904,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                         const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_xs);
                         let _tmp$2;
                         while (true) {
-                          const _p$2 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p);
+                          const _p$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p);
                           if (_p$2 === undefined) {
                             _tmp$2 = true;
                             break;
@@ -11727,7 +12933,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                           _tmp = false;
                         }
                         if (_tmp) {
-                          const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_xs.len);
+                          const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_xs.len);
                           const _p$3 = _xs.len;
                           const _p$4 = _xs.buf;
                           let _tmp$3 = 0;
@@ -11760,7 +12966,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     }
                     break _L$3;
                   }
-                  return _M0FP39stillfail5rules5vault11listing__okN6constrS6559;
+                  return _M0FP39stillfail5rules5vault11listing__okN6constrS7144;
                 }
                 let hs;
                 _L$4: {
@@ -11779,7 +12985,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                           const _p = _M0MPC15array5Array4iterGRP39stillfail5rules4lock4StmtE(_xs);
                           let _tmp$2;
                           while (true) {
-                            const _p$2 = _M0MPB4Iter4nextGUsRPB5ArrayGiEEE(_p);
+                            const _p$2 = _M0MPB4Iter4nextGUsRP39stillfail5rules4lock9PersonWebEE(_p);
                             if (_p$2 === undefined) {
                               _tmp$2 = true;
                               break;
@@ -11807,7 +13013,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                           _tmp = false;
                         }
                         if (_tmp) {
-                          const _p = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_xs.len);
+                          const _p = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_xs.len);
                           const _p$2 = _xs.len;
                           const _p$3 = _xs.buf;
                           let _tmp$2 = 0;
@@ -11840,7 +13046,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     }
                     break _L$4;
                   }
-                  return _M0FP39stillfail5rules5vault11listing__okN6constrS6560;
+                  return _M0FP39stillfail5rules5vault11listing__okN6constrS7145;
                 }
                 const _bind$2 = _M0FP39stillfail5rules5vault20browser__listing__ok(_kind, ms, hs);
                 if (_bind$2 === undefined) {
@@ -11863,7 +13069,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     _tmp = false;
                   }
                   if (!_tmp) {
-                    return _M0FP39stillfail5rules5vault11listing__okN6constrS6561;
+                    return _M0FP39stillfail5rules5vault11listing__okN6constrS7146;
                   }
                 }
                 const _bind$4 = _M0FP39stillfail5rules5vault5field(l, "lasts");
@@ -11880,7 +13086,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     _tmp = false;
                   }
                   if (!_tmp) {
-                    return _M0FP39stillfail5rules5vault11listing__okN6constrS6562;
+                    return _M0FP39stillfail5rules5vault11listing__okN6constrS7147;
                   }
                 }
                 return undefined;
@@ -11900,7 +13106,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
       break _L;
     }
   }
-  return _M0FP39stillfail5rules5vault11listing__okN6constrS6558;
+  return _M0FP39stillfail5rules5vault11listing__okN6constrS7143;
 }
 function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c) {
   const i = next;
@@ -11962,7 +13168,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
     _tmp = _tmp$2;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault8item__okN6constrS6606;
+    return _M0FP39stillfail5rules5vault8item__okN6constrS7191;
   }
   _L: {
     _L$2: {
@@ -11977,7 +13183,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
           const _id = _String._0;
           if (_M0FP39stillfail5rules5vault8ulid__id(_id, "i_")) {
             if (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(i, "version")) || (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(i, "epoch")) || !_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(i, "at")))) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS6608;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS7193;
             }
             const _bind$2 = _M0FP39stillfail5rules5vault5field(i, "deleted");
             if (_bind$2 === undefined) {
@@ -11991,7 +13197,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                 _tmp$2 = false;
               }
               if (!_tmp$2) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS6609;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS7194;
               }
             }
             const _bind$3 = _M0FP39stillfail5rules5vault5field(i, "deleted");
@@ -12008,7 +13214,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
               }
             }
             if (!_M0FP39stillfail5rules5vault3b64(_M0FP39stillfail5rules5vault5field(i, "ct"), 1048576)) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS6610;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS7195;
             }
             const _p = _M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(i, "ct"));
             let ct;
@@ -12033,11 +13239,11 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                   }
                   break _L$3;
                 }
-                return _M0FP39stillfail5rules5vault8item__okN6constrS6611;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS7196;
               }
             }
             if (!deleted && ct.length < 38) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS6612;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS7197;
             }
             const _bind$4 = _M0FP39stillfail5rules5vault5field(i, "listing");
             if (_bind$4 === undefined) {
@@ -12051,7 +13257,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
               }
             }
             if (!_M0FP39stillfail5rules5vault10sig__shape(_M0FP39stillfail5rules5vault5field(i, "sig"))) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS6613;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS7198;
             }
             const epoch = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(i, "epoch"));
             const vault_epoch = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(vault$2, "epoch"));
@@ -12061,12 +13267,12 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
             const version = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(i, "version"));
             if (prev === undefined) {
               if (version !== 0 && !copy) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS6614;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS7199;
               }
             } else {
               const _Some$2 = prev;
               if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_Some$2, "id")), _id) || _M0IP016_24default__implPB2Eq10not__equalGORPC14json4JsonE(_M0FP39stillfail5rules5vault5field(_Some$2, "vault"), _M0FP39stillfail5rules5vault5field(i, "vault"))) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS6615;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS7200;
               }
               const _bind$5 = _M0FP39stillfail5rules5vault5field(_Some$2, "deleted");
               let _p$2;
@@ -12082,7 +13288,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                 }
               }
               if (!!_p$2) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS6616;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS7201;
               }
               const held = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$2, "version"));
               const _p$3 = $i64_trunc_f64(held);
@@ -12105,11 +13311,11 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
             const _p$4 = _M0MPC16option6Option10unwrap__orGbE(_M0MPC16option6Option3mapGUssEbE(by, (b) => _M0FP39stillfail5rules5vault9has__text(members, b._0)), false);
             if (_p$3 ? _p$4 : false) {
               if (!_M0FP39stillfail5rules5vault10signed__ok(next, "stillfail-vault-item/1", c)) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS6617;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS7202;
               }
               return undefined;
             } else {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS6618;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS7203;
             }
           } else {
             break _L;
@@ -12121,7 +13327,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
     }
     break _L;
   }
-  return _M0FP39stillfail5rules5vault8item__okN6constrS6607;
+  return _M0FP39stillfail5rules5vault8item__okN6constrS7192;
 }
 function _M0FP39stillfail5rules2js8json__of(v) {
   const _bind = _M0FP39stillfail5rules2js8js__kind(v);
@@ -12157,7 +13363,7 @@ function _M0FP39stillfail5rules2js8json__of(v) {
           } else {
             return _bind$3;
           }
-          _M0MPC15array5Array4pushGUsRPC14json4JsonEE(xs, _tmp$2);
+          _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(xs, _tmp$2);
           _tmp = i + 1 | 0;
           continue;
         } else {
@@ -12355,7 +13561,7 @@ function _M0FP39stillfail5rules2js6to__js(v) {
 }
 function _M0IP39stillfail5rules2js8JsCryptoP39stillfail5rules4lock6Crypto10sig__valid(self, sig, hash, origins, rp_id, passkey) {
   const _tmp = _M0FP39stillfail5rules2js6to__js(sig);
-  const _p = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(origins.len);
+  const _p = _M0MPC15array5Array20unsafe__make__uninitGUssEE(origins.len);
   const _p$2 = origins.len;
   const _p$3 = origins.buf;
   let _tmp$2 = 0;
@@ -12386,8 +13592,8 @@ function _M0FP39stillfail5rules2js8opt__num(v) {
 function _M0FP39stillfail5rules2js8opt__str(v) {
   return _M0FP39stillfail5rules2js8js__kind(v) === 3 ? _M0FP39stillfail5rules2js7js__str(v) : undefined;
 }
-function _M0FP39stillfail5rules2js11state__jsonN5pairsS6736(xs) {
-  const _p = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(xs.len);
+function _M0FP39stillfail5rules2js11state__jsonN5pairsS7321(xs) {
+  const _p = _M0MPC15array5Array20unsafe__make__uninitGUssEE(xs.len);
   const _p$2 = xs.len;
   const _p$3 = xs.buf;
   let _tmp = 0;
@@ -12419,7 +13625,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
   const _p$5 = s.genesis;
   const _tmp$4 = { _0: "genesis", _1: new _M0DTPC14json4Json6String(_p$5) };
   const _p$6 = s.origins;
-  const _p$7 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$6.len);
+  const _p$7 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$6.len);
   const _p$8 = _p$6.len;
   const _p$9 = _p$6.buf;
   let _tmp$5 = 0;
@@ -12440,7 +13646,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
   const _p$11 = s.rp_id;
   const _tmp$7 = { _0: "rp_id", _1: new _M0DTPC14json4Json6String(_p$11) };
   const _tmp$8 = { _0: "cloud_keys", _1: s.cloud_keys };
-  const _tmp$9 = { _0: "members", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS6736(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.members), (p) => {
+  const _tmp$9 = { _0: "members", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS7321(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.members), (p) => {
     const _tmp$10 = p._0;
     const _p$12 = p._1.sub;
     const _tmp$11 = { _0: "sub", _1: new _M0DTPC14json4Json6String(_p$12) };
@@ -12451,7 +13657,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$15 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 3), undefined);
     return { _0: _tmp$10, _1: new _M0DTPC14json4Json6Object(_p$15) };
   }))) };
-  const _tmp$10 = { _0: "devices", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS6736(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.devices), (p) => {
+  const _tmp$10 = { _0: "devices", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS7321(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.devices), (p) => {
     const _tmp$11 = p._0;
     const d = p._1;
     const _p$12 = d.id;
@@ -12477,7 +13683,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     } else {
       const _Some = _bind$3;
       const _es = _Some;
-      const _p$17 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_es.len);
+      const _p$17 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_es.len);
       const _p$18 = _es.len;
       const _p$19 = _es.buf;
       let _tmp$16 = 0;
@@ -12512,10 +13718,10 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     }
     return { _0: _tmp$11, _1: new _M0DTPC14json4Json6Object(m) };
   }))) };
-  const _tmp$11 = { _0: "signKeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS6736(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.sign_keys), (p) => {
+  const _tmp$11 = { _0: "signKeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS7321(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.sign_keys), (p) => {
     const _tmp$12 = p._0;
     const _p$12 = p._1;
-    const _p$13 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$12.len);
+    const _p$13 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$12.len);
     const _p$14 = _p$12.len;
     const _p$15 = _p$12.buf;
     let _tmp$13 = 0;
@@ -12534,7 +13740,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$16 = _p$13;
     return { _0: _tmp$12, _1: new _M0DTPC14json4Json5Array(_p$16) };
   }))) };
-  const _tmp$12 = { _0: "passkeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS6736(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.passkeys), (p) => {
+  const _tmp$12 = { _0: "passkeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS7321(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.passkeys), (p) => {
     const _tmp$13 = p._0;
     const _p$12 = p._1.id;
     const _tmp$14 = { _0: "id", _1: new _M0DTPC14json4Json6String(_p$12) };
@@ -12549,9 +13755,9 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$17 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 5), undefined);
     return { _0: _tmp$13, _1: new _M0DTPC14json4Json6Object(_p$17) };
   }))) };
-  const _p$12 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.signed), (_hole256) => new _M0DTPC14json4Json6String(_hole256)));
+  const _p$12 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.signed), (_hole286) => new _M0DTPC14json4Json6String(_hole286)));
   const _tmp$13 = { _0: "signed", _1: new _M0DTPC14json4Json5Array(_p$12) };
-  const _tmp$14 = { _0: "stations", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS6736(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.stations), (p) => {
+  const _tmp$14 = { _0: "stations", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS7321(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.stations), (p) => {
     const _tmp$15 = p._0;
     const _p$13 = p._1.key;
     const _tmp$16 = { _0: "key", _1: new _M0DTPC14json4Json6String(_p$13) };
@@ -12560,9 +13766,9 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$15 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 2), undefined);
     return { _0: _tmp$15, _1: new _M0DTPC14json4Json6Object(_p$15) };
   }))) };
-  const _p$13 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.gateways), (_hole259) => new _M0DTPC14json4Json6String(_hole259)));
+  const _p$13 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.gateways), (_hole289) => new _M0DTPC14json4Json6String(_hole289)));
   const _tmp$15 = { _0: "gateways", _1: new _M0DTPC14json4Json5Array(_p$13) };
-  const _tmp$16 = { _0: "persons", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS6736(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.persons), (p) => {
+  const _tmp$16 = { _0: "persons", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS7321(_M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map4iterGsRP39stillfail5rules4lock12PersonDeviceE(s.persons), (p) => {
     const _tmp$17 = p._0;
     const _p$14 = p._1;
     return { _0: _tmp$17, _1: new _M0DTPC14json4Json6String(_p$14) };
@@ -12570,7 +13776,19 @@ function _M0FP39stillfail5rules2js11state__json(s) {
   const _p$14 = s.disabled;
   const _bind = [_tmp, _tmp$2, _tmp$3, _tmp$4, _tmp$6, _tmp$7, _tmp$8, _tmp$9, _tmp$10, _tmp$11, _tmp$12, _tmp$13, _tmp$14, _tmp$15, _tmp$16, { _0: "disabled", _1: _p$14 ? _M0DTPC14json4Json4True__ : _M0DTPC14json4Json5False__ }];
   const _p$15 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 16), undefined);
-  return new _M0DTPC14json4Json6Object(_p$15);
+  const out = new _M0DTPC14json4Json6Object(_p$15);
+  const _bind$2 = s.moved;
+  if (out.$tag === 6) {
+    const _Object = out;
+    const _m = _Object._0;
+    if (_bind$2 === undefined) {
+    } else {
+      const _Some = _bind$2;
+      const _root = _Some;
+      _M0MPB3Map3setGsRPC14json4JsonE(_m, "moved", new _M0DTPC14json4Json6String(_root));
+    }
+  }
+  return out;
 }
 function _M0FP39stillfail5rules2js11entries__of(v) {
   const out = new _M0TPB5ArrayGRPC14json4JsonE([], 0);
@@ -12587,7 +13805,7 @@ function _M0FP39stillfail5rules2js11entries__of(v) {
       } else {
         return _bind$2;
       }
-      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(out, _tmp$2);
+      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(out, _tmp$2);
       _tmp = i + 1 | 0;
       continue;
     } else {
@@ -12773,7 +13991,7 @@ function _M0FP39stillfail5rules2js9admit__js(entries, fold_now, queries, crypto)
         const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$2, 0, 1), undefined);
         answer = new _M0DTPC14json4Json6Object(_p);
       }
-      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(out, answer);
+      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(out, answer);
       _tmp = i + 1 | 0;
       continue;
     } else {
@@ -13011,7 +14229,7 @@ function _M0FP39stillfail5rules2js14fold__held__js(entries, now, crypto) {
   }
   return _M0FP39stillfail5rules2js7refused(why);
 }
-function _M0FP39stillfail5rules2js12person__jsonN6deviceS6899(d) {
+function _M0FP39stillfail5rules2js12person__jsonN6deviceS7490(d) {
   const _p = d.key;
   const _tmp = { _0: "key", _1: new _M0DTPC14json4Json6String(_p) };
   const _p$2 = d.id;
@@ -13031,10 +14249,25 @@ function _M0FP39stillfail5rules2js12person__json(p) {
   const _p$4 = p.seq;
   const _p$5 = undefined;
   const _tmp$4 = { _0: "seq", _1: new _M0DTPC14json4Json6Number(_p$4, _p$5) };
-  const _p$6 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map6valuesGsRP39stillfail5rules4lock12PersonDeviceE(p.devices), _M0FP39stillfail5rules2js12person__jsonN6deviceS6899));
-  const _bind = [_tmp, _tmp$2, _tmp$3, _tmp$4, { _0: "devices", _1: new _M0DTPC14json4Json5Array(_p$6) }];
-  const _p$7 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 5), undefined);
-  return new _M0DTPC14json4Json6Object(_p$7);
+  const _p$6 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map6valuesGsRP39stillfail5rules4lock12PersonDeviceE(p.devices), _M0FP39stillfail5rules2js12person__jsonN6deviceS7490));
+  const _tmp$5 = { _0: "devices", _1: new _M0DTPC14json4Json5Array(_p$6) };
+  const _p$7 = _M0MPB4Iter9to__arrayGUssEE(_M0MPB4Iter3mapGRP39stillfail5rules4lock12PersonDeviceRPC14json4JsonE(_M0MPB3Map6valuesGsRP39stillfail5rules4lock12PersonDeviceE(p.webs), (w) => {
+    const _p$8 = w.id;
+    const _tmp$6 = { _0: "id", _1: new _M0DTPC14json4Json6String(_p$8) };
+    const _p$9 = w.label;
+    const _tmp$7 = { _0: "label", _1: new _M0DTPC14json4Json6String(_p$9) };
+    const _p$10 = w.at;
+    const _p$11 = undefined;
+    const _tmp$8 = { _0: "at", _1: new _M0DTPC14json4Json6Number(_p$10, _p$11) };
+    const _p$12 = w.exp;
+    const _p$13 = undefined;
+    const _bind = [_tmp$6, _tmp$7, _tmp$8, { _0: "exp", _1: new _M0DTPC14json4Json6Number(_p$12, _p$13) }];
+    const _p$14 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 4), undefined);
+    return new _M0DTPC14json4Json6Object(_p$14);
+  }));
+  const _bind = [_tmp, _tmp$2, _tmp$3, _tmp$4, _tmp$5, { _0: "webs", _1: new _M0DTPC14json4Json5Array(_p$7) }];
+  const _p$8 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 6), undefined);
+  return new _M0DTPC14json4Json6Object(_p$8);
 }
 function _M0FP39stillfail5rules2js16person__fold__js(entries, sub, crypto) {
   let answer;
@@ -13232,7 +14465,7 @@ function _M0FP39stillfail5rules2js10lock__view(lock) {
       if (_p <= 0) {
         _tmp$5 = new _M0TPB5ArrayGsE([], 0);
       } else {
-        const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p);
+        const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p);
         let _tmp$6 = 0;
         while (true) {
           const _p$3 = _tmp$6;
@@ -13301,7 +14534,7 @@ function _M0FP39stillfail5rules2js24browser__listing__ok__js(l) {
   if (_p <= 0) {
     _tmp$2 = new _M0TPB5ArrayGsE([], 0);
   } else {
-    const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p);
+    const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p);
     let _tmp$3 = 0;
     while (true) {
       const _p$3 = _tmp$3;
@@ -13322,7 +14555,7 @@ function _M0FP39stillfail5rules2js24browser__listing__ok__js(l) {
   if (_p$2 <= 0) {
     _tmp$4 = new _M0TPB5ArrayGsE([], 0);
   } else {
-    const _p$3 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$2);
+    const _p$3 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$2);
     let _tmp$5 = 0;
     while (true) {
       const _p$4 = _tmp$5;
@@ -13353,7 +14586,7 @@ function _M0FP39stillfail5rules2js14signer__of__js(lock, key) {
     return _M0FP39stillfail5rules2js6to__js(new _M0DTPC14json4Json6Object(_p));
   }
 }
-function _M0FP39stillfail5rules2js14supersedes__ofN1nS7005(v, k) {
+function _M0FP39stillfail5rules2js14supersedes__ofN1nS7598(v, k) {
   if (v.$tag === 6) {
     const _Object = v;
     const _m = _Object._0;
@@ -13375,7 +14608,7 @@ function _M0FP39stillfail5rules2js14supersedes__ofN1nS7005(v, k) {
     return 0n;
   }
 }
-function _M0FP39stillfail5rules2js14supersedes__ofN7deletedS7006(v) {
+function _M0FP39stillfail5rules2js14supersedes__ofN7deletedS7599(v) {
   if (v.$tag === 6) {
     const _Object = v;
     const _m = _Object._0;
@@ -13448,7 +14681,7 @@ function _M0FP39stillfail5rules2js14supersedes__of(a, b, number) {
       }
       return false;
     }
-    return _M0FP39stillfail5rules7history10supersedes(_M0FP39stillfail5rules2js14supersedes__ofN1nS7005(a$2, number), _M0FP39stillfail5rules2js14supersedes__ofN7deletedS7006(a$2), _M0FP39stillfail5rules2js14supersedes__ofN1nS7005(a$2, "epoch"), _M0FP39stillfail5rules2js14supersedes__ofN1nS7005(b$2, number), _M0FP39stillfail5rules2js14supersedes__ofN7deletedS7006(b$2), _M0FP39stillfail5rules2js14supersedes__ofN1nS7005(b$2, "epoch"), text);
+    return _M0FP39stillfail5rules7history10supersedes(_M0FP39stillfail5rules2js14supersedes__ofN1nS7598(a$2, number), _M0FP39stillfail5rules2js14supersedes__ofN7deletedS7599(a$2), _M0FP39stillfail5rules2js14supersedes__ofN1nS7598(a$2, "epoch"), _M0FP39stillfail5rules2js14supersedes__ofN1nS7598(b$2, number), _M0FP39stillfail5rules2js14supersedes__ofN7deletedS7599(b$2), _M0FP39stillfail5rules2js14supersedes__ofN1nS7598(b$2, "epoch"), text);
   }
   return false;
 }
@@ -13478,17 +14711,17 @@ function _M0FP39stillfail5rules2js10step__name(s) {
     }
   }
 }
-function _M0FP39stillfail5rules2js16fork__before__jsN1wS7040(v) {
+function _M0FP39stillfail5rules2js16fork__before__jsN1wS7633(v) {
   return _M0MPC16double6Double7to__int(_M0FP39stillfail5rules2js7js__num(_M0FP39stillfail5rules2js7js__get(v, "weight")));
 }
-function _M0FP39stillfail5rules2js16fork__before__jsN1rS7041(v) {
+function _M0FP39stillfail5rules2js16fork__before__jsN1rS7634(v) {
   return _M0FP39stillfail5rules2js8js__kind(_M0FP39stillfail5rules2js7js__get(v, "removal")) === 1 && _M0FP39stillfail5rules2js8js__bool(_M0FP39stillfail5rules2js7js__get(v, "removal"));
 }
-function _M0FP39stillfail5rules2js16fork__before__jsN1sS7042(v, k) {
+function _M0FP39stillfail5rules2js16fork__before__jsN1sS7635(v, k) {
   return _M0FP39stillfail5rules2js7js__str(_M0FP39stillfail5rules2js7js__get(v, k));
 }
 function _M0FP39stillfail5rules2js16fork__before__js(a, b) {
-  const _bind = _M0FP39stillfail5rules4lock6before(_M0FP39stillfail5rules2js16fork__before__jsN1wS7040(a), _M0FP39stillfail5rules2js16fork__before__jsN1rS7041(a), _M0FP39stillfail5rules2js16fork__before__jsN1sS7042(a, "tie"), _M0FP39stillfail5rules2js16fork__before__jsN1sS7042(a, "hash"), _M0FP39stillfail5rules2js16fork__before__jsN1wS7040(b), _M0FP39stillfail5rules2js16fork__before__jsN1rS7041(b), _M0FP39stillfail5rules2js16fork__before__jsN1sS7042(b, "tie"), _M0FP39stillfail5rules2js16fork__before__jsN1sS7042(b, "hash"));
+  const _bind = _M0FP39stillfail5rules4lock6before(_M0FP39stillfail5rules2js16fork__before__jsN1wS7633(a), _M0FP39stillfail5rules2js16fork__before__jsN1rS7634(a), _M0FP39stillfail5rules2js16fork__before__jsN1sS7635(a, "tie"), _M0FP39stillfail5rules2js16fork__before__jsN1sS7635(a, "hash"), _M0FP39stillfail5rules2js16fork__before__jsN1wS7633(b), _M0FP39stillfail5rules2js16fork__before__jsN1rS7634(b), _M0FP39stillfail5rules2js16fork__before__jsN1sS7635(b, "tie"), _M0FP39stillfail5rules2js16fork__before__jsN1sS7635(b, "hash"));
   if (_bind === undefined) {
     return _M0FP39stillfail5rules2js8js__null();
   } else {
@@ -13515,7 +14748,7 @@ function _M0FP39stillfail5rules2js9chain__js(entries, ch) {
     }
   }
   const _p = ch.off;
-  const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p.len);
+  const _p$2 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p.len);
   const _p$3 = _p.len;
   const _p$4 = _p.buf;
   let _tmp$2 = 0;
@@ -13578,7 +14811,7 @@ function _M0FP39stillfail5rules2js9chain__js(entries, ch) {
   const o = _M0FP39stillfail5rules2js15js__new__object();
   _M0FP39stillfail5rules2js7js__put(o, "entries", es);
   const _p$5 = ch.at;
-  const _p$6 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$5.len);
+  const _p$6 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$5.len);
   const _p$7 = _p$5.len;
   const _p$8 = _p$5.buf;
   let _tmp$3 = 0;
@@ -13599,7 +14832,7 @@ function _M0FP39stillfail5rules2js9chain__js(entries, ch) {
   const _p$9 = _p$6;
   _M0FP39stillfail5rules2js7js__put(o, "at", _M0FP39stillfail5rules2js6to__js(new _M0DTPC14json4Json5Array(_p$9)));
   const _p$10 = ch.hashes;
-  const _p$11 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$10.len);
+  const _p$11 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$10.len);
   const _p$12 = _p$10.len;
   const _p$13 = _p$10.buf;
   let _tmp$4 = 0;
@@ -13725,74 +14958,6 @@ function _M0FP39stillfail5rules2js17person__chain__js(entries, genesis, crypto) 
   }
   return _M0FP39stillfail5rules2js7refused(why);
 }
-function _M0FP39stillfail5rules2js20person__fold__ws__js(entries, sub, crypto) {
-  let answer;
-  let _try_err;
-  _L: {
-    _L$2: {
-      const _bind = _M0FP39stillfail5rules2js11entries__of(entries);
-      let _tmp;
-      if (_bind.$tag === 1) {
-        const _ok = _bind;
-        _tmp = _ok._0;
-      } else {
-        const _err = _bind;
-        _try_err = _err._0;
-        break _L$2;
-      }
-      const _bind$2 = _M0FP39stillfail5rules4lock16fold__person__ws(_tmp, sub, { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
-      let _tmp$2;
-      if (_bind$2.$tag === 1) {
-        const _ok = _bind$2;
-        _tmp$2 = _ok._0;
-      } else {
-        const _err = _bind$2;
-        _try_err = _err._0;
-        break _L$2;
-      }
-      answer = _M0FP39stillfail5rules2js12person__json(_tmp$2);
-      break _L;
-    }
-    let why;
-    _L$3: {
-      _L$4: {
-        switch (_try_err.$tag) {
-          case 2: {
-            const _Refused = _try_err;
-            const _why = _Refused._0;
-            why = _why;
-            break _L$4;
-          }
-          case 1: {
-            const _Refusal = _try_err;
-            const _why$2 = _Refusal._0;
-            why = _why$2;
-            break _L$4;
-          }
-          case 0: {
-            const _Invalid = _try_err;
-            const _why$3 = _Invalid._0;
-            const _bind = [{ _0: "error", _1: new _M0DTPC14json4Json6String(_why$3) }];
-            const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 1), undefined);
-            answer = new _M0DTPC14json4Json6Object(_p);
-            break;
-          }
-          default: {
-            const _p$2 = _M0FP15Error10to__string(_try_err);
-            const _bind$2 = [{ _0: "error", _1: new _M0DTPC14json4Json6String(_p$2) }];
-            const _p$3 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$2, 0, 1), undefined);
-            answer = new _M0DTPC14json4Json6Object(_p$3);
-          }
-        }
-        break _L$3;
-      }
-      const _bind = [{ _0: "error", _1: new _M0DTPC14json4Json6String(why) }];
-      const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 1), undefined);
-      answer = new _M0DTPC14json4Json6Object(_p);
-    }
-  }
-  return _M0FP39stillfail5rules2js6to__js(answer);
-}
 function _M0FP39stillfail5rules2js9opt__json(v) {
   if (v === undefined) {
     return _M0DTPC14json4Json4Null__;
@@ -13802,239 +14967,466 @@ function _M0FP39stillfail5rules2js9opt__json(v) {
     return new _M0DTPC14json4Json6String(_s);
   }
 }
-function _M0FP39stillfail5rules2js10roster__jsN1sS7125(_hole10) {
-  return new _M0DTPC14json4Json6String(_hole10);
-}
-function _M0FP39stillfail5rules2js10roster__js(ws, root, chains, crypto) {
-  const cs = new _M0TPB5ArrayGRPB5ArrayGRPC14json4JsonEE([], 0);
-  const _bind = _M0FP39stillfail5rules2js7js__len(chains);
+function _M0FP39stillfail5rules2js10bodies__of(v) {
+  const out = new _M0TPB5ArrayGRPC14json4JsonE([], 0);
+  const _bind = _M0FP39stillfail5rules2js7js__len(v);
   let _tmp = 0;
   while (true) {
     const i = _tmp;
     if (i < _bind) {
-      let es;
+      let _bind$2;
       let _try_err;
       _L: {
         _L$2: {
-          const _bind$2 = _M0FP39stillfail5rules2js11entries__of(_M0FP39stillfail5rules2js6js__at(chains, i));
-          if (_bind$2.$tag === 1) {
-            const _ok = _bind$2;
-            es = _ok._0;
+          const _bind$3 = _M0FP39stillfail5rules2js8json__of(_M0FP39stillfail5rules2js6js__at(v, i));
+          let _tmp$2;
+          if (_bind$3.$tag === 1) {
+            const _ok = _bind$3;
+            _tmp$2 = _ok._0;
           } else {
-            const _err = _bind$2;
+            const _err = _bind$3;
             _try_err = _err._0;
             break _L$2;
           }
+          _bind$2 = new _M0DTPB6ResultGRPC14json4JsonRP39stillfail5rules4form7InvalidE2Ok(_tmp$2);
           break _L;
         }
-        const _Invalid = _try_err;
-        const _why = _Invalid._0;
-        return _M0FP39stillfail5rules2js7refused(_why);
+        _bind$2 = new _M0DTPB6ResultGRPC14json4JsonRP39stillfail5rules4form7InvalidE3Err(_try_err);
       }
-      _M0MPC15array5Array4pushGUsRPC14json4JsonEE(cs, es);
+      if (_bind$2.$tag === 1) {
+        const _Ok = _bind$2;
+        const _b = _Ok._0;
+        _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(out, _b);
+      }
       _tmp = i + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const r = _M0FP39stillfail5rules4lock6roster(ws, root, cs, { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
-  const _p = r.rooted;
-  const _tmp$2 = { _0: "rooted", _1: _p ? _M0DTPC14json4Json4True__ : _M0DTPC14json4Json5False__ };
-  const _p$2 = r.members;
-  const _p$3 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$2.len);
-  const _p$4 = _p$2.len;
-  const _p$5 = _p$2.buf;
-  let _tmp$3 = 0;
+  return out;
+}
+function _M0FP39stillfail5rules2js10chains__of(chains) {
+  const cs = new _M0TPB5ArrayGRPB5ArrayGRPC14json4JsonEE([], 0);
+  const _bind = _M0FP39stillfail5rules2js7js__len(chains);
+  let _tmp = 0;
   while (true) {
-    const _p$6 = _tmp$3;
-    if (_p$6 < _p$4) {
-      const _p$7 = _p$5[_p$6];
-      const _tmp$4 = { _0: "sub", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$7.sub) };
-      const _tmp$5 = { _0: "role", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$7.role) };
-      const _tmp$6 = { _0: "lock", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$7.lock) };
-      const _tmp$7 = { _0: "admit", _1: _M0FP39stillfail5rules2js9opt__json(_p$7.admit) };
-      const _p$8 = _p$7.keys;
-      let _tmp$8;
-      if (_p$8 === undefined) {
-        _tmp$8 = _M0DTPC14json4Json4Null__;
+    const i = _tmp;
+    if (i < _bind) {
+      const _bind$2 = _M0FP39stillfail5rules2js11entries__of(_M0FP39stillfail5rules2js6js__at(chains, i));
+      let _tmp$2;
+      if (_bind$2.$tag === 1) {
+        const _ok = _bind$2;
+        _tmp$2 = _ok._0;
       } else {
-        const _p$9 = _p$8;
-        const _p$10 = _p$9;
-        const _p$11 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$10.len);
-        const _p$12 = _p$10.len;
-        const _p$13 = _p$10.buf;
-        let _tmp$9 = 0;
+        return _bind$2;
+      }
+      _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(cs, _tmp$2);
+      _tmp = i + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return new _M0DTPC16result6ResultGRPB5ArrayGRPB5ArrayGRPC14json4JsonEERP39stillfail5rules4form7InvalidE2Ok(cs);
+}
+function _M0FP39stillfail5rules2js10roster__jsN1sS7716(_hole38) {
+  return new _M0DTPC14json4Json6String(_hole38);
+}
+function _M0FP39stillfail5rules2js10roster__js(ws, root, chains, bodies, crypto) {
+  let cs;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FP39stillfail5rules2js10chains__of(chains);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        cs = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    const _Invalid = _try_err;
+    const _why = _Invalid._0;
+    return _M0FP39stillfail5rules2js7refused(_why);
+  }
+  const _p = _M0FP39stillfail5rules2js10bodies__of(bodies);
+  const _p$2 = { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto };
+  const r = _M0FP39stillfail5rules4lock10roster__of(ws, root, cs, _p, _p$2)._0;
+  const _p$3 = r.rooted;
+  const _tmp = { _0: "rooted", _1: _p$3 ? _M0DTPC14json4Json4True__ : _M0DTPC14json4Json5False__ };
+  const _p$4 = r.members;
+  const _p$5 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$4.len);
+  const _p$6 = _p$4.len;
+  const _p$7 = _p$4.buf;
+  let _tmp$2 = 0;
+  while (true) {
+    const _p$8 = _tmp$2;
+    if (_p$8 < _p$6) {
+      const _p$9 = _p$7[_p$8];
+      const _tmp$3 = { _0: "sub", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$9.sub) };
+      const _tmp$4 = { _0: "role", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$9.role) };
+      const _tmp$5 = { _0: "lock", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$9.lock) };
+      const _tmp$6 = { _0: "admit", _1: _M0FP39stillfail5rules2js9opt__json(_p$9.admit) };
+      const _p$10 = _p$9.keys;
+      let _tmp$7;
+      if (_p$10 === undefined) {
+        _tmp$7 = _M0DTPC14json4Json4Null__;
+      } else {
+        const _p$11 = _p$10;
+        const _p$12 = _p$11;
+        const _p$13 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$12.len);
+        const _p$14 = _p$12.len;
+        const _p$15 = _p$12.buf;
+        let _tmp$8 = 0;
         while (true) {
-          const _p$14 = _tmp$9;
-          if (_p$14 < _p$12) {
-            const _p$15 = _p$13[_p$14];
-            const _p$16 = _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$15);
-            _p$11.buf[_p$14] = _p$16;
-            _tmp$9 = _p$14 + 1 | 0;
+          const _p$16 = _tmp$8;
+          if (_p$16 < _p$14) {
+            const _p$17 = _p$15[_p$16];
+            const _p$18 = _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$17);
+            _p$13.buf[_p$16] = _p$18;
+            _tmp$8 = _p$16 + 1 | 0;
             continue;
           } else {
             break;
           }
         }
-        const _p$14 = _p$11;
-        _tmp$8 = new _M0DTPC14json4Json5Array(_p$14);
+        const _p$16 = _p$13;
+        _tmp$7 = new _M0DTPC14json4Json5Array(_p$16);
       }
-      const _p$9 = [_tmp$4, _tmp$5, _tmp$6, _tmp$7, { _0: "keys", _1: _tmp$8 }];
-      const _p$10 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$9, 0, 5), undefined);
-      const _p$11 = new _M0DTPC14json4Json6Object(_p$10);
-      _p$3.buf[_p$6] = _p$11;
-      _tmp$3 = _p$6 + 1 | 0;
+      const _p$11 = [_tmp$3, _tmp$4, _tmp$5, _tmp$6, { _0: "keys", _1: _tmp$7 }];
+      const _p$12 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$11, 0, 5), undefined);
+      const _p$13 = new _M0DTPC14json4Json6Object(_p$12);
+      _p$5.buf[_p$8] = _p$13;
+      _tmp$2 = _p$8 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$6 = _p$3;
-  const _tmp$4 = { _0: "members", _1: new _M0DTPC14json4Json5Array(_p$6) };
-  const _p$7 = r.stations;
-  const _p$8 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$7.len);
-  const _p$9 = _p$7.len;
-  const _p$10 = _p$7.buf;
-  let _tmp$5 = 0;
+  const _p$8 = _p$5;
+  const _tmp$3 = { _0: "members", _1: new _M0DTPC14json4Json5Array(_p$8) };
+  const _p$9 = r.stations;
+  const _p$10 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$9.len);
+  const _p$11 = _p$9.len;
+  const _p$12 = _p$9.buf;
+  let _tmp$4 = 0;
   while (true) {
-    const _p$11 = _tmp$5;
-    if (_p$11 < _p$9) {
-      const _p$12 = _p$10[_p$11];
-      const _p$13 = _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$12);
-      _p$8.buf[_p$11] = _p$13;
-      _tmp$5 = _p$11 + 1 | 0;
+    const _p$13 = _tmp$4;
+    if (_p$13 < _p$11) {
+      const _p$14 = _p$12[_p$13];
+      const _p$15 = _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$14);
+      _p$10.buf[_p$13] = _p$15;
+      _tmp$4 = _p$13 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$11 = _p$8;
-  const _tmp$6 = { _0: "stations", _1: new _M0DTPC14json4Json5Array(_p$11) };
-  const _p$12 = r.pairs;
-  const _p$13 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$12.len);
-  const _p$14 = _p$12.len;
-  const _p$15 = _p$12.buf;
-  let _tmp$7 = 0;
+  const _p$13 = _p$10;
+  const _tmp$5 = { _0: "stations", _1: new _M0DTPC14json4Json5Array(_p$13) };
+  const _p$14 = r.pairs;
+  const _p$15 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$14.len);
+  const _p$16 = _p$14.len;
+  const _p$17 = _p$14.buf;
+  let _tmp$6 = 0;
   while (true) {
-    const _p$16 = _tmp$7;
-    if (_p$16 < _p$14) {
-      const _p$17 = _p$15[_p$16];
-      const _p$18 = [{ _0: "sub", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$17._0) }, { _0: "lock", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$17._1) }, { _0: "role", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$17._2) }];
-      const _p$19 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$18, 0, 3), undefined);
-      const _p$20 = new _M0DTPC14json4Json6Object(_p$19);
-      _p$13.buf[_p$16] = _p$20;
-      _tmp$7 = _p$16 + 1 | 0;
+    const _p$18 = _tmp$6;
+    if (_p$18 < _p$16) {
+      const _p$19 = _p$17[_p$18];
+      const _p$20 = [{ _0: "sub", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$19._0) }, { _0: "lock", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$19._1) }, { _0: "role", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$19._2) }];
+      const _p$21 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$20, 0, 3), undefined);
+      const _p$22 = new _M0DTPC14json4Json6Object(_p$21);
+      _p$15.buf[_p$18] = _p$22;
+      _tmp$6 = _p$18 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$16 = _p$13;
-  const _tmp$8 = { _0: "pairs", _1: new _M0DTPC14json4Json5Array(_p$16) };
-  const _p$17 = r.undecided;
-  const _p$18 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$17.len);
-  const _p$19 = _p$17.len;
-  const _p$20 = _p$17.buf;
-  let _tmp$9 = 0;
+  const _p$18 = _p$15;
+  const _tmp$7 = { _0: "pairs", _1: new _M0DTPC14json4Json5Array(_p$18) };
+  const _p$19 = r.undecided;
+  const _p$20 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$19.len);
+  const _p$21 = _p$19.len;
+  const _p$22 = _p$19.buf;
+  let _tmp$8 = 0;
   while (true) {
-    const _p$21 = _tmp$9;
-    if (_p$21 < _p$19) {
-      const _p$22 = _p$20[_p$21];
-      const _p$23 = [{ _0: "sub", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$22._0) }, { _0: "lock", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$22._1) }];
-      const _p$24 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$23, 0, 2), undefined);
-      const _p$25 = new _M0DTPC14json4Json6Object(_p$24);
-      _p$18.buf[_p$21] = _p$25;
-      _tmp$9 = _p$21 + 1 | 0;
+    const _p$23 = _tmp$8;
+    if (_p$23 < _p$21) {
+      const _p$24 = _p$22[_p$23];
+      const _p$25 = [{ _0: "sub", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$24._0) }, { _0: "lock", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$24._1) }];
+      const _p$26 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$25, 0, 2), undefined);
+      const _p$27 = new _M0DTPC14json4Json6Object(_p$26);
+      _p$20.buf[_p$23] = _p$27;
+      _tmp$8 = _p$23 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$21 = _p$18;
-  const _tmp$10 = { _0: "undecided", _1: new _M0DTPC14json4Json5Array(_p$21) };
-  const _p$22 = r.cancelled;
-  const _p$23 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$22.len);
-  const _p$24 = _p$22.len;
-  const _p$25 = _p$22.buf;
-  let _tmp$11 = 0;
+  const _p$23 = _p$20;
+  const _tmp$9 = { _0: "undecided", _1: new _M0DTPC14json4Json5Array(_p$23) };
+  const _p$24 = r.cancelled;
+  const _p$25 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$24.len);
+  const _p$26 = _p$24.len;
+  const _p$27 = _p$24.buf;
+  let _tmp$10 = 0;
   while (true) {
-    const _p$26 = _tmp$11;
-    if (_p$26 < _p$24) {
-      const _p$27 = _p$25[_p$26];
-      const _p$28 = _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$27);
-      _p$23.buf[_p$26] = _p$28;
-      _tmp$11 = _p$26 + 1 | 0;
+    const _p$28 = _tmp$10;
+    if (_p$28 < _p$26) {
+      const _p$29 = _p$27[_p$28];
+      const _p$30 = _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$29);
+      _p$25.buf[_p$28] = _p$30;
+      _tmp$10 = _p$28 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$26 = _p$23;
-  const _tmp$12 = { _0: "cancelled", _1: new _M0DTPC14json4Json5Array(_p$26) };
-  const _p$27 = r.statements;
-  const _p$28 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$27.len);
-  const _p$29 = _p$27.len;
-  const _p$30 = _p$27.buf;
-  let _tmp$13 = 0;
+  const _p$28 = _p$25;
+  const _tmp$11 = { _0: "cancelled", _1: new _M0DTPC14json4Json5Array(_p$28) };
+  const _p$29 = r.statements;
+  const _p$30 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$29.len);
+  const _p$31 = _p$29.len;
+  const _p$32 = _p$29.buf;
+  let _tmp$12 = 0;
   while (true) {
-    const _p$31 = _tmp$13;
-    if (_p$31 < _p$29) {
-      const _p$32 = _p$30[_p$31];
-      const _p$33 = [{ _0: "hash", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$32.hash) }, { _0: "kind", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$32.kind) }, { _0: "log", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$32.log) }, { _0: "by", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$32.by) }, { _0: "label", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$32.label) }, { _0: "why", _1: _M0FP39stillfail5rules2js9opt__json(_p$32.why) }, { _0: "decided", _1: _M0FP39stillfail5rules2js9opt__json(_p$32.decided) }];
-      const _p$34 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$33, 0, 7), undefined);
-      const _p$35 = new _M0DTPC14json4Json6Object(_p$34);
-      _p$28.buf[_p$31] = _p$35;
-      _tmp$13 = _p$31 + 1 | 0;
+    const _p$33 = _tmp$12;
+    if (_p$33 < _p$31) {
+      const _p$34 = _p$32[_p$33];
+      const _p$35 = [{ _0: "hash", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$34.hash) }, { _0: "kind", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$34.kind) }, { _0: "log", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$34.log) }, { _0: "by", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$34.by) }, { _0: "label", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$34.label) }, { _0: "why", _1: _M0FP39stillfail5rules2js9opt__json(_p$34.why) }, { _0: "decided", _1: _M0FP39stillfail5rules2js9opt__json(_p$34.decided) }];
+      const _p$36 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$35, 0, 7), undefined);
+      const _p$37 = new _M0DTPC14json4Json6Object(_p$36);
+      _p$30.buf[_p$33] = _p$37;
+      _tmp$12 = _p$33 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$31 = _p$28;
-  const _tmp$14 = { _0: "statements", _1: new _M0DTPC14json4Json5Array(_p$31) };
-  const _p$32 = r.labels;
-  const _p$33 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$32.len);
-  const _p$34 = _p$32.len;
-  const _p$35 = _p$32.buf;
-  let _tmp$15 = 0;
+  const _p$33 = _p$30;
+  const _tmp$13 = { _0: "statements", _1: new _M0DTPC14json4Json5Array(_p$33) };
+  const _p$34 = r.labels;
+  const _p$35 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$34.len);
+  const _p$36 = _p$34.len;
+  const _p$37 = _p$34.buf;
+  let _tmp$14 = 0;
   while (true) {
-    const _p$36 = _tmp$15;
-    if (_p$36 < _p$34) {
-      const _p$37 = _p$35[_p$36];
-      const _p$38 = new _M0TPB5ArrayGRPC14json4JsonE([_M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$37._0), _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$37._1)], 2);
-      const _p$39 = new _M0DTPC14json4Json5Array(_p$38);
-      _p$33.buf[_p$36] = _p$39;
-      _tmp$15 = _p$36 + 1 | 0;
+    const _p$38 = _tmp$14;
+    if (_p$38 < _p$36) {
+      const _p$39 = _p$37[_p$38];
+      const _p$40 = new _M0TPB5ArrayGRPC14json4JsonE([_M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$39._0), _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$39._1)], 2);
+      const _p$41 = new _M0DTPC14json4Json5Array(_p$40);
+      _p$35.buf[_p$38] = _p$41;
+      _tmp$14 = _p$38 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$36 = _p$33;
-  const _tmp$16 = { _0: "labels", _1: new _M0DTPC14json4Json5Array(_p$36) };
-  const _p$37 = r.refused;
-  const _p$38 = _M0MPC15array5Array20unsafe__make__uninitGRPC14json4JsonE(_p$37.len);
-  const _p$39 = _p$37.len;
-  const _p$40 = _p$37.buf;
-  let _tmp$17 = 0;
+  const _p$38 = _p$35;
+  const _tmp$15 = { _0: "labels", _1: new _M0DTPC14json4Json5Array(_p$38) };
+  const _p$39 = r.refused;
+  const _p$40 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$39.len);
+  const _p$41 = _p$39.len;
+  const _p$42 = _p$39.buf;
+  let _tmp$16 = 0;
   while (true) {
-    const _p$41 = _tmp$17;
-    if (_p$41 < _p$39) {
-      const _p$42 = _p$40[_p$41];
-      const _p$43 = [{ _0: "genesis", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$42._0) }, { _0: "why", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7125(_p$42._1) }];
-      const _p$44 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$43, 0, 2), undefined);
-      const _p$45 = new _M0DTPC14json4Json6Object(_p$44);
-      _p$38.buf[_p$41] = _p$45;
-      _tmp$17 = _p$41 + 1 | 0;
+    const _p$43 = _tmp$16;
+    if (_p$43 < _p$41) {
+      const _p$44 = _p$42[_p$43];
+      const _p$45 = [{ _0: "genesis", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$44._0) }, { _0: "why", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$44._1) }];
+      const _p$46 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$45, 0, 2), undefined);
+      const _p$47 = new _M0DTPC14json4Json6Object(_p$46);
+      _p$40.buf[_p$43] = _p$47;
+      _tmp$16 = _p$43 + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  const _p$41 = _p$38;
-  const _bind$2 = [_tmp$2, _tmp$4, _tmp$6, _tmp$8, _tmp$10, _tmp$12, _tmp$14, _tmp$16, { _0: "refused", _1: new _M0DTPC14json4Json5Array(_p$41) }];
-  const _p$42 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$2, 0, 9), undefined);
-  return _M0FP39stillfail5rules2js6to__js(new _M0DTPC14json4Json6Object(_p$42));
+  const _p$43 = _p$40;
+  const _tmp$17 = { _0: "refused", _1: new _M0DTPC14json4Json5Array(_p$43) };
+  const _p$44 = r.in_force;
+  const _p$45 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$44.len);
+  const _p$46 = _p$44.len;
+  const _p$47 = _p$44.buf;
+  let _tmp$18 = 0;
+  while (true) {
+    const _p$48 = _tmp$18;
+    if (_p$48 < _p$46) {
+      const _p$49 = _p$47[_p$48];
+      const _p$50 = [{ _0: "entry", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$49._0) }, { _0: "body", _1: _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$49._1) }];
+      const _p$51 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_p$50, 0, 2), undefined);
+      const _p$52 = new _M0DTPC14json4Json6Object(_p$51);
+      _p$45.buf[_p$48] = _p$52;
+      _tmp$18 = _p$48 + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  const _p$48 = _p$45;
+  const _tmp$19 = { _0: "in_force", _1: new _M0DTPC14json4Json5Array(_p$48) };
+  const _p$49 = r.lacking;
+  const _p$50 = _M0MPC15array5Array20unsafe__make__uninitGUssEE(_p$49.len);
+  const _p$51 = _p$49.len;
+  const _p$52 = _p$49.buf;
+  let _tmp$20 = 0;
+  while (true) {
+    const _p$53 = _tmp$20;
+    if (_p$53 < _p$51) {
+      const _p$54 = _p$52[_p$53];
+      const _p$55 = _M0FP39stillfail5rules2js10roster__jsN1sS7716(_p$54);
+      _p$50.buf[_p$53] = _p$55;
+      _tmp$20 = _p$53 + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  const _p$53 = _p$50;
+  const _bind = [_tmp, _tmp$3, _tmp$5, _tmp$7, _tmp$9, _tmp$11, _tmp$13, _tmp$15, _tmp$17, _tmp$19, { _0: "lacking", _1: new _M0DTPC14json4Json5Array(_p$53) }, { _0: "newest", _1: _M0FP39stillfail5rules2js9opt__json(r.newest) }, { _0: "settings", _1: _M0MPC16option6Option10unwrap__orGRPB5ArrayGRP39stillfail5rules4lock4NodeGRP39stillfail5rules4lock9LockStateEEE(r.settings, _M0DTPC14json4Json4Null__) }];
+  const _p$54 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 13), undefined);
+  return _M0FP39stillfail5rules2js6to__js(new _M0DTPC14json4Json6Object(_p$54));
 }
-export { _M0FP39stillfail5rules2js13canonical__of as canonical_of, _M0FP39stillfail5rules2js15entry__text__of as entry_text_of, _M0FP39stillfail5rules2js11lower__role as lower_role, _M0FP39stillfail5rules2js8fold__js as fold_js, _M0FP39stillfail5rules2js9admit__js as admit_js, _M0FP39stillfail5rules2js11genesis__js as genesis_js, _M0FP39stillfail5rules2js9apply__js as apply_js, _M0FP39stillfail5rules2js10signer__js as signer_js, _M0FP39stillfail5rules2js14admit__one__js as admit_one_js, _M0FP39stillfail5rules2js14fold__held__js as fold_held_js, _M0FP39stillfail5rules2js16person__fold__js as person_fold_js, _M0FP39stillfail5rules2js17admit__person__js as admit_person_js, _M0FP39stillfail5rules2js12cert__ok__js as cert_ok_js, _M0FP39stillfail5rules2js13vault__ok__js as vault_ok_js, _M0FP39stillfail5rules2js12item__ok__js as item_ok_js, _M0FP39stillfail5rules2js24browser__listing__ok__js as browser_listing_ok_js, _M0FP39stillfail5rules2js14signer__of__js as signer_of_js, _M0FP39stillfail5rules2js21vault__supersedes__js as vault_supersedes_js, _M0FP39stillfail5rules2js20item__supersedes__js as item_supersedes_js, _M0FP39stillfail5rules2js11tie__of__js as tie_of_js, _M0FP39stillfail5rules2js16fork__before__js as fork_before_js, _M0FP39stillfail5rules2js15lock__chain__js as lock_chain_js, _M0FP39stillfail5rules2js17person__chain__js as person_chain_js, _M0FP39stillfail5rules2js20person__fold__ws__js as person_fold_ws_js, _M0FP39stillfail5rules2js10roster__js as roster_js }
+function _M0FP39stillfail5rules2js10state4__js(ws, root, chains, bodies, now, crypto) {
+  let cs;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FP39stillfail5rules2js10chains__of(chains);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        cs = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    const _Invalid = _try_err;
+    const _why = _Invalid._0;
+    return _M0FP39stillfail5rules2js7refused(_why);
+  }
+  const st = _M0FP39stillfail5rules4lock6state4(ws, root, cs, _M0FP39stillfail5rules2js10bodies__of(bodies), now, { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
+  const o = _M0FP39stillfail5rules2js4held(st.lock);
+  _M0FP39stillfail5rules2js7js__put(o, "on", _M0FP39stillfail5rules2js11js__of__str(st.on));
+  return o;
+}
+function _M0FP39stillfail5rules2js11ws__tag__js(ws, genesis, crypto) {
+  const _p = { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto };
+  return _p.method_table.method_0(_p.self, `stillfail/ws-tag/1\n${ws}\n${genesis}`);
+}
+function _M0FP39stillfail5rules2js14body__hash__js(body, crypto) {
+  let _try_err;
+  _L: {
+    const _bind = _M0FP39stillfail5rules2js8json__of(body);
+    let _tmp;
+    if (_bind.$tag === 1) {
+      const _ok = _bind;
+      _tmp = _ok._0;
+    } else {
+      const _err = _bind;
+      _try_err = _err._0;
+      break _L;
+    }
+    const _bind$2 = _M0FP39stillfail5rules4lock10body__hash(_tmp, { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
+    if (_bind$2.$tag === 1) {
+      const _ok = _bind$2;
+      return _ok._0;
+    } else {
+      const _err = _bind$2;
+      _try_err = _err._0;
+      break _L;
+    }
+  }
+  let why;
+  _L$2: {
+    switch (_try_err.$tag) {
+      case 2: {
+        const _Refused = _try_err;
+        const _why = _Refused._0;
+        why = _why;
+        break _L$2;
+      }
+      case 1: {
+        const _Refusal = _try_err;
+        const _why$2 = _Refusal._0;
+        why = _why$2;
+        break _L$2;
+      }
+      case 0: {
+        const _Invalid = _try_err;
+        const _why$3 = _Invalid._0;
+        return `!${_why$3}`;
+      }
+      default: {
+        return `!${_M0FP15Error10to__string(_try_err)}`;
+      }
+    }
+  }
+  return `!${why}`;
+}
+function _M0FP39stillfail5rules2js17body__refusal__js(ws, body, commits, crypto) {
+  let b;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FP39stillfail5rules2js8json__of(body);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        b = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    const _Invalid = _try_err;
+    const _why = _Invalid._0;
+    return _M0FP39stillfail5rules2js11js__of__str(`a body is {ws, kind, …, salt}: ${_why}`);
+  }
+  const cs = new _M0TPB5ArrayGRP39stillfail5rules4lock6CommitE([], 0);
+  const _bind = _M0FP39stillfail5rules2js7js__len(commits);
+  let _tmp = 0;
+  while (true) {
+    const i = _tmp;
+    if (i < _bind) {
+      _L$2: {
+        const x = _M0FP39stillfail5rules2js6js__at(commits, i);
+        let chain;
+        let _try_err$2;
+        _L$3: {
+          _L$4: {
+            const _bind$2 = _M0FP39stillfail5rules2js11entries__of(_M0FP39stillfail5rules2js7js__get(x, "chain"));
+            if (_bind$2.$tag === 1) {
+              const _ok = _bind$2;
+              chain = _ok._0;
+            } else {
+              const _err = _bind$2;
+              _try_err$2 = _err._0;
+              break _L$4;
+            }
+            break _L$3;
+          }
+          break _L$2;
+        }
+        _M0MPC15array5Array4pushGRP39stillfail5rules4lock4StmtE(cs, new _M0TP39stillfail5rules4lock6Commit(_M0FP39stillfail5rules2js7js__str(_M0FP39stillfail5rules2js7js__get(x, "genesis")), chain));
+        break _L$2;
+      }
+      _tmp = i + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return _M0FP39stillfail5rules2js7why__js(_M0FP39stillfail5rules4lock13body__refusal(ws, b, cs, { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto }));
+}
+export { _M0FP39stillfail5rules2js13canonical__of as canonical_of, _M0FP39stillfail5rules2js15entry__text__of as entry_text_of, _M0FP39stillfail5rules2js11lower__role as lower_role, _M0FP39stillfail5rules2js8fold__js as fold_js, _M0FP39stillfail5rules2js9admit__js as admit_js, _M0FP39stillfail5rules2js11genesis__js as genesis_js, _M0FP39stillfail5rules2js9apply__js as apply_js, _M0FP39stillfail5rules2js10signer__js as signer_js, _M0FP39stillfail5rules2js14admit__one__js as admit_one_js, _M0FP39stillfail5rules2js14fold__held__js as fold_held_js, _M0FP39stillfail5rules2js16person__fold__js as person_fold_js, _M0FP39stillfail5rules2js17admit__person__js as admit_person_js, _M0FP39stillfail5rules2js12cert__ok__js as cert_ok_js, _M0FP39stillfail5rules2js13vault__ok__js as vault_ok_js, _M0FP39stillfail5rules2js12item__ok__js as item_ok_js, _M0FP39stillfail5rules2js24browser__listing__ok__js as browser_listing_ok_js, _M0FP39stillfail5rules2js14signer__of__js as signer_of_js, _M0FP39stillfail5rules2js21vault__supersedes__js as vault_supersedes_js, _M0FP39stillfail5rules2js20item__supersedes__js as item_supersedes_js, _M0FP39stillfail5rules2js11tie__of__js as tie_of_js, _M0FP39stillfail5rules2js16fork__before__js as fork_before_js, _M0FP39stillfail5rules2js15lock__chain__js as lock_chain_js, _M0FP39stillfail5rules2js17person__chain__js as person_chain_js, _M0FP39stillfail5rules2js10roster__js as roster_js, _M0FP39stillfail5rules2js10state4__js as state4_js, _M0FP39stillfail5rules2js11ws__tag__js as ws_tag_js, _M0FP39stillfail5rules2js14body__hash__js as body_hash_js, _M0FP39stillfail5rules2js17body__refusal__js as body_refusal_js }

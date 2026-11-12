@@ -229,7 +229,7 @@ fn state_json(s : @lock.LockState) -> Json {
     Json::object(m)
   }
   let pairs = fn(xs : Array[(String, Json)]) -> Json { Json::array(xs.map(fn(p) { Json::array([Json::string(p.0), p.1]) })) }
-  Json::object(Map([
+  let out = Json::object(Map([
     ("ws", Json::string(s.ws)),
     ("seq", Json::number(s.seq)),
     ("head", Json::string(s.head)),
@@ -247,6 +247,12 @@ fn state_json(s : @lock.LockState) -> Json {
     ("persons", pairs(s.persons.iter().map(fn(p) { (p.0, Json::string(p.1)) }).collect())),
     ("disabled", Json::boolean(s.disabled)),
   ]))
+  // (only where it moved: a chain of today's states as it did)
+  match (out, s.moved) {
+    (Object(m), Some(root)) => m["moved"] = Json::string(root)
+    _ => ()
+  }
+  out
 }
 
 ///|
@@ -381,11 +387,18 @@ fn person_json(p : @lock.Person) -> Json {
     ("head", Json::string(p.head)),
     ("seq", Json::number(p.seq)),
     ("devices", Json::array(p.devices.values().map(device).collect())),
+    (
+      "webs",
+      Json::array(p.webs.values().map(fn(w) {
+        Json::object(Map([("id", Json::string(w.id)), ("label", Json::string(w.label)), ("at", Json::number(w.at)), ("exp", Json::number(w.exp))]))
+      }).collect()),
+    ),
   ]))
 }
 
 ///|
-/// A person's own lock, its chain checked: `{sub, genesis, head, seq, devices}` or `{error}`.
+/// A person's own lock, its chain checked: `{sub, genesis, head, seq, devices: [{key, id, label}], webs: [{id, label,
+/// at, exp}]}` or `{error}`.
 pub fn person_fold_js(entries : JsValue, sub : String, crypto : JsCrypto) -> JsValue {
   let answer = try person_json(@lock.fold_person(entries_of(entries), sub, crypto)) catch {
     @lock.Refused(why) | @lock.Refusal(why) => Json::object(Map([("error", Json::string(why))]))
@@ -634,17 +647,6 @@ pub fn person_chain_js(entries : JsValue, genesis : String, crypto : JsCrypto) -
 }
 
 ///|
-/// A person's chain as `person_fold_js` has it, a workspace's statements taken.
-pub fn person_fold_ws_js(entries : JsValue, sub : String, crypto : JsCrypto) -> JsValue {
-  let answer = try person_json(@lock.fold_person_ws(entries_of(entries), sub, crypto)) catch {
-    @lock.Refused(why) | @lock.Refusal(why) => Json::object(Map([("error", Json::string(why))]))
-    @form.Invalid(why) => Json::object(Map([("error", Json::string(why))]))
-    e => Json::object(Map([("error", Json::string(e.to_string()))]))
-  }
-  to_js(answer)
-}
-
-///|
 fn opt_json(v : String?) -> Json {
   match v {
     Some(s) => Json::string(s)
@@ -653,17 +655,35 @@ fn opt_json(v : String?) -> Json {
 }
 
 ///|
-/// Workspace `ws`'s list, rooted in the person log of genesis hash `root`, from `chains` (each person log's active
-/// chain, genesis first): `{rooted, members: [{sub, role, lock, admit, keys}], stations, pairs: [{sub, lock, role}],
-/// undecided: [{sub, lock}], cancelled, statements: [{hash, kind, log, by, label, why, decided}], labels: [[name,
-/// label]], refused: [{genesis, why}]}`, or `{error}` when the chains are none.
-pub fn roster_js(ws : String, root : String, chains : JsValue, crypto : JsCrypto) -> JsValue {
+fn bodies_of(v : JsValue) -> Array[Json] {
+  let out : Array[Json] = []
+  for i in 0..<js_len(v) {
+    if (try Ok(json_of(js_at(v, i))) catch { e => Err(e) }) is Ok(b) {
+      out.push(b)
+    }
+  }
+  out
+}
+
+///|
+/// The chains given as `roster_js` and `state4_js` take them, or why not.
+fn chains_of(chains : JsValue) -> Array[Array[Json]] raise @form.Invalid {
   let cs : Array[Array[Json]] = []
   for i in 0..<js_len(chains) {
-    let es = entries_of(js_at(chains, i)) catch { @form.Invalid(why) => return refused(why) }
-    cs.push(es)
+    cs.push(entries_of(js_at(chains, i)))
   }
-  let r = @lock.roster(ws, root, cs, crypto)
+  cs
+}
+
+///|
+/// Workspace `ws`'s list, rooted in the person log of genesis hash `root`, from `chains` (each person log's active
+/// chain, genesis first) and `bodies` (the statements' bodies kept): `{rooted, members: [{sub, role, lock, admit,
+/// keys}], stations, pairs: [{sub, lock, role}], undecided: [{sub, lock}], cancelled, statements: [{hash, kind, log, by,
+/// label, why, decided}], labels: [[name, label]], refused: [{genesis, why}], in_force: [{entry, body}], lacking,
+/// newest, settings}`, or `{error}` when the chains are none.
+pub fn roster_js(ws : String, root : String, chains : JsValue, bodies : JsValue, crypto : JsCrypto) -> JsValue {
+  let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
+  let r = @lock.roster(ws, root, cs, bodies_of(bodies), crypto)
   let s = Json::string(_)
   to_js(Json::object(Map([
     ("rooted", Json::boolean(r.rooted)),
@@ -691,5 +711,52 @@ pub fn roster_js(ws : String, root : String, chains : JsValue, crypto : JsCrypto
     }))),
     ("labels", Json::array(r.labels.map(fn(p) { Json::array([s(p.0), s(p.1)]) }))),
     ("refused", Json::array(r.refused.map(fn(p) { Json::object(Map([("genesis", s(p.0)), ("why", s(p.1))])) }))),
+    ("in_force", Json::array(r.in_force.map(fn(p) { Json::object(Map([("entry", s(p.0)), ("body", s(p.1))])) }))),
+    ("lacking", Json::array(r.lacking.map(s))),
+    ("newest", opt_json(r.newest)),
+    ("settings", r.settings.unwrap_or(Json::null())),
   ])))
 }
+
+///|
+/// Workspace `ws`'s state (rules/src/lock/state4.mbt), from what `roster_js` takes, at `now` (unix seconds, the
+/// keeper's clock): `{on, state, rules}`, `state` and `rules` as `fold_held_js` has them (so `admit_one_js` and
+/// `admit_person_js` take `rules`), or `{error}`.
+pub fn state4_js(ws : String, root : String, chains : JsValue, bodies : JsValue, now : Double, crypto : JsCrypto) -> JsValue {
+  let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
+  let st = @lock.state4(ws, root, cs, bodies_of(bodies), now, crypto)
+  let o = held(st.lock)
+  js_put(o, "on", js_of_str(st.on))
+  o
+}
+
+///|
+/// Workspace `ws`'s tag in the person log of genesis hash `genesis` (what its commitments there carry as `t`).
+pub fn ws_tag_js(ws : String, genesis : String, crypto : JsCrypto) -> String {
+  @lock.ws_tag(ws, genesis, crypto)
+}
+
+///|
+/// A statement's body's hash (what its commitment carries as `h`), or "!" and why it has none.
+pub fn body_hash_js(body : JsValue, crypto : JsCrypto) -> String {
+  try @lock.body_hash(json_of(body), crypto) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => "!" + why
+    @form.Invalid(why) => "!" + why
+    e => "!" + e.to_string()
+  }
+}
+
+///|
+/// Why a keeper of workspace `ws` does not take `body` (text), or null: `commits` every `ws` entry it keeps that
+/// commits to the body's hash, each `{genesis, chain}` (its log from the genesis to that entry, the entry last).
+pub fn body_refusal_js(ws : String, body : JsValue, commits : JsValue, crypto : JsCrypto) -> JsValue {
+  let b = json_of(body) catch { @form.Invalid(why) => return js_of_str("a body is {ws, kind, …, salt}: " + why) }
+  let cs : Array[@lock.Commit] = []
+  for i in 0..<js_len(commits) {
+    let x = js_at(commits, i)
+    let chain = entries_of(js_get(x, "chain")) catch { _ => continue }
+    cs.push({ genesis: js_str(js_get(x, "genesis")), chain })
+  }
+  why_js(@lock.body_refusal(ws, b, cs, crypto))
+}
+

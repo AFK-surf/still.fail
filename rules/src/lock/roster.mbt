@@ -1,7 +1,13 @@
-// A workspace's list from its people's own logs (station/test/lock-roster-model.ts `roster`, `rule=grounded`, the
-// coordinator's correction of 2026-11-12): who belongs to it, in which role, by which of their person logs, and its
-// stations, from the statements on each log's active chain (`ws.*`, `fold_person_ws`). The workspace is rooted in one
-// person log (its genesis pinned): that person is its owner by it, always.
+// A workspace's list from its people's own logs (station/test/lock-roster4-model.ts `inForce`, `openOff`, `rosterIn`,
+// under its defaults, 2026-11-13; the list itself lock-roster-model.ts `roster`, `rule=grounded`): who belongs to it, in
+// which role, by which of their person logs, its stations and its settings, from the statements in force. A statement is
+// a commitment `ws {t, h}` in its signer's log with its body kept apart (`body.mbt`); it is in force where its entry is
+// on its log's active chain (`chain.mbt`), under the workspace's tag in that log, its body is kept, and so is every body
+// along its `prev` chain back to the first (`order=whole` is how signers choose `prev`; a keeper's rule is only this).
+// The entries of the tag whose body is not kept are `lacking`: what a keeper asks for. A removal names the bodies it
+// takes back (`cancels=h`): it cancels every statement in force of those bodies. The workspace is rooted in one person
+// log (its genesis pinned, or named by the old chain's `moved`): that person is its owner by it, always; its settings
+// and whether it is on are said only there (`open`, `off`: the newest in force; nothing is ever let go by an entry).
 //
 // The statements are a Dung argumentation framework, labelled by its grounded semantics (its least fixed point):
 // - arguments: each admit (`a:<hash>`, "this admit holds"); for every (person, log) pair that signs an admit or a
@@ -10,13 +16,13 @@
 //   counts");
 // - attacks: every admit giving a pair a role at least ρ attacks `n:<pair>|ρ` (a standing holds by any one of its
 //   admits); `n:<signer>|<the role needed>` attacks each admit and cancellation its pair signed (owner to give owner,
-//   admin to give admin or member; owner to cancel an owner's admit, admin the others); a cancellation attacks the admit
-//   it names. The root's pair has no `n`: it always stands, as owner.
+//   admin to give admin, member or viewer; owner to cancel an owner's admit, admin the others); a cancellation attacks
+//   the admit it names. The root's pair has no `n`: it always stands, as owner.
 // - IN: every attacker OUT; OUT: some attacker IN; the rest UNDECIDED, taken as out.
 // Choices kept from the model: the statements of a log are its genesis's person's; every admitted (person, log) counts
 // as theirs for what they sign; the one a person is bound by (whose devices are let in) is the admit in force giving the
 // highest role, then the smallest hash; the root's binding never moves. A station is admitted by a pair that stands as
-// owner or admin, and cancelled by one.
+// owner or admin, and cancelled by one. Hashes named in the list (`a:`, `c:`, `admit`, `cancelled`) are the entries'.
 
 ///|
 /// A statement of the workspace on a log's active chain.
@@ -69,6 +75,13 @@ pub(all) struct Roster {
   labels : Array[(String, String)]
   /// The chains given that are not one (their genesis's hash where it has one), and why.
   refused : Array[(String, String)]
+  /// The statements in force (their entry's hash, their body's), and the entries of the workspace's tag on an active
+  /// chain whose body is not kept, each in the order of their hashes.
+  in_force : Array[(String, String)]
+  lacking : Array[String]
+  /// The newest of `open` and `off` in force on the root's active chain (its kind), and the newest `open`'s body.
+  newest : String?
+  settings : Json?
 }
 
 ///|
@@ -83,16 +96,23 @@ fn mgr(role : String?) -> Bool {
 
 ///|
 /// The workspace `ws`'s list, rooted in the person log of genesis hash `root`, from `chains`: the active chain of each
-/// person log known (genesis first), each checked again (`fold_person_ws`). Two chains of one log: the longer, then the
-/// one of the lower head hash. Whatever the order of `chains`, the same list, each part of it in MoonBit's `String`
-/// order (a shorter text first).
-pub fn roster(ws : String, root : String, chains : Array[Array[Json]], c : &Crypto) -> Roster {
+/// person log known (genesis first), each checked again (`fold_person`), and `bodies`, the bodies kept (of any
+/// workspace: each by its hash, one whose shape is no statement's taken as not kept). Two chains of one log: the
+/// longer, then the one of the lower head hash. Whatever the order of `chains` and `bodies`, the same list, each part
+/// of it in MoonBit's `String` order (a shorter text first).
+pub fn roster(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], c : &Crypto) -> Roster {
+  roster_of(ws, root, chains, bodies, c).0
+}
+
+///|
+/// `roster`, with the logs it took (by their genesis's hash).
+fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], c : &Crypto) -> (Roster, Map[String, (Person, Array[Json])]) {
   let refused : Array[(String, String)] = []
   let logs : Map[String, (Person, Array[Json])] = Map([])
   for chain in chains {
     let g = if chain.length() > 0 { entry_hash(chain[0], c) catch { _ => "" } } else { "" }
     let sub = if chain.length() > 0 { text_of(field(Some(chain[0]), "body") |> field("sub")).unwrap_or("") } else { "" }
-    let p = match (try Ok(fold_person_ws(chain, sub, c)) catch { e => Err(e) }) {
+    let p = match (try Ok(fold_person(chain, sub, c)) catch { e => Err(e) }) {
       Ok(p) => p
       Err(Refused(why)) | Err(Refusal(why)) => {
         refused.push((g, why))
@@ -110,24 +130,105 @@ pub fn roster(ws : String, root : String, chains : Array[Array[Json]], c : &Cryp
     }
   }
   refused.sort_by(fn(a, b) { a.compare(b) })
-  let empty : Roster = { rooted: false, members: [], stations: [], pairs: [], undecided: [], cancelled: [], statements: [], labels: [], refused }
-  guard logs.get(root) is Some((root_person, _)) else { return empty }
-  let root_sub = root_person.sub
-  let root_pair = root_sub + "|" + root
-  // The statements, by their logs in the order of their hashes (none of it changes what is labelled).
-  let stmts : Array[Stmt] = []
-  let gs = logs.keys().collect()
-  gs.sort()
-  for g in gs {
-    let (p, chain) = logs.get(g).unwrap()
-    for i in 1..<chain.length() {
-      let e = chain[i]
-      let kind = text_of(field(Some(e), "kind")).unwrap_or("")
-      let b = field(Some(e), "body")
-      if kind.has_prefix("ws.") && text_of(field(b, "ws")) == Some(ws) {
-        stmts.push({ hash: entry_hash(e, c) catch { _ => "" }, kind, body: b, log: g, by: p.sub })
+  // The bodies kept, by their hashes.
+  let kept : Map[String, Json] = Map([])
+  for b in bodies {
+    if body_why(b) is None {
+      if (try Ok(body_hash(b, c)) catch { e => Err(e) }) is Ok(h) {
+        kept[h] = b
       }
     }
+  }
+  let whole = fn(b : Json) -> Bool {
+    let mut p = text_of(field(Some(b), "prev"))
+    let mut n = 0
+    while p is Some(x) && n < 10000 {
+      match kept.get(x) {
+        None => return false
+        Some(q) => p = text_of(field(Some(q), "prev"))
+      }
+      n = n + 1
+    }
+    true
+  }
+  // The statements in force, by the logs in the order of their hashes, each in its chain's order; what is lacking.
+  let gs = logs.keys().collect()
+  gs.sort()
+  let in_force : Array[(String, String, Json, String)] = []
+  let lacking : Array[String] = []
+  for g in gs {
+    let (_, chain) = logs.get(g).unwrap()
+    let t = ws_tag(ws, g, c)
+    for i in 1..<chain.length() {
+      let e = Some(chain[i])
+      guard text_of(field(e, "kind")) == Some("ws") && (field(e, "body") |> field("t") |> text_of) == Some(t) else { continue }
+      let x = entry_hash(chain[i], c) catch { _ => continue }
+      let hb = (field(e, "body") |> field("h") |> text_of).unwrap_or("")
+      match kept.get(hb) {
+        Some(b) if text_of(field(Some(b), "ws")) == Some(ws) => if whole(b) { in_force.push((x, hb, b, g)) }
+        _ => lacking.push(x)
+      }
+    }
+  }
+  lacking.sort()
+  let forced = in_force.map(fn(f) { (f.0, f.1) })
+  forced.sort_by(fn(a, b) { a.compare(b) })
+  // On or off, and the settings: the root's alone.
+  let mut newest : String? = None
+  let mut settings : Json? = None
+  for f in in_force {
+    if f.3 == root {
+      match text_of(field(Some(f.2), "kind")) {
+        Some("open") => {
+          newest = Some("open")
+          settings = Some(f.2)
+        }
+        Some("off") => newest = Some("off")
+        _ => ()
+      }
+    }
+  }
+  let empty : Roster = {
+    rooted: false, members: [], stations: [], pairs: [], undecided: [], cancelled: [], statements: [], labels: [], refused,
+    in_force: forced, lacking, newest, settings,
+  }
+  guard logs.get(root) is Some((root_person, _)) else { return (empty, logs) }
+  let root_sub = root_person.sub
+  let root_pair = root_sub + "|" + root
+  // The statements of the list, each as round three had it in the clear: its kind `ws.<kind>`, its body with what a
+  // removal cancels named by the entries in force of those bodies (none of it changes what is labelled).
+  let by_body : Map[String, Array[String]] = Map([])
+  for f in in_force {
+    match by_body.get(f.1) {
+      Some(xs) => xs.push(f.0)
+      None => by_body[f.1] = [f.0]
+    }
+  }
+  let stmts : Array[Stmt] = []
+  for f in in_force {
+    let (x, _, b, g) = f
+    let kind = text_of(field(Some(b), "kind")).unwrap_or("")
+    guard kind == "member" || kind == "member.remove" || kind == "station" || kind == "station.remove" else { continue }
+    let body = match b {
+      Object(m) => {
+        let out : Map[String, Json] = Map([])
+        for k, v in m {
+          out[k] = v
+        }
+        if m.get("cancels") is Some(Array(cs)) {
+          let named : Array[Json] = []
+          for y in cs {
+            for z in by_body.get(text_of(Some(y)).unwrap_or("")).unwrap_or([]) {
+              named.push(Json::string(z))
+            }
+          }
+          out["cancels"] = Json::array(named)
+        }
+        Json::object(out)
+      }
+      _ => b
+    }
+    stmts.push({ hash: x, kind: "ws." + kind, body: Some(body), log: g, by: logs.get(g).unwrap().0.sub })
   }
   let txt = fn(s : Stmt, k : String) { text_of(field(s.body, k)).unwrap_or("") }
   let pair_of = fn(s : Stmt) { s.by + "|" + s.log }
@@ -362,5 +463,11 @@ pub fn roster(ws : String, root : String, chains : Array[Array[Json]], c : &Cryp
   cancelled.sort()
   let ls = label.iter().collect()
   ls.sort_by(fn(a, b) { a.0.compare(b.0) })
-  { rooted: true, members, stations: sts, pairs: ps, undecided: us, cancelled, statements: said, labels: ls, refused }
+  (
+    {
+      rooted: true, members, stations: sts, pairs: ps, undecided: us, cancelled, statements: said, labels: ls, refused,
+      in_force: forced, lacking, newest, settings,
+    },
+    logs,
+  )
 }
