@@ -15,6 +15,7 @@ import { BRIDGE, DshDriver, classifyFailure, dshSetup } from "../src/agents/dsh.
 import { dshRoute, profileEnv, profileRuntimes } from "../src/agents/profiles.ts";
 import type { AgentSession, OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { allLeft } from "../src/agents/runner.ts";
+import { learn } from "../src/accounts/catalog.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -193,6 +194,9 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.equal(classifyFailure("UNKNOWN", 'turn failed: 401: {"message":"Upstream request failed: Invalid credential"}'), "auth");
     assert.equal(classifyFailure("MISSING_CREDENTIAL", "the route's key resolves to nothing"), "auth");
     assert.equal(classifyFailure("QUOTA", "insufficient balance"), "rate_limit");
+    // FB-17: pi-ai's own words when the provider gave none; a provider's own under the same code.
+    assert.equal(classifyFailure("CONTEXT_WINDOW_EXCEEDED", 'pi-ai detected context overflow for model "openai/claude-opus-5-5"'), "context");
+    assert.equal(classifyFailure("CONTEXT_WINDOW_EXCEEDED", "400 upstream said no"), "context");
     // A prompt dsh refuses starts no turn: it ends at once.
     await session.prompt("refuse");
     await until(ended(4));
@@ -404,5 +408,20 @@ describe("what a profile runs DeepSeek Harness on", () => {
     assert.deepEqual(models("deepseek-v4.1-flash"), [{ id: "deepseek-v4.1-flash", input: ["text", "image"] }]);
     assert.deepEqual(models("deepseek-v4-pro"), [{ id: "deepseek-v4-pro" }], "a model not known to read images is left text only");
     assert.deepEqual(models("anthropic/claude-sonnet-5"), [{ id: "anthropic/claude-sonnet-5", input: ["text", "image"] }], "however the profile spells it");
+  });
+
+  test("a model dsh is started on takes its window and most output from the model catalog", () => {
+    // FB-17: pi-ai took Opus 5.5 behind a gateway for a 256K model (its default before dsh 0.2.2) and failed the turn.
+    const route = dshRoute(profile({ kind: "api-provider", provider: "custom", key: "k", endpoint: "https://gateway.example/v1", protocol: "chat_completions" }));
+    const models = (model: string) => dshSetup(route, model, undefined, "", "/h", "r", "http://127.0.0.1:1/mcp").patch.find((p) => p.id === "llm-pi-ai").config.providers.stillfail.models;
+    learn({ "claude-opus-5-5": { context: 1_000_000, output: 128_000 }, "small-model": { context: 32_000, output: 32_000 }, "no-window": { output: 8_000 } });
+    try {
+      assert.deepEqual(models("openai/claude-opus-5-5"), [{ id: "openai/claude-opus-5-5", input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 }], "however the profile spells it");
+      assert.deepEqual(models("small-model"), [{ id: "small-model", contextWindow: 32_000 }], "an output that fills the window is left to pi-ai");
+      assert.deepEqual(models("no-window"), [{ id: "no-window" }], "no window known: pi-ai's own");
+      assert.deepEqual(models("unknown-model"), [{ id: "unknown-model" }]);
+    } finally {
+      learn(null);
+    }
   });
 });
