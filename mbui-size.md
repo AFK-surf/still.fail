@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [031d90e13](https://github.com/AFK-surf/still.fail/commit/031d90e133a9105c05eb13487969fec00e8eff37) app tests: what floats over the old chat page's li | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 94.24 | 174.48 |
 | [5ee283c78](https://github.com/AFK-surf/still.fail/commit/5ee283c7884e3b5d3253e08bfbbdcdfd4be76e93) fix(mbui): keep compact MoonBit diagnostics in dev | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 94.03 | 136.81 |
 | [8a03ff2d0](https://github.com/AFK-surf/still.fail/commit/8a03ff2d0258da25a191097e2942707ae546c65d) Comma connect: take the line Comma's production sh | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 93.41 | 177.86 |
 | [53b5a35c3](https://github.com/AFK-surf/still.fail/commit/53b5a35c302639bfceb213bbc6bb16bf2270dd92) rules: a log's active chain by the fork choice, a  | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 93.5 | 184.15 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [62447bc44](https://github.com/AFK-surf/still.fail/commit/62447bc440a1d8e8b9db9c9c1225ad9757411600) mbui: words in pieces in a block lent a picker of  | 1.84 | 2.47 | 10.35 | 29.09 | 36.55 | 25.9 | 48.3 | 94.31 | 135.49 |
 | [0d024466b](https://github.com/AFK-surf/still.fail/commit/0d024466b290064b1d9dec6da6309128fb2c7283) mbui: the corner rule holds a node of the window's | 1.85 | 2.47 | 10.36 | 29.09 | 36.58 | 25.9 | 48.32 | 94.6 | 125.5 |
 | [6272573dc](https://github.com/AFK-surf/still.fail/commit/6272573dcd3fb0b9f5871645e332fe307ddc10f0) app: a message's pictures and videos as nodes, com | 1.85 | 2.47 | 10.36 | 29.09 | 36.58 | 25.9 | 48.32 | 94.88 | 130.81 |
-| [bd43f701d](https://github.com/AFK-surf/still.fail/commit/bd43f701d74ca1bf1a034df61a8df6fe49f3e36f) core: a device holding no lock takes the one the w | 1.84 | 2.46 | 10.34 | 29.07 | 36.51 | 25.89 | 48.27 | 94.67 | 176.93 |
