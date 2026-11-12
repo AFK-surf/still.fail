@@ -66,15 +66,10 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let station = text(job, "station")
   let id = text(job, "id")
   let row = c.id("open-job/" + station + "/" + id)
-  let chat = field(job, "chat")
-  let chat_station = match opt_text(chat, "station") {
-    Some(s) if s != "" => s
-    _ => station
-  }
-  let leads = chat is Some(Object(_)) && chat_station != ""
+  let chat = @sfbase.job_chat(job)
+  let leads = chat is Some(_)
   c.on_press(row, fn() {
-    if leads {
-      let r : ChatRef = { station: chat_station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }
+    if chat is Some(r) {
       open_chat_ref(r)
       if flag(job, "service") {
         pick_job(id)

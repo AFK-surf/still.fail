@@ -14,7 +14,9 @@ design rules (the user, 2026-10-03):
    versioned and migrated. A topic is read from it by a query, never from the network.
 4. **One sync owns all traffic** (`src/sync/scheduler.ts`, `src/station/sync.ts`, `src/sync/cloud.ts`): it keeps
    everything current by itself whatever is shown; what a UI shows or `client.focus` only raises priority. A
-   subscription never starts a request. (Exceptions, read only while shown: a station's usage, its archived chats.)
+   subscription never starts a request. (Exceptions, read only while shown: a station's usage, its archived chats; a
+   chat its station's lists do not have, its thread or its session, read as it is opened so that it shows or says it
+   is not there, never waits for good.)
 5. **An action does not wait for the network**: it takes effect in the core at once (the outbox, a pending chat, the
    overlays of renames, pins, archives, kept in the database across restarts), `doing` tracks it, a failure rolls it
    back and says why. Something made here meets the station's by its exact `clientKey`, never by a guess.

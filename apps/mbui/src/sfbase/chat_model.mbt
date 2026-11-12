@@ -934,6 +934,25 @@ pub fn chat_params(r : ChatRef) -> Map[String, Json] {
 }
 
 ///|
+/// The chat a job is in, as the core names it beside the job (`chat`: its id, the session it opens by, its title; and
+/// `station` where it is on another station than the job's, a task run there for it): none where it is in none. A job
+/// row opens this, never a chat of the job's own station by the chat's id (2026-11-12: a task Studio ran for a chat on
+/// another station opened a chat Studio has not, waiting for good).
+pub fn job_chat(job : Json?) -> ChatRef? {
+  let chat = field(job, "chat")
+  let station = match opt_text(chat, "station") {
+    Some(s) if s != "" => s
+    _ => text(job, "station")
+  }
+  let session = text(chat, "id")
+  if chat is Some(Object(_)) && station != "" && session != "" {
+    Some({ station, session, title: text(chat, "title"), station_name: "" })
+  } else {
+    None
+  }
+}
+
+///|
 /// What chat `r`'s page opens on, asked of `ask` (opens_answered's): its view, answered once it is, or why it has none,
 /// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come.
 pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) -> Bool {

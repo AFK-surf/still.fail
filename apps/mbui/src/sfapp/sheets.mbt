@@ -1796,15 +1796,16 @@ fn open_job_row_node(row : @view.View, src : Source, job : () -> Json?) -> Unit 
     row,
     fn() {
       let j = @signals.untracked(job)
-      let chat = field(j, "chat")
-      if chat is Some(Object(_)) {
-        let station = text(j, "station")
-        @sfbase.history_push()
-        app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
-        // a service: its page over its chat
-        if flag(j, "service") {
-          app.nav.push(Service(station, text(j, "id")))
+      match @sfbase.job_chat(j) {
+        Some(r) => {
+          @sfbase.history_push()
+          app.nav.push(Chat(r))
+          // a service: its page over its chat (the service is the job's station's)
+          if flag(j, "service") {
+            app.nav.push(Service(text(j, "station"), text(j, "id")))
+          }
         }
+        None => ()
       }
     },
     open_job_row_corner,
