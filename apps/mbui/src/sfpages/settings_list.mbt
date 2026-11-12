@@ -237,7 +237,7 @@ fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : S
   if platform == 0 || platform == 3 || platform == 5 {
     device.push(settings_row(Shortcuts, "shortcuts", "keyboard", @sf.t("web-pages.settings.nav.shortcuts")))
   }
-  if platform == 0 {
+  if @settings.local_station_managed() {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
   }
   // 共享调试: on a phone its switch and which chats it is lent to; on every app, which chats were allowed, how long a

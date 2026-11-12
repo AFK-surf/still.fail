@@ -89,3 +89,20 @@ test "本机 Station made once: what the host says asked again every few seconds
   assert_true(t.find("Willow") is Some(_))
   assert_true(t.find("运行中") is Some(_))
 }
+
+///|
+test "本机 Station with existing data unattached or removed offers 添加这台 Mac" {
+  let cases : Array[(String, Json)] = [
+    ("unattached", Json::null()),
+    ("removed", { "id": "ws1", "name": "星火工作室", "station": "st1", "stationName": "Willow", "removed": true }),
+  ]
+  for one in cases {
+    let (label, ws) = one
+    let t = setting_tester(LocalStation, 1280.0, platform=0, host=fn(h) {
+      h.set_local_station((
+        { "data": "/Users/test/.stillfail", "runner": "none", "installed": true, "workspace": ws } : Json
+      ).stringify())
+    })
+    assert_true(t.query(Button, label="添加这台 Mac") is Some(_), msg=label)
+  }
+}

@@ -204,7 +204,7 @@ pub fn local_machine_pc() -> Bool
 
 pub let local_read_ms : Double
 
-pub fn local_station_addable() -> Bool
+pub fn local_station_addable_in(String, Array[String]) -> Bool
 
 pub fn local_station_managed() -> Bool
 
