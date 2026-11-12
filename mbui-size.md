@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [8a0b79570](https://github.com/AFK-surf/still.fail/commit/8a0b795707a9eea9d27486ae0387941c483355e4) app tests: chat_pictures_scrolled_wbtest's bytes b | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 93.14 | 175.17 |
 | [af0bd99e7](https://github.com/AFK-surf/still.fail/commit/af0bd99e70a42ce10c951c587e0c467baeef20fd) core tests: the rig tells a change of a station's  | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 94.47 | 186.2 |
 | [4988be2af](https://github.com/AFK-surf/still.fail/commit/4988be2af51e93ce98203f122a34f5d290570ee3) core: a change of one row of the list a station ma | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 94.6 | 137.26 |
 | [2e2fd4a7d](https://github.com/AFK-surf/still.fail/commit/2e2fd4a7d021777f3973ff9121767738dd04cdec) core: a station's chat list made again only where  | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.19 | 51.92 | 94.42 | 178.9 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c53c9b785](https://github.com/AFK-surf/still.fail/commit/c53c9b785a4e389ea32dd7ae069242cdc6a8028b) core tests: the test clock takes the steps that wo | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 94.6 | 188.29 |
 | [839854c0e](https://github.com/AFK-surf/still.fail/commit/839854c0edea3b18e32c202c449042027a66ad97) cloud: push to both products' apps from one cloud  | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 95.26 | 175.58 |
 | [04650114d](https://github.com/AFK-surf/still.fail/commit/04650114d5241c9192a7403f6926868b2430afe0) core tests: what answering each way the app asks r | 1.88 | 2.51 | 10.74 | 29.71 | 37.98 | 26.44 | 49.57 | 95.26 | 175.58 |
-| [1916c2b23](https://github.com/AFK-surf/still.fail/commit/1916c2b23a0070b62aec34280763fa475d0ee580) core: a lock's entries are signed one at a time, t | 1.88 | 2.51 | 10.74 | 29.71 | 37.97 | 26.44 | 49.57 | 94.29 | 180.06 |
