@@ -76,6 +76,8 @@ export async function harness(
     /** Push notifications: the VAPID key (base64url point and scalar), the FCM service account's JSON. */
     vapid?: { publicKey: string; privateKey: string };
     fcm?: string;
+    /** FCM_SERVICE_ACCOUNT_MORE: the other product's projects' accounts. */
+    fcmMore?: string;
     apns?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
@@ -182,6 +184,7 @@ export async function harness(
         ...(options.statusRepo ? { STATUS_REPO: options.statusRepo } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
+        ...(options.fcmMore ? { FCM_SERVICE_ACCOUNT_MORE: options.fcmMore } : {}),
         ...(options.apns ? { APNS_KEY: options.apns } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
         ...(options.mail ? { TEST_MAIL: "1" } : {}),

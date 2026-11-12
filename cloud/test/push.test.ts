@@ -427,6 +427,43 @@ test("iOS devices get an APNs alert signed with the team's key, a chat's replaci
   }
 });
 
+test("one cloud pushes to both products' Android apps: a token goes by its own project's account, kept for next time", async () => {
+  const keyOf = async (project: string) => ({ type: "service_account", project_id: project, client_email: `push@${project}.iam.gserviceaccount.com`, private_key: await exportPKCS8((await generateKeyPair("RS256", { extractable: true })).privateKey), token_uri: "https://oauth.example/token" });
+  const stillfail = await keyOf("stillfail-test"), monoid = await keyOf("monoid-test");
+  // Each project's app's tokens: another project's account is answered as FCM does.
+  const own: Record<string, string> = { "alice-token": "stillfail-test", "bob-token": "monoid-test" };
+  const got: OutboundRequest[] = [];
+  const h = await harness({
+    fcm: JSON.stringify(stillfail),
+    fcmMore: JSON.stringify([monoid]),
+    push: (request) => {
+      got.push(request);
+      if (request.url === stillfail.token_uri) return { status: 200, body: JSON.stringify({ access_token: "access", expires_in: 3600, token_type: "Bearer" }) };
+      const project = /projects\/([^/]+)\/messages:send/.exec(request.url)![1]!;
+      const message = JSON.parse(new TextDecoder().decode(request.body)).message;
+      if (own[message.token] !== project) return { status: 403, body: JSON.stringify({ error: { code: 403, status: "PERMISSION_DENIED", details: [{ errorCode: "SENDER_ID_MISMATCH" }] } }) };
+      return { status: 200, body: JSON.stringify({ name: `projects/${project}/messages/1` }) };
+    },
+  });
+  try {
+    const { station, aliceTokens, bobTokens } = await workspace(h);
+    assert.equal((await register(h, aliceTokens, "POST", { kind: "fcm", token: "alice-token" })).status, 204);
+    assert.equal((await register(h, bobTokens, "POST", { kind: "fcm", token: "bob-token" })).status, 204);
+    const sends = () => got.filter((r) => r.url.endsWith("messages:send")).map((r) => `${/projects\/([^/]+)\//.exec(r.url)![1]} ${JSON.parse(new TextDecoder().decode(r.body)).message.token}`);
+    const to = ["alice@example.test", "bob@example.test"];
+    assert.deepEqual(await (await notify(h, station, [notice(to)])).json(), { sent: 2 });
+    assert.deepEqual(sends().sort(), ["monoid-test bob-token", "stillfail-test alice-token", "stillfail-test bob-token"], "bob's tried with still.fail's first, then monoid's");
+    assert.equal(got.filter((r) => r.url === stillfail.token_uri).length, 2, "an access token for each account");
+
+    // Next time each goes straight to its own project, and neither is dropped.
+    got.length = 0;
+    assert.deepEqual(await (await notify(h, station, [notice(to)])).json(), { sent: 2 });
+    assert.deepEqual(sends().sort(), ["monoid-test bob-token", "stillfail-test alice-token"]);
+  } finally {
+    await h.close();
+  }
+});
+
 test("Android devices get a high-priority FCM data message; an unregistered token is dropped", async () => {
   const { privateKey } = await generateKeyPair("RS256", { extractable: true });
   const account = { type: "service_account", project_id: "stillfail-test", client_email: "push@stillfail-test.iam.gserviceaccount.com", private_key: await exportPKCS8(privateKey), token_uri: "https://oauth.example/token" };

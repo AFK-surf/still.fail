@@ -91,8 +91,12 @@ export interface Env {
   VAPID_SUBJECT?: string;
   /** The Firebase project's service account (its JSON) that sends to the Android app (fcm.ts). Without it there is no FCM. */
   FCM_SERVICE_ACCOUNT?: string;
+  /** The other product's Firebase projects' service accounts (one's JSON, or a list): its Android apps' tokens are sent by those (fcm.ts). */
+  FCM_SERVICE_ACCOUNT_MORE?: string;
   /** The team's APNs key that sends to the iOS app (apns.ts): JSON { keyId, teamId, key (the .p8's PEM), topic? }. Without it there is no APNs. */
   APNS_KEY?: string;
+  /** The other product's iOS apps' APNs keys (one's JSON, or a list), each with its topic (apns.ts). */
+  APNS_KEY_MORE?: string;
   /** The accounts that sign in with an email and a password (password.ts): a JSON list of {email, password, name?}, App Store review's. Unset: none. */
   REVIEW_ACCOUNTS?: string;
   /** Cloudflare Email Service's send_email binding (wrangler.jsonc), which sends the sign-in codes (mail.ts). */
