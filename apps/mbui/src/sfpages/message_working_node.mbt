@@ -115,7 +115,11 @@ fn working_said_node(
           })
           line.box(fn(face) {
             @sf.style_node(face, fn() { activity_face })
-            face.box(fn(av) { agent_avatar_node(av, fn() { a().maker }, fn() { a().runtime }, fn() { "" }) }) |> ignore
+            face.box(fn(av) { agent_avatar_node(av, fn() { a().maker }, fn() { a().runtime }, fn() { "" }) |> ignore })
+            |> ignore
+            // (its agent's card over its picture and the ring over it under a pointer, as over a message's picture:
+            // the line's press and hold its own as ever)
+            message_agent_card_node(face, src, here, @signals.untracked(a).key, pointed=true)
             // (its ring over its picture)
             face.box(fn(ring) {
               ring.over(Is(true)) |> ignore

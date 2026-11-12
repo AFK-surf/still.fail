@@ -1,9 +1,9 @@
 // Someone else's message as nodes of the window's tree, made once (message.mbt's others_message, sent_elsewhere, their
 // styles the same): its picture out in the margin before its words (inline: over its head's start), its head (name,
-// where it went, time; where a mouse is what it is used with and it offers itself, its ⋯ at the head's end), what it
-// says under it. Not here yet: its picture held under the pane's top as a long one scrolls past (the old one's c.stick:
-// the list's, to come), the card over its picture and name, its files (message_files.mbt), coming out of its agent's
-// picture (emit).
+// where it went, time; where a mouse is what it is used with and it offers itself, its ⋯ at the head's end; right
+// clicked, the same: message_menu_node), what it says under it. Not here yet: its picture held under the
+// pane's top as a long one scrolls past (the old one's c.stick: the list's, to come), its files (message_files.mbt),
+// coming out of its agent's picture (emit).
 
 ///|
 /// What a message offers of itself (share_turn_tool's, others_message's `share`): its key (its list's Entry::id, as a
@@ -35,21 +35,21 @@ fn message_others_node(
   body : (@view.View) -> Unit,
   share? : MessageShare? = None,
 ) -> (@view.View, () -> Bool) {
-  // (its ⋯ where a mouse is the native input: laid out by it, the head as it is whichever hand is on it now)
+  // (its ⋯ where a mouse is the native input: laid out by it, the head as it is whichever hand is on it now; a right
+  // click whichever: message_menu_node)
+  let offered = share
   let share = if @sf.more_held() { None } else { share }
   let menu_on : Ref[() -> Bool] = Ref(fn() { false })
   let node = v.box(fn(row) {
     @sf.style_node(row, fn() { if share is Some(_) { msg_row_share } else { msg_row } })
     match share {
-      Some(s) => {
-        // (pointed at over all of it, its ⋯ shown then, nothing pressed for it: an old view's box with an id, hovered;
-        // what is pressed in it, its name, time, links, as ever; a ground, no control: the arrow over it, said by nothing)
-        row.points(Is(true)).as_ground() |> ignore
-        row.on_menu(fn(m) {
-          @sfbase.share_offer(m.wx, m.wy, s.go, @signals.untracked(s.link), @signals.untracked(s.words), s.key)
-        })
-        |> ignore
-      }
+      // (pointed at over all of it, its ⋯ shown then, nothing pressed for it: an old view's box with an id, hovered;
+      // what is pressed in it, its name, time, links, as ever; a ground, no control: the arrow over it, said by nothing)
+      Some(_) => row.points(Is(true)).as_ground() |> ignore
+      None => ()
+    }
+    match offered {
+      Some(s) => message_menu_node(row, s)
       None => ()
     }
     row.box(fn(col) {
@@ -72,7 +72,9 @@ fn message_others_node(
               // (its menu beside its room, which is there whether the ⋯ shows or not: open while it is)
               let open = fn() { @sf.presented_from(Node(room)) }
               menu_on.val = open
-              room.show(fn() { @sf.hovered_in_node(row) || open() }, fn(m) {
+              // (at once, as the old row's hand_shown: shown by where the hand is, no coming or going of its own, so
+              // the ⋯ of a row the pointer left is gone as it leaves, not still there beside the next's)
+              room.show(fn() { @sf.hovered_in_node(row) || open() }, at_once=true, fn(m) {
                 @sf.icon_button_node(m, "more", fn() { @sf.t("web-main.menu.more") }, fn() {
                   @sf.menu(
                     @sfbase.message_items(@signals.untracked(s.link), @signals.untracked(s.words), s.go),
@@ -175,6 +177,7 @@ fn sent_elsewhere_body(v : @view.View, src : Source, here : MessageNodeHere, s :
           agent_avatar_node(a, fn() { s().by.maker }, fn() { s().by.runtime }, fn() {
             if surface() == "feishu" { "feishu" } else { "slack" }
           })
+          |> ignore
         }
       })
     },

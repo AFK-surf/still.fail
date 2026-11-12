@@ -59,13 +59,18 @@ fn agent_said_node(
       here,
       fn() { m().time },
       fn(av) {
-        // (an agent's its maker's mark; still.fail's own its mark)
-        agent_avatar_node(
+        // (an agent's its maker's mark; still.fail's own its mark; one of the chat's agents' with its card over it under
+        // a pointer, agent_hover's: a finger's by its name)
+        let pic = agent_avatar_node(
           av,
           fn() { if m().author_kind == "agent" { m().by.maker } else { "" } },
           fn() { if m().author_kind == "agent" { m().by.runtime } else { "" } },
           fn() { "" },
         )
+        let agent = @signals.untracked(fn() { if m().author_kind == "agent" { message_agent_of(here, m().by.agent) } else { "" } })
+        if agent != "" {
+          message_agent_card_node(pic, src, here, agent, pointed=true)
+        }
       },
       fn(h) {
         message_name_node(h, src, here, fn() { m().by.name }, fn() { message_agent_of(here, m().by.agent) }, fn() {

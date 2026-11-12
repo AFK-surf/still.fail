@@ -184,7 +184,7 @@ fn card_new(
             r,
             here,
             fn() { m().time },
-            fn(av) { agent_avatar_node(av, fn() { m().by.maker }, fn() { m().by.runtime }, fn() { "" }) },
+            fn(av) { agent_avatar_node(av, fn() { m().by.maker }, fn() { m().by.runtime }, fn() { "" }) |> ignore },
             fn(h) {
               message_name_node(h, src, here, fn() { m().by.name }, fn() { message_agent_of(here, m().by.agent) }, fn() {
                 m().by.from

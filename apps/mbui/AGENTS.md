@@ -148,6 +148,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What is left of the old is counted by detlint and only falls: `old-island` (`@ui.old` hosting a Ctx in a node),
   `old-list` (`Ctx::list`), `old-panel`, `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`.
   A change never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.
+- What changes with the width a row or a part is given is a binding (`By`: a gap's height, a margin, a size), never a
+  structure switched by a value worked out of that width (`pick`, `show` on `width() <= …`): a structure switched makes
+  its way in and out, and what the window or the system's bars do to the width is no motion of the thing's (found by
+  #5767; the coordinator of the migration, 2026-11-12).
 
 ## Motion
 

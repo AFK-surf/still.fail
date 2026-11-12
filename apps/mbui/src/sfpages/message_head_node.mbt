@@ -3,7 +3,7 @@
 // its round ground, still.fail's without a maker, a person's face; the place it went to on the picture's corner), the
 // name, when it was said (pressed: every time in the app the other way, absolute_times), and where it went or came
 // from. What it shows bound to what it is told, as that changes; the hand's state read where it is drawn (lit_node).
-// Not here yet: an agent's card over its picture and its name (hover.mbt's agent_card).
+// An agent's card over its name here, over its picture where its row puts it (message_agent_card_node).
 
 ///|
 /// Where a message's nodes are shown (MessageHere's, made once): its chat (its station, its session, its view as it
@@ -47,13 +47,13 @@ fn message_agent_of(here : MessageNodeHere, agent : String) -> String {
 ///|
 /// An agent's picture (agent_avatar's) in `v`: its model's `maker` (its `runtime`'s where none is said; still.fail's
 /// mark without either) on the neutral ground, 18 round, one piece in bones; `corner` (slack | feishu; "" none), that
-/// place's mark on its corner. Each as it changes.
+/// place's mark on its corner. Each as it changes. Its node (what its agent's card is over: message_agent_card_node).
 fn agent_avatar_node(
   v : @view.View,
   maker : () -> String,
   runtime : () -> String,
   corner : () -> String,
-) -> Unit {
+) -> @view.View {
   v.box(fn(b) {
     @sf.style_node(b, fn() { agent_avatar_ground })
     b.bone_whole(Is(true)) |> ignore
@@ -76,7 +76,6 @@ fn agent_avatar_node(
     })
     place_corner_node(b, corner)
   })
-  |> ignore
 }
 
 ///|
@@ -123,7 +122,8 @@ fn person_avatar_node(
 /// A name over its message (message_name's) in `v`: `name` in the accent's ink, 240 at most, cut short past it; one of
 /// the chat's agents' (`agent`) opens its history beside the chat, another chat's agent's (`from`, its link) that chat;
 /// underlined then while the hand is on it (lit_node), and as wide as a press's least room less its head's gap at
-/// least (its words at its start). Each as it changes.
+/// least (its words at its start); one of the chat's agents' with its card over it, as over its picture (agent_hover's:
+/// message_agent_card_node, its agent as the row is made). Each as it changes.
 fn message_name_node(
   v : @view.View,
   src : Source,
@@ -144,14 +144,20 @@ fn message_name_node(
         msg_name_room
       }
     })
-    @sf.presses_node(b, on=goes, fn() {
+    let press = fn() {
       let a = @signals.untracked(agent)
       if a != "" {
         open_detail(src, message_node_ref(here), a)
       } else {
         open_link(@signals.untracked(from))
       }
-    })
+    }
+    @sf.presses_node(b, on=goes, press)
+    // (its agent's card over it, the card's hand then its presses': one gesture a node)
+    let a = @signals.untracked(agent)
+    if a != "" {
+      message_agent_card_node(b, src, here, a, words_along=true, press~)
+    }
     b.says(By(fn() { if goes() { Some(@view.said(Link, label=name())) } else { None } })) |> ignore
     b.box(fn(w) {
       w

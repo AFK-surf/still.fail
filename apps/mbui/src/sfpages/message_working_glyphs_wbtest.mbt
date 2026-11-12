@@ -232,6 +232,8 @@ test "an agent's first words, made once as nodes, come in glyph by glyph as the 
   let old = glyphs_old(760.0, work_src(live_old, []), "g01", came_old)
   old.run_for(@ui.move_most_ms)
   came_old.set(Some(old.time()))
+  // (the frame of the moment it came: what is read is that frame, not the one drawn before it came)
+  old.draw()
   let was = [glyphs_drawn(old)]
   for _ in 0..<10 {
     old.run_for(activity_glyph_in_ms / 8.0)
@@ -243,6 +245,7 @@ test "an agent's first words, made once as nodes, come in glyph by glyph as the 
   let t = glyphs_new(760.0, work_src(live, []), steadies, came)
   t.run_for(@ui.move_most_ms)
   came.set(Some(t.time()))
+  t.draw()
   let seen = [glyphs_drawn(t)]
   for _ in 0..<10 {
     t.run_for(activity_glyph_in_ms / 8.0)
