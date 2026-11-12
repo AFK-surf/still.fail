@@ -1729,7 +1729,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         _ => ()
       }
       match foot_v.val {
-        Some(fv) if fv.alive() => foot_h.set(self.tree.height_in(fv.at, self.at, w))
+        // (the foot's on the host's pixels as the head's is, the one reading of the room under the last block: the foot
+        // placed that tall, so its top lies where the last block ends)
+        Some(fv) if fv.alive() => foot_h.set(rows_slot_on(self.tree.height_in(fv.at, self.at, w), self.tree.rows_grid_now()))
         _ => ()
       }
       let all = places(laid.untracked())
@@ -2242,8 +2244,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         fs.set_inset_right(Pt(0.0))
         fs.set_inset_bottom(Pt(0.0))
         fs.set_inset_top(Auto)
-        foot_v.val = Some(f)
-        make_foot(f)
+        // (as tall as the room under the last block, on the grid: what the page builds in it at its top, as the head's)
+        f.height(By(fn() { Some(foot_h.get()) })).shrink(Is(0.0)) |> ignore
+        // (what comes, goes or resizes in it goes in the list's one way, as what its blocks hold does, unless it is said
+        // at once: Tree::come_group_join by Tree's list_feet)
+        if !at_once && held_node.val >= 0 {
+          let tree = self.tree
+          let at = f.at
+          tree.list_feet[at] = held_node.val
+          f.owns(fn() { tree.list_feet.remove(at) }) |> ignore
+        }
+        f.box(fn(i) {
+          i.shrink(Is(0.0)) |> ignore
+          foot_v.val = Some(i)
+          make_foot(i)
+        })
+        |> ignore
       })
       |> ignore
     None => ()
