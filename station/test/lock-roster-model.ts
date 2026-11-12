@@ -844,6 +844,10 @@ export class World3 {
   comparable(): Holder[] {
     return this.holders;
   }
+  /// Whether statement `x` is in force at `h`: on its log's active chain (lock-roster4-model.ts: and its body there).
+  stands(h: Holder, x: string): boolean {
+    return h.logs.get(this.logOf.get(x)!)?.on.has(x) === true;
+  }
   /// The list at every holder compared with a fresh holder's given the same entries, shuffled (A1).
   sameEntries(): { checks: number; mismatch: number } {
     return sameEntries(this);
@@ -1227,7 +1231,7 @@ export function a2(seed: number, v: V3v, y: "admit" | "cancel" | "device", paren
   const before = w.holders.filter(at).length, changedBefore = w.holders.filter((h) => at(h) && changed(h)).length;
   w.note(`${cut.name} is back: every keeper syncs with every other`);
   w.level();
-  return { inForceEnd: w.holders.some(at), changedEnd: w.holders.some(changed), phoneEnd: w.stations.some((h) => w.ros(h).letIn.has(P.signer.id)), before, changedBefore, ever: w.activeAt.get(hashOf(e))?.size ?? 0, entries: w.all.size, log: w.log };
+  return { inForceEnd: w.holders.some(at), changedEnd: w.comparable().some(changed), phoneEnd: w.stations.some((h) => w.ros(h).letIn.has(P.signer.id)), before, changedBefore, ever: w.activeAt.get(hashOf(e))?.size ?? 0, entries: w.all.size, log: w.log };
 }
 
 // ── A3: concurrent statements by different people, fault-free ──────────────────────────────────────────────────────
@@ -1339,7 +1343,7 @@ export function a4(seed: number, v: V3v, role: "member" | "admin", y: A4Y, adopt
   let oldWhileBoth = false;
   w.watch = (h, r) => {
     const k = h.logs.get(B.log);
-    if (k?.on.has(hashOf(rm)) && k.on.has(hashOf(nw)) && [...r.letIn.keys()].some((x) => oldKeys.has(x))) oldWhileBoth = true;
+    if (k && w.stands(h, hashOf(rm)) && w.stands(h, hashOf(nw)) && [...r.letIn.keys()].some((x) => oldKeys.has(x))) oldWhileBoth = true;
   };
   w.level(skip);
   P.compromised = true;
@@ -1354,7 +1358,7 @@ export function a4(seed: number, v: V3v, role: "member" | "admin", y: A4Y, adopt
   const cutOld = [...cr.letIn.keys()].some((x) => oldKeys.has(x)), cutNew = cr.letIn.has(O.signer.id);
   w.note(`${cut.name} is back: every keeper syncs with every other`);
   w.level();
-  const rs = w.holders.map((h) => w.ros(h));
+  const rs = w.comparable().map((h) => w.ros(h));
   const st = w.stations.map((h) => w.ros(h));
   return {
     oldWhileBoth, oldEnd: rs.some((r) => [...r.letIn.keys()].some((x) => oldKeys.has(x))), newEnd: st.every((r) => r.letIn.has(O.signer.id)),

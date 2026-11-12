@@ -285,23 +285,30 @@ type X = {
   oldRules: OldRules | null;
   reading: "A" | "B";
   frozen: Map<Holder, string>;
+  /// The bodies each key signed: its device holds them from the signing on (a body is the signer's before any keeper's).
+  mine: Map<string, Set<string>>;
   /// The next statement made names this `prev`, whatever its signer holds (a signer leaving its own out on purpose).
   forcePrev: string | null | undefined;
 };
 const XS = new WeakMap<World3, X>();
+/// The options of the world being made: round three's constructor makes the setup before a subclass's constructor can
+/// keep them.
+let making: W4Options = {};
 
 export class World4 extends World3 {
   get x(): X {
     let x = XS.get(this);
     if (x === undefined) {
-      x = { o: {}, bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map(), forcePrev: undefined };
+      x = { o: making, mine: new Map(), bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map(), forcePrev: undefined };
       XS.set(this, x);
     }
     return x;
   }
 
   constructor(seed: number, v: V3v, family: Family = "free", o: W4Options = {}) {
+    making = o;
     super(seed, v, family, { ...o, bare: o.bare || o.w1 === false });
+    making = {};
     const x = this.x;
     x.o = o;
     if (o.bare) {
@@ -375,7 +382,8 @@ export class World4 extends World3 {
     // `prev`: the latest statement of the tag before it in the log, under `prev` the latest whose body the signing
     // device holds (a key no device of the world holds, a forger's, names the latest)
     const holder = byPrev(this.x.o.order) ? this.devs?.find((d) => d.signer.id === by.id)?.h : undefined;
-    const held = holder ? this.keptOf(holder) : undefined;
+    const kept = holder ? this.keptOf(holder) : undefined, mine = this.x.mine.get(by.id);
+    const held = kept && { has: (hb: string) => kept.has(hb) || mine?.has(hb) === true, get: (hb: string) => kept.get(hb) ?? (mine?.has(hb) ? this.x.bodies.get(hb) : undefined) };
     const whole = (hb: string) => {
       for (let p: string | null = hb, n = 0; p !== null && n < 10_000; n++) {
         const q = held!.get(p);
@@ -396,6 +404,8 @@ export class World4 extends World3 {
     const b: Body = { ws, kind: kind.slice(3), ...rest, prev, salt };
     const hb = bodyHash(b);
     const x = this.x;
+    if (!x.mine.has(by.id)) x.mine.set(by.id, new Set());
+    x.mine.get(by.id)!.add(hb);
     if (!x.bodies.has(hb)) {
       x.bodies.set(hb, b);
       x.order.push(hb);
@@ -587,7 +597,8 @@ export class World4 extends World3 {
         for (const y of f.ready) if (!x.ready.has(`${h.name}|${y}`)) x.ready.set(`${h.name}|${y}`, this.step);
         for (const y of f.stmts.keys()) if (!x.inAt.has(`${h.name}|${y}`)) x.inAt.set(`${h.name}|${y}`, this.step);
       }
-      if (x.o.offFinal && this.openOff(h, root, f).newest === "off") this.letGo(h, ws);
+      // (stations only: a device that let go of its own `off` as it signed it would never give it to anyone)
+      if (x.o.offFinal && !this.devOf.has(h) && this.openOff(h, root, f).newest === "off") this.letGo(h, ws);
     }
   }
   letGo(h: Holder, ws: string) {
@@ -724,10 +735,14 @@ export class World4 extends World3 {
     const keys = new Set<string>();
     for (const s of this.stations) {
       if (!this.pinsOf(s).get(WS)) continue;
-      const r = this.ros(s);
-      for (const k of [...r.stations, ...r.letIn.keys()]) keys.add(k);
+      const r = this.ros(s), self = this.keyOfHolder(s);
+      // (a station's own list naming itself does not count: one taken out is told nothing more, and keeps what it had)
+      for (const k of [...r.stations, ...r.letIn.keys()]) if (k !== self) keys.add(k);
     }
     return this.holders.filter((h) => keys.has(this.keyOfHolder(h)));
+  }
+  stands(h: Holder, x: string): boolean {
+    return this.inForce(h, WS).stmts.has(x);
   }
   lacking(h: Holder, ws = WS): string[] {
     return this.pinsOf(h).has(ws) ? this.inForce(h, ws).lacking : [];
@@ -964,8 +979,8 @@ export function m1(family: Family, runs: number, steps: number, more: W4Options 
 }
 
 /// A body lost with its device: alice's app signs xena's admit and gives the stations the entry, not the body (its
-/// message dropped); then the app is lost. Her phone, on her log, goes on: admits xena as an admin and takes the third
-/// station out. At how many stations each of the phone's statements is in force, and what each lists as lacking.
+/// message dropped); then the app is lost. Her phone, on her log, goes on: admits xena as an admin and makes dan a
+/// member. At how many stations each of the phone's statements is in force, and what each lists as lacking.
 export function lostBody(seed: number, order: Order): { later: number; inForce: number; through: number; xena: number; lacking: number; log: string[] } {
   const w = new World4(seed, VON, "free", { order });
   const A = w.dev("alice's app"), P = w.dev("alice's phone");
@@ -979,10 +994,9 @@ export function lostBody(seed: number, order: Order): { later: number; inForce: 
   w.keptOf(A.h).delete(e.body.h);
   w.holders = w.holders.filter((h) => h !== A.h);
   w.level();
-  const st = stationKeys3[2].hex;
   const later = [
     w.sign(P, "ws.member", { ws: WS, sub: "xena", lock: w.home.get("xena"), role: "admin" }) as Entry,
-    w.sign(P, "ws.station.remove", { ws: WS, key: st, cancels: w.seenStations(P.h, st) }) as Entry,
+    w.sign(P, "ws.member", { ws: WS, sub: "dan", lock: w.home.get("dan"), role: "member" }) as Entry,
   ];
   w.level();
   let inForce = 0, through = 0;
@@ -1121,7 +1135,7 @@ export function m3(family: Family, runs: number, steps: number): M3Out {
       out.otherTags = Math.max(out.otherTags, new Set(others.map((e) => e.body.t)).size);
       if (others.length > 1) out.spanSecs.push(others.at(-1)!.at - others[0].at);
     }
-    if (new Set(w1st.map((h) => w.stateSaid(h))).size === 1) out.agreeW1++;
+    if (new Set(w.comparable().filter((h) => w1st.includes(h)).map((h) => w.stateSaid(h))).size === 1) out.agreeW1++;
     if (new Set(w2st.map((h) => d4Said(w.d4(h, WS2)))).size === 1) out.agreeW2++;
     // (b)
     const noW2 = run(seed, { w2: false }), noW1 = run(seed, { w1: false });
@@ -1170,6 +1184,7 @@ export function m5Clock(seed: number, skew: number, webAt: boolean): M5Clock {
   const removed = lets(webKey("alice").hex);
   const bob = webKey("bob").hex;
   const e = w.sign(P, "web", { id: bob, label: "a browser alice's phone let in", exp: w.t + 1 + WEB_DEVICE_SECS }) as Entry;
+  w.level();
   w.sign(A, "device.remove", { key: P.signer.id });
   w.level();
   const signerGone = lets(bob);
@@ -1213,8 +1228,9 @@ export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any
     w.sign(A, r.stations.has(st) ? "ws.station.remove" : "ws.station", r.stations.has(st) ? { ws: WS, key: st, cancels: w.seenStations(A.h, st) } : { ws: WS, key: st }, { bring: false });
     w.level();
   }
-  const base = w.stateSaid(w.stations[0]), baseList = w.ros(w.stations[0]);
-  const cut = w.stations[w.rng.int(3)];
+  const baseList = w.ros(w.stations[0]);
+  // (the third station may have been taken out above)
+  const cut = w.stations[w.rng.int(2)];
   w.note(`${cut.name} is cut off`);
   const r = w.sign(A, "device.remove", { key: P.signer.id }, { bring: false }) as Entry;
   w.level(new Set([cut]));
@@ -1249,7 +1265,10 @@ export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any
     for (const h of w.holders) if (h !== A.h && !w.pinsOf(h).has(WS)) w.regive(A, h), steps++;
     w.level();
   }
-  const recovered = kind === "web" || w.comparable().every((h) => w.stateSaid(h) === base);
+  // on again: every keeper the workspace has on, in one state, with the members and stations it had before
+  const ks = w.comparable(), d0 = w.d4(ks[0] ?? w.stations[0]);
+  const recovered = kind === "web" || (typeof d0 !== "string" && d0.on === "on" && new Set(ks.map((h) => w.stateSaid(h))).size === 1 &&
+    [...d0.members.keys()].sort().join() === [...baseList.members.keys()].sort().join() && d0.stations.join() === [...baseList.stations].sort().join());
   return { before, end, differ, letGo, steps, recovered, log: w.log };
 }
 
