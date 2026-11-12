@@ -1070,7 +1070,8 @@ fn add_people_foot(v : @view.View, core : Core, here : Here, st : AddPeople, clo
 
 ///|
 /// Those to add added (`workspace.addMembers`) with the role chosen: what came of it said in the form's place (joined,
-/// added to join at their first sign-in, in already), or why not under it.
+/// added to join at their first sign-in, in already; where the lock's change no station took yet, that sentence), or
+/// why not under it.
 fn add_people_go(core : Core, here : Here, st : AddPeople) -> Unit {
   let emails = @signals.untracked(fn() { add_people_emails(st) })
   guard emails.length() > 0 else { return }
@@ -1085,6 +1086,8 @@ fn add_people_go(core : Core, here : Here, st : AddPeople) -> Unit {
     ]),
     fn(r) {
       match r {
+        // (a change of the lock no station took yet: its sentence in the done words' place)
+        Ok(v) if pending_said(v) != "" => st.done.set(pending_said(v))
         Ok(v) => {
           let n = fn(k : String) { items(Some(v), k).length() }
           st.done.set(fill("android-settings.add.done", [

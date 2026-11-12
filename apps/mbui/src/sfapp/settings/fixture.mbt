@@ -3985,14 +3985,14 @@ fn fx_pending_rows() -> Array[Json] {
     ]),
     obj([
       ("id", str("p2")),
-      ("text", str("把 Ana 改为成员没有生效：Ana刚被另一台设备改过。请查看现在的状态，仍然需要的话再操作一次")),
+      ("text", str("把 Ana 改为成员：没有生效。另一台设备刚改过「Ana」，请查看现在的状态，仍然需要的话再操作一次")),
       ("state", str("failed")),
       ("stations", []),
       ("dismissText", str("知道了")),
     ]),
     obj([
       ("id", str("p3")),
-      ("text", str("续期 Chrome · macOS")),
+      ("text", str("续期 Chrome · macOS：没有生效。请查看现在的状态，仍然需要的话再操作一次")),
       ("state", str("failed")),
       ("stations", []),
       ("why", str("这台设备已不在安全模式中")),

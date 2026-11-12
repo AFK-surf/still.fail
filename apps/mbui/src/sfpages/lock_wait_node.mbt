@@ -23,12 +23,14 @@ pub fn lock_wait_node(
 }
 
 ///|
-/// Which of the steps shows (pair_steps' branches): the code typed, one being found, or what is so and the request.
+/// Which of the steps shows (pair_steps' branches): the code typed, one being found, or what is so and the request;
+/// or, the code approved but no station of the lock having taken it yet, what it waits for (`Waits`).
 #derive(Eq)
 priv enum PairShows {
   Typing
   Finding
   Asked
+  Waits
 }
 
 ///|
@@ -43,8 +45,11 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
   let on = [("workspace", ws)]
   let asking = fn() { @settings.is_doing(core, ["lock.pair"], on) }
   let checking = fn() { @settings.is_doing(core, ["lock.pairCode"], on) || state() == "checking" }
+  // (the code approved, no station having taken it yet: the call's pending sentence, "" none)
+  let waits : @signals.Signal[String] = @signals.signal("")
   let shows = fn() {
     match state() {
+      _ if waits.get() != "" => Waits
       "code" | "wrong" | "checking" => Typing
       "finding" => Finding
       _ if asking() => Finding
@@ -66,8 +71,15 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
           typed,
           fn(code) {
             (core.call)("lock.pairCode", { "workspace": Json::string(ws), "code": Json::string(code) }, fn(r) {
-              if r is Err(_) {
-                typed.set("")
+              match r {
+                Err(_) => typed.set("")
+                // (approved, but no station took it yet: the code put away as on approval, its sentence said)
+                Ok(v) if @settings.pending_said(v) != "" => {
+                  typed.set("")
+                  waits.set(@settings.pending_said(v))
+                  (core.say)(@settings.pending_said(v))
+                }
+                Ok(_) => ()
               }
             })
           },
@@ -120,6 +132,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
         })
         lock_devices_node(v, dialled)
       }
+      Waits => lock_note_node(v, fn() { waits.get() })
       Asked => {
         v.show(fn() { state() == "failed" }, fn(n) {
           @sf.words_node(n, fn() { text(pair(), "error") }, fn() { lock_failed }).words_centered(Is(true)) |> ignore

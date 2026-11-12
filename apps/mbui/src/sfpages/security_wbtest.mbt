@@ -272,7 +272,7 @@ test "开启安全模式, at each width and with either hand: its people, the de
 let pending_waiting : String = "移除设备 林的 MacBook Pro（2024 款 · 公司配的那台 · 放在办公室）：已记下，等 Willow、Maple 上线后生效"
 
 ///|
-let pending_failed : String = "把 Ana 改为成员没有生效：Ana刚被另一台设备改过。请查看现在的状态，仍然需要的话再操作一次"
+let pending_failed : String = "把 Ana 改为成员：没有生效。另一台设备刚改过「Ana」，请查看现在的状态，仍然需要的话再操作一次"
 
 ///|
 let pending_why : String = "这台设备已不在安全模式中"
@@ -306,7 +306,7 @@ test "安全, at each width and with either hand: what is pending under the stat
     let (_, head) = t.find("以下改动还没有生效").unwrap()
     let (_, waiting) = t.find(pending_waiting).unwrap()
     let (_, failed) = t.find(pending_failed).unwrap()
-    assert_true(t.find("续期 Chrome · macOS") is Some(_), msg=at)
+    assert_true(t.find("续期 Chrome · macOS：没有生效。请查看现在的状态，仍然需要的话再操作一次") is Some(_), msg=at)
     assert_true(t.find(pending_why) is Some(_), msg=at)
     // (first after the state, before 成员; oldest first)
     assert_true(state < head && head < waiting && waiting < failed, msg=at)
@@ -422,4 +422,38 @@ test "安全, at each width and with either hand: a removal answered pending say
     t.frame()
     assert_eq(@sfbase.toast_words(), said, msg=at)
   }
+}
+
+///|
+test "people added, answered with a change of the lock no station took yet: its sentence in the done words' place" {
+  let said = "添加成员 new@example.com：已记下，等 Maple 上线后生效"
+  let made : Ref[Source?] = Ref(None)
+  let t = setting_tester(Workspace, 390.0, platform=2, over=fn(base) {
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        if name == "workspace.addMembers" {
+          done(Ok({ "joined": [], "added": [Json::string("new@example.com")], "already": [], "pending": { "id": "p9", "text": said, "state": "waiting", "stations": ["Maple"] } }))
+        } else {
+          (base.call)(name, params, done)
+        }
+      },
+    }
+    made.val = Some(src)
+    src
+  })
+  let core = @sfbase.settings_core(made.val.unwrap(), rig_workspace)
+  let here = @settings.here_of(core, rig_workspace.id, rig_workspace.name)
+  @settings.open_add_people(core, here, Some({ "role": "owner", "members": [], "added": [] }))
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = t.find("name@example.com，可粘贴多个").unwrap()
+  t.tap(x + 4.0, y + 4.0)
+  t.frame()
+  t.type_text("new@example.com")
+  t.frame()
+  t.click(Button, label="添加")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(said) is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // (not the done words: 1 位 added to join at their first sign-in)
+  assert_true(t.find("首次登录") is None, msg=t.words().map(fn(w) { w.0 }).join("|"))
 }

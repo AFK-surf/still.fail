@@ -98,8 +98,14 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     )
     if typed is Some(code) {
       (core.call)("lock.pairCode", { "workspace": Json::string(ws), "code": Json::string(code) }, fn(r) {
-        if r is Err(_) {
-          c.clear_code_field(key)
+        match r {
+          Err(_) => c.clear_code_field(key)
+          // (approved, but no station took it yet: its sentence said, the code cleared)
+          Ok(v) if @settings.pending_said(v) != "" => {
+            c.clear_code_field(key)
+            (core.say)(@settings.pending_said(v))
+          }
+          Ok(_) => ()
         }
       })
     }

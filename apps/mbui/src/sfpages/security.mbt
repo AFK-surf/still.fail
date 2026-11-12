@@ -322,15 +322,21 @@ fn sec_pending_node(parent : @view.View, core : Core, ws : () -> String, pv : ()
       })
       |> ignore
     },
+    // (one look at either width: the accent's words, starting where the sentence starts)
     acts=fn(a) {
-      sec_do_node(a, fn() { text(pv(), "dismissText") }, busy=dropping, fn() {
-        @settings.act(
-          core,
-          @signals.untracked(fn() { text(pv(), "dismissText") }),
-          "lock.pendingDismiss",
-          obj([("workspace", str(@signals.untracked(ws))), ("id", str(@signals.untracked(id)))]),
-        )
-      })
+      sec_tap_do_node(
+        a,
+        fn() { text(pv(), "dismissText") },
+        fn() {
+          @settings.act(
+            core,
+            @signals.untracked(fn() { text(pv(), "dismissText") }),
+            "lock.pendingDismiss",
+            obj([("workspace", str(@signals.untracked(ws))), ("id", str(@signals.untracked(id)))]),
+          )
+        },
+        dropping,
+      )
     },
     acts_shown=fn() { failed() && text(pv(), "dismissText") != "" },
   )
@@ -614,16 +620,23 @@ fn sec_do_node(
   primary? : Bool = false,
 ) -> Unit {
   match @sf.look_node(parent) {
-    Narrow =>
-      parent.pick(busy, fn(p, at_work) {
-        if at_work {
-          @sf.spinner_node(p, size=sec_spin) |> ignore
-        } else {
-          @sf.tap_text_node(p, label, press)
-        }
-      })
+    Narrow => sec_tap_do_node(parent, label, press, busy)
     Wide => @sf.button_node(parent, label, press, tone=if primary { Primary } else { Ghost }, busy~) |> ignore
   }
+}
+
+///|
+/// What a row does as words in the link's ink (the library's tap_text_node: its words where the row's start, its room
+/// to be pressed round them), a spinner in their place while it is at work: a narrow row's at its end, and a change
+/// not in effect's 知道了 at either width.
+fn sec_tap_do_node(parent : @view.View, label : () -> String, press : () -> Unit, busy : () -> Bool) -> Unit {
+  parent.pick(busy, fn(p, at_work) {
+    if at_work {
+      @sf.spinner_node(p, size=sec_spin) |> ignore
+    } else {
+      @sf.tap_text_node(p, label, press)
+    }
+  })
 }
 
 ///|

@@ -361,6 +361,15 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 }
 
 ///|
+/// What a call's answer says in place of its done words where what it asked is a change of a lock no station took yet:
+/// its `pending` row's sentence (lock-pending.ts: what it does and what it waits for); "" where it carries none. Any
+/// call's answer may carry one: every caller that says how a call ended asks this first (act, adding people, a device
+/// approved face to face).
+pub fn pending_said(answer : Json) -> String {
+  text(field(Some(answer), "pending"), "text")
+}
+
+///|
 /// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said (felt as
 /// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run. Answered
 /// with a change of a lock no station took yet (its `pending` row: lock-pending.ts), that row's sentence is said in
@@ -376,7 +385,7 @@ pub fn act(
   (core.call)(name, params, fn(r) {
     match r {
       Ok(v) => {
-        match text(field(Some(v), "pending"), "text") {
+        match pending_said(v) {
           "" =>
             if done != "" {
               (core.say)(done)
