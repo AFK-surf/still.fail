@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c447d3c8f](https://github.com/AFK-surf/still.fail/commit/c447d3c8f9f76ca9027e30d8acb148cc80a177ea) mbui: what comes down a column in a group set off  | 1.92 | 2.58 | 11.09 | 30.15 | 39.77 | 26.83 | 51.09 | 94.88 | 158.25 |
 | [d1960a64d](https://github.com/AFK-surf/still.fail/commit/d1960a64d14e7f3350aeaaa7989a5c40653b162a) station: a local status socket, what its agents do | 1.93 | 2.58 | 11.09 | 30.15 | 39.77 | 26.82 | 51.09 | 94.54 | 147.47 |
 | [4124b8b5f](https://github.com/AFK-surf/still.fail/commit/4124b8b5ffbaef4dd62163041ed550c74a4f710e) app: the window resized moves nothing in a chat or | 1.92 | 2.58 | 11.09 | 30.14 | 39.75 | 26.81 | 51.08 | 94.59 | 167.1 |
 | [7a1131cc8](https://github.com/AFK-surf/still.fail/commit/7a1131cc8bdb3d250d60e2dcd4b9d725c1119250) app: a chat's row's gap kept by its kind, its heig | 1.92 | 2.58 | 11.09 | 30.14 | 39.75 | 26.81 | 51.08 | 94.49 | 154.08 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6dd0313ad](https://github.com/AFK-surf/still.fail/commit/6dd0313ad4ab64bb6851cebf6b9a173c422e5513) test(station lock): the world runs the protocol as | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.13 | 185.46 |
 | [c25a2dceb](https://github.com/AFK-surf/still.fail/commit/c25a2dceb14a9f9408c2b495e93a083f6cb502cf) station: the machine's sample read on the main thr | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.5 | 183.14 |
 | [22dda4926](https://github.com/AFK-surf/still.fail/commit/22dda49266334245453d5f4ba0fd2ae143873cf2) core: the rows a chat list showed are kept beside  | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.14 | 127.45 |
-| [e64ecb965](https://github.com/AFK-surf/still.fail/commit/e64ecb965d245bac9d5ab9c032214d37b2d218ed) mbui: a page's list keeps slots only round what sh | 1.86 | 2.49 | 10.45 | 29.22 | 36.93 | 26.02 | 48.62 | 93.75 | 185.04 |
