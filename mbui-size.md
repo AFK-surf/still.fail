@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [9f77c9f7d](https://github.com/AFK-surf/still.fail/commit/9f77c9f7dbc853f017a2478b71757bfd0969376f) app: the workspaces' sheet closes as the switch is | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 93.93 | 158.3 |
 | [aa6562ab0](https://github.com/AFK-surf/still.fail/commit/aa6562ab09792f0fa89a6ec430ed89cbc4f539e2) mbui: a page's list's foot at rest: a short list s | 1.86 | 2.49 | 10.43 | 29.2 | 36.86 | 26 | 48.57 | 93.8 | 176.25 |
 | [20027072d](https://github.com/AFK-surf/still.fail/commit/20027072d5fa229a5ba6fee7c204f4c22b55a1c2) mbui: a page's list scrolled with nothing laid out | 1.86 | 2.49 | 10.42 | 29.19 | 36.86 | 26 | 48.55 | 93.95 | 179.41 |
 | [e02e43d2a](https://github.com/AFK-surf/still.fail/commit/e02e43d2a6b8e36ea270c769eabd1c433f7e2891) Install the Antigravity CLI from the app, by its o | 1.86 | 2.49 | 10.42 | 29.19 | 36.85 | 25.99 | 48.55 | 94.14 | 127.3 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1bf02b581](https://github.com/AFK-surf/still.fail/commit/1bf02b58130efa46b6b95f1bfa89070021955321) core: race a link at its first missed ping; a scre | 1.83 | 2.45 | 10.21 | 28.96 | 36.07 | 25.79 | 47.9 | 94.75 | 177.21 |
 | [1b37cbb32](https://github.com/AFK-surf/still.fail/commit/1b37cbb32ffad74d08d6e8f4775191a6e6f04f57) mbui: a motion's time as it is, on the moments' gr | 1.83 | 2.44 | 10.2 | 28.95 | 36.04 | 25.78 | 47.89 | 94.45 | 136.48 |
 | [f975f6544](https://github.com/AFK-surf/still.fail/commit/f975f65440b19a3edc2a8595567b477da37ddf73) sf: a code block's bar's words at the system's siz | 1.83 | 2.44 | 10.2 | 28.95 | 36.04 | 25.79 | 47.89 | 94.55 | 164.94 |
-| [2ad95a0b4](https://github.com/AFK-surf/still.fail/commit/2ad95a0b4edde672213300c0be4d8a685b8d9717) app: a card's pictures told to the nodes that read | 1.83 | 2.44 | 10.2 | 28.94 | 36.04 | 25.78 | 47.89 | 94.13 | 176.76 |
