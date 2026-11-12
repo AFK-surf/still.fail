@@ -8707,6 +8707,11 @@ fn Tree::come_group_settle(
     self.once_laid_out(fn() { self.come_group_settle(col, g, views, waited=true) })
     return
   }
+  // (one coming still not measured once that layout is done (laid out nowhere: its room shut) left out of it, its own
+  // way, its end worked out as it is first laid out: no group is said of a height that is no number)
+  let live = live.filter(fn(w) {
+    w.live() is Some(m) && !(m.flex.style.come_to > 0.0 && m.flex.style.come_goal != m.flex.style.come_goal)
+  })
   match self.come_groups.get(col) {
     Some((h, _)) if physical_equal(h, g) => self.come_groups.remove(col)
     _ => ()
