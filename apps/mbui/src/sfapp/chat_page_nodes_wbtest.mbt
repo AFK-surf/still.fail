@@ -1,6 +1,7 @@
 // A chat's page made with its inside nodes (sfbase's chat_page_nodes on: chat_page_made's `body` and `foot`), as a
-// skeleton: its messages the page's list, the composer in the list's foot in its old view. That it holds together, no
-// more: what the old page floats over its list, puts over its rows and flies over it is not made yet.
+// skeleton: its messages the page's list, the composer in the list's foot in its old view, the way back to the newest
+// over it and a message gone to. That it holds together, no more: what else the old page floats over its list, puts
+// over its rows and flies over it is not made yet.
 
 ///|
 /// The fixture's chat s-c1 opened with its page's inside nodes, `w` by `h` on `platform`, at rest.
@@ -461,16 +462,20 @@ test "a chat's page made with its inside nodes tells the core what is read and w
 ///|
 /// The long chat (chat_window_wbtest's) opened on screen `s` with its page's inside nodes, at rest (the Tester's screen:
 /// 2 pixels a point); the core saying where it was left (`at`: the message's seq, its top under the list's in pixels, if
-/// said) and its unread line at message `line` (none at 0) as it is read.
+/// said) and its unread line at message `line` (none at 0) as it is read; `before` done as the run begins, before the chat
+/// is opened (a message it is to go to); not judged on how what moves goes where `unjudged` (from the start).
 fn place_long_open(
   l : LongChat,
   s : (String, Double, Double, Int),
   at? : (Double, Double?)? = None,
   line? : @signals.Signal[Int] = @signals.signal(0),
+  before? : () -> Unit = fn() {  },
+  unjudged? : Bool = false,
 ) -> @ui.Tester {
   let (_, w, h, platform) = s
   new_run()
   @sfbase.chat_page_nodes.set(true)
+  before()
   let base = long_source(l)
   let src : Source = {
     ..base,
@@ -499,6 +504,9 @@ fn place_long_open(
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, begun=fn() {
     @sfbase.window_tall.val = h
   })
+  if unjudged {
+    t.motion_unjudged(true)
+  }
   long_run(t, l, long_opened_ms)
   t
 }
@@ -606,5 +614,122 @@ test "a chat's page made with its inside nodes opens at its unread line before w
     place_left_and_opened(t, l, meanwhile=fn() { line.set(l.first.get() + 3) })
     let at = t.rect_of("以下是新消息")
     assert_true(at is Some((_, y, _, _)) && y > 0.0 && y < h / 3.0, msg="\{name}: the unread line at \{Repr(at)}")
+  }
+}
+
+///|
+/// The way back to the newest of the long chat's page now (named 跳到最新, or 回到刚才的位置 where `back`), if shown.
+fn to_newest_shown(t : @ui.Tester, back? : Bool = false) -> @ui.SemNode? {
+  t.query(Button, label=if back { "回到刚才的位置" } else { "跳到最新" })
+}
+
+///|
+/// The top of the lowest field drawn (the composer's), if any.
+fn composer_top(t : @ui.Tester) -> Double? {
+  let mut top : Double? = None
+  for s in t.semantics() {
+    if s.role == @ui.Role::TextField && (top is None || top.unwrap() < s.rect.1) {
+      top = Some(s.rect.1)
+    }
+  }
+  top
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the way back to the newest none at its end; read up, shown over the composer, named, pressed in 44 by 44; pressed, at its end again and gone" {
+  for s in long_screens {
+    let (name, w, h, _) = s
+    let l = long_chat()
+    let t = place_long_open(l, s)
+    let last = "第\{long_count}条："
+    guard t.rect_of(last) is Some((_, end, _, _)) else { fail("\{name}: its last message not drawn as it opens") }
+    assert_true(to_newest_shown(t) is None, msg="\{name}: the way back to the newest shown at its end")
+    // (read up: as the wheel's first frame scrolls the list, the frames' judge takes the composer, pinned in the list's
+    // foot and still where it shows, for moved as much: the list's to mend; what shows is held here as a result)
+    t.motion_unjudged(true)
+    t.move_to(w / 2.0, h / 2.0)
+    t.wheel(w / 2.0, h / 2.0, -600.0)
+    long_run(t, l, long_rest_ms)
+    guard to_newest_shown(t) is Some(b) else { fail("\{name}: the way back to the newest not shown read up") }
+    let (_, by, bw, bh) = b.rect
+    let field = composer_top(t)
+    assert_true(
+      bw >= 44.0 && bh >= 44.0 && by > h / 2.0 && field is Some(f) && by + bh <= f,
+      msg="\{name}: the way back to the newest at \{Repr(b.rect)}, the composer's field at \{Repr(field)}",
+    )
+    t.click(Button, label="跳到最新")
+    long_run(t, l, long_rest_ms)
+    let now = t.rect_of(last).map(fn(r) { r.1 })
+    assert_true(now is Some(y) && (y - end).abs() <= 1.0, msg="\{name}: pressed, its last message at \{Repr(now)}, its end \{end}")
+    assert_true(to_newest_shown(t) is None, msg="\{name}: the way back to the newest shown at its end again")
+  }
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: a message gone to among its rows just under its top; the way back to the newest back where the reader was first, then to its end" {
+  for s in long_screens {
+    let (name, w, h, _) = s
+    let l = long_chat()
+    let t = place_long_open(l, s)
+    let last = "第\{long_count}条："
+    guard t.rect_of(last) is Some((_, end, _, _)) else { fail("\{name}: its last message not drawn as it opens") }
+    // (read up more than a screen: the wheel's, as in the tests above)
+    t.motion_unjudged(true)
+    t.move_to(w / 2.0, h / 2.0)
+    for _ in 0..<3 {
+      t.wheel(w / 2.0, h / 2.0, -600.0)
+      long_run(t, l, long_rest_ms)
+    }
+    let seen : Array[(Int, Double)] = []
+    for n in l.first.get()..=l.last.get() {
+      if t.rect_of("第\{n}条：") is Some((_, y, _, _)) && y > h / 4.0 && y < h * 0.75 {
+        seen.push((n, y))
+      }
+    }
+    assert_true(seen.length() > 0, msg="\{name}: nothing read in the middle of the list")
+    // gone to inside the chat as it shows (a quote's, a row's state line): a message near the top of what it holds
+    let target = l.first.get() + 3
+    go_to(long_ref, target.to_double())
+    @ui.came_from_outside()
+    long_run(t, l, long_rest_ms)
+    let at = t.rect_of("第\{target}条：")
+    assert_true(at is Some((_, y, _, _)) && y > 0.0 && y < h / 3.0, msg="\{name}: \{target} gone to at \{Repr(at)}")
+    assert_true(!@sfbase.go_tos.contains(long_ref.station + "\u{1}" + long_ref.session), msg="\{name}: still to go to")
+    // back where the reader was, then to its end
+    t.click(Button, label="回到刚才的位置")
+    long_run(t, l, long_rest_ms)
+    let wrong = seen.filter(fn(p) { !(t.rect_of("第\{p.0}条：") is Some((_, y, _, _)) && (y - p.1).abs() <= 1.0) })
+    assert_true(
+      wrong.is_empty(),
+      msg="\{name}: read at \{Repr(seen)}, back at \{Repr(wrong.map(fn(p) { t.rect_of("第\{p.0}条：").map(fn(r) { r.1 }) }))}",
+    )
+    assert_true(to_newest_shown(t, back=true) is None, msg="\{name}: the way back still back once there")
+    t.click(Button, label="跳到最新")
+    long_run(t, l, long_rest_ms)
+    let now = t.rect_of(last).map(fn(r) { r.1 })
+    assert_true(now is Some(y) && (y - end).abs() <= 1.0, msg="\{name}: pressed again, its last message at \{Repr(now)}, its end \{end}")
+    assert_true(to_newest_shown(t) is None, msg="\{name}: the way back to the newest shown at its end")
+  }
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: opened to go to a message before what it opens on, the pages before asked till it comes, it just under its top, nothing left to go to" {
+  for s in long_screens {
+    let (name, h) = (s.0, s.2)
+    let target = 120
+    let l = long_chat()
+    // (as the list is brought to the message come, the frames' judge takes the composer, pinned in the list's foot and
+    // still where it shows, for moved as far as the list went (4500 on 大屏 at 120 frames a second), as it does from a
+    // wheel in the tests above: the list's to mend; where it comes to is held here as a result)
+    let t = place_long_open(l, s, before=fn() { go_to(long_ref, target.to_double(), keep_place=false) }, unjudged=true)
+    long_run(t, l, long_rest_ms)
+    let older = l.asked.filter(fn(a) { a.has_prefix("older") })
+    assert_true(older.length() > 0, msg="\{name}: asked \{@ui.list_text(l.asked)}")
+    let at = t.rect_of("第\{target}条：")
+    assert_true(
+      at is Some((_, y, _, _)) && y > 0.0 && y < h / 3.0,
+      msg="\{name}: \{target} at \{Repr(at)}, asked \{@ui.list_text(l.asked)}, first \{l.first.get()}",
+    )
+    assert_true(!@sfbase.go_tos.contains(long_ref.station + "\u{1}" + long_ref.session), msg="\{name}: still to go to")
   }
 }

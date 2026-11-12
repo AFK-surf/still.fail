@@ -691,6 +691,10 @@ pub fn first_one_node(@view.View, () -> String, (@view.View) -> Unit, art? : (@v
 
 pub fn fixed_anchor(@view.View, (Double, Double, Double, Double)) -> @view.View
 
+pub fn float_button_node(@view.View, String, () -> String, () -> Unit, count? : () -> String, tips? : TipLayer, shortcut? : String) -> @view.View
+
+pub let float_button_reach : Double
+
 pub let floating : Raised
 
 pub fn foot_across(Double) -> @ui.Style

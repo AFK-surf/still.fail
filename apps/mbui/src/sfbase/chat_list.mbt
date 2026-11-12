@@ -1951,11 +1951,26 @@ pub fn chat_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, what : 
   guard v.newer && v.thread is Some(th) else { return }
   let rd = reading_of(r.station + "\u{1}" + r.session)
   rd.latest_asked = true
-  let station = r.station
-  c.tell("chat.latest/" + r.station + "/" + r.session, fn() {
-    act(src, what, "", "chat.latest", { "station": Json::string(station), "thread": Json::number(th) }, failed=fn() {
-      rd.latest_asked = false
-    })
+  c.tell("chat.latest/" + r.station + "/" + r.session, fn() { chat_latest_act(src, r.station, th, what, rd) })
+}
+
+///|
+/// chat_latest's, asked at once, for a page made as nodes (its press's handler): the place kept forgotten, and where the
+/// window is short of the chat's end its latest page asked (true; false where it is not short of it).
+pub fn chat_latest_now(src : Source, r : ChatRef, v : ChatView, what : String) -> Bool {
+  place_forget(r.station + "\u{1}" + r.session)
+  guard v.newer && v.thread is Some(th) else { return false }
+  let rd = reading_of(r.station + "\u{1}" + r.session)
+  rd.latest_asked = true
+  chat_latest_act(src, r.station, th, what, rd)
+  true
+}
+
+///|
+/// The chat's latest page asked (`chat.latest`), its Reading `rd` told where it fails.
+fn chat_latest_act(src : Source, station : String, th : Double, what : String, rd : Reading) -> Unit {
+  act(src, what, "", "chat.latest", { "station": Json::string(station), "thread": Json::number(th) }, failed=fn() {
+    rd.latest_asked = false
   })
 }
 

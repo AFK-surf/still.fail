@@ -148,6 +148,8 @@ pub fn chat_kept_from(Source, ChatRef) -> ChatView?
 
 pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
 
+pub fn chat_latest_now(Source, ChatRef, ChatView, String) -> Bool
+
 pub fn chat_windows_reset() -> Unit
 
 pub fn chat_link(String, String) -> String
@@ -743,6 +745,8 @@ pub let go_to_passages : Map[String, String]
 pub let go_to_words : Map[String, Array[String]]
 
 pub let go_tos : Map[String, Double]
+
+pub let go_tos_said : @signals.Signal[Int32]
 
 pub fn halo_of(Int64) -> Int64
 
