@@ -85,22 +85,47 @@ fn RestCase::y(self : RestCase, k : Int) -> Double? {
 }
 
 ///|
-test "scrolls_window from_end: a short list sits at its foot; a block at a time, to just fill what shows and past it, its last at its foot in the frame each comes, what was over it as far up, no jump at either" {
+test "scrolls_window from_end: a short list sits at its foot; a block at a time, to just fill what shows and past it, each opening along its way from its moment, what was over it going up with it, its last at its foot at rest, no jump at either" {
   let c = rest_case(3, true)
   // (three of 40 in 200: 80 of room over them)
   let first = (c.y(0), c.y(2), c.scroll.at(c.tree))
   let each = []
+  let mut at = 1000.0
+  // (a 40's way, from rest: where it has got half way, and its end)
+  let ends = @flex.come_way_ms(0.0, 0.0, 40.0)
+  let half = @flex.come_way(0.0, 0.0, 40.0, ends / 2.0).0
   for n in [4, 5, 6] {
+    c.now.val = at
+    c.tree.advance(at)
     c.keys.set(Array::makei(n, fn(i) { i }))
-    c.tree.frame(390.0, 844.0) |> ignore
-    each.push((c.y(0), c.y(n - 2), c.y(n - 1), c.scroll.at(c.tree)))
+    let look = fn(t : Double) {
+      c.now.val = at + t
+      c.tree.advance(at + t)
+      c.tree.frame(390.0, 844.0) |> ignore
+      (c.y(0), c.y(n - 2), c.y(n - 1), c.scroll.at(c.tree))
+    }
+    each.push((look(0.0), look(ends / 2.0), look(ends)))
+    at = at + ends * 2.0
   }
   assert_eq(first, (Some(80.0), Some(160.0), 0.0))
-  // (four: 40 over them; five fill it; six go 40 past it, the first wholly over the top: not made)
+  let up = fn(y : Double?, by : Double) { y.map(fn(y) { y - by }) }
+  // (four: 40 over them; five fill it; six go 40 past it, the first wholly over the top at rest: not made then)
   assert_eq(each, [
-    (Some(40.0), Some(120.0), Some(160.0), 0.0),
-    (Some(0.0), Some(120.0), Some(160.0), 0.0),
-    (None, Some(120.0), Some(160.0), 40.0),
+    (
+      (Some(80.0), Some(160.0), Some(200.0), 0.0),
+      (up(Some(80.0), half), up(Some(160.0), half), up(Some(200.0), half), 0.0),
+      (Some(40.0), Some(120.0), Some(160.0), 0.0),
+    ),
+    (
+      (Some(40.0), Some(160.0), Some(200.0), 0.0),
+      (up(Some(40.0), half), up(Some(160.0), half), up(Some(200.0), half), 0.0),
+      (Some(0.0), Some(120.0), Some(160.0), 0.0),
+    ),
+    (
+      (Some(0.0), Some(160.0), Some(200.0), 0.0),
+      (up(Some(0.0), half), up(Some(160.0), half), up(Some(200.0), half), half),
+      (None, Some(120.0), Some(160.0), 40.0),
+    ),
   ])
   // (at its foot all the while, told so once)
   assert_eq(c.told, [true])

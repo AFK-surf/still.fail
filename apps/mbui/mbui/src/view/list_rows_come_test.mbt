@@ -1,8 +1,8 @@
 // A page's list's keys changed by data (View::scrolls_window): what comes or goes down its column at one moment makes
 // its way as one, as a plain column's rows do (View::comes, flex's ComeGroup), from the data's moment, whatever frames
 // are drawn; at its foot what is above goes up by the same way, the list kept there; scrolled up, what is read stays
-// where it is and a change within sight moves in place; a change the page says is a catch-up, and blocks brought in by
-// scrolling, at once. A short list sits at its foot. Each scene is looked at at moments it declares, the frames between
+// where it is and a change within sight moves in place; keys the page says are caught up (View::scrolls_window's
+// `comes`), and blocks brought in by scrolling, at once. A short list sits at its foot. Each scene is looked at at moments it declares, the frames between
 // drawn at none (one jump), 60, 120, 24 and 7 a second, on a grid from 0 that the data's moment is not on.
 
 ///|
@@ -69,20 +69,30 @@ priv struct RcCase {
 
 ///|
 /// A page's list 300 by 200 of `keys`, each block as tall as rc_tall says with words 行k, following its foot; drawn
-/// once, at 0.
-fn rc_case(keys : Array[Int]) -> RcCase {
+/// once, at 0. `comes`, `goes`: what its page says of a key that comes and of one that goes (the list's own default:
+/// it does). `from_end`: short of what shows, at its foot (View::scrolls_window's). `reduced`: its motion reduced.
+fn rc_case(
+  keys : Array[Int],
+  comes? : (Int) -> Bool = fn(_) { true },
+  goes? : (Int) -> Bool = fn(_) { true },
+  from_end? : Bool = false,
+  reduced? : Bool = false,
+) -> RcCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(keys, same=fn(a, b) { a == b })
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(200.0))) |> ignore
-      o.scrolls_window(scroll, fn() { keys.get() }, est=40.0, follows=fn() { true }, fn(b, k) {
+      o.scrolls_window(scroll, fn() { keys.get() }, est=40.0, follows=fn() { true }, comes~, goes~, from_end~, fn(b, k) {
         b.height(Is(Some(rc_tall(k)))).words(Is("行\{k}")) |> ignore
       })
       |> ignore
     })
     |> ignore
   })
+  if reduced {
+    tree.reduces_motion(fn() { true })
+  }
   tree.frame(390.0, 844.0) |> ignore
   { tree, scroll, keys }
 }
@@ -114,18 +124,19 @@ fn RcCase::off_foot(self : RcCase) -> Double {
 
 ///|
 /// `tree` walked to each of `looks` (in order), `events` told at their moments on the way (each between frames: before
-/// the frame of a look at the same moment), frames drawn between at `rate` a second (on its grid from 0; none at 0),
-/// a frame at each look; what `read` says at each.
+/// the frame of a look at the same moment), frames drawn between at `rate` a second (on its grid from 0; none at 0 nor
+/// at `from` or before, where it was walked to already), a frame at each look; what `read` says at each.
 fn[T] rc_walk(
   tree : @view.Tree,
   events : Array[(Double, () -> Unit)],
   looks : Array[Double],
   rate : Double,
   read : () -> T,
+  from? : Double = 0.0,
 ) -> Array[T] {
   let out = []
   let step = if rate > 0.0 { rc_second / rate } else { 0.0 }
-  let last = Ref(0.0)
+  let last = Ref(from)
   let frames_to = fn(to : Double) {
     if step > 0.0 {
       let mut f = (last.val / step).floor() + 1.0
@@ -350,21 +361,29 @@ test "a page's list scrolled up, a key put in within sight: what is over it stay
 }
 
 ///|
-/// What a page says of a change of its list's keys: a catch-up (older messages paged in, a reconnect's backlog), at
-/// once. Till the list takes it said (the plan's `ListPlace::catch_up`), the change as it is: every change at once.
-fn rc_catch_up(change : () -> Unit) -> Unit {
-  change()
-}
-
-///|
-test "a page's list at its foot, thirty keys come in a change the page says is a catch-up: there at once, at its foot (already so)" {
-  for rate in rc_rates {
-    let c = rc_case(Array::makei(20, fn(i) { i }))
-    let got = rc_walk(c.tree, [(rc_at, fn() { rc_catch_up(fn() { c.keys.set(Array::makei(50, fn(i) { i })) }) })], [rc_at, rc_at + 100.0], rate, fn() {
-      (rc_y(c.tree, "行48"), rc_y(c.tree, "行49"), c.off_foot())
+test "a page's list at its foot, thirty keys come in one change of which the page says the last comes, the rest caught up: twenty-nine there at once, the last along its way, what is above going up with it, at its foot all the way, the same at every rate" {
+  let tall = rc_tall(49)
+  let ends = rc_at + @flex.come_way_ms(0.0, 0.0, tall)
+  let looks = [rc_at, rc_at + 50.0, rc_at + 125.0, ends - 0.5, ends, ends + 100.0]
+  let by_rate = rc_rates.map(fn(rate) {
+    let c = rc_case(Array::makei(20, fn(i) { i }), comes=fn(k) { k == 49 })
+    rc_walk(c.tree, [(rc_at, fn() { c.keys.set(Array::makei(50, fn(i) { i })) })], looks, rate, fn() {
+      (rc_y(c.tree, "行47"), rc_y(c.tree, "行48"), c.off_foot())
     })
-    assert_eq(got, [(120.0, 160.0, 0.0), (120.0, 160.0, 0.0)], msg="at \{rate} a second")
+  })
+  for i, rate in rc_rates {
+    let got = by_rate[i]
+    // (the twenty-nine there as the change is told, 48 at its foot; then up as far as 49's way has got)
+    for j, at in looks {
+      let up = @flex.come_way(0.0, 0.0, tall, at - rc_at).0
+      assert_true((got[j].0 - (120.0 - up)).abs() < 1.0e-6, msg="47 at \{at}, \{rate} a second: \{Repr(got)}")
+      assert_true((got[j].1 - (160.0 - up)).abs() < 1.0e-6, msg="48 at \{at}, \{rate} a second: \{Repr(got)}")
+      assert_eq(got[j].2, 0.0, msg="at its foot at \{at}, \{rate} a second")
+    }
+    assert_eq(got, by_rate[0], msg="at \{rate} a second")
   }
+  // (at rest at its moment and the way's length: 48 a block up, 49 at its foot)
+  assert_eq(by_rate[0][4], (80.0, 120.0, 0.0))
 }
 
 ///|
@@ -380,7 +399,7 @@ test "a page's list scrolled up to where blocks never made show: each there at o
 
 ///|
 test "a short page's list sits at its foot; grown by a block at a time past what shows, at rest each time its last at its foot, what was over it as far up, no jump as it comes to fill what shows or more" {
-  let c = rc_case([0, 1, 2])
+  let c = rc_case([0, 1, 2], from_end=true)
   let rows = fn(n : Int) { (rc_y(c.tree, "行\{n - 2}"), rc_y(c.tree, "行\{n - 1}"), c.off_foot()) }
   // (three of 40 in 200: at its foot, 80 of ground over them)
   assert_eq((rc_y(c.tree, "行0"), rows(3)), (80.0, (120.0, 160.0, 0.0)))

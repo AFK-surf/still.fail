@@ -50,6 +50,9 @@ pub fn[K : Hash + Eq] panel_list_node(
       slop=@ui.touch_slop(),
       bar=@ui.tree_scroll_bar(),
       place?,
+      // (its keys there and gone as they change: a debt of 方案 A, given their way list by list, shown to the owner: list-comes-off)
+      comes=fn(_) { false },
+      goes=fn(_) { false },
     )
     |> ignore
   })

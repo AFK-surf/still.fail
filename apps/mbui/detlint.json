@@ -457,6 +457,15 @@
       "src/sfpages/recent.mbt": 4,
       "src/sfpages/search.mbt": 1
     },
+    "list-comes-off": {
+      "src/sf/page_node.mbt": 1,
+      "src/sf/page_wide_node.mbt": 1,
+      "src/sf/panel_list_node.mbt": 1,
+      "src/sfapp/sheets.mbt": 1,
+      "src/sfpages/history_steps_node.mbt": 1,
+      "src/sfpages/sidebar_node.mbt": 1,
+      "src/sfpages/things.mbt": 1
+    },
     "old-list": {
       "src/sf/page.mbt": 3,
       "src/sf/player.mbt": 2,
@@ -603,6 +612,7 @@
     "ui-current": {},
     "build-clock": {},
     "build-motion": {},
+    "list-comes-off": {},
     "old-list": {},
     "old-island": {},
     "old-panel": {},

@@ -37,7 +37,13 @@ yet and you can add one, add it.
   place holds it whole, its place's way to a smaller one waiting for it: never both seen, no words cut by the way
   (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11). Say `at_once=true`
   only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another);
-  `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls,
+  `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls;
+  those its keys bring or take by data make their way as an each's rows do, one way with all else in its column then,
+  where they are seen (at its foot what is above going up with them; scrolled up, what is read staying), each key its
+  page says `comes` as it appears and `goes` as it goes (View::scrolls_window; its counts how it all ends, where a block
+  is meanwhile read through Places alone); every list that says none comes or none goes is a debt of 方案 A, counted
+  (detlint's `list-comes-off`) and only falling,
+  each switched on with before and after shown to the owner (the coordinator of the migration, 2026-11-12);
   what a block holds makes its way as anywhere, but what it makes or lets go because it was given another key (a block
   put by and taken: `reused`) is so at once, as were it made anew (`src/view/key_taken.mbt`; the coordinator of the
   migration, 2026-11-11). What holds a scroller makes its way as anything does, what it holds

@@ -38,6 +38,10 @@ fn slots_case(
   follows? : Bool = false,
   foot_room? : () -> Double = fn() { 0.0 },
   first? : (ListPlace[Int]) -> Unit = fn(_) {  },
+  // (its keys there and gone as they change by data: its clock stands at 0 here, where no way would go on, and what is
+  // held is what the slots cost, not a way's; a way's frames as many keys as it holds, list_blocks_way_test)
+  comes? : (Int) -> Bool = fn(_) { false },
+  goes? : (Int) -> Bool = fn(_) { false },
 ) -> SlotsCase {
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let made = Ref(0)
@@ -54,6 +58,8 @@ fn slots_case(
           place~,
           follows=fn() { follows },
           foot_room~,
+          comes~,
+          goes~,
           fn(b, k) {
             made.val = made.val + 1
             b.owns(fn() { gone.val = gone.val + 1 }) |> ignore

@@ -7972,6 +7972,25 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   along_row? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
+  self.each_by(items, key, row, leave~, at_once~, along_row~, loc~)
+}
+
+///|
+/// View::each, each row made or let go by a change making its way or not as `way_of` says of its key, the row, and
+/// whether it comes (else goes), asked of it then (a page's list's own rules: View::scrolls_window); none, as the
+/// each's `at_once` says of all of them.
+#callsite(autofill(loc))
+fn[T : Eq, K : Hash + Eq] View::each_by(
+  self : View,
+  items : () -> Array[T],
+  key : (T) -> K,
+  row : (View, @signals.Signal[T]) -> Unit,
+  leave? : Double = 0.0,
+  at_once? : Bool = false,
+  along_row? : Bool = false,
+  way_of? : (K, View, Bool) -> Bool,
+  loc~ : SourceLoc,
+) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot(loc)
   slot.along_row_said(along_row, at_once, "each", loc)
@@ -7980,8 +7999,15 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   let gone_rows : Map[K, (View, @signals.Signal[T])] = Map([])
   // (the rows made with what holds them: there at once)
   let way = Ref(false)
+  let ways = fn(k : K, v : View, coming : Bool) {
+    way.val &&
+    (match way_of {
+      Some(f) => f(k, v, coming)
+      None => true
+    })
+  }
   let stop = slot.tree.structured(items, fn(all) {
-    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, way.val, loc) })
+    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, ways, loc) })
   })
   way.val = !at_once && leave <= 0.0
   slot.owns(stop) |> ignore
@@ -7998,7 +8024,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   key : (T) -> K,
   row : (View, @signals.Signal[T]) -> Unit,
   leave : Double,
-  way : Bool,
+  way : (K, View, Bool) -> Bool,
   loc : SourceLoc,
 ) -> Unit {
   guard slot.live() is Some(sn) else { return }
@@ -8035,7 +8061,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
               row(v, item)
             }, loc~)
             let none = slot.tree.structural(v, said)
-            if way && !none {
+            if !none && way(k, v, true) {
               slot.comes(v, 0.0, 1.0) |> ignore
             }
             rows[k] = (v, item)
@@ -8050,7 +8076,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   for k, r in rows {
     if !seen.contains(k) {
       gone.push(k)
-      if slot.goes(r.0, leave, !way) {
+      if slot.goes(r.0, leave, !way(k, r.0, false)) {
         gone_rows[k] = r
       }
     }

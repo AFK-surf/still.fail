@@ -639,11 +639,7 @@ fn come_height(s : Style, natural : Double) -> Double {
     s.come_k = fmax(fmin(s.come_to, 1.0), 0.0)
     return if s.come_to >= 1.0 { 0.0 / 0.0 } else { goal }
   }
-  let (tall, _) = match s.come_group {
-    Some(g) if g.set => come_group_way(g, s, goal, t)
-    _ => come_way_by(s.come_from, s.come_v, goal, plan_of(s, goal), t, turn?=come_style_turn(s, plan_of(s, goal)))
-  }
-  let tall = fmax(tall, 0.0)
+  let tall = come_tall_on(s, goal, t)
   // (holding nothing it is laid out by, closing to nothing from as tall as one before it was (a pick's case that made
   // nothing): its share of that)
   s.come_k = if natural > 0.0 {
@@ -654,6 +650,45 @@ fn come_height(s : Style, natural : Double) -> Double {
     s.come_to
   }
   tall
+}
+
+///|
+/// How tall item `s` is `t` ms into its way to `goal`, its way under way (come_height's, come_tall_at's): its group's
+/// share or its own way, never less than nothing.
+fn come_tall_on(s : Style, goal : Double, t : Double) -> Double {
+  let (tall, _) = match s.come_group {
+    Some(g) if g.set => come_group_way(g, s, goal, t)
+    _ => come_way_by(s.come_from, s.come_v, goal, plan_of(s, goal), t, turn?=come_style_turn(s, plan_of(s, goal)))
+  }
+  fmax(tall, 0.0)
+}
+
+///|
+/// How tall item `s`, coming or going (Style's come_*), `natural` tall where it comes to all of it, is laid out at
+/// moment `at`: what come_height lays it out at with its clock there, to the bit, worked out the same way, nothing of
+/// it changed. Its way's end where it was never laid out yet, as its first layout will say it (as long as a Move from
+/// where it sets out to `natural`'s share); `natural` on no way, or past its end coming, what it goes to going. What a
+/// list reads a place by as its blocks make their way (View::scrolls_window), between frames as at them.
+pub fn come_tall_at(s : Style, natural : Double, at : Double) -> Double {
+  if !known(s.come_at) || !known(s.come_to) {
+    return natural
+  }
+  let goal = s.come_to * natural
+  let ends = if known(s.come_ends) {
+    s.come_ends
+  } else {
+    s.come_at +
+    (match come_style_turn(s, goal) {
+      Some(tr) => tr.t1 + tr.dur
+      None => come_way_ms(s.come_from, s.come_v, goal)
+    })
+  }
+  let dur = ends - s.come_at
+  let t = time_gone(at, s.come_at)
+  if dur <= 0.0 || t >= time_gone(dur, 0.0) {
+    return if s.come_to >= 1.0 { natural } else { goal }
+  }
+  come_tall_on(s, goal, t)
 }
 
 ///|
