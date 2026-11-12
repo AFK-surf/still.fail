@@ -246,3 +246,23 @@ test "its words cut into their cells once as they are said, not again as each fr
   assert_eq(working_cells_made.val - made, 4)
   assert_eq(t.audit(), [])
 }
+
+///|
+test "its agent's card opens over its picture under a pointer, as over a message's picture, and closes once the pointer has left it" {
+  let live = Some(work_live("读 chat_rows.mbt"))
+  let t = work_new(760.0, work_src(@signals.signal(live), []), fn() { work_view([work_agent_json()]) })
+  t.run_for(@ui.move_most_ms)
+  let shut = t.words().length()
+  guard t.all(Button).filter(fn(s) { s.label.has_prefix("Claude：") }).last() is Some(line) else {
+    fail("no line at work")
+  }
+  // (its picture: the line's start, the ring's room round it)
+  let (x, y, _, h) = line.rect
+  t.move_to(x + 15.0, y + h / 2.0)
+  t.run_for(hover_open_ms * 2.0)
+  assert_true(t.words().length() > shut, msg="its card over its picture")
+  t.move_to(1.0, 1.0)
+  t.run_for(hover_close_ms * 2.0)
+  assert_eq(t.words().length(), shut, msg="closed")
+  assert_eq(t.audit(), [])
+}
