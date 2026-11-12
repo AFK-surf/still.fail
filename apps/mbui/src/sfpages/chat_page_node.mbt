@@ -30,7 +30,15 @@ pub fn chat_page_body_node(
           }
       }
     },
-    same=fn(_, _) { false },
+    // (told only as the view or its entries are other ones: the chat's list keeps both while nothing of it changed,
+    // sfbase's chat_read; another topic's change reads none of the rows again)
+    same=fn(a, b) {
+      match (a, b) {
+        (Some((v1, e1)), Some((v2, e2))) => physical_equal(v1, v2) && physical_equal(e1, e2)
+        (None, None) => true
+        _ => false
+      }
+    },
   )
   v.box(fn(b) {
     b.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
