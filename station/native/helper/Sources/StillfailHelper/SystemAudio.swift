@@ -118,7 +118,7 @@ final class SystemAudio: NSObject, SCStreamOutput {
       if let encoder {
         // After a gap (silence left out, sound that does not follow on) the encoder starts anew, as the client's
         // decoder does (client/shell ScreenTap): neither carries the sound before the gap into the packet after it.
-        if sentEnd != ts { encoder.reset() }
+        if let end = sentEnd, abs(ts - end) <= AudioPackets.slack {} else { encoder.reset() }
         // (one in, one out: a packet the encoder gives nothing for is none to send; the next is)
         guard let encoded = encoder.encode(pcm) else { return }
         data = encoded
@@ -188,24 +188,29 @@ final class SystemAudio: NSObject, SCStreamOutput {
 }
 
 /// Interleaved stereo PCM16 as it comes, made into packets of exactly 960 frames (20 ms); at most 15 kept (300 ms), the
-/// oldest dropped first. Sound that follows on from the sound before it (its time within `slack` of where that ends,
-/// counted by its frames) is one run, and a packet's time is where it starts in its run, by the frames before it: 20 ms
-/// on from the packet before it exactly, however a capture's said times jitter. Sound that does not follow on (a gap,
-/// as ScreenCaptureKit sends nothing while nothing plays) starts a run of its own: the part made before it is dropped,
-/// not joined to it under a time it was not captured at.
+/// oldest dropped first. Sound that follows on from the sound before it is one run: a buffer follows on when its said
+/// time is within `slack` of where the run's frames say it starts. A packet's time is where it starts in its run by the
+/// frames before it, from the run's start, which each buffer draws a 64th of the way to its said time: so neither the
+/// said times' jitter nor the two clocks' drift (the capture's host time, the sound card's frames: tens of ppm apart)
+/// moves packets off by more than a fraction of a millisecond, and the run never breaks for drift. Sound that does not
+/// follow on (a gap, as ScreenCaptureKit sends nothing while nothing plays) starts a run of its own: the part made before
+/// it is dropped, not joined to it under a time it was not captured at.
 struct AudioPackets {
   static let frames = 960
   static let bytes = frames * 4
   static let kept = 15
-  /// How far from where the sound before it ends (by its frames) new sound may start and still follow on (µs): half a
+  /// How far from where the run's frames say it starts a buffer's said time may be and still follow on (µs): half a
   /// packet, more than a capture's said time jitters, less than any gap.
   static let slack: Int64 = 10_000
 
   private var building: [Int16] = []
-  /// The run: when it started (µs), the frames that came in it, those of them in packets made; nil before any.
+  /// The run: when it started (µs, drawn to the buffers' said times), the frames that came in it, those of them in
+  /// packets made; nil before any.
   private var runAt: Int64?
   private var runFrames: Int64 = 0
   private var made: Int64 = 0
+  /// How many runs there have been.
+  private(set) var runs = 0
   private(set) var queued: [(Int64, Data)] = []
 
   static func micros(_ frames: Int64) -> Int64 { frames * 1_000_000 / Int64(SystemAudio.rate) }
@@ -213,13 +218,16 @@ struct AudioPackets {
   /// `pcm` (interleaved stereo) captured from `at` (µs) on.
   mutating func add(_ pcm: [Int16], at: Int64) {
     let count = pcm.count / 2
-    if let runAt, abs(at - (runAt + AudioPackets.micros(runFrames))) <= AudioPackets.slack {} else {
+    if let start = runAt, abs(at - (start + AudioPackets.micros(runFrames))) <= AudioPackets.slack {
+      runAt = start + (at - (start + AudioPackets.micros(runFrames))) / 64
+    } else {
       building.removeAll(keepingCapacity: true)
       runAt = at
       runFrames = 0
       made = 0
+      runs += 1
     }
-    runFrames += Int64(count)
+    let start = runAt!
     var frame = 0
     while frame < count {
       let take = min(count - frame, AudioPackets.frames - building.count / 2)
@@ -229,11 +237,12 @@ struct AudioPackets {
         let data = building.withUnsafeBufferPointer { b in Data(buffer: UnsafeBufferPointer(start: b.baseAddress, count: b.count)) }
         // Little-endian on every Mac this runs on (arm64, x86_64): the bytes as they are.
         if queued.count == AudioPackets.kept { queued.removeFirst() }
-        queued.append((runAt! + AudioPackets.micros(made), data))
+        queued.append((start + AudioPackets.micros(made), data))
         made += Int64(AudioPackets.frames)
         building.removeAll(keepingCapacity: true)
       }
     }
+    runFrames += Int64(count)
   }
 
   mutating func pop() -> (Int64, Data)? {

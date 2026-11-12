@@ -14,42 +14,54 @@ const SLACK: u64 = 10_000;
 const QUIET: u32 = 10;
 const BITRATE: i32 = 64_000;
 
-/// The capture's buffers made into packets of exactly 960 frames. Sound that follows on from the sound before it is one
-/// run, and a packet's time is where it starts in its run by the frames before it: 20 ms on from the one before it
-/// exactly, however the buffers' said times jitter. Sound that does not follow on starts a run of its own, the part of a
-/// packet made before it dropped.
+/// The capture's buffers made into packets of exactly 960 frames. Sound that follows on from the sound before it (its
+/// buffer's said time within SLACK of where the run's frames say it starts) is one run, and a packet's time is where it
+/// starts in its run by the frames before it, from the run's start, which each buffer draws a 64th of the way to its
+/// said time: so neither the said times' jitter nor the two clocks' drift (QPC, the sound card's frames: tens of ppm
+/// apart) moves packets off by more than a fraction of a millisecond, and the run never breaks for drift (still.fail
+/// Helper's AudioPackets, the same). Sound that does not follow on starts a run of its own, the part of a packet made
+/// before it dropped.
 pub struct Runs {
     building: Vec<u8>,
     /// The run: when it started (µs), the frames that came in it, those of them in packets made; none before any.
     at: Option<u64>,
     frames: u64,
     made: u64,
+    /// How many runs there have been.
+    pub runs: u32,
 }
 
 impl Runs {
     pub fn new() -> Self {
-        Runs { building: Vec::with_capacity(PACKET_BYTES), at: None, frames: 0, made: 0 }
+        Runs { building: Vec::with_capacity(PACKET_BYTES), at: None, frames: 0, made: 0, runs: 0 }
     }
 
     /// A buffer of interleaved stereo PCM16 captured from `at` (µs): each packet it completes given to `packet` with its
     /// time. `discontinuity`: the capture says it does not follow on.
     pub fn add(&mut self, at: u64, pcm: &[u8], discontinuity: bool, mut packet: impl FnMut(u64, Vec<u8>)) {
-        let follows = !discontinuity && self.at.is_some_and(|start| at.abs_diff(start + self.frames * 1_000_000 / 48_000) <= SLACK);
-        if !follows {
-            self.building.clear();
-            self.at = Some(at);
-            self.frames = 0;
-            self.made = 0;
+        let expected = self.at.map(|start| start as i64 + (self.frames * 1_000_000 / 48_000) as i64);
+        match expected {
+            Some(e) if !discontinuity && (at as i64 - e).abs() <= SLACK as i64 => {
+                self.at = Some((self.at.unwrap() as i64 + (at as i64 - e) / 64) as u64);
+            }
+            _ => {
+                self.building.clear();
+                self.at = Some(at);
+                self.frames = 0;
+                self.made = 0;
+                self.runs += 1;
+            }
         }
-        self.frames += (pcm.len() / 4) as u64;
+        let start = self.at.unwrap();
         for chunk in pcm.chunks(4) {
             self.building.extend_from_slice(chunk);
             if self.building.len() == PACKET_BYTES {
-                let ts = self.at.unwrap() + self.made * PACKET_US;
+                let ts = start + self.made * PACKET_US;
                 self.made += 1;
                 packet(ts, std::mem::replace(&mut self.building, Vec::with_capacity(PACKET_BYTES)));
             }
         }
+        self.frames += (pcm.len() / 4) as u64;
     }
 }
 
@@ -95,7 +107,7 @@ impl Packets {
         match &mut self.opus {
             None => payload.extend_from_slice(pcm),
             Some(e) => {
-                if self.sent_end != Some(ts) {
+                if !self.sent_end.is_some_and(|end| ts.abs_diff(end) <= SLACK) {
                     if let Some(fresh) = encoder() { *e = fresh; }
                 }
                 let samples: Vec<i16> = pcm.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
@@ -170,21 +182,52 @@ mod tests {
             runs.add(at, &buffer(n), false, |ts, pcm| {
                 let was = packets.sent_end;
                 assert!(packets.payload(ts, &pcm).is_some());
-                if was == Some(ts) { follows += 1; }
+                if was.is_some_and(|end| ts.abs_diff(end) <= SLACK) { follows += 1; }
                 sent.push(ts);
             });
         }
         assert_eq!(sent.len(), 100);
-        assert!(sent.windows(2).all(|w| w[1] - w[0] == 20_000), "20 ms apart exactly");
+        assert!(sent.windows(2).all(|w| (w[1] - w[0]).abs_diff(20_000) <= 300), "20 ms apart, the jitter a 64th of it at most");
+        assert_eq!(runs.runs, 1);
         assert_eq!(follows, 99, "one run: the encoder made anew for its first packet alone");
         // 100 ms with nothing captured: a run of its own, its first packet's encoder anew
         let mut after = vec![];
         for n in 0..4usize { runs.add(7_100_000 + n as u64 * 10_000, &buffer(n), false, |ts, _| after.push(ts)); }
-        assert_eq!(after, vec![7_100_000, 7_120_000]);
+        assert_eq!(after.len(), 2);
+        assert!(after[0].abs_diff(7_100_000) <= 100 && (after[1] - after[0]).abs_diff(20_000) <= 100);
+        assert_eq!(runs.runs, 2);
         let mut said = vec![];
         runs.add(7_140_000, &buffer(0), true, |ts, _| said.push(ts));
         runs.add(7_150_000, &buffer(1), false, |ts, _| said.push(ts));
         assert_eq!(said, vec![7_140_000], "a discontinuity said: anew");
+    }
+
+    /// Ten minutes of 10 ms buffers whose said times run 100 ppm fast, or slow, against the frames, and jitter: one run,
+    /// every packet, each within 3 ms of when its first frame was captured, and the encoder made anew once.
+    #[test]
+    fn drift_of_100_ppm_either_way_keeps_one_run_and_packets_on_their_time() {
+        let jitter = [0i64, 3_000, -3_000, 1_000, -2_000, 8_000, -8_000, 2_000, -1_000, 3_000];
+        let sound: Vec<u8> = (0..480).flat_map(|i| (((i % 96) as i16 - 48) * 100).to_le_bytes().repeat(2)).collect();
+        for ppm in [100.0f64, -100.0] {
+            let clock = |frame: u64| 1_000_000.0 + frame as f64 * 1_000_000.0 / 48_000.0 * (1.0 + ppm / 1e6);
+            let mut runs = Runs::new();
+            let mut packets = Packets::new(true);
+            let (mut n_packets, mut worst, mut follows) = (0u64, 0f64, 0u64);
+            let buffers = 10 * 60 * 100usize;
+            for n in 0..buffers {
+                let at = (clock(n as u64 * 480) as i64 + jitter[n % jitter.len()]) as u64;
+                runs.add(at, &sound, false, |ts, pcm| {
+                    worst = worst.max((ts as f64 - clock(n_packets * 960)).abs());
+                    if packets.sent_end.is_some_and(|end| ts.abs_diff(end) <= SLACK) { follows += 1; }
+                    assert!(packets.payload(ts, &pcm).is_some());
+                    n_packets += 1;
+                });
+            }
+            assert_eq!(runs.runs, 1, "{ppm} ppm");
+            assert_eq!(n_packets, (buffers * 480 / 960) as u64, "{ppm} ppm: none dropped");
+            assert_eq!(follows, n_packets - 1, "{ppm} ppm: the encoder made anew for the first packet alone");
+            assert!(worst <= 3_000.0, "{ppm} ppm: {worst} µs off");
+        }
     }
 
     #[test]
