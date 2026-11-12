@@ -44,7 +44,7 @@
 // STILLFAIL_NATIVE=build never downloads (builds what the cache lacks); STILLFAIL_NATIVE=offline neither downloads nor
 // builds. Builds go to $CARGO_TARGET_DIR/native/<part> when it is set, else the crate's own target/ (a worktree's own:
 // a vendored crate built from two checkouts in one target confuses rustc, docs/operations.md).
-import { execFileSync, spawnSync, type SpawnSyncOptions } from "node:child_process";
+import { execFileSync, spawn, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { Resolver } from "node:dns/promises";
 import {
@@ -1401,9 +1401,30 @@ async function main(argv: string[]) {
           throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once`);
         }
       }
+      if (outbox) mkdirSync(outbox, { recursive: true });
+      // Those not here yet, each in a process of its own, three side by side: one after another a branch that changed
+      // the shell built shell-station and the reader for each target in turn, its natives job stopped at its 5 minutes
+      // (opus-screen-audio 43149224744; the reader's three alone 217 s, mbui-halt-flush-prototype 43154389365,
+      // 2026-11-12). What two of them share (shell-apple, a reader's moon build) one takes and the other waits for
+      // (`get`'s lock, moon's).
+      const todo = wanted.filter(([p, t]) => !complete(cached(p, t, key(p, t)), p, t));
+      if (todo.length > 1 && !process.env.STILLFAIL_NATIVE_ONE) {
+        const flags = [...(publish ? ["--publish"] : []), ...(outbox ? ["--outbox", outbox] : []), ...(windows ? ["--windows"] : [])];
+        const one = (p: string, t: Target) => new Promise<number>((done) => {
+          const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "ensure", ...flags, `${p}:${t}`],
+            { stdio: ["ignore", "inherit", "inherit"], env: { ...process.env, STILLFAIL_NATIVE_ONE: "1" } });
+          child.on("exit", (code) => done(code ?? 1));
+        });
+        const queue = [...wanted];
+        const failed: string[] = [];
+        await Promise.all([0, 1, 2].map(async () => {
+          for (let next = queue.shift(); next; next = queue.shift()) if (await one(...next)) failed.push(next.join(":"));
+        }));
+        if (failed.length) throw new Error(`not got: ${failed.join(" ")}`);
+        return;
+      }
       const work = join(tmpdir(), `stillfail-native-${process.pid}`);
       mkdirSync(work, { recursive: true });
-      if (outbox) mkdirSync(outbox, { recursive: true });
       const summary: string[] = [];
       const publishedNow = new Set<string>();
       for (const [p, t] of wanted) {
