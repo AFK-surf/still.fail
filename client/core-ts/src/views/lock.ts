@@ -2228,7 +2228,11 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // 设置 › 安全 did nothing that lasted).
         const own = onOwnLock(inner, c.workspace, param("device"));
         if (own !== null) {
-          return yield* withBound(inner, own.sub, Effect.tap(inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove")), () => takeOffBound(inner, own.sub, param("device"))));
+          const off = yield* withBound(inner, own.sub, Effect.tap(inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove")), () => takeOffBound(inner, own.sub, param("device"))));
+          // (pending on their own lock, or, taken there by a station of another workspace of theirs, in this one's:
+          // said so either way, as this workspace's page shows it)
+          const here = pendingHeld(inner, c.workspace).find((x) => x.state === "waiting" && x.entry.kind === "device.remove" && get(x.entry.body, "id") === param("device"));
+          return here !== undefined ? { pending: pendingRowOf(inner, c.workspace, here) } : off;
         }
         result = yield* lock.append("device.remove", { id: param("device") });
         break;
