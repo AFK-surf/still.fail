@@ -303,6 +303,9 @@ type X = {
   mine: Map<string, Set<string>>;
   /// The next statement made names this `prev`, whatever its signer holds (a signer leaving its own out on purpose).
   forcePrev: string | null | undefined;
+  /// The body a device signs again: the same, where its `prev` is still a statement before it in the log (D1: a body
+  /// does not change when its entry is signed again).
+  reuse: Body | undefined;
 };
 const XS = new WeakMap<World3, X>();
 /// The options of the world being made: round three's constructor makes the setup before a subclass's constructor can
@@ -313,7 +316,7 @@ export class World4 extends World3 {
   get x(): X {
     let x = XS.get(this);
     if (x === undefined) {
-      x = { o: making, mine: new Map(), bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), before: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map(), forcePrev: undefined };
+      x = { o: making, mine: new Map(), bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), before: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map(), forcePrev: undefined, reuse: undefined };
       XS.set(this, x);
     }
     return x;
@@ -414,6 +417,13 @@ export class World4 extends World3 {
       }
     }
     if (this.x.forcePrev !== undefined) (prev = this.x.forcePrev), (this.x.forcePrev = undefined);
+    const reuse = this.x.reuse;
+    this.x.reuse = undefined;
+    if (reuse && reuse.ws === ws && reuse.kind === kind.slice(3)) {
+      let ok = reuse.prev === null;
+      for (let y: Entry = parent; !ok && y.prev !== null; y = this.entry(y.prev)) ok = y.kind === "ws" && y.body.t === t && y.body.h === reuse.prev;
+      if (ok) return super.make(parent, "ws", { t, h: bodyHash(reuse) }, by, at);
+    }
     if (kind === "ws.member" && rest.email === undefined) rest.email = `${rest.sub}@x`;
     // (`cancels=h`: a removal names the statements' bodies, whatever entry its signer saw them in)
     const rc = rest as { cancels?: string[] };
@@ -673,7 +683,10 @@ export class World4 extends World3 {
           this.note(`  ${d.name} does not sign ${this.told(h)} again: the chain says otherwise of it since`);
           continue;
         }
+        const lostE = this.entry(h);
+        if (lostE.kind === "ws") this.x.reuse = this.x.bodies.get(lostE.body.h);
         const again = this.sign(d, it.kind, it.body, { log: it.log, bring: true });
+        this.x.reuse = undefined;
         if (typeof again === "string") {
           it.void = again;
           this.note(`  ${d.name} cannot sign ${this.told(h)} again after its head (${again}): marked not in effect`);
