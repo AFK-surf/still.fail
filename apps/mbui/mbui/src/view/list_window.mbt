@@ -467,8 +467,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   near_top? : (Double, () -> Bool, () -> Unit),
   reused? : (K) -> Int?,
   make_reused? : (View, () -> K) -> Unit,
+  head? : (View) -> Unit,
+  foot? : (View) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
+  // (its head and its foot: taken, nothing made of them yet, the acceptance tests' commit alone)
+  ignore(head)
+  ignore(foot)
   // (what asks it to show a block or its foot: the page's, else its own, which End asks its foot of at once,
   // scroll_keys.mbt)
   let place = Some(place.unwrap_or(ListPlace::new()))
