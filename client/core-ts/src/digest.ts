@@ -15,13 +15,9 @@ export function digest(v: unknown): string {
   return d;
 }
 
-/// The version of a topic's value as it went to a subscriber (store.ts: a subscription's `have`, an unsubscribe's
-/// `v`): its canonical JSON's length and its hash, `<length>:<hash>` in base 36. Made of the value alone, so a topic
-/// evicted and made again still answers `same` to a version a client kept, and nothing of it is kept to answer that
-/// (what the store remembers for a client, `#kept`, is only to send what changed where it is not the same). The
-/// length beside the hash makes two values taken for one (cyrb53 is 53 bits, not a cryptographic hash) the less likely
-/// still; were the way it is made ever changed, a version kept from before would match nothing, and the value would
-/// only go whole again.
+/// A value's version made of its content: its canonical JSON's length and its hash, `<length>:<hash>` in base 36. What
+/// a topic's value that is no object goes by (`token`). The length beside the hash makes two values taken for one
+/// (cyrb53 is 53 bits, not a cryptographic hash) the less likely still.
 export function version(v: unknown): string {
   if (v === null || typeof v !== "object" || !Object.isFrozen(v)) return versionOf(canonical(v));
   let d = versions.get(v);
@@ -37,6 +33,36 @@ const versions = new WeakMap<object, string>();
 
 function versionOf(c: string): string {
   return `${c.length.toString(36)}:${hash(c).toString(36)}`;
+}
+
+/// The version of a topic's value as it went to a subscriber (store.ts: an unsubscribe's `v`, a subscription's `have`):
+/// a token of the value object itself, `<run>:<count>` in base 36, given it the first time one is asked, never of what it
+/// holds. A topic's value is the same object for as long as it is unchanged (what is shared is never written: the
+/// core's AGENTS.md), so the same token says the same value with nothing hashed: hashing the value whole was 5.9 ms of
+/// every switch of workspace for the 55 KB `profiles` let go of (Hermes, Mac Studio, 2026-11-12). A value made again
+/// equal (its topic evicted and opened again) is another object and another token: where the store remembers what the
+/// client kept (`#kept`), what changed from that goes, empty; else the value whole. `<run>` is made at random once a
+/// core starts, so a token kept from another run, or from before a restart, matches nothing. A value that is no object
+/// (a number, a string, null) goes by its content (`version`).
+export function token(v: unknown): string {
+  if (v === null || typeof v !== "object") return version(v);
+  let t = tokens.get(v);
+  if (t === undefined) {
+    t = `${run()}:${(given++).toString(36)}`;
+    tokens.set(v, t);
+  }
+  return t;
+}
+
+/// The tokens given (token), by the value they were given.
+const tokens = new WeakMap<object, string>();
+let given = 0;
+let runId: string | null = null;
+
+/// This core run's own part of a token, made at random as the first is given.
+function run(): string {
+  runId ??= Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => b.toString(36).padStart(2, "0")).join("");
+  return runId;
 }
 
 /// A short name for a long text that changes when it does (a picture's base64 or data: URL, peek-pictures.ts): its

@@ -20,7 +20,7 @@ import * as format from "../format.ts";
 import { current as lang, t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
-import { conformTy, shapedBeside, shapeKey, textKey } from "../conform.ts";
+import { conformTy, defaultOf, shapedBeside, shapeKey, textKey } from "../conform.ts";
 import { LISTED_CHAT } from "../shapes/schema.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
@@ -122,11 +122,6 @@ const archiveHintIn = (v: Value | undefined): ArchiveHint => archiveHintOf(v !==
 const chatPrefsIn = (v: Value | undefined): J => {
   const prefs = v !== undefined && "ok" in v ? v.ok : null;
   return { chatTabs: get(prefs, "chatTabs"), stationUpdatesDismissed: get(prefs, "stationUpdatesDismissed") };
-};
-const profileOverview = (v: Value | undefined): J => v && "ok" in v ? v.ok : undefined;
-const sameProfileOverview = (a: J, b: J): boolean => {
-  if (!isObject(a) || !isObject(b)) return equal(a, b);
-  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing")) && equal(get(a, "modelMakers"), get(b, "modelMakers")) && get(get(a, "mesh"), "reached") === get(get(b, "mesh"), "reached");
 };
 
 /// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
@@ -2845,8 +2840,9 @@ export class Views implements Owner {
     return { ok: items };
   }
 
-  /// A station's decorated overview (`profile`: as the profiles' page reads it), and its host reading, as its list's item
-  /// shows them: made once for every view that shows them, again as they or their times in words change.
+  /// A station's decorated overview, what of it the workspace's profiles read decorated (`profile`: its kept part,
+  /// station_part.profiled), and its host reading, as its list's item shows them: made once for every view that shows
+  /// them, again as they or their times in words change.
   #stationShownOf(station: string): StationShown {
     let kept = this.#stationShown.get(station);
     if (kept) return kept;
@@ -2856,23 +2852,30 @@ export class Views implements Owner {
     // words about time hold (present.ts `made`); whether it can be read, which no clock changes, for as long as the
     // record is kept. Each made it anew: `stations` decorated every station's whole overview for that one boolean (12–13 ms
     // of its 14–16 ms in Hermes for 5 stations of 150 KB each), `profiles` all of them again (11.7–13 ms of 19–20 ms),
-    // both again as a workspace was come back to a minute after it was left with no overview changed.
+    // both again as a workspace was come back to a minute after it was left with no overview changed. `profile` is made
+    // of what the profiles read of it alone (data.ts overviewProfiled), never of the whole overview: decorating a copy
+    // of each station's whole for them was 10.7 of the 15 ms their list took to make after a workspace was switched to
+    // on 小屏 (Hermes, Mac Studio, 2026-11-12).
     const shown = new WeakMap<object, present.Made<J>>();
     const readable = new WeakMap<object, boolean>();
-    const decorate = (o: J, c: present.Clock): J => {
-      work.overviews++;
-      return asShaped("Overview", present.decorate(overview, structuredClone(o), c));
+    const decorate = (o: J, c: present.Clock, part = false): J => {
+      if (part) work.profiledParts++;
+      else work.overviews++;
+      const shownOf = present.decorate(overview, structuredClone(o), c);
+      // (a part put through the overview's shape as the whole is, the rest of it the shape's defaults, which nothing
+      // reading it reads: its profiles, sharing, mesh and machines' logins as the whole would have them)
+      return asShaped("Overview", part && isObject(shownOf) ? { ...overviewDefaults(), ...shownOf } : shownOf);
     };
-    const decorated = (read: () => J) => computed(() => {
+    const decorated = (read: () => J, part = false) => computed(() => {
       const o = read();
       if (o === undefined) return null;
       // (its times in words, by the minute)
       const c = this.#clock();
-      return isObject(o) ? present.taken(present.made(shown, o, c, () => decorate(o, c))) : decorate(o, c);
+      return isObject(o) ? present.taken(present.made(shown, o, c, () => decorate(o, c, part))) : decorate(o, c, part);
     });
     kept = {
       full: decorated(() => this.ok(overview)),
-      profile: decorated(() => this.#core.store.select(overview, profileOverview, sameProfileOverview)),
+      profile: decorated(() => this.#core.data.overviewProfiled(station), true),
       host: computed(() => {
         const h = this.ok({ topic: "host", station });
         return h === undefined ? null : asShaped("Host", present.host(h));
@@ -2905,11 +2908,12 @@ export class Views implements Owner {
         return !fits;
       }),
       // Its machine's own logins offered for a profile, as its page has them (the same list while they are equal: the
-      // profiles' page is not made again with each other change of its overview).
+      // profiles' page is not made again with each other change of its overview): of what the profiles read of it,
+      // which holds them and the profiles whose runtimes take them (present.ts overview `taken`).
       offered: (() => {
         let last: J[] = [];
         return computed(() => {
-          const next = arr(get(kept!.full.get(), "machineLogins")).filter((l) => get(l, "offered") === true);
+          const next = arr(get(kept!.profile.get(), "machineLogins")).filter((l) => get(l, "offered") === true);
           return equal(last, next) ? last : (last = next);
         });
       })(),
@@ -3962,6 +3966,14 @@ const pinnedAt = new WeakMap<object, number>();
 /// `value` put through shape `ty` once, as it would go out, and marked so (`shaped`: shared, never changed, not copied or
 /// shaped again where it goes out inside another value as `ty`; where another struct is said there, made as that one,
 /// once: conform.ts `reshaped`); null when it does not fit (the station's row says so).
+/// An overview of nothing but its shape's defaults (conform.ts `defaultOf`), made once: what a part of one is put
+/// through the overview's shape with (#stationShownOf `profile`).
+let overviewDefaultsMade: J = null;
+function overviewDefaults(): J {
+  overviewDefaultsMade ??= sharedValue(defaultOf("Overview"));
+  return overviewDefaultsMade;
+}
+
 function asShaped(ty: string, value: J): J {
   const out = conformTy(ty, value);
   if (!("ok" in out) || out.ok === null || typeof out.ok !== "object") return null;

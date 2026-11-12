@@ -7,7 +7,8 @@
 // value, the next ones only what changed (delta.ts), and an unchanged value sends nothing; one subscribed `from` another
 // of its subscriptions to the same topic (a list's first rows, more of them asked now) gets its first value as what
 // changed from that one's, not the whole of it again (#firstFrom); one asked again by a client that kept what it was
-// sent as it let go of the topic (`have`) gets `same` where it is that still, else what changed from that (#first).
+// sent as it let go of the topic (`have`: the token of what it holds, digest.ts `token`) gets `same` where it is that
+// still, else what changed from that (#first).
 // Code inside the core can
 // `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out. While no page
 // is in view (`inView`), what changed is kept from the subscribers and goes out as one difference per topic once one is.
@@ -27,7 +28,7 @@ import { readAfresh } from "./markdown.ts";
 import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
-import { version } from "./digest.ts";
+import { token } from "./digest.ts";
 import { work } from "./work.ts";
 
 export const COALESCE_MS = 50;
@@ -35,7 +36,7 @@ export const EVICT_AFTER_MS = 60_000;
 /// How many values let go of keeping them (`keep`) are remembered for a client (#kept), the least recently let go of
 /// forgotten first: the app keeps the lists its places open on, a workspace's eight or so, and its last 4 chats
 /// (apps/mbui/src/sfbase/source.mbt `topic_kept`). One it keeps past these, asked again, is still answered `same`
-/// where it has not changed (a version needs nothing remembered), and whole where it has.
+/// where its value is the same object still (a token needs nothing remembered), and whole where it is not.
 export const KEPT_PER_CLIENT = 24;
 /// The topics a page opens with, each first subscriber's wait for its first value a trace of its own (`<topic>.open`,
 ///): how long a chat took to show, and how much of that the core spent making it.
@@ -49,10 +50,11 @@ const FLUSH_TOLD_EVERY_MS = 60_000;
 /// copy between stations: the topics it watches whatever page shows): these go out then too.
 const UNSEEN = new Set(["notify", "workspaceMarks", "downloads", "driveTransfers"]);
 
-/// A topic's value's version (digest.ts), counted (work.ts `versions`).
-function versioned(v: unknown): string {
-  work.versions++;
-  return version(v);
+/// A topic's value's token (digest.ts `token`): of the value object, nothing of it read; one that is no object, of its
+/// content, hashed (counted: work.ts `versions`).
+function tokenOf(v: unknown): string {
+  if (v === null || typeof v !== "object") work.versions++;
+  return token(v);
 }
 
 /// A value or the error a topic shows.
@@ -152,16 +154,16 @@ export class Store {
   readonly #subscriptions = new Map<string, Topic>();
   /// A keyed subscriber's `from` (`client/id` to the id of the client's other subscription), till its first value goes.
   readonly #from = new Map<string, RequestId>();
-  /// A subscriber's `have` (`client/id` to the version of what it holds), till its first value goes (#first).
+  /// A subscriber's `have` (`client/id` to the token of what it holds), till its first value goes (#first).
   readonly #have = new Map<string, string>();
   /// What each client holds of the topics it let go of keeping them (`keep`), by topic key: the value it was last sent,
-  /// whose version its `{id, v}` said, and that version; at most KEPT_PER_CLIENT, the least recently let go of first.
-  /// A subscription asked again with that version gets what changed from it (#first), not the value whole. It is
+  /// whose token its `{id, v}` said, and that token; at most KEPT_PER_CLIENT, the least recently let go of first.
+  /// A subscription asked again with that token gets what changed from it (#first), not the value whole. It is
   /// cheap: the value is the object that went out (shared, read-only: never a copy, never changed), the one the topic's
   /// entry holds as `sent` while it lives, so it costs memory only once the topic is evicted or has moved on; and a
-  /// version is made only as a client lets go of a topic it keeps. One is forgotten as a subscription of that client to
-  /// that topic gets its first message (whatever it is: the client takes what it kept out with it too), and all of a
-  /// client's as it goes (dropClient).
+  /// token is given only as a client lets go of a topic it keeps, nothing of the value read for it. One is forgotten as
+  /// a subscription of that client to that topic gets its first message (whatever it is: the client takes what it kept
+  /// out with it too), and all of a client's as it goes (dropClient).
   readonly #kept = new Map<ClientId, Map<string, { ok: unknown; v: string }>>();
   #source: Source | null = null;
   #idleCount = 0;
@@ -342,7 +344,7 @@ export class Store {
     this.#scheduleEmit(entry.topic);
   }
 
-  /// `keep`: the client keeps what it holds of the topic (protocol.ts): answered `{id, v}`, the version of that, the
+  /// `keep`: the client keeps what it holds of the topic (protocol.ts): answered `{id, v}`, the token of that, the
   /// last message for `id`: what went to it before (a difference already on its way) it has applied by then. That value
   /// is remembered for the client (#kept), to send what changed from it as it asks again.
   unsubscribe(client: ClientId, id: RequestId, keep = false): void {
@@ -359,7 +361,7 @@ export class Store {
     if (keep) {
       // (what went to it last: the value it holds, every message to it going out in order; none, where none went)
       const had = entry?.subscribers.some(([c, i]) => c === client && i === id) ? entry.sent : undefined;
-      const v = had !== undefined && "ok" in had ? versioned(had.ok) : null;
+      const v = had !== undefined && "ok" in had ? tokenOf(had.ok) : null;
       if (had !== undefined && "ok" in had && v !== null) this.#keep(client, topicKey(topic), had.ok, v);
       this.host.emit(client, { id, v });
     }
@@ -419,7 +421,7 @@ export class Store {
     this.#kept.delete(client);
   }
 
-  /// Client `client` let go of topic `key` keeping `ok`, of version `v`: remembered for it (#kept), the least recently
+  /// Client `client` let go of topic `key` keeping `ok`, of token `v`: remembered for it (#kept), the least recently
   /// let go of forgotten past KEPT_PER_CLIENT.
   #keep(client: ClientId, key: string, ok: unknown, v: string): void {
     let kept = this.#kept.get(client);
@@ -894,16 +896,18 @@ export class Store {
 
   /// The first message of subscriber `id` of `client` (`keyed`: it takes keyed ops) to topic `topic`, whose value going
   /// out is `value`, where it need not be the value whole; none where it goes whole. In this order:
-  /// - `{id, same: true}` where it was asked with `have` and `value` is the one of that version: nothing of it sent;
+  /// - `{id, same: true}` where it was asked with `have` and `value` is the one of that token (the same object), or what
+  ///   changed from what the client was remembered to keep under it (#kept) is nothing: nothing of it sent;
   /// - its `from`'s (#firstFrom): what changed from another of its subscriptions held now (a list's first rows, more
   ///   of them asked), which differs from it by the rows asked and what changed this moment; what was kept is as old as
   ///   the while the topic was let go of, all that changed meanwhile in what changed from it: the lighter as a rule;
-  /// - `{id, delta, kept: true}` where it was asked with `have` and that is the version of what the client was
+  /// - `{id, delta, kept: true}` where it was asked with `have` and that is the token of what the client was
   ///   remembered to keep of this topic (#kept): what changed from that, as a held subscriber's change goes (keyed ops
   ///   for a keyed one of a topic with keyed lists, plain else), unless it weighs more than the value (`heavier`,
   ///   `largerThan`, as #flush decides).
-  /// An error, nothing remembered, another version: none. Its `from` and `have` are forgotten either way, and what was
-  /// remembered of the topic for the client: its first message gone, the client keeps none of it after.
+  /// An error, nothing remembered, another token (another run's, one forgotten): none. Its `from` and `have` are
+  /// forgotten either way, and what was remembered of the topic for the client: its first message gone, the client keeps
+  /// none of it after.
   #first(client: ClientId, id: RequestId, topic: Topic, keyed: boolean, value: Value): CoreMessage | null {
     const at = `${client}/${id}`;
     const have = this.#have.get(at);
@@ -911,12 +915,13 @@ export class Store {
     const kept = this.#kept.get(client);
     const had = kept?.get(topicKey(topic));
     if (had !== undefined) kept!.delete(topicKey(topic));
-    // What the client holds, where it is remembered (#kept): what changed from it, worked out item by item, not by
-    // hashing the value whole (`version`: 4-5 ms in Hermes for a chat of 46 KB, longer than sending it whole took);
-    // none changed, the same version.
+    // The value the client holds still (the same object: its token), nothing worked out; else what changed from what
+    // it holds, where that is remembered (#kept), worked out item by item, never by hashing the value whole (4-5 ms in
+    // Hermes for a chat of 46 KB, longer than sending it whole took): none changed (a value made again equal), `same`.
+    const same = have !== undefined && "ok" in value && tokenOf(value.ok) === have;
     const spec = keyed ? specOf(topic) : null;
-    const ops = have !== undefined && had !== undefined && had.v === have && "ok" in value ? (spec ? diffKeyed(had.ok, value.ok, spec) : diff(had.ok, value.ok)) : null;
-    if (have !== undefined && "ok" in value && (ops !== null ? ops.length === 0 : versioned(value.ok) === have)) {
+    const ops = !same && have !== undefined && had !== undefined && had.v === have && "ok" in value ? (spec ? diffKeyed(had.ok, value.ok, spec) : diff(had.ok, value.ok)) : null;
+    if (same || (ops !== null && ops.length === 0)) {
       this.#from.delete(at);
       return { id, same: true };
     }
