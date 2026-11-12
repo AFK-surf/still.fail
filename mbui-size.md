@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a70e5f3b4](https://github.com/AFK-surf/still.fail/commit/a70e5f3b4c475a4fefed4042a18942bcdf937494) station: the agents' memory and the machine's own  | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 94.05 | 189.94 |
 | [9f77c9f7d](https://github.com/AFK-surf/still.fail/commit/9f77c9f7dbc853f017a2478b71757bfd0969376f) app: the workspaces' sheet closes as the switch is | 1.86 | 2.49 | 10.43 | 29.2 | 36.87 | 26 | 48.57 | 93.93 | 158.3 |
 | [aa6562ab0](https://github.com/AFK-surf/still.fail/commit/aa6562ab09792f0fa89a6ec430ed89cbc4f539e2) mbui: a page's list's foot at rest: a short list s | 1.86 | 2.49 | 10.43 | 29.2 | 36.86 | 26 | 48.57 | 93.8 | 176.25 |
 | [20027072d](https://github.com/AFK-surf/still.fail/commit/20027072d5fa229a5ba6fee7c204f4c22b55a1c2) mbui: a page's list scrolled with nothing laid out | 1.86 | 2.49 | 10.42 | 29.19 | 36.86 | 26 | 48.55 | 93.95 | 179.41 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [16c0c777a](https://github.com/AFK-surf/still.fail/commit/16c0c777ace2f893323615cacc5ce638c0d5e694) app, mbui: a hang report says which kind of page w | 1.83 | 2.45 | 10.24 | 28.99 | 36.19 | 25.82 | 48 | 94.45 | 185.01 |
 | [1bf02b581](https://github.com/AFK-surf/still.fail/commit/1bf02b58130efa46b6b95f1bfa89070021955321) core: race a link at its first missed ping; a scre | 1.83 | 2.45 | 10.21 | 28.96 | 36.07 | 25.79 | 47.9 | 94.75 | 177.21 |
 | [1b37cbb32](https://github.com/AFK-surf/still.fail/commit/1b37cbb32ffad74d08d6e8f4775191a6e6f04f57) mbui: a motion's time as it is, on the moments' gr | 1.83 | 2.44 | 10.2 | 28.95 | 36.04 | 25.78 | 47.89 | 94.45 | 136.48 |
-| [f975f6544](https://github.com/AFK-surf/still.fail/commit/f975f65440b19a3edc2a8595567b477da37ddf73) sf: a code block's bar's words at the system's siz | 1.83 | 2.44 | 10.2 | 28.95 | 36.04 | 25.79 | 47.89 | 94.55 | 164.94 |
