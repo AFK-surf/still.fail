@@ -211,9 +211,24 @@ test "window zoom: window corners stay consistent at every size" {
 }
 
 ///|
+/// The corner rule's fault known at a zoom of 1.5 in a chat (Tester::corners_known), passed through on the way to 1.75 by
+/// the tests that press ⌘= four times, and at rest there since the window resized moves no message row (#5768; before
+/// it the rows' ease hid it): the bar's last button (chat_bar_wide_node's, 32 across) stands 6 in from the window's
+/// top right corner, 10.67 round at that zoom, and follows it at 4.67. The corner chain takes that as fitting the
+/// theme's least, 6, in the window's points (mbui's paint/corner.mbt corner_fit_ok: 4.67 × 1.5 = 7), the rule in the
+/// content's points (mbui's ui/corners.mbt corner_fits_in, its container not the window: 4.67), so the two disagree
+/// wherever a corner followed from the window is under 6 in the content's points and not in the window's. Kept till
+/// they say one measure of it (mbui's to mend, not the bar's).
+// kept across runs: a value (no field of it changes)
+let zoom_bar_corners_known : Array[String] = [
+  "a box in 「整理发布清单 你 A」 (at 815,6 32×32, node 227) (corner 4.666666666666666) in the top right of 「整理发布清单 你 A 星 个 今天 整理发布清单…」 (at 0,0 853×533, node 159) (corner 10.666666666666666): 6 from its edges, a corner the theme's ranges do not let it have; 4.666666666666666 in, it would be 6",
+]
+
+///|
 test "window zoom: the panel at the window edge keeps following its corner when enlarged" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat", w=1280.0, h=800.0, window_corner=16.0, window_inset=true)
+  t.corners_known(zoom_bar_corners_known)
   for _ in 0..<4 { t.key(@ui.key_of_char('='), mods=@ui.mod_cmd) }
   for _ in 0..<2 {
     t.run_for(@ui.move_most_ms)
@@ -296,6 +311,7 @@ test "window zoom: the chat's bar stays clear of the window corner when its cont
 test "window zoom: a short rail keeps settings visible and scrolls its places" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat", w=1280.0, h=800.0, window_corner=16.0, window_inset=true)
+  t.corners_known(zoom_bar_corners_known)
   for _ in 0..<4 { t.key(@ui.key_of_char('='), mods=@ui.mod_cmd) }
   t.frame_at(t.time() + @ui.move_most_ms)
   assert_true((@ui.window_zoom() - 1.75).abs() < 0.001)

@@ -72,8 +72,10 @@ pub fn chat_list(
     rise_ms=@sf.enter_ms,
     top=list_top,
     in_front=app_in_front(),
-    // (narrow or not, and on a way the width it is kept at: each row another version as that changes, from then)
-    laid=(if narrow { "|narrow" } else { "" }) + laid_at_w(key, held, lay_w),
+    // (the way it was last held on and the width it was kept at: each row another version as a way sets off, from then;
+    // not as the window or an edge dragged makes the pane narrower or wider, whatever the width it is laid out at
+    // then, narrow or not: their rows there at once, laid out anew in that frame, no motion of their own)
+    laid=laid_at_w(key, held, lay_w),
     laid_at~,
     foot_way?,
   )
@@ -732,28 +734,24 @@ fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
 }
 
 ///|
-/// The width chat list `key`'s rows are another version for (shown_rows' `laid`): held at one on a page's way
-/// (laid_w), that one still once the way is there and the pane as wide, so that its rows are not another version again
-/// as nothing of them changed (all of them on the list's way for nothing then, a way set off over it while that goes
-/// on from there: a side panel closed again as soon as it is open); "" once the pane is another width.
+/// What chat list `key`'s rows are another version for (shown_rows' `laid`): the page's way it was held on (laid_w) and
+/// the width it was held at, that one still once the way is there, so that its rows are not another version again as
+/// nothing of them changed (all of them on the list's way for nothing then, a way set off over it while that goes on
+/// from there: a side panel closed again as soon as it is open), and still as the pane is made another width by
+/// nothing that goes (the window, its edge dragged): no cause of a row's (apps/mbui/AGENTS.md, Motion). Each way held
+/// on is another (its id), so a way to a width held at before still sets the rows off on it.
 fn laid_at_w(key : String, held : Bool, w : Double) -> String {
   if held {
-    lists_held_w[key] = w
-    return "|" + w.to_string()
+    let laid = "|" + @sfbase.page_way.id + "@" + w.to_string()
+    lists_held_w[key] = laid
+    return laid
   }
-  match lists_held_w.get(key) {
-    Some(at) if (at - w).abs() < 0.5 => "|" + at.to_string()
-    Some(_) => {
-      lists_held_w.remove(key) |> ignore
-      ""
-    }
-    None => ""
-  }
+  lists_held_w.get(key).unwrap_or("")
 }
 
 ///|
-/// The width each chat list's rows were last held at on a page's way (laid_at_w).
-let lists_held_w : Map[String, Double] = Map([])
+/// What each chat list's rows were last held for on a page's way (laid_at_w).
+let lists_held_w : Map[String, String] = Map([])
 
 ///|
 /// How far from the left of a pane `frame_w` wide chat list `key`, laid out `list_w` wide, stands: in its middle; on a
