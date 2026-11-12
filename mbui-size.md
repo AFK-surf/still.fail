@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [eed3184fa](https://github.com/AFK-surf/still.fail/commit/eed3184fa82fe04ff8b2ee8c2811feaa0241a01a) mbui: a chat's page made as nodes tells the core w | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.29 | 132.58 |
 | [3e8f43a25](https://github.com/AFK-surf/still.fail/commit/3e8f43a25998ec1f2f0d867dad19e9c162cad87c) mbui: a chat's page made as nodes holds its compos | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.18 | 156.38 |
 | [5ffe54e22](https://github.com/AFK-surf/still.fail/commit/5ffe54e22b7147c31ab5d34060d2d252b8c92f4c) app tests: page-seconds.txt written again from mai | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.24 | 178.87 |
 | [58efd9ace](https://github.com/AFK-surf/still.fail/commit/58efd9ace270f41d6109c3bb392ef52d3e649726) mbui: a shared node no layout ever placed is no de | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.67 | 154.42 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [33ffbb39f](https://github.com/AFK-surf/still.fail/commit/33ffbb39f0814ad4933e78856088d8da8b1d762b) mbui: what a page's list's block holds comes and g | 1.88 | 2.51 | 10.73 | 29.66 | 37.92 | 26.4 | 49.54 | 94.39 | 170.72 |
 | [022ba7280](https://github.com/AFK-surf/still.fail/commit/022ba728003387d92bfa4daec6f5b38a1dd5a273) core: a test's time passes without a flush after t | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.06 | 176.2 |
 | [edf3b5b3f](https://github.com/AFK-surf/still.fail/commit/edf3b5b3fa563b2c957c1d89cb9cf148a07857a9) station: a lock's stations come to one chain: what | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.75 | 189.85 |
-| [e0dbf4815](https://github.com/AFK-surf/still.fail/commit/e0dbf48150e60e8842d6ae5356addd5b758d65f2) mbui app: on 小屏 a kept place of the bottom bar com | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94 | 163.26 |
