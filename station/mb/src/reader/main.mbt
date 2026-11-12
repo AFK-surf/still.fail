@@ -77,7 +77,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList"].contains(
     op,
   )
 }
@@ -119,6 +119,7 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
     "usageCalls" => @readops.usage_calls(db, args)
     "outflowMessages" => @readops.outflow_messages(db, self.host, self.data, self.sep, args)
     "archiveLook" => @readops.archive_look(db, args)
+    "recentChatList" => @readops.recent_chat_list(db, args)
     _ => fail("no read \{op}")
   }
 }
