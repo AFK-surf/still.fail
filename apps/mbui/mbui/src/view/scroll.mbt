@@ -109,6 +109,10 @@ pub struct Scroll {
   /// whether it is at its foot, followed, told only as that changes (Scroll::at_foot_now): a page's list's by its own
   /// blocks and anchor (View::scrolls_window), else by how far it goes as last laid out (View::scrolls)
   priv mut at_foot_said : (() -> Bool)?
+  /// how tall what is pinned over its foot covers what it shows (a page's list's foot, as tall as the room it keeps
+  /// under its last block: View::scrolls_window's), what a part brought into sight comes to rest over (View::scrolls'
+  /// `shows`)
+  priv mut foot_covered : () -> Double
 }
 
 ///|
@@ -170,6 +174,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     held_said: fn() {  },
     pressed_said: fn(_) { fn() {  } },
     at_foot_said: None,
+    foot_covered: fn() { 0.0 },
   }
 }
 
@@ -1191,6 +1196,7 @@ pub fn View::scrolls(
     s.whole = None
     s.seen.set(None)
     s.tall = fn() { 0.0 }
+    s.foot_covered = fn() { 0.0 }
     s.host = None
     match self.tree.scrolls_at.get(self.at) {
       Some(o) if physical_equal(o, s) => self.tree.scrolls_at.remove(self.at)
@@ -1302,7 +1308,12 @@ pub fn View::scrolls(
   .shows(fn(top, foot) {
     let t = self.tree.logic_said()
     // (across: its start and its end, as wide as it is)
-    let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
+    // (down, less what is pinned over its foot: what is brought comes to rest over that, not under it)
+    let vh = if across {
+      self.tree.nodes[self.at].flex.width
+    } else {
+      self.tree.nodes[self.at].flex.height - dmax(0.0, @signals.untracked(s.foot_covered))
+    }
     let x = s.stopped(t)
     if top < 0.0 {
       s.sent(t, x + top)
