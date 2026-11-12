@@ -551,6 +551,7 @@ pub fn Tester::new(
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  focus_off_begun()
   // (the file each bar of its is held by: motion_runs)
   if motion_runs() {
     let at = loc.to_string()
@@ -1129,6 +1130,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   self.hold_seen_whole_now()
   self.hold_corners()
+  // (where the focus a key moved along comes to rest, once what moved as it did is at rest: tester_focus_off.mbt)
+  self.focus_off_at_rest()
   // (what it drew was placed by the layout it drew by: tester_placed.mbt)
   self.hold_placed()
   match self.each {
@@ -1304,8 +1307,10 @@ pub fn Tester::compose(self : Tester, s : String) -> Unit {
 ///|
 pub fn Tester::key(self : Tester, code : Int, mods? : Int = 0) -> Unit {
   posted_tell()
+  let was = g().focus
   on_key(code, mods)
   self.draw()
+  self.focus_moved_held(code, mods, was)
 }
 
 ///|
@@ -3071,8 +3076,10 @@ pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy
 pub fn Tester::key_told(self : Tester, code : Int, mods : Int, at : Double) -> Unit {
   self.fake.event_at = at
   posted_tell()
+  let was = g().focus
   on_key(code, mods)
   self.fake.event_at = -1.0
+  self.focus_moved_held(code, mods, was)
 }
 
 ///|

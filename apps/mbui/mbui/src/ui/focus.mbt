@@ -278,7 +278,7 @@ fn Ctx::tab_stops(self : Ctx) -> Array[Focusable] {
     if f.layer != 0 && self.layer_stack_of(f.layer) < tree_modal_stack() {
       continue
     }
-    if self.layer_inert(f.layer) || !island_allows(f.island) {
+    if self.layer_inert(f.layer) || !island_keys(f.island) {
       continue
     }
     if f.group == 0 {
@@ -314,7 +314,7 @@ fn Ctx::group_stop(self : Ctx, gid : Int) -> Focusable {
 ///|
 /// Group `gid`'s items as the last frame built them.
 fn Ctx::group_items(self : Ctx, gid : Int) -> Array[Focusable] {
-  self.last_focusables.filter(fn(f) { f.group == gid && island_allows(f.island) })
+  self.last_focusables.filter(fn(f) { f.group == gid && island_keys(f.island) })
 }
 
 ///|
@@ -457,7 +457,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
     return false
   }
   for f in self.last_focusables {
-    if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
+    if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_keys(f.island) {
       self.clicked.push(f.id)
       self.press_on_key(f.id)
       made_pressed(f.id)

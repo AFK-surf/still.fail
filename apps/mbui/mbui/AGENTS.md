@@ -107,6 +107,12 @@ yet and you can add one, add it.
 - What can be done (pressed, stepped, written in) is named, for a screen reader to say what it is: a node of the
   window's tree that is not fails its test (`Tester::hold_named`; an old view's widget is not held to it, the user,
   2026-11-09). A test finds what it acts on as a screen reader would, by role and name (`Tester::get` and `Find`).
+- The keyboard's focus is only on what takes input now. Whether a node may have it is one asking, `Tree::takes_keys`
+  (no modal layer over it, taking presses, in use), read by Tab's order, by what gives the focus and by what gives it
+  back; what the hand reaches is another (`Tree::pressless_at`), and neither is folded into the other. A part behind
+  the one in use says so once, on the node that holds it (`View::in_use`, `src/view/in_use.mbt`), never widget by
+  widget. A test whose key moves the focus along (Tab, Shift+Tab, an arrow) onto what is wholly outside the window
+  stops, judged where its ways end (`src/ui/tester_focus_off.mbt`; the coordinator of the migration, 2026-11-12).
 
 ## Time in a test is declared, never waited for
 

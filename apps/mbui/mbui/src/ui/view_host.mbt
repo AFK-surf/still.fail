@@ -2688,6 +2688,26 @@ fn island_allows(island : @view.NodeId?) -> Bool {
 }
 
 ///|
+/// Whether what an old view built in node `island` holds (none: the old frame's own) may have the keyboard's focus, as
+/// the window's tree has that old view (Tree::takes_keys: no modal layer over it, taking presses, in use): what Tab
+/// goes to and what is given the focus there.
+fn island_keys(island : @view.NodeId?) -> Bool {
+  match (island, view_app.val) {
+    (Some(id), Some(tree)) => tree.takes_keys(id)
+    _ => true
+  }
+}
+
+///|
+/// Whether a field's focus asked for in what an old view built in node `island` is kept asked, not given: the old view
+/// takes input (island_allows) but is in a part not in use (View::in_use), so it is given the focus as it is built in
+/// use again, as one under a modal layer is given it back as that goes (view_focus_kept_for): a chat's composer asked
+/// the focus as its chat opens beside the sidebar in use on 中屏's tape, given it as the page is brought over.
+fn island_kept_asked(island : @view.NodeId?) -> Bool {
+  island_allows(island) && !island_keys(island)
+}
+
+///|
 /// The old view node `id` (a hit target's, a field's) was built in, as the last frame had it (Node's `island`).
 fn Ctx::island_of_id(self : Ctx, id : Int) -> @view.NodeId? {
   if id == 0 {
@@ -5477,7 +5497,7 @@ fn view_focus_kept_for(c : Ctx, id : Int) -> Bool {
 ///|
 /// Whether what Ctx's focus names `id` takes input now, as the focus would be given back to it (view_layers_focus): a
 /// stop of an old view, where the node it is hosted in is where presses are taken (Tree::presses_here: nothing that
-/// holds it put away, leaving or said to take none), a modal layer still over it or not (what that keeps from input may
+/// holds it put away, leaving or said to take none) and is in use (Tree::in_use), a modal layer still over it or not (what that keeps from input may
 /// still be given it, for that one to give back as it goes); none, a node of the tree's (held so as it is given it:
 /// focus_told_tree), or one of the old frame's own layers, as it is.
 fn back_takes_input(t : @view.Tree, id : Int) -> Bool {
@@ -5485,7 +5505,9 @@ fn back_takes_input(t : @view.Tree, id : Int) -> Bool {
     return true
   }
   match focus_node_of(id) {
-    Some(n) => t.presses_here(n)
+    // (nor in a part not in use, behind the one that is: the keyboard's focus none of it, View::in_use; asked of that
+    // alone, not of Tree::takes_keys whole, which a modal layer over it would say no to as well)
+    Some(n) => t.presses_here(n) && t.in_use(n)
     None => true
   }
 }

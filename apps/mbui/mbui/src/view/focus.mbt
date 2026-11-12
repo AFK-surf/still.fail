@@ -124,8 +124,8 @@ pub fn View::focus_shown(self : View) -> Bool {
 
 ///|
 /// What can take the focus now, and what hosts an old view (whose own take it at its place), in the tree's order (each
-/// before what it holds, what it holds in its order): those that take input now (a modal layer over them says not:
-/// Tree::allows) and take presses (not leaving, not said to take none).
+/// before what it holds, what it holds in its order): those that may have the keyboard's focus now (Tree::keys_at: a
+/// modal layer over them says not, Tree::allows; not leaving, not said to take no press; in use, View::in_use).
 pub fn Tree::focus_order(self : Tree) -> Array[FocusAt] {
   let out : Array[FocusAt] = []
   fn walk(at : Int) -> Unit {
@@ -133,7 +133,7 @@ pub fn Tree::focus_order(self : Tree) -> Array[FocusAt] {
     if !n.live {
       return
     }
-    if (n.hosted || (n.focusable && n.focus_tab)) && !self.pressless_at(at) {
+    if (n.hosted || (n.focusable && n.focus_tab)) && self.keys_at(at) {
       out.push({ id: { at, gen: n.gen }, hosted: n.hosted, keys: n.focus_keys })
     }
     for k in self.kids_in_order(at) {
@@ -277,11 +277,11 @@ pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool =
 }
 
 ///|
-/// Whether node `id` can take the focus now (View::focusable, taking presses, under no modal layer that does not hold
-/// it): what a screen reader may give it.
+/// Whether node `id` can take the focus now (View::focusable, and it may have the keyboard's: Tree::keys_at, taking
+/// presses, under no modal layer that does not hold it, in use): what a screen reader may give it.
 pub fn Tree::can_focus(self : Tree, id : NodeId) -> Bool {
   // (held by no node from the root (put by: View::park): not to be focused, as it is in no focus order)
-  self.alive_id(id) && self.nodes[id.at].focusable && !self.pressless_at(id.at) && self.held_from_root(id.at)
+  self.alive_id(id) && self.nodes[id.at].focusable && self.keys_at(id.at) && self.held_from_root(id.at)
 }
 
 ///|

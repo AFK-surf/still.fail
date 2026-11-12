@@ -138,6 +138,9 @@ fn tree_source_said(id : @view.NodeId, paren? : Bool = false) -> String {
 /// screen back, both at the last frame's moment (Tester::contrast_faults): what is read right after it (the words, the
 /// draw list) and the clock are as they were before it.
 pub fn Tester::audit(self : Tester) -> Array[String] {
+  // (a key's focus left unjudged as the frames stopped short of where its ways end: printed only, for now,
+  // tester_focus_off.mbt)
+  self.focus_off_left() |> ignore
   self.room_faults() +
   self.tree_room_faults() +
   self.squeeze_faults() +

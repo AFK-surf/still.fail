@@ -127,7 +127,7 @@ let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 /// while nothing is left in it, ⌘⇧H its first agent's history beside it (one in front: the panel closed), ⌘. its agents
 /// at work stopped, its services and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file
 /// picker for its draft (composer.file); Space with no field focused (the keymap's `!Field`), the composer
-/// (composer.focus). What it cannot do now passes the key on.
+/// (composer.focus), the page brought over first where the tape has it behind (tape_page_for_key). What it cannot do now passes the key on.
 fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   c.on_action("chat.jobs", fn() {
     toggle_jobs_pop()
@@ -139,6 +139,7 @@ fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   })
   c.on_action("composer.focus", fn() {
     guard !switcher_open() else { return false }
+    tape_page_for_key(c.moment())
     composer_focus(c, src, r)
     true
   })

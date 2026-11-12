@@ -587,6 +587,8 @@ struct Node {
   mut said : Said?
   /// what it and all it holds are kept from what is read out (View::hides)
   mut said_hidden : Bool
+  /// it and all it holds not in use, behind what is (View::in_use): the keyboard's focus none of theirs
+  mut behind : Bool
   /// what it and all it holds are drawn in, as their bones (View::bones): 0 none
   mut bones : Int64
   /// drawn in its bones as one piece of its own box, nothing in it drawn (View::bone_whole)
@@ -1028,6 +1030,8 @@ pub struct Tree {
   /// how many of its nodes are drawn in their bones themselves (Node's `bones` not 0): none, and no node is in them,
   /// nothing walked to its root to learn it (Tree::bones_of_at)
   mut bones_set : Int
+  /// how many nodes are said not in use (View::in_use): none, that not asked of what holds a node
+  mut behind_set : Int
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -1363,6 +1367,7 @@ pub fn Tree::new(
     looks_reading: false,
     hand: fn(_) {  },
     bones_set: 0,
+    behind_set: 0,
     downs: [],
     changed: [],
     composed: [],
@@ -1513,6 +1518,10 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.look.shadow = (0.0, 0.0, 0L)
       n.said = None
       n.said_hidden = false
+      if n.behind {
+        self.behind_set -= 1
+      }
+      n.behind = false
       if n.bones != 0L {
         self.bones_set -= 1
       }
@@ -1769,6 +1778,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         hosted: false,
         said: None,
         said_hidden: false,
+        behind: false,
         bones: 0L,
         bone_whole: false,
         cut: false,
@@ -3247,6 +3257,7 @@ priv enum Prop {
   FillsAcross
   WordsBreaks
   GlyphsBy
+  InUse
 }
 
 ///|
@@ -3342,6 +3353,7 @@ impl Show for Prop with output(self, logger) {
       FillsAcross => "FillsAcross"
       WordsBreaks => "WordsBreaks"
       GlyphsBy => "GlyphsBy"
+      InUse => "InUse"
     },
   )
 }
@@ -3428,6 +3440,7 @@ fn Prop::ord(self : Prop) -> Int {
     Measured => 52
     WordsCentered => 53
     GlyphsBy => 86
+    InUse => 88
     EllipsisPast => 54
     WordsBreaks => 87
     Points => 55
@@ -7331,6 +7344,10 @@ fn View::let_go(self : View) -> Unit {
   }
   n.said = None
   n.said_hidden = false
+  if n.behind {
+    self.tree.behind_set -= 1
+  }
+  n.behind = false
   if n.bones != 0L {
     self.tree.bones_set -= 1
   }
@@ -12622,6 +12639,22 @@ pub fn Tree::hand_at_end(self : Tree, at : Double) -> Unit {
   )
   self.told = self.told + 1
   self.marked()
+}
+
+///|
+/// The latest moment a way under way now ends, as the ways said it (Tree::hand_at_end: a Move, a way in or out, a
+/// glide, a Way read as it goes): where all that moves now comes to rest; -1 where none is on its way (what a finger
+/// drags has no end said: none). The Tester's to read (where the focus a key moved comes to rest:
+/// ui's tester_focus_off.mbt), never an app's: what is built or done reads no motion's state (the app's AGENTS.md:
+/// no logic reads whether a motion runs).
+pub fn Tree::ways_end(self : Tree) -> Double {
+  let mut end = -1.0
+  for e in self.hand_ends {
+    if e > end {
+      end = e
+    }
+  }
+  end
 }
 
 ///|
