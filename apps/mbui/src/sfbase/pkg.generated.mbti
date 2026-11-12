@@ -3004,6 +3004,7 @@ pub(all) struct Peek {
   mut got : Int32
   pictures : Array[String]
   mut target : Int32
+  mut was : Int32
   mut codec : String
   mut stream : @ui.Stream?
   mut video : Bool
@@ -3087,6 +3088,8 @@ pub(all) struct Reading {
   mut first_was : Double
   mut newer_was : Bool
   mut placed : Bool
+  mut put_there : Bool
+  mut put_place : (Int, Double)?
   mut put : Bool
   mut lined : Bool
   asked : @signals.Signal[Double]

@@ -175,3 +175,24 @@ test "大屏: another chat put in place, the one before kept shown till it has i
   t.type_text("新")
   assert_eq(composer_seen(t).1, "新")
 }
+
+///|
+/// The card's preview is the card's, by its key: scrolled up to it, the older page coming in before it (its row built
+/// at another place in the list, its ids with it), it goes on as it was, asked of its station once and its picture
+/// handed to the host once.
+test "小屏: a screen card's preview goes on as older messages come in before its row: asked once, its picture handed over once" {
+  let t = covered_chat(0)
+  let (first, _) = t.visible()
+  assert_eq(@sfbase.peek_views.val, 1)
+  scroll_to_words(t, "打开定价页")
+  middle_words(t, "打开定价页")
+  t.run_for(@ui.move_most_ms)
+  let (now, _) = t.visible()
+  assert_true(now > first, msg="its row at another place: \{first} then \{now}")
+  assert_eq(@sfbase.peek_views.val, 1)
+  let mut got = 0
+  for _, p in @sfbase.peeks {
+    got += p.got
+  }
+  assert_eq(got, 1)
+}

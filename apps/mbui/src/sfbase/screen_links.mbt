@@ -364,8 +364,12 @@ pub(all) struct Peek {
   mut got : Int
   /// its pictures by their keys, oldest first: the one shown (the newest decoded) and any newer one decoding
   pictures : Array[String]
-  /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle)
+  /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle); and, in the frame it changed
+  /// in, the one it had before, the one the last frame showed (its row built at another place in its list, as older
+  /// messages come in before it: a row's ids are by its place, while the card, its preview and its pictures are by its
+  /// key)
   mut target : Int
+  mut was : Int
   /// what its view's frames are (its config's `codec`): "jpeg" before one says otherwise
   mut codec : String
   /// its video's decoder (an H.264 preview), made as its config comes; each frame acknowledged as it is shown
@@ -416,6 +420,7 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         got: 0,
         pictures: [],
         target: 0,
+        was: 0,
         codec: "jpeg",
         stream: None,
         video: false,
@@ -442,7 +447,10 @@ pub fn screen_peek(
   target? : Int = 0,
 ) -> Unit {
   let p = peek_for(key, station, screen)
-  p.target = target
+  if p.target != target {
+    p.was = p.target
+    p.target = target
+  }
   peeks_built[key] = true
   // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
   @ui.built_used(fn() { peeks_built[key] = true })
@@ -712,7 +720,12 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let gone = []
   for key, p in peeks {
     let held = peeks_built.contains(key)
-    let on = held && (p.target == 0 || c.rect_of(p.target) is Some(_))
+    // (a card whose target changed in this frame shows where the one it had showed in the last: its row built at
+    // another place is the same card, its preview going on, nothing asked of the station again nor handed to the host
+    // again)
+    let shown_by = if p.was != 0 { p.was } else { p.target }
+    p.was = 0
+    let on = held && (p.target == 0 || c.rect_of(shown_by) is Some(_))
     let want = shown && on
     match p.run {
       PeekOn => if !want { peek_stop(src, p) }

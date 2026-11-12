@@ -58,6 +58,11 @@ pub(all) struct Reading {
   mut newer_was : Bool
   /// put in place once (the unread line, where it was opened, or the end)
   mut placed : Bool
+  /// put at a message by the app (a go-to), not moved by the reader since: the page before not asked while it stands
+  /// there; and where it stands (ListReader::place: the first row in view, how far its top is above the list's), taken
+  /// the first time the page before would be asked there
+  mut put_there : Bool
+  mut put_place : (Int, Double)?
   mut put : Bool
   /// the unread line shown: put at once it is (it may come after the chat opened, what came while the app was away
   /// read from the station after it)
@@ -236,6 +241,8 @@ pub fn reading_of(key : String) -> Reading {
         first_was: -1.0,
         newer_was: false,
         placed: false,
+        put_there: false,
+        put_place: None,
         put: false,
         lined: false,
         asked: @signals.signal(-1.0),
@@ -1217,12 +1224,21 @@ pub fn list_made(info : @ui.ListInfo?, n : Int, ask_rows : Array[Int], lr : @ui.
 }
 
 ///|
-/// Whether less than a screen of a chat's list is above what shows (`info` as it was last laid out, `lr` the list as it
-/// is now): its page asks for more before it (chat_grow_rows), so that a hand reading it back at its fastest never
-/// comes to its top before they are in. Measured in points: the rows above at the height they were laid out at, one not
-/// laid out yet (above where it opened) at the least a row the core counts has (chat_row_least), never more than it
-/// can be; counted only as far as a screen.
+/// Whether a chat's list wants the page before it (`info` as it was last laid out, `lr` the list as it is now): what it
+/// lays out does not fill its window (the screen shows less than it could), or the reader has moved it off its end
+/// (it is not pinned to its newest: info's `at_end`) and less than a screen of it is above what shows. Its page then
+/// asks for more before it (chat_grow_rows), so that a hand reading it back at its fastest never comes to its top
+/// before they are in; while it sits at its end, as it opens or as messages come, nothing is asked ahead of need.
+/// Measured in points: the rows above at the height they were laid out at, one not laid out yet (above where it
+/// opened) at the least a row the core counts has (chat_row_least), never more than it can be; counted only as far as a
+/// screen.
 pub fn chat_short_above(info : @ui.ListInfo, lr : @ui.ListReader) -> Bool {
+  if info.content < info.height {
+    return true
+  }
+  if info.at_end {
+    return false
+  }
   match lr.place() {
     Some((first, off, _)) => {
       let mut above = off
@@ -2292,6 +2308,8 @@ pub fn list_after(
           } else if back is None {
             flash_start(c, rd)
           }
+          rd.put_there = true
+          rd.put_place = None
           c.list_scroll_to(key, at, offset=match back {
             Some(off) => -off
             None => -top
@@ -2343,7 +2361,8 @@ pub fn list_after(
     let made = fn(i) { list_made(i, n, ask_rows, lr) }
     let info = c.list_info_as(key, made)
     let short_above = made(info).near_top
-    // less than a screen laid out above what shows: as many more before it as chat_grow_rows, once for each first
+    // off its end with less than a screen laid out above what shows, or not filling its window: as many more before it
+    // as chat_grow_rows, once for each first
     match (info, v.thread) {
       // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
       (Some(_), Some(thread)) if v.more && v.older == "" && rd.placed && short_above => {
@@ -2356,12 +2375,30 @@ pub fn list_after(
               _ => -1.0
             }
         }
-        // (asked once the frame's builds are over, from where the last laid the list out)
+        // (asked once the frame's builds are over, from where the last laid the list out; told again after a frame
+        // whose scroll built nothing, from where the list is then)
         if rd.asked.get() != first {
-          c.after_build("older", fn() {
+          c.after_build_or_scroll("older", fn() {
             if rd.asked.get() == first {
               return
             }
+            // (only as the reader moves it: where the app put it, nothing while it stands there)
+            let now = lr.place().map(fn(p) { (p.0, p.1) })
+            if rd.put_there {
+              match rd.put_place {
+                None => {
+                  rd.put_place = now
+                  return
+                }
+                Some(p) if now == Some(p) => return
+                _ => {
+                  rd.put_there = false
+                  rd.put_place = None
+                }
+              }
+            }
+            // (told again after a scroll: still less than a screen above what shows)
+            guard lr.info() is Some(i) && chat_short_above(i, lr) else { return }
             rd.asked.set(first)
             (src.call)(
               "chat.older",
