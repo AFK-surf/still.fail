@@ -536,15 +536,23 @@ jobs:
           - { group: 1/4, fps: "120" }
           # (the second's too: 288 s of its pages and 299 s in all on a branch, 2026-11-09, 42635671188; 268 s on main,
           # its time spread over many files' frames at 120, no one test's to take out)
-          - { group: 2/4, fps: "120", part: 1/2 }
-          - { group: 2/4, fps: "120", part: 2/2 }
+          # (the second's and the fourth's on three runners each, 2026-11-12: by page-seconds.txt the pages at 120 were
+          # dealt 246 s a program on every one of the seven runners, and the same deal runs half as long again on one
+          # runner as on another, so one of them was stopped at its five minutes in three of main's eight runs, 43e6e7e4
+          # 43130673490, 03cf6e18 43134811657, 9f77c9f7 43137352094, a file added dealing all of them anew each time.
+          # On nine, 180 s a program: test.sh's page_deal at 120)
+          - { group: 2/4, fps: "120", part: 1/3 }
+          - { group: 2/4, fps: "120", part: 2/3 }
+          - { group: 2/4, fps: "120", part: 3/3 }
           # (the third's pages at 120 in two halves, how what moves goes counted on every frame too: stopped at its five
           # minutes in one, 2026-11-10, 42649531176)
           - { group: 3/4, fps: "120", part: 1/2 }
           - { group: 3/4, fps: "120", part: 2/2 }
-          # (the fourth's pages at 120 in two halves: 315 s and stopped at its five minutes in one, 2026-11-09)
-          - { group: 4/4, fps: "120", part: 1/2 }
-          - { group: 4/4, fps: "120", part: 2/2 }
+          # (the fourth's pages at 120 in two halves: 315 s and stopped at its five minutes in one, 2026-11-09; in
+          # three since, above)
+          - { group: 4/4, fps: "120", part: 1/3 }
+          - { group: 4/4, fps: "120", part: 2/3 }
+          - { group: 4/4, fps: "120", part: 3/3 }
           - { group: 1/4, fps: "60" }
           # (the second's at 60 was in two halves from #5322 until the screens', squeeze_said's and words_large's sweeps
           # left the rates: 139-251 s of its five minutes on seven branches' runs of one evening, and 299 s and stopped

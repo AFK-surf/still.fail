@@ -317,7 +317,9 @@ for t in $targets; do
           60) specs="4,4,520,1 4,4,20,1 1,4,600,1 8,8,0,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
-          120) specs="4,4,500,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
+          # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
+          # says why): by the table every runner's pages 180 s a program where they were 246)
+          120) specs="4,4,500,1 12,12,26,1 2,8,370,1 12,12,220,1" ;;
           24 | 7) specs="4,4,90,2 4,4,14,2 1,4,840,2 4,4,120,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
         esac
@@ -454,7 +456,8 @@ for t in $targets; do
           # second 54-121, 175-182 s, on one of the four cores each; dealt as though both had none, the second's job was
           # 259 s of its 5 minutes three times, the first's 145-212, main e0220aca 43130127033, e046fa45 43132128804,
           # 20027072 43133699456, 2026-11-12)
-          [ "${APP_GROUP:-}" = 4/4 ] && [ "${MBUI_TEST_FPS:-}" = 120 ] && [ "$APP_PART" != 1/1 ] && specs="4,4,100,1 4,4,180,1"
+          # (in three parts since 2026-11-12, the third with none of preview_tree's: its other runs go to the first two)
+          [ "${APP_GROUP:-}" = 4/4 ] && [ "${MBUI_TEST_FPS:-}" = 120 ] && [ "${APP_PART#*/}" = 3 ] && specs="4,4,100,1 4,4,180,1 4,4,0,1"
           while read -r g f; do [ "$g" = "${APP_PART%/*}" ] && kept+=("$f"); done < <(page_deal "$specs" "${words[@]:3}")
           [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
         else
