@@ -265,6 +265,11 @@ fn foot_steps(w : Double, h : Double, platform : Int) -> Array[(String, Double, 
   step_done("a line more")
   @sfbase.writing_add(src, draft, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
   step_done("a file")
+  // (a quote: the focus given to its own field, made in the list's foot; what comes after it followed as after a file)
+  @sfbase.writing_quote(src, draft, { "author": "Claude", "text": "其余的行按估计的高度占位", "ts": "ts8" })
+  step_done("a quote")
+  @sfbase.writing_error(src, draft, "发送没有成功")
+  step_done("an error")
   let moved = fn(name : String) -> Unit raise {
     t.frame()
     let said = t.idle_said()
@@ -287,10 +292,6 @@ fn foot_steps(w : Double, h : Double, platform : Int) -> Array[(String, Double, 
     // button (先不换) steps 8 in its row in one frame, at 60 and 120 frames a second: the rows', nothing of the
     // composer's, to mend with the rows; the distance held after it, 36.2)
   }
-  // (not walked yet: a quote, and what comes after one. Once a quote has come (the focus given to its own field, made
-  // in the list's foot) the list at its foot follows no further change of its foot or of its room: an error's line, a
-  // line more, the keyboard each leave the last message covered by as much (小屏 21.9 to -10.1, -2.9, -278.1), where
-  // after a file alone it follows each. The list's to mend; these steps come back here with it)
   steps
 }
 
