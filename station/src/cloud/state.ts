@@ -9,7 +9,7 @@ import { readJsonFile } from "../ops/json-file.ts";
 import { log } from "../ops/log.ts";
 import { setStationCloud } from "../ops/i18n.ts";
 import { createHash } from "node:crypto";
-import { type Entry, type LockState, apply, asEntry, canonical, entryHash, fold, genesis, lockChain, sayWord, state4, wsTag } from "./lock.ts";
+import { type Entry, type LockState, apply, asEntry, bodyHash, canonical, entryHash, fold, genesis, lockChain, roster4, sayWord, state4, wsTag } from "./lock.ts";
 import { type BodyRefused, LockBodies } from "./lock-bodies.ts";
 import { type Kept, type LogRules, type OffChain, hashOf, keep, rechoose } from "./log-keep.ts";
 import { PersonChains } from "../mesh/person-chains.ts";
@@ -557,6 +557,21 @@ export class Cloud {
     return f.on === "off" ? null : f.out;
   }
 
+  /// What says which of the stations the control plane lists in `ws` are the workspace's: the lock in force, or, where
+  /// its chain moved and this station waits for the root's log or its `open` (`waiting`), the chain's, as before it
+  /// moved, so that the stations it named bring this one what it lacks (the mesh answers them only the lock's
+  /// methods meanwhile: `waiting`).
+  rosterOf(ws?: string | null): { state: LockState | null } | null {
+    const l = this.locked(ws);
+    return l?.waiting === true ? this.chain(ws) : l;
+  }
+
+  /// Whether `ws`'s chain moved and this station waits for what its state is made of: nobody is let in, and its
+  /// stations are asked only for the lock's own (mesh/peer.ts).
+  waiting(ws?: string | null): boolean {
+    return this.locked(ws)?.waiting === true;
+  }
+
   /// The workspace lock's own chain pinned in `ws` as kept (its fold: seq, head and genesis are the chain's), whether
   /// it moved or not: null when none is pinned (or it was turned off).
   chain(ws?: string | null): { state: LockState | null } | null {
@@ -603,6 +618,61 @@ export class Cloud {
     const root = l?.state?.disabled ? undefined : l?.state?.moved;
     if (l === null || root === undefined) return new Set();
     return this.forceOf(ws, l, root).needs;
+  }
+
+  /// Who this station's state of `ws` named until a removal came in force (a station by its key, a device by its id or
+  /// signing key), and the bodies each is given of it: the removal's and those along its `prev` chain, nothing else
+  /// (the model's `admitsBefore`, as this station saw it go: kept while it runs).
+  private toldOuts = new Map<string, Map<string, Set<string>>>();
+
+  /// The bodies of `ws` given to `key`, taken out of its state by a removal: none where it was not.
+  toldOut(ws: string | null, key: string): ReadonlySet<string> {
+    return (this.toldOuts ??= new Map()).get(this.idOf(ws))?.get(key) ?? new Set();
+  }
+
+  /// Each one `before` named and `after` does not, where a removal of it is in force now: told it, and its `prev` chain.
+  private tellOut(id: string, root: string, before: LockState, after: LockState, chains: Entry[][], bodies: unknown[]) {
+    const keysOf = (st: LockState) => {
+      const out = new Map<string, string | null>();
+      for (const k of st.stations.keys()) out.set(k, null);
+      for (const [x, d] of st.devices) {
+        out.set(x, d.sub);
+        if (d.sign_key !== undefined) out.set(d.sign_key, d.sub);
+      }
+      return out;
+    };
+    const was = keysOf(before), now = keysOf(after);
+    const gone = [...was].filter(([k]) => !now.has(k));
+    if (gone.length === 0) return;
+    let inForce: Set<string>;
+    try {
+      inForce = new Set(roster4(id, root, chains, bodies).in_force.map((x) => x.body));
+    } catch {
+      return;
+    }
+    const by = new Map<string, any>();
+    for (const b of bodies) {
+      const h = bodyHash(b);
+      if (h !== null) by.set(h, b);
+    }
+    const outs = (this.toldOuts ??= new Map());
+    const mine = outs.get(id) ?? new Map<string, Set<string>>();
+    for (const [k, sub] of gone) {
+      for (const h of inForce) {
+        const b = by.get(h);
+        const about = b?.kind === "station.remove" ? b.key === k : b?.kind === "member.remove" ? sub !== null && b.sub === sub : false;
+        if (!about) continue;
+        const given = mine.get(k) ?? new Set<string>();
+        for (let p: string | null = h, n = 0; p !== null && n < 10_000; n++) {
+          const q = by.get(p);
+          if (q === undefined) break;
+          given.add(p);
+          p = typeof q.prev === "string" ? q.prev : null;
+        }
+        mine.set(k, given);
+      }
+    }
+    outs.set(id, mine);
   }
 
   /// The person logs a device of `ws` is given to work out its state itself (GET /lock/logs): those it is made of where
@@ -712,6 +782,7 @@ export class Cloud {
         }
       }
     }
+    if (was !== undefined && was.out.waiting !== true) this.tellOut(id, root, was.out.state, out.state, logs.map(([, es]) => es), kept);
     const f: InForce = { lock: l, ver, from, until, on: s.on, out, needs, word };
     forces.set(id, f);
     return f;
@@ -775,7 +846,7 @@ export class Cloud {
   filtered(st: CloudState) {
     const peers = this.planePeers ?? st.peers;
     const gateways = this.planeGateways ?? st.gateway_keys;
-    const l = this.locked();
+    const l = this.rosterOf(null);
     if (l === null) return { peers, gateways };
     const s = l.state;
     return {
@@ -789,7 +860,7 @@ export class Cloud {
   /// call them nor take their calls. Said to agents (`UNPROTECTED`) instead of letting them vanish. Empty without a
   /// lock, with a broken one, and for the home one until the control plane's first roster of this run.
   unprotected(ws?: string | null): any[] {
-    const s = this.locked(ws)?.state;
+    const s = this.rosterOf(ws)?.state;
     if (!s || !this.state) return [];
     const listed = this.isHome(ws) ? (this.planePeers ?? []) : ((this.state.joined ?? []).find((j) => j.workspace === ws)?.peers ?? []);
     return listed.filter((p) => typeof p?.id === "string" && p.id !== this.state!.station && !s.stations.has(p.id));
@@ -1020,7 +1091,7 @@ export class Cloud {
 
   private joinedMembership(j: Joined, home: string): Membership | null {
     if (j.workspace === home || this.leftOut(j.workspace) !== null) return null;
-    const own = this.locked(j.workspace);
+    const own = this.rosterOf(j.workspace);
     const peers = own === null ? j.peers : j.peers.filter((p) => own.state !== null && typeof p?.id === "string" && own.state.stations.has(p.id));
     return { ...j, peers, home: false };
   }

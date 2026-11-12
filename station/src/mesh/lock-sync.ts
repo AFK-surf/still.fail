@@ -13,7 +13,7 @@ import type { Cloud } from "../cloud/state.ts";
 import { asEntry, type Entry, fold } from "../cloud/lock.ts";
 import { type Kept, hashOf } from "../cloud/log-keep.ts";
 import type { PeerCall } from "./bus.ts";
-import { answerPerson } from "./person-sync.ts";
+import { answerBodies, answerPerson } from "./person-sync.ts";
 import { personChainsOf } from "./serve.ts";
 
 /// Whether a peer refused a request as one from before that does not know its method.
@@ -29,9 +29,11 @@ const entriesOf = (raw: unknown): Entry[] => {
 
 /// A lock request of another station of the workspace (the transport checked it is in the roster, so in the lock), of
 /// the lock of the workspace it was asked in (`workspace`).
-export function answerLock(cloud: Cloud, request: any, workspace: string | null = null): unknown {
-  // A person's own lock, as heard in the workspace (person-sync.ts).
+export function answerLock(cloud: Cloud, request: any, workspace: string | null = null, peer: string | null = null): unknown {
+  // A person's own lock, as heard in the workspace (person-sync.ts); the workspace's statements' bodies, to the station
+  // asking (`peer`: none said, none given).
   if (typeof request?.method === "string" && request.method.startsWith("lock.person.")) return answerPerson(personChainsOf(cloud), request, workspace ?? cloud.home() ?? "");
+  if (typeof request?.method === "string" && request.method.startsWith("lock.bodies.")) return answerBodies(cloud, request, workspace ?? cloud.home() ?? "", peer);
   const ws = workspace && workspace !== cloud.home() ? workspace : null;
   const locked = cloud.chain(ws);
   const seq = locked?.state?.seq ?? -1;

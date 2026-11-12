@@ -77,6 +77,68 @@ export function answerPerson(chains: PersonChains, request: any, ws: string): un
   throw new Error("unknown lock method");
 }
 
+/// What this station gives station `peer` of workspace `ws`'s bodies (by hash): every one, to a station its own state
+/// there names (before the chain moved, its chain's; where it waits for the root, none), whatever the control plane's
+/// roster says; to one a removal took out of it, that removal's and its `prev` chain (Cloud `toldOut`); else none.
+export function bodiesGiven(cloud: Cloud, ws: string, peer: string): Map<string, unknown> {
+  const w = ws === cloud.home() ? null : ws;
+  const all = cloud.bodies(w).all();
+  const l = cloud.locked(w);
+  if (l?.state && l.waiting !== true && l.state.stations.has(peer)) return all;
+  const out = new Map<string, unknown>();
+  for (const h of cloud.toldOut(w, peer)) if (all.has(h)) out.set(h, all.get(h));
+  return out;
+}
+
+/// A bodies request of station `peer` of workspace `ws` (the transport checked it is one of its stations):
+/// `lock.bodies.kept` the hashes of those this station gives it, `lock.bodies.get {hashes}` those, `lock.bodies.offer
+/// {bodies}` some, kept as the rules take them (Cloud `takeBodies`). Nothing of another workspace is said or given.
+export function answerBodies(cloud: Cloud, request: any, ws: string, peer: string | null): unknown {
+  const w = ws === cloud.home() ? null : ws;
+  switch (request?.method) {
+    case "lock.bodies.kept":
+      return { hashes: peer === null ? [] : [...bodiesGiven(cloud, ws, peer).keys()] };
+    case "lock.bodies.get": {
+      const given = peer === null ? new Map() : bodiesGiven(cloud, ws, peer);
+      const want = Array.isArray(request.hashes) ? request.hashes.filter((h: unknown): h is string => typeof h === "string") : [];
+      return { bodies: want.flatMap((h: string) => (given.has(h) ? [given.get(h)] : [])) };
+    }
+    case "lock.bodies.offer": {
+      const bodies = Array.isArray(request.bodies) ? request.bodies : [];
+      if (bodies.length > BODIES_OFFERED) throw new Error("too many bodies");
+      return { taken: cloud.takeBodies(w, bodies).taken };
+    }
+  }
+  throw new Error("unknown lock method");
+}
+
+/// How many bodies one offer brings at most.
+const BODIES_OFFERED = 4096;
+
+/// Brings one peer and this station level in workspace `ws`'s bodies: gives it those it lacks of what this station
+/// gives it, and asks for those it says it has that this station lacks. A station from before answers none.
+export async function bodiesSyncWith(cloud: Cloud, call: PeerCall, peer: string, ws: string): Promise<void> {
+  const w = ws === cloud.home() ? null : ws;
+  if (cloud.chain(w) === null) return;
+  let said: any;
+  try {
+    said = await call(peer, ws, { method: "lock.bodies.kept" });
+  } catch (e) {
+    if (unknownMethod(e)) return;
+    throw e;
+  }
+  const theirs = new Set((Array.isArray(said?.hashes) ? said.hashes : []).filter((h: unknown): h is string => typeof h === "string"));
+  const given = bodiesGiven(cloud, ws, peer);
+  const lacks = [...given].filter(([h]) => !theirs.has(h)).map(([, b]) => b);
+  if (lacks.length > 0) await call(peer, ws, { method: "lock.bodies.offer", bodies: lacks.slice(0, BODIES_OFFERED) });
+  const have = cloud.bodies(w);
+  const want = [...theirs].filter((h) => !have.has(h as string));
+  if (want.length === 0) return;
+  const got: any = await call(peer, ws, { method: "lock.bodies.get", hashes: want });
+  const bodies = Array.isArray(got?.bodies) ? got.bodies : [];
+  if (bodies.length > 0 && bodies.length <= BODIES_OFFERED) cloud.takeBodies(w, bodies);
+}
+
 /// Brings one peer and this station level in workspace `ws`: gives it the entries of each log it lacks and takes those
 /// it has more; with a station from before, gives it the chains it has fewer of and takes those it has more of.
 export async function personSyncWith(chains: PersonChains, call: PeerCall, peer: string, ws: string): Promise<void> {
@@ -126,7 +188,7 @@ async function asBefore(chains: PersonChains, call: PeerCall, peer: string, ws: 
   }
 }
 
-/// Whenever a chain kept here moves, or a roster comes, each station of each workspace this one is in is brought level
+/// Whenever a chain kept here moves, a body comes, or a roster comes, each station of each workspace this one is in is brought level
 /// with it in the logs heard there; one that could not be (offline, the line between them down) is tried again,
 /// sooner at first, until it is.
 export function followPersons(cloud: Cloud, chains: PersonChains, call: PeerCall, after: (ms: number, f: () => void) => () => void = wall.after): () => void {
@@ -141,7 +203,7 @@ export function followPersons(cloud: Cloud, chains: PersonChains, call: PeerCall
     const retry = retries.get(key);
     if (level.get(key) === heads || going.has(key) || (retry !== undefined && !retry.due)) return;
     going.add(key);
-    personSyncWith(chains, call, peer, ws).then(
+    personSyncWith(chains, call, peer, ws).then(() => bodiesSyncWith(cloud, call, peer, ws)).then(
       () => {
         // (what it had heard as this began: what it took meanwhile brings it again)
         level.set(key, heads);
@@ -167,7 +229,9 @@ export function followPersons(cloud: Cloud, chains: PersonChains, call: PeerCall
     const st = cloud.state;
     if (stopped || !st || !cloud.peersCurrent) return;
     for (const m of cloud.memberships()) {
-      const heads = headsIn(chains, m.workspace);
+      // (and the bodies it keeps there, and what it lacks: a body come or a statement heard brings it again)
+      const w = m.home ? null : m.workspace;
+      const heads = `${headsIn(chains, m.workspace)}|${cloud.chain(w) === null ? "" : `${cloud.bodies(w).all().size}:${cloud.lacking(w).length}:${cloud.forceWord(w)}`}`;
       for (const p of m.peers) if (typeof p?.id === "string" && p.id !== st.station) bring(p.id, m.workspace, heads);
     }
   };
