@@ -2199,8 +2199,12 @@ fn composer_least(c : @ui.Ctx, draft : String) -> Double {
   let corner = composing.corners.get(draft).unwrap_or(@sf.card_corner)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c, c.width))
   match @motion.measured(c, "composer/content") {
-    Some(box) => foot - box + composer_open_box(c, corner~)
-    None => composer_open_room(c, c.width, corner~)
+    // (its foot round its box, both measured of the same composer: a foot shorter than the box holds them measured of
+    // two, the box a new chat's in its pane's middle, many lines tall, the foot a chat's from before or none yet; that
+    // way round the room came out under 0, a chat's rows over it a height under 0, and the app stopped on the frame a
+    // new chat became its chat, laid out Medium (0.1.8569: newchat_send_wbtest's unfolded))
+    Some(box) if foot >= box => foot - box + composer_open_box(c, corner~)
+    _ => composer_open_room(c, c.width, corner~)
   }
 }
 
