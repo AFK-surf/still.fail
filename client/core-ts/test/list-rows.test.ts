@@ -11,6 +11,7 @@ import { dbName, holds } from "../src/data.ts";
 import { holdLanguage, setCurrent, t as words } from "../src/i18n.ts";
 import type { Topic } from "../src/protocol.ts";
 import type { FakeHost } from "../src/testing.ts";
+import { CHAT_READS } from "../src/db/chat-reads.ts";
 import { LIST_ROW_MAKING } from "../src/views/views.ts";
 import { work, workSince, type Work } from "../src/work.ts";
 import { held } from "./real-size-asked.ts";
@@ -408,6 +409,110 @@ test("a_change_of_one_chat_with_the_list_shown_reads_no_rows_text_but_that_chats
     assert.deepEqual(texts, own);
     assert.deepEqual(rowsOf(u.value).map((r: J) => r.id), rowsOf(was).map((r: J) => r.id));
   } finally {
+    done();
+  }
+});
+
+/// The statements of the chat list's database a change ran, by kind: a declared read by its name (db/chat-reads.ts),
+/// any other by its first words.
+function statementsOf(host: FakeHost): { kinds: () => Record<string, number>; done: () => void } {
+  const sql = sqlOf(host) as J;
+  const names = new Map(Object.entries(CHAT_READS).map(([name, read]) => [read.sql, name]));
+  let kinds: Record<string, number> = {};
+  const count = (q: string) => {
+    const kind = names.get(q) ?? q.replace(/\s+/g, " ").slice(0, 60);
+    kinds[kind] = (kinds[kind] ?? 0) + 1;
+  };
+  const was = { all: sql.all, run: sql.run, exec: sql.exec };
+  for (const m of ["all", "run", "exec"] as const) {
+    const f = was[m].bind(sql);
+    sql[m] = (q: string, p?: unknown) => (count(q), f(q, p));
+  }
+  return {
+    kinds: () => {
+      const out = kinds;
+      kinds = {};
+      return out;
+    },
+    done: () => {
+      for (const m of ["all", "run", "exec"] as const) delete sql[m];
+    },
+  };
+}
+
+/// What the statements of each of three changes with the list shown are, by kind (statementsOf): a declared read runs
+/// only where what it reads of the row changed (chat-reads.ts `by`), the row itself reaching the list by its own key.
+const CHANGES: Record<string, Record<string, number>> = {
+  "an agent's state": {
+    "BEGIN IMMEDIATE": 1,
+    "SELECT ord, json, unread FROM chat WHERE station = ? AND arc": 1,
+    "SELECT id FROM chat_row WHERE station = ?": 1,
+    "INSERT OR REPLACE INTO chat (station, id, archived, ord, thr": 1,
+    "INSERT OR REPLACE INTO chat_row (station, id, key, state, wh": 1,
+    "INSERT INTO list (station, list, confirmed, rev) VALUES (?, ": 1,
+    "COMMIT": 1,
+    "counts": 1,
+    "SELECT rev FROM list WHERE station = ? AND list = 'chats'": 5
+  },
+  "a new message on the first chat": {
+    "BEGIN IMMEDIATE": 1,
+    "SELECT ord, json, unread FROM chat WHERE station = ? AND arc": 1,
+    "INSERT OR REPLACE INTO chat (station, id, archived, ord, thr": 1,
+    "INSERT OR REPLACE INTO chat_row (station, id, key, state, wh": 1,
+    "INSERT INTO list (station, list, confirmed, rev) VALUES (?, ": 1,
+    "COMMIT": 1,
+    "window": 1,
+    "SELECT rev FROM list WHERE station = ? AND list = 'chats'": 5
+  },
+  "a new message on a chat outside the window": {
+    "BEGIN IMMEDIATE": 1,
+    "SELECT ord, json, unread FROM chat WHERE station = ? AND arc": 1,
+    "SELECT id FROM chat_row WHERE station = ?": 1,
+    "INSERT OR REPLACE INTO chat (station, id, archived, ord, thr": 1,
+    "INSERT OR REPLACE INTO chat_row (station, id, key, state, wh": 1,
+    "INSERT INTO list (station, list, confirmed, rev) VALUES (?, ": 1,
+    "COMMIT": 1,
+    "window": 1,
+    "SELECT rev FROM list WHERE station = ? AND list = 'chats'": 5
+  }
+};
+
+test("one_chat_changing_with_the_list_shown_runs_the_window_only_where_what_it_reads_of_the_row_changed", async () => {
+  const { host, base } = await written();
+  await listAnew(host, base);
+  const { t, u, done } = await shown(host, base);
+  const counted = statementsOf(host);
+  const seen: Record<string, Record<string, number>> = {};
+  try {
+    const items = rowsOf(u.value);
+    const change = async (name: string, station: string, id: string, f: (r: J) => J) => {
+      const record = t.data.chat(station, id) as J;
+      counted.kinds();
+      t.data.putChat(station, f(record));
+      await t.read(u, 1);
+      seen[name] = counted.kinds();
+    };
+    // An agent's state (its process): the row's place and the list's rows as they were. (The first not pinned: the
+    // pinned keep their own order.)
+    const top = items.find((r: J) => r.pinned !== true)!;
+    const at = items.indexOf(top);
+    const ids = items.map((r: J) => r.id);
+    await change("an agent's state", top.station, top.id, (r) => ({ ...r, agents: r.agents.map((a: J, i: number) => (i === 0 ? { ...a, process: a.process === "running" ? "cold" : "running" } : a)) }));
+    assert.deepEqual(rowsOf(u.value).map((r: J) => r.id), ids);
+    // A new message on the chat first already: active later, its place the same.
+    await change("a new message on the first chat", top.station, top.id, (r) => ({ ...r, lastActiveAt: t.host.nowMs() + 1000, last: { ...r.last, text: "又一条" } }));
+    assert.deepEqual(rowsOf(u.value).map((r: J) => r.id), ids);
+    assert.equal(rowsOf(u.value)[at].id, top.id);
+    // A new message on a chat outside the window: it comes in first, the last of the window goes.
+    const last = String(sqlOf(host).all("SELECT id FROM chat WHERE station = ? AND archived = 0 ORDER BY last_active LIMIT 1", [UP[1]])[0]![0]);
+    await change("a new message on a chat outside the window", UP[1], last, (r) => ({ ...r, lastActiveAt: t.host.nowMs() + 2000, last: { ...r.last, text: "新来的" } }));
+    assert.equal(rowsOf(u.value)[at].id, last, "it came in first of those not pinned");
+    assert.equal(rowsOf(u.value).length, ids.length, "and the last of the window went");
+    if (process.env.LIST_ROWS_PRINT) console.log(`const CHANGES: Record<string, Record<string, number>> = ${JSON.stringify(seen, null, 2)};`);
+    assert.equal(seen["an agent's state"].window ?? 0, 0, "an agent's state changing ran no window");
+    assert.deepEqual(seen, CHANGES);
+  } finally {
+    counted.done();
     done();
   }
 });

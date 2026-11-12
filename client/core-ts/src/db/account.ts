@@ -21,7 +21,7 @@ import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
 import { CHAT_COLUMNS, CHAT_MADE, type ChatColumnsMade, ensureChatColumns, ensureFilesKept, ensureKept, ensureLetters, ensureListRows, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, versionOf } from "./schema.ts";
-import { CHAT_READS, type ChatRead } from "./chat-reads.ts";
+import { CHAT_READS, rowColumns, type ChatRead } from "./chat-reads.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -65,7 +65,8 @@ export type HeadRow = { station: string; id: string; pinnedAt: number | null; ro
 
 /// A chat row before and after a burst (undefined: not there).
 export type RowChange = { id: string; before: J | undefined; after: J | undefined };
-type ReadChatChange = RowChange & { archived: boolean; between?: J[] };
+/// A row written, for the declared reads (chat-reads.ts): its records and its place (`ord`) before and after.
+type ReadChatChange = RowChange & { archived: boolean; between?: J[]; ordBefore: number | undefined; ordAfter: number | undefined };
 
 /// What a burst changed.
 export type Changes = {
@@ -314,6 +315,9 @@ type ChatCols = { json: string; unread: number | null; thread: number | null; se
 /// A chat row a declared read found (chat-reads.ts): its keys, the read's own columns after them (`cols`, from the
 /// fourth), and its record where the read asked for it (read by its key, from the cache where held).
 export type ChatFound = { station: string; archived: boolean; id: string; cols: SqlRow; record: J | undefined };
+
+/// The rows a declared read's statement gave, each a ChatFound of its own (its record not read).
+export const foundOf = (rows: readonly SqlRow[]): ChatFound[] => rows.map((r) => ({ station: String(r[0]), archived: r[1] === 1, id: String(r[2]), cols: r.slice(3), record: undefined }));
 
 /// The statement that puts a chat's record: the columns every core writes, `state` and `made` this core's, and those
 /// SQLite makes of its JSON (schema.ts CHAT_COLUMNS), of the JSON given last.
@@ -598,7 +602,7 @@ export class AccountDb {
     m.set(id, { id, before: was ? was.before : before, after });
   }
 
-  #tellChatRead(station: string, archived: number, id: string, before: J | undefined, after: J | undefined): void {
+  #tellChatRead(station: string, archived: number, id: string, before: J | undefined, after: J | undefined, ordBefore: number | undefined, ordAfter: number | undefined): void {
     let rows = this.#changes.readChats.get(station);
     if (!rows) {
       rows = new Map();
@@ -609,7 +613,8 @@ export class AccountDb {
     if (was) {
       if (was.after !== undefined) (was.between ??= []).push(was.after);
       was.after = after;
-    } else rows.set(key, { id, archived: archived !== 0, before, after });
+      was.ordAfter = ordAfter;
+    } else rows.set(key, { id, archived: archived !== 0, before, after, ordBefore, ordAfter });
   }
 
   /// A log changed: `put` the numbers put in it, null for anything else.
@@ -1116,15 +1121,17 @@ export class AccountDb {
     delete rest.unread;
     let running = 0;
     for (const a of Array.isArray(row.agents) ? row.agents : []) if (get(a, "process") === "running") running = 1;
+    // (the columns the declared reads are told by as chat-reads.ts rowColumns says them: one rule)
+    const c = rowColumns(row);
     return {
       json: JSON.stringify(rest),
       unread,
-      thread: u64(row.thread),
-      session: str(row.session),
-      clientKey: str(row.clientKey),
-      lastActive: num(row.lastActiveAt) ?? 0,
-      pinnedAt: num(row.pinned),
-      mine: row.mine === true ? 1 : 0,
+      thread: c.thread,
+      session: c.session,
+      clientKey: c.clientKey,
+      lastActive: c.lastActive,
+      pinnedAt: c.pinnedAt,
+      mine: c.mine ? 1 : 0,
       running,
       tone: this.#derive.tone(row),
       asks: this.#derive.asks(row) ? 1 : 0,
@@ -1133,7 +1140,7 @@ export class AccountDb {
     };
   }
 
-  #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined): void {
+  #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined, ordBefore: number | undefined): void {
     const c = this.#chatCols(row);
     // (asked before the record is put: its triggers take the row kept beside it)
     const listed = !archived && this.#listRowHeld(station, id);
@@ -1144,7 +1151,7 @@ export class AccountDb {
     this.#cache.delete(K("lrow", station, id));
     if (listed) this.#keepListRow(station, id, kept);
     this.#loadedList(station, archived ? "archived" : "chats")?.set(id, kept, [ord]);
-    this.#tellChatRead(station, archived, id, before, kept);
+    this.#tellChatRead(station, archived, id, before, kept, before === undefined ? undefined : ordBefore, ord);
     if (!archived) this.#tellChat(station, id, before, kept);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
@@ -1170,24 +1177,24 @@ export class AccountDb {
         const c = this.#chatCols(row);
         if (before && before[1] === places[i] && before[2] === c.json && before[3] === c.unread) return;
         changed = true;
-        this.#putChatRow(station, a, id, row, places[i], before ? this.#chatRow(station, a, id, before[2], before[3]) : undefined);
+        this.#putChatRow(station, a, id, row, places[i], before ? this.#chatRow(station, a, id, before[2], before[3]) : undefined, before ? (before[1] as number) : undefined);
       });
       for (const [id, r] of was) {
         if (seen.has(id)) continue;
         changed = true;
-        this.#deleteChatRow(station, a, id, this.#chatRow(station, a, id, r[2], r[3]));
+        this.#deleteChatRow(station, a, id, this.#chatRow(station, a, id, r[2], r[3]), r[1] as number);
       }
       this.#markListed(station, archived ? "archived" : "chats", confirmed, changed);
     });
   }
 
-  #deleteChatRow(station: string, archived: number, id: string, before: J | undefined): void {
+  #deleteChatRow(station: string, archived: number, id: string, before: J | undefined, ordBefore: number): void {
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
     this.#cache.delete(K("chat", station, archived, id));
     this.#cache.delete(K("lrow", station, id));
     if (!archived) this.#listRowsHeld.get(station)?.delete(id);
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
-    this.#tellChatRead(station, archived, id, before, undefined);
+    this.#tellChatRead(station, archived, id, before, undefined, ordBefore, undefined);
     if (!archived) this.#tellChat(station, id, before, undefined);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
@@ -1201,16 +1208,16 @@ export class AccountDb {
       const c = this.#chatCols(row);
       if (r && r[1] === c.json && r[2] === c.unread) return;
       const ord = r ? (r[0] as number) : ((this.sql.all("SELECT max(ord) FROM chat WHERE station = ? AND archived = 0", [station])[0]?.[0] as number | null) ?? -1) + 1;
-      this.#putChatRow(station, 0, id, row, ord, r ? this.#chatRow(station, 0, id, r[1], r[2]) : undefined);
+      this.#putChatRow(station, 0, id, row, ord, r ? this.#chatRow(station, 0, id, r[1], r[2]) : undefined, r ? (r[0] as number) : undefined);
       this.#bumpRev(station, "chats");
     });
   }
 
   dropChat(station: string, id: string): void {
     this.#write(() => {
-      const r = this.sql.all("SELECT json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
+      const r = this.sql.all("SELECT json, unread, ord FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
       if (!r) return;
-      this.#deleteChatRow(station, 0, id, this.#chatRow(station, 0, id, r[0], r[1]));
+      this.#deleteChatRow(station, 0, id, this.#chatRow(station, 0, id, r[0], r[1]), r[2] as number);
       this.#bumpRev(station, "chats");
     });
   }
@@ -1218,16 +1225,20 @@ export class AccountDb {
   /// What a declared read finds (chat-reads.ts), each row with its record where `wants` says so (every row by default):
   /// read by its key, from the cache where it is held, its JSON read only where it is not.
   chatFound<P>(read: ChatRead<P>, p: P, wants: (cols: SqlRow) => boolean = () => true): ChatFound[] {
-    const rows = this.sql.all(read.sql, read.params(p));
-    const out: ChatFound[] = rows.map((r) => ({ station: String(r[0]), archived: r[1] === 1, id: String(r[2]), cols: r.slice(3), record: undefined }));
-    if (!read.records) return out;
+    const out = foundOf(this.chatCounted(read, p));
+    if (read.records) this.chatRecords(out.filter((f) => wants(f.cols)));
+    return out;
+  }
+
+  /// The records of rows a read found (`record` of each, undefined where it is gone): read by their keys, from the cache
+  /// where held, their JSON read only where not.
+  chatRecords(found: ChatFound[]): void {
     for (const archived of [0, 1]) {
-      const of = out.filter((f) => (f.archived ? 1 : 0) === archived && wants(f.cols));
+      const of = found.filter((f) => (f.archived ? 1 : 0) === archived);
       if (of.length === 0) continue;
       const made = this.#records(of.map((f) => [f.station, f.id]), archived);
       of.forEach((f, i) => (f.record = made[i]));
     }
-    return out;
   }
 
   /// What a declared read of counts or columns answers (chat-reads.ts), as SQLite gives it.
@@ -1461,7 +1472,7 @@ export class AccountDb {
       const last = u64(get(get(before, "last"), "seq"));
       if (last !== null && n < last) continue;
       const after = { ...before, unread: false };
-      this.#putChatRow(station, 0, id, after, r[1] as number, before);
+      this.#putChatRow(station, 0, id, after, r[1] as number, before, r[1] as number);
       this.#bumpRev(station, "chats");
     }
   }

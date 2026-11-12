@@ -72,7 +72,13 @@ columns; the keys it is told by, and those a written row tells, before and after
 not only for what it returns: `test/chat-plans.test.ts` holds every declaration's plan to it (`one`: found by its key
 through an index, no walk of a station's rows; `first`: walked in an index's order, so its LIMIT stops the walk;
 `count`: of covering indexes alone), on a database as the core opens one (it never runs ANALYZE), and its `OVER_PLAN`
-only falls; an index a read needs is made at every open (schema.ts ensureChatColumns). The chat list is a window over the index
+only falls; an index a read needs is made at every open (schema.ts ensureChatColumns). A read is run again only as it
+is told (Data keeps each answer by its keys' revisions, #chatRows), and told only by a write that can change it: a
+station's read says what of a row its answer reads (`by`: whether the row is in it, its order, what it counts), so an
+agent's state changing tells the window nothing, the row reaching the list by its own key (`$chat-row`, the records a
+read found by `$chat-record`); `test/chat-told.test.ts` holds every declaration to it (a write that changes an answer
+told it, and what a view reads is what the statement gives), and its `TOLD_SAME` (told, the answer the same) only
+falls. A read's name is its own. The chat list is a window over the index
 (views.ts `#window`), what is overlaid here (local.ts `overlaid`) read apart by its keys. A new read is a declaration
 there; `scripts/whole-lists.ts` refuses a whole list read, and its `WHOLE` says where one still is and what takes it away.
 A column a read needs is derived as the record is written (SQLite's of its JSON, schema.ts `CHAT_COLUMNS`, held to the
