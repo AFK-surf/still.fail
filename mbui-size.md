@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [edf3b5b3f](https://github.com/AFK-surf/still.fail/commit/edf3b5b3fa563b2c957c1d89cb9cf148a07857a9) station: a lock's stations come to one chain: what | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.75 | 189.85 |
 | [e0dbf4815](https://github.com/AFK-surf/still.fail/commit/e0dbf48150e60e8842d6ae5356addd5b758d65f2) mbui app: on 小屏 a kept place of the bottom bar com | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94 | 163.26 |
 | [eabadd6eb](https://github.com/AFK-surf/still.fail/commit/eabadd6eba08069dfe87aa9b5a553092db783dc0) Align 待处理's chat rows with the long jobs over them | 1.88 | 2.51 | 10.72 | 29.66 | 37.92 | 26.4 | 49.52 | 94.45 | 176.05 |
 | [36b56f216](https://github.com/AFK-surf/still.fail/commit/36b56f21638e00fceb91eb9653cd263970ed735a) screens: a Mac's clicks and wheels carry the modif | 1.87 | 2.51 | 10.72 | 29.65 | 37.91 | 26.39 | 49.52 | 94.27 | 188.24 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [b74057fd8](https://github.com/AFK-surf/still.fail/commit/b74057fd8d0d593b09d966dddb0071e3e5144d50) mbui: each bar set beside the most one Tester of i | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94 | 138.34 |
 | [a02efcc16](https://github.com/AFK-surf/still.fail/commit/a02efcc16431cd4a623b9be3b8e31a3082a0dbdf) test: new_pick_whole says a string's view owned an | 1.85 | 2.47 | 10.37 | 29.12 | 36.62 | 25.92 | 48.37 | 93.83 | 174.41 |
 | [f1beb4691](https://github.com/AFK-surf/still.fail/commit/f1beb4691cf38058bf9a1b541321fad71c757774) app, mbui: Show of a composed value, derive(Show), | 1.85 | 2.47 | 10.37 | 29.11 | 36.61 | 25.9 | 48.33 | 93.78 | 164.71 |
-| [e73742ee2](https://github.com/AFK-surf/still.fail/commit/e73742ee25f11038e9fb8bbba384fd288f9e3a53) app: 对话目录's rows as a pick's: the reader's in the  | 1.85 | 2.47 | 10.36 | 29.1 | 36.58 | 25.9 | 48.33 | 93.78 | 135.43 |
