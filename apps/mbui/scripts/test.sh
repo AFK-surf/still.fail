@@ -514,16 +514,19 @@ for t in $targets; do
     rm -rf "$d"
     return $c
   }
-  # pkgs_run DIR: the small packages' programs put there (PKGS_BUILD_OUT), side by side, each one process of all its
-  # files as moon test runs a package's (one testexe part: no file's seconds said, which scripts/page-seconds.sh would
-  # take for a page's)
+  # pkgs_run DIR: the small packages' programs put there (PKGS_BUILD_OUT), side by side, each on two processes taking
+  # its next file (exe_run's): a process of all a package's files, as moon test runs it, was the first group's longest
+  # run at every rate on main's 14 runs of 2026-11-12, 124-246 s at 120 a second, its pages ending 30-93 s before it
+  # with its four cores to spare, app 1/4 at 120 fps 265 s of its 5 minutes (main 89fc703f 43324051783). The default
+  # rate's run on a runner of its own (APP_GROUP=pkgs) is moon test's still, one process a package.
+  # (testexe says each file's seconds of its package: scripts/page-seconds.sh takes sfapp's alone)
   pkgs_run() {
     local e q k i=0 c=0 pids=() o
     o=$(mktemp -d)
     for e in $(cd "$1" && find . -name '*_test.exe' | sed 's|^\./||' | LC_ALL=C sort); do
       q=$(dirname "$e") k=${e%_test.exe}
       k=${k##*.}
-      exe_run "$1/$e" "$1/$q/__${k}_test_info.json" 1 "stillfail/$q" src/$q/*.mbt > "$o/$i" 2>&1 &
+      exe_run "$1/$e" "$1/$q/__${k}_test_info.json" 2 "stillfail/$q" src/$q/*.mbt > "$o/$i" 2>&1 &
       pids+=($!) i=$((i + 1))
     done
     for e in "${pids[@]}"; do wait $e || c=1; done

@@ -16,7 +16,7 @@ for run in "$@"; do
     while read -r job name; do
       case "$name" in *"at 60 fps"*) col=3 ;; *"at 120 fps"*) col=4 ;; *" fps"*) col=5 ;; *) col=2 ;; esac
       gh api --allow-escape-sequences "repos/AFK-surf/still.fail/actions/jobs/$job/logs" 2>/dev/null |
-        sed -n "s/.*testexe: each file's seconds: //p" | tr ',' '\n' |
+        sed -n "s|.*testexe: each file's seconds of stillfail/sfapp: ||p" | tr ',' '\n' |
         awk -v c=$col 'NF == 2 { print $1, c, $2 }'
     done
 done > "$T/seen"
