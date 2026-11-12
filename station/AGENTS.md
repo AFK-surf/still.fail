@@ -112,6 +112,14 @@
   the home one: `src/cloud/state.ts` `leftJoined`, `src/cloud/presence.ts` `took`), nor by an ask over the mesh, where
   who manages the station may be the plane's word (`src/cli.ts` `nameJoinedLock`). Each of these let a device the lock
   never named in until 2026-11-12.
+- Of each lock (its home's, a joined workspace's, each person's own) it goes by the rules' active chain of what it keeps
+  (`src/cloud/log-keep.ts`; 2026-11-12): everything that reads "the lock" reads that chain, the file's `entries` are it
+  (what an older station reads), `aside` the rest, at most `ASIDE_MOST`. It changes branch only for entries another
+  keeper took (another station of the lock; a device saying `keep`): what a device, a hello or the control plane
+  brings itself is taken only where it goes on from the head, else answered as a fork was before and not kept, its
+  signer at hand to sign it after the head. Today's cores never follow a station that changes branch: they take only
+  what goes on from the chain they hold (`client/core-ts/src/views/lock.ts` readLockOnce, 2026-11-12); refusing a
+  fresh entry decides nothing for any other keeper.
 
 ## Screens
 

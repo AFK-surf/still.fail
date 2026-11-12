@@ -132,10 +132,14 @@ each other level (`station/src/mesh/lock-sync.ts`, `station/src/mesh/person-sync
 no station answers (one from before, all offline), and is sent what is signed for the stations and devices from
 before, never waited on; that goes 7 days after these stations ship.
 
-That sync is being replaced (2026-11-12): stations that took different entries at one place never come back to one
-chain today (`station/test/lock-world-sim.ts` lists what that breaks). What replaces it is modelled, not built, in
+That sync is being replaced (2026-11-12): stations that took different entries at one place never came back to one
+chain (`station/test/lock-world-sim.ts` lists what that broke and what still does). What replaces it is modelled in
 `station/test/lock-fork-choice-model.ts` (each log's fork choice) and `station/test/lock-roster-model.ts` (a workspace
-said in its people's own logs); product code does not follow them yet. What it is built to (the user, 2026-11-12):
+said in its people's own logs). The stations go by the fork choice now (`station/src/cloud/log-keep.ts`), keeping a
+branch only for what another keeper took: a station never makes a fork itself (what a device brings goes on from its
+head, or is refused as before), so it never moves off an entry for one that came to it alone; stations of a lock still
+give each other all they keep and come to one chain. Until the core follows (step 3), a device of today's that read an
+entry the stations moved off stays on it. What it is built to (the user, 2026-11-12):
 
 - The lock's adversary is the cloud and every station but the one asked (`rules/protocol/lock.spthy`): only signatures
   of devices on a lock decide. No cloud and no station orders entries, arbitrates between them, or is the one to follow.

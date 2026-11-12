@@ -1,6 +1,7 @@
 // The rules' fork choice and workspace list (rules/src/lock/chain.mbt, roster.mbt) against the models they were
 // written from, on the worlds the models' own generators draw (rules-fork-check.ts says what is compared). Nothing in
-// the product calls these rules yet (2026-11-12): this is what holds them to the design until something does.
+// the product calls these rules but the station's chains (src/cloud/log-keep.ts, 2026-11-12; lock-forks.test.ts holds
+// a station to the model): this is what holds them to the design.
 //
 // RULES_FORK_SEEDS=<n> worlds a variant and family (by default 32 for the workspace lock, 96 for person logs: several
 // hundred in all), RULES_FORK_STEPS=<n> steps a world (120). Worker threads as lock-fork-choice.test.ts

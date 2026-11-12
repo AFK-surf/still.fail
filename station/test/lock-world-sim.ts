@@ -24,14 +24,16 @@
 // 1); every failing seed is counted and named with the properties it broke. There are two workspaces, each its own
 // lock: every station's home one, and one two of them joined.
 //
-// What the product does not hold yet (2026-11-12): two stations that took different entries at the same place never
-// come back to one chain. `syncWith` (mesh/lock-sync.ts) and the presence socket's `syncLock` (cloud/presence.ts)
-// compare only how far each lock goes: as far as each other they call it level; one further, the other's takeLock
-// refuses what it brings, tried again for ever. So the properties of the end that follow from one chain (E1 one chain,
-// E2 let in alike, E3 no device left on a chain no station keeps, E4 the plane on it, E6 a removal sticks) fail on many
-// seeds. What fails on the unchanged product is in `KNOWN_SEEDS` and `KNOWN_TOLD`, and the tests pass when exactly that
-// fails: anything else that fails fails them, and so does a known failure that holds now (take it out). The checks of
-// every step stay hard: a wrong chain, a forger's entry or someone let in whom the chain does not name fails at once.
+// Until 2026-11-12 two stations that took different entries at the same place never came back to one chain (E1, E2,
+// E5, E6 failed on many seeds). Since the stations keep every entry another keeper took and go by the fork choice
+// (cloud/log-keep.ts), E1, E2 and E6 hold on every seed; what still fails is not the stations' (2026-11-12, step 2 of
+// the lock's new sync): E3, the devices here behave as today's core (a device takes a station's chain only where it
+// goes on from the one it holds, so one that holds the entry that lost its place is left behind: it goes with step 3,
+// the core's fork choice); E4, the plane keeps one chain and only extends it (the entry that lost, where it took that
+// first: it goes with the cloud's copy); E5 where the plane alone took a disable. That is in `KNOWN_SEEDS` and
+// `KNOWN_TOLD` (`WHY`), and the tests pass when exactly that fails: anything else that fails fails them, and so does a
+// known failure that holds now (take it out). The checks of every step stay hard: a wrong chain, a forger's entry or
+// someone let in whom the chain does not name fails at once.
 import assert from "node:assert/strict";
 import { createPrivateKey, createPublicKey, sign as nodeSign } from "node:crypto";
 import { mkdtempSync } from "node:fs";
@@ -330,9 +332,9 @@ class World {
     s.cloud = cloud;
     // What it refuses of entries brought to it (by a device, a station, the plane), said once each in the log.
     const take = cloud.takeLock.bind(cloud);
-    cloud.takeLock = (entries: Entry[], ws: string | null = null) => {
+    cloud.takeLock = (entries: Entry[], ws: string | null = null, fork = false) => {
       try {
-        return take(entries, ws);
+        return take(entries, ws, fork);
       } catch (e) {
         const why = `s${s.i}|${ws ?? WS}|${(e as Error).message}|${entries[0]?.seq}`;
         if (!this.refusals.has(why)) {
@@ -956,18 +958,24 @@ async function fails(steps: Step[], held: boolean[], seed: number): Promise<{ er
   }
 }
 
-/// What the unchanged product does not hold (2026-11-12): the stations take entries first come first kept, and nothing
-/// brings two that took different entries back to one chain. By seed of the drawn worlds (the default 30, from 1), the
-/// end's properties each breaks; by told world, the same. Only shrinks: a world that holds one of these now fails its
-/// test until it is taken out.
-const KNOWN_SEEDS: Record<number, string[]> = {
-  3: ["E1", "E2"], 4: ["E1", "E4"], 5: ["E1", "E2"], 7: ["E1"], 11: ["E1"], 14: ["E3"], 16: ["E1", "E2", "E4"], 17: ["E1"], 18: ["E1", "E2"],
-  20: ["E1", "E2", "E3"], 22: ["E1", "E2"], 23: ["E1", "E2"], 24: ["E3", "E4", "E5"], 25: ["E1", "E2"], 26: ["E1", "E2", "E3"], 27: ["E1"],
-  28: ["E1", "E2", "E3", "E4"], 30: ["E1"],
+/// What the product does not hold (2026-11-12): by seed of the drawn worlds (the default 30, from 1), the end's
+/// properties each breaks; by told world, the same. Each is one of these (`WHY`), the stations agreeing in every one
+/// (seeds 3, 4, 26 and both told worlds checked from their traces, 2026-11-12). Only shrinks: a world that holds one of these now
+/// fails its test until it is taken out.
+const WHY: Record<string, string> = {
+  E3: "a device here holds the entry that lost its place (it signed it, or read it first), as today's core would: step 3 (2026-11-12)",
+  E4: "the plane took the entry that lost first and only extends its one chain: the cloud's copy, gone with it (2026-11-12)",
+  E5: "the plane alone took the owner's disable (no station did: not after their head), which today's core does not sign again: step 3 (2026-11-12, known before it)",
 };
-const KNOWN_TOLD: Record<string, string[]> = {
-  "two at once": ["E1", "E2"],
-  "a removed device signs": ["E1", "E2", "E6"],
+const KNOWN_SEEDS: Record<number, (keyof typeof WHY)[]> = {
+  3: ["E3", "E4"], 4: ["E3", "E4"], 5: ["E3", "E4"], 7: ["E4"], 11: ["E4"], 14: ["E3"], 16: ["E3"], 17: ["E3", "E4"], 18: ["E3", "E4"],
+  20: ["E3", "E4"], 22: ["E3", "E4"], 23: ["E3"], 24: ["E3", "E4", "E5"], 25: ["E3", "E4"], 26: ["E3", "E4"], 27: ["E3"], 28: ["E3", "E4"], 30: ["E4"],
+};
+const KNOWN_TOLD: Record<string, (keyof typeof WHY)[]> = {
+  // (bob's entry, taken first by s1 and the plane, loses to alice's by weight: bob's and carol's apps hold it, the plane too)
+  "two at once": ["E3", "E4"],
+  // (the removal wins at s2 too; the phone taken out holds its own entry, which s2 showed it before the removal came)
+  "a removed device signs": ["E3"],
 };
 /// The seeds `KNOWN_SEEDS` says all of (past them, what a world breaks at the end is told, not failed on).
 const KNOWN_UPTO = 30;
@@ -1039,8 +1047,7 @@ export function namedWorlds(): void {
     }
   });
 
-  // What the product does not hold yet (2026-11-12): E1 and E2, known (KNOWN_TOLD), until forked stations are brought
-  // back to one chain.
+  // The stations come to one chain (E1, E2 hold); E3 and E4 known (KNOWN_TOLD, WHY).
   test("two devices that sign after the same chain at once, each taken first by another station, leave the stations with one chain in the end", async () => {
     const w = new World(3);
     try {
@@ -1056,8 +1063,7 @@ export function namedWorlds(): void {
     }
   });
 
-  // What the product does not hold yet (2026-11-12): E1, E2 and E6, known (KNOWN_TOLD), until forked stations are brought
-  // back to one chain, and that chain keeps the removal.
+  // The stations come to one chain that keeps the removal (E1, E2, E6 hold); E3 known (KNOWN_TOLD, WHY).
   test("a device taken out that signs after the chain from before, at a station that has not heard of it yet, keeps nothing in the end", async () => {
     const w = new World(4);
     try {

@@ -177,7 +177,10 @@ export function lockCommand(data: string, what: "status" | "reset", workspace?: 
   if (lock === null) return say("station.cli.lock.none");
   if (lock.state === null) return say("station.cli.lock.broken");
   const s = lock.state;
-  return say("station.cli.lock.status", { seq: s.seq, hash: s.head.slice(0, 16), members: s.members.size, devices: s.devices.size, stations: s.stations.size });
+  const status = say("station.cli.lock.status", { seq: s.seq, hash: s.head.slice(0, 16), members: s.members.size, devices: s.devices.size, stations: s.stations.size });
+  // (the entries kept off the chain it goes by: cloud/log-keep.ts)
+  const aside = lock.aside?.length ?? 0;
+  return aside === 0 ? status : `${status}${say("station.cli.lock.aside", { n: aside })}`;
 }
 
 /// A joined workspace's lock taken away on this machine, kept beside as <file>.reset-<time>, and the lock joining named

@@ -279,6 +279,41 @@ export function personFold(entries: unknown[], sub: string): Person {
   return out;
 }
 
+/// Why an entry given is off a log's active chain, as the rules say it (rules/src/lock/chain.mbt `Off`; `at` its place
+/// among those given): refused by the log's rules after its parent (`refusal` why); no parent among those that follow;
+/// beaten at its parent by the child chosen (`winner` its hash, by `step`); below a child not chosen (`under` its hash);
+/// the same entry again with another signature.
+export type Off = {
+  at: number;
+  why: "refused" | "no parent" | "beaten" | "below" | "again";
+  refusal?: string;
+  winner?: string;
+  step?: "weight" | "removal" | "tie" | "hash";
+  under?: string;
+};
+/// A log's active chain among entries given in any order, branching: their places on it from the genesis, its hashes,
+/// and why each other one is off it.
+export type Chain = { at: number[]; hashes: string[]; off: Off[] };
+
+function chainOf(out: any): Chain {
+  if ("error" in out) throw new Error(out.error);
+  return { at: out.at, hashes: out.hashes, off: out.off };
+}
+
+/// The workspace lock's active chain among `entries` from its genesis of hash `root`, by the fork choice with votes by
+/// role (rules/src/lock/chain.mbt `lock_chain`), entries taken before (`now` null, as lock.json's are folded). Throws
+/// why there is none.
+export function lockChain(entries: Entry[], root: string): Chain {
+  return chainOf(rules.lock_chain_js(entries, root, "roles", null, crypto));
+}
+
+/// A person log's active chain among `entries` from its genesis of hash `root` (rules/src/lock/chain.mbt
+/// `person_chain`). The rules take a workspace's statements there (`ws.*`), which `personFold` refuses until every
+/// station takes them: the caller leaves them out. Throws why there is none.
+export function personChain(entries: unknown[], root: string): Chain {
+  return chainOf(rules.person_chain_js(entries, root, crypto));
+}
+
 /// The device a connection is by a person's own lock (`entries`, the chain it brought), and that member's role in the
 /// workspace's lock. Throws a LockRefusal why it may not connect.
 export function admitPerson(s: LockState, who: { sub: string; endpoint: string; base?: string; proof?: string }, entries: unknown[]): { device: string; role: Role; person: Person } {

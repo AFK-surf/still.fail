@@ -165,6 +165,7 @@
   "station.cli.badChannel": "channel 必须是 stable 或 beta，不是 {channel}",
   "station.cli.held": "另一个 still.fail station 正在运行这个数据目录（{dir}）；同一台机器上的一个数据目录只能运行一个 station",
   "station.cli.joined": "已加入 workspace「{workspace}」，此 station 名为「{name}」（{id}）",
+  "station.cli.lock.aside": "，另有 {n} 条记录不在所用的链上",
   "station.cli.lock.broken": "安全模式：此 station 的 lock.json 无效，所有连接均被拒绝。运行 `stillfail lock reset` 恢复为由 still.fail 服务器管理访问",
   "station.cli.lock.none": "安全模式：未开启（由 still.fail 服务器管理访问）",
   "station.cli.lock.pending": "收到 workspace 的受信任清单后，此 station 将进入安全模式。请在 still.fail 中验证此 station，安全码为 {code}",
