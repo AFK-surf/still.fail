@@ -39,7 +39,9 @@ case " $pkgs " in *" mbui/ui "*) light="$light ui/ui.blackbox_test" ;; esac
 export MBC_LIGHT_TESTS="$light"
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 # (what the run says of each file's bars and of how what moves goes, MOTION lines (src/ui/tester_fps.mbt: motion_runs),
-# kept whole in MOTION_OUT where it is given and out of what is shown: past LINES_OUT's tail, as the app's test.sh)
-moon_test_native "${args[@]}" 2>&1 | grep -v "$F" | awk -v out="${MOTION_OUT:-}" '/^MOTION / { if (out != "") print >> out; next } { print }' | tail -${LINES_OUT:-60}
+# kept whole in MOTION_OUT where it is given and out of what is shown: past LINES_OUT's tail, as the app's test.sh; and
+# each frame said, where the two runs comparing kept rows with rows drawn anew say them (MBUI_TEST_FRAMES=1), kept whole
+# in KEPT_OUT the same: scripts/kept_compare.sh)
+moon_test_native "${args[@]}" 2>&1 | grep -v "$F" | awk -v out="${MOTION_OUT:-}" -v kept="${KEPT_OUT:-}" '/^MOTION / { if (out != "") print >> out; next } /^KEPT / { if (kept != "") print >> kept; next } { print }' | tail -${LINES_OUT:-60}
 r=${PIPESTATUS[0]}
 exit $r

@@ -35,3 +35,21 @@ fn motion_bars_said(_check : String, _bars : Array[(String, Int)]) -> Unit {
 fn motion_known_said(_check : String, _file : String, _n : Int, _bar : Int, _what : String) -> Unit {
   ()
 }
+
+///|
+/// (none of the two runs here either: test_keeps_none, tester_fps.mbt)
+fn test_keeps_none() -> Bool {
+  false
+}
+
+///|
+/// (none said: test_frames_said, tester_fps.mbt)
+fn test_frames_said() -> Bool {
+  false
+}
+
+///|
+/// Which frames are said whole (tester_rows_kept.mbt's kept_dump_keys): MBUI_TEST_FRAME_DUMP.
+fn test_frame_dump() -> String {
+  ""
+}

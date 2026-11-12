@@ -1666,6 +1666,27 @@ pub fn round_trip_again(
 fn init {
   // (a made-up core's place given back as every run begins: the engine's, or what the run sets)
   @ui.on_reset(fn() { @core.serve_end() })
+  // (where a run says each frame for the two runs comparing kept rows with rows drawn anew, what the app sends its
+  // core told the Tester as it goes, by the core's own trace, the app's path as it is: mbui's tester_rows_kept.mbt)
+  @ui.on_reset(fn() {
+    if @ui.frames_said() {
+      @core.trace_to(core_sent_told)
+    }
+  })
+}
+
+///|
+/// A line of the core's trace (core's trace.mbt) told the Tester where it is a message out: the message and the bytes
+/// beside it as the trace has them; not its wall clock (`w`), which is not the Tester's.
+fn core_sent_told(line : String) -> Unit {
+  let parsed = @json.parse(line) catch { _ => return }
+  guard parsed is Object(m) && m.get("out") is Some(out) else { return }
+  let bytes = match (m.get("b"), m.get("bn")) {
+    (Some(b), _) => " " + b.stringify()
+    (_, Some(n)) => " +" + n.stringify()
+    _ => ""
+  }
+  @ui.kept_core_told(out.stringify() + bytes)
 }
 
 ///|
