@@ -110,6 +110,10 @@ export type TooOld = "station" | "app";
 /// Whether a station's refusal is for a security mode (DownCause `lock`).
 export const lockRefusal = (e: { code: string }) => e.code === "lock_unconfirmed" || e.code === "lock_station";
 
+/// What a station says as it ends a device's connection that its lock no longer lets in (station/src/mesh/serve.ts
+/// `gone`: the device taken out, or its member).
+export const LOCK_ENDED = "lock_unconfirmed";
+
 /// What a station's `/events` stream is opened for beyond the sessions at work (which every station since 0.1.6968
 /// follows itself, FOLLOWS): host samples, the jobs' logs, the logins' terminals.
 export type EventsFor = { host: boolean; logs: [string, number][]; logins?: string[] };
@@ -521,6 +525,9 @@ export class Links {
       let brief = 0;
       let costly = 0;
       let reached = false;
+      // Whether a stream the station ended for its lock is opened again at once (`LOCK_ENDED`): once, and again only after
+      // a station refused this device for its lock since (what the try at once was for).
+      let mayHurry = true;
       for (;;) {
         // Replaced before it opened: its successor asks instead.
         if (link.generation !== generation) return;
@@ -592,6 +599,7 @@ export class Links {
               // It answered, but no: it is there. Not reached at all: coming back, or down. Refused for a security mode:
               // down for this device, and why (DownCause `lock`). Answered 426: which side is too old (TooOld).
               const lock = lockRefusal(error);
+              if (lock) mayHurry = true;
               const state = lock ? "offline" : error.status !== undefined ? "error" : reached && misses < MISSES ? "reconnecting" : "offline";
               const old: TooOld | null = state === "error" && error.status === 426 ? (error.code === "station_too_old" ? "station" : "app") : null;
               record(core.host, "link miss", () => `${stationTag(address)} misses=${misses}/${LONG_MISSES} cloud=${core.status.cloudDown() ? "down" : "up"} -> ${state}: ${said(error.message)}`);
@@ -707,7 +715,12 @@ export class Links {
             // so do brief ones in a row (STREAM_HELD_MS).
             const standing = why !== GONE && why !== NETWORK && (self.#requests.wire.standing?.(link.addr) ?? false);
             if (!standing) self.setLink(address, { state: "reconnecting", message: why === "ended" ? t("station.core.disconnected") : why });
-            return { again: woke || (standing && lasted >= RECONNECT_MS && brief <= 1), why, lasted, bytes: opened.success.came?.bytes ?? read, read, events } as const;
+            // Ended by the station for its lock after it stood (this device or its member taken out): the next try is
+            // refused, and its refusal is what shows the waiting page (views/lock.ts `refused`, from the entries it
+            // tells), so it is made at once, not RECONNECT_MS later (2026-11-11: up to 2.3 s of 正在重连 first).
+            // Nothing else ends a connection so: a station restarting or a way gone waits as before.
+            const hurry = !woke && lasted >= RECONNECT_MS && opened.success.ended?.() === LOCK_ENDED;
+            return { again: woke || (standing && lasted >= RECONNECT_MS && brief <= 1), hurry, why, lasted, bytes: opened.success.came?.bytes ?? read, read, events } as const;
           }),
         );
         if ("done" in ended) return;
@@ -716,6 +729,11 @@ export class Links {
             ? { why: ended.why ?? "", lasted: ended.lasted ?? 0, bytes: ended.bytes ?? 0, read: ended.read ?? 0, events: ended.events ?? 0 }
             : { why: ended.why ?? "", lasted: 0, bytes: 0, read: 0, events: 0 };
           if (ended.again) continue;
+          if ("hurry" in ended && ended.hurry && mayHurry) {
+            mayHurry = false;
+            record(core.host, "link wait", () => `${stationTag(address)} 0s (ended for the lock) why=${said(ended.why ?? "")}`);
+            continue;
+          }
         } else previous = { why: ended.failed, lasted: 0, bytes: 0, read: 0, events: 0 };
         // Not reached: less and less often, and seldom while still.fail cloud says it is not online or it has not been
         // reached for long. A UI back after being away wants it now, and so does the cloud saying it is back, or the

@@ -2437,7 +2437,12 @@ export class MeshWire implements StationWire {
       // How fast it comes tells how fast that way is; not an event stream's, which comes as things happen.
       const streams = head.headers.some(([k, v]) => k.toLowerCase() === "accept" && v.includes("text/event-stream"));
       const timed = relay !== null && !streams ? mesh.timed(key, relay, reply.body) : reply.body;
-      return { status: reply.status, headers: reply.headers, body: timed, via: l.path(), relay: relay !== null ? relayHost(relay) : null };
+      // Why the station ended the connection it came on, as its close said (shell, iroh-wasm and node-iroh give it).
+      const ended = () => {
+        const r = l.conn.closeReason();
+        return r !== null && r.kind === "application" ? r.reason : null;
+      };
+      return { status: reply.status, headers: reply.headers, body: timed, via: l.path(), relay: relay !== null ? relayHost(relay) : null, ended };
     }), refusedFor);
   }
 

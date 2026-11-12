@@ -12,7 +12,10 @@ export type RequestHead = { method: string; path: string; headers: [string, stri
 /// A station's answer: status, headers, and the body as it arrives (open while the request's scope is); how it came
 /// (`relay`, `direct`), when known.
 /// `via`: relay or direct, on a mesh link; `relay`: the relay's host, through one.
-export type WireReply = { status: number; headers: [string, string][]; body: Pull<Uint8Array>; via: string | null; relay?: string | null };
+/// `ended`: why the station ended the connection it came on, as it said in closing it (its reason, station/src/mesh/
+/// serve.ts: `lock_unconfirmed`, `credential_revoked`…); null while the connection is open or it went otherwise (a
+/// timeout, the network). None on a wire with no connection of its own.
+export type WireReply = { status: number; headers: [string, string][]; body: Pull<Uint8Array>; via: string | null; relay?: string | null; ended?: () => string | null };
 
 export function replyHeader(reply: { headers: [string, string][] }, name: string): string | undefined {
   return reply.headers.find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1];
