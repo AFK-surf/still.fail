@@ -38,6 +38,15 @@ export const work = {
   /// Records cloned whole into a row (views.ts #chatRow `whole`: a chat's own row, made for one chat at a time). A list's
   /// rows clone none (#listRow takes of its record what it holds, the values shared).
   rowsCloned: 0,
+  /// Rows a chat list took as kept beside their records (db/account.ts `chat_row`, views.ts listRowKey): neither made
+  /// nor their records read.
+  rowsKept: 0,
+  /// Rows of a list kept beside their records as these are written (db/account.ts #keepListRow) or after a list made
+  /// them (views.ts #keepMade).
+  rowsWritten: 0,
+  /// Items of keyed lists put through their shape as they go out (output.ts), not taken as made beside them
+  /// (conform.ts shapedBeside).
+  conformed: 0,
   /// What a chat's row offers only as it is pressed, held, swiped or pointed at, made of its record (views.ts #chatRow
   /// whole, #rowMenu): its menu's (who may share it, publish it, its links in Slack and Feishu), its swipe's question, its
   /// watch's words. A list's rows make none: a chat's whole row (`chatRow`) does, made for one chat at a time.

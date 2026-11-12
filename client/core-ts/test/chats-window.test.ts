@@ -178,12 +178,14 @@ test("a window raised from 20 to 40 makes the 20 rows added and sends them alone
   assert.equal(out.length, 20);
   const sent = messages.get(1)!.length;
   const made = work.rows;
+  const kept = work.rowsKept;
   t.window(ALL, 40);
   await t.host.time.pass(100);
   const now = valueOf(t, ALL);
   assert.equal(rowsOf(now).length, 40);
   assert.equal(now.more, 380);
-  assert.equal(work.rows - made, 20, "the rows added made, no other");
+  // (no list read them before, so none is kept beside its record, db/account.ts `chat_row`: made as they are read)
+  assert.deepEqual([work.rows - made, work.rowsKept - kept], [19, 0], "the rows added made, no other: the first of them made with the window's");
   rowsOf(now).slice(0, 20).forEach((r, i) => assert.equal(r, out[i], `row ${i} the same object`));
   const grew = messages.get(1)!.slice(sent);
   assert.equal(grew.length, 1, "one message");

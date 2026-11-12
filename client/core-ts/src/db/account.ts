@@ -20,7 +20,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureLetters, ensureListRows, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -40,6 +40,24 @@ export type Derive = { tone(row: J): string | null; asks(row: J): boolean };
 /// read); `judge`, the verdict on an overview as the database holds it (the record `stationDoc` gives, so what judging
 /// it made serves its readers).
 export type OverviewFit = { readonly shapes: string; judge: (station: string, overview: J) => boolean };
+
+/// A listed chat's row as its list shows it, kept beside its record (`chat_row`): whole, as the core reads it, and as it
+/// goes out (`sent`); what its stand-in says of it (`state`); the key of what else it was made with (`key`).
+export type ListRow = { readonly key: string; readonly state: string | null; readonly whole: J; readonly sent: J };
+
+/// How the views make a listed chat's row (views.ts #listRow), for each database to make it as its record is written
+/// and keep it beside it (`chat_row`): `key`, what else a row of `station` is made with now, null while that is not
+/// there (its workspace not read); `make`, its row of `record` as the list would make it under that key, null where
+/// the list makes it as it is read (what is changing here, asked here, opened from another chat); `taken`, a row read
+/// back from its column, made what a row made is (frozen, its shape beside it).
+export type ListRowMaker = {
+  key(station: string): string | null;
+  make(station: string, record: J): { state: string | null; whole: J; sent: J } | null;
+  taken(whole: J, sent: J): void;
+};
+
+/// What a list reads first of a chat (listHead): its row kept beside it under the key in force, else its record.
+export type HeadRow = { station: string; id: string; pinnedAt: number | null; row: ListRow | null; record: J };
 
 /// A chat row before and after a burst (undefined: not there).
 export type RowChange = { id: string; before: J | undefined; after: J | undefined };
@@ -319,6 +337,17 @@ export class AccountDb {
   /// How this core judges an overview as it is written, and keeps the verdict beside it (`station_fit`, made with
   /// `station_part`); none: judged as it is read, nothing kept.
   fit: OverviewFit | null = null;
+  /// How the views make a listed chat's row, to keep it beside its record as it is written (`chat_row`); none: rows are
+  /// made as they are read, nothing kept.
+  listRows: ListRowMaker | null = null;
+  /// Whether rows are kept beside their records (`chat_row` is there; it could not be made without room, or the
+  /// database is a newer core's).
+  #listRowsKept = false;
+  /// The chats of each station that have a row kept beside their record (`chat_row` as it was when the station's first
+  /// record of this run was written, and what was kept since): the ones a list read. A record written has its row made
+  /// with it only if it is one of these (#keepListRow), so what a write costs follows what lists showed, not how many
+  /// chats a station has.
+  readonly #listRowsHeld = new Map<string, Set<string>>();
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
   readonly #runner: Runner;
@@ -378,6 +407,12 @@ export class AccountDb {
         for (const [column] of PART_COLUMNS) this.#columns.add(column);
       } catch {
         // No room to make it: each part is read of its overview, by SQLite, this time.
+      }
+      try {
+        ensureListRows(sql);
+        this.#listRowsKept = true;
+      } catch {
+        // No room to make it: a list's rows are made as they are read, this time.
       }
       try {
         if (ensureSlackSaid(sql)) this.#fillSlackSaid();
@@ -474,6 +509,7 @@ export class AccountDb {
       changes.firstChats.clear();
       // What was read is not what is kept any more.
       this.#cache.clear();
+      this.#listRowsHeld.clear();
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#logSpans.clear();
@@ -1070,12 +1106,17 @@ export class AccountDb {
 
   #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined): void {
     const c = this.#chatCols(row);
+    // (asked before the record is put: its triggers take the row kept beside it)
+    const listed = !archived && this.#listRowHeld(station, id);
     this.#run(
       "INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.json],
     );
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
+    // (its row kept beside it went with it, by the triggers: made again of it, where it is listed)
+    this.#cache.delete(K("lrow", station, id));
+    if (listed) this.#keepListRow(station, id, kept);
     this.#loadedList(station, archived ? "archived" : "chats")?.set(id, kept, [ord]);
     this.#tellChatRead(station, archived, id, before, kept);
     if (!archived) this.#tellChat(station, id, before, kept);
@@ -1117,6 +1158,8 @@ export class AccountDb {
   #deleteChatRow(station: string, archived: number, id: string, before: J | undefined): void {
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
     this.#cache.delete(K("chat", station, archived, id));
+    this.#cache.delete(K("lrow", station, id));
+    if (!archived) this.#listRowsHeld.get(station)?.delete(id);
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
     this.#tellChatRead(station, archived, id, before, undefined);
     if (!archived) this.#tellChat(station, id, before, undefined);
@@ -1203,6 +1246,107 @@ export class AccountDb {
     const found = this.sql.all(`SELECT station, id FROM chat WHERE ${where}`, [...stations, limit]);
     const made = this.#chatRowsFound(found, 0, () => this.sql.all(`SELECT station, id, json, unread FROM chat WHERE ${where}`, [...stations, limit]));
     return found.flatMap((r, i): [string, J][] => (made[i] === undefined ? [] : [[String(r[0]), made[i]]]));
+  }
+
+  /// Whether a chat of `station` has a row kept beside its record: one a list read (#listRowsHeld, read of `chat_row`
+  /// once a station a run, before its first record of the run is written).
+  #listRowHeld(station: string, id: string): boolean {
+    if (!this.#listRowsKept || this.listRows === null) return false;
+    let held = this.#listRowsHeld.get(station);
+    if (held === undefined) {
+      held = new Set(this.sql.all("SELECT id FROM chat_row WHERE station = ?", [station]).map((r) => String(r[0])));
+      this.#listRowsHeld.set(station, held);
+    }
+    return held.has(id);
+  }
+
+  /// A listed chat's row made of `record` as it is written, kept beside it (`chat_row`), for a chat a list read (its
+  /// row was kept: #listRowHeld; one no list read yet is made as a list first reads it, and kept then: keepListRow),
+  /// where its list's key can be said now and its row is one a list keeps (ListRowMaker). In the burst writing the
+  /// record, after it (whose triggers took the one kept before).
+  #keepListRow(station: string, id: string, record: J): void {
+    if (!this.#listRowsKept || this.listRows === null) return;
+    const key = this.listRows.key(station);
+    if (key === null) return;
+    const made = this.listRows.make(station, record);
+    if (made === null) return;
+    this.#putListRow(station, id, { key, ...made });
+  }
+
+  #putListRow(station: string, id: string, row: ListRow): void {
+    work.rowsWritten++;
+    this.#run("INSERT OR REPLACE INTO chat_row (station, id, key, state, whole, sent) VALUES (?, ?, ?, ?, ?, ?)", [station, id, row.key, row.state, JSON.stringify(row.whole), JSON.stringify(row.sent)]);
+    this.#cache.set(K("lrow", station, id), row);
+    this.#listRowsHeld.get(station)?.add(id);
+  }
+
+  /// A row a list made as it read it (`made`, of `record` under `key`), kept beside its record: only while that is still
+  /// the record held (as it was read), else nothing (it was written since, its own row with it).
+  keepListRow(station: string, id: string, record: J, row: ListRow): void {
+    if (!this.#listRowsKept || this.readOnly) return;
+    if (this.#cache.get(K("chat", station, 0, id)) !== record) return;
+    const kept = this.#cache.get(K("lrow", station, id)) as ListRow | undefined;
+    if (kept !== undefined && kept.key === row.key) return;
+    this.#write(() => this.#putListRow(station, id, row));
+  }
+
+  /// The row kept beside a listed chat's record under `key`: as it was read or kept this run, else read (by its key, and
+  /// only where it is kept under that one).
+  keptListRow(station: string, id: string, key: string): ListRow | undefined {
+    const kept = this.#cache.get(K("lrow", station, id)) as ListRow | undefined;
+    if (kept !== undefined) return kept.key === key ? kept : undefined;
+    if (!this.#listRowsKept || this.listRows === null) return undefined;
+    const r = this.sql.all("SELECT state, whole, sent FROM chat_row WHERE station = ? AND id = ? AND key = ?", [station, id, key])[0];
+    if (r === undefined || typeof r[1] !== "string" || typeof r[2] !== "string") return undefined;
+    const row = this.#readListRow(key, r[0], r[1], r[2]);
+    this.#cache.set(K("lrow", station, id), row);
+    return row;
+  }
+
+  #readListRow(key: string, state: SqlValue, whole: string, sent: string): ListRow {
+    work.rowsKept++;
+    const w = frozen(JSON.parse(whole));
+    const t = frozen(JSON.parse(sent));
+    this.listRows!.taken(w, t);
+    return { key, state: typeof state === "string" ? state : null, whole: w, sent: t };
+  }
+
+  /// The rows of these stations a list shows first (chatHead's), each its row kept beside it under its station's key in
+  /// force (`keys`), else its record: a record's JSON is read only where no row is kept under that key.
+  listHead(stations: string[], limit: number, mine: boolean, keys: Map<string, string>): HeadRow[] {
+    if (stations.length === 0) return [];
+    if (!this.#listRowsKept || this.listRows === null) return this.chatHead(stations, limit, mine).map(([station, record]) => ({ station, id: String(get(record, "id")), pinnedAt: num(get(record, "pinned")), row: null, record }));
+    const marks = stations.map(() => "?").join(", ");
+    const where = `c.archived = 0 AND c.station IN (${marks})${mine ? " AND c.mine = 1" : ""} ORDER BY c.pinned_at DESC, c.last_active DESC LIMIT ?`;
+    const said = JSON.stringify(Object.fromEntries(keys));
+    // (a row kept under another key read for nothing: its key alone)
+    const found = this.sql.all(
+      `SELECT c.station, c.id, c.pinned_at, r.key, r.state, CASE WHEN r.key = json_extract(?, '$."' || c.station || '"') THEN r.whole END, CASE WHEN r.key = json_extract(?, '$."' || c.station || '"') THEN r.sent END FROM chat AS c LEFT JOIN chat_row AS r ON r.station = c.station AND r.id = c.id WHERE ${where}`,
+      [said, said, ...stations, limit],
+    );
+    const out: HeadRow[] = [];
+    const missing: SqlRow[] = [];
+    for (const r of found) {
+      const station = String(r[0]);
+      const id = String(r[1]);
+      const key = keys.get(station);
+      const cached = this.#cache.get(K("lrow", station, id)) as ListRow | undefined;
+      let row: ListRow | undefined = cached !== undefined && cached.key === key ? cached : undefined;
+      if (row === undefined && key !== undefined && r[3] === key && typeof r[5] === "string" && typeof r[6] === "string") {
+        row = this.#readListRow(key, r[4], r[5], r[6]);
+        this.#cache.set(K("lrow", station, id), row);
+      } else if (row !== undefined) work.rowsKept++;
+      if (row === undefined) missing.push(r);
+      out.push({ station, id, pinnedAt: typeof r[2] === "number" ? r[2] : null, row: row ?? null, record: undefined });
+    }
+    if (missing.length > 0) {
+      // (theirs alone, by their keys, whatever their number: #byKey's `all` is these too)
+      const theirs = () => this.sql.all("SELECT c.station, c.id, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = json_extract(k.value, '$[0]') AND c.archived = 0 AND c.id = json_extract(k.value, '$[1]')", [JSON.stringify(missing.map((r) => [r[0], r[1]]))]);
+      const records = this.#chatRowsFound(missing.map((r) => [r[0], r[1]]), 0, theirs);
+      const by = new Map(missing.map((r, i) => [K(String(r[0]), String(r[1])), records[i]]));
+      for (const h of out) if (h.row === null) h.record = by.get(K(h.station, h.id));
+    }
+    return out.filter((h) => h.row !== null || h.record !== undefined);
   }
 
   /// How many sidebar rows these stations have.
@@ -2345,6 +2489,7 @@ export class AccountDb {
       }
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
+      this.#listRowsHeld.clear();
       this.#logPutsForgotten();
       this.#logCache.clear();
       this.#logIndices.clear();

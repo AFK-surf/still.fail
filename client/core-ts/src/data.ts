@@ -7,7 +7,7 @@
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
 import { OVERVIEW_CHAT } from "./db/schema.ts";
-import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
+import { AccountDb, LIST_OF, type Changes, type Derive, type HeadRow, type ListKind, type ListRow, type ListRowMaker, type LogTable, type OverviewFit, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
 import type { MdStore } from "./markdown.ts";
@@ -300,6 +300,8 @@ export class Data {
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
   /// How the views judge whether this core can read an overview (judgeOverviews).
   #fit: OverviewFit | null = null;
+  /// How the views make a listed chat's row (keepListRows).
+  #listRows: ListRowMaker | null = null;
   /// Sign-ins for new profiles as their station answered a step of them (`login.new`, `login.code`), by station and
   /// login: shown in its overview's `logins` while the overview still has the login where the step found it (`from`: the
   /// state it moved on from; null, not listed yet). A code sent showed its field again, empty, until the station's next
@@ -409,6 +411,7 @@ export class Data {
       if (db.readOnly) note = { kind: "newer", detail: null };
       db.onCommit = (changes) => this.#committed(changes);
       db.fit = this.#fit;
+      db.listRows = this.#listRows;
       db.onFull = (full, error) => this.#setNote(sub, full ? { kind: "full", detail: error } : null);
       this.#dbs.set(sub, db);
       if (note) this.#setNote(sub, note);
@@ -1170,6 +1173,35 @@ export class Data {
   judgeOverviews(fit: OverviewFit | null): void {
     this.#fit = fit;
     for (const db of this.#dbs.values()) db.fit = fit;
+  }
+
+  /// How the views make a listed chat's row, for each database to make it as its record is written and keep it beside it
+  /// (account.ts #keepListRow, `chat_row`).
+  keepListRows(maker: ListRowMaker | null): void {
+    this.#listRows = maker;
+    for (const db of this.#dbs.values()) db.listRows = maker;
+  }
+
+  /// The rows of these stations a list shows first, each its row kept beside it under its station's key (`keys`), else
+  /// its record (account.ts listHead), across their databases.
+  listHead(stations: string[], limit: number, mine: boolean, keys: Map<string, string>): HeadRow[] {
+    const by = new Map<AccountDb, string[]>();
+    for (const s of stations) {
+      const db = this.of(s);
+      if (!db) continue;
+      by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    return [...by].flatMap(([db, list]) => db.listHead(list, limit, mine, keys));
+  }
+
+  /// The row kept beside a listed chat's record under `key`, where it was read or kept this run (account.ts).
+  keptListRow(station: string, id: string, key: string): ListRow | undefined {
+    return this.of(station)?.keptListRow(station, id, key);
+  }
+
+  /// A row a list made as it read it, kept beside its record while that is the one held (account.ts keepListRow).
+  keepListRow(station: string, id: string, record: unknown, row: ListRow): void {
+    this.of(station)?.keepListRow(station, id, record, row);
   }
 
   /// Whether this core can read a station's overview as kept beside it (account.ts overviewFit): undefined, none held;
