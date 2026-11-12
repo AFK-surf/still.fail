@@ -232,16 +232,16 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 /// (tree_laid_spare), each as a new one; `fresh` (a Tester's look at it, tester_corners.mbt): each worked out anew
 /// (Tree::laid_held_toward, Node::new), nothing kept touched.
 /// `facts`: each besides as it is said to be laid out and its words as drawn (Ctx::tree_facts,
-/// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else. `steady`: which a scroller holds
-/// and moves (tree_scroll_held_at), for sizes steady. Which of the tree's each of the frame's nodes is (tree_frame_ids) is
-/// said while `f` runs, where it is not `laid` (none of whose asks reads it), and let go after.
+/// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else. Which a scroller holds and moves
+/// (tree_scroll_held_at: sizes steady's, and what the corner rule takes for scrolled) is said as well. Which of the
+/// tree's each of the frame's nodes is (tree_frame_ids) is said while `f` runs, where it is not `laid` (none of whose
+/// asks reads it), and let go after.
 fn[T] Ctx::with_tree_nodes(
   self : Ctx,
   f : () -> T,
   laid? : Bool = false,
   fresh? : Bool = false,
   facts? : Bool = false,
-  steady? : Bool = false,
 ) -> T {
   let tree = match view_app.val {
     Some(t) if !old_whole.val => t
@@ -366,7 +366,7 @@ fn[T] Ctx::with_tree_nodes(
         corner_scale_at[i] = s
       }
     }
-    if steady && tree.is_scroll_held(d.id) {
+    if tree.is_scroll_held(d.id) {
       tree_scroll_held_at.add(i)
     }
     if facts {
@@ -1176,14 +1176,17 @@ fn Ctx::words_cut(self : Ctx, i : Int) -> String? {
 /// What scrolls between node `i` and its ancestor `p` (`i` in what it holds): whether something scrolls up and down (a
 /// list, a box kept to a height: Ctx::capped), and whether something scrolls sideways (Ctx::sideways). A box kept to
 /// a height or scrolled sideways that has nothing to scroll (Ctx::scroll_still) does not: what it holds stays where it
-/// is, as in any box.
+/// is, as in any box. A node of the tree's that scrolls scrolls only the one node it holds and moves
+/// (tree_scroll_held_at), not what it holds beside that (its bar, a page's list's foot pinned over the foot of what
+/// shows), which stands where it is as anything does.
 fn Ctx::scrolls_between(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
   let mut up_down = false
   let mut across = false
+  let mut child = i
   let mut q = self.nodes[i].parent
   while q >= 0 && q != p {
     let n = self.nodes[q]
-    if n.kind == kind_list || n.tree_scrolls {
+    if n.kind == kind_list || (n.tree_scrolls && tree_scroll_held_at.contains(child)) {
       up_down = true
     } else if n.sideways {
       match sideways.get(n.id) {
@@ -1192,6 +1195,7 @@ fn Ctx::scrolls_between(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
         _ => across = true
       }
     }
+    child = q
     q = n.parent
   }
   (up_down, across)
@@ -2097,6 +2101,7 @@ fn Ctx::corner_scrolled_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
 /// its last built and at its foot).
 fn Ctx::scrolled_at_ends(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
   let mut sc = -1
+  let mut child = i
   let mut q = self.nodes[i].parent
   while q >= 0 && q != p {
     let n = self.nodes[q]
@@ -2105,9 +2110,11 @@ fn Ctx::scrolled_at_ends(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
         Some(st) => st.vertical
         None => false
       })
-    if n.kind == kind_list || n.tree_scrolls || vertical_box {
+    // (as Ctx::scrolls_between has it: only the one node of the tree's that scrolls holds and moves)
+    if n.kind == kind_list || (n.tree_scrolls && tree_scroll_held_at.contains(child)) || vertical_box {
       sc = q
     }
+    child = q
     q = n.parent
   }
   if sc < 0 {

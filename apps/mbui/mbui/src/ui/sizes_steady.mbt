@@ -259,7 +259,7 @@ fn sizes_steady_fault(
 /// however far it can go now (Tree::is_scroll_held): what is in one measured from its top all the while it is in one,
 /// never switched to the window's as what it holds comes to fit in it or grows past it on its way, and never what
 /// stands beside it in the scroller (its bar, a page's list's pinned foot: Ctx::sizes_steady_faults).
-// kept across runs: filled and emptied round one asking of sizes steady (Ctx::with_tree_nodes's `steady`)
+// kept across runs: filled and emptied round each asking of the frame with the tree's nodes (Ctx::with_tree_nodes)
 let tree_scroll_held_at : Set[Int] = Set([])
 
 ///|
@@ -274,7 +274,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
   let hand_now = rows_steady.hand != sizes_steady.hand
   sizes_steady.hand = rows_steady.hand
   let here : Set[(Int, Int, Int64, Bool)] = Set([])
-  self.with_tree_nodes(steady=true, fn() {
+  self.with_tree_nodes(fn() {
     let tree = view_tree()
     // (one ident twice in the frame: who either is, unsaid)
     let count : Map[Int, Int] = Map([])
