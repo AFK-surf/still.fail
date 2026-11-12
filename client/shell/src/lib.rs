@@ -1422,11 +1422,19 @@ impl Inner {
         // A directory's names, with their kinds as the directory says them (`types`: [name, "file" | "dir" | "link" |
         // "other"], links not followed), in Node's readdirSync's order (libuv sorts them by their bytes, but on Windows);
         // null when it cannot be read.
+        // `disk`: in the order the file system gives them (Node's opendirSync, Rust's read_dir), an entry that does not
+        // read ending the list rather than failing it (station/src/read/machine.ts `readDir`).
         if op == "fs.readdir" {
             let Ok(entries) = std::fs::read_dir(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let disk = a.get("disk").and_then(Value::as_bool).unwrap_or(false);
             let mut out: Vec<(String, &str)> = Vec::new();
             for entry in entries {
-                let Ok(entry) = entry else { return Ok(Value::Null) };
+                let Ok(entry) = entry else {
+                    if disk {
+                        break;
+                    }
+                    return Ok(Value::Null);
+                };
                 let kind = match entry.file_type() {
                     Ok(t) if t.is_symlink() => "link",
                     Ok(t) if t.is_dir() => "dir",
@@ -1435,7 +1443,7 @@ impl Inner {
                 };
                 out.push((entry.file_name().to_string_lossy().into_owned(), kind));
             }
-            if !cfg!(windows) {
+            if !cfg!(windows) && !disk {
                 out.sort_by(|x, y| x.0.as_bytes().cmp(y.0.as_bytes()));
             }
             let types = a.get("types").and_then(Value::as_bool).unwrap_or(false);
@@ -1506,6 +1514,93 @@ impl Inner {
             }
             let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
             return Ok(json!(String::from_utf8_lossy(body)));
+        }
+        // What a link points to, as Node's readlinkSync gives it; null when the path is no link or cannot be read.
+        if op == "fs.readlink" {
+            return Ok(std::fs::read_link(str_of(a, "path")?).map_or(Value::Null, |p| json!(p.to_string_lossy())));
+        }
+        // A file from byte `from` to its end, decoded as Buffer.toString("utf8") does (what is not UTF-8 replaced, a byte
+        // order mark kept); null when it does not open.
+        if op == "fs.from" {
+            use std::io::{Read, Seek, SeekFrom};
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let from = a.get("from").and_then(Value::as_u64).unwrap_or(0);
+            let mut bytes = Vec::new();
+            if file.seek(SeekFrom::Start(from)).is_err() || file.read_to_end(&mut bytes).is_err() {
+                return Ok(Value::Null);
+            }
+            return Ok(json!(String::from_utf8_lossy(&bytes)));
+        }
+        // A file's lines as Rust's BufRead::lines with map_while(Result::ok) reads them (station/src/read/machine.ts
+        // `lines`): without their "\n" or "\r\n", each decoded strictly with a leading byte order mark dropped, ending at
+        // the first that is not UTF-8 or at a read that fails; at most `limit`. A line longer than `max` bytes (its "\n"
+        // counted) is read as "". None when the file does not open: an empty list.
+        if op == "fs.lines" {
+            use std::io::Read;
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(json!([])) };
+            let limit = a.get("limit").and_then(Value::as_u64).map_or(usize::MAX, |n| n as usize);
+            let max = a.get("max").and_then(Value::as_u64).map_or(usize::MAX, |n| n as usize);
+            let mut out: Vec<Value> = Vec::new();
+            let mut pending: Vec<u8> = Vec::new();
+            let mut over = false;
+            // Whether more are wanted.
+            let take = |line: &[u8], over: &mut bool, out: &mut Vec<Value>| -> bool {
+                if *over {
+                    *over = false;
+                    out.push(json!(""));
+                    return out.len() < limit;
+                }
+                let mut line = line;
+                if line.last() == Some(&b'\n') {
+                    line = &line[..line.len() - 1];
+                }
+                if line.last() == Some(&b'\r') {
+                    line = &line[..line.len() - 1];
+                }
+                let body = line.strip_prefix(b"\xef\xbb\xbf").unwrap_or(line);
+                match std::str::from_utf8(body) {
+                    Ok(text) => out.push(json!(text)),
+                    Err(_) => return false,
+                }
+                out.len() < limit
+            };
+            let mut chunk = vec![0u8; 1 << 16];
+            loop {
+                let n = match file.read(&mut chunk) {
+                    Ok(n) => n,
+                    Err(_) => return Ok(Value::Array(out)),
+                };
+                if n == 0 {
+                    break;
+                }
+                let mut start = 0;
+                let keep = |part: &[u8], pending: &mut Vec<u8>, over: &mut bool| {
+                    if *over {
+                        return;
+                    }
+                    if pending.len() + part.len() > max {
+                        *over = true;
+                        pending.clear();
+                    } else {
+                        pending.extend_from_slice(part);
+                    }
+                };
+                while let Some(nl) = chunk[start..n].iter().position(|&b| b == b'\n').map(|i| start + i) {
+                    keep(&chunk[start..=nl], &mut pending, &mut over);
+                    let line = std::mem::take(&mut pending);
+                    start = nl + 1;
+                    if !take(&line, &mut over, &mut out) {
+                        return Ok(Value::Array(out));
+                    }
+                }
+                if start < n {
+                    keep(&chunk[start..n], &mut pending, &mut over);
+                }
+            }
+            if !pending.is_empty() || over {
+                take(&pending, &mut over, &mut out);
+            }
+            return Ok(Value::Array(out));
         }
         if op == "fs.read" {
             let Ok(bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };

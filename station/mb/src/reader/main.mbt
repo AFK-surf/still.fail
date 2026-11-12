@@ -77,7 +77,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession"].contains(
     op,
   )
 }
@@ -109,6 +109,9 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
     "openedChatSaid" => @readops.opened_chat_said(db, args)
     "widgetState" => @readops.widget_state(db, args)
     "transcriptFile" => @readops.transcript_file(db, self.host, self.data, self.sep, self.finder, args)
+    "memory" => @readops.memory(self.host, self.data, self.sep, args)
+    "machineSessions" => @readops.machine_sessions(db, self.host, self.sep, args)
+    "machineSession" => @readops.machine_session(db, self.host, self.sep, args)
     _ => fail("no read \{op}")
   }
 }
