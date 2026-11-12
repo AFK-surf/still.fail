@@ -1599,6 +1599,7 @@ let zh : Map[String, String] = {
   "web-pages.stations.settingsOffline": "station 离线，连接后可查看和修改设置",
   "web-pages.stations.software": "软件与更新",
   "web-pages.stations.softwareOffline": "station 离线，连接后可查看更新",
+  "web-pages.vault.aboutEdit": "说明",
   "web-pages.vault.accounts": "订阅和 API Key",
   "web-pages.vault.add": "添加",
   "web-pages.vault.addDevice": "授权新设备",

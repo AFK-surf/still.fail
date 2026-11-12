@@ -1589,6 +1589,7 @@ web-pages.stations.search.what
 web-pages.stations.settingsOffline
 web-pages.stations.software
 web-pages.stations.softwareOffline
+web-pages.vault.aboutEdit
 web-pages.vault.accounts
 web-pages.vault.add
 web-pages.vault.addDevice

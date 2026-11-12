@@ -1631,6 +1631,7 @@ let en : Map[String, String] = {
   "web-pages.stations.settingsOffline": "The station is offline. Its settings appear once it connects.",
   "web-pages.stations.software": "Software",
   "web-pages.stations.softwareOffline": "The station is offline. Updates appear once it connects.",
+  "web-pages.vault.aboutEdit": "About",
   "web-pages.vault.accounts": "Subscriptions & API keys",
   "web-pages.vault.add": "Add",
   "web-pages.vault.addDevice": "Give them the key",

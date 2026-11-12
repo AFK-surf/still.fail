@@ -1645,6 +1645,7 @@
   "web-pages.vault.editor.namePlaceholder": "GitHub token",
   "web-pages.vault.editor.about": "About",
   "web-pages.vault.editor.aboutPlaceholder": "What it is and how it is used (e.g. the home UniFi console, reached through a forward on Studio)",
+  "web-pages.vault.aboutEdit": "About",
   "web-pages.vault.editor.aboutNote": "Agents see the about when they ask for it: never put a password in it.",
   "web-pages.vault.editor.fileNamePlaceholder": "Production kubeconfig",
   "web-pages.vault.editor.value": "Value",

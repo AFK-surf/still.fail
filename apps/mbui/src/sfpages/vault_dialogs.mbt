@@ -137,8 +137,11 @@ pub fn vault_editor_dialog(
         |> ignore
       }
       input(c, "name", @sf.t("web-pages.vault.editor.name"), @sf.t(if k == "file" { "web-pages.vault.editor.fileNamePlaceholder" } else { "web-pages.vault.editor.namePlaceholder" }), false, false, "")
-      // what it is for and how it is used: agents are shown it with its name, so never a secret in it
-      input(c, "about", @sf.t("web-pages.vault.editor.about"), @sf.t("web-pages.vault.editor.aboutPlaceholder"), false, true, "")
+      // a new one's: what it is for and how it is used (agents are shown it with its name, so never a secret in it);
+      // one there already has its own, on its page (vault_about_dialog)
+      if was is None {
+        input(c, "about", @sf.t("web-pages.vault.editor.about"), @sf.t("web-pages.vault.editor.aboutPlaceholder"), false, false, "")
+      }
       match k {
         "token" => input(c, "value", @sf.t("web-pages.vault.editor.value"), "ghp_…", true, false, "")
         "ssh_key" => {
@@ -287,6 +290,98 @@ pub fn vault_editor_dialog(
           },
         )
       }) |> ignore
+    },
+  )
+}
+
+///|
+/// An item's about written on its own (说明, from its page): what it is for and how it is used, the rest of the item as
+/// it was (`plain`: what it holds, opened; `row`: how agents may ask for it), written as the editor's 保存 writes it
+/// (`vault.putItem`), the dialog staying while it is saved (refused, why under it).
+pub fn vault_about_dialog(core : Core, ws : String, vault : String, row : Json, plain : Json) -> Unit {
+  vault_serial.val += 1
+  let key = "vault-about/" + vault_serial.val.to_string()
+  let was = Some(plain)
+  let rv = Some(row)
+  let typed = field_of(key)
+  typed.set(text(was, "notes"))
+  let saving : @signals.Signal[Bool] = @signals.signal(false)
+  let error : @signals.Signal[String] = @signals.signal("")
+  let save = fn(shut : () -> Unit) {
+    let k = text(was, "kind")
+    // (what it holds and how agents get it, as the editor would have them: only its about changed)
+    let words : Map[String, String] = Map([])
+    words["name"] = text(was, "name")
+    match field(was, "fields") {
+      Some(Object(fs)) =>
+        for f, v in fs {
+          match v {
+            String(s) => words[f] = s
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+    words["hosts"] = join(strings(rv, "hosts"), " ")
+    words["env"] = text(rv, "env")
+    words["about"] = typed.text()
+    let mode = if strings(rv, "modes").contains("env") { "env" } else { "proxy" }
+    let lasts = if text(rv, "lasts") == "" { "default" } else { text(rv, "lasts") }
+    saving.set(true)
+    error.set("")
+    vault_act(
+      core,
+      ws,
+      "putItem",
+      vault_put_params(vault, rv, was, k, words, flag(rv, "listed"), mode, lasts),
+      @sf.t("web-pages.vault.saveWhat"),
+      done=@sf.t("web-pages.vault.saved"),
+      then=fn(_) {
+        saving.set(false)
+        shut()
+      },
+      failed=fn(err) {
+        saving.set(false)
+        error.set(vault_said(err).unwrap_or(""))
+      },
+    )
+  }
+  open_dialog_nodes(
+    @sf.t("web-pages.vault.editor.about"),
+    fn(v, _) {
+      @sf.field_node(
+        v,
+        fn() { @sf.t("web-pages.vault.editor.about") },
+        hint=fn() { @sf.t("web-pages.vault.editor.aboutNote") },
+        error=fn() { error.get() },
+        fn(b) {
+          @sf.textarea_node(b, typed, rows=3, placeholder=@sf.t("web-pages.vault.editor.aboutPlaceholder"), label=@sf.t("web-pages.vault.editor.about")) |> ignore
+        },
+      )
+    },
+    fn(v, shut) {
+      @sf.foot_spacer_node(v)
+      @sf.button_node(
+        v,
+        fn() { @sf.t("common.cancel") },
+        fn() {
+          v.focus_let_go()
+          shut()
+        },
+        tone=Ghost,
+      )
+      |> ignore
+      @sf.button_node(
+        v,
+        fn() { @sf.t("common.save") },
+        fn() {
+          v.focus_let_go()
+          save(shut)
+        },
+        tone=Primary,
+        busy=fn() { saving.get() },
+      )
+      |> ignore
     },
   )
 }
