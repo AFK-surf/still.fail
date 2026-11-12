@@ -136,6 +136,11 @@ pub let long_reply : String =
   #|有问题随时说。
 
 ///|
+/// How many pages before its first the first row's chat has (`chat.older` brings one each): what its device holds of
+/// it, all of them.
+let rich_chat_pages : Int = 2
+
+///|
 /// The first row's chat, its page of `older` pages back included.
 pub fn rich_chat(older : Int) -> Json {
   let claude = by_agent("anthropic", "claude", "s-c1")
@@ -258,7 +263,7 @@ pub fn rich_chat(older : Int) -> Json {
       },
     ],
     "messages": Json::array(all),
-    "more": Json::boolean(older < 2),
+    "more": Json::boolean(older < rich_chat_pages),
     "newer": false,
     "outbox": [],
     "offline": false,

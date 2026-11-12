@@ -309,11 +309,16 @@ test("a_chats_opening_reads_of_its_log_what_its_window_shows_and_a_page_told_gro
   assert.equal(first.core.inner.data.logSpan("entry", "ws/st", "7")?.count, 300);
   await first.core.close();
   // (a core started again on what the device holds, its station not reached: its log read from the database)
-  const opened = async (rows: number | null) => {
+  const opened = async (rows: number | null, outline = false) => {
     const core = await Core.create(first.host, { clock: first.host.time.clock, sample: 0, wire: () => new HostWire(first.host) });
     await first.host.time.pass(500);
     const client = core.connect();
     const values = new Map();
+    // (its outline, of all the device holds of the chat, not of its window: asked first where it is looked at)
+    if (outline) {
+      subscribe(core, client, 3, { topic: "chatOutline", station: "ws/st", thread: 7 });
+      await first.host.settle();
+    }
     const before = { ...work };
     if (rows !== null) call(core, client, 9, "chat.window", { station: "ws/st", thread: 7, rows });
     subscribe(core, client, 1, parseTopic({ topic: "chat", station: "ws/st", thread: 7, compact: true })!);
@@ -324,16 +329,21 @@ test("a_chats_opening_reads_of_its_log_what_its_window_shows_and_a_page_told_gro
     const grow = { ...work };
     call(core, client, 2, "chat.older", { station: "ws/st", thread: 7, ...(rows !== null ? { rows: 20 } : {}) });
     await first.host.time.pass(100);
+    const outlined = first.host.emitted.filter(([, m]) => (m as { id?: number }).id === 3).length;
     apply(first.host, values);
     const grown = [v(values, 1).messages.length, workSince(grow).logRows];
     await core.close();
-    return { shown, read, grown };
+    const said = outline ? v(values, 3).count : null;
+    return { shown, read, grown, outlined, said };
   };
   for (const k of Object.keys(answers)) if (k.startsWith("GET /threads/7/entries")) answers[k] = status(502, { error: "busy" });
   const untold = await opened(null);
   const told = await opened(30);
   assert.deepEqual([untold.shown, untold.read, untold.grown], [50, 50, [100, 50]]);
   assert.deepEqual([told.shown, told.read, told.grown], [30, 30, [50, 20]], "its log read for what it shows, and for the 20 it grows by");
+  // Its outline sent nothing as it grew: what the device holds did not change (views.ts #chatOutline).
+  const outlined = await opened(30, true);
+  assert.deepEqual([outlined.said, outlined.outlined], [300, 0]);
 });
 
 test("a_chat_let_go_of_and_asked_again_untold_opens_on_its_untold_page", async () => {

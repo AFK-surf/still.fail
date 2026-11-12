@@ -181,12 +181,14 @@ pub fn outline_chat(mode : String, around? : Bool = false) -> Json {
 }
 
 ///|
-/// The messages of the chat a mode shows in thread 7 (the long chat's, else the first chat's), each with its day.
+/// The messages of the chat a mode shows in thread 7 (the long chat's, else the first chat's, every page before it
+/// included, whatever its window shows), each with its day. The core's outline is of all the device holds of a chat, not
+/// of its page's window (views.ts #chatOutline, #peopleSaid): a `chat.older` answered from the device sends it nothing.
 fn outline_messages(f : Fixture) -> Array[(Int, Json)] {
   if outline_mode(f.mode) {
     outline_all(f.mode)
   } else {
-    items(Some(rich_chat(f.older)), "messages").map(fn(m) { (0, m) })
+    items(Some(rich_chat(rich_chat_pages)), "messages").map(fn(m) { (0, m) })
   }
 }
 
