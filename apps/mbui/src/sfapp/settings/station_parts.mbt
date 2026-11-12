@@ -436,6 +436,32 @@ pub fn connect_candidates_asked(here : Here, address : String, id : String) -> M
 }
 
 ///|
+/// One account of the workspace whole, as its own pages show it (`profile`: its members, the places it is on, its
+/// stations, its check's detail, its allowance's resets and times), by the profile of it on station `address`: no value
+/// while the stations' overviews are not read, null where no station has that profile. Asked so by a profile's page on
+/// a station (sfpages accounts.mbt); the account's page of all its stations asks it by its key (profile_by_key_read). A
+/// list of accounts reads their rows (`profiles`), never one whole.
+pub fn profile_read(core : Core, here : Here, address : String, id : String) -> Read {
+  (core.topic)("profile", { "scope": str(station_scope(here, address)), "station": str(address), "id": str(id) }).get()
+}
+
+///|
+/// One account of the workspace whole (profile_read), by its key (a row's `key`): the account's page of all its
+/// stations (profile_new.mbt), null where the workspace has no such account.
+pub fn profile_by_key_read(core : Core, here : Here, key : String) -> Read {
+  (core.topic)("profile", { "scope": str(here.workspace), "key": str(key) }).get()
+}
+
+///|
+/// The account of profile `id` on station `address` whole (profile_read), None while not known or where there is none.
+pub fn profile_of(core : Core, here : Here, address : String, id : String) -> Json? {
+  match profile_read(core, here, address, id).value {
+    Some(Object(_)) as e => e
+    _ => None
+  }
+}
+
+///|
 /// The workspace a station is asked of: its address's, `here`'s for one without it.
 fn station_scope(here : Here, address : String) -> String {
   if address.contains("/") {

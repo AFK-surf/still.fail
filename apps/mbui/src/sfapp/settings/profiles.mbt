@@ -277,8 +277,7 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
               chevron(c)
             }, on_press=fn() {
               // an account on several stations: its own page, each station's part under it
-              let signed = items(ev, "members").filter(fn(m) { text(Some(m), "role") != "user" }).length()
-              (core.push)(if signed > 1 { ProfileAccount(text(ev, "key")) } else { Profile(text(ev, "station"), text(p, "id")) })
+              (core.push)(if flag(ev, "several") { ProfileAccount(text(ev, "key")) } else { Profile(text(ev, "station"), text(p, "id")) })
             })
           }
         })

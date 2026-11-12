@@ -301,7 +301,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let trouble = text(field(e, "state"), "text")
         let tone = text(field(e, "state"), "tone")
         // where it is and who uses it
-        let used = items(p, "usedBy").length()
+        let used = count(e, "usedCount")
         let facts = [
           text(p, "planText"),
           text(e, "where"),
@@ -360,9 +360,22 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               None
             },
             foot_capsule?=if windows { Some(@sf.fill_chip_small_h) } else { None },
+            // (its page in the pane once what it shows is answered, the pane as it was meanwhile, what it asked handed
+            // to that page: sfbase's account_open.mbt)
             on_press=fn() {
-              place_pick[place_key(w.id, "profiles")] = route
-              @sfbase.show_chosen()
+              // (the one shown already: nothing to ask, nothing made anew to take it)
+              if @signals.untracked(fn() { place_route(src, w, "profiles") }) == Some(route) {
+                @sfbase.show_chosen()
+                return
+              }
+              let at = match route {
+                Route::Profile(station, id) => @sfbase.profile_shown_at(station, id)
+                _ => ""
+              }
+              @sfbase.show_answered(src, @sfbase.route_asks(w.id, route), at, fn() {
+                place_pick[place_key(w.id, "profiles")] = route
+                @sfbase.show_chosen()
+              })
             },
           )
       }

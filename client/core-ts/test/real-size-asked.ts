@@ -10,7 +10,7 @@ import type { Rigs } from "../src/rigs.ts";
 import { parseTopic, type Topic } from "../src/protocol.ts";
 import { isObject } from "../src/util.ts";
 import {
-  CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, CHAT_MESSAGES, DRIVE, LETTERS_COUNT, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, PEEKS, SEARCH, UP, VAULT_ITEM, cardCame, changelogFeed, changelogReleased,
+  CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, PEOPLE, CHAT_MESSAGES, DRIVE, LETTERS_COUNT, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, PEEKS, SEARCH, UP, VAULT_ITEM, cardCame, changelogFeed, changelogReleased,
   chatArchived, chatRenamed, devicesAdded, devicesSaid, driveAdded, fixture, hostReading, jobLogOf, jobsMoved, lettersHeld, liveStepped, lockApproved, memberJoined, messageAdded, more,
   netOf, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, overviewMoved, presetsChanged, quotaChanged, records, resourcesOf, screensMoved, screensOf, sessionMade, thingSaid, transcriptOf,
   usageRead, vaultAdded, vaultUsed,
@@ -59,6 +59,11 @@ export const ASKED: Record<string, Record<string, unknown> & { topic: string }> 
   // (a row pressed, held, swiped or pointed at: its chat's whole row, sfbase/rows.mbt whole_row; the chat's, its page's menu)
   "chatRow": { topic: "chatRow", station, session: key },
   "profiles": { topic: "profiles", scope: "ws" },
+  // (an account's page on a station, sfpages/accounts.mbt: a Claude subscription of the chat's station lent to two more,
+  // its allowance's resets of each kind; an account's page of all its stations by its key, settings/profile_new.mbt: the
+  // ChatGPT one of the chat's station lent to three, its allowance the one read again, `quota`)
+  "profile": { topic: "profile", scope: "ws", station, id: "claude-maple-0" },
+  "profile key": { topic: "profile", scope: "ws", key: `sub:codex:${PEOPLE[0]!.email}` },
   "connects": { topic: "connects", scope: "ws", mine: false },
   "connects mine": { topic: "connects", scope: "ws", mine: true },
   // (a connect of the chat's station with sessions, of its runtime many: its page, and its choice of a session's list)

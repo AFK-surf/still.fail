@@ -39,6 +39,9 @@
 /// answers the app's list by the run's asked with its first limit and tells the run no window.
 /// MBUI_MARKS_ONE (2026-11-12: the workspaces' marks one topic whichever workspace is shown) off in all 81 as it came:
 /// only the replay reads it, which answers the app's marks by the run's, asked of the workspace then shown.
+/// MBUI_PROFILE_ROWS (2026-11-12: an account a row each in the accounts' list, one account whole its pages' own
+/// `profile`) off in all 81 as it came: as MBUI_CONNECT_ROWS, only the replay reads it, which reads the app's rows and
+/// `profile` out of the run's `profiles {scope}`, whose items were whole.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 72,
   "MBUI_DEVICES": 73,
@@ -50,6 +53,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_CHAT_ROW": 74,
   "MBUI_CHATS_WINDOW": 74,
   "MBUI_MARKS_ONE": 74,
+  "MBUI_PROFILE_ROWS": 81,
 }
 
 ///|

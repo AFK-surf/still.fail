@@ -65,10 +65,15 @@ fn three_stations(base : Source) -> Source {
           }
         "station" => { value: @settings.station_said(wholes, text(p, "station"), ""), error: None, version: 1 }
         "stationPart" => { value: @settings.station_said(wholes, text(p, "station"), text(p, "part")), error: None, version: 1 }
-        // (the profiles' list with the machine logins each station offers, as the core works them out)
+        // (the profiles' list with the machine logins each station offers, as the core works them out, a row each; one
+        // account whole of them)
         "profiles" => {
           let r = base.topic(name, params).get().snapshot()
-          { ..r, value: @settings.profiles_of_stations(r.value, wholes) }
+          { ..r, value: @settings.profiles_rows(@settings.profiles_of_stations(r.value, wholes)) }
+        }
+        "profile" => {
+          let r = base.topic("profiles", { "scope": params.get("scope").unwrap_or(Json::string("")) }).get().snapshot()
+          { ..r, value: @settings.profile_said(r.value, params) }
         }
         _ => base.topic(name, params).get().snapshot()
       }

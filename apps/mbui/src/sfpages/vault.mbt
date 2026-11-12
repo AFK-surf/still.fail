@@ -945,7 +945,7 @@ fn vault_all_node(b : @view.View, core : Core, ws : () -> String, view : () -> J
               title,
               said([g.0, text(ev, "where")]),
               if text(p, "checkTone") == "red" { text(p, "checkText") } else { "" },
-              text(p, "group"),
+              text(ev, "group"),
               Profile(text(ev, "station"), text(p, "id")),
             ),
           )

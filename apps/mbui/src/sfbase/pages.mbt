@@ -315,6 +315,52 @@ fn hand_over(leases : Array[TopicLease], open : () -> Unit) -> Unit {
 }
 
 ///|
+/// The readers a press handed over to a page it shows in a pane in place of the one there, no entry of the stack put on
+/// top (a place's side list's pick: hand_over_shown), by what that page is shown for (`at`): taken as that page is
+/// first built (shown_read), let go at that frame's end, as an entry's are (page_entry_read).
+let handed_shown : Map[String, Array[TopicLease]] = Map([])
+
+///|
+/// `open` run (a press showing a page in a pane in place of the one there: a place's side list's row), `leases` handed
+/// to the page it shows, `at` what that page is shown for (shown_read's): kept past the page that leaves, let go at the
+/// end of the frame the page shown is first built in. What was handed for the same page and not taken yet is let go
+/// first (shown again before it was built).
+pub fn hand_over_shown(at : String, leases : Array[TopicLease], open : () -> Unit) -> Unit {
+  let readers : Array[TopicLease] = []
+  for lease in leases {
+    match prepare_chat_handoff(lease) {
+      Some(reader) => readers.push(reader)
+      None => ()
+    }
+  }
+  match handed_shown.get(at) {
+    Some(had) => for reader in had { reader.release() }
+    None => ()
+  }
+  handed_shown[at] = readers
+  open()
+}
+
+///|
+/// The page shown for `at` (hand_over_shown's) first built: what was handed to it let go once this build has read what
+/// it reads, at its frame's end; what it read is its own reader's by then.
+pub fn shown_read(at : String) -> Unit {
+  match handed_shown.get(at) {
+    Some(readers) => {
+      handed_shown.remove(at)
+      @ui.after_frame(fn() { for reader in readers { reader.release() } })
+    }
+    None => ()
+  }
+}
+
+///|
+/// What a profile's page is shown for (hand_over_shown, shown_read): its station and profile.
+pub fn profile_shown_at(station : String, id : String) -> String {
+  "profile\u{1}" + station + "\u{1}" + id
+}
+
+///|
 /// The source for one actual navigation entry. Keep its identity until the entry leaves so its final events can
 /// use the same projection that the page read, rather than the surrounding window's source. What the page before it
 /// handed over as it opened it (open_handing) is the entry's from here, till its first build (page_entry_read).
@@ -848,6 +894,13 @@ pub fn reset() -> Unit {
   let pending = pending_chat_readers.values().collect()
   pending_chat_readers.clear()
   for reader in pending { stop_pending_chat(reader) }
+  let shown = handed_shown.values().collect()
+  handed_shown.clear()
+  for readers in shown {
+    for reader in readers {
+      reader.release()
+    }
+  }
   let handed = handed_readers.values().collect()
   handed_readers.clear()
   for readers in handed {

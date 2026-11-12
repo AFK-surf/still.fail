@@ -54,7 +54,6 @@ const OVER: Record<string, number> = {
   "jobLog 400": 96,
   "jobLog 300": 72,
   "drive": 72,
-  "profiles": 64,
   // (its first window, 30 rows as the app asks them: real-size-asked.ts WINDOWS; the list of all of them, under the bar)
   "chats mine": 40,
   "history": 56,
@@ -73,13 +72,13 @@ const OVER_DELTA: Record<string, number> = {
   "usage/down": 88,
   "drive/file": 72,
   "chatLetters/letter": 40,
-  "profiles/down": 40,
   "usage/usage": 40,
   "devices/device": 24,
   "connects/down": 24,
   "connect/session": 24,
   "connectCandidates/session": 24,
   "longJobs/down": 24,
+  "profiles/down": 16,
   "chatThings/thing": 16,
   "chatThings q/thing": 16,
   "driveBrowse phone/file": 16,
@@ -164,6 +163,11 @@ const EMPTY: Record<string, Record<string, string>> = {
   "chatRow": { foundMarks: NEVER, "xshare.to": STATE },
   // (profiles.ts gives its note no failing)
   "profiles": { "wait.failing": NEVER },
+  // (a ChatGPT account's allowance: a count of resets and when each ends, no kinds, as a station tells Codex's,
+  // accounts/quota.ts withCodexCredits; the Claude one asked by its station holds them)
+  // (the Claude one used by no chat; the ChatGPT one by three)
+  "profile": { "profile.usedBy": NONE },
+  "profile key": { "profile.quota.resets": NONE },
   "connects": { "wait.failing": ERROR },
   "connects mine": { "wait.failing": ERROR },
   // (asked for its last line alone, a job's row: no lines, jobs.ts log)

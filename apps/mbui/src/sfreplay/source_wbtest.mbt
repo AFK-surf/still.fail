@@ -91,6 +91,53 @@ test "a run from before the stations' rows: the app's rows, a station and a part
 }
 
 ///|
+test "a run from before the accounts' rows: the list's rows and one account read out of its accounts whole, made once, held with them" {
+  @core.client.reset()
+  let src = source()
+  let r = @core.Replay::parse((
+    #|{"out":{"id":5,"subscribe":{"topic":"profiles","scope":"w"},"keyed":true}}
+    #|{"in":{"id":5,"value":{"items":[{"key":"sub:claude:a@x","group":"claude","groupTitle":"Claude","station":"w/a","title":"a@x","usable":true,"state":null,"look":false,"where":"A, B","profile":{"id":"p1","name":"One","usedBy":["k1","k2"],"check":{"detail":"ok"},"checkText":"ok","quota":{"state":"ok","windows":[{"label":"5h","mark":"5h","left":50,"level":"ok","usedPercent":50}],"resets":[]}},"members":[{"station":"w/a","profileId":"p1","role":"host"},{"station":"w/b","profileId":"p2","role":"host"}],"places":[],"stations":[]}],"attention":0,"wait":{"reading":false,"failing":[]},"machineLogins":[]}}}
+  ))
+  r.keep_stations()
+  r.attach()
+  let all_p : Map[String, Json] = { "scope": "w" }
+  let one_p : Map[String, Json] = { "scope": "w", "station": "w/b", "id": "p2" }
+  let key_p : Map[String, Json] = { "scope": "w", "key": "sub:claude:a@x" }
+  // (nothing yet: no value, none made)
+  assert_true((src.topic_read)("profile", one_p).value is None)
+  (src.topic_read)("profile", key_p) |> ignore
+  (src.topic_read)("profiles", all_p) |> ignore
+  assert_eq(r.deliver(), 1)
+  // (the list's rows: what a row draws, whether it is on several stations, how many use it)
+  assert_eq(
+    @settings.items((src.topic_read)("profiles", all_p).value, "items")[0].stringify(),
+    "{\"key\":\"sub:claude:a@x\",\"group\":\"claude\",\"groupTitle\":\"Claude\",\"station\":\"w/a\",\"title\":\"a@x\",\"usable\":true,\"state\":null,\"look\":false,\"where\":\"A, B\",\"profile\":{\"id\":\"p1\",\"name\":\"One\",\"checkText\":\"ok\",\"quota\":{\"state\":\"ok\",\"windows\":[{\"label\":\"5h\",\"mark\":\"5h\",\"left\":50,\"level\":\"ok\"}]}},\"several\":true,\"usedCount\":2}",
+  )
+  // (one account whole, by a station's profile of it and by its key: the run's item as it is)
+  let one = (src.topic_read)("profile", one_p)
+  assert_eq(@settings.items(one.value, "members").length(), 2)
+  assert_eq(@settings.text(@settings.field(one.value, "profile"), "id"), "p1")
+  assert_eq((src.topic_read)("profile", key_p).value.unwrap().stringify(), one.value.unwrap().stringify())
+  assert_eq((src.topic_read)("profile", { "scope": "w", "station": "w/c", "id": "p9" }).value, Some(Json::null()))
+  // read again while nothing changed: the same value, the same version
+  let again = (src.topic_read)("profile", one_p)
+  assert_true(physical_equal(again.value.unwrap(), one.value.unwrap()))
+  assert_eq(again.version, one.version)
+  // one followed `profiles` for all of them, the list's own too, let go of once the last leaves
+  (src.leave)("profile", one_p, @sfbase.TopicLeave::Legacy)
+  (src.leave)("profile", key_p, @sfbase.TopicLeave::Legacy)
+  (src.leave)("profile", { "scope": "w", "station": "w/c", "id": "p9" }, @sfbase.TopicLeave::Legacy)
+  assert_true(@core.client.peek_topic("profiles", params=all_p) is Some(_))
+  (src.leave)("profiles", all_p, @sfbase.TopicLeave::Legacy)
+  assert_true(@core.client.peek_topic("profiles", params=all_p) is None)
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade(), [])
+  assert_false(r.diverged().iter().any(fn(m) { m.contains("profile") }))
+  @core.Replay::detach()
+  @core.client.reset()
+}
+
+///|
 test "a run from before the connects' rows: one connect and its choice's sessions read out of its connects whole, made once, held with them" {
   @core.client.reset()
   let src = source()
