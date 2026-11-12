@@ -43,11 +43,20 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: its last m
     t.type_text("先看第三项")
     t.run_for(@ui.move_most_ms)
     assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "先看第三项", msg=name)
-    let fields = t.semantics().filter(fn(s) { s.role == @ui.Role::TextField }).map(fn(s) { (s.label, s.rect) })
-    let under = t.words().filter(fn(x) { x.2 > ly }).map(fn(x) { x.0 }).join("|")
+    // drawn in the field where it is now (the composer opened as it was focused): its words as the draw list has them
+    // (an old view's field is a node whose words are its placeholder, mbui's Ctx::editor; what is typed in it is drawn
+    // as its own runs, which Tester::find does not read)
+    let mut now : (Double, Double, Double, Double)? = None
+    for s in t.semantics() {
+      if s.role == @ui.Role::TextField && (now is None || now.unwrap().1 < s.rect.1) {
+        now = Some(s.rect)
+      }
+    }
+    guard now is Some((nx, ny, nw, nh)) else { fail("\{name}: no composer's field once typed in") }
+    let typed = t.text_runs().filter(fn(r) { r.text.contains("先看第三项") })
     assert_true(
-      t.find("先看第三项") is Some(_),
-      msg="\{name}: what is typed drawn: its fields \{Repr(fields)}, its input method \{Repr(t.ime())}, the words under the last message \{under}",
+      typed.iter().any(fn(r) { r.top < ny + nh && r.bottom > ny && r.x0 >= nx && r.x0 < nx + nw }),
+      msg="\{name}: what is typed drawn in the field at \{Repr((nx, ny, nw, nh))}: \{Repr(typed.map(fn(r) { (r.x0, r.top, r.bottom) }))}",
     )
   }
 }
