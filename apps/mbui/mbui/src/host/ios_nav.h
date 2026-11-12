@@ -461,7 +461,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
 - (void)barItems:(NSArray<NSDictionary *> *)items ink:(UIColor *)ink accent:(UIColor *)accent bare:(BOOL)bare title:(NSString *)title {
   NSMutableString *key = [NSMutableString stringWithFormat:@"%d\x1f%@\x1e", bare, bare ? title : @""];
   for (NSDictionary *d in items) {
-    [key appendFormat:@"%@\x1f%@\x1f%@\x1f%@", d[@"id"], d[@"icon"], d[@"dot"], d[@"title"]];
+    [key appendFormat:@"%@\x1f%@\x1f%@\x1f%@\x1f%@", d[@"id"], d[@"icon"], d[@"dot"], d[@"title"], d[@"prominent"]];
     for (NSDictionary *m in d[@"menu"]) [key appendFormat:@"\x1d%@\x1f%@\x1f%@\x1f%@", m[@"id"], m[@"title"], m[@"checked"], m[@"icon"]];
     [key appendString:@"\x1e"];
   }
