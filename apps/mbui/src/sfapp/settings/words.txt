@@ -805,7 +805,12 @@ android-settings.vault.ask.typed.file
 android-settings.vault.ask.typed.token
 android-settings.vault.ask.typed.username
 android-settings.vault.ask.use
-android-settings.vault.ask.describe
+android-settings.vault.ask.describe.about
+android-settings.vault.ask.describe.aboutLabel
+android-settings.vault.ask.describe.both
+android-settings.vault.ask.describe.name
+android-settings.vault.ask.describe.nameLabel
+android-settings.vault.ask.describe.noAbout
 android-settings.vault.conflict
 android-settings.vault.copied
 android-settings.vault.create

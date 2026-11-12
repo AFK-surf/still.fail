@@ -1644,8 +1644,8 @@ test("an item renamed in the plain library: its card says what would change, its
     const [r] = pendingOf(h.secrets, null, "bob@x.com");
     assert.deepEqual(r!.describe, { name: "UniFi 后台登录态", about: "经 Studio 转发", was: { name: "127.0.0.1 登录态", about: "" } });
     const { text, card } = h.cards.at(-1)!;
-    assert.equal(text, "申请修改「127.0.0.1 登录态」：认不出来\n\n名字改为：UniFi 后台登录态\n\n说明改为：经 Studio 转发");
-    assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["修改", "不改"]);
+    assert.equal(text, "申请修改密钥「127.0.0.1 登录态」的名称与说明：认不出来\n\n名称改为：UniFi 后台登录态\n\n说明改为：经 Studio 转发");
+    assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["确认修改", "保持不变"]);
     assert.deepEqual(card.vault.describe, { name: "UniFi 后台登录态", about: "经 Studio 转发", wasAbout: "" });
     // No grant of the item comes of it, nor anyone's but its owner's word.
     assert.match(h.secrets.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "once" })!, /grants nothing/);

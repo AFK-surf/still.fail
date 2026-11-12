@@ -30,8 +30,12 @@ pub(all) struct Asked {
   filename : String
   typed : Bool
   station : String
-  /// one to rename the item or change its about (secret_describe): what would change is `how_text`
+  /// one to rename the item or change its about (secret_describe): its name as it would be (`new_name`), its about
+  /// as it would be and as it was (`new_about`, `was_about`)
   describe : Bool
+  new_name : String
+  new_about : String
+  was_about : String
 }
 
 ///|
@@ -39,6 +43,72 @@ pub(all) struct Asked {
 pub fn Asked::writes(self : Asked) -> Bool {
   self.save_kind != "" || self.describe
 }
+
+///|
+/// One to rename the item: whether its name would change.
+fn Asked::renames(self : Asked) -> Bool {
+  self.describe && self.new_name != "" && self.new_name != self.name
+}
+
+///|
+/// One to rename the item: whether its about would change.
+fn Asked::reabouts(self : Asked) -> Bool {
+  self.describe && self.new_about != self.was_about
+}
+
+///|
+/// One to rename the item, its title (the user, 2026-11-12: 「这 ui…是人能看懂的吗」, 「遣词正经一点」): 修改密钥的名称与说明, 修改密钥的名称, or 修改密钥 … 的说明
+/// (its name heavier than the words around it), what changes said under it a part each.
+fn describe_title_runs(ask : Asked, named : (String) -> @ui.Run, words : (String) -> @ui.Run) -> Array[@ui.Run] {
+  if ask.renames() && ask.reabouts() {
+    [words(tr("android-settings.vault.ask.describe.both"))]
+  } else if ask.renames() {
+    [words(tr("android-settings.vault.ask.describe.name"))]
+  } else {
+    fill_named("android-settings.vault.ask.describe.about", [("name", ask.name)], named, words)
+  }
+}
+
+///|
+/// A part's line as it was (`was`: crossed out, quiet) or as it would be (`strong`: heavier, a name's): each on a line of
+/// its own, all of them where the card's words start, so the card has one edge (the user, 2026-11-12:
+/// 「感觉视觉上还不够清晰」, 「你这样会导致对齐是错的」).
+fn describe_words_runs(was : Bool, words : String, strong? : Bool = false) -> Array[@ui.Run] {
+  let t = @sf.theme()
+  if was {
+    [@ui.span(words, color=t.p.muted, strike=true)]
+  } else {
+    [@ui.span(words, weight=if strong { 600 } else { 400 }, color=t.p.text)]
+  }
+}
+
+///|
+/// Its name's lines: as it is, then as it would be.
+fn describe_name_lines(ask : Asked) -> Array[Array[@ui.Run]] {
+  [describe_words_runs(true, ask.name), describe_words_runs(false, ask.new_name, strong=true)]
+}
+
+///|
+/// Its about's lines: as it was where it said one, then as it would be (that it goes, quiet).
+fn describe_about_lines(ask : Asked) -> Array[Array[@ui.Run]] {
+  let out = if ask.was_about != "" { [describe_words_runs(true, ask.was_about)] } else { [] }
+  if ask.new_about == "" {
+    out.push([@ui.span(tr("android-settings.vault.ask.describe.noAbout"), color=@sf.theme().p.muted)])
+  } else {
+    out.push(describe_words_runs(false, ask.new_about))
+  }
+  out
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_describe_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
+
+///|
+/// A part of what renaming changes, apart from what is over it by room alone (no ground of its own: the card's one edge
+/// for all its words): what it is (名称, 说明), quiet, over its lines.
+// kept across runs: a value (no field of it changes)
+let ask_describe_part : @ui.Style = @ui.css("w=Full gap=S0_5 pt=S3")
 
 ///|
 /// A secret to keep that the person types in here (`save.typed`: the agent has none): its kind, and the account the
@@ -344,7 +414,7 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
     let named = fn(n) { @ui.span(n, weight=600, color=t.p.text) }
     let words = fn(w) { @ui.span(w, weight=400, color=t.p.text) }
     let runs = if ask.describe {
-      fill_named("android-settings.vault.ask.describe", [("name", ask.name)], named, words)
+      describe_title_runs(ask, named, words)
     } else if save {
       fill_named(
         "android-settings.vault.ask.save",
@@ -366,7 +436,26 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
     if ask.command != "" {
       c.rich([@ui.span(ask.command, mono=true)], style=if full_command { @sf.ask_note } else { ask_command }, breaks=full_command) |> ignore
     }
-    if ask.how_text != "" {
+    // (one to rename: what changes, a part each, in place of how it is given)
+    if ask.renames() {
+      c.box(style=ask_describe_part, fn() {
+        c.text(tr("android-settings.vault.ask.describe.nameLabel"), style=@sf.ask_note) |> ignore
+        for runs in describe_name_lines(ask) {
+          c.rich(runs, style=ask_describe_words) |> ignore
+        }
+      })
+      |> ignore
+    }
+    if ask.reabouts() {
+      c.box(style=ask_describe_part, fn() {
+        c.text(tr("android-settings.vault.ask.describe.aboutLabel"), style=@sf.ask_note) |> ignore
+        for runs in describe_about_lines(ask) {
+          c.rich(runs, style=ask_describe_words) |> ignore
+        }
+      })
+      |> ignore
+    }
+    if ask.how_text != "" && !ask.describe {
       c.text(ask.how_text, style=@sf.ask_note) |> ignore
     }
     let risky = !ask.writes() && (ask.mode == "env" || ask.mode == "file")

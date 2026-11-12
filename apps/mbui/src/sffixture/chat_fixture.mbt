@@ -1553,7 +1553,8 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
 // 「…」 as how it went), let go at once (no longer asked). An option with 失败 in it fails. The modes chat-cards (the
 // card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards);
 // chat-vault, with an agent asking to keep a password at its end, decided here as the core decides it; chat-vault-typed,
-// asking the person to type a token in instead; chat-vault-file, to pick a file.
+// asking the person to type a token in instead; chat-vault-file, to pick a file; chat-vault-describe, to rename an item
+// and say what it is.
 
 ///|
 /// How the first row's chat's cards stand as answered here: by seq, the card's decision.
@@ -1581,8 +1582,22 @@ pub let fix_vault : Ref[String] = Ref("")
 ///|
 /// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in; `file`: a file
 /// they pick), or `use_secret` for an already answered request to use a token; its card as the core says it.
-pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false, timed? : Bool = false) -> Json {
-  let ask : Map[String, Json] = if use_secret {
+pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false, timed? : Bool = false, describe? : Bool = false) -> Json {
+  let ask : Map[String, Json] = if describe {
+    {
+      "name": "127.0.0.1 登录态",
+      "reason": "原名称无法看出用途，补充可辨识的名称与使用说明",
+      "mode": "browser",
+      "hosts": [],
+      "describe": {
+        "name": "UniFi 管理后台登录状态（经 Studio 转发至 127.0.0.1:8443）",
+        "about": "家中 UniFi 管理后台（192.168.0.1）的登录状态。访问方式：先在 Studio 上将 192.168.0.1:443 转发至 127.0.0.1:8443，再转发至本机，然后在对话的浏览器中打开 https://127.0.0.1:8443/。",
+        "wasAbout": "",
+      },
+      "howText": "名称改为：UniFi 管理后台登录状态（经 Studio 转发至 127.0.0.1:8443）",
+      "answer": "approve",
+    }
+  } else if use_secret {
     { "name": "Axiom 查询 token", "reason": "查询中继连接日志，定位拨号失败的原因", "mode": "proxy", "hosts": ["api.axiom.co"], "howText": "代理 · 限 api.axiom.co", "command": "curl -s https://api.axiom.co/v1/datasets/_apl", "answer": "approve", "scope": "chat" }
   } else if file {
     { "name": "生产集群", "mode": "file", "save": { "kind": "file", "typed": true }, "answer": "approve" }
@@ -1598,7 +1613,7 @@ pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)
   }
-  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if use_secret { "申请使用 Axiom 查询 token 查询日志" } else if file { "请选择生产集群的 kubeconfig" } else if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 测试服务登录 的密码" }, "刚刚", {
+  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if describe { "申请修改密钥「127.0.0.1 登录态」的名称与说明" } else if use_secret { "申请使用 Axiom 查询 token 查询日志" } else if file { "请选择生产集群的 kubeconfig" } else if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 测试服务登录 的密码" }, "刚刚", {
     "card": { "type": "options", "vault": "r-demo", "vaultAsk": Json::object(ask) },
     "createdAt": Json::number(1.0e9),
   })
@@ -1745,7 +1760,7 @@ pub fn ask_end_post() -> Json {
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let ask_end = f.mode == "chat-ask-end"
-  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before"
+  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before" || f.mode == "chat-vault-describe"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
   // (chat-rig: an agent's request for the viewer's rig, waiting; -other: someone else's rig; -web: on a web page;
@@ -1819,7 +1834,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       // chat-vault's request to keep a password, last
       if vault {
-        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file", use_secret=f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before", timed=f.mode == "chat-vault-timeout"))
+        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file", use_secret=f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before", timed=f.mode == "chat-vault-timeout", describe=f.mode == "chat-vault-describe"))
       }
       // chat-phone's request for the person's phone, last
       if phone {

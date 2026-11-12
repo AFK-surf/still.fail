@@ -937,7 +937,7 @@ test("vault calls: an agent's request to rename an item: answered as one to keep
   await r.host.time.pass(500);
   r.take();
   const row = vaults().requests[0];
-  assert.deepEqual([row.itemName, row.describe, row.howText], ["127.0.0.1 登录态", { name: "UniFi 后台", about: "经 Studio 转发到 127.0.0.1:8443", wasAbout: "" }, "名字改为：UniFi 后台\n说明改为：经 Studio 转发到 127.0.0.1:8443"]);
+  assert.deepEqual([row.itemName, row.describe, row.howText], ["127.0.0.1 登录态", { name: "UniFi 后台", about: "经 Studio 转发到 127.0.0.1:8443", wasAbout: "" }, "名称改为：UniFi 后台\n说明改为：经 Studio 转发到 127.0.0.1:8443"]);
   await r.ask("vault.approve", { request: "r_d", scope: "once" });
   const written = r.st.items.get(id)!;
   assert.ok(signedOk(written, TAG.item));
