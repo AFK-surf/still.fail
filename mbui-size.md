@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [627960c24](https://github.com/AFK-surf/still.fail/commit/627960c243efddcd2134db194779e3f65e8f5dad) core: every lock call and roster write in each way | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.18 | 180.46 |
 | [b310ef4c6](https://github.com/AFK-surf/still.fail/commit/b310ef4c6e94a4c6a2e9b4e18ab67e173a632d9a) mbui: a scripted run's step comes where a device's | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 93.91 | 183.33 |
 | [67e932c32](https://github.com/AFK-surf/still.fail/commit/67e932c32099609e6fda4b9956bff8a5d12659e6) core: a device its station ended for the lock dial | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.11 | 141.24 |
 | [4639baabb](https://github.com/AFK-surf/still.fail/commit/4639baabb4604530b8ec011b31eea93409a2d689) mbui: a field in a page's list drawn whole as one  | 1.86 | 2.49 | 10.42 | 29.19 | 36.84 | 25.99 | 48.55 | 94.01 | 180.81 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [19d52998a](https://github.com/AFK-surf/still.fail/commit/19d52998ac2d6af2f0dcefb77273736cae8997b6) mbui: a right click on what has no menu of its own | 1.83 | 2.44 | 10.2 | 28.94 | 36.03 | 25.79 | 47.87 | 94.34 | 184.61 |
 | [ebbf50a92](https://github.com/AFK-surf/still.fail/commit/ebbf50a920ab55bb799d6b59bacab25689892c1c) mbui: what goes beside a link of a node's words (V | 1.83 | 2.44 | 10.19 | 28.94 | 36 | 25.78 | 47.85 | 94.96 | 177.29 |
 | [ccdd9e4ff](https://github.com/AFK-surf/still.fail/commit/ccdd9e4ff72b50e83e4dc47e5120547d66d61225) app tests: every screen of real size is given each | 1.83 | 2.44 | 10.18 | 28.93 | 35.95 | 25.77 | 47.8 | 94.42 | 133.77 |
-| [b1e394b22](https://github.com/AFK-surf/still.fail/commit/b1e394b22589646f7b2449edcf5ba230e1682d75) app: the pictures sent from here written through o | 1.83 | 2.44 | 10.18 | 28.92 | 35.95 | 25.77 | 47.8 | 94.45 | 178.83 |
