@@ -273,6 +273,37 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
+  test("Slack not reached as it starts is asked again until it answers; Slack's refusal fails the start", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    // The first two asks of who the bot is get no answer (the network down), as fetch says it.
+    const client = new SlackClient(fake.base);
+    const api = client.api.bind(client);
+    let asks = 0;
+    client.api = ((method: string, ...rest: unknown[]) => {
+      if (method === "auth.test" && ++asks <= 2) return Promise.reject(new TypeError("fetch failed"));
+      return (api as any)(method, ...rest);
+    }) as typeof client.api;
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client, pingMs: PING, staleMs: STALE * 5 });
+    const refused = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-2", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    try {
+      // A short first wait, for the test: the station's is a second.
+      (surface as any).backoffMs = 30;
+      await surface.start(quiet);
+      assert.deepEqual([surface.botUserId(), surface.socket()], ["", { connected: false, lastError: "fetch failed" }]);
+      await fake.until("connected once Slack answered", () => surface.socket().connected);
+      assert.equal(asks, 3);
+      assert.equal(surface.botUserId(), "UBOT");
+
+      fake.answer("auth.test", { ok: false, error: "invalid_auth" });
+      await assert.rejects(refused.start(quiet), /slack auth.test: invalid_auth/);
+    } finally {
+      await surface.stop();
+      await refused.stop();
+      await fake.close();
+    }
+  });
+
   test("posts go out as written in markdown blocks, a long one in parts; files are uploaded first and shared below the text", async () => {
     const fake = await FakeSlack.start();
     bot(fake);
