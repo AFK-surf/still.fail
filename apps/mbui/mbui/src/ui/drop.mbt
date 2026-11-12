@@ -87,37 +87,111 @@ fn drop_within(c : Ctx, x : Double, y : Double) -> Array[Int] {
 }
 
 ///|
-/// Words from outside let go at (`x`, `y`): on a field (what a press there reaches), put in where they were let go as
-/// a paste's are (a step of their own to undo; as many as its paste_limit or more handed to the app as a paste's are,
-/// EditorResult::pasted), the field taking the focus; elsewhere left for this frame's build (Ctx::words_into).
+/// What of the window's tree did with what was let go from outside at a point (tree_words_at, tree_paths_at).
+#derive(Eq)
+priv enum TreeDropped {
+  /// a node of it took it
+  Took
+  /// what of it is drawn there is under a modal layer it is not in: nobody's
+  Shut
+  /// none of it took it: the old view's ways, as before there was a tree
+  Not
+}
+
+///|
+/// Words from outside let go at (`x`, `y`) on the window's tree: on a field of it, in where they were let go; beside one
+/// on a node of it, or what holds that, that takes them for it (words_into), there at once at that field's caret.
+fn tree_words_at(c : Ctx, x : Double, y : Double, words : String) -> TreeDropped {
+  match tree_drop_at(x, y) {
+    Some((Some(st), _)) => {
+      place_caret_at(st, x, y, h_now())
+      tree_words_into(c, st, words)
+      Took
+    }
+    Some((None, Some(at))) =>
+      match tree_drops_on(at, fn(d) { d.words is Some(_) }) {
+        Some({ words: Some(f), .. }) => {
+          tree_words_into(c, f.st, words)
+          Took
+        }
+        _ => Not
+      }
+    Some((_, None)) => Shut
+    None => Not
+  }
+}
+
+///|
+/// Files of drop `pick` let go at (`x`, `y`) with their paths on the window's tree: taken at once, not read, by the
+/// innermost of the node there and what holds it that takes them by their paths (paths_into: on its field, or beside
+/// any); on a field, else, their paths in where they were let go; beside any on one that takes words for its field
+/// (words_into), their paths there at its caret. Taken or shut, the drop let go unread.
+fn tree_paths_at(c : Ctx, x : Double, y : Double, paths : Array[DroppedPath], pick : Int) -> TreeDropped {
+  guard !paths.is_empty() else {
+    return match tree_drop_at(x, y) {
+      Some((_, None)) => {
+        forget_drop(pick)
+        Shut
+      }
+      _ => Not
+    }
+  }
+  let took = match tree_drop_at(x, y) {
+    Some((_, None)) => Shut
+    Some((on, Some(at))) => {
+      let on_field = fn(f : Field) { match on { Some(st) => physical_equal(st, f.st); None => true } }
+      match tree_drops_on(at, fn(d) { d.paths is Some((f, _)) && on_field(f) }) {
+        Some({ paths: Some((_, take)), .. }) => {
+          take(paths)
+          Took
+        }
+        _ =>
+          match on {
+            Some(st) => {
+              place_caret_at(st, x, y, h_now())
+              tree_words_into(c, st, paths_words(paths))
+              Took
+            }
+            None =>
+              match tree_drops_on(at, fn(d) { d.words is Some(_) }) {
+                Some({ words: Some(f), .. }) => {
+                  tree_words_into(c, f.st, paths_words(paths))
+                  Took
+                }
+                _ => Not
+              }
+          }
+      }
+    }
+    None => Not
+  }
+  if took != Not {
+    forget_drop(pick)
+  }
+  took
+}
+
+///|
+/// Words from outside let go at (`x`, `y`): the window's tree's first (tree_words_at); where none of it took them, on an
+/// old view's field (what a press there reaches), put in where they were let go as a paste's are (a step of their own
+/// to undo; as many as its paste_limit or more handed to the app as a paste's are, EditorResult::pasted), the field
+/// taking the focus; elsewhere left for this frame's build (Ctx::words_into).
 fn words_let_go(x : Double, y : Double, words : String) -> Unit {
   // (the window's tree as of when they are let go: what is there then, view_host.mbt)
   old_input_brought()
   let c = g()
   dropping.words = None
-  let target = hit_in(c.hit_ids, c.hit_rects, x, y)
-  match c.editors.get(target) {
-    Some(st) => {
-      c.focus_visible = false
-      c.focus_moved(target)
-      place_caret_at(st, x, y, h_now())
-      st.text_input(text_paste, words, 0, 0, h_now())
-    }
-    None =>
-      // (on a field of the window's tree: in where they were let go; beside one on a node of the tree's that takes
-      // them for it, words_into: there at once, at that field's caret; else left for this frame's build)
-      match tree_drop_at(x, y) {
-        Some((Some(st), _)) => {
-          place_caret_at(st, x, y, h_now())
-          tree_words_into(c, st, words)
-        }
-        Some((None, at)) =>
-          match tree_drops_on(at, fn(d) { d.words is Some(_) }) {
-            Some({ words: Some(f), .. }) => tree_words_into(c, f.st, words)
-            _ => ()
-          }
-        None => dropping.words = Some((drop_within(c, x, y), words, c.frame_no))
+  if tree_words_at(c, x, y, words) is Not {
+    let target = hit_in(c.hit_ids, c.hit_rects, x, y)
+    match c.editors.get(target) {
+      Some(st) => {
+        c.focus_visible = false
+        c.focus_moved(target)
+        place_caret_at(st, x, y, h_now())
+        st.text_input(text_paste, words, 0, 0, h_now())
       }
+      None => dropping.words = Some((drop_within(c, x, y), words, c.frame_no))
+    }
   }
   // (taken as the frame begins: what reads what the hand did is built again in it, the field's words, a box that takes
   // them for its field)
@@ -125,38 +199,14 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
 }
 
 ///|
-/// Files of drop `pick` let go at (`x`, `y`) with their paths, no box taking them as files (Ctx::on_files): left for
-/// this frame's build, a box that takes them by their paths (Ctx::paths_into) or as words for its field
-/// (Ctx::words_into); taken by none, the field they were let go on puts their paths in as it ends (drops_frame_end).
+/// Files of drop `pick` let go at (`x`, `y`) with their paths, none of the window's tree taking them and no old view's
+/// box taking them as files (Ctx::on_files): left for this frame's build, a box that takes them by their paths
+/// (Ctx::paths_into) or as words for its field (Ctx::words_into); taken by none, the field they were let go on puts
+/// their paths in as it ends (drops_frame_end).
 fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) -> Unit {
-  old_input_brought()
   let c = g()
   let target = hit_in(c.hit_ids, c.hit_rects, x, y)
-  // (on a node of the window's tree: taken there at once, not read, by the innermost that takes them by their paths
-  // (paths_into: on its field, or beside any); on a field, else, their paths in where they were let go; beside any on
-  // one that takes words for its field (words_into), their paths there at its caret; else left for this frame's build)
-  match tree_drop_at(x, y) {
-    Some((on, at)) => {
-      forget_drop(pick)
-      let on_field = fn(f : Field) { match on { Some(st) => physical_equal(st, f.st); None => true } }
-      match tree_drops_on(at, fn(d) { d.paths is Some((f, _)) && on_field(f) }) {
-        Some({ paths: Some((_, take)), .. }) => take(paths)
-        _ =>
-          match on {
-            Some(st) => {
-              place_caret_at(st, x, y, h_now())
-              tree_words_into(c, st, paths_words(paths))
-            }
-            None =>
-              match tree_drops_on(at, fn(d) { d.words is Some(_) }) {
-                Some({ words: Some(f), .. }) => tree_words_into(c, f.st, paths_words(paths))
-                _ => ()
-              }
-          }
-      }
-    }
-    None => dropping.paths = Some({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })
-  }
+  dropping.paths = Some({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })
   hand_event()
 }
 
@@ -189,13 +239,17 @@ fn tree_drops_of(v : @view.View) -> TreeDrops {
 }
 
 ///|
-/// What of the window's tree is at (`x`, `y`) in the window, where a press there would go to one of its nodes (not one
-/// hosting an old view): the field's state where it is a field, and the node. None: not the tree's.
-fn tree_drop_at(x : Double, y : Double) -> (EditorState?, @view.NodeId)? {
+/// What of the window's tree something let go at (`x`, `y`) in the window lands on (@view.Tree::drop_at): the node drawn
+/// there, whether or not it takes a press (a page's words: what holds them asked after them, tree_drops_on), not one
+/// hosting an old view; the field's state where it is a field, and the node. Some with no node: the tree's, taking
+/// nothing there now (under a modal layer it is not in). None: not the tree's (an old view's, where nothing of
+/// the tree's is over it, or nothing's).
+fn tree_drop_at(x : Double, y : Double) -> (EditorState?, @view.NodeId?)? {
   guard view_app.val is Some(tree) else { return None }
-  match tree.target_at(x, y) {
-    Pressed(id) | Dragged(id) => Some((tree_fields.get(id).map(fn(tf) { tf.st }), id))
-    _ => None
+  match tree.drop_at(x, y) {
+    Some(OnNode(id)) => Some((tree_fields.get(id).map(fn(tf) { tf.st }), Some(id)))
+    Some(Shut(_)) => Some((None, None))
+    Some(OnOld(_)) | None => None
   }
 }
 
@@ -389,21 +443,25 @@ fn init {
             }
           _ => []
         }
-        // (taken as they are let go by what takes them there, Ctx::on_files: not those let go on a field with their
-        // paths, which are the field's)
+        // (the window's tree's first, by their paths (tree_paths_at); where none of it took them, taken as they are let
+        // go by what of an old view takes them there, Ctx::on_files: not those let go on a field with their paths, which
+        // are the field's)
+        old_input_brought()
         let c = g()
-        let on_field = !paths.is_empty() && c.editors.contains(hit_in(c.hit_ids, c.hit_rects, x, y))
-        match (if on_field { None } else { files_take_at(x, y) }) {
-          Some(take) => {
-            take(Pick::waits([@hostapi.dropped_pick(id)], "files dropped"))
+        if tree_paths_at(c, x, y, paths, id) is Not {
+          let on_field = !paths.is_empty() && c.editors.contains(hit_in(c.hit_ids, c.hit_rects, x, y))
+          match (if on_field { None } else { files_take_at(x, y) }) {
+            Some(take) => take(Pick::waits([@hostapi.dropped_pick(id)], "files dropped"))
+            // (taken by none as files: left to what takes them by their paths, else let go now)
+            None =>
+              if paths.is_empty() {
+                forget_drop(id)
+              } else {
+                paths_let_go(x, y, paths, id)
+              }
           }
-          // (taken by none as files: left to what takes them by their paths, else let go now)
-          None =>
-            if paths.is_empty() {
-              forget_drop(id)
-            } else {
-              paths_let_go(x, y, paths, id)
-            }
+        } else {
+          hand_event()
         }
       }
       "words" => {
