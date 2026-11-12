@@ -18,6 +18,8 @@ import { stationLater } from "./station-fixture.ts";
 
 /// The lock's one station.
 const A = "aa".repeat(32);
+/// Its second, where `setUp` is asked for two.
+const B = "bb".repeat(32);
 /// Web pages of the owner's, on the lock.
 const WEBS = Array.from({ length: PENDING_MOST + 1 }, (_, i) => (0xe0 + i).toString(16).repeat(32));
 const SLACK_MS = 200;
@@ -54,17 +56,19 @@ function station(first: Entry, now: () => number) {
 }
 
 /// A locked workspace `ws` (s1 the owner, this device its app; s2 a member with a phone; web pages of s1's), its one
-/// station A serving it, the lock read and held; the cloud answering, or (`cloud: "never"`) never.
-async function setUp(cloud: "answers" | "never" = "answers") {
+/// station A serving it (`two`: and B, `st2`), the lock read and held; the cloud answering, or (`cloud: "never"`) never.
+async function setUp(cloud: "answers" | "never" = "answers", two = false) {
   const g = grant();
   const more = [{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8" }, ...WEBS.map((id, i) => ({ id, sub: "s1", kind: "web", label: `web ${i}`, exp: 2_000_000_000 }))];
-  const r = await rig((signer) => ({ ws: genesis("ws", signer, true, [{ key: A, name: "mini" }], g.keys, ME, more) }), undefined, A);
+  const r = await rig((signer) => ({ ws: genesis("ws", signer, true, [{ key: A, name: "mini" }, ...(two ? [{ key: B, name: "mini 2" }] : [])], g.keys, ME, more) }), undefined, two ? [A, B] : A);
   const inner = r.core.inner;
   const st = station(r.cloud.chains.get("ws")![0]!, () => r.host.nowMs());
+  const st2 = station(r.cloud.chains.get("ws")![0]!, () => r.host.nowMs());
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
     if (ws === "ws" && id === A && path.startsWith("/lock")) return st.answer(method, path, body);
+    if (two && ws === "ws" && id === B && path.startsWith("/lock")) return st2.answer(method, path, body);
     return (original as (...a: unknown[]) => unknown)(addr, method, path, body, ...rest);
   }) as typeof inner.stations.requests.call;
   const run = async <X>(e: Effect.Effect<X, any>) => {
@@ -102,7 +106,19 @@ async function setUp(cloud: "answers" | "never" = "answers") {
   /// The station told this device again (its link opened, its `lock` event): the lock read of it.
   const told = () => run(read(inner, "ws"));
   const removed = (id: string) => held(inner, "ws")!.entries.some((e) => e.kind === "device.remove" && (e.body as { id: string }).id === id);
-  return { r, inner, st, run, timed, told, removed };
+  return { r, inner, st, st2, run, timed, told, removed };
+}
+type Setup = Awaited<ReturnType<typeof setUp>>;
+
+/// The cloud from now on answering the workspace's view with `left` its stations, and taking a station's removal (as
+/// it does once a person takes one out).
+function stationsLeft(s: Setup, left: { id: string; name: string }[]) {
+  stationLater(s.r.host, (req) => {
+    const path = new URL(req.url).pathname;
+    if (req.method === "DELETE" && /^\/v1\/workspaces\/ws\/stations\/[^/]+$/.test(path)) return Promise.resolve(jsonResponse(200, { ok: true }));
+    if (req.method === "GET" && path === "/v1/workspaces/ws") return Promise.resolve(jsonResponse(200, { id: "ws", name: "W", role: "owner", lock: s.r.cloud.head("ws"), lock_requests: 0, stations: left.map((x) => ({ ...x, online: true, last_seen: null })) }));
+    return undefined;
+  });
 }
 
 /// An entry signed at the station meanwhile, after its head (by this device's key, as another device of the owner's
@@ -264,4 +280,49 @@ test("the lock turned off with its station up: taken (the station lets the lock 
   assert.equal(a.ok.pending, undefined, JSON.stringify(a.ok));
   assert.equal(pendingHeld(s.inner, "ws").length, 0);
   assert.equal(held(s.inner, "ws")!.entries.at(-1)!.kind, "disable");
+});
+
+// ── a station gone for good ──
+// Whose taking counts for an entry are the stations the lock names after it (views/lock.ts `#signed`): one taken out is
+// brought it behind, and where none is named after it the lock is the cloud's to keep, as one that never named one;
+// what was pending then is brought the cloud's way (`deliver`). 2026-11-13: with the lock's one station retired, every
+// change pended for good, its removal too, and past PENDING_MOST every call was refused: the lock could be neither
+// changed nor turned off, and the station's machine, the last way out, was gone.
+
+test("the lock's one station gone for good, taken out of the workspace: its removal the cloud's, what was pending for it brought then, and the lock turned off at once", async () => {
+  const s = await setUp();
+  s.st.say.silent = true;
+  const a = await s.timed("lock.removeDevice", { device: PHONE });
+  assert.equal(a.ok?.pending?.state, "waiting", JSON.stringify(a.ok));
+  stationsLeft(s, []);
+  const b = await s.timed("workspace.removeStation", { station: A });
+  assert.equal(b.error, undefined, JSON.stringify(b.error));
+  await s.r.host.time.pass(1_000);
+  const kinds = held(s.inner, "ws")!.entries.map((e) => e.kind);
+  assert.ok(kinds.includes("station.remove"), kinds.join());
+  assert.ok(s.removed(PHONE), `the pending removal taken: ${kinds.join()}`);
+  assert.deepEqual(pendingHeld(s.inner, "ws"), []);
+  assert.ok(s.r.cloud.chains.get("ws")!.some((e) => e.kind === "device.remove" && (e.body as { id: string }).id === PHONE), "the cloud keeps it");
+  const lock = await s.r.watch({ topic: "lock", workspace: "ws" });
+  const l = await lock();
+  assert.deepEqual(l.pending, []);
+  assert.ok(!JSON.stringify(l.members ?? []).includes("Pixel 8"), "the phone not listed");
+  const c = await s.timed("lock.disable", {});
+  assert.equal(c.error, undefined, JSON.stringify(c.error));
+  assert.equal(c.ok?.pending, undefined, JSON.stringify(c.ok));
+  assert.equal(held(s.inner, "ws")!.entries.at(-1)!.kind, "disable");
+});
+
+test("one of the lock's two stations taken out while the other is silent: pending, waiting for the other by name, the cloud sent nothing", async () => {
+  const s = await setUp("answers", true);
+  s.st2.say.silent = true;
+  stationsLeft(s, [{ id: B, name: "studio 2" }]);
+  const length = s.r.cloud.chains.get("ws")!.length;
+  const b = await s.timed("workspace.removeStation", { station: A });
+  assert.equal(b.error, undefined, JSON.stringify(b.error));
+  assert.deepEqual(pendingHeld(s.inner, "ws").map((x) => [x.state, x.entry.kind]), [["waiting", "station.remove"]]);
+  assert.equal(s.r.cloud.chains.get("ws")!.length, length, "the cloud sent nothing");
+  const lock = await s.r.watch({ topic: "lock", workspace: "ws" });
+  const rows = (await lock()).pending as { stations: string[]; text: string }[];
+  assert.deepEqual(rows.map((x) => x.stations), [["studio 2"]], JSON.stringify(rows));
 });

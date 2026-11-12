@@ -701,3 +701,65 @@ test("a failed change to the person's own lock, on the workspace's lock topic: d
   assert.deepEqual((await lock()).pending, []);
   assert.deepEqual(s.personal.view("s1").pending, []);
 });
+
+// ── what failed says ──
+// A pending entry whose parent is no longer the head pinned fails where no seed is in hand (`#deliver`): named as
+// changed meanwhile only where its own subject was (`againOf` `otherwise`); where the lock moved and its subject did not,
+// what changed is their trusted devices (2026-11-13: 「移除设备 laptop没有生效：laptop刚被另一台设备改过」 though the
+// laptop was not touched, a tablet approved meanwhile).
+
+/// An entry the station keeps after the chain pinned, signed by this device's key as another device of theirs would.
+function theirsOnPerson(s: Setup, kind: string, body: unknown) {
+  const pinned = s.personal.entries("s1");
+  const seed = s.r.host.secure.get("personal-signer")!.value;
+  const key = `ed25519:${hex(ed25519.getPublicKey(seed))}`;
+  const e = { v: 1 as const, ws: personOf("s1"), seq: pinned.length, prev: entryHash(pinned.at(-1)!), at: Math.floor(s.r.host.nowMs() / 1000), kind, body };
+  s.st.kept.person = [...pinned, { ...e, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } }];
+}
+
+for (const c of [
+  { name: "another device put on meanwhile, the laptop untouched: their trusted devices said changed", body: { key: `ed25519:${"66".repeat(32)}`, id: "66".repeat(32), label: "tablet" }, says: "移除设备 laptop没有生效：受信任设备刚被另一台设备改过" },
+  { name: "the laptop itself changed meanwhile (renamed): it said changed", body: { key: LAPTOP_KEY, id: LAPTOP, label: "renamed", sign_key: LAPTOP_SIGNS }, says: "移除设备 laptop没有生效：laptop刚被另一台设备改过" },
+]) {
+  test(`a person's lock, pending, the head moved, no seed in hand: ${c.name}`, async () => {
+    const s = await setUp();
+    cloudAs(s.r, "all");
+    s.st.say.silent = true;
+    await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: LAPTOP_KEY });
+    theirsOnPerson(s, "device", c.body);
+    s.st.say.silent = false;
+    await s.run(s.personal.refresh("s1"));
+    await s.r.host.time.pass(1_000);
+    const rows = s.personal.view("s1").pending as { state: string; text: string }[];
+    assert.deepEqual(rows.map((r) => r.state), ["failed"]);
+    assert.ok(rows[0]!.text.startsWith(c.says), rows[0]!.text);
+  });
+}
+
+// ── a station gone for good ──
+// The person's one station taken out of their one workspace: no station of theirs is left to ask, so what was pending
+// on their own lock is the cloud's then (personal-lock.ts `#deliver`, told as the workspace's view changes), as a new
+// entry with none to ask is (2026-11-13: it waited for good).
+
+test("the person's one station gone for good, taken out of their workspace: an own device's removal pending for it is the cloud's then, pinned, nothing pending", async () => {
+  const s = await setUp();
+  s.st.say.silent = true;
+  const before = s.personal.entries("s1");
+  const out = await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: LAPTOP_KEY });
+  answeredWithin("adb.personalRemove, silent", out, 2 * ASKED_MS + SLACK_MS);
+  pendingOnPerson("adb.personalRemove, silent", s, before);
+  // (the cloud from now on: the station's removal taken, the workspace's view without it)
+  stationLater(s.r.host, (req) => {
+    const path = new URL(req.url).pathname;
+    if (req.method === "DELETE" && path === `/v1/workspaces/ws/stations/${A}`) return Promise.resolve(jsonResponse(200, { ok: true }));
+    if (req.method === "GET" && path === "/v1/workspaces/ws") return Promise.resolve(jsonResponse(200, { id: "ws", name: "W", role: "owner", lock: s.r.cloud.head("ws"), lock_requests: 0, stations: [] }));
+    return undefined;
+  });
+  const gone = await timedCall(s.r, "workspace.removeStation", { account: "s1", workspace: "ws", station: A });
+  assert.ok(gone.ok, JSON.stringify(gone.said));
+  await s.r.host.time.pass(1_000);
+  assert.deepEqual(s.personal.view("s1").pending, []);
+  assert.ok(isRemove(LAPTOP_KEY)(s.personal.entries("s1").at(-1)!), "pinned");
+  assert.ok(isRemove(LAPTOP_KEY)(s.personCloud.entries.at(-1)!), "the cloud keeps it");
+  assert.deepEqual(pendingHeld(s.inner, "ws"), [], "and the workspace's removal of it taken too");
+});

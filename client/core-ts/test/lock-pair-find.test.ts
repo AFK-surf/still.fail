@@ -337,6 +337,8 @@ test("a personal lock's code disappears during the search: another device can st
     standing: () => "none", root: () => null,
     // (views/lock.ts `ownLockFor` reads these of it as the locks are read: it begins nothing here)
     refresh: () => Effect.void, entries: () => [], mayBeginQuietly: () => false,
+    // (and what is pending of it, on the lock's topic, as the workspace's view changes)
+    pendingShown: () => [], stationsChanged: () => {},
   }) as never;
   await Effect.runPromise(personalBegin(w.core.inner, ["s1"]));
   await w.host.time.pass(1_000);
@@ -359,6 +361,8 @@ test("a personal lock's code disappears while it is checked: another device can 
     standing: () => "none", root: () => null,
     // (views/lock.ts `ownLockFor` reads these of it as the locks are read: it begins nothing here)
     refresh: () => Effect.void, entries: () => [], mayBeginQuietly: () => false,
+    // (and what is pending of it, on the lock's topic, as the workspace's view changes)
+    pendingShown: () => [], stationsChanged: () => {},
   }) as never;
   await Effect.runPromise(personalBegin(w.core.inner, ["s1"]));
   await w.host.time.pass(1_000);
@@ -570,6 +574,8 @@ test("where its person bound a lock of their own that this device is not on, it 
     standing: () => standing, root: () => null, entries: () => [], chain: () => null,
     // (views/lock.ts `ownLockFor` reads these of it as the locks are read: it begins nothing here)
     refresh: () => Effect.void, mayBeginQuietly: () => false,
+    // (and what is pending of it, on the lock's topic, as the workspace's view changes)
+    pendingShown: () => [], stationsChanged: () => {},
   }) as never;
   await signedIn(w, "person", { sub: "s1", person: "ab".repeat(32) });
   const here = (await w.lock()).me;

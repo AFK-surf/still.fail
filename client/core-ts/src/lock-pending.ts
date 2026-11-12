@@ -5,6 +5,7 @@
 // Pure: what each lock keeps, where, and who is told is the caller's.
 import type { Entry } from "./lock.ts";
 import { canonical } from "./lock.ts";
+import { CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
 
 /// The most entries a lock keeps waiting for its stations here: past it a person's call is refused with a sentence
@@ -13,6 +14,20 @@ import { t } from "./i18n.ts";
 /// waits for one before the ninth: what they did is all still to take effect, and every one more is one more for the
 /// stations to refuse once another device changed the lock meanwhile.
 export const PENDING_MOST = 8;
+
+/// How long a write to still.fail cloud of a workspace's roster (a member added, taken out or given a role, a station
+/// taken out or enrolled) is waited on before the call fails saying the server did not answer and nothing was saved:
+/// the shell's client bounds only the connecting (15 s), and a cloud that took the request and never answered held the
+/// person's button for good (test/answer-timing.test.ts, 2026-11-12). As long as the lock waits for its stations to take
+/// an entry (views/lock.ts TAKEN_MS), the longest of its waits: a write that takes the cloud longer than a station takes
+/// to answer is not one to wait on; ASKED_MS (3 s) would fail writes a slow line makes in five. So does what a lock
+/// gives the cloud to keep where it names no station (views/lock.ts `#cloudOnly`, `deliver`; personal-lock.ts the
+/// same): a call fails then with `cloudSilent`, nothing kept; brought in the background, it is left pending, brought
+/// again as the cloud is next heard from.
+export const CLOUD_WRITE_MS = 15_000;
+
+/// The cloud did not answer a write a person waits on by CLOUD_WRITE_MS: nothing saved, try again.
+export const cloudSilent = (): CoreError => new CoreError("cloud_silent", t("core-misc.lock.pending.cloudSilent"));
 
 /// What a pending entry does, in words (`core-misc.lock.pending.act.*`); null: the core's own, which no one asked for
 /// (a person's lock bound, their devices kept to it, an entry of this device's signed again): kept and brought, not

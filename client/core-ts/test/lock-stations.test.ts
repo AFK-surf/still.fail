@@ -461,5 +461,10 @@ test("a locked workspace's roster changes answer within the stations' wait and t
   assert.ok(enrolled.command.endsWith(` --lock ${st.head().hash}`), enrolled.command);
   assert.equal(st.chain.length, 1);
   await pends("workspace.removeMember", { member: "s2" }, "member.remove", { sub: "s2" });
-  await pends("workspace.removeStation", { station: A }, "station.remove", { key: A });
+  // Its one station taken out: the lock names none after that, which is the cloud's to keep from it on, as a lock that
+  // never named one is (a station gone for good is waited for by nothing), and held.
+  const length = chain().length;
+  await timed("workspace.removeStation", { station: A });
+  assert.ok(chain().slice(length).some((e) => e.kind === "station.remove"), "the cloud keeps it");
+  assert.ok(held(inner, "ws")!.entries.some((e) => e.kind === "station.remove" && (e.body as { key: string }).key === A), "held");
 });

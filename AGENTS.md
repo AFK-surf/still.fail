@@ -131,7 +131,8 @@ they changed on their event streams (`station/src/mesh/lock-events.ts`) and brin
 each other level (`station/src/mesh/lock-sync.ts`, `station/src/mesh/person-sync.ts`). The cloud is asked only where
 no station answers (one from before, all offline), and is sent what a station took for the stations and devices from
 before, never waited on; that goes 7 days after these stations ship. Its taking an entry counts for nothing: what no
-station took is pending on the device that signed it (`client/core-ts/src/lock-pending.ts`) until one does.
+station took is pending on the device that signed it (`client/core-ts/src/lock-pending.ts`) until one does, or until
+the lock names none (its last station taken out), which the cloud keeps as before there were stations.
 
 That sync is being replaced (2026-11-12): stations that took different entries at one place never came back to one
 chain (`station/test/lock-world-sim.ts` lists what that broke and what still does). What replaces it is modelled in

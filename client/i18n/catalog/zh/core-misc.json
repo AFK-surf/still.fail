@@ -248,6 +248,7 @@
   "core-misc.lock.pending.header": "以下改动还没有生效",
   "core-misc.lock.pending.waiting": "{action}：已记下，等 {stations} 上线后生效",
   "core-misc.lock.pending.failed": "{action}没有生效：{what}刚被另一台设备改过。请查看现在的状态，仍然需要的话再操作一次",
+  "core-misc.lock.pending.trusted": "受信任设备",
   "core-misc.lock.pending.dismiss": "知道了",
   "core-misc.lock.pending.act.removeDevice": "移除设备 {name}",
   "core-misc.lock.pending.act.renew": "续期 {name}",

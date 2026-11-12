@@ -19,7 +19,7 @@ import type { Runner } from "./runtime.ts";
 import { fromUtf8, hex, parseJson, sha256, utf8 } from "./util.ts";
 import { ed25519Ok } from "./vault/verified.ts";
 import type { Asked } from "./views/lock.ts";
-import { PENDING_MOST, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "./lock-pending.ts";
+import { CLOUD_WRITE_MS, PENDING_MOST, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "./lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -631,6 +631,12 @@ export class PersonalLock {
     return (this.#pending.get(sub) ?? []).filter((x) => x.act !== null).map((item) => ({ item, row: pendingRow(item, names) }));
   }
 
+  /// The stations of `sub`'s workspaces changed (one taken out, as the workspace's view read again says): what is
+  /// pending is brought as they stand now (`#deliver`), the cloud's way where none is left.
+  stationsChanged(sub: string): void {
+    this.#deliver(sub);
+  }
+
   /// A failed one the person read (`adb.personalPendingDismiss`): dropped.
   dismissPending(sub: string, id: string): void {
     const items = this.#pending.get(sub) ?? [];
@@ -695,14 +701,26 @@ export class PersonalLock {
           continue;
         }
         if (e.seq !== pinned.length || e.prev !== entryHash(pinned[pinned.length - 1]!)) {
+          // (its subject decided otherwise since: that one named; else the lock moved and the seed to sign it again is not
+          // in hand: what changed is their trusted devices, not it)
           const how = againOf(pinned, this.#aside.get(sub) ?? [], e, subjectOf);
           if (how === "done") set(null);
-          else set({ state: "failed", what: item.name });
+          else set({ state: "failed", what: how === "otherwise" ? item.name : t("core-misc.lock.pending.trusted") });
           continue;
         }
         const chain = [...pinned, e];
         const r = yield* Effect.result(stations.bring(sub, chain));
         if (r._tag === "Success" && typeof r.success === "number" && r.success > 0) {
+          yield* this.#tookLate(sub, e, chain);
+          continue;
+        }
+        // No station of theirs to ask any more (the last taken out of their workspaces): the cloud's, as a new entry
+        // with none to ask is (`#signHere`). Taken there, pinned and pending no more (dropped first: `#pin` sends the
+        // cloud what was pending, and it has it); not, it waits for the next time this runs.
+        if (r._tag === "Success" && r.success === null) {
+          const kept = yield* Effect.timeoutOption(Effect.result(this.#env.cloud(sub, "POST", PATH, { entries: [e] })), CLOUD_WRITE_MS); // timer: a deadline (the turn is held meanwhile)
+          if (kept._tag !== "Some" || kept.value._tag !== "Success") return;
+          set(null);
           yield* this.#tookLate(sub, e, chain);
           continue;
         }
@@ -754,10 +772,12 @@ export class PersonalLock {
         this.#env.runner.fork(Effect.ignore(toCloud));
         return yield* landed;
       }
-      // No station to ask (none this device knows of), or a genesis: the cloud's, as before.
+      // No station to ask (none this device knows of), or a genesis: the cloud's, as before; a call a person waits on
+      // by CLOUD_WRITE_MS, else it fails saying nothing was saved, nothing pinned or pending.
       if (taken === null || kind === "genesis") {
         if (typeof taken === "object" && taken !== null) this.#env.runner.fork(Effect.ignore(taken.later));
-        return Effect.andThen(cloudTakes, inTurn(landed));
+        const inTime = within === undefined ? cloudTakes : Effect.flatMap(Effect.timeoutOption(cloudTakes, CLOUD_WRITE_MS), (o) => (o._tag === "Some" ? Effect.void : Effect.fail(cloudSilent()))); // timer: a deadline on what a call waits for
+        return Effect.andThen(inTime, inTurn(landed));
       }
       // Pending: none took it nor refused it by the call's wait (or TAKEN_MS). Those still answering are listened to: one
       // taking it then, it is pinned (`#tookLate`); one refusing it, decided as it is next delivered.

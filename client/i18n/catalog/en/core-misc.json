@@ -248,6 +248,7 @@
   "core-misc.lock.pending.header": "These changes haven't taken effect yet",
   "core-misc.lock.pending.waiting": "{action}: noted, takes effect once {stations} is online",
   "core-misc.lock.pending.failed": "{action} didn't take effect: {what} was just changed on another device. Check how it stands now, and do it again if it's still needed",
+  "core-misc.lock.pending.trusted": "your trusted devices",
   "core-misc.lock.pending.dismiss": "OK",
   "core-misc.lock.pending.act.removeDevice": "Remove device {name}",
   "core-misc.lock.pending.act.renew": "Renew {name}",

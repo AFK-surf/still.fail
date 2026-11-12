@@ -123,7 +123,10 @@ another; the accounts' list's merge across stations and its refills.
   (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
   held and never on it, shown on the lock's topic as not in effect, and brought to the stations as one is next read
   (views/lock.ts `deliver`, personal-lock.ts `#deliver`), never on a timer. The cloud is sent an entry once a station
-  took it. Only a lock that names no station, and a person's lock begun anew, are still the cloud's to take.
+  took it. Whose taking counts are the stations the lock names after the entry (one taken out is brought it behind).
+  Only a lock that names no station (the removal of its last station leaves one so; a person's with none left in
+  their workspaces), and a person's lock begun anew, are still the cloud's to take; what was pending is brought there
+  then (2026-11-13: a lock whose one station retired could never be changed again).
 
 ## Contracts made from here
 

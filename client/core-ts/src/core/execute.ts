@@ -15,6 +15,7 @@ import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
 import { Kind } from "../trace.ts";
 import { t } from "../i18n.ts";
+import { CLOUD_WRITE_MS, cloudSilent } from "../lock-pending.ts";
 import { isObject } from "../util.ts";
 import { Wake } from "../wake.ts";
 import type { Call } from "./calls.ts";
@@ -61,13 +62,8 @@ function rosterOf(method: string, path: string, body: unknown): { ws: string; wh
   return method === "PATCH" && kind === "members" && typeof role === "string" ? { ws, what: { member: id, role } } : null;
 }
 
-/// How long a write to still.fail cloud of a workspace's roster (a member added, taken out or given a role, a station
-/// taken out or enrolled) is waited on before the call fails saying the server did not answer and nothing was saved:
-/// the shell's client bounds only the connecting (15 s), and a cloud that took the request and never answered held the
-/// person's button for good (test/answer-timing.test.ts, 2026-11-12). As long as the lock waits for its stations to take
-/// an entry (views/lock.ts TAKEN_MS), the longest of its waits: a write that takes the cloud longer than a station takes
-/// to answer is not one to wait on; ASKED_MS (3 s) would fail writes a slow line makes in five.
-export const CLOUD_WRITE_MS = 15_000;
+// (CLOUD_WRITE_MS: src/lock-pending.ts, where the lock's own writes to the cloud end by it too)
+export { CLOUD_WRITE_MS };
 
 /// How long a write to still.fail cloud that went through waits for the account's topics read again before it answers:
 /// that read goes on after. 2026-11-11 a member added answered after 3 min 40 s, the POST itself under a second: every
@@ -165,7 +161,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
             // fails here leaves nothing changed: that entry is dropped too, as the failure says (nothing saved).
             const asked = inner.provider.request(sub, op.method, op.path, op.body, ctx);
             const bounded = roster || adding || enrolling
-              ? Effect.flatMap(Effect.timeoutOption(asked, CLOUD_WRITE_MS), (o) => (o._tag === "Some" ? Effect.succeed(o.value) : Effect.fail(new CoreError("cloud_silent", t("core-misc.lock.pending.cloudSilent"))))) // timer: a deadline on what a call waits for
+              ? Effect.flatMap(Effect.timeoutOption(asked, CLOUD_WRITE_MS), (o) => (o._tag === "Some" ? Effect.succeed(o.value) : Effect.fail(cloudSilent()))) // timer: a deadline on what a call waits for
               : asked;
             const pendingId = isObject(signed) && isObject(signed.pending) && typeof signed.pending.id === "string" ? signed.pending.id : null;
             let result = yield* (pendingId !== null && roster ? Effect.tapError(bounded, () => Effect.sync(() => hooks.pendingDrop?.(inner, roster.ws, pendingId))) : bounded);

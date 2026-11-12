@@ -46,7 +46,7 @@ import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, personOf } from "../personal-lock.ts";
-import { type Act, PENDING_MOST, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
+import { type Act, CLOUD_WRITE_MS, PENDING_MOST, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -237,15 +237,17 @@ function putPending(inner: Inner, ws: string, items: readonly Pending[]): void {
   touch(inner, ws);
 }
 
-/// The names of the lock's stations, as the workspace's view (else the lock) names them: what a pending entry waits for.
-function stationNames(inner: Inner, ws: string): string[] {
+/// The names of the lock's stations, as the workspace's view (else the lock) names them: what a pending entry waits for
+/// (`of`: but one it takes out, whose taking it does not wait for, `Lock.#signed`).
+function stationNames(inner: Inner, ws: string, of?: Entry): string[] {
   const f = fold(held(inner, ws)?.entries ?? []);
   const listed = arr(get(view(inner, ws), "stations"));
-  return [...f.stations].map(([key, name]) => str(listed.find((s) => s?.id === key)?.name) || name || key.slice(0, 8));
+  const out = of?.kind === "station.remove" ? str(get(of.body, "key")) : null;
+  return [...f.stations].filter(([key]) => key !== out).map(([key, name]) => str(listed.find((s) => s?.id === key)?.name) || name || key.slice(0, 8));
 }
 
 /// A pending entry's row in the `lock` topic.
-export const pendingRowOf = (inner: Inner, ws: string, p: Pending) => pendingRow(p, stationNames(inner, ws));
+export const pendingRowOf = (inner: Inner, ws: string, p: Pending) => pendingRow(p, stationNames(inner, ws, p.entry));
 
 /// What the signing key of this device is, as loaded (undefined: not loaded yet), per core.
 const signers = new WeakMap<Inner, string | null>();
@@ -467,6 +469,10 @@ export function install(inner: Inner): void {
     const ws = topic.workspace as string;
     // The prompts name the workspaces, and follow the person's role in each.
     lockSeen(inner).touch("prompts");
+    // Its stations may have changed (one taken out): what is pending of its person's own lock is brought as their
+    // stations stand now, the cloud's way where the last was taken out (personal-lock.ts `stationsChanged`).
+    const owner = inner.workspaces.owner(ws);
+    if (owner !== null) inner.adb.personal().stationsChanged(owner);
     const says = cloudSays(view(inner, ws));
     if (says === undefined) return;
     readSaid(inner, ws, says);
@@ -669,8 +675,14 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           // What it keeps, as far as this read shows it (its chain gone by): what it lacks of what this device keeps is
           // carried to it (`carry`).
           const known = head === null ? [] : how === "behind" ? was!.entries.slice(0, head.seq + 1) : entries;
+          // What it shows counts as far as the lock names it: its own removal, and what follows, is not taken of it (whose
+          // taking counts are the stations the lock names after an entry, `Lock.#signed`; one taken out is brought it
+          // behind, and takes it, but its removal waits for those left).
+          const out = entries === null ? -1 : entries.findIndex((e) => e.kind === "station.remove" && get(e.body, "key") === id);
+          const shown = out > 0 ? entries!.slice(0, out) : entries;
+          const named = out > 0 ? { seq: out - 1, hash: entryHash(shown![out - 1]!), genesis: head!.genesis } : head;
           const devices = yield* ask(id, "/lock/devices");
-          return { id, head, entries, parts, known, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
+          return { id, head: named, entries: shown, parts, known, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
         }),
       ),
       () => OTHERS_MS,
@@ -870,6 +882,9 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
         if (taken.length > 0) inner.runner.fork(Effect.ignore(inner.provider.request(sub, "POST", `/v1/workspaces/${encodeURIComponent(ws)}/lock`, { entries: taken }, null), { log: "Unhandled", message: "lock entries a station took sent to the cloud" }));
       }
     }
+    // The lock held names no station (the last taken out): no station's read will ever bring what is pending, so it is
+    // brought now, the cloud's way (`Lock.deliver`).
+    if (head !== null && fold(now.entries).stations.size === 0 && !fold(now.entries).disabled) deliver(inner, ws);
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
@@ -2868,13 +2883,21 @@ export class Lock {
       yield* tries === 0 ? checked : Effect.mapError(checked, () => self.#changed(entry));
       const p = part(inner, self.ws);
       if (tries > 0) p.tries.set(hash, tries);
-      // (the stations of the lock before it and after it: one it takes out is brought it too, and one it takes in)
-      const stations = [...new Set([...fold(entries).stations.keys(), ...fold(chain).stations.keys()])];
+      // (the stations of the lock before it and after it: one it takes out is brought it too, and one it takes in; whose
+      // taking counts are those it names after it, `named`: a station taken out is brought it behind, as one gone for
+      // good never would take it, and its removal would wait for it for ever)
+      const named = [...fold(chain).stations.keys()];
+      const stations = [...new Set([...fold(entries).stations.keys(), ...named])];
+      const behind = stations.filter((s) => !named.includes(s));
       const signed: Head = { seq: entry.seq, hash, genesis: head.genesis };
       const takenBy = (id: string, said: unknown) => self.#takenBy(id, said, entry);
-      // A lock that names no station: nothing but the cloud keeps it (turned on with none up), and what is signed is
-      // the cloud's to keep, as before there were stations to keep a lock; nothing here protects anything yet.
-      if (stations.length === 0) return yield* self.#cloudOnly(entry, head, signed, chain);
+      // A lock that names no station (turned on with none up, or the last taken out by this entry): nothing but the
+      // cloud keeps it, and what is signed is the cloud's to keep, as before there were stations to keep a lock;
+      // nothing here protects anything yet.
+      if (named.length === 0) {
+        if (behind.length > 0) inner.runner.fork(Effect.ignore(self.#bring(chain, behind), { log: "Unhandled", message: "lock chain brought to a station taken out" }));
+        return yield* self.#cloudOnly(entry, head, signed, chain);
+      }
       // A station named (`waitFor`: one being taken in pins only what this device brings it) is brought it first, and
       // waited on: its taking is what the call is for. Taken by none of them, nothing is brought anywhere else and the
       // call fails in the station's words, or as not reached: never pending, as nothing could take it but that one.
@@ -2894,9 +2917,10 @@ export class Lock {
       // (waited on only of those that serve it: one from before, or not answering, hears of it in the background, and
       // its taking it is held as it comes)
       const serving = p.serving;
-      const later = stations.filter((s) => !serving.has(s));
+      if (behind.length > 0) inner.runner.fork(Effect.ignore(self.#bring(chain, behind), { log: "Unhandled", message: "lock chain brought to a station taken out" }));
+      const later = named.filter((s) => !serving.has(s));
       if (later.length > 0) inner.runner.fork(Effect.ignore(Effect.flatMap(self.#bring(chain, later), (said) => self.#tookLate(said, takenBy, signed, chain, entry)), { log: "Unhandled", message: "lock chain brought" }));
-      const first = yield* self.#firstTaken(chain, stations.filter((s) => serving.has(s)), takenBy, head.genesis);
+      const first = yield* self.#firstTaken(chain, named.filter((s) => serving.has(s)), takenBy, head.genesis);
       const answer: unknown = { head: signed, stations: {} };
       // Refused by a station that keeps this lock (another entry at its place, or the lock's rules) and taken by none:
       // what becomes of it is `#lost`'s, in the turn.
@@ -2940,7 +2964,9 @@ export class Lock {
         return there !== undefined && entryHash(there) === signed.hash ? Effect.void : Effect.fail(e);
       });
     });
-    return Effect.succeed(Effect.as(Effect.andThen(cloudTakes, this.#cloudTook(head, signed, chain)), { head: signed, stations: {} }));
+    // (a call a person waits on: by CLOUD_WRITE_MS, else it fails saying nothing was saved, nothing held or pending)
+    const inTime = this.#within === null ? cloudTakes : Effect.flatMap(Effect.timeoutOption(cloudTakes, CLOUD_WRITE_MS), (o) => (o._tag === "Some" ? Effect.void : Effect.fail(cloudSilent()))); // timer: a deadline on what a call waits for
+    return Effect.succeed(Effect.as(Effect.andThen(inTime, this.#cloudTook(head, signed, chain)), { head: signed, stations: {} }));
   }
 
   /// In the turn: `entry` (of `chain`) kept pending (`pendingHeld`), or, signed again (`of` the id of the one first
@@ -3026,11 +3052,23 @@ export class Lock {
         const chain = [...h.entries, entry];
         const signed: Head = { seq: entry.seq, hash: entryHash(entry), genesis: h.head.genesis };
         const takenBy = (id: string, said: unknown) => self.#takenBy(id, said, entry);
-        const stations = [...new Set([...fold(h.entries).stations.keys(), ...fold(chain).stations.keys()])];
+        // (whose taking counts: the stations it names after it, as `#signed` goes; one taken out is brought it behind)
+        const named = [...fold(chain).stations.keys()];
+        const behind = [...fold(h.entries).stations.keys()].filter((s) => !named.includes(s));
+        if (behind.length > 0) inner.runner.fork(Effect.ignore(self.#bring(chain, behind), { log: "Unhandled", message: "pending lock entry brought to a station taken out" }));
+        // The lock names no station after it (the last taken out): the cloud's to keep, as `#cloudOnly`'s. Taken there,
+        // it is held and pending no more; not, it waits for the next time this runs.
+        if (named.length === 0) {
+          const kept = yield* Effect.timeoutOption(Effect.result(self.#toCloud([entry], false)), CLOUD_WRITE_MS); // timer: a deadline (the turn is held meanwhile)
+          if (kept._tag !== "Some" || kept.value._tag !== "Success") return;
+          yield* drop;
+          yield* self.#taken(signed, chain);
+          continue;
+        }
         const serving = part(inner, ws).serving;
-        const later = stations.filter((s) => !serving.has(s));
+        const later = named.filter((s) => !serving.has(s));
         if (later.length > 0) inner.runner.fork(Effect.ignore(Effect.flatMap(self.#bring(chain, later), (said) => self.#tookLate(said, takenBy, signed, chain, entry)), { log: "Unhandled", message: "pending lock entry brought" }));
-        const first = yield* self.#firstTaken(chain, stations.filter((s) => serving.has(s)), takenBy, h.head.genesis);
+        const first = yield* self.#firstTaken(chain, named.filter((s) => serving.has(s)), takenBy, h.head.genesis);
         const b: Brought = "now" in first ? first.now : { took: false, refused: first.refused() };
         if (b.took) {
           // (held, pending no more, the cloud sent it: `hold`)
