@@ -915,10 +915,14 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                     state.passkey = { id: p.id, host: p.host, rpId: p.rpId, clientData: p.clientData, allow, userVerification: typeof p.userVerification === "string" ? p.userVerification : "preferred" };
                   }
                 }
+                // What the machine does not let the station do (a Mac without the Accessibility grant): no input taken
+                // whatever a station from before it said, and not made to only look from elsewhere either (nothing taken
+                // it, its 控制 kept for when the grant is there).
+                const lacks = isObject(s.access) && s.access.control === false;
                 // Whether this view's input is taken, as the station says (a read-only member's is not).
-                if (typeof s.control === "boolean") state.control = s.control && control;
+                if (typeof s.control === "boolean") state.control = s.control && control && !lacks;
                 // Made to only look from elsewhere (`screen.watchOnly`): it stays so when the view opens again.
-                if (s.control === false && control) {
+                if (s.control === false && control && !lacks) {
                   wanted = false;
                   state.watchOnly = (state.watchOnly ?? 0) + 1;
                   // Taken by another (a person's 接管, an agent asked to): who, the viewer's own other device unnamed.
@@ -933,7 +937,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                   delete bounds.taken;
                 }
                 // Taken from people's views as it opened (their own other devices aside): said once.
-                const from = s.control === true && control ? othersOf(names(s.took), mine).map(personShown) : [];
+                const from = s.control === true && control && !lacks ? othersOf(names(s.took), mine).map(personShown) : [];
                 if (from.length > 0) {
                   state.took = (state.took ?? 0) + 1;
                   state.tookFrom = from;

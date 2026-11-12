@@ -1030,6 +1030,39 @@ each("the_station_says_what_a_view_takes_and_lacks_and_when_it_stops", async (se
   core.close();
 });
 
+each("a_machine_that_takes_no_input_is_not_driven_and_its_view_is_not_made_to_only_look", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  const access = { capture: true, control: false, message: "在「辅助功能」里打开 stillfail-station", app: "stillfail-station" };
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  // The station says so (control false, beside what is missing): not driven, and not as if taken from elsewhere.
+  views[0]!.send(join([stateFrame({ title: "桌面", control: false, access }), configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 1, bytesOf(10, seed))]));
+  await host.settle();
+  said(host, log);
+  let s = lastState(log, 1);
+  assert.deepEqual([s.control, s.watchOnly, s.taken, s.takenBy, s.access], [false, undefined, undefined, undefined, access]);
+  call(core, ui, 2, "screen.input", { view: "v", input: { t: "text", text: "x" } });
+  await host.settle();
+  assert.deepEqual(views[0]!.got, []);
+  // Opened again (the station's update), it still asks to drive, for when the grant is there.
+  views[0]!.send(stateFrame({ ended: "stopping" }));
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 2);
+  assert.equal(views[1]!.ask.control, true);
+  // A station from before it says control true with the same access: not driven either, nothing said taken.
+  views[1]!.send(join([stateFrame({ title: "桌面", control: true, took: ["Bob"], access }), configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 2, bytesOf(10, seed))]));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.control, s.watchOnly, s.took, s.clipboard], [false, undefined, undefined, []]);
+  call(core, ui, 3, "screen.input", { view: "v", input: { t: "text", text: "y" } });
+  await host.settle();
+  assert.deepEqual(views[1]!.got, []);
+  core.close();
+});
+
 test("acks_after_a_view_went_are_let_go_and_input_to_none_is_refused", async () => {
   const { host, core, ui } = await viewing(1);
   const log: J[] = [];

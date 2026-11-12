@@ -589,6 +589,7 @@ let en : Map[String, String] = {
   "android-misc.screen.passkey.asking": "Confirm in Windows' window…",
   "android-misc.screen.passkey.failed": "It was not signed: {why}",
   "android-misc.screen.pasteWhat": "paste",
+  "android-misc.screen.people": "People viewing",
   "android-misc.screen.reveal": "Show in Finder",
   "android-misc.screen.revealWhat": "show it in Finder",
   "android-misc.screen.section": "Screens",

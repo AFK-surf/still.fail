@@ -244,6 +244,24 @@ test "a screen's link: its viewer over the chat (back comes back to it)" {
 }
 
 ///|
+test "a page put over a screen's viewer (a chat a notice opened): the view let go of and the device let sleep meanwhile; back on it, open again" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/w/ws1/s/st1/screen/main")
+  t.run_for(@ui.move_most_ms)
+  guard app.nav.top() is Screen(_) else { fail("no viewer on top") }
+  assert_true(t.awake())
+  @sfbase.open_page(NewChat)
+  t.run_for(@ui.move_most_ms)
+  assert_false(app.nav.top() is Screen(_))
+  assert_false(t.awake())
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.top() is Screen(_))
+  assert_true(t.awake())
+}
+
+///|
 /// A history whose items span entries 1–2, 3–9, 10–12 …, its page before not loaded (`more`) when `more`.
 fn spread_history(more : Bool) -> Json {
   let h = fix_history()

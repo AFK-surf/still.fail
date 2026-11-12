@@ -120,6 +120,26 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   |> ignore
   // (none kept of another workspace: those put by left for good as the workspace in view changes)
   v.reacts(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(_) { app.nav.shelf_empty() })
+  // a station's screen with a page put over it (a chat a notice opened): its page is not built there, so its view is
+  // let go of as it is covered, and opened again by its page as it is on top again
+  v.reacts(
+    fn() {
+      let pages = app.nav.pages()
+      let screens : Array[(String, String, Bool)] = []
+      for i, p in pages {
+        match p {
+          Screen(at) => screens.push((at.station, at.screen, i < pages.length() - 1))
+          _ => ()
+        }
+      }
+      screens
+    },
+    fn(screens) {
+      for k in screens {
+        @sfpages.screen_covered(src, k.0, k.1, k.2)
+      }
+    },
+  )
   // what the places of the bar open on asked ahead of them from the moment it shows, held till its page is gone from
   // view under another (the stack at rest: Nav::root_shows), at those moments whatever frames are drawn (sfbase's
   // places_ahead_node)
