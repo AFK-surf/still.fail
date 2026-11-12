@@ -990,6 +990,22 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       if number(self.state, "watchOnly") != number(Some(s), "watchOnly") {
         self.wants_control = Some(false)
       }
+      // taken by someone else as it drove, or taken from people by this view's 接管: said once each (a view opened again
+      // starts its counts anew, none said)
+      let names = fn(key) { strings(Some(s), key).join(@sf.t("web-main.list.separator")) }
+      if number(Some(s), "taken") > number(self.state, "taken") {
+        let by = names("takenBy")
+        toast_later(
+          if by == "" {
+            @sf.t("android-misc.screen.taken")
+          } else {
+            @sf.t("android-misc.screen.takenBy", args=[("names", by)])
+          },
+        )
+      }
+      if number(Some(s), "took") > number(self.state, "took") {
+        toast_later(@sf.t("android-misc.screen.took", args=[("names", names("tookFrom"))]))
+      }
       self.state = Some(s)
       self.heard = true
       if moved {

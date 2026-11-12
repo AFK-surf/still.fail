@@ -825,15 +825,18 @@ test("a view let go of from elsewhere: ended, said why and by whom; made to only
   const [a, b] = hub.people("fake").views;
   assert.deepEqual([a!.client, a!.app, b!.client, b!.device], ["youdid.wtf 桌面版 · pengx17", "desktop", "still.fail iOS", "other-device"]);
 
+  // (the second, on another device, only looks: the first drives it)
+  assert.deepEqual(hub.people("fake").views.map((v) => v.control), [true, false]);
   // 转为只看: it goes on, told so; what it sends then is not posted; the list says who holds it.
   hub.watchOnly("fake", a!.id);
-  assert.deepEqual(hub.people("fake").views.map((v) => v.control), [false, true]);
+  assert.deepEqual(hub.people("fake").views.map((v) => v.control), [false, false]);
   const told: any[] = [];
   for (;;) {
     const got = await first.frames.next();
     if (got?.kind === KIND.state) told.push(json(got.payload));
     if (told.some((s) => s.control === false && s.title === undefined)) break;
   }
+  assert.ok(!told.some((s) => "takenBy" in s), "made to only look from elsewhere, nobody took it");
   await first.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "pointer", kind: "move", x: 0.5, y: 0.5, buttons: 0 }))));
   await settle();
   assert.deepEqual(source.views[0]!.inputs, []);
@@ -888,6 +891,91 @@ test("made to only look with a key and the button down: both let go of, the rele
   assert.deepEqual(source.views[0]!.inputs.slice(4), [{ t: "key", kind: "up", key: "Shift", code: "ShiftLeft", mods: 8 }, { t: "pointer", kind: "up", x: 0.25, y: 0.5, buttons: 0 }]);
   await v.stream.finish();
   await v.served;
+});
+
+test("one person's view drives at a time: a person's ask takes it and the others only look, told who; a view's own reopen never takes it", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  hub.add(source);
+  const kim: Viewer = { sub: "u3", email: "kim@example.com", name: "Kim", role: "member", workspace: "w", device: "k" };
+  const ask = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true };
+  const views: Awaited<ReturnType<typeof open>>[] = [];
+  /// A view opened, the states it is told gathered as they come.
+  const opened = async (viewer: Viewer, screen: unknown) => {
+    const v = await open(hub, viewer, screen);
+    views.push(v);
+    const states: any[] = [];
+    void (async () => {
+      for (let got = await v.frames.next(); got !== null; got = await v.frames.next()) if (got.kind === KIND.state) states.push(json(got.payload));
+    })();
+    await settle();
+    return { ...v, states };
+  };
+  const drivers = () => hub.people("fake").views.filter((v) => v.control).map((v) => `${v.name}@${v.device ?? "agent"}`);
+
+  // Pat drives; Kim opens asking to drive, and only looks.
+  const pat = await opened(member, ask);
+  const kim1 = await opened(kim, ask);
+  assert.deepEqual([pat.states[0].control, kim1.states[0].control, "took" in kim1.states[0]], [true, false, false]);
+  assert.deepEqual(drivers(), ["Pat@d"]);
+
+  // Pat holds a key and the button; Kim takes it (接管): Pat only looks, told it was Kim, what Pat held let go of.
+  const press = (e: unknown) => pat.stream.write(frame(KIND.input, Buffer.from(JSON.stringify(e))));
+  await press({ t: "key", kind: "down", key: "a", code: "KeyA", mods: 0 });
+  await press({ t: "pointer", kind: "down", x: 0.5, y: 0.5, buttons: 1 });
+  await settle();
+  const kim2 = await opened(kim, { ...ask, taken: true });
+  assert.deepEqual(kim2.states[0].took, ["Pat"]);
+  assert.equal(kim2.states[0].control, true);
+  assert.deepEqual(pat.states.find((s) => s.control === false), { control: false, login: null, passkey: null, takenBy: "Kim" });
+  assert.deepEqual(source.views[0]!.inputs.slice(2), [{ t: "key", kind: "up", key: "a", code: "KeyA", mods: 0 }, { t: "pointer", kind: "up", x: 0.5, y: 0.5, buttons: 0 }]);
+  assert.deepEqual(hub.people("fake").controlledBy, ["Kim"]);
+  // (Kim's first view, only looking, closed as the core closes the one the next takes the place of)
+  await kim1.stream.finish();
+  await kim1.served;
+  views.splice(1, 1);
+
+  // Pat's own reopens asking to drive, its person not asking: only looking, Kim still drives; on a device never made to
+  // only look as well.
+  const patAgain = await opened(member, ask);
+  const patPhone = await opened({ ...member, device: "d2" }, ask);
+  assert.deepEqual([patAgain.states[0].control, patPhone.states[0].control], [false, false]);
+  assert.ok(!kim2.states.some((s) => "takenBy" in s));
+  assert.deepEqual(drivers(), ["Kim@k"]);
+
+  // Pat takes it back: Kim only looks, told so.
+  const patTakes = await opened(member, { ...ask, taken: true });
+  assert.deepEqual([patTakes.states[0].control, patTakes.states[0].took], [true, ["Kim"]]);
+  assert.equal(kim2.states.find((s) => s.control === false)?.takenBy, "Pat");
+  assert.deepEqual(drivers(), ["Pat@d"]);
+
+  // The same person on another device takes it: the view on the first only looks, one view drives.
+  const patPhoneTakes = await opened({ ...member, device: "d2" }, { ...ask, taken: true });
+  assert.deepEqual(patPhoneTakes.states[0].took, ["Pat"]);
+  assert.equal(patTakes.states.find((s) => s.control === false)?.takenBy, "Pat");
+  assert.deepEqual(drivers(), ["Pat@d2"]);
+
+  // An agent's view is not touched by a person's take, nor held off by: it waits (tools/computer.ts) as before.
+  const agent = await hub.openAs("fake", { maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] }, { name: "agent: 部署", control: true });
+  const kim3 = await opened(kim, { ...ask, taken: true });
+  assert.deepEqual(kim3.states[0].took, ["Pat"]);
+  assert.deepEqual(drivers(), ["agent: 部署@agent", "Kim@k"]);
+  // An agent asked to take it: told it was the agent.
+  assert.equal(letGo(hub, "agent: 部署", "fake", "take_control", undefined).startsWith("1 "), true);
+  await settle();
+  assert.equal(kim3.states.find((s) => s.control === false)?.takenBy, "agent: 部署");
+  agent.close();
+
+  // A read-only member asking to take it only looks, and takes it from nobody.
+  const pat4 = await opened({ ...member, device: "d3" }, ask);
+  assert.deepEqual(drivers(), ["Pat@d3"], "with nobody else driving, a view drives as it opens");
+  const vic = await opened(reader, { ...ask, taken: true });
+  assert.deepEqual([vic.states[0].control, "took" in vic.states[0]], [false, false]);
+  assert.ok(!pat4.states.some((s) => s.control === false));
+  assert.deepEqual(drivers(), ["Pat@d3"]);
+
+  for (const v of views) await v.stream.finish();
+  await Promise.all(views.map((v) => v.served));
 });
 
 test("the agents' screen tool says each view's device, and lets go of a view only as asked", () => {

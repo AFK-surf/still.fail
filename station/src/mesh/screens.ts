@@ -206,7 +206,7 @@ const QUIET = 10;
 /// shows a video tagged Display P3 as such (none: sRGB's colours); `client` and `app`: the app's own name and kind, to tell
 /// its people which device a view is on; `audio: "pcm_s16le"` the computer's sound, with `opus` where the client
 /// decodes Opus too (a station from before sends PCM to it); `self`: the device's main id, for it to know its own views; `taken`: its person
-/// asked to drive it, over having been made to only look (hub.ts `mayDrive`).
+/// asked to drive it (控制, 接管): it takes it from whoever else drives it, and over having been made to only look (hub.ts `drive`).
 export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; opus?: boolean; quality?: Quality; fps?: Fps; fit?: ViewFit; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean } {
   const bound = (v: unknown, otherwise: number) => (num(v) ? Math.min(8192, Math.max(16, Math.round(v))) : otherwise);
   const codecs = Array.isArray(screen.codecs) ? CODECS.filter((c) => screen.codecs.includes(c)) : [];
@@ -255,7 +255,8 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   if (ask.codecs.length === 0) return refuse(400, `screen.codecs: one of ${CODECS.join(", ")}`);
   if (ask.peek && !source.peek) return refuse(501, "this screen is not previewed");
   // A viewer (read-only member) sees, and does not drive.
-  const control = ask.control && !readOnly(viewer) && hub.mayDrive(id, viewer.device, ask.taken === true);
+  const name = viewer.name || viewer.email;
+  const { control, took } = ask.control && !readOnly(viewer) ? hub.drive(id, viewer.device, ask.taken === true, name) : { control: false, took: [] };
   let view: ScreenView;
   try {
     view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true, ...(ask.opus ? { opus: true } : {}) } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
@@ -288,7 +289,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const pacer = new Pacer(now, START_RATE, ask.fps, stall.stalled);
   const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ask.quality);
   const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, device: viewer.device, ...(ask.self ? { self: ask.self } : {}), ...(ask.client ? { client: ask.client } : {}), ...(ask.app ? { app: ask.app } : {}), control, peek: ask.peek, audio: ask.audio, access, lang, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ...(ask.quality ? { quality: ask.quality } : {}), now, sleep })
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name, device: viewer.device, ...(ask.self ? { self: ask.self } : {}), ...(ask.client ? { client: ask.client } : {}), ...(ask.app ? { app: ask.app } : {}), control, took, peek: ask.peek, audio: ask.audio, access, lang, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ...(ask.quality ? { quality: ask.quality } : {}), now, sleep })
     .run()
     .finally(stall.done);
 }
@@ -341,6 +342,8 @@ class ViewSession {
   readonly client: string | undefined;
   readonly app: string | undefined;
   control: boolean;
+  /// Whose views it took the screen from as it opened (its first state's `took`).
+  readonly took: string[];
   /// A preview's: not among those on the screen.
   readonly peek: boolean;
   readonly audio: boolean;
@@ -358,7 +361,7 @@ class ViewSession {
   readonly #own: { maxWidth: number; maxHeight: number };
   #region: Region | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; device: string; self?: string; client?: string; app?: string; control: boolean; peek?: boolean; audio?: boolean; access: AccessShown | undefined; lang: Lang; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; quality?: Quality; now: () => number; sleep: (ms: number) => Promise<void> }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; device: string; self?: string; client?: string; app?: string; control: boolean; took?: string[]; peek?: boolean; audio?: boolean; access: AccessShown | undefined; lang: Lang; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; quality?: Quality; now: () => number; sleep: (ms: number) => Promise<void> }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -371,6 +374,7 @@ class ViewSession {
     this.client = o.client;
     this.app = o.app;
     this.control = o.control;
+    this.took = o.took ?? [];
     this.peek = o.peek === true;
     this.audio = o.audio === true && !this.peek;
     this.access = o.access;
@@ -436,8 +440,8 @@ class ViewSession {
       .finally(() => this.#done());
   }
 
-  /// Another member made it only look: what is a driver's alone goes, the pictures go on.
-  #watchOnly() {
+  /// Another member made it only look (`by`: took it): what is a driver's alone goes, the pictures go on.
+  #watchOnly(by?: string) {
     if (this.#closed || !this.control) return;
     this.control = false;
     this.#unclip();
@@ -450,15 +454,15 @@ class ViewSession {
     this.#pointer = null;
     if (at !== null && at.buttons !== 0) held.push({ ...at, kind: "up", buttons: 0 });
     for (const e of held) this.#then(() => this.view.input(e));
-    void this.#state({ control: false, login: null, passkey: null });
+    void this.#state({ control: false, login: null, passkey: null, ...(by !== undefined ? { takenBy: by } : {}) });
   }
 
   async run(): Promise<void> {
     // How it starts: what it is and whether this view drives it; then who is on it (the hub tells everyone on it).
     // How its pictures are made (the statistics' 采集方式 and 编码器), where the source says.
     const video = this.view.video?.();
-    void this.#state({ title: this.#title, control: this.control, ...(this.access ? { access: this.access } : {}), ...(video ? { video } : {}) });
-    if (!this.peek) this.#leave = this.hub.join(this.id, { name: this.name, device: this.device, ...(this.self ? { self: this.self } : {}), ...(this.client ? { client: this.client } : {}), ...(this.app ? { app: this.app } : {}), control: this.control, tell: (people) => void this.#state(people), end: (by) => this.#stop(tr(this.#lang, "station.screen.endedBy", { by })), watchOnly: () => this.#watchOnly() });
+    void this.#state({ title: this.#title, control: this.control, ...(this.took.length > 0 ? { took: this.took } : {}), ...(this.access ? { access: this.access } : {}), ...(video ? { video } : {}) });
+    if (!this.peek) this.#leave = this.hub.join(this.id, { name: this.name, device: this.device, ...(this.self ? { self: this.self } : {}), ...(this.client ? { client: this.client } : {}), ...(this.app ? { app: this.app } : {}), control: this.control, tell: (people) => void this.#state(people), end: (by) => this.#stop(tr(this.#lang, "station.screen.endedBy", { by })), watchOnly: (by) => this.#watchOnly(by) });
     const unwatch = this.hub.watch(() => {
       if (this.hub.get(this.id) !== this.source) return this.#stop("gone");
       const title = this.source.title();

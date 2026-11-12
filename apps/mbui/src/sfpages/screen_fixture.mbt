@@ -177,6 +177,57 @@ pub fn screen_fixture_stream(
         None,
         None,
       )
+    // driving, then 李雷 takes it (its notice said); or only looking while 李雷 drives, then 接管 (its notice said): the
+    // screens at rest are screen-agent-driving's and screen-live's (the picture comes after the take)
+    "screen-taken" | "screen-took" => {
+      let taken = m == "screen-taken"
+      on_value(
+        {
+          "state": screen_fix_state(
+            "live",
+            taken,
+            true,
+            ["李雷"],
+            "",
+            Some(if taken { [] } else { ["李雷"] }),
+            Some(!taken),
+            Some(if taken { "控制 · 李雷也在看" } else { "只看 · 李雷 正在控制" }),
+            None,
+            None,
+            None,
+          ),
+        },
+        None,
+      )
+      let st = match
+        screen_fix_state(
+          "live",
+          !taken,
+          true,
+          ["李雷"],
+          "",
+          Some(if taken { ["李雷"] } else { [] }),
+          Some(taken),
+          Some(if taken { "只看 · 李雷 正在控制" } else { "控制 · 李雷也在看" }),
+          None,
+          None,
+          None,
+        ) {
+        Object(m) => m.copy()
+        _ => {}
+      }
+      if taken {
+        st["watchOnly"] = Json::number(1.0)
+        st["taken"] = Json::number(1.0)
+        st["takenBy"] = Json::array([Json::string("李雷")])
+      } else {
+        st["took"] = Json::number(1.0)
+        st["tookFrom"] = Json::array([Json::string("李雷")])
+      }
+      on_value({ "state": Json::object(st) }, None)
+      on_value({ "config": { "codec": "jpeg", "width": 1280.0, "height": 720.0 } }, None)
+      on_value({ "frame": { "key": true, "ts": 1000.0 } }, Some(screen_fix_jpeg()))
+    }
     "screen-read-only" => live(false, false, ["李雷"], None, None, None, None, None, None)
     "screen-not-drivable" =>
       live(

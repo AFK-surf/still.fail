@@ -113,6 +113,14 @@
   who manages the station may be the plane's word (`src/cli.ts` `nameJoinedLock`). Each of these let a device the lock
   never named in until 2026-11-12.
 
+## Screens
+
+- One person's view drives a screen at a time, any number look (pengxiao, 2026-11-12: 「控制独占，查看不限」):
+  `src/screens/hub.ts` `drive` decides it as a view opens. Its person asking (控制, 接管: the view's `taken`) takes
+  it, and every other person's view that drives it, their own on another device too, only looks from then on, told
+  who took it; a view's own reopen (its link went, a resize) never takes it. An agent's view is not one of them: its
+  input waits while a person drives (`src/tools/computer.ts`). Each side is told it in a notice (「独占这块应该需要有提示」).
+
 ## Devices (设备)
 
 - A device is what agents use that runs no station (the user, 2026-11-10): attached to a station (on its USB, in its

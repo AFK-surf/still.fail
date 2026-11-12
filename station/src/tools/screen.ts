@@ -52,7 +52,7 @@ export function letGo(hub: ScreenHub, by: string, id: unknown, action: string, v
   try {
     switch (action) {
       case "take_control":
-        return `${hub.takeControl(id)} people's views of ${id} now only look; your input goes through until one of them takes it back. Tell them when you are done.`;
+        return `${hub.takeControl(id, by)} people's views of ${id} now only look; your input goes through until one of them takes it back. Tell them when you are done.`;
       case "disconnect":
         hub.endView(id, one(), by);
         return `View ${view} of ${id} disconnected; it is not opened again by itself.`;
