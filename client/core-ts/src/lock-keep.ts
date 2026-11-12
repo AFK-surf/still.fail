@@ -9,7 +9,7 @@
 //
 // Bounded as a station's is (ASIDE_MOST, log-keep.ts says why): past it, what would land aside is not kept, and the
 // oldest kept aside go (with what hangs below them). Nothing on the chain gone by is dropped for it.
-import { type Entry, entryHash } from "./lock.ts";
+import { type Entry, canonical, entryHash } from "./lock.ts";
 
 /// The most entries a log keeps off its chain (station/src/cloud/log-keep.ts ASIDE_MOST).
 export const ASIDE_MOST = 256;
@@ -108,3 +108,33 @@ export function keep(was: Kept, brought: readonly Entry[], rules: LogRules): Too
   const changed = !same(active, was.entries) || side.length !== was.aside.length || side.some((e) => !was0.has(hashOf(e)));
   return { kept: changed ? { entries: active, aside: side } : was, moved: head(active) !== head(was.entries), changed };
 }
+
+/// What becomes of an entry of this device's that lost its place (a station refused it as not on its head, or a read
+/// moved the chain held off it), by the chain held now and what the entry is about (`subject`: its kind's subject, the
+/// device, the member, the station, the lock itself; null where it has none): `done`, it is on the chain, or an entry of
+/// its kind saying the same is since its parent (someone did it already); `otherwise`, an entry about its subject is
+/// since its parent (someone decided otherwise since); `unmoved`, its parent is the head still (what refused it was no
+/// other entry at its place: the rules, said as the station said them); else `sign`, signed again after the head (the
+/// rules still to take it there, the caller's to check). "Since its parent": after the place where its branch parts from
+/// the chain held, its parent where that is on it, else the nearest entry up its branch kept `aside` that is.
+export type Again = "done" | "otherwise" | "unmoved" | "sign";
+export function againOf(chain: readonly Entry[], aside: readonly Entry[], lost: Entry, subject: (e: Entry) => string | null): Again {
+  const lostHash = hashOf(lost);
+  const at = new Map(chain.map((e, i) => [hashOf(e), i]));
+  if (at.has(lostHash)) return "done";
+  const up = new Map(aside.map((e) => [hashOf(e), e]));
+  let parent = lost.prev;
+  for (let n = 0; parent !== null && !at.has(parent) && n <= aside.length; n++) parent = up.get(parent)?.prev ?? null;
+  const i = parent === null ? undefined : at.get(parent);
+  if (i === undefined) return "unmoved";
+  if (i === chain.length - 1) return "unmoved";
+  const since = chain.slice(i + 1);
+  const meaning = canonical(lost.body ?? null);
+  if (since.some((e) => e.kind === lost.kind && canonical(e.body ?? null) === meaning)) return "done";
+  const about = subject(lost);
+  if (about !== null && since.some((e) => subject(e) === about)) return "otherwise";
+  return "sign";
+}
+
+/// How many times one entry that lost its place is signed again, all told (the first signing again of it counted 1).
+export const AGAIN_MOST = 3;

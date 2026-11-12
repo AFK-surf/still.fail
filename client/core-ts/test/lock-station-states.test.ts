@@ -7,13 +7,15 @@ import { test } from "node:test";
 import { Effect, Fiber } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next, readHead } from "../src/lock.ts";
-import { get } from "../src/util.ts";
+import { get, utf8 } from "../src/util.ts";
 import { OTHERS_MS, TAKEN_MS, held, read } from "../src/views/lock.ts";
-import { ME, elsewhere, genesis, grant, rig } from "./lock-rig.ts";
+import { ME, elsewhere, genesis, grant, rig, unhex } from "./lock-rig.ts";
 import { stationReplies } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
 const S = "bb".repeat(32);
+const OLD = "ee".repeat(32);
+const THIRD = "ef".repeat(32);
 
 const STATES = [
   "unnamed-none", "named-none", "named-other", "unnamed-other", "old", "silent", "refuses", "named-behind", "named-ahead", "named-forked",
@@ -69,19 +71,24 @@ async function setUp(state: State, order: "A first" | "S first", says?: "A" | "n
   const g = grant();
   let me: Signer | null = null;
   const stations = named(state) ? [{ key: A, name: "a" }, { key: S, name: "s" }] : [{ key: A, name: "a" }];
-  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, stations, g.keys, ME, []) }), undefined, order === "A first" ? [A, S] : [S, A]);
+  // (OLD, another app of the owner's that signs: what S went another way with is its, not this device's, which would
+  // sign its own again: lock-signs-again.test.ts. THIRD, one more, whose removal is A's entry: a removal of a device
+  // that signs, it beats S's at the genesis by the rules' second step)
+  const old = elsewhere();
+  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, stations, g.keys, ME, [{ id: OLD, sub: "s1", kind: "app", label: "old", sign_key: old.id }, { id: THIRD, sub: "s1", kind: "app", label: "third", sign_key: `ed25519:${"77".repeat(32)}` }]) }), undefined, order === "A first" ? [A, S] : [S, A]);
   const inner = r.core.inner;
   const signer = me! as Signer;
   const g1 = r.cloud.chains.get("ws")![0]!;
   // A keeps L1 one entry past its genesis (so that S can be behind it).
   const a = station(g1);
-  a.chain.push(signer.sign(next("ws", headOf(a.chain), 1001, "member", { sub: "s3", email: "c@x.com", role: "member" })));
+  a.chain.push(signer.sign(next("ws", headOf(a.chain), 1001, "device.remove", { id: THIRD })));
   const aChain = [...a.chain];
   // The chains S may keep: L2 (another genesis, naming S), L1 one shorter, one longer, and forked at A's last entry.
   const l2 = [genesis("ws", elsewhere(), true, [{ key: S, name: "s" }], g.keys, ME, [])];
   const behind = [g1];
   const ahead = [...aChain, signer.sign(next("ws", headOf(aChain), 1003, "member", { sub: "s4", email: "d@x.com", role: "member" }))];
-  const forked = [g1, signer.sign(next("ws", headOf([g1]), 1002, "member", { sub: "s9", email: "x@x.com", role: "member" }))];
+  const fork = next("ws", headOf([g1]), 1002, "member", { sub: "s9", email: "x@x.com", role: "member" });
+  const forked = [g1, { ...fork, sig: { key: old.id, alg: "Ed25519" as const, sig: old.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(fork))])) } }];
   const sSt = station(g1);
   sSt.chain.splice(0, 1, ...aChain);
   const s = {

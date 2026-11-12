@@ -244,6 +244,7 @@
   "core-misc.lock.keyNotKept": "Couldn't read or save this device's security key: {error}",
   "core-misc.lock.inWorkspace": "“{name}”: {error}",
   "core-misc.lock.listSep": "; ",
+  "core-misc.lock.changedMeanwhile": "This change didn't take effect: {what} was just changed on another device. Check how it stands now, and do it again if it's still needed",
   "core-misc.screen.opening": "Opening a screen",
   "core-misc.screen.noWire": "Station screens can't be viewed here",
   "core-misc.screen.timeout": "The screen didn't open: the station isn't responding",

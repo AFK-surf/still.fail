@@ -448,7 +448,8 @@ peer_wait() {
 
 # the security mode as the test station keeps it (its lock.json, read by the station's own rules; NAME: that of the
 # station beside it so named, as second-station names them): LOCK on|off,
-# DEVICE <id> <person> <kind> own=<own> exp=<seconds, or -> a line each, STATIONS n, PERSONS n, PERSON <person> <the
+# DEVICE <id> <person> <kind> own=<own> exp=<seconds, or -> a line each, STATIONS n, HEAD <its head's hash>,
+# PERSONS n, PERSON <person> <the
 # lock of their own bound> a line each; SAID and the devices whose latest `device` entry says the key they are or would
 # be on their person's own lock with (`person_key`, which the fold drops: read of the entries themselves), the first 12
 # hex digits of each
@@ -465,6 +466,7 @@ const s = fold(j.entries ?? j, null);
 console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
 for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' exp=' + (d.exp ?? '-') + ' ' + (d.label ?? ''));
 console.log('STATIONS ' + s.stations.size);
+console.log('HEAD ' + s.head);
 console.log('PERSONS ' + s.persons.size);
 for (const [sub, person] of s.persons) console.log('PERSON ' + sub + ' ' + String(person).slice(0, 12));
 const said = new Map();
