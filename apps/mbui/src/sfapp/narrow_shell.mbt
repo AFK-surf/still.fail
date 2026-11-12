@@ -549,13 +549,14 @@ fn narrow_made_as(
               over=chat_bar_node,
               stint~,
               // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
-              body=fn(col, s, r, composer) {
+              body=fn(col, s, r, composer, shows) {
                 @sfpages.chat_page_body_node(
                   col,
                   s,
                   r,
                   tips=@sf.TipLayer::new(fn() { None }),
                   stint~,
+                  shows~,
                   top=list_top,
                   foot=list_foot,
                   composer~,

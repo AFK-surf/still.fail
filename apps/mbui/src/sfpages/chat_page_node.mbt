@@ -7,13 +7,15 @@
 /// them, once its view is read (till then none: its bones are the old page's), laid out by the room the column gives it
 /// (View::by_room: its width what the shell gives the page, as it changes), `top` over its first row (its bar's room),
 /// `foot` under its last and the composer `composer` builds under that, in the list's foot (till the view is read, at
-/// the foot of the room it is given), `lead` the unread line under its top, its tips `tips`, its time on top `stint`.
+/// the foot of the room it is given), `lead` the unread line under its top, its tips `tips`, its time on top `stint`;
+/// what is read told the core while `shows` (chat_read_node).
 pub fn chat_page_body_node(
   v : @view.View,
   src : Source,
   r : ChatRef,
   tips~ : @sf.TipLayer,
   stint~ : () -> Int,
+  shows~ : () -> Bool,
   top? : () -> Double = fn() { list_top },
   foot? : () -> Double = fn() { list_foot },
   composer? : (@view.View) -> Unit,
@@ -91,6 +93,7 @@ pub fn chat_page_body_node(
         foot~,
         composer?,
         lead~,
+        read=fn(place, rows) { chat_read_node(o, src, r, view, place, rows, shows) },
       )
       |> ignore
     })

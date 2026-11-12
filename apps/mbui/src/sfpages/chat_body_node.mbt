@@ -259,7 +259,8 @@ priv struct ChatBodyKeeps {
 /// put where `place` asks: at its end as it opens (followed there), at its unread line where it has one (`lead` under
 /// its top, as list_after puts it once); a chat too short to fill what shows at its foot, over the composer (the old
 /// list's from_end); the page before asked as it nears its top. `made`, told each row's key and what holds it as its row
-/// is made (a block made, or made again as its key comes to be another kind of row).
+/// is made (a block made, or made again as its key comes to be another kind of row). `read`, given `place` and its rows,
+/// for what is told the core of what is read (chat_read_node).
 fn chat_body_node(
   v : @view.View,
   src : Source,
@@ -275,6 +276,7 @@ fn chat_body_node(
   place? : @view.ListPlace[String] = @view.ListPlace::new(),
   keeps? : ChatBodyKeeps = { opened: notices_open, copied: @sf.LiveMap::new(), steadies: ActivitySteadies::new() },
   made? : (String, @view.View) -> Unit = fn(_, _) {  },
+  read? : (@view.ListPlace[String], () -> ChatBodyRows) -> Unit = fn(_, _) {  },
 ) -> @view.View {
   let kept : ChatBodyKept = { sent: {}, sent_as: {} }
   // (worked out once as the view, its entries or what is on its way change; the keys only change as rows come, go or
@@ -348,6 +350,7 @@ fn chat_body_node(
   if @signals.untracked(fn() { rows.get().rows.contains("line") }) {
     place.bring("line", offset=-(@signals.untracked(top) + lead))
   }
+  read(place, fn() { rows.get() })
   v
 }
 

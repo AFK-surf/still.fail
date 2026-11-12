@@ -519,7 +519,7 @@ fn tape_made(
               over=fn(o, src, page, stint) { chat_bar_wide_node(o, src, page, tape_chat_bar_ends(), tips, stint) },
               // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
               // (built in the page's panel, as tape_page_one builds the page: what stands in its corners concentric with them)
-              body=fn(col, s, r, composer) { chat_body_nodes(col, s, r, tips, stint, composer, in_pane=true) },
+              body=fn(col, s, r, composer, shows) { chat_body_nodes(col, s, r, tips, stint, composer, shows, in_pane=true) },
               foot=fn(c, s, r) {
                 @sf.pane_round.val = Some(tape_page_round())
                 chat_composer_nodes(c, s, r, wide.tape.get())

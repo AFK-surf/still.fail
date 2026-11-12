@@ -382,7 +382,7 @@ fn pane_made(
                   chat_bar_wide_node(o, src, page, pane_chat_bar_ends(src, o), tips, stint)
                 },
                 // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
-                body=fn(col, s, r, composer) { chat_body_nodes(col, s, r, tips, stint, composer) },
+                body=fn(col, s, r, composer, shows) { chat_body_nodes(col, s, r, tips, stint, composer, shows) },
                 foot=fn(c, s, r) { chat_composer_nodes(c, s, r, wide.tape.get()) },
               )
             })

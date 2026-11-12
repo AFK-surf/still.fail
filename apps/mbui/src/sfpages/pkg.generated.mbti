@@ -91,7 +91,9 @@ pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
 pub let chat_narrow_w : Double
 
-pub fn chat_page_body_node(@view.View, @sfbase.Source, @sfbase.ChatRef, tips~ : @sf.TipLayer, stint~ : () -> Int32, top? : () -> Double, foot? : () -> Double, composer? : (@view.View) -> Unit, lead? : Double) -> Unit
+pub fn chat_page_body_node(@view.View, @sfbase.Source, @sfbase.ChatRef, tips~ : @sf.TipLayer, stint~ : () -> Int32, shows~ : () -> Bool, top? : () -> Double, foot? : () -> Double, composer? : (@view.View) -> Unit, lead? : Double) -> Unit
+
+pub fn chat_read_left(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView?) -> Bool
 
 pub fn chat_row(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, on? : Bool, list_ground? : Int64, more? : Bool, lifted? : Double, found? : Bool, opened? : (@sfbase.ChatRef) -> Unit, unghost? : (Bool) -> Unit, at? : @sf.ListAt) -> Int32
 
