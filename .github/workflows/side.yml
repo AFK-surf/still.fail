@@ -22,7 +22,7 @@ jobs:
       # Mac; beside those the mesh's measured too unevenly to move, or 109 ms for a line of nothing (side run 41798988101).
       max-parallel: 1
       matrix:
-        part: [core-ts, station, rust, locks, rigs]
+        part: [core-ts, station, rust, locks, rigs, cloud]
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 10
     steps:
@@ -33,6 +33,8 @@ jobs:
         run: pnpm install --frozen-lockfile && cd client/core-ts && pnpm install --frozen-lockfile
       - if: matrix.part == 'station'
         run: pnpm install --frozen-lockfile && cd station && pnpm install --frozen-lockfile
+      - if: matrix.part == 'cloud'
+        run: cd cloud && pnpm install --frozen-lockfile
       - name: side (${{ matrix.part }})
         run: sh scripts/side.sh ${{ matrix.part }}
       # (what a failed locks or rigs kept before its down, scripts/e2e-local.sh `kept`: the cloud's, the relay's and each

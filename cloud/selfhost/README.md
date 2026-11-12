@@ -62,6 +62,7 @@ relay.cloud.example.com {
 | `GRANT_SIGNING_JWK` | An Ed25519 private JWK with a `kid`: `node -e 'const k=require("crypto").generateKeyPairSync("ed25519").privateKey.export({format:"jwk"});console.log(JSON.stringify({...k,kid:"selfhost-1"}))'`. Keep it and the two above: losing them signs everyone out and makes stations distrust new grants. |
 | `ADMIN_EMAIL` | The console's admin. |
 | `EMAIL_FROM`, `SMTP_URL`, `SMTP_HELO` | Signing in with a code sent to an email: from `EMAIL_FROM`, through `smtp://user:password@host:587` (STARTTLS, required) or `smtps://…:465`. Without `SMTP_URL` the codes are written to the log (`MAIL to …`): enough for a cloud only its operator signs in to, who reads its log. |
+| `OUTBOUND_ALLOW`, `OUTBOUND_DENY`, `EXTRA_CA_CERTS` | Where the API may connect (workerd's network rules: `public`, `private`, `local` or CIDRs, comma-separated; default `public`, so nothing it is asked to fetch reaches the operator's own network), and a PEM file of certificates trusted beside the browsers' roots, by the API and the mail (an OpenID provider's or a relay's own CA). The mail reaches private and local addresses as well. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The OAuth client people sign in through, its redirect URI `$PUBLIC_ORIGIN/v1/auth/google/callback`: Google's, or with `OIDC_ISSUER` that provider's (its discovery document at `$OIDC_ISSUER/.well-known/openid-configuration`; a public client with PKCE needs no secret). `OIDC_NAME` is what the sign-in page calls it. Its accounts are named apart from Google's (`oi-…`) and join one with the same email. |
 
 The API's other settings (`env.ts`: push, traces) are read from the environment under their own names too; settings
@@ -81,6 +82,13 @@ Each call with `Authorization: Bearer $ADMIN_TOKEN`:
 
 Stations update, and the installer gets them, from `$PUBLIC_ORIGIN/releases/…`: the files `scripts/release.sh` puts in
 the bucket, put in `$STILLFAIL_DATA/releases` at the same paths.
+
+## Tests
+
+`test/selfhost.test.ts` (with the cloud's, `pnpm test`): the config, the routes, the sites, signing in without Google.
+`side/selfhost.test.ts` (`pnpm side`, the side run's): the cloud built and run on workerd, signing in with a code
+mailed through an SMTP relay that requires STARTTLS and AUTH, and through an OpenID provider, both with certificates of
+a CA given in `EXTRA_CA_CERTS`.
 
 ## Apps
 

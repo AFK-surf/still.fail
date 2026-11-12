@@ -12,5 +12,5 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "migrations/**/*.ts", "selfhost/**/*.ts", "test/**/*.ts", "worker-configuration.d.ts"]
+  "include": ["src/**/*.ts", "migrations/**/*.ts", "selfhost/**/*.ts", "side/**/*.ts", "test/**/*.ts", "worker-configuration.d.ts"]
 }

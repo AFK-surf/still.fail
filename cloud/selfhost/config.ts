@@ -80,7 +80,8 @@ const flags = (config: Wrangler) => `compatibilityDate = ${text(config.compatibi
 const module = (file: string) => `modules = [(name = ${text(file)}, esModule = embed ${text(`workers/${file}`)})]`;
 
 /** The workerd config: the router on the `http` socket, setup.ts on `setup`; directories (`objects`, `releases`, the
- * sites') and both sockets' addresses are the defaults the run script overrides (--directory-path, --socket-addr). */
+ * sites') and both sockets' addresses are the defaults the run script overrides (--directory-path, --socket-addr), and
+ * /site.capnp (where the API may connect, what TLS it trusts) is the one it writes. */
 export function workerdConfig(): string {
   const api = wrangler("wrangler.jsonc");
   const local = (api.durable_objects?.bindings ?? []).filter((b) => !b.script_name);
@@ -107,13 +108,16 @@ export function workerdConfig(): string {
     ...(Object.keys(SITES) as Site[]).map((site) => `(name = ${text(`${site}-files`)}, disk = (path = ${text(`sites/${site}`)}))`),
     `(name = "releases-files", disk = (path = "data/releases", writable = true))`,
     `(name = "objects", disk = (path = "data/objects", writable = true))`,
-    `(name = "internet", network = (allow = ["public"], tlsOptions = (trustBrowserCas = true)))`,
-    `(name = "smtp", network = (allow = ["public", "private"], tlsOptions = (trustBrowserCas = true)))`,
+    // (what the API may reach, and the certificates both trust beside the browsers', are the operator's: `run` writes
+    // them as /site.capnp, from OUTBOUND_ALLOW, OUTBOUND_DENY and EXTRA_CA_CERTS)
+    `(name = "internet", network = (allow = Site.allow, deny = Site.deny, tlsOptions = (trustBrowserCas = true, trustedCertificates = Site.trusted)))`,
+    `(name = "smtp", network = (allow = ["public", "private", "local"], deny = Site.deny, tlsOptions = (trustBrowserCas = true, trustedCertificates = Site.trusted)))`,
     `(name = "none", network = (allow = []))`,
   ];
   return [
     "# Made by cloud/selfhost/config.ts from the wrangler files; not edited.",
     'using Workerd = import "/workerd/workerd.capnp";',
+    'using Site = import "/site.capnp";',
     "const config :Workerd.Config = (",
     `  services = [\n    ${services.join(",\n    ")}\n  ],`,
     '  sockets = [(name = "http", address = "127.0.0.1:8080", http = (forwardedProtoHeader = "X-Forwarded-Proto"), service = "router"), (name = "setup", address = "127.0.0.1:8081", http = (), service = "setup")],',

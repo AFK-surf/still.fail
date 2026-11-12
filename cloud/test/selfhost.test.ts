@@ -22,6 +22,8 @@ test("the config names none of still.fail's hosts: every name and key is read fr
     assert.match(config, new RegExp(`className = "${cls}", uniqueKey = "stillfail-cloud-${cls}", enableSql = true`), cls);
   }
   assert.doesNotMatch(config, /className = "Relay"/);
+  // What the API may reach and what TLS it trusts are the operator's (run writes /site.capnp): never fixed here.
+  assert.match(config, /\(name = "internet", network = \(allow = Site\.allow, deny = Site\.deny, tlsOptions = \(trustBrowserCas = true, trustedCertificates = Site\.trusted\)\)\)/);
   assert.match(config, /\(name = "RELEASES", service = \(name = "releases", entrypoint = "Releases"\)\)/);
   assert.match(config, /\(name = "EMAIL", service = \(name = "mail", entrypoint = "Mail"\)\)/);
 });

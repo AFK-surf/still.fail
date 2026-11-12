@@ -2,7 +2,8 @@
 // binary, pinned in package.json), the Workers bundled as wrangler bundles them, the config (config.ts), the static
 // sites (`pnpm run build:cloud`'s dist/cloud-web, -admin, -preview: built first unless --sites-built) and `run`, which
 // starts it with its directories and addresses.
-//   node selfhost/build.ts [--out DIR] [--sites-built]       (default DIR: ../dist/selfhost)
+//   node selfhost/build.ts [--out DIR] [--sites-built | --no-sites]       (default DIR: ../dist/selfhost)
+// (--no-sites: the sites' directories empty, a cloud of the API alone: side/selfhost.test.ts's)
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -13,7 +14,7 @@ import { SITES, workerdConfig } from "./config.ts";
 
 const CLOUD = join(import.meta.dirname, "..");
 const REPO = join(CLOUD, "..");
-const { values } = parseArgs({ options: { out: { type: "string" }, "sites-built": { type: "boolean" } } });
+const { values } = parseArgs({ options: { out: { type: "string" }, "sites-built": { type: "boolean" }, "no-sites": { type: "boolean" } } });
 const out = resolve(values.out ?? join(REPO, "dist", "selfhost"));
 
 /** The Workers, by the file the config embeds. */
@@ -34,8 +35,8 @@ function workerdBinary(): string {
   return from.resolve(`@cloudflare/workerd-${process.platform}-${arch}/bin/workerd`);
 }
 
-if (!values["sites-built"]) execFileSync("pnpm", ["run", "build:cloud"], { cwd: REPO, stdio: "inherit" });
-for (const site of Object.keys(SITES)) if (!existsSync(join(REPO, "dist", `cloud-${site}`, "index.html")) && site !== "preview") throw new Error(`no dist/cloud-${site}: pnpm run build:cloud`);
+if (!values["sites-built"] && !values["no-sites"]) execFileSync("pnpm", ["run", "build:cloud"], { cwd: REPO, stdio: "inherit" });
+for (const site of Object.keys(SITES)) if (!values["no-sites"] && !existsSync(join(REPO, "dist", `cloud-${site}`, "index.html")) && site !== "preview") throw new Error(`no dist/cloud-${site}: pnpm run build:cloud`);
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, "workers"), { recursive: true });
@@ -55,7 +56,10 @@ for (const [file, entry] of Object.entries(WORKERS)) {
     logLevel: "warning",
   });
 }
-for (const site of Object.keys(SITES)) cpSync(join(REPO, "dist", `cloud-${site}`), join(out, "sites", site), { recursive: true });
+for (const site of Object.keys(SITES)) {
+  if (values["no-sites"]) mkdirSync(join(out, "sites", site), { recursive: true });
+  else cpSync(join(REPO, "dist", `cloud-${site}`), join(out, "sites", site), { recursive: true });
+}
 cpSync(workerdBinary(), join(out, "bin", "workerd"));
 chmodSync(join(out, "bin", "workerd"), 0o755);
 writeFileSync(join(out, "config.capnp"), workerdConfig());

@@ -8,7 +8,8 @@
     "test": "tsx --test --test-timeout=60000 test/*.test.ts",
     "dev": "wrangler dev",
     "deploy": "python3 deploy.py",
-    "selfhost": "node selfhost/build.ts"
+    "selfhost": "node selfhost/build.ts",
+    "side": "tsx --test --test-concurrency=1 --test-timeout=120000 side/*.test.ts"
   },
   "dependencies": {
     "@cloudflare/containers": "0.3.7",

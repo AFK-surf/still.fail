@@ -9,7 +9,22 @@ data=${STILLFAIL_DATA:?the directory the cloud keeps what it holds in}
 : "${PUBLIC_ORIGIN:?https://<the cloud name>}" "${ADMIN_ORIGIN:?https://admin.<the cloud name>}" "${RELAY_URL:?https://relay.<the cloud name>, iroh-relay}"
 : "${AUTH_SIGNING_KEY:?43 characters or more}" "${GRANT_SIGNING_JWK:?an Ed25519 private JWK}"
 mkdir -p "$data/objects" "$data/releases/icons"
-exec "$here/bin/workerd" serve "$here/config.capnp" \
+# Where the API may connect (workerd's network allow and deny: "public", "private", "local", CIDRs; comma-separated) and
+# what TLS it and the mail trust beside the browsers' roots (EXTRA_CA_CERTS: a PEM file, its certificates one by one).
+site=$(mktemp -d)
+list() { printf '%s' "$1" | tr ',' '\n' | sed '/^ *$/d; s/^ *//; s/ *$//; s/.*/"&"/' | paste -sd, -; }
+trusted=
+if [ -n "${EXTRA_CA_CERTS:-}" ]; then
+    awk -v dir="$site" '/-----BEGIN CERTIFICATE-----/ { n++ } n { print > (dir "/ca" n ".pem") }' "$EXTRA_CA_CERTS"
+    trusted=$(cd "$site" && ls ca*.pem 2>/dev/null | sed 's/.*/embed "&"/' | paste -sd, -)
+fi
+cat > "$site/site.capnp" <<CAPNP
+@0xd5c1e0f7a3b2c491;
+const allow :List(Text) = [$(list "${OUTBOUND_ALLOW:-public}")];
+const deny :List(Text) = [$(list "${OUTBOUND_DENY:-}")];
+const trusted :List(Text) = [$trusted];
+CAPNP
+exec "$here/bin/workerd" serve "$here/config.capnp" --import-path "$site" \
   --directory-path "objects=$data/objects" --directory-path "releases-files=$data/releases" \
   --directory-path "web-files=$here/sites/web" --directory-path "admin-files=$here/sites/admin" --directory-path "preview-files=$here/sites/preview" \
   --socket-addr "http=${LISTEN:-127.0.0.1:8080}" --socket-addr "setup=${SETUP_LISTEN:-127.0.0.1:8081}" "$@"

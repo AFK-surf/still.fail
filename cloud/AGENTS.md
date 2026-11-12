@@ -34,7 +34,8 @@
 - `selfhost/` runs the same Workers on workerd outside Cloudflare (its README.md). Its config is made from the
   wrangler files, so a Worker, Durable Object, var or route added there is self-hosted too; a binding of a kind it has
   no stand-in for (only R2 and send_email have one) needs one there. Whatever names the cloud stays a var, never a
-  host written in code: a self-hosted cloud's names are only known as it runs.
+  host written in code: a self-hosted cloud's names are only known as it runs. `pnpm side` (side/selfhost.test.ts,
+  the side run's) runs it on workerd for real, signing in through an SMTP relay and an OpenID provider.
 - The control plane's contract is shared with Comma (AFK-surf/Cue): `station/src/cloud/provider.ts` holds what differs.
   A change to a station-facing route keeps both working.
 - Tests run in Miniflare with everything outside mocked: `pnpm run types && pnpm run check && pnpm test`, one file
