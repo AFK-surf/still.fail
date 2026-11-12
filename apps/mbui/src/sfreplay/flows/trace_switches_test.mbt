@@ -42,6 +42,8 @@
 /// MBUI_PROFILE_ROWS (2026-11-12: an account a row each in the accounts' list, one account whole its pages' own
 /// `profile`) off in all 81 as it came: as MBUI_CONNECT_ROWS, only the replay reads it, which reads the app's rows and
 /// `profile` out of the run's `profiles {scope}`, whose items were whole.
+/// MBUI_HOME_SAME (2026-11-12: Home's own lists kept as they are let go of, as the places' are) off in all 81 as it
+/// came.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 72,
   "MBUI_DEVICES": 73,
@@ -54,6 +56,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_CHATS_WINDOW": 74,
   "MBUI_MARKS_ONE": 74,
   "MBUI_PROFILE_ROWS": 81,
+  "MBUI_HOME_SAME": 81,
 }
 
 ///|

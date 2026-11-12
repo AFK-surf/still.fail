@@ -535,6 +535,10 @@ pub let trace_switches : Array[String] = [
   // on it, its old way (one account read out of `profiles`' whole items) gone from it, so only the replay reads it: a
   // trace without it has the app's rows and `profile` read out of its run's `profiles {scope}` (src/sfreplay/source.mbt))
   "MBUI_PROFILE_ROWS",
+  // (Home's own lists (its chats, its long jobs, the news over them) kept as they are let go of, as the places' are
+  // with MBUI_HAVE_SAME, and asked again with their version: sfbase's `lasting`, home_lasting. A trace without it has
+  // them let go of and asked again whole, as its run's app did (src/sfreplay/source.mbt replay_kept))
+  "MBUI_HOME_SAME",
 ]
 
 ///|

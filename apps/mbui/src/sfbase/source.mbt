@@ -232,9 +232,26 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
 /// its bones until the core answered across its thread (the user, 2026-11-10). Lists read only: nothing typed for
 /// (`q`), nothing written in (a form, a draft), no chat. The stations' rows are one ask for every list, a chat's name of
 /// its station too, which takes no kept value (station_marks: what changed while nothing read it is never shown as it
-/// was, core_signal_wbtest.mbt).
+/// was, core_signal_wbtest.mbt). Home's own lists too (home_lasting): on 小屏 Home switched away from rests on the
+/// stack's shelf and lets go of what it read, and taken back read it anew; shown only as the core answered, its long
+/// jobs and its rows were gone meanwhile and then every row made again and coming in as new (the owner's phone,
+/// 2026-11-12: 50–68 ms, the rows under 今天 drawn as slivers through that frame; bar_places_kept_wbtest.mbt).
 // kept across runs: a value (nothing of it changes)
-let lasting : Array[String] = ["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive"]
+let lasting : Array[String] = [
+  "workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive", "chats", "longJobs", "changelog",
+]
+
+///|
+/// Of `lasting`, Home's own lists (its chats, its long jobs, the news over them): kept as they are let go of since
+/// MBUI_HOME_SAME, what a replay of a run from before asks as that run did (sfreplay's replay_kept).
+// kept across runs: a value (nothing of it changes)
+let home_lasting : Array[String] = ["chats", "longJobs", "changelog"]
+
+///|
+/// Whether topic `name` is one of Home's own lists `lasting` keeps (home_lasting).
+pub fn home_lasting_of(name : String) -> Bool {
+  home_lasting.contains(name)
+}
 
 ///|
 /// How many values of topic `name` asked with `params` (its JSON as the core is asked it, its name in it too) the

@@ -684,11 +684,13 @@ fn replay_tells(name : String, topic : Json) -> Array[(String, Json)] {
 
 ///|
 /// What the core's client keeps as it lets go of it (sfbase's topic_kept, as src/stillfail's main has it), where the
-/// run's app did, its trace's head saying so: the lists the places open on with MBUI_HAVE_SAME, a chat with
-/// MBUI_KEEP_CHAT, each asked again as that run asked it.
+/// run's app did, its trace's head saying so: the lists the places open on with MBUI_HAVE_SAME, Home's own with
+/// MBUI_HOME_SAME, a chat with MBUI_KEEP_CHAT, each asked again as that run asked it.
 fn replay_kept(name : String, params : Json) -> Int {
   let on = if name == "chat" {
     @sfcore.trace_switch("MBUI_KEEP_CHAT")
+  } else if @sfbase.home_lasting_of(name) {
+    @sfcore.trace_switch("MBUI_HOME_SAME")
   } else {
     @sfcore.trace_switch("MBUI_HAVE_SAME")
   }

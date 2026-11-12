@@ -1567,6 +1567,11 @@ pub fn round_trip_again(
   let named : Map[String, (String, Map[String, Json])] = Map([])
   // (what is answered for each subscription the client holds, by its id: called to stop)
   let live : Map[Int, () -> Unit] = Map([])
+  // (what each subscription last gave of its value, its JSON's text; and what was kept by each version said as one was
+  // let go of with `keep` (the client's Client::keep): asked again with that version, answered `same` where the value is
+  // that still, as the core answers it)
+  let gave : Map[Int, String] = Map([])
+  let kept_texts : Map[String, String] = Map([])
   let wire_key = fn(name : String, wire : Map[String, Json]) { @sfbase.wire_topic_key(name, wire) }
   // (whether this one is the core still: one another took the core's place from (a test after, a kept conversation)
   // says nothing more, all it answers stopped)
@@ -1601,6 +1606,10 @@ pub fn round_trip_again(
           }
         }
         let (name, params) = named.get(wire_key(topic, wire)).unwrap_or((topic, wire))
+        let have = match m.get("have") {
+          Some(String(h)) => kept_texts.get(h)
+          _ => None
+        }
         let on = Ref(true)
         let stop : Ref[() -> Unit] = Ref(fn() {  })
         live[id] = fn() {
@@ -1631,8 +1640,20 @@ pub fn round_trip_again(
               Some(m) => {
                 let text = m.stringify()
                 if text != last.val {
+                  let first = last.val == ""
                   last.val = text
-                  @signals.after_flush(fn() { if on.val { give(text) } })
+                  let said = match now.value {
+                    Some(v) => v.stringify()
+                    None => ""
+                  }
+                  gave[id] = said
+                  // (asked with the version of a value kept that is its value still: `same`, no value)
+                  let out = if first && have is Some(h) && h == said && said != "" {
+                    ({ "id": Json::number(id.to_double()), "same": Json::boolean(true) } : Json).stringify()
+                  } else {
+                    text
+                  }
+                  @signals.after_flush(fn() { if on.val { give(out) } })
                 }
               }
               None => ()
@@ -1640,7 +1661,7 @@ pub fn round_trip_again(
           })
         })
       }
-      (_, Some(True), _) =>
+      (_, Some(True), _) => {
         match live.get(id) {
           Some(stop) => {
             stop()
@@ -1648,6 +1669,17 @@ pub fn round_trip_again(
           }
           None => ()
         }
+        // (let go of with `keep`: the version of what it gave last, its value kept by it)
+        if m.get("keep") is Some(True) {
+          let v = "k" + id.to_string()
+          match gave.get(id) {
+            Some(said) if said != "" => kept_texts[v] = said
+            _ => ()
+          }
+          give(({ "id": Json::number(id.to_double()), "v": Json::string(v) } : Json).stringify())
+        }
+        gave.remove(id)
+      }
       (_, _, Some(String(call))) =>
         (base.call)(call, m.get("params").unwrap_or(Json::null()), fn(r) {
           let answer : Json = match r {
