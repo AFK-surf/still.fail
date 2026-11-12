@@ -11,7 +11,7 @@ import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
 import { PENDING_MOST } from "../src/lock-pending.ts";
 import { jsonResponse } from "../src/testing.ts";
-import { ASKED_MS, held, pendingHeld, read } from "../src/views/lock.ts";
+import { ASKED_MS, held, pendingHeld, pendingRowOf, read } from "../src/views/lock.ts";
 import { call } from "./helpers.ts";
 import { ME, PHONE, genesis, grant, rig } from "./lock-rig.ts";
 import { stationLater } from "./station-fixture.ts";
@@ -25,10 +25,11 @@ const WEBS = Array.from({ length: PENDING_MOST + 1 }, (_, i) => (0xe0 + i).toStr
 const SLACK_MS = 200;
 
 /// A station of the lock as station/src/mesh/serve.ts answers it: `silent`, asked, it never answers; `lateUntil`, till
-/// then what it is asked is held, and answered then; `refuse`, what is brought not on its head is refused (409).
+/// then what it is asked is held, and answered then; `refuse`, what is brought not on its head is refused (409);
+/// `rules`, what is brought is refused in these words (409), as the lock's rules refuse it there.
 function station(first: Entry, now: () => number) {
   const chain: Entry[] = [first];
-  const say = { silent: false, lateUntil: 0 };
+  const say = { silent: false, lateUntil: 0, rules: null as string | null };
   const head = (): Head => ({ seq: chain.length - 1, hash: entryHash(chain.at(-1)!), genesis: entryHash(chain[0]!) });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (say.silent) return Effect.never;
@@ -39,6 +40,7 @@ function station(first: Entry, now: () => number) {
       return Effect.succeed({ head: head(), entries: chain.filter((e) => e.seq > after), ...serves });
     }
     if (method === "POST" && path === "/lock") {
+      if (say.rules !== null) return Effect.fail(new CoreError("lock_refused", say.rules, 409));
       const es = (body as { entries: Entry[] }).entries;
       const last = es.at(-1)!;
       if (last.seq < chain.length) return entryHash(chain[last.seq]!) === entryHash(last) ? Effect.succeed({ taken: 0, head: head() }) : Effect.fail(new CoreError("lock_refused", "another entry is at its place", 409));
@@ -211,8 +213,35 @@ test("the head moved meanwhile about the same device otherwise: failed, said so,
   await s.told();
   await s.r.host.time.pass(500);
   assert.deepEqual(pendingHeld(s.inner, "ws").map((x) => x.state), ["failed"]);
+  assert.match(pendingRowOf(s.inner, "ws", pendingHeld(s.inner, "ws")[0]!).text, /^移除设备 .+：没有生效。另一台设备刚改过「.+」，请查看现在的状态，仍然需要的话再操作一次$/);
   assert.equal(s.st.chain.length, 2);
   assert.ok(!s.removed(PHONE));
+});
+
+test("refused by its station with its parent the head still (the lock's rules there): failed, said so, the station's words kept apart", async () => {
+  const s = await setUp();
+  s.st.say.silent = true;
+  await s.timed("lock.removeDevice", { device: PHONE });
+  s.st.say.silent = false;
+  s.st.say.rules = "this device may not take that one out";
+  await s.told();
+  await s.r.host.time.pass(500);
+  const row = pendingRowOf(s.inner, "ws", pendingHeld(s.inner, "ws")[0]!);
+  assert.deepEqual([row.state, row.why], ["failed", "this device may not take that one out"]);
+  assert.match(row.text, /^移除设备 .+：没有生效。请查看现在的状态，仍然需要的话再操作一次$/);
+});
+
+test("the lock turned off by another device meanwhile: failed, said it is no longer needed", async () => {
+  const s = await setUp();
+  s.st.say.silent = true;
+  await s.timed("lock.removeDevice", { device: PHONE });
+  s.st.say.silent = false;
+  await theirs(s, "disable", {});
+  await s.told();
+  await s.r.host.time.pass(500);
+  const row = pendingRowOf(s.inner, "ws", pendingHeld(s.inner, "ws")[0]!);
+  assert.equal(row.state, "failed");
+  assert.match(row.text, /^移除设备 .+：没有生效。安全模式已经关闭，这项改动不再需要$/);
 });
 
 test("an act that only repeats a pending one answers as that one, signing nothing twice", async () => {
@@ -320,9 +349,38 @@ test("one of the lock's two stations taken out while the other is silent: pendin
   const length = s.r.cloud.chains.get("ws")!.length;
   const b = await s.timed("workspace.removeStation", { station: A });
   assert.equal(b.error, undefined, JSON.stringify(b.error));
+  // (the answer the cloud's with the row, which says it waits)
+  assert.match(b.ok?.pending?.text ?? "", /^移除 station .+：已记下，等 studio 2 上线后生效$/, JSON.stringify(b.ok));
   assert.deepEqual(pendingHeld(s.inner, "ws").map((x) => [x.state, x.entry.kind]), [["waiting", "station.remove"]]);
   assert.equal(s.r.cloud.chains.get("ws")!.length, length, "the cloud sent nothing");
   const lock = await s.r.watch({ topic: "lock", workspace: "ws" });
   const rows = (await lock()).pending as { stations: string[]; text: string }[];
   assert.deepEqual(rows.map((x) => x.stations), [["studio 2"]], JSON.stringify(rows));
+});
+
+// ── what a call answers ──
+// A call whose lock entry ends pending says so in its answer, `pending` its row (LockPending), whatever else the call
+// answers (the roster's: the cloud's; people added: the first that pends), so the app says that sentence in place of
+// its done words (2026-11-13: the roster's calls answered as done, the entry only pending).
+
+test("the roster's calls and people added, their lock entry pending: the answer carries the row, its sentence saying it waits", async () => {
+  const members = [{ sub: "s1", email: "a@x.com", role: "owner" }, { sub: "s2", email: "b@x.com", role: "member" }];
+  for (const [name, params, says] of [
+    ["workspace.setRole", { member: "s2", role: "admin" }, /^把 .+ 改为.+：已记下，等 studio 上线后生效$/],
+    ["workspace.removeMember", { member: "s2" }, /^移除成员 .+：已记下，等 studio 上线后生效$/],
+    ["workspace.addMembers", { role: "admin", emails: ["d@x.com"] }, /^添加成员 .+：已记下，等 studio 上线后生效$/],
+  ] as const) {
+    const s = await setUp();
+    s.st.say.silent = true;
+    stationLater(s.r.host, (req) => {
+      const path = new URL(req.url).pathname;
+      if ((req.method === "PATCH" || req.method === "DELETE") && path === "/v1/workspaces/ws/members/s2") return Promise.resolve(jsonResponse(200, { ok: true }));
+      if (req.method === "POST" && path === "/v1/workspaces/ws/members") return Promise.resolve(jsonResponse(200, { joined: [], added: ["d@x.com"], already: [], view: { members } }));
+      return undefined;
+    });
+    const a = await s.timed(name, params);
+    assert.equal(a.error, undefined, `${name}: ${JSON.stringify(a.error)}`);
+    assert.equal(a.ok?.pending?.state, "waiting", `${name}: ${JSON.stringify(a.ok)}`);
+    assert.match(a.ok.pending.text, says, name);
+  }
 });

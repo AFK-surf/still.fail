@@ -333,6 +333,11 @@ for (const cond of CONDITIONS) {
     // (the new device given the chain with its entry on, to pin and bring to the stations itself)
     const chains = (out.said as { approved?: { chains?: Record<string, Entry[]> } } | undefined)?.approved?.chains;
     assert.ok(chains?.s1?.some((e) => e.kind === "device" && (e.body as { key?: string }).key === NEW_KEY), JSON.stringify(out.said).slice(0, 200));
+    // (and the answer says it is pending, its row: the app says its sentence in place of its done words)
+    const pending = (out.said as { approved?: { t?: string; pending?: { state: string; text: string } } } | undefined)?.approved;
+    assert.equal(pending?.t, "approved");
+    assert.equal(pending?.pending?.state, "waiting", JSON.stringify(out.said).slice(0, 300));
+    assert.match(pending!.pending!.text, /^批准设备 Pixel 9：已记下，等 .+ 上线后生效$/);
   });
 }
 
@@ -706,7 +711,7 @@ test("a failed change to the person's own lock, on the workspace's lock topic: d
 // A pending entry whose parent is no longer the head pinned fails where no seed is in hand (`#deliver`): named as
 // changed meanwhile only where its own subject was (`againOf` `otherwise`); where the lock moved and its subject did not,
 // what changed is their trusted devices (2026-11-13: 「移除设备 laptop没有生效：laptop刚被另一台设备改过」 though the
-// laptop was not touched, a tablet approved meanwhile).
+// laptop was not touched, a tablet approved meanwhile; and the name ran into the words).
 
 /// An entry the station keeps after the chain pinned, signed by this device's key as another device of theirs would.
 function theirsOnPerson(s: Setup, kind: string, body: unknown) {
@@ -718,8 +723,8 @@ function theirsOnPerson(s: Setup, kind: string, body: unknown) {
 }
 
 for (const c of [
-  { name: "another device put on meanwhile, the laptop untouched: their trusted devices said changed", body: { key: `ed25519:${"66".repeat(32)}`, id: "66".repeat(32), label: "tablet" }, says: "移除设备 laptop没有生效：受信任设备刚被另一台设备改过" },
-  { name: "the laptop itself changed meanwhile (renamed): it said changed", body: { key: LAPTOP_KEY, id: LAPTOP, label: "renamed", sign_key: LAPTOP_SIGNS }, says: "移除设备 laptop没有生效：laptop刚被另一台设备改过" },
+  { name: "another device put on meanwhile, the laptop untouched: their trusted devices said changed", body: { key: `ed25519:${"66".repeat(32)}`, id: "66".repeat(32), label: "tablet" }, says: "移除设备 laptop：没有生效。另一台设备刚改过受信任设备，请查看现在的状态，仍然需要的话再操作一次" },
+  { name: "the laptop itself changed meanwhile (renamed): it said changed", body: { key: LAPTOP_KEY, id: LAPTOP, label: "renamed", sign_key: LAPTOP_SIGNS }, says: "移除设备 laptop：没有生效。另一台设备刚改过「laptop」，请查看现在的状态，仍然需要的话再操作一次" },
 ]) {
   test(`a person's lock, pending, the head moved, no seed in hand: ${c.name}`, async () => {
     const s = await setUp();
@@ -732,7 +737,7 @@ for (const c of [
     await s.r.host.time.pass(1_000);
     const rows = s.personal.view("s1").pending as { state: string; text: string }[];
     assert.deepEqual(rows.map((r) => r.state), ["failed"]);
-    assert.ok(rows[0]!.text.startsWith(c.says), rows[0]!.text);
+    assert.equal(rows[0]!.text, c.says);
   });
 }
 

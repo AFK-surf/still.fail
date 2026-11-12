@@ -355,17 +355,22 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const { subs, key, seed } = a.personal;
       const chains: Record<string, Entry[]> = {};
       const failed: { ws: string; error: string }[] = [];
+      // (its entry pending on their lock, no station of theirs up: the first such row, which the answer carries)
+      let pending: unknown = null;
       for (const sub of subs) {
         // (put on the person's lock, then in the workspaces' where they bound it, as one: `withBound`)
         const add = inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label, ...(a.signKey !== null ? { sign_key: a.signKey } : {}) }, t("core-misc.personal.reason.add"), seed);
         const added = yield* Effect.result(withBound(inner, sub, Effect.tap(add, () => putOnBound(inner, sub, { id: a.device, label: a.label, signKey: a.signKey }))));
         if (added._tag === "Success") chains[sub] = added.success;
         else failed.push({ ws: personOf(sub), error: added.failure.message });
+        pending ??= inner.adb.personal().pendingShown(sub).find(({ item }) => item.state === "waiting" && item.entry.kind === "device" && get(item.entry.body, "key") === key)?.row ?? null;
       }
-      return { t: "approved", workspaces: Object.keys(chains).map(personOf), failed, chains };
+      return { t: "approved", workspaces: Object.keys(chains).map(personOf), failed, chains, ...(pending !== null ? { pending } : {}) };
     }
     const done: string[] = [];
     const failed: { ws: string; error: string }[] = [];
+    // (its entry pending in a workspace's lock, no station of it up: the first such row, which the answer carries)
+    let pending: unknown = null;
     for (const p of a.places) {
       const body: J = { id: a.device, sub: p.sub, kind: a.kind, label: a.label };
       if (a.kind === "app" && a.signKey !== null) body.sign_key = a.signKey;
@@ -377,9 +382,10 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const signed = yield* Effect.result(Effect.andThen(p.joins === true ? lock.admit(p.sub, a.email) : Effect.void, lock.append("device", body)));
       if (signed._tag === "Success") done.push(p.ws);
       else failed.push({ ws: p.ws, error: signed.failure.message });
+      if (pending === null && signed._tag === "Success" && isObject(signed.success) && isObject(signed.success.pending)) pending = signed.success.pending;
       yield* within.wait(Effect.ignore(read(inner, p.ws), { log: "Unhandled", message: "pairing workspace read" }));
     }
-    return { t: "approved", workspaces: done, failed };
+    return { t: "approved", workspaces: done, failed, ...(pending !== null ? { pending } : {}) };
   });
 }
 

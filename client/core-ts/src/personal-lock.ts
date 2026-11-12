@@ -705,7 +705,7 @@ export class PersonalLock {
           // in hand: what changed is their trusted devices, not it)
           const how = againOf(pinned, this.#aside.get(sub) ?? [], e, subjectOf);
           if (how === "done") set(null);
-          else set({ state: "failed", what: how === "otherwise" ? item.name : t("core-misc.lock.pending.trusted") });
+          else set({ state: "failed", ...(how === "otherwise" ? { what: item.name } : { as: "trusted" as const }) });
           continue;
         }
         const chain = [...pinned, e];

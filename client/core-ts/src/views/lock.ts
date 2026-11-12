@@ -2482,12 +2482,15 @@ export function added(inner: Inner, sub: string, ws: string, role: string, answe
       }),
     ];
     const lock = new Lock(inner, ws, sub, null, { within, read: true });
+    // (the first of them pending, if any: `{pending}`, its row, which the call's answer carries; the page lists them all)
+    let first: unknown = null;
     for (const w of wanted) {
       const has = fold(held(inner, ws)?.entries ?? m.entries).members.get(w.sub);
       if (has?.role === role) continue;
-      yield* lock.append("member", { sub: w.sub, email: w.email, role });
+      const said = yield* lock.append("member", { sub: w.sub, email: w.email, role });
+      if (first === null && isObject(said) && isObject(said.pending)) first = { pending: said.pending };
     }
-    return null;
+    return first;
   });
 }
 
@@ -3017,14 +3020,14 @@ export class Lock {
         const item = pendingHeld(inner, ws).find((x) => x.state === "waiting" && (passes.get(x.id) ?? 0) < 2);
         if (item === undefined || !h?.head) return;
         passes.set(item.id, (passes.get(item.id) ?? 0) + 1);
-        const fail = (how: { what?: string; why?: string }) => Effect.sync(() => putPending(inner, ws, pendingHeld(inner, ws).map((x) => (x.id === item.id ? { ...x, state: "failed" as const, ...how } : x))));
+        const fail = (how: { what?: string; why?: string; as?: "off" }) => Effect.sync(() => putPending(inner, ws, pendingHeld(inner, ws).map((x) => (x.id === item.id ? { ...x, state: "failed" as const, ...how } : x))));
         const drop = Effect.sync(() => putPending(inner, ws, pendingHeld(inner, ws).filter((x) => x.id !== item.id)));
         if (h.entries.some((e) => hashOf(e) === hashOf(item.entry))) {
           yield* drop;
           continue;
         }
         if (fold(h.entries).disabled) {
-          yield* fail({ what: nameOf(inner, ws) });
+          yield* fail({ as: "off" });
           continue;
         }
         let entry = item.entry;

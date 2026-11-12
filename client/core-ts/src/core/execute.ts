@@ -165,10 +165,15 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
               : asked;
             const pendingId = isObject(signed) && isObject(signed.pending) && typeof signed.pending.id === "string" ? signed.pending.id : null;
             let result = yield* (pendingId !== null && roster ? Effect.tapError(bounded, () => Effect.sync(() => hooks.pendingDrop?.(inner, roster.ws, pendingId))) : bounded);
+            // The lock's entry pending (no station took it): the answer says so, the cloud's with its row as `pending`
+            // (`LockPending`), which the app says in place of its done words.
+            const pendingRow = (said: unknown) => (isObject(said) && isObject(said.pending) ? said.pending : null);
+            const withPending = (row: unknown) => (row === null ? result : { ...(isObject(result) ? result : {}), pending: row });
+            if (roster) result = withPending(pendingRow(signed));
             // People added: so in a locked workspace's lock too, with the role given (views/lock.ts `added`).
             if (adding && hooks.added) {
               const role = isObject(op.body) && typeof op.body.role === "string" ? op.body.role : "member";
-              yield* hooks.added(inner, sub, decodeURIComponent(adding[1]!), role, result);
+              result = withPending(pendingRow(yield* hooks.added(inner, sub, decodeURIComponent(adding[1]!), role, result)));
             }
             // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
             if (enrolling && hooks.enrolled) result = yield* hooks.enrolled(inner, sub, decodeURIComponent(enrolling[1]!), result);

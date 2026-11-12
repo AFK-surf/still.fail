@@ -37,7 +37,9 @@ export type Act = "removeDevice" | "renew" | "approve" | "addMember" | "setRole"
 /// One pending entry. `id`: the hash of the entry as first signed, the same while it is signed again (`entry` the one
 /// brought now). `name`: what it is about, as the person knows it then; `role` a role given, in words. `at` when it was
 /// signed first (ms). `state`: `waiting` for a station, or `failed`: `what` was changed meanwhile by another device
-/// (`core-misc.lock.pending.failed`), or `why` says what else refused it. `tries`: signings again of it. `sent`: the
+/// (`core-misc.lock.pending.failed`), or `why` says what else refused it (a station, in its words), or `as`: `trusted`,
+/// the lock moved and its subject did not, with no seed in hand to sign it again (a person's own lock), `off`, the
+/// lock turned off meanwhile. `tries`: signings again of it. `sent`: the
 /// cloud was sent it as it was signed (a station that pins what the lock says of it from the cloud alone).
 export type Pending = {
   id: string;
@@ -49,6 +51,7 @@ export type Pending = {
   state: "waiting" | "failed";
   what?: string;
   why?: string;
+  as?: "trusted" | "off";
   tries?: number;
   sent?: boolean;
 };
@@ -74,8 +77,11 @@ export function actText(p: Pick<Pending, "act" | "name" | "role">): string {
 export function pendingRow(p: Pending, stations: readonly string[]): PendingRow {
   const action = actText(p);
   if (p.state === "waiting") return { id: p.id, text: t("core-misc.lock.pending.waiting", { action, stations: stationsText(stations) }), state: "waiting", stations: stations.slice(0, 3) };
+  // (each says that it failed and what to do next; a name in the words is set off as one, `failed`'s 「{what}」)
   const dismissText = t("core-misc.lock.pending.dismiss");
-  if (p.why !== undefined) return { id: p.id, text: action, state: "failed", stations: [], why: p.why, dismissText };
+  if (p.why !== undefined) return { id: p.id, text: t("core-misc.lock.pending.failedWhy", { action }), state: "failed", stations: [], why: p.why, dismissText };
+  if (p.as === "off") return { id: p.id, text: t("core-misc.lock.pending.failedOff", { action }), state: "failed", stations: [], dismissText };
+  if (p.as === "trusted") return { id: p.id, text: t("core-misc.lock.pending.failedTrusted", { action }), state: "failed", stations: [], dismissText };
   return { id: p.id, text: t("core-misc.lock.pending.failed", { action, what: p.what ?? p.name }), state: "failed", stations: [], dismissText };
 }
 
