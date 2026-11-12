@@ -450,6 +450,11 @@ for t in $targets; do
           read -r -a words <<< "$r"
           kept=()
           specs=$(printf '1,1,0,1 %.0s' $(seq ${APP_PART#*/}))
+          # (the fourth's at 120 a second: its first part has preview_tree's tests 0-54 beside its pages, 81-111 s, the
+          # second 54-121, 175-182 s, on one of the four cores each; dealt as though both had none, the second's job was
+          # 259 s of its 5 minutes three times, the first's 145-212, main e0220aca 43130127033, e046fa45 43132128804,
+          # 20027072 43133699456, 2026-11-12)
+          [ "${APP_GROUP:-}" = 4/4 ] && [ "${MBUI_TEST_FPS:-}" = 120 ] && [ "$APP_PART" != 1/1 ] && specs="4,4,100,1 4,4,180,1"
           while read -r g f; do [ "$g" = "${APP_PART%/*}" ] && kept+=("$f"); done < <(page_deal "$specs" "${words[@]:3}")
           [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
         else
