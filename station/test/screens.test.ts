@@ -335,9 +335,10 @@ test("the sound is left out while the pictures wait in front of the link", async
   await v.served;
 });
 
-/// Muted on the client (`sound` 0), the computer's sound goes no more: what the source makes meanwhile is taken and left
-/// out, so once it is on again (`sound` 1) the next packet made goes, not what was kept while muted.
-test("a view muted on the client is sent no sound till it is on again", async () => {
+/// Opus (a twentieth of PCM's bytes) is not left out for the pictures. Muted on the client (`sound` 0), the computer's
+/// sound goes no more: what the source makes meanwhile is taken and left out, so once it is on again (`sound` 1) the
+/// next packet made goes, not what was kept while muted.
+test("Opus goes while the pictures wait, and a view muted on the client is sent no sound till it is on again", async () => {
   class HeldSound extends FakeView {
     #waiting: ((frame: AudioFrame) => void) | null = null;
     nextAudio() {
@@ -365,6 +366,13 @@ test("a view muted on the client is sent no sound till it is on again", async ()
   await settle();
   assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "opus", sampleRate: 48000, channels: 2 });
   assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 1n);
+  // Opus goes while the pictures wait in front of the link too (PCM is left out then: the test before)
+  await time.adjust(QUEUE_MS + 1);
+  view.give(7);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 7n);
+  await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+  await settle();
   await v.stream.write(frame(KIND.sound, Buffer.from([0])));
   await settle();
   view.give(2);

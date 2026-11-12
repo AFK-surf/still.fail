@@ -522,7 +522,9 @@ class ViewSession {
   /// picture's round trip is known (sound from the start made that round trip the queue's, and nothing waited past it),
   /// what comes meanwhile taken and left out: the source keeps up to 300 ms not taken (still.fail Helper's AudioPackets,
   /// stillfail-screen's AudioQueue), which would go all at once and the sound stay that far behind. Its leaving out is
-  /// meant: the sound breaks up on a link too slow for it, the pictures going on. Its format is said once, as the first
+  /// meant: the sound breaks up on a link too slow for it, the pictures going on. Opus (about 64 kbit/s) is not left out
+  /// for the pictures: on 800 and 400 kbit/s left out so it went with gaps of 1–1.5 s, and sent always it came whole with
+  /// the pictures' rate and lateness as they were (2026-11-12, AUDIO=opus). Its format is said once, as the first
   /// packet has it (Opus where the client said it decodes it and the source encodes it, else PCM). Muted on the client
   /// (`sound` 0), what comes is taken and left out the same way, so the sound is as late as before once it is on again.
   async #audio(): Promise<void> {
@@ -535,7 +537,7 @@ class ViewSession {
           await this.#send(KIND.audioConfig, Buffer.from(JSON.stringify({ codec: next.codec, sampleRate: 48000, channels: 2 })));
           configured = true;
         }
-        if (!this.#timed || !this.#soundOn || this.pacer.backlogged()) continue;
+        if (!this.#timed || !this.#soundOn || (next.codec === "pcm_s16le" && this.pacer.backlogged())) continue;
         const payload = Buffer.alloc(8 + next.data.length);
         payload.writeBigUInt64BE(BigInt(Math.round(next.ts)), 0);
         payload.set(next.data, 8);
