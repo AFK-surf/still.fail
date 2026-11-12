@@ -915,6 +915,8 @@ pub struct Tree {
   mut offset_moved : (NodeId) -> Unit
   /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
   mut list_feel : () -> (ListFeel, Double)
+  /// whether the pointer now drags what scrolls up or down as a finger does (Tree::pointer_drags_scroll)
+  mut drags_scroll : () -> Bool
   /// whether motion is reduced where what hosts the tree draws it (Tree::reduces_motion): what comes or goes there at
   /// once (View::comes)
   mut motion_reduced : () -> Bool
@@ -1337,6 +1339,7 @@ pub fn Tree::new(
     moves: fn(_, _, _) {  },
     offset_moved: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
+    drags_scroll: fn() { true },
     motion_reduced: fn() { false },
     press_least: fn() { 0.0 },
     twice_feel: fn() { (double_press_ms, double_press_slop) },
@@ -12131,6 +12134,17 @@ fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
 /// them); none said, the desktop's, at 1.
 pub fn Tree::lists_feel(self : Tree, f : () -> (ListFeel, Double)) -> Unit {
   self.list_feel = f
+}
+
+///|
+/// Whether the pointer now drags what scrolls up or down (a page's list, a plain column) as a finger does, as it is
+/// asked: not where a desktop's page says the mouse drags no list (the wheel and the trackpad scroll it, a drag is the
+/// pointer's own: words picked), its column then taking over no hold to scroll (View::scrolls' `claims`); one scrolled
+/// across (a code block, a table) still dragged along its row, as an old view's sideways box is. None said, it does.
+/// The bridge of the old frames' saying (ui's Ctx::mouse_drags_lists, the last said holding): once the frames are
+/// nodes, the tree's own.
+pub fn Tree::pointer_drags_scroll(self : Tree, f : () -> Bool) -> Unit {
+  self.drags_scroll = f
 }
 
 ///|
