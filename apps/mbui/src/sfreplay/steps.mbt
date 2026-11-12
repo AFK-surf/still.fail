@@ -245,10 +245,21 @@ pub fn Flow::start(
   // to it due as long after it as they came in the run, its first step too, not as long after the replay's clock began)
   let started_at = 1000.0
   r.clock(fn() { started_at })
+  // (a run whose app was started on a page (its script's `#env MBUI_OPEN_PAGE`, src/stillfail/main.mbt): that page
+  // pushed as the run begins, before its first frame, as the run's app did it as it started; not once Home is drawn,
+  // where the wide frame's pane landed first and what it declared was let go of, which the run's app never asked)
+  let started_on = trace_started_on(trace)
+  started_page.val = started_on
+  let begun = fn() {
+    match started_on {
+      Some(page) => @sfapp.open_page(page)
+      None => ()
+    }
+  }
   let t = match r.text() {
     Some(text) =>
-      @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), time=started_at, loc~)
-    None => @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), time=started_at, loc~)
+      @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), time=started_at, begun~, loc~)
+    None => @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), time=started_at, begun~, loc~)
   }
   // (and the rest of what its host gave its first frame: the system's settings, the minutes it was off UTC)
   ignore(t.settings_said(settings.stringify()))
@@ -1539,9 +1550,25 @@ pub fn Flow::rest_passed(self : Flow, name : String) -> Bool {
 }
 
 ///|
-/// `page` pushed over Home, as a scripted run's `#env MBUI_OPEN_PAGE` has it (src/stillfail/main.mbt; there before
-/// the first frame, here once the Tester has drawn Home: the same asks, matched whatever their order), in place once
-/// its push is over (@ui.nav_rest).
+/// The page the run's app was started on (its trace's `#env MBUI_OPEN_PAGE` step), opened as the replay's run began
+/// (Flow::start): Flow::open_page pushes it no more.
+// kept across runs: set by each Flow::start
+let started_page : Ref[@sfapp.Page?] = Ref(None)
+
+///|
+/// The page a trace's run was started on, as its script said it (`#env MBUI_OPEN_PAGE=NAME`), if one.
+fn trace_started_on(trace : String) -> @sfapp.Page? {
+  if trace.contains("\"step\":\"#env MBUI_OPEN_PAGE=files\"") {
+    Some(@sfapp.Page::Files)
+  } else {
+    None
+  }
+}
+
+///|
+/// `page` pushed over Home, as a scripted run's `#env MBUI_OPEN_PAGE` has it (src/stillfail/main.mbt): before the
+/// first frame where the run's app was started on it (Flow::start), else now; in place once its push is over
+/// (@ui.nav_rest).
 #callsite(autofill(loc))
 pub fn Flow::open_page(self : Flow, page : @sfapp.Page, loc~ : SourceLoc) -> Unit {
   if pace_split.val != "" {
@@ -1549,9 +1576,12 @@ pub fn Flow::open_page(self : Flow, page : @sfapp.Page, loc~ : SourceLoc) -> Uni
   }
   let site = loc.to_string()
   emit("#env MBUI_OPEN_PAGE=" + page_name(page))
-  @sfapp.open_page(page)
-  self.t.draw()
-  self.core()
+  // (opened as the run began where its run's app was started on it: Flow::start; else pushed now)
+  if started_page.val != Some(page) {
+    @sfapp.open_page(page)
+    self.t.draw()
+    self.core()
+  }
   // (a page pushed over Home slides in, to its end)
   if @ui.nav_rest() >= 0.0 {
     self.run_to_at(site, @ui.nav_rest)

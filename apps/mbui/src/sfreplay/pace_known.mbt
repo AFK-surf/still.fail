@@ -142,18 +142,6 @@ let pace_splits_untraced : Map[String, Array[Int]] = {
 /// again over one).
 // kept across runs: a value
 let strict_diverged_known : Map[String, Array[(Double, String)]] = {
-  // drive-download-many (recorded again for bell_lit): its run's app was started on the files' page (the trace's
-  // `MBUI_OPEN_PAGE=files`), the replay's opens it as a step (Flow::open_page) once the first screen is up. So the
-  // replay's app first lands the wide frame's pane, declaring the new chat as the marks are answered (1093.9), and lets
-  // go of it as the files' page comes on top, a frame's moment there, the shell's `doing` handed over from the page
-  // before let go of and asked again with it. The run's app asked none of it. The replay's way of opening the page, not
-  // the app's: goes as Flow::open_page starts the replay's app on the page as its run's was
-  "drive-download-many": [
-    (1093.92529296875, "{\"id\":19,\"subscribe\":{\"topic\":\"newChat\",\"scope\":\"01M76NSCTQ86BGR7W0YS3R5G21\"},\"keyed\":true}"),
-    (1566.6666666666665, "{\"id\":19,\"unsubscribe\":true}"),
-    (1566.6666666666665, "{\"id\":12,\"unsubscribe\":true}"),
-    (1583.3333333333333, "{\"id\":26,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
-  ],
   // lock-wait (#5519; anew with what the first screen reads declared, #5589; anew with notify.permission told as
   // notify is answered, between frames, #5613: it takes the id before doing's and driveTransfers', and what the
   // replay held for it comes a frame sooner): at 22116.7 the lock's delta (safe mode off) takes the waiting page away
