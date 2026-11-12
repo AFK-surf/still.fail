@@ -8,6 +8,8 @@
 //! for 1); a launcher before this one does, to take its place at a handover (from 3: run.rs `renew`).
 
 mod data;
+#[cfg(unix)]
+mod front;
 mod lifecycle;
 mod log;
 mod ports;

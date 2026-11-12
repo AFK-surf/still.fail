@@ -52,6 +52,15 @@ pub async fn mesh(host : @host.Host, path : String) -> Unit {
   guard said is { "id": listening, .. } else { fail("the shell gave no listening socket") }
   let mesh : Mesh = { host, endpoint: None, options: "", said: Json::null(), waiting: [], clients: [], binds: 0 }
   host.say(({ "listening": Json::string(path) } : Json).stringify())
+  // Its stdin is the launcher's: ended (the launcher gone, or stopping the station), the endpoint goes with it.
+  ignore(
+    host.rt.fork(name="mesh parent", () => {
+      while host.line() is Some(_) {
+        ()
+      }
+      @host.exit(0)
+    }),
+  )
   while true {
     let (accepted, _) = host.shell("tcp.accept", { "id": listening })
     guard accepted is { "id": id, .. } else { continue }

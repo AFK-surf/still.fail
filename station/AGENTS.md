@@ -5,7 +5,11 @@
 - Processes: the launcher (`native/launcher`, Rust) keeps the pid, the data directory's lock and the ports, and on an
   update starts the next Node before letting the old one go; each agent process runs under a runner
   (`native/runner`), so a turn goes on while the station restarts or crashes and the next one takes it up
-  (`src/agents/runner.ts`; `adopt` in `src/agents/process.ts`). iroh is a Node addon (`native/mesh`). The native
+  (`src/agents/runner.ts`; `adopt` in `src/agents/process.ts`). The station's iroh endpoint is kept by the MoonBit
+  front (`mb/src/front/mesh.mbt`), which the launcher starts and keeps across Node's handovers
+  (`native/launcher/src/front.rs`), for each Node in turn (`src/mesh/front.ts`, its streams carried by the shell and
+  none of their bytes by the program); where none runs (Windows, a checkout without the program) Node binds it itself
+  with its addon (`native/mesh`), which keeps the image codecs and the rest as before. The native
   parts are prebuilt by their sources (`scripts/native.ts`): even a comment changed in one makes every machine and
   CI build it again, so touch them only for what they do.
 - What still.fail draws outside the app (the Helper's windows, `native/helper`) is in still.fail's design (the

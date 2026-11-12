@@ -2370,7 +2370,10 @@ impl Shell {
 
     fn start_waiting(dir: PathBuf, complete: Complete, ctx: *mut c_void, open_wait: std::time::Duration) -> std::io::Result<Shell> {
         std::fs::create_dir_all(&dir)?;
-        let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).thread_name("stillfail-shell").enable_all().build()?;
+        // Two threads in an app; a station's program says how many it is to have (STILLFAIL_SHELL_THREADS: the station's
+        // front, whose threads carry every byte of the station's iroh, its addon's on as many as the machine has cores).
+        let threads = std::env::var("STILLFAIL_SHELL_THREADS").ok().and_then(|n| n.parse::<usize>().ok()).filter(|n| *n > 0).unwrap_or(2);
+        let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(threads).thread_name("stillfail-shell").enable_all().build()?;
         let (jobs, queue) = mpsc::channel::<Job>();
         std::thread::Builder::new().name("stillfail-disk".into()).spawn(move || {
             for job in queue {

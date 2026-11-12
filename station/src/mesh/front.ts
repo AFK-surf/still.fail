@@ -12,6 +12,7 @@ import { type Server, type Socket, connect, createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { log } from "../ops/log.ts";
+import { wall } from "../ops/fibers.ts";
 import type { Addr, Connection, Endpoint, Mesh, Stream, Traffic } from "./native.ts";
 
 /// What frames say besides a length (client/shell's PIPE_END, PIPE_FAILED); the longest a frame written here is.
@@ -24,7 +25,7 @@ type Seen = { conn: number; remote: string; alpn: string; via: string | null; pa
 
 /// `mesh`, its endpoint the front's at `socket`.
 export function withFront(mesh: Mesh, socket: string): Mesh {
-  return { ...mesh, bind: (options) => bindFront(socket, options) };
+  return { ...mesh, bind: (options) => FrontEndpoint.bind(socket, options) };
 }
 
 let opened = 0;
@@ -44,11 +45,15 @@ class Front {
   /// Every stream's socket open: closed with the endpoint (each a stream of a connection closed with it).
   readonly #open = new Set<Socket>();
   #gone: Error | null = null;
+  /// Once the link is gone (the front ended, or it was closed here).
+  readonly gone: Promise<void>;
+  #wentAway!: () => void;
 
   private constructor(control: Socket, server: Server, streamsPath: string) {
     this.#control = control;
     this.#server = server;
     this.streamsPath = streamsPath;
+    this.gone = new Promise((resolve) => (this.#wentAway = resolve));
     createInterface({ input: control }).on("line", (line) => {
       let said: { id: number; ok?: unknown; error?: string };
       try { said = JSON.parse(line); }
@@ -140,6 +145,7 @@ class Front {
   #end(error: Error) {
     if (this.#gone) return;
     this.#gone = error;
+    this.#wentAway();
     for (const a of this.#asked.values()) a.reject(error);
     this.#asked.clear();
     for (const i of this.#incoming.values()) i.end();
@@ -195,7 +201,11 @@ class FrontStream implements Stream {
   readonly #socket: Socket;
   /// Bi (a stream both ways): `stopped` answers null where the addon's does on a stream gone; one way, it fails.
   readonly #both: boolean;
-  #buffer: Buffer;
+  /// What came of a frame's head (or of what failed the stream) and is not whole yet; the bytes of the frame coming
+  /// still to come, each given as it comes (a frame is not waited for whole: a frame read in pieces was put together
+  /// again with every piece).
+  #head: Buffer = Buffer.alloc(0);
+  #left = 0;
   readonly #frames: (Buffer | null | Error)[] = [];
   #reader: ((f: Buffer | null | Error) => void) | null = null;
   #over = false;
@@ -206,35 +216,43 @@ class FrontStream implements Stream {
     this.#id = id;
     this.#socket = came.socket;
     this.#both = both;
-    this.#buffer = came.carry;
+    const carry = came.carry;
     this.#socket.on("data", (d) => {
-      this.#buffer = this.#buffer.length === 0 ? d : Buffer.concat([this.#buffer, d]);
-      this.#parse();
+      this.#parse(d);
     });
     this.#socket.on("end", () => this.#came(new Error("the stream's way to the front ended")));
     this.#socket.on("close", () => this.#came(new Error("the stream's way to the front ended")));
-    this.#parse();
+    this.#parse(carry);
     this.#socket.resume();
   }
 
-  #parse() {
-    while (!this.#over && this.#buffer.length >= 4) {
-      const n = this.#buffer.readUInt32BE(0);
-      if (n === END) {
-        this.#came(null);
-      } else if (n === FAILED) {
-        if (this.#buffer.length < 8) return;
-        const len = this.#buffer.readUInt32BE(4);
-        if (this.#buffer.length < 8 + len) return;
-        this.#came(new Error(this.#buffer.toString("utf8", 8, 8 + len)));
-      } else {
-        if (this.#buffer.length < 4 + n) return;
-        const frame = this.#buffer.subarray(4, 4 + n);
-        this.#buffer = this.#buffer.subarray(4 + n);
-        this.#give(frame);
+  #parse(d: Buffer) {
+    while (!this.#over && d.length > 0) {
+      if (this.#left > 0) {
+        const take = Math.min(this.#left, d.length);
+        this.#give(d.subarray(0, take));
+        this.#left -= take;
+        d = d.subarray(take);
+        continue;
       }
+      const head = this.#head.length === 0 ? d : Buffer.concat([this.#head, d]);
+      if (head.length < 4) return void (this.#head = Buffer.from(head));
+      const n = head.readUInt32BE(0);
+      if (n === END) {
+        this.#head = Buffer.alloc(0);
+        return this.#came(null);
+      }
+      if (n === FAILED) {
+        if (head.length < 8 || head.length < 8 + head.readUInt32BE(4)) return void (this.#head = Buffer.from(head));
+        this.#head = Buffer.alloc(0);
+        return this.#came(new Error(head.toString("utf8", 8, 8 + head.readUInt32BE(4))));
+      }
+      this.#head = Buffer.alloc(0);
+      this.#left = n;
+      d = head.subarray(4);
     }
   }
+
 
   /// Its end (null) or what failed it: the last of what it gives.
   #came(last: null | Error) {
@@ -389,67 +407,138 @@ class FrontConnection implements Connection {
   closed() { return this.#ended; }
 }
 
-async function bindFront(socket: string, options: Parameters<Mesh["bind"]>[0]): Promise<Endpoint> {
-  const front = await Front.open(socket);
-  const hex = (b: Buffer) => Buffer.from(b).toString("hex");
-  const said = await front.ask("bind", {
-    streams: front.streamsPath,
-    key: hex(options.secretKey),
-    options: {
-      alpns: options.alpns.map(hex),
-      relayUrls: options.relayUrls,
-      // (the addon finds and is found unless told not to)
-      discovery: options.discovery !== false,
-      ...(options.bindAddr ? { bindAddr: options.bindAddr } : {}),
-      ...(options.relayOnly ? { relayOnly: true } : {}),
-      ...(options.congestion ? { congestion: options.congestion } : {}),
-    },
-  }).catch((e) => {
-    front.close();
-    throw e;
-  });
-  let relays: { url: string; connected: boolean }[] = await front.ask("relayStatus").catch(() => []);
-  let asking = false;
-  const relaysAgain = () => {
-    if (asking) return;
-    asking = true;
-    front.ask("relayStatus").then((r) => { relays = r; }, () => {}).finally(() => (asking = false));
-  };
-  const endpoint = {
-    id: () => said.id as string,
-    sockets: () => said.sockets as string[],
-    online: () => front.ask("online").then(() => {}),
-    home: () => {
-      relaysAgain();
-      return relays[0]?.url ?? null;
-    },
-    relayStatus: () => {
-      relaysAgain();
-      return relays;
-    },
-    insertRelay: (url: string) => front.ask("insertRelay", { args: { url } }).then(() => {}),
-    removeRelay: (url: string) => front.ask("removeRelay", { args: { url } }).then(() => {}),
-    publicRelays: (on: boolean) => front.ask("publicRelays", { args: { on } }).then(() => {}),
-    keep: (urls: string[]) => void front.ask("keep", { args: { urls } }).catch((e) => log.warn("mesh", "relays not kept", { error: (e as Error).message })),
-    setCongestion: (congestion: "cubic" | "bbr") => void front.ask("setCongestion", { args: { congestion } }).catch(() => {}),
-    holdIncoming: (n: number) => void front.ask("holdIncoming", { args: { n } }).catch(() => {}),
-    addAddr: (addr: Addr) => void front.ask("addAddr", { addr }).catch(() => {}),
-    setRelayEntries: (entries: { entry: string; relay: string }[]) => front.ask("setRelayEntries", { args: { entries } }).then(() => {}),
-    networkChange: () => front.ask("networkChange").then(() => {}),
-    accept: async (): Promise<Connection | null> => {
-      const said = await front.ask("accept").catch(() => ({ end: true }));
-      return said?.end ? null : new FrontConnection(front, said);
-    },
-    connect: async (addr: Addr, alpn: Buffer, additional?: Buffer[], givenUp?: Promise<void>): Promise<Connection> => {
-      let asked = 0;
-      void givenUp?.then(() => front.ask("giveUp", { of: asked }).catch(() => {}));
-      const seen = await front.ask("connect", { addr, alpn: hex(alpn), additional: (additional ?? []).map(hex) }, (n) => (asked = n));
-      return new FrontConnection(front, seen);
-    },
-    close: async () => {
-      await front.ask("close").catch(() => {});
+/// The station's endpoint at the front, its link to it made again where it went (the front ended, and the launcher
+/// started another: front.rs): bound again as it was, what it accepts from then on the new link's. Connections made on
+/// the link that went went with it.
+class FrontEndpoint implements Endpoint {
+  readonly #socket: string;
+  readonly #bind: Record<string, unknown>;
+  #front: Front;
+  #said: { id: string; sockets: string[] };
+  #relays: { url: string; connected: boolean }[] = [];
+  #asking = false;
+  #closed = false;
+  /// The link made again, once it is.
+  #again: Promise<void> | null = null;
+
+  private constructor(socket: string, bind: Record<string, unknown>, front: Front, said: { id: string; sockets: string[] }) {
+    this.#socket = socket;
+    this.#bind = bind;
+    this.#front = front;
+    this.#said = said;
+  }
+
+  static async bind(socket: string, options: Parameters<Mesh["bind"]>[0]): Promise<FrontEndpoint> {
+    const bind = {
+      key: hex(options.secretKey),
+      options: {
+        alpns: options.alpns.map(hex),
+        relayUrls: options.relayUrls,
+        // (the addon finds and is found unless told not to)
+        discovery: options.discovery !== false,
+        ...(options.bindAddr ? { bindAddr: options.bindAddr } : {}),
+        ...(options.relayOnly ? { relayOnly: true } : {}),
+        ...(options.congestion ? { congestion: options.congestion } : {}),
+      },
+    };
+    const { front, said } = await FrontEndpoint.#link(socket, bind);
+    const endpoint = new FrontEndpoint(socket, bind, front, said);
+    endpoint.#relays = await front.ask("relayStatus").catch(() => []);
+    endpoint.#watch(front);
+    return endpoint;
+  }
+
+  static async #link(socket: string, bind: Record<string, unknown>) {
+    const front = await Front.open(socket);
+    try {
+      const said = await front.ask("bind", { streams: front.streamsPath, ...bind });
+      return { front, said };
+    } catch (e) {
       front.close();
-    },
-  };
-  return endpoint;
+      throw e;
+    }
+  }
+
+  /// The link gone while the endpoint is open: made again, a while after each try that fails.
+  #watch(front: Front) {
+    void front.gone.then(() => {
+      if (this.#closed || this.#front !== front) return;
+      log.warn("mesh", "the front is gone; linking to it again");
+      this.#again = (async () => {
+        for (let wait = 250; !this.#closed; wait = Math.min(wait * 2, 8000)) {
+          await wall.sleep(wait); // timer: a retry after a failure, with a backoff
+          try {
+            const { front: next, said } = await FrontEndpoint.#link(this.#socket, this.#bind);
+            if (this.#closed) return next.close();
+            this.#front = next;
+            this.#said = said;
+            this.#watch(next);
+            log.info("mesh", "linked to the front again", { station: said.id });
+            return;
+          } catch (e) {
+            log.warn("mesh", "the front not reached", { error: (e as Error).message, again: `${Math.min(wait * 2, 8000)} ms` });
+          }
+        }
+      })().finally(() => (this.#again = null));
+    });
+  }
+
+  #ask(op: string, args: Record<string, unknown> = {}) {
+    return this.#front.ask(op, args);
+  }
+
+  id() { return this.#said.id; }
+  sockets() { return this.#said.sockets; }
+  online() { return this.#ask("online").then(() => {}); }
+  home() {
+    this.#relaysAgain();
+    return this.#relays[0]?.url ?? null;
+  }
+  relayStatus() {
+    this.#relaysAgain();
+    return this.#relays;
+  }
+  #relaysAgain() {
+    if (this.#asking) return;
+    this.#asking = true;
+    this.#ask("relayStatus").then((r) => { this.#relays = r; }, () => {}).finally(() => (this.#asking = false));
+  }
+  insertRelay(url: string) { return this.#ask("insertRelay", { args: { url } }).then(() => {}); }
+  removeRelay(url: string) { return this.#ask("removeRelay", { args: { url } }).then(() => {}); }
+  publicRelays(on: boolean) { return this.#ask("publicRelays", { args: { on } }).then(() => {}); }
+  keep(urls: string[]) { void this.#ask("keep", { args: { urls } }).catch((e) => log.warn("mesh", "relays not kept", { error: (e as Error).message })); }
+  setCongestion(congestion: "cubic" | "bbr") { void this.#ask("setCongestion", { args: { congestion } }).catch(() => {}); }
+  holdIncoming(n: number) { void this.#ask("holdIncoming", { args: { n } }).catch(() => {}); }
+  addAddr(addr: Addr) { void this.#ask("addAddr", { addr }).catch(() => {}); }
+  setRelayEntries(entries: { entry: string; relay: string }[]) { return this.#ask("setRelayEntries", { args: { entries } }).then(() => {}); }
+  networkChange() { return this.#ask("networkChange").then(() => {}); }
+
+  async accept(): Promise<Connection | null> {
+    for (;;) {
+      const front = this.#front;
+      const said = await front.ask("accept").catch(() => ({ end: true }));
+      if (!said?.end) return new FrontConnection(front, said);
+      // its link gone: the next connection comes on the link made again
+      if (this.#closed) return null;
+      if (this.#again) await this.#again;
+      else if (this.#front === front) await front.gone;
+      if (this.#closed) return null;
+    }
+  }
+
+  async connect(addr: Addr, alpn: Buffer, additional?: Buffer[], givenUp?: Promise<void>): Promise<Connection> {
+    const front = this.#front;
+    let asked = 0;
+    void givenUp?.then(() => front.ask("giveUp", { of: asked }).catch(() => {}));
+    const seen = await front.ask("connect", { addr, alpn: hex(alpn), additional: (additional ?? []).map(hex) }, (n) => (asked = n));
+    return new FrontConnection(front, seen);
+  }
+
+  async close() {
+    this.#closed = true;
+    await this.#front.ask("close").catch(() => {});
+    this.#front.close();
+  }
 }
+
+const hex = (b: Buffer) => Buffer.from(b).toString("hex");

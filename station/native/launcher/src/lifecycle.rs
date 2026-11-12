@@ -52,6 +52,8 @@ pub struct Times {
     /// After a handover whose new Node did not take over, the wait before a Node is started again: the installer's to
     /// put the release from before back (the old Node is gone by then; this way the next one runs on it).
     pub rollback: Duration,
+    /// A front (front.rs) that ends sooner than this after it started is not started again: it would only end again.
+    pub front: Duration,
 }
 
 /// What a Node serves once it has taken over the station: the agents' door (after the sessions are taken up) and the
@@ -64,7 +66,7 @@ pub const START_FAILURES: u32 = 5;
 impl Times {
     pub fn of_env() -> Times {
         let s = Duration::from_secs;
-        let mut times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(60), stable: s(60), parent: s(2), drained: s(300), take: s(90), rollback: s(10) };
+        let mut times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(60), stable: s(60), parent: s(2), drained: s(300), take: s(90), rollback: s(10), front: s(10) };
         for pair in std::env::var("STILLFAIL_LAUNCHER_TIMES").unwrap_or_default().split(',') {
             let Some((key, ms)) = pair.split_once('=') else { continue };
             let Ok(ms) = ms.trim().parse::<u64>() else { continue };
@@ -79,6 +81,7 @@ impl Times {
                 "drained" => &mut times.drained,
                 "take" => &mut times.take,
                 "rollback" => &mut times.rollback,
+                "front" => &mut times.front,
                 _ => continue,
             };
             *slot = Duration::from_millis(ms);
@@ -726,7 +729,7 @@ mod tests {
         let run = data.join("run");
         std::fs::create_dir_all(&run).unwrap();
         let fake = Fake { dir: data, now: Instant::now(), pid: 100, told: vec![], killed: vec![], parent_gone: false, routes: vec![], renewed: vec![] };
-        let times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(4), stable: s(60), parent: s(2), drained: s(300), take: s(90), rollback: s(10) };
+        let times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(4), stable: s(60), parent: s(2), drained: s(300), take: s(90), rollback: s(10), front: s(10) };
         let mut station = Lifecycle::new(fake, times, run, with_parent);
         station.start();
         station
