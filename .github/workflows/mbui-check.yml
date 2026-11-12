@@ -223,8 +223,9 @@ jobs:
           # (sfapp's page tests, on a push, in four processes side by side, its files dealt round them (SFAPP_SHARDS=4):
           # the runner's four cores, one of them working while the other three waited when all 162 files ran in one,
           # the app's fourth group the longest job of every mbui push, its pages 110-196 s of its 190-300, 2026-10-31,
-          # as asked. Once a day in one process (SFAPP_SHARDS=1), their files one after another: what one file leaves
-          # behind that a later one trips on shows there, which shards' fewer files each partly hide. The screen
+          # as asked. Once a day each group's share in one process (SFAPP_SHARDS=1), at the default rate, its files one
+          # after another: what one file leaves behind that a later one trips on shows there, which shards' fewer files
+          # each partly hide (at a rate as a push runs them: all in one was more than the day's 10 minutes). The screen
           # sweeps a process each beside them either way, test.sh)
           # (each of FPS's rates in its turn, MBUI_TEST_FPS; none said: once, as by default)
           code=0

@@ -201,6 +201,14 @@ for t in $targets; do
   if [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
     files=(src/sfapp/*_wbtest.mbt)
     n=${SFAPP_SHARDS:-5}
+    # (the day's run, SFAPP_SHARDS=1: its pages a process for each group's share, every file after the ones before it
+    # there, at the default rate alone; at a rate as a push runs them. All the pages in one process at a rate were more
+    # than its job's 10 minutes, 1,141-3,990 s of them by page-seconds.txt, the day's mbui-check cancelled or failed
+    # every day since 2026-11-09: 43151279466, app 4/4 at 24, 7, 60 and 120 fps stopped at 615 s, 2026-11-12)
+    one_process=
+    if [ "$n" = 1 ] && [ -n "${APP_GROUP:-}" ] && [ -n "${APP_EXE:-}" ]; then
+      if [ -n "${MBUI_TEST_FPS:-}" ]; then n=4; else one_process=1; fi
+    fi
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
     # Run the screen sweeps beside page tests, so their durations do not add. Corners includes squeeze's screens (and,
     # in its Chinese run, a press's room and the light theme's contrast: each screen opened once for all its rules);
@@ -248,7 +256,15 @@ for t in $targets; do
         [ $b -gt $a ] && runs+=("$f --index $a-$b")
       done
     done
-    if [ "$n" = 1 ]; then
+    if [ -n "$one_process" ]; then
+      # (the day's, on the four runners: each group's share by the files' times, in one process)
+      g1=() g2=() g3=() g4=()
+      while read -r g f; do
+        case $g in 1) g1+=("$f") ;; 2) g2+=("$f") ;; 3) g3+=("$f") ;; *) g4+=("$f") ;; esac
+      done < <(page_deal "1,1,0,1 1,1,0,1 1,1,0,1 1,1,0,1" "${pages[@]}")
+      runs+=("@pages 1 1 ${g1[*]}" "@pages 2 1 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 1 ${g4[*]}")
+      export APP_JOBS=1
+    elif [ "$n" = 1 ]; then
       # (one: the files that test the pages in one process, every one after the ones moon runs before it, so what one
       # leaves behind that a later one trips on shows (shards, a process each, hide it))
       runs+=("${pages[*]}")
@@ -536,7 +552,9 @@ for t in $targets; do
         # ones at the median's) and app 3/4 at 120 fps part 1/2 was dealt 274-304 s of pages where its part 2/2 had
         # 114-149, cut at its 5 minutes once, main b310ef4c 43127552002, 3aa695f5 43121556932, f4d86e2a 43129595300,
         # 2026-11-12)
-        exe_run "$APP_EXE" "$APP_INFO" "$3each" stillfail/sfapp "${@:4}" > "$out.$i" 2>&1
+        # (the day's in one process: its files one after another, what one leaves behind there for the next)
+        if [ -n "$one_process" ]; then j=1; else j="$3each"; fi
+        exe_run "$APP_EXE" "$APP_INFO" "$j" stillfail/sfapp "${@:4}" > "$out.$i" 2>&1
       elif [ -n "${APP_EXE:-}" ] && [[ " ${runs[i]} " != *" -p "* ]]; then
         exe_run "$APP_EXE" "$APP_INFO" ${APP_JOBS:-1} stillfail/sfapp ${runs[i]} > "$out.$i" 2>&1
       else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
