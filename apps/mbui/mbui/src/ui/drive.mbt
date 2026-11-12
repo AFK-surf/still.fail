@@ -789,7 +789,8 @@ fn press(x : Double, y : Double, up : Bool) -> Unit {
 }
 
 ///|
-/// Runs the script's steps due this frame (after it was drawn): steps that only look run on at once; one that acts
+/// Runs the script's steps due this frame (after it was presented and all of its own work done, where a device's input
+/// comes: on_frame): steps that only look run on at once; one that acts
 /// ends the frame's turn, so the app sees it before the next (its input's frames). The run asks for no frame of its
 /// own: what it waits for on screen comes with a frame (an input's, a message's, a motion's, the host's event); what
 /// it waits for in time (a step's timeout, a hold let go, a pause, a shot taken by another) is a wake at that time.

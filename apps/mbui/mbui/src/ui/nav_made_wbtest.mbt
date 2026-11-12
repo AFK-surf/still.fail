@@ -230,22 +230,28 @@ test "window tree: a made page's time on top its own entry's: kept while another
 }
 
 ///|
-test "window tree: a made page in the hand by a scripted run's drag (its steps taken as each frame ends, as a film's): each frame it moves in the hand says a page held by a finger; at rest again, none" {
+test "window tree: a made page in the hand by a scripted run's drag (its steps taken after each frame's work, as a device's input between frames): each frame that drew it in the hand says a page held by a finger, none other does; at rest again, none" {
   let (t, nav, _, _) = made_stack()
   pushed(t, nav, "m1")
   let held = Ref(0)
   let missed : Array[Int] = []
+  let said_free : Array[Int] = []
+  // (in the hand as the frame was drawn: as the step of the frame before left it, nothing between the two)
+  let drawn_held = Ref(nav.mode == 3)
   t.drive("drag 4 400 60 0 300\nwait 800\nexit", each=fn(_) {
-    if nav.mode == 3 {
+    if drawn_held.val {
       held.val += 1
       if !g().page_in_hand {
         missed.push(g().frame_no)
       }
+    } else if g().page_in_hand {
+      said_free.push(g().frame_no)
     }
+    drawn_held.val = nav.mode == 3
   })
   |> ignore
   assert_true(held.val > 3, msg="frames in the hand: \{held.val}")
-  assert_eq(missed, [])
+  assert_eq((missed, said_free), ([], []))
   // (let go short of a third: back where it was, at rest, no page in the hand)
   assert_eq(nav.depth(), 2)
   assert_eq(nav.mode, 0)

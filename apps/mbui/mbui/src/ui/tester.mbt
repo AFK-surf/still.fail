@@ -1138,7 +1138,9 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   // (what the window's tree keeps held to what working it out whole gives, where the frame changed it: the drawing
   // order and the boxes each node lays out as the frame was presented, kept_at_present; whether each takes input as
   // the frame's own work is done, here, what the next input meets: the old frame's modal layer is told the tree as its
-  // frame closes, view_frame_end, after it was presented. Not where a bench measures its frames, as kept_at_present)
+  // frame closes, view_frame_end, after it was presented; a scripted run's step after that, as an input between frames
+  // (drive_frame), what it changes still due here, told by the frame after. Not where a bench measures its frames, as
+  // kept_at_present)
   match kept_presented.val {
     Some(why) => {
       kept_presented.val = None
