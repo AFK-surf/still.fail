@@ -86,7 +86,7 @@ function machineFiles(home: string) {
     { type: "event_msg", payload: { type: "item_completed", item: { type: "UserMessage", content: [{ text: "<environment_context_x>kept" }, { text: "<user_instructions>" }] } } },
     { type: "turn_context", payload: { model: "gpt-z" } },
   ), t + 1);
-  put(join(codex, "sessions", "2026", "11", "01", "rollout-2026-11-01T00-00-00-x-1_part.jsonl"), jsonl(meta("x-1"), event("user_message", "older copy")), t + 1);
+  put(join(codex, "sessions", "2026", "11", "01", "rollout-2026-11-01T00-00-00-x-1_part.jsonl"), jsonl(meta("x-1"), event("user_message", "older copy")), t);
   put(join(codex, "sessions", "2026", "11", "01", "rollout-2026-11-01T00-00-00-x-2.jsonl"), jsonl(
     meta("x-2", "/w/two"),
     { type: "response_item", payload: { type: "message", role: "user", content: [{ text: "<permissions>" }, { text: "<wrapped>all</wrapped>" }, { text: "real ask" }, { text: "second part" }] } },
