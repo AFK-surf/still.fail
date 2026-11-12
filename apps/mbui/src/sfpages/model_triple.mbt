@@ -1300,8 +1300,15 @@ fn triple_chip(
 
 ///|
 /// Who runs it, at the foot's start (the web's panel's foot, the phone's sheet's): the accounts in a panel of their
-/// own, from it.
-fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
+/// own, from it (on 中屏/大屏 flush with the model panel `panel_serial`).
+fn triple_runs_who(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  of : String,
+  v : Json?,
+  panel_serial : Int,
+) -> Unit {
   let who = c.id("triple/who")
   let revert_none = fn() {
     let cur = src.topic("pick", pick_params(station, of)).get().value
@@ -1318,6 +1325,7 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
       w=triple_accounts_w,
       gone=revert_none,
       focus=false,
+      match_panel=panel_serial,
     )
   }
   c.on_press(who, go)
@@ -1440,8 +1448,9 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
     return
   }
   let borrow = field(v, "borrow")
+  let panel_serial = if contents.serial > 0 { contents.serial } else { @sf.last_presented() }
   c.box(style=triple_who_room, keep=true, flow=true, line_gap=@ui.Space::px(S2), fn() {
-    triple_runs_who(c, src, station, of, v)
+    triple_runs_who(c, src, station, of, v, panel_serial)
     if !flag(v, "runtimeFixed") && items(v, "runtimes").length() > 1 {
       triple_runtime(c, src, station, of, v)
     }

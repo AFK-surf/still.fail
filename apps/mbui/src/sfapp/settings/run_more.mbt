@@ -135,6 +135,7 @@ fn run_view(
           Some(xs) => pick([("profiles", Json::array(xs.map(fn(s) { str(s) })))])
         }
       },
+      auto_note=if picked_ids is Some([]) { text(v, "autoNote") } else { "" },
       auto_trail?=if repick == "" { None } else { Some(repicking) },
     )
     return
@@ -1187,6 +1188,7 @@ fn account_list(
   runtime : String,
   picked : Array[String]?,
   pick : (Array[String]?) -> Unit,
+  auto_note? : String = "",
   auto_trail? : () -> Unit,
 ) -> Unit {
   let all_ids = accounts.map(fn(x) { text(Some(x), "id") }).filter(fn(x) { x != "" })
@@ -1201,6 +1203,7 @@ fn account_list(
           key + "/auto",
           all_on,
           tr("android-chat.run.account.auto"),
+          note=auto_note,
           disabled=single_only,
           trail?=auto_trail,
           on_press=fn() {

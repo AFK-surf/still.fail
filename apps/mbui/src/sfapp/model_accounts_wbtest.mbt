@@ -81,8 +81,13 @@ test "model accounts: 全不选 + 点一个, subset toggling, single-line quota 
   let ctrl = words_exactly_at(wide, "Opus 5.5").unwrap()
   wide.tap(ctrl.0 + ctrl.2 / 2.0, ctrl.1 + ctrl.3 / 2.0)
   wide.run_for(@ui.move_most_ms)
+  let model_panel = wide.get(Dialog, label="模型").rect
   wide.click(Button, label="全选")
   wide.run_for(@ui.move_most_ms)
+  let accounts_panel = wide.get(Dialog, label="账号").rect
+  assert_eq(accounts_panel.0, model_panel.0, msg="wide: 账号 left matches 模型 left")
+  assert_eq(accounts_panel.2, model_panel.2, msg="wide: 账号 width matches 模型 width")
+  assert_eq(accounts_panel.1, model_panel.1 + model_panel.3 + @sf.panel_offset, msg="wide: 账号 stands panel_offset below 模型")
   check_model_accounts(wide, "wide", 56.0)
 
   // Entering 全不选 and dismissing the 账号 popover reverts the incomplete 0-account draft back to saved selection.
@@ -94,6 +99,24 @@ test "model accounts: 全不选 + 点一个, subset toggling, single-line quota 
   wide.run_for(@ui.move_most_ms)
   assert_eq(@sffixture.new_fix.d_none, false, msg="wide: Escape from 账号 reverts 全不选")
   assert_true(wide.find("未选择") is None, msg="wide: chip reverted from 未选择")
+
+  // Widening the parent model panel (全部模型 in newchat-providers-model) keeps 账号 aligned to the wider width too.
+  let crowded = model_pop("newchat-providers-model")
+  crowded.click(Button, label="全部模型")
+  crowded.run_for(@ui.move_most_ms)
+  let crowded_model = crowded.get(Dialog, label="模型").rect
+  assert_true(crowded_model.2 > model_panel.2, msg="crowded 全部模型 panel is wider than narrow model panel")
+  crowded.click(Button, label="全选")
+  crowded.run_for(@ui.move_most_ms)
+  let crowded_accounts = crowded.get(Dialog, label="账号").rect
+  assert_eq(crowded_accounts.0, crowded_model.0, msg="crowded: 账号 left matches 模型 left")
+  assert_eq(crowded_accounts.2, crowded_model.2, msg="crowded: 账号 width matches wider 模型 width")
+  let crowded_gap = if crowded_accounts.1 >= crowded_model.1 + crowded_model.3 {
+    crowded_accounts.1 - (crowded_model.1 + crowded_model.3)
+  } else {
+    crowded_model.1 - (crowded_accounts.1 + crowded_accounts.3)
+  }
+  assert_eq(crowded_gap, @sf.panel_offset, msg="crowded: 账号 stands panel_offset from 模型")
 
   let phone = phone_agent_card()
   phone.click(Button, label="账号 林的 Max · 自动 5H 62% W 18%")

@@ -1085,6 +1085,7 @@ test "the run's 账号: what 全选 means, single-account disabled state, and �
     msg="tapping 全选 while all checked sends profiles: []",
   )
   assert_eq(@sffixture.new_fix.d_none, true)
+  assert_true(t.find("请选择至少一个账号") is Some(_), msg="全不选 shows hint under 全选 on 选择账号 page")
   t.back()
   t.run_for(@ui.move_most_ms)
   assert_eq(@sffixture.new_fix.d_none, false, msg="leaving 选择账号 while in 全不选 reverts draft")
