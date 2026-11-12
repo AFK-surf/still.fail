@@ -1149,6 +1149,8 @@
   "web-main.preset.cloneFailed": "Clone failed: {why}",
   "web-main.preset.choose": "Choose “{name}”",
   "web-main.feedback.open": "View",
+  "web-main.feedback.dismiss": "Close",
+  "web-main.feedback.menu": "{label} replies",
   "web-main.feedback.lead": "Only the people in this chat see the still.fail team's replies; its agents don't. Hand one to the agent and it goes into the composer as a quote: the agent reads it once you send it.",
   "web-main.feedback.handOn": "Hand to agent",
   "web-main.feedback.placeholder": "Reply to the still.fail team…",

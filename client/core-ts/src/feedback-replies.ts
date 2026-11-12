@@ -12,7 +12,7 @@ import { t } from "./i18n.ts";
 import type { Owner } from "./core/routing.ts";
 import type { Topic } from "./protocol.ts";
 import type { Value } from "./store.ts";
-import { arr as arrU, get as getU } from "./util.ts";
+import { arr as arrU, get as getU, isObject } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -23,6 +23,9 @@ const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /// What a workspace's record `feedback` keeps: still.fail cloud's answer, as it gave it.
 export const FEEDBACK_RECORD = "feedback";
+/// The latest reply of the team's dismissed on this device for each report of the workspace, by report id.
+export const FEEDBACK_DISMISSED = "feedbackDismissed";
+const DISMISSED_KEPT = 200;
 
 /// The first line of a reply, as the chat's card shows it under its title.
 function firstLine(text: string): string {
@@ -38,11 +41,12 @@ function who(reply: J): string {
 }
 
 /// The reports of chat `session` on station `station` (`<workspace>/<id>`) with the team's replies, newest first, as
-/// its card and panel show them; `kept`: the workspace's record.
+/// its card and panel show them; `kept`: the workspace's record, `dismissed`: the replies dismissed here by report id.
 /// (`account`: the account that reaches the workspace, which answers as the person)
-export function chatFeedback(kept: unknown, station: string, session: string, now: number, offsetMin: number, account = ""): J {
+export function chatFeedback(kept: unknown, station: string, session: string, now: number, offsetMin: number, account = "", dismissed: unknown = undefined): J {
   const id = station.slice(station.indexOf("/") + 1);
   const workspace = ofAddress(station);
+  const gone = isObject(dismissed) ? dismissed : {};
   const reports = arr(get(kept, "feedback"))
     .filter((f) => str(f?.station) === id && str(f?.session) === session && typeof f?.number === "number")
     .map((f) => {
@@ -55,8 +59,10 @@ export function chatFeedback(kept: unknown, station: string, session: string, no
       }));
       const team = replies.filter((r) => r.from === "team");
       const last = team[team.length - 1];
+      const reportId = str(f.id);
+      const latestId = last ? last.id : "";
       return {
-        id: str(f.id),
+        id: reportId,
         workspace,
         account,
         number: f.number as number,
@@ -64,6 +70,8 @@ export function chatFeedback(kept: unknown, station: string, session: string, no
         title: str(f.title),
         heading: t("core-misc.feedback.heading", { number: String(f.number) }),
         latest: last ? firstLine(last.text) : "",
+        latestId,
+        dismissed: latestId !== "" && gone[reportId] === latestId,
         replies,
       };
     })
@@ -90,6 +98,28 @@ export class FeedbackReplies implements Owner {
     const station = String(topic.station);
     const now = this.#host.nowMs();
     const workspace = ofAddress(station);
-    return { ok: chatFeedback(this.#data.record(FEEDBACK_RECORD, workspace), station, String(topic.session), now, this.#host.utcOffsetMin(now), this.#owner(workspace) ?? "") };
+    return {
+      ok: chatFeedback(
+        this.#data.record(FEEDBACK_RECORD, workspace),
+        station,
+        String(topic.session),
+        now,
+        this.#host.utcOffsetMin(now),
+        this.#owner(workspace) ?? "",
+        this.#data.record(FEEDBACK_DISMISSED, workspace),
+      ),
+    };
+  }
+
+  /// Dismisses report `id`'s notice on this device up to the team's reply `reply`: a newer reply brings it back.
+  dismiss(workspace: string, id: string, reply: string): void {
+    if (workspace === "" || id === "" || reply === "") return;
+    const cur = this.#data.record(FEEDBACK_DISMISSED, workspace);
+    const prev = isObject(cur) ? cur : {};
+    if (prev[id] === reply) return;
+    const entries = Object.entries(prev).filter(([k, v]) => k !== id && typeof v === "string");
+    entries.push([id, reply]);
+    const kept = entries.length > DISMISSED_KEPT ? entries.slice(entries.length - DISMISSED_KEPT) : entries;
+    this.#data.put(FEEDBACK_DISMISSED, workspace, Object.fromEntries(kept), false);
   }
 }

@@ -1110,6 +1110,8 @@
   "web-main.preset.cloneFailed": "克隆失败：{why}",
   "web-main.preset.choose": "选择「{name}」",
   "web-main.feedback.open": "查看",
+  "web-main.feedback.dismiss": "关闭",
+  "web-main.feedback.menu": "{label} 的回复",
   "web-main.feedback.lead": "只有这个对话里的人能看到 still.fail 团队的回复，agent 看不到。点「交给 agent」，回复会作为引用放进输入框，你发送后 agent 才读到。",
   "web-main.feedback.handOn": "交给 agent",
   "web-main.feedback.placeholder": "回复 still.fail 团队…",

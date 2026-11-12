@@ -150,6 +150,7 @@ export type Call =
   | { kind: "keysSet"; action: string | null; keys: string[] | null }
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
+  | { kind: "feedbackDismiss"; workspace: string; id: string; reply: string }
   | { kind: "commandsFind"; query: string; offered: unknown[] }
   /// What a chat's relay picker shows (relay-pick.ts): the connects read, what was typed, all asked for, the bot picked.
   | { kind: "relayView"; connects: RelayConnect[]; query: string; all: boolean; bot: string | null }
@@ -837,6 +838,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    case "feedback.dismiss": {
+      const p = read(params, [
+        ["workspace", S, "req"],
+        ["id", S, "req"],
+        ["reply", S, "req"],
+      ]);
+      return { kind: "feedbackDismiss", workspace: p.workspace as string, id: p.id as string, reply: p.reply as string };
+    }
     case "history.tool": {
       const p = read(params, [
         ["name", S, "req"],

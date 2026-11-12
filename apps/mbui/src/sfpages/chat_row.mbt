@@ -1361,6 +1361,23 @@ fn chat_menu_whole(
       share_menu(shared, share_from)
     }
   }
+  let reports = feedback_reports(src, r)
+  if reports.length() > 0 {
+    if items.length() > 0 {
+      items.push(None)
+    }
+    for f in reports {
+      let fv = Some(f)
+      let id = text(fv, "id")
+      items.push(
+        Some(
+          @sf.menu_item_of(@sf.t("web-main.feedback.menu", args=[("label", text(fv, "label"))]), icon="said", fn() {
+            open_feedback(src, r, id)
+          }),
+        ),
+      )
+    }
+  }
   Some(items)
 }
 

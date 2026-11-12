@@ -381,8 +381,13 @@ export class Core {
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
-      inner.router.owners.push(new FeedbackReplies(inner.host, inner.data, (workspace) => inner.workspaces.owner(workspace)));
+      const feedbackReplies = new FeedbackReplies(inner.host, inner.data, (workspace) => inner.workspaces.owner(workspace));
+      inner.router.owners.push(feedbackReplies);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
+      handlers.feedbackDismiss = (_i, call) => {
+        const c = call as Extract<Call, { kind: "feedbackDismiss" }>;
+        return Effect.sync(() => (feedbackReplies.dismiss(c.workspace, c.id, c.reply), null));
+      };
       handlers.historyTool = (_i, call) => {
         const c = call as Extract<Call, { kind: "historyTool" }>;
         // Markdown read here for the clients that draw its tree (markdown.ts), as everywhere else.

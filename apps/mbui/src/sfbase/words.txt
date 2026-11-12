@@ -907,8 +907,10 @@ web-main.decisions.dismiss
 web-main.decisions.dismissWhat
 web-main.doing.failed
 web-main.draft.notSent
+web-main.feedback.dismiss
 web-main.feedback.handOn
 web-main.feedback.lead
+web-main.feedback.menu
 web-main.feedback.open
 web-main.feedback.placeholder
 web-main.feedback.send

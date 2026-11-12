@@ -28,7 +28,9 @@ test("a chat shows only its own reports the team replied on, the team's latest f
     ],
   };
   const shown = chatFeedback(kept, "w1/st", "chat:c-1", 1_790_000_200_000, 0);
-  assert.deepEqual(shown.reports.map((r: J) => [r.label, r.workspace, r.heading, r.latest]), [["FB-12", "w1", "still.fail 团队回复了 FB-12", "收到，已修复。"]]);
+  assert.deepEqual(shown.reports.map((r: J) => [r.label, r.workspace, r.heading, r.latest, r.latestId, r.dismissed]), [["FB-12", "w1", "still.fail 团队回复了 FB-12", "收到，已修复。", "r3", false]]);
+  assert.equal(chatFeedback(kept, "w1/st", "chat:c-1", 1_790_000_200_000, 0, "", { FB12: "r3" }).reports[0].dismissed, true);
+  assert.equal(chatFeedback(kept, "w1/st", "chat:c-1", 1_790_000_200_000, 0, "", { FB12: "r1" }).reports[0].dismissed, false, "a newer team reply brings it back");
   assert.deepEqual(shown.reports[0].replies.map((r: J) => [r.from, r.who, r.text]), [
     ["team", "still.fail 团队", "能发一下日志吗？\n谢谢"],
     ["person", "阿一", "好的"],
@@ -87,5 +89,27 @@ test("the replies are read as the events socket opens and as the cloud says they
   assert.deepEqual(posted, [{ text: "昨天下午三点" }]);
   assert.ok(host.requests.some((r) => r.url.endsWith("/feedback/FB12/reply") && r.headers.some(([k, val]) => k === "authorization" && val === "Bearer a1")));
   assert.deepEqual(v(values, 1).reports[0].replies.map((r: J) => [r.from, r.who, r.text]), [["team", "still.fail 团队", "能发一下日志吗？"], ["person", "阿一", "昨天下午三点"]]);
+  assert.equal(v(values, 1).reports[0].dismissed, false);
+
+  // Dismissed on this device up to r1: kept across restarts and person replies, shown again when the team replies anew.
+  call(core, ui, 3, "feedback.dismiss", { workspace: "w1", id: "FB12", reply: "r1" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 1).reports[0].latestId, v(values, 1).reports[0].dismissed], ["r1", true]);
   core.close();
+
+  const core2 = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui2 = core2.connect();
+  const values2 = new Map();
+  subscribe(core2, ui2, 1, { topic: "chatFeedback", station: "w1/st", session: "chat:c-1" });
+  await host.settle();
+  apply(host, values2);
+  assert.deepEqual([v(values2, 1).reports[0].latestId, v(values2, 1).reports[0].dismissed], ["r1", true], "persisted in the workspace's database");
+
+  kept = { feedback: [report(12, "chat:c-1", [...kept.feedback[0].replies, team("r10", "查到了，0.1.8701 已修。")])] };
+  host.socketSend("/v1/events", '{"type":"feedback","workspace":"w1"}');
+  await host.settle();
+  apply(host, values2);
+  assert.deepEqual([v(values2, 1).reports[0].latestId, v(values2, 1).reports[0].dismissed, v(values2, 1).reports[0].latest], ["r10", false, "查到了，0.1.8701 已修。"]);
+  core2.close();
 });

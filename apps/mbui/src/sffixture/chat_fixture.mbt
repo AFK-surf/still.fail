@@ -764,6 +764,8 @@ fn fix_feedback(answered : Bool) -> Json {
         "title": "chat_post 偶尔发不出去",
         "heading": "still.fail 团队回复了 FB-12",
         "latest": "谢谢反馈！能再说一下出错时 Willow 在跑什么吗？我们在日志里看到那会儿它重启过一次。",
+        "latestId": "r1",
+        "dismissed": false,
         "replies": Json::array(replies),
       },
     ],
