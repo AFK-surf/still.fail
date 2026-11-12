@@ -112,8 +112,8 @@ type Row = Record<string, SqlStorageValue>;
 /** A device to push to, as registered (POST /v1/push). */
 export type PushDevice =
   | { kind: "web"; endpoint: string; p256dh: string; auth: string }
-  | { kind: "fcm"; token: string }
-  | { kind: "apns"; token: string; sandbox: boolean };
+  | { kind: "fcm"; token: string; app?: string }
+  | { kind: "apns"; token: string; sandbox: boolean; app?: string };
 /** A device registered, with the language its notifications are said in (Chinese for one registered before languages). */
 export type PushRegistration = PushDevice & { id: string; lang: Lang; shows: Shows | null };
 
@@ -183,6 +183,8 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "shows")) this.#run("ALTER TABLE push ADD COLUMN shows TEXT");
     // Nor whether an APNs token is a development build's (1) or not, before there was APNs.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "sandbox")) this.#run("ALTER TABLE push ADD COLUMN sandbox INTEGER");
+    // The credential that last took an app's token (its Firebase project, its APNs topic: push.ts), tried first.
+    if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "app")) this.#run("ALTER TABLE push ADD COLUMN app TEXT");
     // Nor had workspaces a mark of their own (an emoji, an icon, as a station's), before they could; their first letter till then.
     const marked = new Set(this.#rows("PRAGMA table_info(workspaces)").map((r) => r.name as string));
     for (const column of ["emoji TEXT", "icon TEXT"]) {
@@ -1500,6 +1502,11 @@ export class Directory extends DurableObject<Env> {
     else this.#run("DELETE FROM push WHERE sub = ? AND token = ?", sub, device.token);
   }
 
+  /** The credential that took each of these tokens (push.ts), kept with their registrations. */
+  pushApps(took: { token: string; app: string }[]): void {
+    for (const { token, app } of took) this.#run("UPDATE push SET app = ? WHERE token = ?", app, token);
+  }
+
   /** Devices whose push service said they are gone: their registrations with every account. */
   dropPush(devices: PushDevice[]): void {
     for (const device of devices) {
@@ -1519,7 +1526,7 @@ export class Directory extends DurableObject<Env> {
     const devices: Record<string, PushRegistration[]> = {};
     for (const email of new Set(emails.map((e) => e.toLowerCase()))) {
       devices[email] = this.#rows(
-        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token, p.sandbox, p.lang, p.shows FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
+        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token, p.sandbox, p.lang, p.shows, p.app FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
          WHERE lower(u.email) = ? ORDER BY p.id LIMIT ?`,
         workspace, email, LIMITS.pushPerUser,
       ).map((r): PushRegistration => {
@@ -1527,8 +1534,9 @@ export class Directory extends DurableObject<Env> {
         const shows = typeof r.shows === "string" ? showsOf(JSON.parse(r.shows) as Record<string, unknown>) : null;
         const id = r.id as string;
         if (r.kind === "web") return { id, lang, shows, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string };
-        if (r.kind === "apns") return { id, lang, shows, kind: "apns", token: r.token as string, sandbox: r.sandbox === 1 };
-        return { id, lang, shows, kind: "fcm", token: r.token as string };
+        const app = typeof r.app === "string" ? { app: r.app } : {};
+        if (r.kind === "apns") return { id, lang, shows, kind: "apns", token: r.token as string, sandbox: r.sandbox === 1, ...app };
+        return { id, lang, shows, kind: "fcm", token: r.token as string, ...app };
       });
     }
     return { workspace, devices };
@@ -2226,7 +2234,7 @@ const FAMILIES: Record<string, string> = {
   seen: "sockets", closed: "sockets", stationConnected: "sockets", stationState: "sockets", stationLeft: "sockets", stationSaid: "sockets",
   fetch: "sockets", webSocketMessage: "sockets", webSocketClose: "sockets", webSocketError: "sockets",
   enroll: "stations", isStation: "stations", pushTargets: "stations", addFeedback: "stations", fixedUntold: "stations", reporterReply: "stations", toldFixed: "stations", markFixed: "stations",
-  registerPush: "push", unregisterPush: "push", dropPush: "push",
+  registerPush: "push", unregisterPush: "push", dropPush: "push", pushApps: "push",
   tellAll: "broadcast", tellStations: "broadcast", modelsMade: "broadcast", tellAdmins: "broadcast", alarm: "broadcast",
 };
 for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWorkspace", "invite", "previewInvitation", "acceptInvitation", "acceptById", "declineById", "revokeInvitation",

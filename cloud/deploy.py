@@ -89,6 +89,9 @@ AXIOM = DEPLOY / "axiom.json"
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
 APNS = DEPLOY / "apns.json"
+# The other product's apps' push credentials (src/fcm.ts, src/apns.ts): one cloud pushes to both products' apps.
+FCM_MORE = DEPLOY / "fcm-service-account-more.json"
+APNS_MORE = DEPLOY / "apns-more.json"
 REVIEW = DEPLOY / "review-accounts.json"
 FEEDBACK = DEPLOY / "feedback-token"
 
@@ -283,6 +286,10 @@ def push() -> dict:
         value["APNS_KEY"] = APNS.read_text()
     else:
         print(f"note: {APNS} is missing; no pushes to iOS")
+    if FCM_MORE.exists():
+        value["FCM_SERVICE_ACCOUNT_MORE"] = FCM_MORE.read_text()
+    if APNS_MORE.exists():
+        value["APNS_KEY_MORE"] = APNS_MORE.read_text()
     return value
 
 
