@@ -1800,7 +1800,10 @@ impl Shell {
     pub fn call(&self, id: u64, op: String, json: &[u8], bytes: Option<Vec<u8>>) {
         let inner = self.inner.clone();
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
-        let cancelled = if op == "fetch" {
+        // A fetch, and a dial's handshake (iroh.connect): given up when the core cancels the call, its connection dropped,
+        // which closes it (a dial left going retransmitted its Initial for the connection's whole idle timeout: the
+        // station addon's `dial`, station/native/mesh/src/lib.rs).
+        let cancelled = if op == "fetch" || op == "iroh.connect" {
             let (cancel, cancelled) = tokio::sync::oneshot::channel();
             inner.fetches.lock().unwrap().insert(id, cancel);
             Some(cancelled)
@@ -2239,6 +2242,29 @@ mod tests {
             assert!(shell.runtime.block_on(closed).unwrap().is_err());
             assert_eq!(cancel(), json!({ "value": false }));
         }
+    }
+
+    /// A dial the core gave up (its opening ended: client/core-ts mesh.ts) is cancelled here as a fetch is: its
+    /// handshake dropped, which closes it (what that stops, the Initial sent again for ten minutes, the station addon's
+    /// `a_dial_given_up_sends_no_more` counts), and the endpoint closes at once.
+    #[test]
+    fn cancelling_a_dial_drops_its_handshake() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        // A station that never answers: a socket that takes what comes.
+        let quiet = shell.runtime.block_on(tokio::net::UdpSocket::bind("127.0.0.1:0")).unwrap();
+        shell.call(94_001, "iroh.bind".into(), serde_json::to_vec(&json!({ "relayUrls": [], "alpns": [] })).unwrap().as_slice(), Some(vec![3; 32]));
+        let endpoint = serde_json::from_str::<Value>(&answer(94_001).0).unwrap()["id"].clone();
+        let station = json!({ "id": hex::encode(SecretKey::from_bytes(&[7; 32]).public().as_bytes()), "ips": [quiet.local_addr().unwrap().to_string()] });
+        shell.call(94_002, "iroh.connect".into(), serde_json::to_vec(&json!({ "id": endpoint, "addr": station })).unwrap().as_slice(), Some(b"test".to_vec()));
+        // Its Initial came: the dial is under way.
+        shell.runtime.block_on(quiet.recv(&mut [0u8; 2048])).unwrap();
+        let cancel = || serde_json::from_slice::<Value>(&shell.call_sync("fetch.cancel", serde_json::to_vec(&json!({ "id": 94_002 })).unwrap().as_slice())).unwrap();
+        assert_eq!(cancel(), json!({ "value": true }));
+        assert_eq!(answer(94_002).1, "cancelled");
+        assert_eq!(cancel(), json!({ "value": false }));
+        shell.call(94_003, "iroh.close".into(), serde_json::to_vec(&json!({ "id": endpoint })).unwrap().as_slice(), None);
+        assert_eq!(answer(94_003).1, "");
     }
 
     #[test]

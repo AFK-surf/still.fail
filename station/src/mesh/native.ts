@@ -60,8 +60,9 @@ export type Endpoint = {
   /// on. Absent from an addon from before.
   setCongestion?(congestion: "cubic" | "bbr"): void;
   accept(): Promise<Connection | null>;
-  /// `additional`: protocols offered after `alpn` (the connection's `alpn()` says which one it speaks).
-  connect(addr: Addr, alpn: Buffer, additional?: Buffer[]): Promise<Connection>;
+  /// `additional`: protocols offered after `alpn` (the connection's `alpn()` says which one it speaks). `givenUp`:
+  /// once it resolves, the handshake is given up (lib.rs `dial`); an addon from before goes on with it.
+  connect(addr: Addr, alpn: Buffer, additional?: Buffer[], givenUp?: Promise<void>): Promise<Connection>;
   close(): Promise<void>;
 };
 export type Mesh = {

@@ -2177,6 +2177,9 @@ function open(
     const opened = { onto: 0, dialled: 0, credential: 0 };
     const since = () => Math.round(env.host.nowMs() - began);
     let abandoned = false;
+    // Its handshake given up with the opening (iroh.ts `connect`): left going, it retransmitted to every way to the
+    // station until the connection's idle timeout, ten minutes, beside every dial after it.
+    const givenUp = Deferred.makeUnsafe<void>();
     let connection: IrohConnection | null = null;
     const establish = Effect.gen(function* () {
       if (!/^[0-9a-f]{64}$/.test(stationId)) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_station_id", { id: stationId })));
@@ -2186,7 +2189,7 @@ function open(
       const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
       env.runner.fork(
         Effect.gen(function* () {
-          const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, []));
+          const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [], Deferred.await(givenUp)));
           opened.dialled = since();
           stages.dialled = opened.dialled;
           if (r._tag === "Success") {
@@ -2245,6 +2248,7 @@ function open(
     return Effect.raceFirst(establish, deadline).pipe(Effect.onExit((exit) => Effect.sync(() => {
       if (exit._tag === "Failure") {
         abandoned = true;
+        Deferred.doneUnsafe(givenUp, Effect.void);
         connection?.close(0, "opening ended");
       }
     })));

@@ -50,6 +50,10 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"
 [build-dependencies]
 napi-build = "2"
 
+[dev-dependencies]
+# The test's clock (`start_paused`): what a dial sends over ten minutes, counted in no time.
+tokio = { version = "1", features = ["test-util"] }
+
 # A workspace of its own: not part of mesh/ or client/.
 [workspace]
 

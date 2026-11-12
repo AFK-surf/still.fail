@@ -196,12 +196,16 @@ export class PeerHttp implements PeerRoute {
   /// A connection to station `id` (`given`: as the URL named it) speaking this protocol. A station from before it is told
   /// by the station transport's protocol, offered after this one: it takes that one instead.
   private async connect(id: string, given: string): Promise<Connection> {
-    const connecting = this.endpoint.connect(this.addr(id), PEER_HTTP_ALPN, [PEER_ALPN]);
+    let giveUp = () => {};
+    const givenUp = new Promise<void>((resolve) => (giveUp = resolve));
+    const connecting = this.endpoint.connect(this.addr(id), PEER_HTTP_ALPN, [PEER_ALPN], givenUp);
     let conn: Connection;
     try {
       conn = await wall.within(this.connectMs, connecting, TIMED_OUT);
     } catch (error) {
       if ((error as Error).message !== TIMED_OUT) throw new HttpRefusal(502, `station ${given} cannot be reached: ${(error as Error).message}`, true);
+      // Its handshake given up: left going, it retransmitted for the connection's idle timeout, ten minutes.
+      giveUp();
       connecting.then((late) => late.close(0, "too late"), () => {});
       throw new HttpRefusal(504, `station ${given} did not answer within ${Math.round(this.connectMs / 1000)} s: it is offline, or cannot be reached from here`, true);
     }
