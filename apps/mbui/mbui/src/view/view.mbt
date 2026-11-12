@@ -7147,7 +7147,12 @@ pub fn View::gesture(
           Some(o) => {
             // (a tap: told the tree, after what it does, for the window's taps: Tree::gesture_tapped)
             match tap {
-              Some(f) => word(f, d, o)
+              Some(f) => {
+                // (what the tap presses held where it is, press_stays.mbt)
+                let stays = self.tree.press_stays(id)
+                word(f, d, o)
+                stays()
+              }
               None => ()
             }
             self.tree.gesture_tapped = true
@@ -11884,7 +11889,9 @@ pub fn Tree::activate_at(self : Tree, id : NodeId, at : Double) -> Bool {
     match self.nodes[id.at].on_press {
       Some(f) => {
         pressed.val = true
+        let held = self.press_stays(id)
         f()
+        held()
       }
       None => ()
     }
@@ -12011,7 +12018,9 @@ pub fn Tree::run_press_at(
     match (second, n.on_double_press, n.on_press) {
       (true, Some(f), _) | (false, _, Some(f)) | (true, None, Some(f)) => {
         pressed.val = true
+        let held = self.press_stays(id)
         f()
+        held()
       }
       _ => ()
     }

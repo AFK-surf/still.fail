@@ -102,6 +102,10 @@ pub struct Scroll {
   /// then kept: blocks come or gone since are told from it)
   priv mut held : Bool
   priv mut held_said : () -> Unit
+  /// what it does as a node in it is pressed (what was pressed held where it is, press_stays.mbt: a page's list's
+  /// View::scrolls_window's, a plain column's View::scrolls'): given the node before the press is done, what to do once
+  /// it is
+  priv mut pressed_said : (View) -> () -> Unit
   /// whether it is at its foot, followed, told only as that changes (Scroll::at_foot_now): a page's list's by its own
   /// blocks and anchor (View::scrolls_window), else by how far it goes as last laid out (View::scrolls)
   priv mut at_foot_said : (() -> Bool)?
@@ -164,6 +168,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     corrected: 0.0,
     held: false,
     held_said: fn() {  },
+    pressed_said: fn(_) { fn() {  } },
     at_foot_said: None,
   }
 }
@@ -835,8 +840,105 @@ pub fn View::scrolls(
       (size, if hm is Undefined { size } else if hm is AtMost { dmin(size, h) } else { h })
     }
   }
+  // (a press in what it holds, down a column that is no page's list (a page's list holds its own: View::scrolls_window),
+  // press_stays.mbt: what lies over what was pressed (each node before it or before what holds it, down a column), how
+  // tall that was then and where it was scrolled to; none once the hand moves it or all the press set off has ended.
+  // Where it was put for that last, and the room kept under what it holds for it: as much as that asks while it is
+  // held, then no more than still shows of it)
+  let press_pin : Ref[(View, Array[View], Double, Double)?] = Ref(None)
+  let press_put = Ref(0.0)
+  let press_ends = Ref(false)
+  let press_unpin : Ref[() -> Unit] = Ref(fn() {  })
+  let press_room : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let over_h = fn(over : Array[View]) {
+    let mut h = 0.0
+    for o in over {
+      if o.alive() && tree.nodes[o.at].flex.style.display != @flex.Display::DisplayNone {
+        h = h + @flex.measured_height(tree.nodes[o.at].flex, tree.nodes[o.at].flex.width)
+      }
+    }
+    h
+  }
+  // (held by what was pressed, as it is laid out showing `shown` of `whole`: put where that is, the room under
+  // it as that asks; held no more, that room no more than still shows)
+  let press_held = fn(whole : Double, shown : Double) -> Bool {
+    let room_was = press_room.untracked()
+    let x = s.x.untracked()
+    let base = whole - press_room.untracked()
+    match press_pin.val {
+      // (moved since by the hand, or put elsewhere, or what was pressed or what was over it let go: held no more)
+      Some((v, over, _, _)) if x != press_put.val || !v.alive() || over.iter().any(fn(o) { !o.alive() }) => {
+        press_pin.val = None
+        (press_unpin.val)()
+      }
+      _ => ()
+    }
+    match press_pin.val {
+      Some((_, over, was, x0)) => {
+        let want = dmax(0.0, x0 + over_h(over) - was)
+        press_room.set(dmax(0.0, want - (base - shown)))
+        if want != x {
+          s.x.set(want)
+          s.offset_said()
+        }
+        press_put.val = want
+        if press_ends.val {
+          press_ends.val = false
+          press_pin.val = None
+        }
+      }
+      None => {
+        let left = dmax(0.0, x + shown - base)
+        if left < press_room.untracked() {
+          press_room.set(left)
+        }
+      }
+    }
+    press_room.untracked() != room_was
+  }
+  if !across && s.whole is None {
+    s.pressed_said = fn(v) {
+      guard inner.val is Some(held) && held.alive() else { return fn() {  } }
+      let over : Array[View] = []
+      let mut i = v.at
+      while i >= 0 && i != held.at {
+        let up = tree.nodes[i].parent
+        if up >= 0 && tree.nodes[up].flex.style.direction is Column {
+          for c in tree.nodes[up].kids {
+            if c == i {
+              break
+            }
+            over.push(tree.handle(c))
+          }
+        }
+        i = up
+      }
+      guard i == held.at else { return fn() {  } }
+      let was = over_h(over)
+      let x0 = s.x.untracked()
+      fn() {
+        (press_unpin.val)()
+        press_pin.val = Some((v, over, was, x0))
+        press_put.val = x0
+        press_ends.val = false
+        press_unpin.val = self.at_moment(tree.cause_now() + @flex.move_most_ms, fn() {
+          press_ends.val = true
+          tree.layout_marked_at(me)
+        })
+      }
+    }
+  }
   let measure_reach = fn(held : View, w : Double, wm : @flex.MeasureMode, h : Double, hm : @flex.MeasureMode) -> Bool {
-    let (whole, shown) = sizes(held, w, wm, h, hm)
+    let (whole, shown) = {
+      let (whole, shown) = sizes(held, w, wm, h, hm)
+      // (the room under it for what was pressed changed: measured again with it)
+      if !across && s.whole is None && press_held(whole, shown) {
+        tree.room_bindings_run()
+        sizes(held, w, wm, h, hm)
+      } else {
+        (whole, shown)
+      }
+    }
     last_whole.val = whole
     let seen_now = Some(if across { (shown, h) } else { (w, shown) })
     let reach_now = Some(whole - shown)
@@ -951,6 +1053,10 @@ pub fn View::scrolls(
         }
       }))
       |> ignore
+    }
+    // (down a column that is no page's list: room under what it holds for what was pressed in it, press_stays.mbt)
+    if !across && s.whole is None {
+      held.margin(By(fn() { (0.0, 0.0, 0.0, press_room.get()) })) |> ignore
     }
     // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
     // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
@@ -1080,6 +1186,7 @@ pub fn View::scrolls(
     s.room = fn() { None }
     s.held = false
     s.held_said = fn() {  }
+    s.pressed_said = fn(_) { fn() {  } }
     s.fill = fn(_, _, _) {  }
     s.whole = None
     s.seen.set(None)
