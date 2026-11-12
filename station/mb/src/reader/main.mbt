@@ -712,6 +712,18 @@ fn main {
     }
     (Some("live-locator"), Some(db), Some(data)) =>
       @host.run(shell_dir=beside(db, "shell"), host => live_locator(host, db, data, flag("--sep").unwrap_or("/")))
+    (Some("forward"), _, _) =>
+      // (a listening socket, handed down or bound here, carried to a port of this machine: `{"listening": port}` said once
+      // it listens; the shell's own files in `--shell-dir`)
+      @host.run(shell_dir=flag("--shell-dir").unwrap_or("."), host => {
+        let listening = match flag("--listen-fd") {
+          Some(fd) => @front.listen(host, fd=@string.parse_int(fd) catch { _ => -1 })
+          None => @front.listen(host, port=@string.parse_int(flag("--listen-port").unwrap_or("0")) catch { _ => 0 })
+        }
+        let said : Json = { "listening": Json::number(listening.port.to_double()) }
+        host.say(said.stringify())
+        @front.forward(host, listening, @string.parse_int(flag("--to").unwrap_or("0")) catch { _ => 0 })
+      })
     (Some("replica-export"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => replica_export(
         host,

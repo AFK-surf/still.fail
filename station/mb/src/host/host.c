@@ -37,6 +37,7 @@ static void signal_one(cond_t *c) { pthread_cond_signal(c); }
 // client/shell's C ABI (client/shell/src/lib.rs).
 typedef void (*sf_complete)(void *, uint64_t, const uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t);
 void *sf_shell_start(const char *data_dir, sf_complete complete, void *ctx);
+void sf_shell_call(const void *shell, uint64_t id, const char *op, const uint8_t *json, size_t json_len, const uint8_t *bytes, size_t bytes_len, uint8_t has_bytes);
 uint8_t *sf_shell_call_sync(const void *shell, const char *op, const uint8_t *json, size_t json_len, size_t *out_len);
 void sf_free(uint8_t *ptr, size_t len);
 
@@ -70,16 +71,27 @@ static void push(uint8_t kind, uint64_t id, const uint8_t *a, size_t al, const u
   unlock(&queue_lock);
 }
 
-// The shell's answer, from any of its threads: its JSON and error, the error's length first (8 bytes) to split them.
+// The shell's answer, from any of its threads: its error and its JSON, each after its length (8 bytes), then whether it
+// carries bytes (1 byte) and the bytes.
+static void put_len(uint8_t *at, size_t n) {
+  for (int i = 0; i < 8; i++) at[i] = (uint8_t)((uint64_t)n >> (8 * i));
+}
+
 static void completed(void *ctx, uint64_t id, const uint8_t *json, size_t jl, const uint8_t *error, size_t el, const uint8_t *bytes, size_t bl, uint8_t has) {
-  (void)ctx; (void)bytes; (void)bl; (void)has;
-  uint8_t n[8];
-  for (int i = 0; i < 8; i++) n[i] = (uint8_t)((uint64_t)el >> (8 * i));
-  size_t len = 8 + el + jl;
-  uint8_t *all = malloc(len);
-  memcpy(all, n, 8);
-  if (el) memcpy(all + 8, error, el);
-  if (jl) memcpy(all + 8 + el, json, jl);
+  (void)ctx;
+  size_t carried = has ? bl : 0;
+  size_t len = 8 + el + 8 + jl + 1 + carried;
+  uint8_t *all = malloc(len), *at = all;
+  put_len(at, el);
+  at += 8;
+  if (el) memcpy(at, error, el);
+  at += el;
+  put_len(at, jl);
+  at += 8;
+  if (jl) memcpy(at, json, jl);
+  at += jl;
+  *at++ = has ? 1 : 0;
+  if (carried) memcpy(at, bytes, carried);
   push(3, id, all, len, NULL, 0);
   free(all);
 }
@@ -205,6 +217,16 @@ moonbit_bytes_t sfh_shell_sync(moonbit_bytes_t op, moonbit_bytes_t json) {
   if (n) memcpy(out, answer, n);
   sf_free(answer, n);
   return out;
+}
+
+/// Asks the shell `op` (NUL-terminated) with `json` and, where `has` says so, `bytes`; its answer comes as event `id`.
+void sfh_shell_call(int64_t id, moonbit_bytes_t op, moonbit_bytes_t json, moonbit_bytes_t bytes, int32_t has) {
+  if (shell == NULL) {
+    static const char none[] = "no shell";
+    completed(NULL, (uint64_t)id, NULL, 0, (const uint8_t *)none, sizeof none - 1, NULL, 0, 0);
+    return;
+  }
+  sf_shell_call(shell, (uint64_t)id, (const char *)op, json, (size_t)Moonbit_array_length(json), bytes, (size_t)Moonbit_array_length(bytes), has ? 1 : 0);
 }
 
 /// The program's arguments in UTF-8, each ended by a NUL: as the system has them, not as the MoonBit runtime takes them
