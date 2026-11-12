@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [6dd0313ad](https://github.com/AFK-surf/still.fail/commit/6dd0313ad4ab64bb6851cebf6b9a173c422e5513) test(station lock): the world runs the protocol as | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.13 | 185.46 |
 | [c25a2dceb](https://github.com/AFK-surf/still.fail/commit/c25a2dceb14a9f9408c2b495e93a083f6cb502cf) station: the machine's sample read on the main thr | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.5 | 183.14 |
 | [22dda4926](https://github.com/AFK-surf/still.fail/commit/22dda49266334245453d5f4ba0fd2ae143873cf2) core: the rows a chat list showed are kept beside  | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.14 | 127.45 |
 | [e64ecb965](https://github.com/AFK-surf/still.fail/commit/e64ecb965d245bac9d5ab9c032214d37b2d218ed) mbui: a page's list keeps slots only round what sh | 1.86 | 2.49 | 10.45 | 29.22 | 36.93 | 26.02 | 48.62 | 93.75 | 185.04 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [79fe73414](https://github.com/AFK-surf/still.fail/commit/79fe734141c015f06d681ccd90a6200d58ba31d9) mbui: a GIF that moves decoded a frame at a time,  | 1.84 | 2.46 | 10.33 | 29.05 | 36.47 | 25.86 | 48.2 | 93.83 | 180.15 |
 | [3b0992b92](https://github.com/AFK-surf/still.fail/commit/3b0992b9224fffd8941e54b864a5ccf487960453) core: people added to a locked workspace are in it | 1.84 | 2.46 | 10.31 | 29.04 | 36.43 | 25.86 | 48.2 | 93.83 | 177.06 |
 | [aabd99d7e](https://github.com/AFK-surf/still.fail/commit/aabd99d7e79520301ed9d20bb5860622710aed16) mbui: a small key of the window's tree over an old | 1.84 | 2.45 | 10.24 | 29 | 36.21 | 25.82 | 48 | 94.29 | 180.59 |
-| [e7fa757d4](https://github.com/AFK-surf/still.fail/commit/e7fa757d4a6c9acfbd3413912199351792addbb6) mbui: whether the app is shown, in front and going | 1.83 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.54 | 155.91 |
