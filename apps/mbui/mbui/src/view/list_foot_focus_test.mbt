@@ -23,28 +23,33 @@ let ff_foot_more : Double = 92.0
 ///|
 priv struct FfCase {
   tree : @view.Tree
+  scroll : @view.Scroll
+  count : @signals.Signal[Int]
   room : @signals.Signal[Double]
   foot : @signals.Signal[Double]
   field : Ref[@view.NodeId?]
 }
 
 ///|
-/// A page's list 300 wide, as tall as `room`, of 30 blocks 40 tall (words 行k at each one's top), following its foot,
-/// where `follows` (else at its top), its foot as tall as `foot` holding a field that takes the focus, or block
-/// `block_field` taking it instead. Drawn once, at 0.
-fn ff_case(follows? : Bool = true, block_field? : Int = -1) -> FfCase {
+/// A page's list 300 wide, as tall as `room`, of `count` blocks 40 tall (30 at first; words 行k at each one's top),
+/// following its foot where `follows` (else at its top), its foot as tall as `foot` holding a field that takes the
+/// focus, or block `block_field` taking it instead; what floats over its top `top_cover` tall (its bar kept clear of
+/// it). Drawn once, at 0.
+fn ff_case(follows? : Bool = true, block_field? : Int = -1, top_cover? : Double = 0.0) -> FfCase {
   let scroll = @view.Scroll::list()
   let room = @signals.signal(ff_room, same=fn(a, b) { a == b })
   let foot = @signals.signal(ff_foot, same=fn(a, b) { a == b })
   let field : Ref[@view.NodeId?] = Ref(None)
+  let count = @signals.signal(30, same=fn(a, b) { a == b })
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(By(fn() { Some(room.get()) })) |> ignore
       o.scrolls_window(
         scroll,
-        fn() { Array::makei(30, fn(i) { i }) },
+        fn() { Array::makei(count.get(), fn(i) { i }) },
         est=ff_tall,
         follows=fn() { follows },
+        bar_clear=fn() { (top_cover, 0.0) },
         foot=fn(f) {
           f.box(fn(b) {
             if block_field < 0 {
@@ -67,13 +72,13 @@ fn ff_case(follows? : Bool = true, block_field? : Int = -1) -> FfCase {
     |> ignore
   })
   tree.frame(390.0, 844.0) |> ignore
-  { tree, room, foot, field }
+  { tree, scroll, count, room, foot, field }
 }
 
 ///|
 /// How far the last block's foot is over the foot's top, as drawn (0: on it).
 fn ff_gap(c : FfCase) -> Double {
-  let y = rc_y(c.tree, "行29")
+  let y = rc_y(c.tree, "行\{c.count.untracked() - 1}")
   c.room.untracked() - c.foot.untracked() - (y + ff_tall)
 }
 
