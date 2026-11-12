@@ -641,8 +641,11 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh android
-      # (what it weighs and takes once idle: mbui-size.yml, after this run)
+      # (what it weighs and takes once idle: mbui-size.yml, after this run, recorded, never a gate: its upload's failure
+      # is not the release's. Studio's connection to GitHub's artifact service reset stopped a release that had built and
+      # signed its APK, main a3e59ea9 43157398296 and three times before on 2026-11-11 and 12)
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with: { name: "mbui-apk-${{ github.sha }}", path: "${{ runner.temp }}/release/android/*.apk", retention-days: 1, compression-level: 0 }
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
