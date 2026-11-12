@@ -272,7 +272,7 @@ test "开启安全模式, at each width and with either hand: its people, the de
 let pending_waiting : String = "移除设备 林的 MacBook Pro（2024 款 · 公司配的那台 · 放在办公室）：已记下，等 Willow、Maple 上线后生效"
 
 ///|
-let pending_failed : String = "把 Ana 改为成员：没有生效。另一台设备刚改过「Ana」，请查看现在的状态，仍然需要的话再操作一次"
+let pending_failed : String = "把 Ana 改为成员：没有生效。「Ana」在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次"
 
 ///|
 let pending_why : String = "这台设备已不在安全模式中"
