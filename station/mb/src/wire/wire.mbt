@@ -40,8 +40,8 @@ pub(all) enum Event {
   Input(BytesView)
   /// Stdin has ended.
   End
-  /// The shell's answer to a call: its JSON, or its error.
-  Answer(Int64, Result[Json, ShellError])
+  /// The shell's answer to a call: its JSON, or its error, and the bytes it carries (none where it carries none).
+  Answer(Int64, Result[Json, ShellError], Bytes?)
   /// One this program does not know.
   Other
 }
@@ -64,16 +64,24 @@ pub fn Event::read(e : BytesView) -> Event {
     b'\x01' => Input(e[9:])
     b'\x02' => End
     b'\x03' => {
+      // (its error's length and the error, its JSON's length and the JSON, whether it carries bytes, and the bytes)
       guard e.length() >= 17 else { return Other }
       let id = le64(e, 1)
       let el = le64(e, 9).to_int()
-      guard el >= 0 && 17 + el <= e.length() else { return Other }
+      guard el >= 0 && 25 + el <= e.length() else { return Other }
+      let jl = le64(e, 17 + el).to_int()
+      guard jl >= 0 && 26 + el + jl <= e.length() else { return Other }
+      let carried = if e[25 + el + jl] == b'\x01' {
+        Some(e[26 + el + jl:].to_bytes())
+      } else {
+        None
+      }
       let error = @utf8.decode_lossy(e[17:17 + el])
       if error != "" {
-        return Answer(id, Err(ShellError(error)))
+        return Answer(id, Err(ShellError(error)), carried)
       }
-      let text = @utf8.decode_lossy(e[17 + el:])
-      Answer(id, Ok(@json.parse(text) catch { _ => Json::null() }))
+      let text = @utf8.decode_lossy(e[25 + el:25 + el + jl])
+      Answer(id, Ok(@json.parse(text) catch { _ => Json::null() }), carried)
     }
     _ => Other
   }

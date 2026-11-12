@@ -495,8 +495,45 @@ enum Handle {
     /// leaves a dial still under way on it asking its relays as it fails (mesh.ts `link`), as the station's addon answers.
     Unbound { id: String },
     IStream(Arc<Halves>),
+    /// A socket listening on this machine (`tcp.listen`, `unix.listen`): what a station's program serves (station/mb).
+    Listener(Arc<Listener>),
     /// A zstd stream being taken apart (`zstd.open`).
     Unzstd(Arc<Mutex<Unzstd>>),
+}
+
+/// A listening socket: TCP on this machine's loopback (one bound here, or one a launcher bound and handed down by its
+/// descriptor), or a Unix socket by its path.
+enum Listener {
+    Tcp(tokio::net::TcpListener),
+    #[cfg(unix)]
+    Unix(tokio::net::UnixListener),
+}
+
+impl Listener {
+    /// The next connection, as a socket read and written as `tcp.open`'s are, and who it came from.
+    async fn accept(&self) -> Result<(Handle, String), String> {
+        fn halves<R, W>(read: R, write: W) -> Handle
+        where
+            R: tokio::io::AsyncRead + Send + Unpin + 'static,
+            W: tokio::io::AsyncWrite + Send + Unpin + 'static,
+        {
+            Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) }
+        }
+        match self {
+            Listener::Tcp(l) => {
+                let (stream, peer) = l.accept().await.map_err(err)?;
+                let _ = stream.set_nodelay(true);
+                let (read, write) = stream.into_split();
+                Ok((halves(read, write), peer.to_string()))
+            }
+            #[cfg(unix)]
+            Listener::Unix(l) => {
+                let (stream, _) = l.accept().await.map_err(err)?;
+                let (read, write) = stream.into_split();
+                Ok((halves(read, write), String::new()))
+            }
+        }
+    }
 }
 
 /// A zstd stream being taken apart, a piece at a time as the core is given them: libzstd's streaming decoder (frames
@@ -713,6 +750,7 @@ impl Handle {
             Handle::Gone { .. } => "gone",
             Handle::Unbound { .. } => "unbound",
             Handle::IStream(_) => "stream",
+            Handle::Listener(_) => "listener",
             Handle::Unzstd(_) => "unzstd",
         }
     }
@@ -892,7 +930,7 @@ impl Inner {
                 let out = z.take(&input)?;
                 Ok(Answer::bytes(json!({ "whole": z.whole }), out))
             }
-            "stream.close" | "ws.close" | "tcp.close" | "zstd.close" => {
+            "stream.close" | "ws.close" | "tcp.close" | "zstd.close" | "listen.close" => {
                 // Dropping the response, the socket's sender (its task ends) or the halves closes it.
                 self.drop_handle(id_of(&a)?);
                 Ok(Answer::json(json!({})))
@@ -988,6 +1026,47 @@ impl Inner {
                 let (read, write) = tokio::io::split(self.adb.open().await?);
                 let id = self.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
                 Ok(Answer::json(json!({ "id": id })))
+            }
+            // A socket to serve (station/mb's programs): a launcher's, handed down by its descriptor (`fd`, Unix), or one
+            // bound here on 127.0.0.1 (`port`, 0 for any free one); its port said. Only this machine's: no other address.
+            "tcp.listen" => {
+                let listener = match a.get("fd").and_then(Value::as_i64) {
+                    #[cfg(unix)]
+                    Some(fd) => {
+                        use std::os::fd::FromRawFd;
+                        // SAFETY: the descriptor was handed to this process to serve, and is taken over once here.
+                        let std = unsafe { std::net::TcpListener::from_raw_fd(fd as i32) };
+                        std.set_nonblocking(true).map_err(err)?;
+                        tokio::net::TcpListener::from_std(std).map_err(err)?
+                    }
+                    #[cfg(not(unix))]
+                    Some(_) => return Err("a socket handed down by its descriptor is Unix's".into()),
+                    None => {
+                        let port = a.get("port").and_then(Value::as_u64).unwrap_or(0) as u16;
+                        tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(err)?
+                    }
+                };
+                let port = listener.local_addr().map_err(err)?.port();
+                Ok(Answer::json(json!({ "id": self.keep(Handle::Listener(Arc::new(Listener::Tcp(listener)))), "port": port })))
+            }
+            // A Unix socket to serve at `path` (one there before is replaced).
+            "unix.listen" => {
+                #[cfg(unix)]
+                {
+                    let path = str_of(&a, "path")?;
+                    let _ = std::fs::remove_file(path);
+                    let listener = tokio::net::UnixListener::bind(path).map_err(err)?;
+                    Ok(Answer::json(json!({ "id": self.keep(Handle::Listener(Arc::new(Listener::Unix(listener)))) })))
+                }
+                #[cfg(not(unix))]
+                Err("Unix sockets are Unix's".into())
+            }
+            // The next connection to a listening socket: a socket read and written as `tcp.open`'s are (`tcp.read`,
+            // `tcp.write`, `tcp.end`, `tcp.close`), and who it came from.
+            "tcp.accept" => {
+                let Handle::Listener(listener) = self.handle(id_of(&a)?)? else { return Err("not a listening socket".into()) };
+                let (conn, peer) = listener.accept().await?;
+                Ok(Answer::json(json!({ "id": self.keep(conn), "peer": peer })))
             }
             "tcp.read" => {
                 let Handle::Tcp { read, .. } = self.handle(id_of(&a)?)? else { return Err("not a tcp connection".into()) };
@@ -2289,6 +2368,56 @@ mod tests {
             answers = ANSWERED.wait(answers).unwrap();
         }
     }
+
+    #[test]
+    fn serves_a_listening_socket_bound_here_handed_down_or_unix() {
+        use std::io::{Read, Write};
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().join("shell"), complete, std::ptr::null_mut()).unwrap();
+        let call = |id: u64, op: &str, a: Value, bytes: Option<Vec<u8>>| {
+            shell.call(id, op.into(), a.to_string().as_bytes(), bytes);
+            let (json, error, bytes) = answer(id);
+            assert_eq!(error, "", "{op}");
+            (serde_json::from_str::<Value>(&json).unwrap(), bytes)
+        };
+        // Each socket: a connection taken, what it sent read, an answer written, the end said.
+        let serve = |base: u64, listener: u64, connect: &dyn Fn() -> Box<dyn ReadWrite>| {
+            let mut client = connect();
+            client.write_all(b"ping").unwrap();
+            let (accepted, _) = call(base, "tcp.accept", json!({ "id": listener }), None);
+            let conn = accepted["id"].as_u64().unwrap();
+            let (_, got) = call(base + 1, "tcp.read", json!({ "id": conn }), None);
+            assert_eq!(got.unwrap(), b"ping");
+            call(base + 2, "tcp.write", json!({ "id": conn }), Some(b"pong".to_vec()));
+            call(base + 3, "tcp.end", json!({ "id": conn }), None);
+            let mut back = Vec::new();
+            client.read_to_end(&mut back).unwrap();
+            assert_eq!(back, b"pong");
+        };
+        // bound here, on 127.0.0.1, its port said
+        let (bound, _) = call(94_001, "tcp.listen", json!({ "port": 0 }), None);
+        let port = bound["port"].as_u64().unwrap() as u16;
+        serve(94_010, bound["id"].as_u64().unwrap(), &|| Box::new(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap()));
+        #[cfg(unix)]
+        {
+            use std::os::fd::IntoRawFd;
+            // one a launcher bound and handed down by its descriptor
+            let launcher = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = launcher.local_addr().unwrap().port();
+            let (handed, _) = call(94_020, "tcp.listen", json!({ "fd": launcher.into_raw_fd() }), None);
+            assert_eq!(handed["port"].as_u64().unwrap() as u16, port);
+            serve(94_030, handed["id"].as_u64().unwrap(), &|| Box::new(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap()));
+            // a Unix socket, by its path (one left there before replaced)
+            let path = dir.path().join("front.sock");
+            std::fs::write(&path, "left").unwrap();
+            let (unix, _) = call(94_040, "unix.listen", json!({ "path": path.display().to_string() }), None);
+            let p = path.clone();
+            serve(94_050, unix["id"].as_u64().unwrap(), &move || Box::new(std::os::unix::net::UnixStream::connect(&p).unwrap()));
+        }
+    }
+
+    trait ReadWrite: std::io::Read + std::io::Write {}
+    impl<T: std::io::Read + std::io::Write> ReadWrite for T {}
 
     #[test]
     fn cancelling_a_fetch_closes_the_socket_while_headers_or_body_are_stalled() {
