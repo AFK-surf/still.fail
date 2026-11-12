@@ -74,6 +74,17 @@ priv struct RideKept {
   /// a list drawn whole as one (ListRiding) with what is drawn anew each time it is drawn in it (a picture, one not seen
   /// asked for): drawn again only by going through it
   anew : Bool
+  /// how many scrims the old frame had as it was drawn (ride_scrims): what of it is said to be drawn over a scrim
+  /// (View::over_scrim) is moved after one as it is gone through (raising), never as it is drawn again, so it is drawn
+  /// again only under as many (a scrim come or gone: gone through once, kept again after)
+  scrims : Int
+}
+
+///|
+/// How many scrims the old frame has as the window's tree is painted (dr.scrims: its layers' with a scrim, built before
+/// the tree's paint): what is kept is kept under them (RideKept's `scrims`).
+fn ride_scrims() -> Int {
+  dr.scrims.length()
 }
 
 ///|
@@ -721,6 +732,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     heads: false,
     out: n,
     anew: false,
+    scrims: ride_scrims(),
   }
   ride_keep(r.id, kept)
   if group >= 0 {
@@ -839,6 +851,7 @@ fn Ctx::ride_kept_for(
     ride_glyphs_gone.val == k.glyphs &&
     inst_owners_kept() == k.owned &&
     tree.drawn_rev(c.id) <= k.rev &&
+    ride_scrims() == k.scrims &&
     ride_whole(dx, self.scale) &&
     ride_whole(dy, self.scale)
   guard fits else { return None }
@@ -1507,6 +1520,7 @@ fn Ctx::list_ride_end(self : Ctx) -> Unit {
     heads,
     out: n,
     anew: l.anew,
+    scrims: ride_scrims(),
   }
   if was is Some(_) {
     ride_kept[l.id] = kept
@@ -1643,6 +1657,7 @@ fn Ctx::list_kept_for(
     ride_glyphs_gone.val == k.glyphs &&
     inst_owners_kept() == k.owned &&
     tree.drawn_rev(c.id) <= k.rev &&
+    ride_scrims() == k.scrims &&
     ride_whole(x - k.x, self.scale) &&
     ride_whole(y - k.y, self.scale)
   if fits {
