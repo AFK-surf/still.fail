@@ -54,7 +54,8 @@ const R3_JOBS: [string, Job3][] = [
 ];
 const r3Rows = R3_JOBS.map(([, job]) => [ask<Any>({ t: "r3", job, round: 3 }), ask<Any>({ t: "r3", job, round: 4 }), ask<Any>({ t: "r3", job, round: 4, more: { cancels: "h" } })] as const);
 const m5Clocks = [false, true].flatMap((webAt) => [0, 300, 3600].map((skew) => ask<M5Clock>({ t: "m5clock", skew, webAt })));
-const revokedRows = ([["web", false, "entry"], ["off", false, "entry"], ["off", false, "h"], ["off", true, "entry"]] as const).flatMap(([kind, offFinal, cancels]) => (["same", "any"] as const).map((parent) => ({ kind, parent, offFinal, cancels, out: ask<Any>({ t: "revoked", kind, parent, n: CASES, offFinal, more: { cancels } }) })));
+const revokedRows = ([["web", false, "entry", "since"], ["off", false, "entry", "since"], ["off", false, "h", "since"], ["off", false, "entry", "any"], ["off", false, "h", "any"], ["off", true, "entry", "since"]] as const).flatMap(([kind, offFinal, cancels, again]) =>
+  (["same", "any"] as const).map((parent) => ({ kind, parent, offFinal, cancels, again, out: ask<Any>({ t: "revoked", kind, parent, n: CASES, offFinal, more: { cancels, again } }) })));
 const m6Rows = [false, true].map((offFinal) => ask<Any>({ t: "m6", n: CASES, offFinal }));
 const M7_ROWS: { label: string; o: Omit<Extract<Job4, { t: "m7" }>, "t" | "n"> }[] = [
   { label: "the handover", o: {} },
@@ -175,9 +176,9 @@ test("M6: on and off", async () => {
   }
   for (const row of revokedRows.filter((x) => x.kind === "off")) {
     const r = await row.out;
-    print(`off=${row.offFinal ? "final" : "a state"} cancels=${row.cancels}: a revoked key of alice's signs off after ${row.parent === "same" ? "the removal's parent" : "a parent of its drawing"}: off at the end at some station ${pct(r.anyEnd, r.n)}, at all ${pct(r.allEnd, r.n)}; keepers differ ${pct(r.differ, r.n)}; stations let go ${r.letGo}; her steps to have it on ${r.steps.join(",")}; on again with the list as before ${pct(r.recovered, r.n)}`);
+    print(`off=${row.offFinal ? "final" : "a state"} cancels=${row.cancels} again=${row.again}: a revoked key of alice's signs off after ${row.parent === "same" ? "the removal's parent" : "a parent of its drawing"}: off at the end at some station ${pct(r.anyEnd, r.n)}, at all ${pct(r.allEnd, r.n)}; keepers differ ${pct(r.differ, r.n)}; stations let go ${r.letGo}; her steps to have it on: ${r.steps.filter((n: number) => n > 0).length} worlds needed ${Math.max(0, ...r.steps)} at most; on again with the list as before ${pct(r.recovered, r.n)}`);
     print(`  not as before: ${said(r.whyNot)}`);
-    if (r.notLog && row.parent === "any" && !row.offFinal) toldLines(`M6 revoked off any cancels=${row.cancels}, the smallest world not as before`, r.notLog);
+    if (r.notLog && row.parent === "any" && !row.offFinal) toldLines(`M6 revoked off any cancels=${row.cancels} again=${row.again}, the smallest world not as before`, r.notLog.slice(0, 1).concat(r.notLog.slice(-30)));
   }
 });
 

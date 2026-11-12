@@ -258,6 +258,11 @@ export type W4Options = World3Options & {
   /// entries' hashes (`entry`, round three's) or the statements' bodies' (`h`), which signing again does not change.
   tellOut?: boolean;
   cancels?: "entry" | "h";
+  /// When a device signs again an entry of its that lost its place: `since` (the default), the product's `againOf`
+  /// (client/core-ts/src/lock-keep.ts: not where the chain since the place it hung already says it, or says otherwise
+  /// about the same subject); `any`, round three's model (not where any entry of the same kind and body is on the chain,
+  /// so a statement made again after its opposite, lost, is not signed again).
+  again?: "since" | "any";
   /// M1: when each statement first was ready at a keeper (on the active chain, its body kept) and first in force.
   track?: boolean;
 };
@@ -282,6 +287,7 @@ type X = {
   refused: Record<string, number>;
   commits: Map<Holder, { ver: number; by: Map<string, Entry[]> }>;
   gates: Map<Holder, { ver: number; ws: string; keys: Set<string> }>;
+  before: Map<string, Set<string>>;
   ready: Map<string, number>;
   inAt: Map<string, number>;
   letGo: { at: string; ws: string; step: number }[];
@@ -305,7 +311,7 @@ export class World4 extends World3 {
   get x(): X {
     let x = XS.get(this);
     if (x === undefined) {
-      x = { o: making, mine: new Map(), bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map(), forcePrev: undefined };
+      x = { o: making, mine: new Map(), bodies: new Map(), order: [], base: -1, kept: new Map(), pins: new Map(), allowed: new Map(), withheld: new Set(), skew: new Map(), refused: {}, commits: new Map(), gates: new Map(), before: new Map(), ready: new Map(), inAt: new Map(), letGo: [], old: new Map(), oldRules: null, reading: "B", frozen: new Map(), forcePrev: undefined };
       XS.set(this, x);
     }
     return x;
@@ -500,11 +506,23 @@ export class World4 extends World3 {
   admitsBefore(from: Holder, to: Holder, b: Body): boolean {
     const root = this.pinsOf(from).get(b.ws);
     if (!root) return false;
-    const hb = bodyHash(b), f = this.inForce(from, b.ws);
-    if (![...f.stmts.values()].some((x) => x === b || bodyHash(x) === hb)) return false;
-    const r = this.rosterIn(from, root, b.ws, { stmts: new Map([...f.stmts].filter(([, x]) => x !== b && bodyHash(x) !== hb)) });
-    const k = this.keyOfHolder(to);
-    return r.stations.has(k) || r.letIn.has(k);
+    // (every removal of the same one left out: told of a second removal too)
+    const subject = b.kind === "member.remove" ? `m|${b.sub}` : `s|${b.key}`;
+    const id = `${from.name}|${from.ver}|${b.ws}|${subject}`;
+    const same = (x: Body) => (x.kind === "member.remove" && `m|${x.sub}` === subject) || (x.kind === "station.remove" && `s|${x.key}` === subject);
+    let keys = this.x.before.get(id);
+    if (keys === undefined) {
+      const f = this.inForce(from, b.ws);
+      const left = new Map([...f.stmts].filter(([, x]) => !same(x)));
+      keys = new Set<string>();
+      if (left.size < f.stmts.size) {
+        const r = this.rosterIn(from, root, b.ws, { stmts: left });
+        keys = new Set([...r.stations, ...r.letIn.keys()]);
+      }
+      if (this.x.before.size > 5000) this.x.before.clear();
+      this.x.before.set(id, keys);
+    }
+    return keys.has(this.keyOfHolder(to));
   }
   keyOfHolder(h: Holder): string {
     const d = this.devOf.get(h);
@@ -550,7 +568,17 @@ export class World4 extends World3 {
     for (const [hb, b] of this.keptOf(from)) {
       if (!pf.has(b.ws) || !pt.has(b.ws) || have.has(hb) || this.x.withheld.has(`${hb}>${to.name}`)) continue;
       if (!ok.has(b.ws)) ok.set(b.ws, this.admits(from, to, b.ws));
-      if (ok.get(b.ws) || (this.x.o.tellOut !== false && (b.kind === "member.remove" || b.kind === "station.remove") && this.admitsBefore(from, to, b))) out.push(b);
+      if (ok.get(b.ws)) out.push(b);
+      else if (this.x.o.tellOut !== false && (b.kind === "member.remove" || b.kind === "station.remove") && this.admitsBefore(from, to, b)) {
+        // the removal, and the bodies its `prev` chain names (without them it is not in force there)
+        out.push(b);
+        for (let p = b.prev, n = 0; p !== null && n < 10_000; n++) {
+          const q = this.keptOf(from).get(p);
+          if (q === undefined) break;
+          if (!have.has(p)) out.push(q);
+          p = q.prev;
+        }
+      }
     }
     return out;
   }
@@ -602,6 +630,53 @@ export class World4 extends World3 {
       if (!moved) return true;
     }
     return false;
+  }
+
+  /// What a statement or a device entry is about (the product's `subjectOf`), by its intent's kind and body.
+  private about(kind: string, b: any): string | null {
+    if (kind === "device" || kind === "device.remove") return `device ${b.key}`;
+    if (kind.endsWith("member") || kind.endsWith("member.remove")) return `member ${b.ws}|${b.sub}`;
+    if (kind.endsWith("station") || kind.endsWith("station.remove")) return `station ${b.ws}|${b.key}`;
+    if (kind.endsWith("open") || kind.endsWith("off")) return `open ${b.ws}`;
+    return null;
+  }
+  private aboutEntry(x: string): string | null {
+    const e = this.entry(x);
+    if (e.kind !== "ws") return this.about(e.kind, e.body);
+    const b = this.x.bodies.get(e.body.h);
+    return b ? this.about(b.kind, b) : null;
+  }
+  resign(d: Dev3) {
+    if (this.x.o.again === "any") return super.resign(d);
+    if (this.v.resign === "off" || d.compromised || this.resigning) return;
+    this.resigning = true;
+    try {
+      for (const h of [...d.mine]) {
+        const k = d.h.logs.get(this.logOf.get(h)!)!;
+        if (d.superseded.has(h) || k.on.has(h)) continue;
+        const key = this.honest.get(h)!, it = this.intents.get(key)!;
+        d.superseded.add(h);
+        if (it.void !== null) continue;
+        let p = this.entry(h).prev;
+        while (p !== null && !k.on.has(p)) p = this.entry(p).prev;
+        if (p === null || p === k.head()) continue;
+        const since = k.active.slice(k.active.indexOf(p) + 1);
+        if (since.some((x) => this.honest.get(x) === key)) continue;
+        const about = this.about(it.kind, it.body);
+        if (about !== null && since.some((x) => this.aboutEntry(x) === about)) {
+          it.void = "said otherwise since";
+          this.note(`  ${d.name} does not sign ${this.told(h)} again: the chain says otherwise of it since`);
+          continue;
+        }
+        const again = this.sign(d, it.kind, it.body, { log: it.log, bring: true });
+        if (typeof again === "string") {
+          it.void = again;
+          this.note(`  ${d.name} cannot sign ${this.told(h)} again after its head (${again}): marked not in effect`);
+        } else this.resigned++;
+      }
+    } finally {
+      this.resigning = false;
+    }
   }
 
   /// D3 as revised: off is a state (`d4`), nothing is let go. `offFinal`, the first reading: a keeper that sees its
@@ -1205,11 +1280,9 @@ export function m3(family: Family, runs: number, steps: number): M3Out {
     const a2 = d4Said(w.d4(w2st[0], WS2)), b2 = d4Said(noW1.d4(noW1.stations.find((h) => h.name === "w0")!, WS2));
     if (a1 === b1) out.sameW1++;
     if (a2 === b2) out.sameW2++;
-    // where W1 differs: the places in alice's log where two entries hang at s0, in each run, and which won
-    const forks = (x: World4) => {
-      const k = x.stations[0].logs.get(x.root)!;
-      return [...k.kids].filter(([, ks]) => ks.length > 1).map(([p, ks]) => `after ${x.said(x.entry(p))}: ${ks.map((c) => `${k.on.has(c) ? "WON" : "lost"} ${x.said(x.entry(c))}`).join(" | ")}`);
-    };
+    // where W1 differs: the places in any log where two entries hang at s0, in each run, and which won
+    const forks = (x: World4) => [...x.stations[0].logs.values()].flatMap((k) =>
+      [...k.kids].filter(([, ks]) => ks.length > 1).map(([p, ks]) => `after ${x.said(x.entry(p))}: ${ks.map((c) => `${k.on.has(c) ? "WON" : "lost"} ${x.said(x.entry(c))}`).join(" | ")}`));
     if (a1 !== b1) out.w1Diffs.push([`seed ${seed}: ${d4Diff(w.d4(w1st[0]), noW2.d4(noW2.stations[0])).join(", ")}`, "forks with W2's statements:", ...forks(w), "forks without:", ...forks(noW2)]);
     if (forks(w).length > 0 || forks(noW2).length > 0) out.forkWorlds++;
     if ((a1 !== b1 || a2 !== b2) && out.firstDiff === null) out.firstDiff = [`seed ${seed}`, `W1 with W2's statements: ${a1}`, `W1 without:             ${b1}`, `W2 with W1's statements: ${a2}`, `W2 without:             ${b2}`];
