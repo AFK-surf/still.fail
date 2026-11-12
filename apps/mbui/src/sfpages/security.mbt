@@ -299,54 +299,41 @@ fn pending_node(parent : @view.View, core : Core, ws : () -> String, lock : () -
 /// `dismissText` drops it (`lock.pendingDismiss`), on a line of its own under its words. A waiting one does nothing
 /// pressed: it is taken by itself as a station takes it.
 fn sec_pending_node(parent : @view.View, core : Core, ws : () -> String, pv : () -> Json?) -> Unit {
-  let wide = @sf.look_node(parent) is Wide
   let id = fn() { text(pv(), "id") }
   let failed = fn() { text(pv(), "state") == "failed" }
-  let dismisses = fn() { failed() && text(pv(), "dismissText") != "" }
   let dropping = fn() { is_doing(core, ["lock.pendingDismiss"], [("workspace", ws()), ("id", id())]) }
-  let dismiss = fn(x : @view.View) {
-    sec_do_node(x, fn() { text(pv(), "dismissText") }, busy=dropping, fn() {
-      @settings.act(
-        core,
-        @signals.untracked(fn() { text(pv(), "dismissText") }),
-        "lock.pendingDismiss",
-        obj([("workspace", str(@signals.untracked(ws))), ("id", str(@signals.untracked(id)))]),
-      )
-    })
-  }
-  parent.box(fn(r) {
-    @sf.style_node(r, fn() { if wide { sec_pending_row } else { @sf.pg_said_row.then(sec_narrow_round).then(sec_pending_top) } })
-    r.box(fn(m) {
-      @sf.style_node(m, fn() { sec_pending_mark }, in_row=true)
-      @sf.icon_node(m, @signals.untracked(fn() { if failed() { "info" } else { "wait" } }), sec_device_glyph, By(fn() {
-        if failed() {
-          @sf.theme().p.warn_ink
-        } else {
-          @sf.theme().p.muted
-        }
-      }), name_now=fn() { if failed() { "info" } else { "wait" } })
-      |> ignore
-    })
-    |> ignore
-    r.box(fn(w) {
-      @sf.style_node(w, fn() { sec_pending_words }, in_row=true)
-      @sf.words_node(w, fn() { text(pv(), "text") }, fn() { if wide { sec_pending_said } else { sec_pending_said_narrow } }) |> ignore
-      w.show(fn() { text(pv(), "why") != "" }, fn(n) {
-        @sf.words_node(n, fn() { text(pv(), "why") }, fn() { if wide { sec_pending_why } else { @sf.pg_link_note } }) |> ignore
-      })
-      // (what it does a line of its own under its words at either width, as a narrow device row's 移除: beside them it
-      // took the room a sentence of no length known needs, and put on two lines what fits on one)
-      w.show(dismisses, fn(a) {
-        a.box(fn(ab) {
-          @sf.style_node(ab, fn() { sec_acts_under })
-          dismiss(ab)
-        })
+  let mark = fn() { if failed() { "info" } else { "wait" } }
+  sec_line_node(
+    parent,
+    fn() { text(pv(), "text") },
+    note=fn() { text(pv(), "why") },
+    wraps=true,
+    mark=fn(m) {
+      m.box(fn(b) {
+        @sf.style_node(b, fn() { sec_pending_mark }, in_row=true)
+        @sf.icon_node(b, @signals.untracked(mark), sec_device_glyph, By(fn() {
+          if failed() {
+            @sf.theme().p.warn_ink
+          } else {
+            @sf.theme().p.muted
+          }
+        }), name_now=mark)
         |> ignore
       })
-    })
-    |> ignore
-  })
-  |> ignore
+      |> ignore
+    },
+    acts=fn(a) {
+      sec_do_node(a, fn() { text(pv(), "dismissText") }, busy=dropping, fn() {
+        @settings.act(
+          core,
+          @signals.untracked(fn() { text(pv(), "dismissText") }),
+          "lock.pendingDismiss",
+          obj([("workspace", str(@signals.untracked(ws))), ("id", str(@signals.untracked(id)))]),
+        )
+      })
+    },
+    acts_shown=fn() { failed() && text(pv(), "dismissText") != "" },
+  )
 }
 
 ///|
@@ -453,7 +440,9 @@ fn sec_group_node(
 /// (wide; amber while `warn`), `end` at its end; `acts`, what it does (while `acts_shown` says) where its title is
 /// words of no length known (a device's name): at its end wide, narrow a line of its own under its words, the title
 /// never squeezed by it. `over`: the name of the rows it starts, over it at its mark while it says one (a person's
-/// devices of one app: still.fail 桌面版), `apart` from the rows before it. Its words as they are said.
+/// devices of one app: still.fail 桌面版), `apart` from the rows before it. Its words as they are said. `wraps`: its
+/// title a sentence, whole on as many lines as it takes, its note under it and what it does under them at either width
+/// (beside it, that took the room the sentence needs), its mark at its first line (a change not in effect).
 fn sec_line_node(
   parent : @view.View,
   title : () -> String,
@@ -467,6 +456,7 @@ fn sec_line_node(
   acts_shown? : () -> Bool = fn() { true },
   over? : () -> String = fn() { "" },
   apart? : () -> Bool = fn() { false },
+  wraps? : Bool = false,
 ) -> Unit {
   match @sf.look_node(parent) {
     Narrow => {
@@ -490,7 +480,7 @@ fn sec_line_node(
             @sf.style_node(first, fn() { sec_first_line })
             first.box(fn(t) {
               @sf.style_node(t, fn() { sec_title_room }, in_row=true)
-              @sf.words_node(t, title, fn() { narrow_row_title }) |> ignore
+              @sf.words_node(t, title, fn() { if wraps { sec_pending_body } else { narrow_row_title } }) |> ignore
             })
             |> ignore
             // (at the row's top: at a card's first row's end in its corner as far from its top as from its side, and
@@ -513,7 +503,14 @@ fn sec_line_node(
         |> ignore
       }
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { (if indent { sec_narrow_row_in } else { @sf.pg_said_row }).then(sec_narrow_round) })
+        @sf.style_node(r, fn() {
+          let row = (if indent { sec_narrow_row_in } else { @sf.pg_said_row }).then(sec_narrow_round)
+          if wraps {
+            row.then(sec_pending_top)
+          } else {
+            row
+          }
+        })
         match acts {
           None => words(r)
           // (its mark beside its title and its note as in a row doing nothing, what it does under them all from where
@@ -522,7 +519,7 @@ fn sec_line_node(
             r.box(fn(wa) {
               @sf.style_node(wa, fn() { sec_with_acts }, in_row=true)
               wa.box(fn(mw) {
-                @sf.style_node(mw, fn() { sec_mark_words })
+                @sf.style_node(mw, fn() { if wraps { sec_mark_words.then(sec_pending_top) } else { sec_mark_words } })
                 words(mw)
               })
               |> ignore
@@ -548,19 +545,48 @@ fn sec_line_node(
         |> ignore
       })
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { sec_row })
+        @sf.style_node(r, fn() { if wraps { sec_pending_row } else { sec_row } })
         match mark {
           Some(f) => f(r)
           None => ()
         }
         r.box(fn(t) {
-          @sf.style_node(t, fn() { sec_row_text }, in_row=true)
+          @sf.style_node(t, fn() { if wraps { sec_pending_words } else { sec_row_text } }, in_row=true)
           t.show(fn() { title() != "" }, fn(w) {
-            @sf.words_node(w, title, fn() { if strong { sec_row_name } else { sec_row_words } }) |> ignore
+            @sf.words_node(w, title, fn() {
+              if wraps {
+                sec_pending_ui
+              } else if strong {
+                sec_row_name
+              } else {
+                sec_row_words
+              }
+            })
+            |> ignore
           })
           t.show(fn() { note() != "" }, fn(w) {
-            @sf.words_node(w, note, fn() { if warn() { sec_warn } else { sec_row_meta } }) |> ignore
+            @sf.words_node(w, note, fn() {
+              if wraps {
+                sec_pending_why
+              } else if warn() {
+                sec_warn
+              } else {
+                sec_row_meta
+              }
+            })
+            |> ignore
           })
+          match acts {
+            Some(f) if wraps =>
+              t.show(acts_shown, fn(a) {
+                a.box(fn(ab) {
+                  @sf.style_node(ab, fn() { sec_acts_under })
+                  f(ab)
+                })
+                |> ignore
+              })
+            _ => ()
+          }
         })
         |> ignore
         match end {
@@ -568,8 +594,8 @@ fn sec_line_node(
           None => ()
         }
         match acts {
-          Some(f) => r.show(acts_shown, f)
-          None => ()
+          Some(f) if !wraps => r.show(acts_shown, f)
+          _ => ()
         }
       })
       |> ignore
@@ -1110,11 +1136,11 @@ let sec_pending_words : @ui.Style = @ui.style(w=@sf.grow, gap=S1)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_pending_said : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
+let sec_pending_ui : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_pending_said_narrow : @ui.TextStyle = @sf.body.then(@sf.full_words)
+let sec_pending_body : @ui.TextStyle = @sf.body.then(@sf.full_words)
 
 ///|
 // kept across runs: a value (no field of it changes)
