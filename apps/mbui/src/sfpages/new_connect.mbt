@@ -263,9 +263,17 @@ fn nc_error(core : Core, f : NcFlow) -> String {
 }
 
 ///|
-/// The connect added: said, the dialog closed onto its page.
-fn nc_added(core : Core, f : NcFlow, id : String, close : () -> Unit, feishu : Bool) -> Unit {
-  (core.say)(@sf.t(if feishu { "web-pages.connect.feishu.added" } else { "web-pages.connect.added" }))
+/// The connect added: said (as its kind says it: `platform`), the dialog closed onto its page.
+fn nc_added(core : Core, f : NcFlow, id : String, close : () -> Unit, platform : String) -> Unit {
+  (core.say)(
+    @sf.t(
+      match platform {
+        "feishu" => "web-pages.connect.feishu.added"
+        "comma" => "web-pages.connect.added.comma"
+        _ => "web-pages.connect.added"
+      },
+    ),
+  )
   close()
   (core.push)(Connect(f.station, id))
 }
@@ -334,7 +342,9 @@ fn nc_body(
         }
       }
       "commaLine" | "done" if text(v, "platform") == "comma" => nc_comma_line(c, core, f, field(v, "comma"), error)
-      "feishuBind" | "commaBind" | "bind" => {
+      // (a Comma connect has one way, a session a Task: the station makes it so, and Comma has no threads to choose by)
+      "commaBind" => nc_models(c, src, core, f, v)
+      "feishuBind" | "bind" => {
         nc_models(c, src, core, f, v)
         @sf.field(c, @sf.t("web-pages.connect.mode"), fn() {
           let (m, r, by_thread) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"), flag(v, "threads"))
@@ -758,7 +768,7 @@ fn nc_foot(
     "commaLine" | "done" if text(v, "platform") == "comma" => {
       cancel()
       next(@sf.t("web-pages.connect.addConnect"), !flag(field(v, "comma"), "ready"), busy, fn() {
-        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
+        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, "comma") })
       })
     }
     "feishuBind" => {
@@ -781,7 +791,7 @@ fn nc_foot(
       cancel()
       if flag(fe, "verified") {
         next(@sf.t("web-pages.connect.addConnect"), false, busy || flag(fe, "creating"), fn() {
-          nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, true) })
+          nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, "feishu") })
         })
       } else {
         next(@sf.t("web-pages.connect.feishu.verify"), !flag(fe, "canVerify"), busy, fn() { nc_act(core, f, "verify") })
@@ -812,7 +822,7 @@ fn nc_foot(
     }
     _ => {
       next(@sf.t("web-pages.connect.addConnect"), items(field(v, "pick"), "options").length() == 0, busy, fn() {
-        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
+        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, "slack") })
       })
     }
   }
@@ -840,7 +850,7 @@ fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, cancel : () ->
 fn nc_watch_added(core : Core, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
   if text(v, "step") == "done" && text(v, "platform") == "feishu" {
     match opt_text(field(v, "feishu"), "connect") {
-      Some(id) if !f.gone => nc_added(core, f, id, close, true)
+      Some(id) if !f.gone => nc_added(core, f, id, close, "feishu")
       _ => ()
     }
   }

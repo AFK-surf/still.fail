@@ -670,6 +670,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-fonts-code" => fonts_at.set(2)
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
     "settings-new-connect-scan" => fx_connect_step.val = "feishuScan"
+    // a new Comma connect's model, its first step after the platform
+    "settings-new-connect-comma" => fx_connect_step.val = "commaBind"
     // a new Slack app's step: its name, its look
     "settings-new-connect-app" => fx_connect_step.val = "app"
     _ => fx_connect_step.val = "team"
@@ -695,7 +697,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
     "settings-connect-run" | "settings-connect-switch" | "settings-slack-app" => "connect:ws1/st1#k1"
-    "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
+    // the page of a connect of another kind, none of its sessions yet
+    "settings-connect-comma" | "settings-connect-feishu" => "connect:ws1/st1#k1"
+    "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" | "settings-new-connect-comma" =>
       "connects"
     "settings-vault-off" | "settings-vault-words" | "settings-vault-recover" | "settings-vault-plain" | "settings-vault-waits" =>
       "vault"
@@ -1343,6 +1347,59 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
       ),
     ),
     ("modeWords", fx_mode_words(false)),
+  ])
+}
+
+///|
+/// Connect k1 as one of another kind (MBUI_FIXTURE=settings-connect-comma, -feishu): Comma's, reached in Comma and
+/// running a session a Task; Feishu's, its app on 飞书. No Slack workspace either, so no team.
+fn fx_connect_as(kind : String) -> Json {
+  let feishu = kind == "feishu"
+  match fx_connect("k1", if feishu { "飞书助手" } else { "Comma 助手" }, "online", "在线", "multi-session") {
+    Object(o) => {
+      o["kind"] = str(kind)
+      o.remove("team")
+      o.remove("slack")
+      o["sessions"] = Json::number(0.0)
+      o["placeText"] = str(if feishu { "飞书" } else { "Comma" })
+      if feishu {
+        o["feishu"] = obj([
+          ("appId", str("cli_a7f3e9b2c41d500e")),
+          ("appSecret", str("…9c2b")),
+          ("domain", str("feishu")),
+          ("console", str("https://open.feishu.cn/app/cli_a7f3e9b2c41d500e")),
+        ])
+        o["modeWords"] = fx_mode_words(true)
+        o["modeText"] = str("每个群一个会话")
+        o["modeLabel"] = str("每个群一个会话")
+        o["modeSentence"] = str("在群里 @ 它开始，之后群里的消息都交给这个会话；@ 它说「新会话」另开一个，话题群的每个话题各一个会话")
+      }
+      Json::object(o)
+    }
+    v => v
+  }
+}
+
+///|
+/// A new connect on Comma's path at its model (MBUI_FIXTURE=settings-new-connect-comma): step 2 of 3, a model picked.
+fn fx_comma_flow() -> Json {
+  obj([
+    ("step", str("commaBind")),
+    ("title", str("绑定模型")),
+    ("back", str("platform")),
+    ("number", Json::number(2.0)),
+    ("total", Json::number(3.0)),
+    ("mobile", Json::boolean(true)),
+    ("platforms", [str("slack"), str("feishu"), str("comma")]),
+    ("platform", str("comma")),
+    ("comma", obj([("line", str("")), ("ready", Json::boolean(false)), ("error", Json::null())])),
+    ("mode", str("multi-session")),
+    ("requireMention", Json::boolean(true)),
+    ("threads", Json::boolean(false)),
+    ("modeWords", fx_mode_words(false)),
+    ("noProfile", Json::boolean(false)),
+    ("canCreate", Json::boolean(true)),
+    ("pick", fx_session_pick()),
   ])
 }
 
@@ -2334,6 +2391,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         Some(v)
       }
     }
+    "connectFlow" if fx_connect_step.val == "commaBind" => Some(fx_comma_flow())
     "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
       Some(fx_feishu_flow(fx_connect_step.val))
     "connectFlow" =>
@@ -2497,14 +2555,25 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               obj([
                 ("station", str("ws1/st1")),
                 ("stationName", str("Willow")),
-                ("connect", fx_connect("k1", "星火助手", "online", "在线", "multi-session")),
+                (
+                  "connect",
+                  match mode {
+                    "settings-connect-comma" => fx_connect_as("comma")
+                    "settings-connect-feishu" => fx_connect_as("feishu")
+                    _ => fx_connect("k1", "星火助手", "online", "在线", "multi-session")
+                  },
+                ),
                 ("runtimeChanges", Json::boolean(mode == "settings-connect-switch")),
                 (
                   "sessions",
-                  [
-                    obj([("key", str("s-c7")), ("titleText", str("Slack 里问的报销流程")), ("statusText", str("昨天"))]),
-                    obj([("key", str("s-c2")), ("titleText", str("首页的列表改成按天分组")), ("statusText", str("8 分钟前"))]),
-                  ],
+                  if mode == "settings-connect-comma" || mode == "settings-connect-feishu" {
+                    []
+                  } else {
+                    [
+                      obj([("key", str("s-c7")), ("titleText", str("Slack 里问的报销流程")), ("statusText", str("昨天"))]),
+                      obj([("key", str("s-c2")), ("titleText", str("首页的列表改成按天分组")), ("statusText", str("8 分钟前"))]),
+                    ]
+                  },
                 ),
                 ("candidates", []),
                 ("running", Json::number(0.0)),

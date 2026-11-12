@@ -495,20 +495,24 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   // line, centred in it)
   let over = @sf.menu_row_over - (info_fact_h - @sf.theme().t.ui_line) / 2.0
   c.box(style=info_facts.then(@ui.style(pt=@sf.room_of(over))), fn() {
-    // (where it came from only when that is not here: a still.fail chat's says nothing)
+    // (where it came from only when that is not here: a still.fail chat's says nothing; a Comma Task's is in no place,
+    // Comma alone)
+    let comma = text(thread, "surface").has_prefix("comma:")
     match text(chat, "place") {
-      "" => ()
+      "" if !comma => ()
       place =>
         fact(@sf.t("web-pages.chat.info.from"), fn() {
           let feishu = text(thread, "surface").has_prefix("feishu:") || text(chat, "feishuUrl") != ""
           c.box(style=info_inline, fn() {
-            if feishu {
+            if comma {
+              @sf.drawable(c, @sf.origin_mark_name("comma"), 13.0, tint=@sf.theme().p.text) |> ignore
+            } else if feishu {
               @sf.feishu_mark(c, 13.0) |> ignore
             } else {
               @sf.slack_mark(c, 13.0) |> ignore
             }
-            let through = if feishu { @sf.t("web-pages.connect.feishu.name") } else { "Slack" }
-            c.text(through + " · " + place, style=info_words) |> ignore
+            let through = if comma { "Comma" } else if feishu { @sf.t("web-pages.connect.feishu.name") } else { "Slack" }
+            c.text(if place == "" { through } else { through + " · " + place }, style=info_words) |> ignore
           })
           |> ignore
         })

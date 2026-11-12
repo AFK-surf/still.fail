@@ -392,8 +392,8 @@ fn cd_menu_items(core : Core, here : Here, station : String, cv : Json?) -> Arra
 ///|
 /// How it runs, in one card (RunSection: runCard), `item` as it is now: the model it runs and who runs it (the core's
 /// pick of `connect:<id>`, its picker an old view's, hosted; none on its runtime: to its profiles), how its
-/// conversations become sessions (更改), in single-session the one they go into (切换; being switched, a ring beside
-/// it); under them what a change reaches.
+/// conversations become sessions (更改; none for a Comma connect), in single-session the one they go into (切换;
+/// being switched, a ring beside it); under them what a change reaches.
 fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, station : String, item : () -> Json?) -> Unit {
   let cv = fn() { field(item(), "connect") }
   let id = @signals.untracked(fn() { text(cv(), "id") })
@@ -423,10 +423,13 @@ fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, sta
           })
         }
       })
-      // how its conversations become sessions, switched in a dialog
-      @sf.link_row_node(g, fn() { @sf.t("web-pages.connect.session") }, fn() { cd_mode_dialog(core, station, @signals.untracked(item)) }, value=fn() {
-        text(cv(), "modeLabel")
-      }, note=fn() { text(cv(), "modeSentence") })
+      // how its conversations become sessions, switched in a dialog (a Comma connect's are one a Task, nothing to
+      // switch: the station makes it so)
+      g.show(fn() { text(cv(), "kind") != "comma" }, fn(m) {
+        @sf.link_row_node(m, fn() { @sf.t("web-pages.connect.session") }, fn() { cd_mode_dialog(core, station, @signals.untracked(item)) }, value=fn() {
+          text(cv(), "modeLabel")
+        }, note=fn() { text(cv(), "modeSentence") })
+      })
       // the station its new conversations run on (a connect is its workspace's: its chats may run on any station of
       // it), picked in a dialog; a single-session connect's one session, and a station from before, say none
       g.show(fn() { text(cv(), "mode") != "single-session" && flag(cv(), "moves") && text(cv(), "kind") != "comma" }, fn(s) {
@@ -472,7 +475,10 @@ fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, sta
       })
     })
     @sf.page_note_node(sec, fn() {
-      @sf.t(if changes() { "web-pages.connect.runtimeChanges" } else { "web-pages.connect.runtimeNote" }, args=[("runtime", text(cv(), "runtimeText"))])
+      // (what a change does to a single session's current one only where it runs one: a multi-session connect's, a
+      // Comma one's among them, say none of it)
+      let key = if changes() { "web-pages.connect.runtimeChanges" } else { "web-pages.connect.runtimeNote" }
+      @sf.t(if text(cv(), "mode") == "single-session" { key } else { key + ".multi" }, args=[("runtime", text(cv(), "runtimeText"))])
     })
   })
 }
@@ -755,12 +761,13 @@ fn text_number(v : Json?, key : String) -> Int {
 }
 
 ///|
-/// A key of words that differ for a Feishu connect: its `.feishu` twin for one (the web's kindKey).
+/// A key of words that differ for a Feishu or a Comma connect: its `.feishu` or `.comma` twin for one (the web's
+/// kindKey).
 fn cd_kind_key(key : String, cv : Json?) -> String {
-  if text(cv, "kind") == "feishu" {
-    key + ".feishu"
-  } else {
-    key
+  match text(cv, "kind") {
+    "feishu" => key + ".feishu"
+    "comma" => key + ".comma"
+    _ => key
   }
 }
 
