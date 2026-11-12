@@ -296,7 +296,7 @@ fn pending_node(parent : @view.View, core : Core, ws : () -> String, lock : () -
 ///|
 /// A change not in effect, `pv` as it is now: its mark (waiting, the time's; failed, the warning's in amber), its
 /// sentence whole on as many lines as it takes, why it failed under it where the core says; a failed one's
-/// `dismissText` drops it (`lock.pendingDismiss`), under its words narrow, at its end wide. A waiting one does nothing
+/// `dismissText` drops it (`lock.pendingDismiss`), on a line of its own under its words. A waiting one does nothing
 /// pressed: it is taken by itself as a station takes it.
 fn sec_pending_node(parent : @view.View, core : Core, ws : () -> String, pv : () -> Json?) -> Unit {
   let wide = @sf.look_node(parent) is Wide
@@ -334,21 +334,17 @@ fn sec_pending_node(parent : @view.View, core : Core, ws : () -> String, pv : ()
       w.show(fn() { text(pv(), "why") != "" }, fn(n) {
         @sf.words_node(n, fn() { text(pv(), "why") }, fn() { if wide { sec_pending_why } else { @sf.pg_link_note } }) |> ignore
       })
-      // (narrow: what it does a line of its own under its words, as a device's 移除)
-      if !wide {
-        w.show(dismisses, fn(a) {
-          a.box(fn(ab) {
-            @sf.style_node(ab, fn() { sec_acts_under })
-            dismiss(ab)
-          })
-          |> ignore
+      // (what it does a line of its own under its words at either width, as a narrow device row's 移除: beside them it
+      // took the room a sentence of no length known needs, and put on two lines what fits on one)
+      w.show(dismisses, fn(a) {
+        a.box(fn(ab) {
+          @sf.style_node(ab, fn() { sec_acts_under })
+          dismiss(ab)
         })
-      }
+        |> ignore
+      })
     })
     |> ignore
-    if wide {
-      r.show(dismisses, dismiss)
-    }
   })
   |> ignore
 }

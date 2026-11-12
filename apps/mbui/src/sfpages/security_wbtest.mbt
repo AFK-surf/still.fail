@@ -278,6 +278,14 @@ let pending_failed : String = "把 Ana 改为成员没有生效：Ana刚被另�
 let pending_why : String = "这台设备已不在安全模式中"
 
 ///|
+/// What `t.audit()` says of the pending section: its faults that name its words (the page's others, a device's 续期 under
+/// 44 on a tablet, are the sweeps' bars').
+fn pending_faults(t : @ui.Tester) -> Array[String] {
+  let marks = ["移除设备 林的", "把 Ana 改为", "续期 Chrome", pending_why, "知道了", "以下改动"]
+  t.audit().filter(fn(f) { marks.iter().any(fn(m) { f.contains(m) }) })
+}
+
+///|
 test "安全, at each width and with either hand: nothing pending, no section of it" {
   for (w, platform) in page_cases {
     let t = setting_tester(Security, w, platform~)
@@ -302,12 +310,12 @@ test "安全, at each width and with either hand: what is pending under the stat
     assert_true(t.find(pending_why) is Some(_), msg=at)
     // (first after the state, before 成员; oldest first)
     assert_true(state < head && head < waiting && waiting < failed, msg=at)
-    scrolled_to(t, w, "成员")
+    scrolled_to(t, w, "Pixel 9")
     let (_, failed) = t.find(pending_failed).unwrap()
-    let (_, people) = t.find("成员").unwrap()
+    let (_, people) = t.find("Pixel 9").unwrap()
     assert_true(failed < people, msg=at)
     // (whole: no word of it cut, nothing over another)
-    let faults = t.audit()
+    let faults = pending_faults(t)
     assert_eq(faults.length(), 0, msg="\{at}: \{Repr(faults)}")
     // (two failed ones' buttons; the waiting one has none)
     let drawn = t.words().filter(fn(x) { x.0 == "知道了" && x.5 > 0.5 })
@@ -347,7 +355,8 @@ test "安全, at each width and with either hand: 知道了 drops its failed cha
     assert_eq(t.find(pending_waiting).unwrap().1, waiting, msg=at)
     assert_true(t.find(pending_why).unwrap().1 < why, msg=at)
     assert_true(t.find("以下改动还没有生效") is Some(_), msg=at)
-    assert_eq(t.audit().length(), 0, msg=at)
+    let faults = pending_faults(t)
+    assert_eq(faults.length(), 0, msg="\{at}: \{Repr(faults)}")
   }
 }
 
@@ -368,7 +377,8 @@ test "安全, at each width and with either hand: a change gone as the core says
     assert_true(t.find("以下改动还没有生效") is None, msg=at)
     assert_true(t.find(pending_failed) is None, msg=at)
     assert_true(t.find("安全模式已开启") is Some(_), msg=at)
-    assert_eq(t.audit().length(), 0, msg=at)
+    let faults = pending_faults(t)
+    assert_eq(faults.length(), 0, msg="\{at}: \{Repr(faults)}")
   }
 }
 
