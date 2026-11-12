@@ -17,6 +17,7 @@ import { Cloud as CloudState } from "./cloud/state.ts";
 import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
 import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
+import { withFront } from "./mesh/front.ts";
 import { verifyWith } from "./cloud/lock.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
 import { makeStore } from "./read/store.ts";
@@ -437,6 +438,8 @@ export class MeshNative extends Context.Service<MeshNative, Mesh>()("stillfail/M
   static readonly layer = Layer.effect(MeshNative, Effect.sync(() => {
     const mesh = loadMesh();
     if (mesh.verify) verifyWith((alg, key, signature, message) => mesh.verify!(alg, key, signature, message));
-    return mesh;
+    // The endpoint kept by the MoonBit front where the launcher started one (mesh/front.ts), across handovers.
+    const front = process.env.STILLFAIL_MESH_FRONT;
+    return front ? withFront(mesh, front) : mesh;
   }));
 }

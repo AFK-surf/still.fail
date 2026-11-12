@@ -3783,6 +3783,7 @@ dependencies = [
 name = "stillfail-shell"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "embedded-io-async",
  "futures",
  "getrandom 0.3.4",
@@ -3794,6 +3795,7 @@ dependencies = [
  "libc",
  "libcrux-ecdsa",
  "libcrux-ed25519",
+ "n0-future",
  "n0-mainline",
  "noq-proto",
  "opus-rs",

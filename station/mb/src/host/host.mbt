@@ -58,10 +58,20 @@ pub fn Host::shell_sync(self : Host, op : String, args : Json) -> Json raise @wi
 
 ///|
 /// Asks the shell what it answers later (its network, its sockets: client/shell's `run`), with `bytes` where the call
-/// carries them; its JSON and the bytes its answer carries. Other fibers go on meanwhile.
-pub async fn Host::shell(self : Host, op : String, args : Json, bytes? : Bytes) -> (Json, Bytes?) {
+/// carries them; its JSON and the bytes its answer carries. Other fibers go on meanwhile. `called` is told the call's
+/// id as it is asked: what gives up a call the shell lets be given up (`fetch.cancel`: a fetch, a dial).
+pub async fn Host::shell(
+  self : Host,
+  op : String,
+  args : Json,
+  bytes? : Bytes,
+  called? : (Int64) -> Unit,
+) -> (Json, Bytes?) {
   self.next += 1L
   let id = self.next
+  if called is Some(f) {
+    f(id)
+  }
   let done = @effect.Deferred::new()
   self.waiting[id] = done
   match bytes {

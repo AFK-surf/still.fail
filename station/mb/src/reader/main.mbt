@@ -724,6 +724,10 @@ fn main {
         host.say(said.stringify())
         @front.forward(host, listening, @string.parse_int(flag("--to").unwrap_or("0")) catch { _ => 0 })
       })
+    (Some("mesh"), _, _) =>
+      // (the station's iroh endpoint kept for its Node, asked on the Unix socket at `--socket`: `{"listening": path}`
+      // said once it listens; the shell's own files in `--shell-dir`)
+      @host.run(shell_dir=flag("--shell-dir").unwrap_or("."), host => @front.mesh(host, flag("--socket").unwrap_or("mesh.sock")))
     (Some("replica-export"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => replica_export(
         host,
