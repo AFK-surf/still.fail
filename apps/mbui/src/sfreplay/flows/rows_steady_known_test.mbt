@@ -22,7 +22,6 @@ fn init {
     // (the old chat list's foot row, an old fault: it stands 65-81 ms into its list's way, then goes a whole step in one
     // frame. main 0, -5.72, -5.96 a frame, 2.74 off its frames round it for 2.98 judged; with every way at its exact
     // moment 0, -6.16, -5.85, 3.24 for 2.92. Taken away as the node list takes its place)
-    ("src/sfreplay/flows/dismiss_test.mbt", 1),
     ("src/sfreplay/flows/drive_upload_test.mbt", 1),
     // (the same old fault of the old chat list's foot row, at 60 a second: 58-68 ms into its way, then a whole step.
     // main 0, -11.16, -11.46, 5.43 for 5.73; at the exact moment 0, -11.84, -11.52, 6.07 for 5.76. Taken away as the
@@ -45,6 +44,5 @@ fn init {
     // -1.69". main's app (src/sfapp/app.mbt, src/sfbase/source.mbt, src/sfbase/workspace_switch.mbt, src/sfdesk/frame.mbt
     // as main has them) on the same replay shows the same four, the same row and words. Goes with the third)
     ("src/sfreplay/flows/share_test.mbt", 4),
-    ("src/sfreplay/flows/share_files_test.mbt", 1),
   ])
 }

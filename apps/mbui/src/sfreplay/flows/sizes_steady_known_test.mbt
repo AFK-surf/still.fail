@@ -11,15 +11,13 @@ fn init {
     // their row goes a few points back and forth as the row goes up under them on the list's way, one way on the
     // screen; their row stepped up in one frame before, the card's room put on at once: under_post.mbt)
     ("src/sfreplay/flows/close_option_test.mbt", 1),
-    ("src/sfreplay/flows/drive_play_test.mbt", 1),
     ("src/sfreplay/flows/glass_test.mbt", 1),
-    ("src/sfreplay/flows/lock_wait_test.mbt", 1),
     ("src/sfreplay/flows/new_chat_test.mbt", 1),
     ("src/sfreplay/flows/service_page_test.mbt", 1),
     ("src/sfreplay/flows/settings_connect_test.mbt", 4),
     ("src/sfreplay/flows/settings_run_settings_test.mbt", 1),
     ("src/sfreplay/flows/settings_vault_item_test.mbt", 1),
-    ("src/sfreplay/flows/share_new_chat_test.mbt", 2),
+    ("src/sfreplay/flows/share_new_chat_test.mbt", 1),
     ("src/sfreplay/flows/sheet_drag_test.mbt", 1),
     ("src/sfreplay/flows/viewer_test.mbt", 2),
     // (shown as the replay gives each message at its own moment, a device's timing: the answer's words in the old
