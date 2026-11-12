@@ -992,6 +992,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
+  sites_arrive()
   // (what the system said of its notifications, read of it so: what reads it built again as it came, notify.mbt)
   notices_arrive()
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old

@@ -10,7 +10,6 @@
 // - a Mermaid chart: as its code till then; `code` takes viz_mermaid_node once it is in main (#5525).
 // - a vault item's card asking for a file to be picked (message_card_node's NotYet): nothing drawn for it yet.
 // - its pictures placed side by side in its words: once its pictures are nodes (#5552, #5553); each its box till then.
-// - an HTML page it places drawn as a page: its file's card till the window's tree holds a host's web view.
 // - its picture held under the pane's top as a long one scrolls past (c.stick), and its coming out of its agent's picture
 //   (emit): the list's, as the list is made of nodes.
 
@@ -187,15 +186,23 @@ fn agent_prose_node(
       chat_title=fn(h) { chat_title_of(m())(h) },
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
       paths=@signals.untracked(m).by.agent != "",
-      // (a file it places: its card where it places it; an HTML page's too, till it is drawn as a page; a picture's
-      // its box, not yet side by side with another)
+      // (a file it places: its card where it places it; a picture's its box, not yet side by side with another)
       files=fn(name) {
+        let card = fn(a) {
+          fn(d) { message_files_node(d, src, here.tips, place, fn() { [a] }, fn() { false }, by, at) }
+        }
         match placed(name) {
-          Some(a) =>
+          // an HTML page: drawn as a page where it is placed (message_viz_node), its card where it cannot be read
+          Some(a) if is_viz(a.name) =>
             Some({
-              draw: fn(d) { message_files_node(d, src, here.tips, place, fn() { [a] }, fn() { false }, by, at) },
+              draw: fn(d) {
+                let ts = @signals.untracked(m).ts
+                message_viz_node(d, src, here.tips, here.station, here.session, owner_of(place.here(), a), ts, a, card(a))
+              },
               image: None,
             })
+          Some(a) =>
+            Some({ draw: card(a), image: None })
           None => None
         }
       },

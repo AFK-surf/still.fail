@@ -152,3 +152,49 @@ test "a native view of the tree's: what takes a press drawn over it after it tol
   // (its hole first among what is drawn, the box over it after)
   assert_eq(t.holes(), [(0.0, 0.0, 400.0, 200.0)])
 }
+
+///|
+test "a node's binding asking whether a native view's host is done drawing it: done again as the host says so, how the view stands not said to change with it" {
+  let t = Tester::new(fn(_) {  }, w=300.0, h=400.0, platform=0, finish=false)
+  t.check_looks(false)
+  let page = NativeView::page("<p>a</p>")
+  set_view_app(fn(root) {
+    native(root, page).height(Is(Some(50.0))) |> ignore
+    root.box(fn(l) {
+      l.words(By(fn() { if page.host_done() { "drawn" } else { "waiting" } })).height(Is(Some(20.0))) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_true(t.rect_of("waiting") is Some(_))
+  // (the host's word alone, as a host says it at a moment of its own: no outside_stood with it)
+  on_outside(outside_view, page.id(), 1)
+  t.draw()
+  assert_true(t.rect_of("drawn") is Some(_), msg="the binding done again as the host said it was done")
+}
+
+///|
+test "what a page says, bound by a node of the tree's: laid out and drawn by the frame that takes it, that frame painted alone the same as built whole" {
+  let tall = @signals.signal(120.0, same=fn(a, b) { a == b })
+  let t = Tester::new(fn(_) {  }, w=300.0, h=400.0, platform=2)
+  let page = NativeView::page("<p>a</p>", said=fn(words) {
+    if words == "taller" {
+      tall.set(232.0)
+    }
+  })
+  set_view_app(fn(root) {
+    root.box(fn(fr) {
+      fr.width(Is(Some(300.0))).height(By(fn() { Some(tall.get()) })) |> ignore
+      native(fr, page).width(Is(Some(300.0))).grow(Is(1.0)) |> ignore
+    })
+    |> ignore
+    root.box(fn(l) { l.words(Is("under it")).height(Is(Some(20.0))) |> ignore }) |> ignore
+  })
+  t.draw()
+  t.run_for(move_most_ms)
+  inspect(stands(t, page), content="0 0 300 120")
+  t.view_says(page.id(), "taller")
+  t.frame()
+  inspect(stands(t, page), content="0 0 300 232")
+  assert_eq(t.rect_of("under it").map(fn(r) { r.1 }), Some(232.0))
+}

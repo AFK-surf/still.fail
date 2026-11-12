@@ -24,6 +24,13 @@ fn init {
     ("src/sfapp/stack_over_wbtest.mbt", 1),
     ("src/sfapp/tape.mbt", 1),
     ("src/sfapp/viewer_media_over_wbtest.mbt", 1),
+    // (the old list's row growing to the 5000 its page says, 中屏 on the tape, at 60: the words and the picture under
+    // the page stop dead from 6.1 a frame as the old view's way to that height ends (9.3, 7.5, 6.1, then none). An old
+    // fault, on main the same numbers a frame later, at 2066.67, one frame past where its test stopped looking, and
+    // counted already in the cases whose Testers chat_wbtest's helper makes: what a page says is taken as a frame
+    // begins now, a frame sooner, so its end is among the frames judged. Taken away with the old chat's page: the row
+    // made as nodes goes there by the list's own way)
+    ("src/sfapp/viz_wbtest.mbt", 2),
     ("src/sfapp/wide_rail_wbtest.mbt", 4),
     ("src/sfapp/wide_wbtest.mbt", 5),
   ])

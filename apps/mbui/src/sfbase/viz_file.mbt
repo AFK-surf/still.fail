@@ -370,7 +370,40 @@ pub fn viz_load(
   size? : Double = 0.0,
 ) -> Result[(String, Json?), Unit]? {
   let id = viz_id(station, key, path)
-  let l = match viz_loads.get(id) {
+  let l = viz_load_of(id)
+  if !l.asked {
+    l.asked = true
+    c.tell("viz/load/" + id, fn() { viz_ask(src, l, station, key, path, size) })
+  }
+  viz_loaded(l)
+}
+
+///|
+/// viz_load for a node of the window's tree `v`: asked as it is made (where not asked yet), read as it comes (a reader
+/// of its signals).
+pub fn viz_load_node(
+  v : @view.View,
+  src : Source,
+  station : String,
+  key : String,
+  path : String,
+  size? : Double = 0.0,
+) -> () -> Result[(String, Json?), Unit]? {
+  let l = viz_load_of(viz_id(station, key, path))
+  // (asked in a handler, as it is made: its answer may come at once)
+  v.reacts(fn() { () }, fn(_) {
+    if !l.asked {
+      l.asked = true
+      viz_ask(src, l, station, key, path, size)
+    }
+  })
+  fn() { viz_loaded(l) }
+}
+
+///|
+/// The load of the file `id` (viz_id), made where there is none.
+fn viz_load_of(id : String) -> VizLoad {
+  match viz_loads.get(id) {
     Some(l) => l
     None => {
       let l : VizLoad = { html: @signals.signal(None), state: @signals.signal(None), state_read: @signals.signal(false), failed: @signals.signal(false), asked: false }
@@ -378,42 +411,11 @@ pub fn viz_load(
       l
     }
   }
-  if !l.asked {
-    l.asked = true
-    c.tell("viz/load/" + id, fn() {
-      let p : Map[String, Json] = {
-        "station": Json::string(station),
-        "key": Json::string(key),
-        "name": Json::string(viz_base_name(path)),
-      }
-      chat_keep(p, size)
-      (src.read_bytes)(
-        "station.file",
-        Json::object(p),
-        fn(r) {
-          match r {
-            Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
-            Err(_) => l.failed.set(true)
-          }
-        },
-      )
-      (src.call)(
-        "widget.state",
-        Json::object({ "station": Json::string(station), "key": Json::string(key), "path": Json::string(path) }),
-        fn(r) {
-          match r {
-            Ok(v) =>
-              l.state.set(match field(Some(v), "state") {
-                Some(Null) | None => None
-                Some(s) => Some(s)
-              })
-            Err(_) => ()
-          }
-          l.state_read.set(true)
-        },
-      )
-    })
-  }
+}
+
+///|
+/// What `l` has come to (viz_load's answer).
+fn viz_loaded(l : VizLoad) -> Result[(String, Json?), Unit]? {
   if l.failed.get() {
     return Some(Err(()))
   }
@@ -421,6 +423,42 @@ pub fn viz_load(
     Some(h) if l.state_read.get() => Some(Ok((h, l.state.get())))
     _ => None
   }
+}
+
+///|
+/// The file's page and what it kept asked of the core, into `l` (viz_load's).
+fn viz_ask(src : Source, l : VizLoad, station : String, key : String, path : String, size : Double) -> Unit {
+  let p : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(key),
+    "name": Json::string(viz_base_name(path)),
+  }
+  chat_keep(p, size)
+  (src.read_bytes)(
+    "station.file",
+    Json::object(p),
+    fn(r) {
+      match r {
+        Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
+        Err(_) => l.failed.set(true)
+      }
+    },
+  )
+  (src.call)(
+    "widget.state",
+    Json::object({ "station": Json::string(station), "key": Json::string(key), "path": Json::string(path) }),
+    fn(r) {
+      match r {
+        Ok(v) =>
+          l.state.set(match field(Some(v), "state") {
+            Some(Null) | None => None
+            Some(s) => Some(s)
+          })
+        Err(_) => ()
+      }
+      l.state_read.set(true)
+    },
+  )
 }
 
 ///|
