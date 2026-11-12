@@ -7,7 +7,7 @@ import { basename, delimiter, join } from "node:path";
 import { copyFile, readFile, readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
-import type { Env, Found, Host, Platform } from "./index.ts";
+import type { Env, Found, Host, HostSample, Platform } from "./index.ts";
 import { holder, osCpuTicks } from "./processes.ts";
 import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parseMounts, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
@@ -73,7 +73,7 @@ async function startTimeOf(pid: number): Promise<number | null> {
 }
 
 /// macOS's memory (host.memory) from what sysctl and vm_stat said; `swap` asked only when the rest is known.
-function macMemoryOf(totalText: string | null, vm: string | null, swap: () => string | null): ReturnType<Host["memory"]> {
+function macMemoryOf(totalText: string | null, vm: string | null, swap: () => string | null): HostSample["memory"] {
   const total = parseU64(totalText ?? "") ?? 0;
   if (vm !== null) {
     const after = vm.split("page size of ")[1];
@@ -94,7 +94,7 @@ function macMemoryOf(totalText: string | null, vm: string | null, swap: () => st
 
 /// host.memory on macOS, its commands not waited on (the main thread's: memoryPressure). The swap is not asked: the
 /// pressure reads only the memory used.
-async function macMemory(): Promise<ReturnType<Host["memory"]>> {
+async function macMemory(): Promise<HostSample["memory"]> {
   const said = async (command: string, args: string[]) => {
     try {
       return trim((await run(command, args, { encoding: "utf8", timeout: 3000 })).stdout);
@@ -117,76 +117,58 @@ const host: Host = {
       return null;
     }
   },
-  /// On macOS as Activity Monitor counts it (app, wired and compressed pages, not reclaimable cache).
-  memory() {
-    if (MACOS) return macMemoryOf(output("sysctl", ["-n", "hw.memsize"]), output("vm_stat", []), () => output("sysctl", ["-n", "vm.swapusage"]));
-    let info = "";
-    try {
-      info = readFileSync("/proc/meminfo", "utf8");
-    } catch {
-      // No memory data; report it as unknown below.
+  /// The memory on macOS as Activity Monitor counts it (app, wired and compressed pages, not reclaimable cache), its
+  /// swap; elsewhere /proc's. Every command and file at once, none waited on.
+  async sample() {
+    const said = async (command: string, args: string[]) => {
+      try {
+        return trim((await run(command, args, { encoding: "utf8", timeout: 3000 })).stdout);
+      } catch {
+        return null;
+      }
+    };
+    const file = (path: string) => readFile(path, "utf8").catch(() => "");
+    const rssOfPs = async () => {
+      const kb = parseU64(trim((await said("ps", ["-o", "rss=", "-p", String(process.pid)])) ?? ""));
+      return kb === null ? 0 : kb * 1024;
+    };
+    if (MACOS) {
+      const [total, vm, swap, model, boot, version, footprint] = await Promise.all([
+        said("sysctl", ["-n", "hw.memsize"]), said("vm_stat", []), said("sysctl", ["-n", "vm.swapusage"]),
+        said("sysctl", ["-n", "machdep.cpu.brand_string"]), said("sysctl", ["-n", "kern.boottime"]), said("sw_vers", ["-productVersion"]),
+        // Its footprint, as Activity Monitor says it. Resident memory there also counts the system's libraries, shared
+        // with every process, and what was freed but not yet taken back: twice or more what it holds.
+        said("footprint", ["-f", "bytes", "--noCategories", "-p", String(process.pid)]),
+      ]);
+      // "{ sec = 1790000000, usec = 0 } ..."
+      const sec = boot?.split("sec = ")[1]?.split(",")[0];
+      const booted = sec === undefined ? null : /^[+-]?[0-9]+$/.test(trim(sec)) ? Number(trim(sec)) : null;
+      const bytes = footprint?.match(/phys_footprint:\s*(\d+)\s*B/)?.[1];
+      return {
+        memory: macMemoryOf(total, vm, () => swap),
+        cpuModel: model ?? "",
+        uptimeSec: booted === null ? 0 : Math.max(Math.trunc(wall.now() / 1000) - booted, 0),
+        osName: version !== null ? `macOS ${version}` : `macOS (Darwin ${release()})`,
+        ownRss: bytes !== undefined ? Number(bytes) : await rssOfPs(),
+      };
     }
+    const [info, cpus, up, ownRss] = await Promise.all([file("/proc/meminfo"), file("/proc/cpuinfo"), file("/proc/uptime"), rssOfPs()]);
     const total = fieldOrNull(info, "MemTotal");
     const available = fieldOrNull(info, "MemAvailable");
     const swapTotal = fieldOrNull(info, "SwapTotal");
     const swapFree = fieldOrNull(info, "SwapFree");
     const swapUsedBytes = swapTotal !== null && swapFree !== null && swapFree <= swapTotal ? (swapTotal - swapFree) * 1024 : null;
-    if (total === null || total <= 0 || available === null || available > total) {
-      return { totalBytes: (total ?? 0) * 1024, usedBytes: 0, swapUsedBytes, known: false };
-    }
-    return {
-      totalBytes: total * 1024,
-      usedBytes: (total - available) * 1024,
-      swapUsedBytes,
-    };
-  },
-  cpuModel() {
-    if (MACOS) return output("sysctl", ["-n", "machdep.cpu.brand_string"]) ?? "";
-    let info = "";
-    try {
-      info = readFileSync("/proc/cpuinfo", "utf8");
-    } catch {
-      // None: empty.
-    }
-    for (const l of info.split("\n")) {
+    const memory = total === null || total <= 0 || available === null || available > total
+      ? { totalBytes: (total ?? 0) * 1024, usedBytes: 0, swapUsedBytes, known: false }
+      : { totalBytes: total * 1024, usedBytes: (total - available) * 1024, swapUsedBytes };
+    let cpuModel = "";
+    for (const l of cpus.split("\n")) {
       if (!l.startsWith("model name")) continue;
       const colon = l.indexOf(":", "model name".length);
-      if (colon >= 0) return trim(l.slice(colon + 1));
+      if (colon >= 0) { cpuModel = trim(l.slice(colon + 1)); break; }
     }
-    return "";
-  },
-  uptimeSec() {
-    if (MACOS) {
-      // "{ sec = 1790000000, usec = 0 } ..."
-      const text = output("sysctl", ["-n", "kern.boottime"]);
-      const sec = text?.split("sec = ")[1]?.split(",")[0];
-      const boot = sec === undefined ? null : /^[+-]?[0-9]+$/.test(trim(sec)) ? Number(trim(sec)) : null;
-      return boot === null ? 0 : Math.max(Math.trunc(wall.now() / 1000) - boot, 0);
-    }
-    try {
-      const s = parseF64(firstWord(readFileSync("/proc/uptime", "utf8")));
-      return s === null ? 0 : Math.round(s);
-    } catch {
-      return 0;
-    }
-  },
-  osName() {
-    if (MACOS) {
-      const version = output("sw_vers", ["-productVersion"]);
-      return version !== null ? `macOS ${version}` : `macOS (Darwin ${release()})`;
-    }
-    return `${osType()} ${release()}`;
-  },
-  ownRss() {
-    // macOS: its footprint, as Activity Monitor says it. Resident memory there also counts the system's libraries,
-    // shared with every process, and what was freed but not yet taken back: twice or more what it holds.
-    if (MACOS) {
-      const said = output("footprint", ["-f", "bytes", "--noCategories", "-p", String(process.pid)]);
-      const bytes = said?.match(/phys_footprint:\s*(\d+)\s*B/)?.[1];
-      if (bytes !== undefined) return Number(bytes);
-    }
-    const kb = parseU64(trim(output("ps", ["-o", "rss=", "-p", String(process.pid)]) ?? ""));
-    return kb === null ? 0 : kb * 1024;
+    const uptime = up === "" ? null : parseF64(firstWord(up));
+    return { memory, cpuModel, uptimeSec: uptime === null ? 0 : Math.round(uptime), osName: `${osType()} ${release()}`, ownRss };
   },
 };
 

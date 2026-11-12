@@ -130,7 +130,7 @@ export class Admin {
   constructor(readers: Readers, deps: AdminDeps = {}) {
     this.deps = deps;
     this.readers = readers;
-    this.host = deps.host ?? new Host(readers);
+    this.host = deps.host ?? new Host(readers.data);
     const agentsNow = () => (typeof deps.agents === "function" ? deps.agents() : deps.agents);
     const given = typeof deps.agents === "function" ? undefined : deps.agents;
     const config = deps.config ?? given?.config;

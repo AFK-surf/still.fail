@@ -261,12 +261,14 @@ const sameFile = (a: string, b: string) => {
 /// What Node's os says (the same counters Task Manager reads): Windows has neither /proc nor sysctl.
 const host: Host = {
   cpuTicks: osCpuTicks,
-  memory: () => ({ totalBytes: totalmem(), usedBytes: Math.max(totalmem() - freemem(), 0), swapUsedBytes: null }),
-  cpuModel: () => trim(cpuList()[0]?.model ?? ""),
-  uptimeSec: () => Math.round(osUptime()),
-  // "Windows 11 Pro 10.0.26300", not os.type()'s "Windows_NT".
-  osName: () => `${osVersion()} ${release()}`,
-  ownRss: () => process.memoryUsage.rss(),
+  sample: async () => ({
+    memory: { totalBytes: totalmem(), usedBytes: Math.max(totalmem() - freemem(), 0), swapUsedBytes: null },
+    cpuModel: trim(cpuList()[0]?.model ?? ""),
+    uptimeSec: Math.round(osUptime()),
+    // "Windows 11 Pro 10.0.26300", not os.type()'s "Windows_NT".
+    osName: `${osVersion()} ${release()}`,
+    ownRss: process.memoryUsage.rss(),
+  }),
 };
 
 /// A PowerShell string of `s`.
