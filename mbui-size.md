@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [eabadd6eb](https://github.com/AFK-surf/still.fail/commit/eabadd6eba08069dfe87aa9b5a553092db783dc0) Align 待处理's chat rows with the long jobs over them | 1.88 | 2.51 | 10.72 | 29.66 | 37.92 | 26.4 | 49.52 | 94.45 | 176.05 |
 | [36b56f216](https://github.com/AFK-surf/still.fail/commit/36b56f21638e00fceb91eb9653cd263970ed735a) screens: a Mac's clicks and wheels carry the modif | 1.87 | 2.51 | 10.72 | 29.65 | 37.91 | 26.39 | 49.52 | 94.27 | 188.24 |
 | [a3e59ea9b](https://github.com/AFK-surf/still.fail/commit/a3e59ea9b4e4c61525f1cb8641071880b9ee43e9) mbui app: on 小屏 a place of the bottom bar switched | 1.88 | 2.51 | 10.72 | 29.5 | 37.21 | 26.39 | 49.52 | 94.34 | 174.97 |
 | [e3c683113](https://github.com/AFK-surf/still.fail/commit/e3c683113f21411a3b910eb58ef0e5856be543c7) Connect pages: each platform's own words (Feishu,  | 1.87 | 2.5 | 10.52 | 29.5 | 37.21 | 26.28 | 49.15 | 94.03 | 174.97 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f1beb4691](https://github.com/AFK-surf/still.fail/commit/f1beb4691cf38058bf9a1b541321fad71c757774) app, mbui: Show of a composed value, derive(Show), | 1.85 | 2.47 | 10.37 | 29.11 | 36.61 | 25.9 | 48.33 | 93.78 | 164.71 |
 | [e73742ee2](https://github.com/AFK-surf/still.fail/commit/e73742ee25f11038e9fb8bbba384fd288f9e3a53) app: 对话目录's rows as a pick's: the reader's in the  | 1.85 | 2.47 | 10.36 | 29.1 | 36.58 | 25.9 | 48.33 | 93.78 | 135.43 |
 | [e7dbca863](https://github.com/AFK-surf/still.fail/commit/e7dbca863bf05bae020682194910edb66eed442b) app, mbui: deprecated APIs and syntax said anew, n | 1.85 | 2.47 | 10.36 | 29.1 | 36.58 | 25.9 | 48.33 | 93.8 | 141.8 |
-| [f06a53f31](https://github.com/AFK-surf/still.fail/commit/f06a53f316e0107577e0dab7bb0d30aea93e14a6) mbui: tree_select_wbtest's words look says max_lin | 1.85 | 2.47 | 10.35 | 29.09 | 36.57 | 25.91 | 48.32 | 94.34 | 113.74 |
