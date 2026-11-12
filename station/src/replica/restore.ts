@@ -250,9 +250,26 @@ export function addFormerly(data: string, origin: string): void {
   renameSync(`${file}.tmp`, file); // sync: in the restore's own thread (restore-worker.ts)
 }
 
-/// `takeBack` in a thread of its own, where a restore waits (null: none did).
-export function takeBackSoon(data: string, db: string, now: number): Promise<Ready | null> {
-  if (!existsSync(readyFile(data))) return Promise.resolve(null); // sync: before the station serves (its store not open yet)
+/// `takeBack` off the main thread, where a restore waits (null: none did): by the MoonBit program (station/mb's
+/// src/replica, `--builder replica-restore`) where it is built, else in a worker thread.
+export async function takeBackSoon(data: string, db: string, now: number, given?: string | null): Promise<Ready | null> {
+  if (!existsSync(readyFile(data))) return null; // sync: before the station serves (its store not open yet)
+  // (imported here: the restore's own thread, which imports this file, keeps its heap to what it does)
+  const { MbProcess, mbReaderBinary } = await import("../read/mb-reader.ts");
+  const binary = given === undefined ? mbReaderBinary() : given;
+  if (binary !== null) {
+    return new Promise((resolve, reject) => {
+      const p = new MbProcess(binary, ["--builder", "replica-restore", "--db", db, "--data", data, "--now", String(now), "--sep", sep]);
+      let said = false;
+      p.once("message", (m: { ready?: Ready | null; error?: string }) => {
+        said = true;
+        if (m.error !== undefined) reject(new Error(m.error));
+        else resolve(m.ready ?? null);
+      });
+      p.once("error", reject);
+      p.once("exit", (code: number) => { if (!said) reject(new Error(`the restore ended saying nothing (${code})`)); });
+    });
+  }
   const file = new URL(import.meta.url.endsWith(".ts") ? "./restore-worker.ts" : "./replica/restore-worker.js", import.meta.url);
   return new Promise((resolve, reject) => {
     const w = new Worker(file, { workerData: { data, db, now } });

@@ -463,6 +463,80 @@ async fn vault_uses(host : @host.Host, db_path : String) -> Unit {
 }
 
 ///|
+/// The export of the station's conversations (replica/runner.ts `MbRunner`, in its worker's place): each line an ask
+/// `{id, type, …}` (`places`, `pass`, `newGenerations`, `sources`, `close`), answered `{id, answer}` or `{id, error}`,
+/// one at a time. The time is the station's, said with each ask (`now`).
+async fn replica_export(host : @host.Host, db : String, replica : String, data_dir : String, origin : String, sep : String) -> Unit {
+  let clock = Ref(0.0)
+  // (a test's: batches smaller than BATCH_BYTES, or left as written)
+  let batch_bytes = match flag("--batch-bytes") {
+    Some(n) => @string.parse_int(n) catch { _ => @replica.batch_bytes }
+    None => @replica.batch_bytes
+  }
+  let fold = !@host.args().contains("--no-fold")
+  let exporter = @replica.Exporter::new(host, sep, db, replica, data_dir, origin, () => clock.val, batch_bytes~, fold~) catch {
+    e => {
+      let failed : Json = { "failed": Json::string(message(e)) }
+      host.say(failed.stringify())
+      return
+    }
+  }
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
+    }
+    let ask = @jsjson.parse(line) catch { _ => @jsjson.JValue::Null }
+    let id = match ask.get("id") {
+      Some(Num(n)) => n
+      _ => 0.0
+    }
+    if ask.get("now") is Some(Num(now)) {
+      clock.val = now
+    }
+    let kind = match ask.get("type") {
+      Some(Str(u)) => @jsjson.text(u)
+      _ => ""
+    }
+    let answer : Result[@jsjson.JValue, String] = try {
+      match kind {
+        "places" => {
+          exporter.set_places(ask.get("places").unwrap_or(Null))
+          Ok(Null)
+        }
+        "pass" => Ok(exporter.pass(ask.get("told").unwrap_or(Null)))
+        "newGenerations" => {
+          exporter.new_generations(match ask.get("after") { Some(Num(a)) => a; _ => 0.0 })
+          Ok(Null)
+        }
+        "sources" => {
+          let hashes = match ask.get("hashes") {
+            Some(Arr(items)) => items.filter_map(h => if h is Str(u) { Some(@jsjson.text(u)) } else { None })
+            _ => []
+          }
+          Ok(exporter.sources(hashes))
+        }
+        "close" => {
+          exporter.close()
+          host.say("{\"id\":\{@jsjson.stringify(Num(id))},\"answer\":null}")
+          return
+        }
+        _ => Err("no such ask: \{kind}")
+      }
+    } catch {
+      e => Err(message(e))
+    }
+    match answer {
+      Ok(v) => host.say("{\"id\":\{@jsjson.stringify(Num(id))},\"answer\":\{@jsjson.stringify(v)}}")
+      Err(m) => {
+        let failed : Json = { "id": Json::number(id), "error": Json::string(m) }
+        host.say(failed.stringify())
+      }
+    }
+  }
+  exporter.close()
+}
+
+///|
 /// The live view's transcript locator (sessions/live-locator.ts): each line a `locate` or a reply to one being looked
 /// for (@locate.Locator).
 async fn live_locator(host : @host.Host, db_path : String, data : String, sep : String) -> Unit {
@@ -638,6 +712,32 @@ fn main {
     }
     (Some("live-locator"), Some(db), Some(data)) =>
       @host.run(shell_dir=beside(db, "shell"), host => live_locator(host, db, data, flag("--sep").unwrap_or("/")))
+    (Some("replica-export"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => replica_export(
+        host,
+        db,
+        flag("--replica").unwrap_or(beside(db, "replica")),
+        flag("--data-dir").unwrap_or(""),
+        flag("--origin").unwrap_or(""),
+        flag("--sep").unwrap_or("/"),
+      ))
+    (Some("replica-restore"), Some(db), Some(data)) =>
+      // (the restore brought before, put in: a line `{"ready": …}` (null: none waited) or `{"error"}`)
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let now = @string.parse_double(flag("--now").unwrap_or("0")) catch { _ => 0.0 }
+        let line = try {
+          match @replica.take_back(host, flag("--sep").unwrap_or("/"), data, db, now) {
+            Some(ready) => "{\"ready\":\{@jsjson.stringify(ready)}}"
+            None => "{\"ready\":null}"
+          }
+        } catch {
+          e => {
+            let failed : Json = { "error": Json::string(message(e)) }
+            failed.stringify()
+          }
+        }
+        host.say(line)
+      })
     (Some("vault-uses"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => vault_uses(host, db))
     (Some("outflow-chats"), Some(db), _) =>
@@ -734,7 +834,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire|usage-scope|signin-save|vault-uses --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire|usage-scope|signin-save|vault-uses|replica-export --db <file> | --builder replica-restore --db <file> --data <dir>")
       2
     }
   }

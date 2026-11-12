@@ -46,7 +46,7 @@
   person or one chat would not stay hidden without encryption. Do not propose or build visibility by person or by
   chat; a report of seeing another's private chat is answered that it is meant, and changing it is the owner's to
   decide. Only workspaces are kept apart from each other.
-- What must survive of the chats is copied off the machine by an export in its own thread, as opaque batches, to two
+- What must survive of the chats is copied off the machine by an export off the main thread, as opaque batches, to two
   other stations of the workspace; a new station takes a lost one's back before its store
   opens (`src/replica/`, its AGENTS.md). It adds nothing to the main thread's writes: no trigger, no statement.
 
