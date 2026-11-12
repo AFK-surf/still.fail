@@ -6,6 +6,9 @@
 ///|
 fn init {
   @ui.host_image_bytes_known([
+    // (chat-download's recording's still and its agent's: what the old list's Tester has its host hold, the same, each
+    // fixture, screen and place, chat_body_node_wbtest's comparison)
+    ("src/sfpages/chat_body_node_wbtest.mbt", 57758),
     ("src/sfpages/peek_pictures_wbtest.mbt", 89156),
     ("src/sfpages/peeks_file_node_wbtest.mbt", 31398),
     ("src/sfpages/screen_wbtest.mbt", 58572),

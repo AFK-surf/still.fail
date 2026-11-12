@@ -765,6 +765,8 @@ fn login_said_node(p : @view.View, s : () -> LoginSaid) -> Unit {
 /// login_shows' lines, its code and its step.
 fn login_active_node(card : @view.View, core : Core, station : String, l : () -> Json?, relay : () -> Bool, place : String) -> Unit {
   card.pick(fn() { flag(l(), "paste") && text(l(), "url") != "" }, fn(x, paste) {
+    // (its lines, its code and its step as far apart as the card's own: lc_card_body's)
+    @sf.style_node(x, fn() { lc_active })
     if paste {
       login_paste_node(x, core, station, l, place)
       return
@@ -950,6 +952,11 @@ let lc_card : @ui.Style = lc_card_body.then(@ui.style(min_w=@sf.login_card_least
 /// The card but how wide it is (its node's: that by where it is, as laid out).
 // kept across runs: a value (no field of it changes)
 let lc_card_body : @ui.Style = @ui.style(w=Cut, p=@sf.inset_room, gap=S0_5, radius=@sf.login_card_corner, bg=A(Fg, O5), align=AStart)
+
+///|
+/// What a login under way shows in its card (login_active_node's): its lines, code and step as far apart as the card's.
+// kept across runs: a value (no field of it changes)
+let lc_active : @ui.Style = @ui.css("gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
