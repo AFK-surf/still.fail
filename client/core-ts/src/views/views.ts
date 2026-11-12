@@ -3863,8 +3863,10 @@ export class Views implements Owner {
   #whereIn(station: string, agents: J[], surface: string, channel: string, channelName: string, threadTs: string, connects?: J[]): { place: string | null; slackUrl: string | null; slackApp: string | null; feishuUrl: string | null } {
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
-    const slack = !isOwnSurface(surface) && !feishu;
-    const place = format.placeName(surface, channel, channelName);
+    // (a Comma Task is in no channel, and opens in no Slack: originOf's rule)
+    const comma = surface.startsWith("comma:");
+    const slack = !isOwnSurface(surface) && !feishu && !comma;
+    const place = comma ? null : format.placeName(surface, channel, channelName);
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
     const feishuConnect = (connects ?? arr(get(this.#chatOverview(station), "connects"))).find((c) => `feishu:${strOf(c, "id")}` === surface);
     const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;

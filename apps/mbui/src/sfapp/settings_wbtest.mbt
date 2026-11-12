@@ -625,6 +625,57 @@ test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed
 }
 
 ///|
+test "Comma: a new connect's 绑定模型 step shows its model and no 会话方式, which a Comma connect has not" {
+  for w in [390.0, 1280.0] {
+    let t = settings_tester("connects", mode="settings-new-connect-comma", shows="settings-new-connect-comma", w~)
+    assert_true(t.find("绑定模型") is Some(_), msg="its step at \{w}")
+    // (the model's field, its label the words 模型 alone)
+    assert_true(t.words().iter().any(fn(x) { x.0 == "模型" }), msg="its model at \{w}: " + t.words().map(fn(x) { x.0 }).join("|"))
+    // (its choices' words: the connects behind the sheet say 每个 thread 一个会话 of their own)
+    for gone in ["会话方式", "在 thread 中 @ 它即开启一个新会话", "它看到的所有 thread 都进入同一个会话"] {
+      assert_true(t.find(gone) is None, msg="\{gone} at \{w}")
+    }
+  }
+}
+
+///|
+test "Comma: a connect's page says Comma's words, no way of making sessions and no Slack" {
+  let t = settings_tester("connect:ws1/st1#k1", mode="settings-connect-comma", w=1280.0)
+  for w in ["Comma 助手", "Comma · Willow", "运行方式", "最近会话", "暂无会话。Comma 交给它的每个 Task 各开启一个会话。"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(x) { x.0 }).join("|"))
+  }
+  assert_true(t.query(Link, label="会话") is None, msg="its way of making sessions is one: no row to change it")
+  // (its note under the model: no single session to switch)
+  assert_true(t.find("运行于 Claude Code，创建后无法更改；如需使用其他运行时，请新建连接。") is Some(_))
+  assert_true(t.find("单会话的当前会话下一条起用新模型") is None)
+  assert_true(t.find("Slack") is None, msg=t.words().map(fn(x) { x.0 }).join("|"))
+  t.click(Button, label="更多")
+  t.frame()
+  t.tap_text("删除连接")
+  t.run_for(@ui.move_most_ms)
+  assert_true(
+    t.find("Comma 连接将断开。如需在 Comma 中也移除这台设备，请到 Comma 的 still.fail 插件页或 Comma for Teams 的 still.fail 页面操作。") is Some(_),
+    msg=t.words().map(fn(x) { x.0 }).join("|"),
+  )
+  assert_true(t.find("Slack") is None)
+}
+
+///|
+test "飞书: a connect's page with no sessions yet, and its delete, say nothing of Slack" {
+  let t = settings_tester("connect:ws1/st1#k1", mode="settings-connect-feishu", w=1280.0)
+  for w in ["飞书助手", "飞书 · Willow", "每个群一个会话", "暂无会话，在群里 @飞书助手 或私聊它即可开始"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(x) { x.0 }).join("|"))
+  }
+  assert_true(t.find("Slack") is None, msg=t.words().map(fn(x) { x.0 }).join("|"))
+  t.click(Button, label="更多")
+  t.frame()
+  t.tap_text("删除连接")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("连接将断开。开放平台中的应用需要你手动删除。") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
+  assert_true(t.find("Slack") is None)
+}
+
+///|
 test "settings: the account's page has the accounts on this device on its one card (Me.kt): 退出登录 beside who it is" {
   let t = settings_tester("me")
   assert_true(t.find("此设备上的账号") is None)
@@ -1164,9 +1215,11 @@ test "a connect's page says what another runtime reaches where its station lets 
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
   open_setting("connect:ws1/st1#k1")
   t.draw()
-  assert_true(t.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is Some(_))
+  // (a multi-session connect: nothing of a single session's)
+  assert_true(t.find("运行于 Claude Code。新会话用新设置。") is Some(_))
+  assert_true(t.find("单会话") is None)
   let before = settings_tester("connect:ws1/st1#k1")
-  assert_true(before.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is None)
+  assert_true(before.find("运行于 Claude Code。新会话用新设置。") is None)
 }
 
 ///|

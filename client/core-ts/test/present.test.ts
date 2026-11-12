@@ -829,6 +829,9 @@ test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does"
   assert.ok(c.modeSentence.endsWith("仅在被 @ 时唤醒。"));
   assert.equal(c.modeWords.single.label, "所有群共用一个会话");
   assert.equal(p.connect({ ...base, kind: "slack", team: "Acme", feishu: undefined }).placeText, "Acme");
+  // a Comma connect: reached in Comma, and not linked yet in its own name, never Slack's
+  const comma = p.connect({ ...base, kind: "comma", mode: "multi-session", feishu: undefined });
+  assert.deepEqual([comma.placeText, comma.statusText], ["Comma", "未连接 Comma"]);
   // switched to one each, with two running: what that does in its groups' words, then that the running finish
   const changes = p.modeChanges(base, 2);
   const multi = changes.find((x: J) => x.mode === "multi-session");

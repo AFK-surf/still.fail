@@ -491,7 +491,7 @@ export function runtimeShort(runtime: string): string {
   return RUNTIME_SHORT[runtime] ?? "CC";
 }
 
-/// A connect's link to Slack in words, and its dot.
+/// A connect's link to its platform in words, and its dot.
 export function connection(state: unknown, kind?: string | null): [string, string] {
   switch (str(get(state, "state")) ?? "") {
     case "connected":
@@ -505,7 +505,7 @@ export function connection(state: unknown, kind?: string | null): [string, strin
     case "disabled":
       return [said("core-logic.format.connection.disabled"), "offline"];
     default:
-      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : "core-logic.format.connection.no_slack"), "offline"];
+      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : kind === "comma" ? "core-logic.format.connection.no_comma" : "core-logic.format.connection.no_slack"), "offline"];
   }
 }
 

@@ -288,8 +288,12 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
     }
     // who started it and when, how many take part, when it was last written in: what there is of them, in a line
     let facts : Array[String] = []
+    // (a Feishu chat's by Feishu, a Comma Task's by Comma alone: it is in no place)
+    let surface = text(thread, "surface")
     match text(chat, "place") {
+      "" if surface.has_prefix("comma:") => facts.push("Comma")
       "" => ()
+      p if surface.has_prefix("feishu:") || text(chat, "feishuUrl") != "" => facts.push(@sf.t("web-pages.connect.feishu.name") + " · " + p)
       p => facts.push(fill("android-chat.info.from.slack", [("place", p)]))
     }
     // (made by another chat's agent: that chat said over this line, not a person)

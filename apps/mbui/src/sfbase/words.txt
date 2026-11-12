@@ -1884,6 +1884,7 @@ web-pages.cloud.someone
 web-pages.connect.addConnect
 web-pages.connect.addTeamToken
 web-pages.connect.added
+web-pages.connect.added.comma
 web-pages.connect.afterChange
 web-pages.connect.bindSaved
 web-pages.connect.bothRuntimes
@@ -1897,11 +1898,14 @@ web-pages.connect.current
 web-pages.connect.delete
 web-pages.connect.deleteBody
 web-pages.connect.deleteBody.feishu
+web-pages.connect.deleteBody.comma
 web-pages.connect.deleteBodySessions
 web-pages.connect.deleteBodySessions.feishu
+web-pages.connect.deleteBodySessions.comma
 web-pages.connect.deleted
 web-pages.connect.disabled
 web-pages.connect.disabled.feishu
+web-pages.connect.disabled.comma
 web-pages.connect.disabling
 web-pages.connect.enable
 web-pages.connect.enabled
@@ -1984,6 +1988,7 @@ web-pages.connect.previous
 web-pages.connect.recent
 web-pages.connect.recentNone
 web-pages.connect.recentNone.feishu
+web-pages.connect.recentNone.comma
 web-pages.connect.reconnect
 web-pages.connect.reconnectFailedShort
 web-pages.connect.reconnected
@@ -1994,6 +1999,8 @@ web-pages.connect.retrying
 web-pages.connect.run
 web-pages.connect.runtimeChanges
 web-pages.connect.runtimeNote
+web-pages.connect.runtimeChanges.multi
+web-pages.connect.runtimeNote.multi
 web-pages.connect.saveConnect
 web-pages.connect.saveFailedShort
 web-pages.connect.saveReconnect
