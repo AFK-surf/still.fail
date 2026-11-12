@@ -734,3 +734,58 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: opened to 
     assert_true(!@sfbase.go_tos.contains(long_ref.station + "\u{1}" + long_ref.session), msg="\{name}: still to go to")
   }
 }
+
+///|
+/// The long chat opened on `s` with its page's inside nodes, read up from its end, nothing focused, at rest; its last
+/// message's words and where they were at its end.
+fn keys_long_open(l : LongChat, s : (String, Double, Double, Int)) -> (@ui.Tester, String, Double) raise {
+  let (name, w, h, _) = s
+  let t = place_long_open(l, s)
+  let last = "第\{long_count}条："
+  guard t.rect_of(last) is Some((_, end, _, _)) else { fail("\{name}: its last message not drawn as it opens") }
+  t.ctx().blur()
+  t.move_to(w / 2.0, h / 2.0)
+  t.wheel(w / 2.0, h / 2.0, -600.0)
+  long_run(t, l, long_rest_ms)
+  assert_true(t.rect_of(last) is None, msg="\{name}: read up, its last message still at \{Repr(t.rect_of(last))}")
+  (t, last, end)
+}
+
+///|
+test "a chat's page made with its inside nodes, a page pushed over it on 小屏: ⌘↓, Space and ⌘U do nothing of the chat's" {
+  let l = long_chat()
+  let (t, last, _) = keys_long_open(l, ("小屏", 390.0, 844.0, 2))
+  @sfbase.open_page(Archived)
+  @ui.came_from_outside()
+  long_run(t, l, long_opened_ms)
+  let picks = t.pick_asks().length()
+  t.key(@ui.key_code_down, mods=@ui.mod_cmd)
+  t.key(@ui.key_space)
+  t.key(@ui.key_of_char('u'), mods=@ui.mod_cmd)
+  long_run(t, l, long_rest_ms)
+  assert_true(!focus_said(t).contains("发消息"), msg="the composer focused: \{focus_said(t)}")
+  assert_eq(t.pick_asks().length(), picks, msg="a picker asked")
+  assert_true(@sfbase.go_back(), msg="no way back to the chat")
+  @ui.came_from_outside()
+  long_run(t, l, long_opened_ms)
+  assert_true(t.rect_of(last) is None, msg="⌘↓ took the list to \{Repr(t.rect_of(last))}")
+}
+
+///|
+test "大屏, a chat's page made with its inside nodes: ⌘↓ takes the list read up back to its end, Space puts the cursor in the composer, ⌘U asks the system's picker" {
+  let l = long_chat()
+  let (t, last, end) = keys_long_open(l, ("大屏", 1280.0, 800.0, 0))
+  t.key(@ui.key_code_down, mods=@ui.mod_cmd)
+  long_run(t, l, long_rest_ms)
+  let now = t.rect_of(last).map(fn(r) { r.1 })
+  assert_true(now is Some(y) && (y - end).abs() <= 1.0, msg="⌘↓: its last message at \{Repr(now)}, its end \{end}")
+  t.ctx().blur()
+  long_run(t, l, long_rest_ms)
+  t.key(@ui.key_space)
+  long_run(t, l, long_rest_ms)
+  assert_eq(focus_said(t), "TextField 发消息")
+  let picks = t.pick_asks().length()
+  t.key(@ui.key_of_char('u'), mods=@ui.mod_cmd)
+  long_run(t, l, long_rest_ms)
+  assert_eq(t.pick_asks().length(), picks + 1, msg="⌘U")
+}
