@@ -288,6 +288,8 @@ fn View::scroll_bar(
       .on_drag(fn(d) {
         match d.kind {
           Down => {
+            // (the hand on its thumb: what the column kept in sight for the focus kept no more, Tree::holds_now)
+            self.tree.focus_holds.remove(self.at) |> ignore
             bar.woke(b, self, d.at)
             bar.held.set(true)
             bar.rested_at(b, self)

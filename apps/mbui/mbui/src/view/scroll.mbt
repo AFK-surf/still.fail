@@ -1220,6 +1220,8 @@ pub fn View::scrolls(
       return s.moved(w.at, w.dx)
     }
     guard w.dy != 0.0 && w.dy.abs() >= w.dx.abs() else { return false }
+    // (the hand on it: what it kept in sight for the focus kept no more, Tree::holds_now)
+    self.tree.focus_holds.remove(self.at) |> ignore
     // (a page's list's fling stopped as the wheel comes, what shows past an end going on back as it was)
     // (a wheel's notch eased in, as an old view's list's is: Ctx::ease_list)
     if s.as_list {
@@ -1254,6 +1256,8 @@ pub fn View::scrolls(
     let (hy, hwy) = if across { (d.x, d.wx) } else { (d.y, d.wy) }
     match d.kind {
       Down => {
+        // (the hand on it: what it kept in sight for the focus kept no more, Tree::holds_now)
+        self.tree.focus_holds.remove(self.at) |> ignore
         // (what shows past an end of a page's list caught where it shows: held by the finger from there)
         if s.as_list {
           s.past_held(d.at)
@@ -1327,7 +1331,17 @@ pub fn View::scrolls(
       return 0.0
     }
     s.at(self.tree) - x
-  }, across~)
+  }, across~, room?=if across {
+    None
+  } else {
+    Some(fn() {
+      (
+        self.tree.nodes[self.at].flex.height,
+        dmax(0.0, bar_clear().0),
+        dmax(0.0, (s.foot_covered)()),
+      )
+    })
+  })
 }
 
 ///|

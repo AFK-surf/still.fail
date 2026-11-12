@@ -5419,7 +5419,18 @@ fn old_show_after_layout(c : Ctx) -> Unit {
   old_show_due.val = None
   // (what holds it scrolled to it: the tree marked due by it, drawn so in this frame, what goes on asked for as the
   // frame ends: view_frame_end; no old view built again for it)
-  tree.show_in_sight(island, within=fn() { Some(w) })
+  // (and kept in sight as the room of what brings it changes while it has the focus: Tree::holds_now, where it is in
+  // the old view as that was last laid out)
+  tree.show_in_sight(
+    island,
+    within=fn() {
+      match old_part_within(g(), island, id) {
+        Some(now) => Some(now)
+        None => Some(w)
+      }
+    },
+    holds=fn() { g().focus == id },
+  )
 }
 
 ///|
