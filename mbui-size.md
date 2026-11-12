@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [980290250](https://github.com/AFK-surf/still.fail/commit/980290250fc2e658987180eb43f6739e76088b04) locks: the cloud's copy of a lock follows the stat | 1.93 | 2.59 | 11.12 | 30.18 | 39.85 | 26.86 | 51.16 | 94.75 | 125.09 |
 | [53796929b](https://github.com/AFK-surf/still.fail/commit/53796929b6e093da58ba270ef70eb80b7764c489) pipeline: the Mac's beta holds back no other part' | 1.93 | 2.59 | 11.12 | 30.18 | 39.85 | 26.86 | 51.16 | 94.85 | 125.09 |
 | [d953c3dd5](https://github.com/AFK-surf/still.fail/commit/d953c3dd5d6de2632c2f630a319733ee559ca218) mbui: what a page's list has in sight, told to han | 1.93 | 2.59 | 11.12 | 30.18 | 39.85 | 26.86 | 51.16 | 95.11 | 162.49 |
 | [6c3e51a27](https://github.com/AFK-surf/still.fail/commit/6c3e51a270589e5f7729072390b5ac758fefe4b5) station: read Antigravity CLI plan usage via agy / | 1.93 | 2.58 | 11.11 | 30.16 | 39.8 | 26.84 | 51.11 | 94.82 | 137.5 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a3e59ea9b](https://github.com/AFK-surf/still.fail/commit/a3e59ea9b4e4c61525f1cb8641071880b9ee43e9) mbui app: on 小屏 a place of the bottom bar switched | 1.88 | 2.51 | 10.72 | 29.5 | 37.21 | 26.39 | 49.52 | 94.34 | 174.97 |
 | [e3c683113](https://github.com/AFK-surf/still.fail/commit/e3c683113f21411a3b910eb58ef0e5856be543c7) Connect pages: each platform's own words (Feishu,  | 1.87 | 2.5 | 10.52 | 29.5 | 37.21 | 26.28 | 49.15 | 94.03 | 174.97 |
 | [9ca6804f9](https://github.com/AFK-surf/still.fail/commit/9ca6804f997c0a33011d9a63b722864f87b75ca0) mbui: a page's list's blocks come or gone by data  | 1.87 | 2.5 | 10.52 | 29.33 | 37.2 | 26.11 | 48.83 | 94.16 | 178.95 |
-| [031d90e13](https://github.com/AFK-surf/still.fail/commit/031d90e133a9105c05eb13487969fec00e8eff37) app tests: what floats over the old chat page's li | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 94.24 | 174.48 |
