@@ -62,7 +62,6 @@ export class TestTime implements HostTime {
       left -= d;
       await flush();
     }
-    await flush();
   }
 }
 
