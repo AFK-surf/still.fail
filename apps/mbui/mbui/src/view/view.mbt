@@ -9712,6 +9712,17 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   self.pull()
   if self.last_w >= 0.0 {
     self.brought(at)
+    // (what that layout told in turn (a page's list's fill telling its blocks' heights to what places them), in the
+    // change's batch: pulled and laid out again here, as a frame's passes lay out what its layout tells (its bindings
+    // run as told there, told_passes_most of them one inside another); else a press found things where they stood
+    // before it told: a block grown 154 since the frame, its slot as tall as counted then, the rows under it that much
+    // higher than drawn, and the row four under the one pressed taken for it, 2026-11-12)
+    let mut passes = 0
+    while self.pulls_marked.length() > 0 && passes < told_passes_most {
+      passes = passes + 1
+      self.pull()
+      self.brought(at)
+    }
   }
 }
 

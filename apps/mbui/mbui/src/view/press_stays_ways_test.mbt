@@ -1,11 +1,22 @@
 // What is pressed in a page's list stays where it was (press_stays.mbt) as what the press opens or shuts round it makes
 // its way, over it or under it: what is over it read as tall as its way has it at each moment, not measured whole (as
 // it was till 2026-11-12: the button went down with what opened over it). Looked at at moments it declares (rc_walk,
-// list_rows_come_test's), the press told at its moment, in one jump and at 60, 120, 24 and 7 a second.
+// list_rows_come_test's), the press told at its moment, in one jump and at 60, 120, 24 and 7 a second. A press while the
+// list holds a block so (its scroll put each layout) finds what it reaches where it is drawn (Tree::bring_to: what the
+// event's layout told laid out in it too; a second press of the button reached the row four under it, 2026-11-12).
 
 ///|
 /// How tall what opens over each row's button.
 let ps_ways_open : Double = 300.0
+
+///|
+/// How tall what opens over the button in the scenes of a way under way at a press: so tall that it grows past a row's
+/// height between two frames, and turned back half way its way lasts past a Move's longest.
+let ps_long_open : Double = 3000.0
+
+///|
+/// How long after the press opening it the second press comes, shutting it on its way.
+let ps_long_again_ms : Double = 100.0
 
 ///|
 /// How long after the press it is looked at, past the end of any way it set off.
@@ -80,5 +91,83 @@ test "a page's list, a row's button pressed opening 300 over it or under it: wha
       assert_true(got.iter().all(fn(y) { y == was }), msg="over \{over} at \{rate} a second: \{was} \{Repr(got)}")
       assert_eq(got, by_rate[0].1, msg="over \{over} at \{rate} a second")
     }
+  }
+}
+
+///|
+test "a page's list, a row's button pressed again as what it opened over it is on its way: that button reached, what was pressed stays where it was at every moment till the way turned back ends, past a Move's longest, the same at every rate" {
+  let second = rc_at + ps_long_again_ms
+  let looks = []
+  let mut at = rc_at
+  while at <= second + ps_ways_look_ms {
+    looks.push(at)
+    at = at + rc_look_ms
+  }
+  let by_rate = rc_rates.map(fn(rate) {
+    let (tree, _) = ps_ways_list(ps_long_open, true)
+    let was = rc_y(tree, "行3")
+    // (opened at rc_at, shut on its way at `second`: its way turned back; pressed at its middle as drawn)
+    let press = fn() {
+      match tree.drawn().filter(fn(d) { d.words == "行3" }) {
+        [d, ..] => tree.press(d.x + d.w / 2.0, d.y + d.h / 2.0) |> ignore
+        _ => ()
+      }
+    }
+    let got = rc_walk(tree, [(rc_at, press), (second, press)], looks, rate, fn() {
+      (rc_y(tree, "行3"), rc_y(tree, "行7"))
+    })
+    (was, got)
+  })
+  for i, rate in rc_rates {
+    let (was, got) = by_rate[i]
+    assert_true(
+      got.iter().all(fn(y) { (y.0 - was).abs() < 1.0e-6 && (y.1 - was - 160.0).abs() < 1.0e-6 }),
+      msg="at \{rate} a second: \{was} \{Repr(got)}",
+    )
+    assert_eq(got, by_rate[0].1, msg="at \{rate} a second")
+  }
+}
+
+///|
+test "a page's list holding a pressed block as what it opened over it grows: a press at the drawn middle of each row in sight, between frames at three moments of the way, reaches that row, the same at every rate" {
+  // (looked at every rc_look_ms, a frame each; a press asked 8 ms after three of them, between it and the next)
+  let moments = [rc_at + 20.0, rc_at + 60.0, rc_at + 150.0]
+  let looks = []
+  let mut at = rc_at
+  while at <= rc_at + 200.0 {
+    looks.push(at)
+    at = at + rc_look_ms
+  }
+  let by_rate = rc_rates.map(fn(rate) {
+    let (tree, buttons) = ps_ways_list(ps_long_open, true)
+    let reached = []
+    let asks = moments.map(fn(m) {
+      (m + 8.0, fn() {
+        // (where each is drawn as the last frame drew it, then what a press there finds, the tree brought to the
+        // press's moment as Tree::press brings it)
+        let middles = Array::makei(5, fn(i) {
+          match tree.drawn().filter(fn(d) { d.words == "行\{i + 3}" }) {
+            [d, ..] => Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
+            _ => None
+          }
+        })
+        tree.bring_to(m + 8.0)
+        for i, mid in middles {
+          let k = i + 3
+          match mid {
+            Some((x, y)) => reached.push((k, tree.target_at(x, y) is Pressed(id) && id == buttons[k].id()))
+            None => reached.push((k, false))
+          }
+        }
+      })
+    })
+    let events = [(rc_at, fn() { ps_ways_press(tree, buttons, 3) })]
+    events.append(asks)
+    rc_walk(tree, events, looks, rate, fn() { 0 }) |> ignore
+    reached
+  })
+  for i, rate in rc_rates {
+    assert_eq(by_rate[i].length(), 15, msg="at \{rate} a second")
+    assert_true(by_rate[i].iter().all(fn(r) { r.1 }), msg="at \{rate} a second: \{Repr(by_rate[i])}")
   }
 }
