@@ -7,7 +7,9 @@
 // - a message for the running turn waits for the next; its model is session/set_model;
 // - the station keeps the transcript (acp.ts KeptTranscript), with each turn's usage: the prompt's answer says it.
 import { existsSync, mkdirSync } from "node:fs";
+import { lstat, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { platform } from "../platform/index.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { AcpDriver, AcpSession, KeptTranscript, type AcpStart } from "./acp.ts";
 import type { Events } from "./own-process.ts";
@@ -25,12 +27,63 @@ export const geminiDir = (home: string) => join(agyHome(home), ".gemini");
 /// Where its sign-in to a Google account lands in that home (its TUI's, `agy` with the profile's agy/ as its HOME:
 /// accounts/login.ts), which the ACP server reads from `--gemini-dir`: a file, `id_token_email` whose account it is.
 export const agyToken = (home: string) => join(geminiDir(home), "antigravity-cli", "antigravity-oauth-token");
+/// Where the station notes the Google account's email when `agyToken` is written or checked, so the account's name and
+/// sign-in marker survive macOS `agy` migrating `agyToken` into the login keychain and unlinking the file.
+export const agyAccountFile = (home: string) => join(agyHome(home), "account.json");
+/// Where `agy acp` keeps its conversation databases under `--gemini-dir` once a signed-in session opens.
+export const agyConversations = (home: string) => join(geminiDir(home), "antigravity-cli", "conversations");
 export function agyEmailIn(text: string): string | null {
   try {
     const email = JSON.parse(text)?.id_token_email;
     return typeof email === "string" && email !== "" ? email : null;
   } catch {
     return null;
+  }
+}
+
+export async function noteAgyEmail(home: string, text: string): Promise<string | null> {
+  let parsed: Json;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    await rm(agyAccountFile(home), { force: true }).catch(() => {});
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    await rm(agyAccountFile(home), { force: true }).catch(() => {});
+    return null;
+  }
+  const raw = parsed.id_token_email;
+  const email = typeof raw === "string" && raw !== "" ? raw : null;
+  try {
+    await writeFile(agyAccountFile(home), `${JSON.stringify(email !== null ? { email } : {})}\n`);
+  } catch {}
+  return email;
+}
+
+export async function agyNotedEmail(home: string): Promise<string | null> {
+  try {
+    const email = JSON.parse(await readFile(agyAccountFile(home), "utf8"))?.email;
+    return typeof email === "string" && email !== "" ? email : null;
+  } catch {
+    return null;
+  }
+}
+
+/// On macOS (`platform.hasKeychain`), `agy acp` running with the user's HOME migrates `agyToken(home)` into the login
+/// keychain and unlinks the file. A profile whose sign-in was noted (`agyAccountFile`) or that already opened an ACP
+/// conversation (`agyConversations`) signed in before that migration; an unsigned profile (even with `agy/sessions`
+/// linked by `linkTranscripts`) has neither.
+export async function agyKeychainSignedIn(home: string): Promise<boolean> {
+  if (!platform.hasKeychain) return false;
+  try {
+    await lstat(agyAccountFile(home));
+    return true;
+  } catch {}
+  try {
+    return (await readdir(agyConversations(home))).length > 0;
+  } catch {
+    return false;
   }
 }
 /// How many bytes of the station's tools a session's model is declared (tools/mcp.ts `fitted`). `agy` 1.5.6 in ACP
@@ -48,7 +101,7 @@ const SESSION_ID = /^[a-zA-Z0-9_-]+$/;
 
 /// What failed a turn, from what it said of it.
 export const classifyFailure = (text: string): FailureReason =>
-  failureOf(text, { auth: ["authentication required", "not logged into antigravity", "authentication expired", "couldn't sign in"], limit: ["resource_exhausted", "quota"] });
+  failureOf(text, { auth: ["authentication required", "not logged into antigravity", "authentication expired", "couldn't sign in", "invalid_grant", "unauthenticated"], limit: ["resource_exhausted", "quota"] });
 
 /// The process's arguments: the profile's files, no approvals, no telemetry.
 export const agyArgs = (home: string) => ["acp", "--gemini-dir", geminiDir(home), "--dangerously-skip-permissions", "--disable-telemetry"];

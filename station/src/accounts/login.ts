@@ -26,6 +26,7 @@
 import type { Clock } from "effect";
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileCredentials } from "../agents/no-keychain.ts";
 import { CONSOLE, type ConsoleLogin, type Device, type DeviceAnswer, deviceToken, startDevice, type Token, whoIs, writeConsole } from "./console.ts";
@@ -33,7 +34,7 @@ import { KIMI_AUTH, kimiDeviceToken, newDeviceId, readKimi, startKimiDevice, wri
 import { CURSOR, type CursorUrls, cursorHandshake, mintCursorKey, pollCursor, writeCursor } from "./cursor.ts";
 import { cleanEnv } from "../agents/runtime.ts";
 import { devinData } from "../agents/devin.ts";
-import { agyHome, agyToken } from "../agents/agy.ts";
+import { agyHome, agyToken, noteAgyEmail } from "../agents/agy.ts";
 import type { Runtime } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -468,7 +469,13 @@ export class LoginManager {
     const until = this.background.now() + AGY_WAIT_MS;
     const look = () => {
       if (this.jobs.get(profile) !== running) return;
-      if (running.home !== undefined && writtenSince(agyToken(running.home), since)) return this.finish(profile, "done", null);
+      if (running.home !== undefined && writtenSince(agyToken(running.home), since)) {
+        const home = running.home;
+        void readFile(agyToken(home), "utf8").then((text) => noteAgyEmail(home, text), () => null).finally(() => {
+          if (this.jobs.get(profile) === running) this.finish(profile, "done", null);
+        });
+        return;
+      }
       if (this.background.now() > until) return this.finish(profile, "failed", tr(running.lang, "station.login.agyCodeRefused"));
       running.stop = this.background.after(AGY_POLL_MS, look);
     };

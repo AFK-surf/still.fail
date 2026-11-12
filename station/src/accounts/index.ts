@@ -17,7 +17,7 @@
 // - a Kimi Code profile signed in to Kimi: its token (minutes) renewed with half its life left, looked at every minute
 //   (kimi.ts).
 import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
-import { agyEmailIn, agyToken } from "../agents/agy.ts";
+import { agyAccountFile, agyEmailIn, agyToken, classifyFailure as agyClassifyFailure } from "../agents/agy.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { createHash, randomBytes } from "node:crypto";
@@ -1092,8 +1092,9 @@ export class Accounts {
         check.detail = tr(lang, "station.profile.hermesModelsFailed", { error: (e as Error).message });
       }
     }
-    // (One signed out of its Google account is said so by its check: no session asked.)
-    if (profile.runtime === "agy" && check.state !== "login" && this.deps.agy?.()) {
+    // (One signed out of its Google account is said so by its check: no session asked; a subscription whose keychain
+    // sign-in was revoked or removed is found signed out here, while an already-failed key check keeps its refusal.)
+    if (profile.runtime === "agy" && (check.state === "ok" || check.state === "unknown") && this.deps.agy?.()) {
       try {
         check.models = await this.deps.agy()!.models(profile);
         check.state = "ok";
@@ -1101,8 +1102,13 @@ export class Accounts {
       } catch (e) {
         const error = (e as Error).message;
         check.models = null;
-        check.state = "failed";
-        check.detail = tr(lang, "station.profile.agyFailed", { error });
+        if (kind === "subscription" && agyClassifyFailure(error) === "auth") {
+          check.state = "login";
+          check.detail = tr(lang, "station.profile.signedOut");
+        } else {
+          check.state = "failed";
+          check.detail = tr(lang, "station.profile.agyFailed", { error });
+        }
       }
     }
     check.decision = await this.discoverFn(profile, check);
@@ -1758,7 +1764,7 @@ function accountFiles(runtime: Runtime, home: string): AccountFile[] {
   if (runtime === "grok") return [{ path: grokAuthFile(home), email: grokEmailIn }];
   if (runtime === "cursor") return [{ path: cursorAuthFile(home), email: (text) => cursorIn(text)?.email ?? null }];
   if (runtime === "devin") return [{ path: devinAccountFile(home), email: devinNotedIn }];
-  if (runtime === "agy") return [{ path: agyToken(home), email: agyEmailIn }];
+  if (runtime === "agy") return [{ path: agyToken(home), email: agyEmailIn }, { path: agyAccountFile(home), email: devinNotedIn }];
   if (runtime === "codex") {
     const email = (text: string) => {
       const claims = codexClaimsIn(text);

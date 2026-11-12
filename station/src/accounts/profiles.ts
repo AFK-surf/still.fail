@@ -3,6 +3,7 @@
 // The providers' addresses can be pointed elsewhere (`Urls`): tests give fake servers.
 import { execFile } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Env } from "../agents/machine-logins.ts";
@@ -17,7 +18,7 @@ import { claudeOAuthToken, claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE, RenewRefused } from "./console.ts";
 import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
 import { devinCatalog, devinData } from "../agents/devin.ts";
-import { agyEmailIn, agyHome, agyToken } from "../agents/agy.ts";
+import { agyHome, agyKeychainSignedIn, agyNotedEmail, agyToken, noteAgyEmail } from "../agents/agy.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { withShellCommand } from "../ops/shell-path.ts";
@@ -341,15 +342,17 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     return done;
   }
   if (o.kind === "subscription" && o.runtime === "agy") {
-    // Signed in when its sign-in's file is in the profile's (agents/agy.ts), whose account it says; whether it works,
-    // and its models, a session opened only to ask says (index.ts).
-    let text: string;
+    // Signed in when its sign-in's file is in the profile's (agents/agy.ts), or on macOS after `agy` migrated that file
+    // into the login keychain (`agyKeychainSignedIn`); whether it works, and its models, a session opened only to ask
+    // says (index.ts).
+    let email: string | null = null;
     try {
-      text = readFileSync(agyToken(o.home), "utf8");
+      email = await noteAgyEmail(o.home, await readFile(agyToken(o.home), "utf8"));
     } catch {
-      return check("login", t("station.profile.signedOut"), null);
+      if (!(await agyKeychainSignedIn(o.home))) return check("login", t("station.profile.signedOut"), null);
+      email = await agyNotedEmail(o.home);
     }
-    return check("ok", [t("station.profile.signedIn"), agyEmailIn(text) ?? ""].filter((s) => s !== "").join(t("station.list.comma")), null);
+    return check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), null);
   }
   return check("unknown", t("station.profile.envUnchecked"), null);
 }

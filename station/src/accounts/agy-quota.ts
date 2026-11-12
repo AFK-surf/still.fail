@@ -5,8 +5,7 @@
 import { spawn } from "node:child_process";
 import { lstat, mkdir } from "node:fs/promises";
 import { devNull } from "node:os";
-import { join } from "node:path";
-import { SESSIONS, agyHome, agyToken, geminiDir } from "../agents/agy.ts";
+import { agyHome, agyKeychainSignedIn, agyToken, geminiDir } from "../agents/agy.ts";
 import { type Env, platform } from "../platform/index.ts";
 import { type Lang, Said, stationLang, tr } from "../ops/i18n.ts";
 import { withShellCommand } from "../ops/shell-path.ts";
@@ -196,10 +195,10 @@ async function pathExists(path: string): Promise<boolean> {
 
 export async function agyQuota(home: string, sourceEnv: Env, urls: Urls, lang: Lang = stationLang(), command = "agy"): Promise<ProfileQuota> {
   const hasFile = await pathExists(agyToken(home));
-  const hasKeychainSession = !hasFile && platform.hasKeychain && (await pathExists(join(agyHome(home), SESSIONS)));
-  // Before sign-in (neither a profile token file nor an initialized session directory on a keychain platform), return
-  // signed out immediately without spawning `agy` or reading the machine keychain for an unsigned profile.
-  if (!hasFile && !hasKeychainSession) {
+  const hasKeychainSignIn = !hasFile && (await agyKeychainSignedIn(home));
+  // Before sign-in (neither a profile token file nor a keychain-migrated sign-in), return signed out immediately
+  // without spawning `agy` or reading the machine keychain for an unsigned profile.
+  if (!hasFile && !hasKeychainSignIn) {
     throw new Said(tr(lang, "station.quota.signInExpired"));
   }
   const baseEnv: Record<string, string> = {};
