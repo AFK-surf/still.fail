@@ -997,6 +997,46 @@ test "Duo screen panels toggle through native events, switch without stacking an
 }
 
 ///|
+test "an iPhone Duo turned upright with 控制中心 open from its column: the panel closes as the bars go across the top, not left where the item was; pressed there again it opens" {
+  // (the system says where an item is only as it is pressed: a panel opened at the column's item, kept on, would stay
+  // at the side the column was on)
+  new_run()
+  let src = fixture("screen-live")
+  open_fixture_over("screen-live", src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
+  t.set_nav_able(true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.move_most_ms)
+  let quick = @sf.t("web-pages.screen.quick")
+  let lit = fn() raise {
+    let mut on = false
+    for group in items(Some(@json.parse(t.nav_said())), "groups") {
+      for item in items(Some(group), "items") {
+        if text(Some(item), "id") == "over/screen-center" { on = flag(Some(item), "prominent") }
+      }
+    }
+    on
+  }
+  // on its side: 控制中心 pressed in the column
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-center\",\"at\":[879,480,48,48]}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(quick) is Some(_), msg="控制中心 open on its side")
+  assert_true(lit(), msg="控制中心 lit on its side")
+  // turned upright: the bars across the top, none down the side
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":59,\"bottom\":90,\"left\":0,\"right\":0}}")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_false(@sf.presenter_visible(), msg="the panel closed as the bars turned")
+  assert_false(t.find(quick) is Some(_), msg="控制中心's words gone as the bars turned")
+  assert_false(lit(), msg="控制中心 no longer lit")
+  // pressed again, at its item across the top
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-center\",\"at\":[700,8,44,44]}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(quick) is Some(_), msg="控制中心 open again upright")
+  assert_true(lit(), msg="控制中心 lit upright")
+}
+
+///|
 /// How long after it is opened the other chat's view is read (the test's core: past the most a page's coming is held
 /// for, the chat then drawn with nothing read a while).
 let other_chat_read_ms : Double = 3000.0
