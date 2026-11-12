@@ -762,7 +762,7 @@ export class StationTopics implements Owner {
   }
 
   /// The page before a chat's window into it (`chat.older`): from the device, else read now; `rows`, as many of its
-  /// messages as its page asks for more (it keeps a screen of them above what shows), else the page whole. Answers
+  /// messages as its page asks for more (read back, a screen of them kept above what shows), else the page whole. Answers
   /// whether still older ones exist.
   older(station: string, id: number, rows: number | null = null): Effect.Effect<boolean, CoreError> {
     return Effect.suspend(() => {

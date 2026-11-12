@@ -5,7 +5,7 @@ test "a chat scroll within its visible messages keeps their layout and reports t
   t.set_rows_on_pixels(true)
   t.scroll_to(8)
   t.frame()
-  // (row 8 at the top of a chat of few messages has less than a screen above it: the page before is asked and comes
+  // (row 8 at the top, the list moved off its end with less than a screen above it: the page before is asked and comes
   // in, and the way to the newest fades in, chat_list.mbt chat_short_above; let come to rest before the measured step)
   t.run_for(@ui.move_most_ms * 2.0)
   let start = t.time()

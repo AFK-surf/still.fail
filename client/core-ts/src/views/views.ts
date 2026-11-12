@@ -3367,8 +3367,8 @@ export class Views implements Owner {
   }
 
   /// A chat's page says how many of its messages it opens on at its end (`chat.window`): as many as fill its screen,
-  /// told before the chat is asked; it asks more before them as less than a screen of them is above what shows
-  /// (`chat.older` with its `rows`).
+  /// told before the chat is asked; it asks more before them once it is read back and less than a screen of them is
+  /// above what shows (`chat.older` with its `rows`).
   setChatWindow(station: string, thread: number | null, session: string | null, rows: number): void {
     this.#chatWindows.set(chatWindowKey(station, thread, session), rows);
   }

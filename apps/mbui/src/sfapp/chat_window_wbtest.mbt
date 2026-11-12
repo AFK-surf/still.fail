@@ -276,7 +276,7 @@ fn long_open(l : LongChat, s : (String, Double, Double, Int), mode? : String = "
 }
 
 ///|
-test "a chat's first ask on 小屏 and 大屏: how many of its last messages it opens on told before it, what fills the window at the least height a row has; more before it asked once laid out only where less than a screen is above" {
+test "a chat's first ask on 小屏 and 大屏: how many of its last messages it opens on told before it, what fills the window at the least height a row has; nothing more asked while it sits at its end" {
   let said : Array[String] = []
   for notices in [false, true] {
     for s in long_screens {
@@ -286,13 +286,13 @@ test "a chat's first ask on 小屏 and 大屏: how many of its last messages it 
       said.push("\{s.0}\{if notices { " notices" } else { "" }}: \{@ui.list_text(l.asked)} held \{long_count - l.first.get() + 1}, drawn \{drawn}, bones \{t.bones_drawn()}")
     }
   }
-  // (messages of a line or two: 30 more than fill the window and a screen above, nothing more asked; notices joined,
-  // 38 points each, fill it, and 20 more come once it is laid out, the screen above kept)
+  // (30 fill the window, notices joined at 38 points each too; at its end nothing more is asked, as it opens: the page
+  // before only once the reader moves it off its end)
   assert_eq(said, [
     "小屏: [window 30, sub] held 30, drawn 10, bones 0",
     "大屏: [window 30, sub] held 30, drawn 11, bones 0",
-    "小屏 notices: [window 30, sub, older 20] held 50, drawn 19, bones 0",
-    "大屏 notices: [window 30, sub, older 20] held 50, drawn 18, bones 0",
+    "小屏 notices: [window 30, sub] held 30, drawn 19, bones 0",
+    "大屏 notices: [window 30, sub] held 30, drawn 18, bones 0",
   ])
 }
 
@@ -448,12 +448,12 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
   assert_eq(fastests.map(fn(f) { f.round().to_int() }), [41, 30, 41, 30])
   // (20 more each time less than a screen was above what showed: 760 points at the least, while what shows moved 40.5
   // points a frame at the most under the finger and 30 a turn of the wheel, the core answering in a frame; read back
-  // through two of them, a chat of notices topped up once more as it opened)
+  // through two of them, from the first frame the list left its end: nothing asked while it sat there as it opened)
   assert_eq(said, [
     "小屏: [window 30, sub, older 20, older 20] held 70",
     "大屏: [window 30, sub, older 20, older 20] held 70",
     "小屏 notices: [window 30, sub, older 20, older 20, older 20] held 90",
-    "大屏 notices: [window 30, sub, older 20, older 20, older 20] held 90",
+    "大屏 notices: [window 30, sub, older 20, older 20] held 70",
   ])
 }
 
@@ -602,4 +602,72 @@ test "a chat read back a step at a time inside the rows it shows, a screen above
     said.push("\{name}: away \{l.first.get() < long_count - 30}, laid \{laid}, asked \{l.asked.length() - asked}, \{painted}")
   }
   assert_eq(said, ["小屏: away true, laid 0, asked 0, a list scrolled without changing its rows"])
+}
+
+///|
+test "a chat whose window grows taller than its first window fills, a station's notices joined: the page before asked while what it lays out does not fill the window, never a hole" {
+  // (30 notices, 38 points each, are 1140 points, told for an 800 high window: grown to 1600, the list shows less than
+  // it could and, at its end and shorter than its window, can not be moved off it; what does not fill the window asks
+  // too, by the same Bool, chat_list.mbt chat_short_above)
+  let l = long_chat(notices=true)
+  let t = long_open(l, long_screens[1])
+  let before = @ui.list_text(l.asked)
+  t.resize(1280.0, 1600.0)
+  long_run(t, l, long_opened_ms)
+  let drawn = long_places(t.words(), 1600.0)
+  let first = l.first.get()
+  assert_eq(
+    "\{before} then \{@ui.list_text(l.asked)} held \{long_count - first + 1}, its first drawn \{drawn.contains(first)}, bones \{t.bones_drawn()}",
+    "[window 30, sub] then [window 30, sub, older 20] held 50, its first drawn false, bones 0",
+  )
+}
+
+///|
+test "a chat gone to a message with less than a screen above it and more in the core: nothing asked while it stands there; the first step back (a finger on 小屏, the wheel on 大屏) asks the page before; read on by a finger, its top never shown with more before it" {
+  let said : Array[String] = []
+  let faults : Array[String] = []
+  for s in long_screens {
+    let (name, _, h, platform) = s
+    let l = long_chat()
+    let t = long_open(l, s)
+    let olders = fn() { l.asked.filter(fn(a) { a.has_prefix("older") }).length() }
+    // (the window's third message, two above it: less than a screen, 170 more in the core; gone to as a link to it
+    // does, from outside the frames)
+    let to = l.first.get() + 2
+    @sfbase.go_to(long_ref, to.to_double())
+    @ui.came_from_outside()
+    long_run(t, l, long_rest_ms)
+    // (standing where the go-to put it: nothing asked; the reader's first step back asks)
+    let standing = olders()
+    if platform == 2 {
+      t.drag(195.0, 300.0, 195.0, 340.0, steps=4)
+    } else {
+      t.wheel(800.0, 400.0, -30.0)
+    }
+    long_run(t, l, long_rest_ms)
+    let stepped = olders()
+    let look = fn(when : String) {
+      if l.first.get() > 1 && long_places(t.words(), h).contains(l.first.get()) {
+        faults.push("\{name} \{when}: its first message of \{long_count - l.first.get() + 1} drawn with more before it")
+      }
+    }
+    look("gone to")
+    // (read on by a finger, on 小屏; 大屏's reading back by the wheel is the test of the window's growths above)
+    for k in 0..<(if platform == 2 { 3 } else { 0 }) {
+      t.drag(195.0, 300.0, 195.0, 600.0, steps=20)
+      let rest = t.time()
+      while t.time() - rest < long_rest_ms - 1.0e-6 {
+        long_frame(t, l)
+        look("stroke \{k}")
+      }
+    }
+    said.push("\{name}: \{to} reached \{long_drawn(t, to, h) || l.first.get() < to}, the page before asked \{standing} while it stands, \{stepped} at the first step back, \{olders()} read back")
+  }
+  assert_eq(faults, [])
+  // (nothing asked from where the app put it; the reader's first step from there asks, and again each time less than a
+  // screen is above what shows: 小屏's first stroke of 40 points twice, the first page leaving less than a screen still)
+  assert_eq(said, [
+    "小屏: 173 reached true, the page before asked 0 while it stands, 2 at the first step back, 2 read back",
+    "大屏: 173 reached true, the page before asked 0 while it stands, 1 at the first step back, 1 read back",
+  ])
 }

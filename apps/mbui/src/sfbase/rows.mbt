@@ -83,9 +83,9 @@ pub let chat_row_least : Double = 38.0
 ///|
 /// A chat's first window in a window `tall` points high: as many of its last messages as fill it for sure, at the least
 /// height a row it counts has (chat_row_least), rounded up to ten (30 on 小屏's 390×844 and on a wide 1280×800): no
-/// more, the screen more above them kept as it is read (chat_grow_rows). 0 before it is laid out (the core opens on its
-/// untold page then, 50 entries). Where the chat opens at something unread or where it was left, the core's window
-/// about that wins over the count.
+/// more, a screen above what shows kept once the reader moves it off its end (chat_grow_rows). 0 before it is laid out
+/// (the core opens on its untold page then, 50 entries). Where the chat opens at something unread or where it was left,
+/// the core's window about that wins over the count.
 pub fn chat_first_window(tall : Double) -> Int {
   if tall <= 0.0 {
     0
@@ -95,10 +95,10 @@ pub fn chat_first_window(tall : Double) -> Int {
 }
 
 ///|
-/// How many of a chat's messages more its page asks for (`chat.older`'s `rows`) whenever less than a screen of it is
-/// laid out above what shows and the core has more (chat_list.mbt chat_short_above), at rest as while it is read back:
-/// at least 760 points at chat_row_least, what a fling at its fastest goes in the frames the core's answer takes, a
-/// frame on a Mac (chat_window_wbtest.mbt measures it).
+/// How many of a chat's messages more its page asks for (`chat.older`'s `rows`) once the reader has moved it off its
+/// end and less than a screen of it is laid out above what shows, or while what it lays out does not fill its window,
+/// the core having more (chat_list.mbt chat_short_above): at least 760 points at chat_row_least, what a fling at its
+/// fastest goes in the frames the core's answer takes, a frame on a Mac (chat_window_wbtest.mbt measures it).
 pub let chat_grow_rows : Int = 20
 
 ///|
