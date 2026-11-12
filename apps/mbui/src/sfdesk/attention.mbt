@@ -449,8 +449,11 @@ fn attention_item(
       "done" => (@sf.mark_blue, "web-main.chatMark.done")
       _ => (Data(@sf.theme().p.warn_ink), "web-main.attention.waitOne")
     }
-    let dot = c.box(style=att_dot.then(@ui.style(bg=ground)), fn() {  })
-    c.semantics(dot, Image, label=@sf.t(said))
+    c.box(style=att_mark, fn() {
+      let dot = c.box(style=att_dot.then(@ui.style(bg=ground)), fn() {  })
+      c.semantics(dot, Image, label=@sf.t(said))
+    })
+    |> ignore
     c.box(style=att_text, fn() {
       c.text(title, style=att_title) |> ignore
       if line != "" {
@@ -514,14 +517,19 @@ let att_empty : @ui.Style = @ui.css("w=Full p=S2_5")
 let att_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6)
 
 ///|
-/// A row (item): 6 by 10 in, its dot and words 8 apart, its corner the panel's inner (--panel-in); pointed at, on the
-/// pointer's ground.
+/// A row (item): 6 by 10 in, its dot's column and words 10 apart, its corner the panel's inner (--panel-in); pointed
+/// at, on the pointer's ground. Its words start where a long job's do above it (open_job_row), not 11 left of them.
 // kept across runs: a value (no field of it changes)
-let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2, align=ACenter, radius=@sf.panel_in)
+let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2_5, align=ACenter, radius=@sf.panel_in)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let att_item_on : @ui.Style = att_item.then(@ui.css("bg=Hover"))
+
+///|
+/// Its dot's column: the 16 a long job's dot and a workspace's mark stand in (open_job_mark), the dot in its middle.
+// kept across runs: a value (no field of it changes)
+let att_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
 
 ///|
 /// Its dot, 7 round, in the amber's ink (red gone wrong).

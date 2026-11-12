@@ -61,6 +61,37 @@ test "the hand grows no row of 待处理: a station offline and a decision to le
 }
 
 ///|
+/// 待处理 beside the rail's bell: the long jobs' names, the chats' titles and the station's trouble start on one line, their
+/// dots in one column (pengxiao, 2026-11-12: the chats' 11 left of the jobs' over them).
+test "待处理's rows, a long job's and a chat's, start their words on one line" {
+  let src : Ref[Source?] = Ref(None)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        let s = fixture_app("home-attention")
+        src.val = Some(s)
+        s
+      }
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, made()) },
+    tree=fn(root) { app_tree(made())(root) },
+    w=1280.0,
+    h=800.0,
+    env=[("MBUI_REDUCE_MOTION", "1")],
+  )
+  t.run_for(squeeze_opening)
+  t.frame()
+  let (job_x, _, _, _) = t.rect_of("Demo iPhone · iOS 27.2").unwrap()
+  let (chat_x, _, _, _) = t.rect_of("夜里的备份").unwrap()
+  let (trouble_x, _, _, _) = t.rect_of("Maple 离线").unwrap()
+  assert_eq(chat_x, job_x)
+  assert_eq(trouble_x, job_x)
+}
+
+///|
 /// Page `mode` in window `win`, pointed at by `hand`, as laid out once it has opened.
 fn hand_layout(mode : String, win : (String, Double, Double, Int), hand : @ui.Pointing) -> String {
   let (_, w, h, platform) = win
