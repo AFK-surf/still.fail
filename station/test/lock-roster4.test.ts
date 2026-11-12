@@ -34,8 +34,11 @@ const VON = V3[1];
 // ── everything asked at once ────────────────────────────────────────────────────────────────────────────────────────
 
 type Any = Record<string, any>;
-const ORDERS = ["prev", "whole", "all", "off"] as const;
+const ORDERS = ["whole", "prev", "all", "off"] as const;
 const m1Rows = FAMILIES.map((family) => ORDERS.map((order) => ask<M1Out>({ t: "m1", family, runs: RUNS, steps: STEPS, order })));
+/// The default with no one told they were taken out (`tellOut` off), to compare.
+const m1Untold = FAMILIES.map((family) => ask<M1Out>({ t: "m1", family, runs: RUNS, steps: STEPS, order: "whole", more: { tellOut: false } }));
+const newcomerRow = ask<Any>({ t: "newcomer" });
 const lostRows = ORDERS.map((order) => ask<Any>({ t: "lost", order }));
 const skipRows = ORDERS.map((order) => ask<Record<string, string>>({ t: "skip", order }));
 const m2Row = ask<Any>({ t: "m2", n: CASES });
@@ -49,9 +52,9 @@ const R3_JOBS: [string, Job3][] = [
   ...([["member", "none"], ["member", "admit"], ["member", "cancel new"], ["admin", "none"], ["admin", "cancel new"], ["admin", "cancel adopt"]] as [ "member" | "admin", A4Y][]).map(([role, y]): [string, Job3] => [`a4 ${role} ${y}`, { t: "a4", v: VON, role, y, adopt: y === "cancel adopt", n: CASES }]),
   ...([true, false] as const).map((reach): [string, Job3] => [`b2 ${reach ? "reached" : "unreached"}`, { t: "b2", v: VON, reach, n: CASES }]),
 ];
-const r3Rows = R3_JOBS.map(([, job]) => [ask<Any>({ t: "r3", job, round: 3 }), ask<Any>({ t: "r3", job, round: 4 })] as const);
+const r3Rows = R3_JOBS.map(([, job]) => [ask<Any>({ t: "r3", job, round: 3 }), ask<Any>({ t: "r3", job, round: 4 }), ask<Any>({ t: "r3", job, round: 4, more: { cancels: "h" } })] as const);
 const m5Clocks = [false, true].flatMap((webAt) => [0, 300, 3600].map((skew) => ask<M5Clock>({ t: "m5clock", skew, webAt })));
-const revokedRows = ([["web", false], ["off", false], ["off", true]] as const).flatMap(([kind, offFinal]) => (["same", "any"] as const).map((parent) => ({ kind, parent, offFinal, out: ask<Any>({ t: "revoked", kind, parent, n: CASES, offFinal }) })));
+const revokedRows = ([["web", false, "entry"], ["off", false, "entry"], ["off", false, "h"], ["off", true, "entry"]] as const).flatMap(([kind, offFinal, cancels]) => (["same", "any"] as const).map((parent) => ({ kind, parent, offFinal, cancels, out: ask<Any>({ t: "revoked", kind, parent, n: CASES, offFinal, more: { cancels } }) })));
 const m6Rows = [false, true].map((offFinal) => ask<Any>({ t: "m6", n: CASES, offFinal }));
 const M7_ROWS: { label: string; o: Omit<Extract<Job4, { t: "m7" }>, "t" | "n"> }[] = [
   { label: "the handover", o: {} },
@@ -76,6 +79,8 @@ test("M1: agreement with bodies delayed, reordered, and one held back for good",
       print(`with nothing held back: (keeper, statement) pairs ready ${r.readyPairs}, in force only later ${r.delayed} (steps late: median ${d[Math.floor(d.length / 2)] ?? 0}, p90 ${d[Math.floor(0.9 * d.length)] ?? 0}, max ${d.at(-1) ?? 0}); ready and not in force at the end ${r.neverIn}`);
       print(`gating at the end: bodies a keeper the workspace has lacks while another keeper keeps them ${r.stuckHeld}, that no keeper keeps ${r.stuckNone}`);
       if (r.stuckLog) toldLines(`M1 ${family} order=${order}, a body not given`, r.stuckLog);
+      print(`taken out (given the workspace's bodies once, no longer listed by its stations): ${r.out}, whose own list says so ${r.outKnow}`);
+      if (r.outLog) for (const l of r.outLog) print(`  ${l}`);
       print(`bodies not taken from messages: ${said(r.refused)}; keepers that let go: ${r.letGo}`);
       if (r.smallest) for (const l of r.smallest) print(`  ${l}`);
       if (r.notLevel) for (const l of r.notLevel) print(`  not level once given: ${l}`);
@@ -83,6 +88,17 @@ test("M1: agreement with bodies delayed, reordered, and one held back for good",
       print(`(the model's check: ${r.oracle} keepers lacking nothing, the state from every body made the same at all)`);
     }
   }
+});
+
+test("M1: taken out and never told (tellOut off), and a newcomer whose givers are away", async () => {
+  for (const [i, family] of FAMILIES.entries()) {
+    const r = await m1Untold[i];
+    print(`tellOut=off, ${family}: taken out ${r.out}, whose own list says so ${r.outKnow}; every keeper the workspace has but the held-back one in one state ${pct(r.agree, r.runs)}`);
+    if (r.outLog) for (const l of r.outLog) print(`  ${l}`);
+  }
+  const n = await newcomerRow;
+  print("a newcomer whose only givers of an old body are away (bob made carol an admin; only s0 and bob's devices have it):");
+  for (const l of [...n.away, "s0 back:", ...n.back]) print(`  ${l}`);
 });
 
 test("M1: a body lost with its device", async () => {
@@ -111,7 +127,8 @@ test("M3: two workspaces, one person in both", async () => {
     print(`(a) bodies of W1 kept at W2's stations: ${r.w1Bodies}; what they store naming W1: ${said(r.hits)}`);
     print(`    what they can tell: ${r.otherCommits} commitments of another tag in alice's log (at most ${r.otherTags} tag(s) a station), spread over ${r.spanSecs.length ? `${Math.min(...r.spanSecs)}-${Math.max(...r.spanSecs)}` : "-"} s`);
     print(`(b) W1's state as without W2's statements: ${pct(r.sameW1, r.runs)}; W2's as without W1's: ${pct(r.sameW2, r.runs)}; one state at W1's stations ${pct(r.agreeW1, r.runs)}, at W2's ${pct(r.agreeW2, r.runs)}`);
-    if (r.firstDiff) for (const l of r.firstDiff) print(`  ${l}`);
+    print(`    worlds where alice's log forked at s0 in either run: ${r.forkWorlds}`);
+    for (const d of r.w1Diffs.slice(0, 3)) for (const l of d) print(`  ${l}`);
   }
 });
 
@@ -126,9 +143,9 @@ test("M4: round three's measures, with bodies in the way", async () => {
     return `after: ${(o.after as [string, number][]).map(([k, n]) => `${n}× ${k}`).join(" | ")}`;
   };
   for (const [i, [label]] of R3_JOBS.entries()) {
-    const [a, b] = await Promise.all(r3Rows[i]);
-    const x = pick(label, a), y = pick(label, b);
-    print(`${label}: ${x === y ? `the same: ${x}` : `r3 ${x}\n${" ".repeat(label.length)}  r4 ${y}`}`);
+    const [a, b, c] = await Promise.all(r3Rows[i]);
+    const x = pick(label, a), y = pick(label, b), z = pick(label, c);
+    print(`${label}: ${x === y && y === z ? `the same: ${x}` : `r3 ${x}\n${" ".repeat(label.length)}  r4 ${y}\n${" ".repeat(label.length)}  r4 cancels=h ${z}`}`);
     if (label === "fold") assert.deepEqual(b.differ, [], "the model's rules and personFold differ");
     if (label.startsWith("drawn")) assert.equal(b.forged, false, "a keeper stored a forged entry");
   }
@@ -158,8 +175,9 @@ test("M6: on and off", async () => {
   }
   for (const row of revokedRows.filter((x) => x.kind === "off")) {
     const r = await row.out;
-    print(`off=${row.offFinal ? "final" : "a state"}: a revoked key of alice's signs off after ${row.parent === "same" ? "the removal's parent" : "a parent of its drawing"}: off at the end at some station ${pct(r.anyEnd, r.n)}, at all ${pct(r.allEnd, r.n)}; keepers differ ${pct(r.differ, r.n)}; stations let go ${r.letGo}; her steps to have it on ${r.steps.join(",")}; on again with the list as before ${pct(r.recovered, r.n)}`);
-    if (r.smallest) toldLines(`M6 revoked off ${row.parent} off=${row.offFinal ? "final" : "a state"}`, r.smallest);
+    print(`off=${row.offFinal ? "final" : "a state"} cancels=${row.cancels}: a revoked key of alice's signs off after ${row.parent === "same" ? "the removal's parent" : "a parent of its drawing"}: off at the end at some station ${pct(r.anyEnd, r.n)}, at all ${pct(r.allEnd, r.n)}; keepers differ ${pct(r.differ, r.n)}; stations let go ${r.letGo}; her steps to have it on ${r.steps.join(",")}; on again with the list as before ${pct(r.recovered, r.n)}`);
+    print(`  not as before: ${said(r.whyNot)}`);
+    if (r.notLog && row.parent === "any" && !row.offFinal) toldLines(`M6 revoked off any cancels=${row.cancels}, the smallest world not as before`, r.notLog);
   }
 });
 
