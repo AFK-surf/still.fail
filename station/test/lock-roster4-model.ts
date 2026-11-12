@@ -731,14 +731,15 @@ export class World4 extends World3 {
   }
   /// The keepers the workspace has, as any of its stations' state says them (its stations, the devices on its members'
   /// bound logs): those given its bodies, and so those whose states are compared.
-  comparable(): Holder[] {
-    const keys = new Set<string>();
-    for (const s of this.stations) {
-      if (!this.pinsOf(s).get(WS)) continue;
-      const r = this.ros(s), self = this.keyOfHolder(s);
-      // (a station's own list naming itself does not count: one taken out is told nothing more, and keeps what it had)
-      for (const k of [...r.stations, ...r.letIn.keys()]) if (k !== self) keys.add(k);
-    }
+  comparable(ws = WS): Holder[] {
+    // the stations another station lists (one taken out is told nothing more and keeps what it had: its own list,
+    // naming itself and whom it had, does not count), then everyone those list
+    const lists = new Map(this.stations.filter((s) => this.pinsOf(s).get(ws)).map((s) => {
+      const r = this.rosterOf(s, ws);
+      return [s, new Set([...r.stations, ...r.letIn.keys()])] as const;
+    }));
+    const listed = [...lists.keys()].filter((s) => [...lists].some(([t, l]) => t !== s && l.has(this.keyOfHolder(s))));
+    const keys = new Set(listed.flatMap((s) => [...lists.get(s)!]));
     return this.holders.filter((h) => keys.has(this.keyOfHolder(h)));
   }
   stands(h: Holder, x: string): boolean {
@@ -911,10 +912,10 @@ export type M1Out = {
   /// The model's check: where nothing is lacking, the state from the kept bodies is the state from every body made.
   oracle: number; oracleBad: number;
   refused: Record<string, number>; letGo: number;
-  smallest: string[] | null;
+  smallest: string[] | null; notLevel: string[] | null;
 };
 export function m1(family: Family, runs: number, steps: number, more: W4Options = {}): M1Out {
-  const out: M1Out = { runs, rested: 0, agree: 0, same: 0, sameChecks: 0, heldOnChain: 0, differ: 0, letInDiff: 0, listed: 0, heldUp: 0, level: 0, readyPairs: 0, delayed: 0, delaySteps: [], neverIn: 0, stuckHeld: 0, stuckNone: 0, stuckLog: null, oracle: 0, oracleBad: 0, refused: {}, letGo: 0, smallest: null };
+  const out: M1Out = { runs, rested: 0, agree: 0, same: 0, sameChecks: 0, heldOnChain: 0, differ: 0, letInDiff: 0, listed: 0, heldUp: 0, level: 0, readyPairs: 0, delayed: 0, delaySteps: [], neverIn: 0, stuckHeld: 0, stuckNone: 0, stuckLog: null, oracle: 0, oracleBad: 0, refused: {}, letGo: 0, smallest: null, notLevel: null };
   for (let seed = 1; seed <= runs; seed++) {
     // the same world with nothing held back: what the order rule costs, what gating leaves out
     const free = new World4(seed, VON, family, { ...more, track: true });
@@ -959,7 +960,8 @@ export function m1(family: Family, runs: number, steps: number, more: W4Options 
     const hb = w.x.order[w.x.base + nth - 1];
     if (hb === undefined) continue;
     const held = [...K.logs.values()].flatMap((k) => k.active.filter((y) => k.store.get(y)!.kind === "ws" && k.store.get(y)!.body.h === hb));
-    if (held.length === 0) continue;
+    // (only where it is still one of the workspace's stations: one taken out is given nothing more)
+    if (held.length === 0 || !w.comparable().includes(K)) continue;
     out.heldOnChain++;
     const other = w.stations.find((h) => h !== K)!;
     const stateK = w.stateSaid(K), stateO = w.stateSaid(other);
@@ -973,6 +975,7 @@ export function m1(family: Family, runs: number, steps: number, more: W4Options 
     w.x.withheld.clear();
     w.giveBodies(K, [w.x.bodies.get(hb)!]);
     if (w.stateSaid(K) === stateO) out.level++;
+    else out.notLevel ??= [`seed ${seed} (${family}): ${K.name} given the body of ${w.said(w.entry(held[0]))}: ${d4Diff(w.d4(K), w.d4(other)).join(", ")}; it lacks ${w.lacking(K).map((y) => w.said(w.entry(y))).join("; ") || "nothing"}`, `${K.name}: ${w.stateSaid(K)}`, `${other.name}: ${stateO}`];
     if (keysK !== keysO && out.smallest === null) out.smallest = [`seed ${seed} (${family}): the body of ${w.said(w.entry(held[0]))} never given to ${K.name}`, `${K.name} lets in: ${keysK}`, `${other.name} lets in: ${keysO}`];
   }
   return out;
@@ -1122,7 +1125,6 @@ export function m3(family: Family, runs: number, steps: number): M3Out {
       ["its members' subs", ["bob", "dan", "carol", "xena"].map((s) => `"${s}"`)],
       ["its members' logs", ["bob", "dan", "carol", "xena"].map((s) => w.home.get(s)!)],
       ["its stations' keys", stationKeys3.map((k) => k.hex)],
-      ["its roles", ['"admin"']],
     ];
     for (const h of w2st) {
       const kept = [...w.keptOf(h).values()];
@@ -1136,7 +1138,7 @@ export function m3(family: Family, runs: number, steps: number): M3Out {
       if (others.length > 1) out.spanSecs.push(others.at(-1)!.at - others[0].at);
     }
     if (new Set(w.comparable().filter((h) => w1st.includes(h)).map((h) => w.stateSaid(h))).size === 1) out.agreeW1++;
-    if (new Set(w2st.map((h) => d4Said(w.d4(h, WS2)))).size === 1) out.agreeW2++;
+    if (new Set(w.comparable(WS2).filter((h) => w2st.includes(h)).map((h) => d4Said(w.d4(h, WS2)))).size === 1) out.agreeW2++;
     // (b)
     const noW2 = run(seed, { w2: false }), noW1 = run(seed, { w1: false });
     const a1 = w.stateSaid(w1st[0]), b1 = noW2.stateSaid(noW2.stations[0]);

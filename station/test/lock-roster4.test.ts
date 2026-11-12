@@ -78,6 +78,7 @@ test("M1: agreement with bodies delayed, reordered, and one held back for good",
       if (r.stuckLog) toldLines(`M1 ${family} order=${order}, a body not given`, r.stuckLog);
       print(`bodies not taken from messages: ${said(r.refused)}; keepers that let go: ${r.letGo}`);
       if (r.smallest) for (const l of r.smallest) print(`  ${l}`);
+      if (r.notLevel) for (const l of r.notLevel) print(`  not level once given: ${l}`);
       assert.equal(r.oracleBad, 0, "with nothing lacking, the kept bodies and every body made give different states");
       print(`(the model's check: ${r.oracle} keepers lacking nothing, the state from every body made the same at all)`);
     }
