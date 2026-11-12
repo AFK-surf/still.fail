@@ -2211,6 +2211,25 @@ test "old-list" {
 }
 
 ///|
+test "list-comes-off" {
+  // a page's list all of whose keys are there or gone at once (`comes=fn(_) { false }`, `goes=fn(_) { false }`, either
+  // or both): counted (a call once); one that answers by its key, one in a test, in the framework (src/host here) not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n  v.scrolls_window(s, keys, comes=fn(k) { k > 0 }, make) |> ignore\n  v.scrolls_window(\n    s,\n    keys,\n    comes=fn(_) { false },\n    goes=fn(_) { false },\n    make,\n  )\n  |> ignore\n  v.scrolls_window(s, keys, goes=fn(_) { false }, make) |> ignore\n}\n",
+      ),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n}\n"),
+      ("src/host/y.mbt", "fn y(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n}\n"),
+    ],
+    "list-comes-off",
+    3,
+  )
+  assert_eq(lines(fs), [2, 4, 12])
+}
+
+///|
 test "old-island" {
   // an old view hosted in a node (`@ui.old(v, build)`): counted (a call each); in a test, in the framework (src/host
   // here), another of ui's calls of a like name (old_views_here) not

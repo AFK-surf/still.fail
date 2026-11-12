@@ -276,6 +276,9 @@ fn chats_pane_node(
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },
+    // (its keys there and gone as they change: a debt of 方案 A, given their way list by list, shown to the owner: list-comes-off)
+    comes=fn(_) { false },
+    goes=fn(_) { false },
     // scrolled to within a screen of its foot while the core has more of its rows: its window a step more, the rows
     // added coming into the list it holds. A screen, not a screen and a half: its first window is what its room shows
     // and a screen more (sfbase's first_window), its foot a screen and a little below at rest, which a screen and a

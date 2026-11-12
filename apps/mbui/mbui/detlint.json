@@ -251,6 +251,7 @@
       "src/kit/toggle.mbt": 1,
       "src/motion/layer.mbt": 21
     },
+    "list-comes-off": {},
     "old-list": {
       "src/demo/main.mbt": 1,
       "src/kit/disclosure.mbt": 1
@@ -325,6 +326,7 @@
     "ui-current": {},
     "build-clock": {},
     "build-motion": {},
+    "list-comes-off": {},
     "old-list": {},
     "old-island": {},
     "old-panel": {},

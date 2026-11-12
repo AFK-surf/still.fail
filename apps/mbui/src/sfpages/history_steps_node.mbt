@@ -203,6 +203,9 @@ fn steps_list_node(
         // (followed at its newest; not once gone to an entry)
         follows=fn() { !steps_own.went.contains(lkey) },
         place~,
+        // (its keys there and gone as they change: a debt of 方案 A, given their way list by list, shown to the owner: list-comes-off)
+        comes=fn(_) { false },
+        goes=fn(_) { false },
         near_top=(1.0, wants_older, ask_older),
         fn(slot, k) {
           slot.pick(fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {

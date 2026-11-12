@@ -782,6 +782,9 @@ fn things_list_node(
     p.scrolls_window(
       scroll,
       fn() { table.get().0 },
+      // (its keys there and gone as they change: a debt of 方案 A, given their way list by list, shown to the owner: list-comes-off)
+      comes=fn(_) { false },
+      goes=fn(_) { false },
       fn(row, name) {
         match @signals.untracked(fn() { table.get().1.get(name) }) {
           Some(RowHead) => things_head_node(row, at, value, has, kind, chosen, side, room)

@@ -238,7 +238,8 @@ test "scrolls_window near_foot: a page more come in as it is asked (a source tha
 test "Scroll::tucks: put as the block is first laid out so its foot is at the top, its foot keeping the room to go there with fewer than it is tall" {
   let c = window_case(tucks=1)
   c.keys.set([0, 1])
-  c.tree.frame(390.0, 844.0) |> ignore
+  // (at rest, what went closed: as long as a Move takes at most on)
+  c.tree.frame(390.0, 844.0, now=@flex.move_most_ms) |> ignore
   // (two of 40 in 100: the second's foot 80 down, room kept under them to go there)
   assert_eq(c.scroll.at(c.tree), 80.0)
   assert_eq(c.scroll.most(), 80.0)
@@ -365,17 +366,19 @@ test "ListPlace::follow_from: its foot followed no further than the block's top;
   })
   tree.frame(390.0, 844.0) |> ignore
   place.follow_from(Some(10))
+  // (each change looked at once what it brought is at rest: as long as a Move takes at most on)
+  let rest = @flex.move_most_ms
   // (two come at its end: its foot at 380, 10's top at 400 under it: followed)
   keys.set(Array::makei(12, fn(i) { i }))
-  tree.frame(390.0, 844.0) |> ignore
+  tree.frame(390.0, 844.0, now=rest) |> ignore
   let followed = scroll.at(tree) == scroll.most()
   // (five more: its foot at 580, past 10's top; held with 10 at the top of what shows)
   keys.set(Array::makei(17, fn(i) { i }))
-  tree.frame(390.0, 844.0) |> ignore
+  tree.frame(390.0, 844.0, now=rest * 2.0) |> ignore
   let (_, y10, _, _) = live[10].rect()
   let held = scroll.at(tree)
   keys.set(Array::makei(18, fn(i) { i }))
-  tree.frame(390.0, 844.0) |> ignore
+  tree.frame(390.0, 844.0, now=rest * 3.0) |> ignore
   assert_eq((followed, y10, held, scroll.at(tree)), (true, 0.0, 400.0, 400.0))
 }
 
@@ -426,7 +429,8 @@ test "scrolls_window: scrolled up off its foot by the hand or put there, nothing
       put_in.push(100)
       put_in.append(Array::makei(12, fn(i) { i + 8 }))
       keys.set(put_in)
-      tree.frame(390.0, 844.0) |> ignore
+      // (looked at once it is at rest: as long as a Move takes at most on from the wheel's moment)
+      tree.frame(390.0, 844.0, now=10.0 + @flex.move_most_ms) |> ignore
       assert_eq(
         (was, (scroll.at(tree), y(7), y(100), y(8))),
         ((300.0, Some(-20.0), Some(20.0), Some(60.0)), (300.0, Some(-20.0), Some(20.0), Some(80.0))),
