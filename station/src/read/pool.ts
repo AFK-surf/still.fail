@@ -39,6 +39,7 @@ import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_L
 import { HttpError } from "./views.ts";
 import { MbReader, type ReaderLike, mbReaderBinary } from "./mb-reader.ts";
 import { wall } from "../ops/fibers.ts";
+import { roots as machineRoots } from "./machine.ts";
 import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
 /// How long a reader with nothing to do is kept.
@@ -111,7 +112,10 @@ function filling(op: string, args: unknown): boolean {
 const PAGES = new Set(["timeline", "machineSessions"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession"]);
+/// The reads of this machine's own Claude Code and Codex sessions: the MoonBit reader is told where they are kept, from
+/// this process's environment (read/machine.ts `roots`), as the worker reads it.
+const MACHINE = new Set(["machineSessions", "machineSession"]);
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -626,7 +630,8 @@ export class Readers {
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
-    const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
+    const given = line === this.moved && MACHINE.has(op) ? { ...(args as object), roots: machineRoots() } : args;
+    const ask: Ask = { id: this.next++, op, args: given, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
       let finished = false;
       const done = () => { finished = true; signal?.removeEventListener("abort", abort); };
