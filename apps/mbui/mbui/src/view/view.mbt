@@ -747,6 +747,14 @@ pub struct Tree {
   /// in them as the list's group is said (Tree::come_group_settle), and how long what a press there set off goes
   /// (press_stays.mbt), none of their subtrees walked
   priv list_inner : Map[Int, (Bool, Array[View])]
+  /// the places of the page's lists' feet (View::scrolls_window's `foot`, pinned on the list's own node, not under
+  /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
+  /// (Tree::come_group_join), where the list's blocks' insides join it
+  priv list_feet : Map[Int, Int]
+  /// the nodes whose ground is drawn by how tall another shows (View::shown_by), each with that one and how; and for
+  /// each so followed, those that follow it: placed again as it is laid out on its way
+  priv shown_bys : Map[Int, (NodeId, (Double) -> GroundShape)]
+  priv shown_followers : Map[Int, Array[Int]]
   /// what is due being done (Tree::advance)
   mut advancing : Bool
   /// where its logic stands: what is due by then done (Tree::advance), what is said from then on said as of then at the
@@ -1260,6 +1268,9 @@ pub fn Tree::new(
     swaps: [],
     come_groups: {},
     list_inner: {},
+    list_feet: {},
+    shown_bys: {},
+    shown_followers: {},
     told: 0,
     advancing: false,
     logic: start,
@@ -4854,6 +4865,11 @@ pub fn View::ground_drawn(self : View, d : Live[GroundShape], loc~ : SourceLoc) 
 /// How node `id` draws its own ground other than as it is laid out (View::ground_drawn; as laid out for one let go).
 pub fn Tree::ground_drawn_of(self : Tree, id : NodeId) -> GroundShape {
   if self.alive_id(id) {
+    // (by how tall the one it follows shows, given it where it is drawn: View::shown_by)
+    match self.shown_bys.get(id.at) {
+      Some((of, f)) if self.alive_id(of) => return f(self.nodes[of.at].flex.height)
+      _ => ()
+    }
     self.nodes[id.at].look.ground_drawn
   } else {
     ground_as_laid
@@ -8492,6 +8508,8 @@ fn View::comes(
   // (from nothing or to nothing, or turned back on such a way: what a box taking no room holding nothing opens or
   // closes its padding by (flex's come_fill, Style's gone_empty); not one in another's place, from as tall as that was)
   st.come_fill = to <= 0.0 || from <= 0.0 || (n.coming && st.come_fill) || fill
+  // (a structure's way a Move, whatever a height change declared said before: View::resizes says its own after)
+  st.come_spec = None
   st.come_from = from
   st.come_v = speed
   st.come_to = to
@@ -8550,6 +8568,14 @@ fn View::comes(
           m.look.clips = m.clips_said || m.coming
           tree.layout_marked_at(vat)
           tree.look_marked_at(vat)
+          // (what draws its ground by how tall this shows: drawn again by it, View::shown_by)
+          match tree.shown_followers.get(vat) {
+            Some(fs) =>
+              for f in fs {
+                tree.place_marked_at(f)
+              }
+            None => ()
+          }
         },
       )
       @signals.set_owner(owner) |> ignore
@@ -8592,7 +8618,7 @@ fn Tree::come_group_join(self : Tree, v : View, st : @flex.Style, at : Double) -
   let col = if st.come_across || self.list_inner.is_empty() {
     own
   } else {
-    let list = self.list_holding(own)
+    let list = self.list_of(own)
     match self.list_inner.get(list) {
       Some((joins, inner)) if list != own => {
         // (those let go or come to their way's end forgotten as one more is kept)
@@ -8622,6 +8648,25 @@ fn Tree::come_group_join(self : Tree, v : View, st : @flex.Style, at : Double) -
   if !views.iter().any(fn(w) { w.at == v.at }) {
     views.push(v)
   }
+}
+
+///|
+/// The held column of the page's list whose way what comes or goes down column `col` joins: the one whose foot it is in
+/// (Tree's list_feet), else the one whose blocks it is in (Tree::list_holding); `col` where none is (lists do not nest:
+/// one at most).
+fn Tree::list_of(self : Tree, col : Int) -> Int {
+  // (in a list's foot: that list's held column, the foot being pinned on its node, not under it)
+  if !self.list_feet.is_empty() {
+    let mut p = col
+    while p >= 0 {
+      match self.list_feet.get(p) {
+        Some(held) => return held
+        None => ()
+      }
+      p = self.nodes[p].parent
+    }
+  }
+  self.list_holding(col)
 }
 
 ///|

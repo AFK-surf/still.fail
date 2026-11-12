@@ -78,7 +78,10 @@ yet and you can add one, add it.
 - A page's list holds its head (`View::scrolls_window`'s `head`: over its keys, in what scrolls, never the anchor, where
   its keys start) and its foot (`foot`: pinned over the foot of what shows, as tall as it is laid out the room under
   the last block, nothing to the hand but what it holds that takes it). A page puts no row of room among its keys and
-  hands no number for either (the coordinator of the migration, 2026-11-12).
+  hands no number for either (the coordinator of the migration, 2026-11-12). A height change a handler declares
+  (`View::resizes`) makes its way as what comes does, in its column's one way (in a list's foot the list's, the room
+  under the last block following the foot as it shows), alone by its spec, nothing where it comes out as tall; one not
+  declared is at once; what draws a ground by how tall something shows is given that (`View::shown_by`).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.

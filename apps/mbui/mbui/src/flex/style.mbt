@@ -228,6 +228,10 @@ pub(all) struct Style {
   // whole at the width it comes to, the gap before it in that row its share; else down a column, its height. Said with
   // the way (the view's View::comes, by the direction of what lays it out).
   mut come_across : Bool
+  // Not CSS's: the way said for a height change declared (the view's View::resizes): how long (ms) and on what curve
+  // (the share of the way gone for the share of its time gone); none, a Move by how far. A way of its own alone: in a
+  // group with others (come_group set), the group's.
+  mut come_spec : (Double, (Double) -> Double)?
   // Not CSS's: holding nothing laid out (all it holds laid out nowhere, or none), it is laid out nowhere itself: no
   // room, padding or gap in what holds it (an old view's box `gone_empty`, CSS's :empty { display: none }). Its padding
   // top and foot as much as what it holds is there while what it holds comes from none or goes to none (come_fill: the
@@ -338,6 +342,7 @@ pub fn Style::new() -> Style {
     come_group: None,
     come_fill: false,
     come_across: false,
+    come_spec: None,
     gone_empty: false,
     structural: false,
     rows_grid: 0.0,

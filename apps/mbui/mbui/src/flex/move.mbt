@@ -627,9 +627,13 @@ fn come_height(s : Style, natural : Double) -> Double {
   s.come_goal = goal
   s.come_whole = natural
   if !known(s.come_ends) {
-    s.come_ends = s.come_at + (match come_style_turn(s, goal) {
-        Some(tr) => tr.t1 + tr.dur
-        None => come_way_ms(s.come_from, s.come_v, goal)
+    s.come_ends = s.come_at + (match (s.come_spec, s.come_group) {
+        (Some((ms, _)), g) if !(g is Some(g) && g.set) => ms
+        _ =>
+          match come_style_turn(s, goal) {
+            Some(tr) => tr.t1 + tr.dur
+            None => come_way_ms(s.come_from, s.come_v, goal)
+          }
       })
     s.come_plan = goal
   }
@@ -656,11 +660,27 @@ fn come_height(s : Style, natural : Double) -> Double {
 /// How tall item `s` is `t` ms into its way to `goal`, its way under way (come_height's, come_tall_at's): its group's
 /// share or its own way, never less than nothing.
 fn come_tall_on(s : Style, goal : Double, t : Double) -> Double {
-  let (tall, _) = match s.come_group {
-    Some(g) if g.set => come_group_way(g, s, goal, t)
+  let (tall, _) = match (s.come_group, s.come_spec) {
+    (Some(g), _) if g.set => come_group_way(g, s, goal, t)
+    (_, Some(spec)) => come_spec_way(s, spec, goal, t)
     _ => come_way_by(s.come_from, s.come_v, goal, plan_of(s, goal), t, turn?=come_style_turn(s, plan_of(s, goal)))
   }
   fmax(tall, 0.0)
+}
+
+///|
+/// How tall item `s` is `t` ms into its way to `goal` said by `spec` (Style's come_spec: how long, on what curve), and
+/// how fast its height goes then (points a ms, by the curve's slope there).
+fn come_spec_way(s : Style, spec : (Double, (Double) -> Double), goal : Double, t : Double) -> (Double, Double) {
+  let (ms, curve) = spec
+  if ms <= 0.0 || t >= ms {
+    return (goal, 0.0)
+  }
+  let x = fmax(t / ms, 0.0)
+  let dx = 1.0e-4
+  let p = curve(x)
+  let slope = (curve(fmin(x + dx, 1.0)) - p) / (fmin(x + dx, 1.0) - x) / ms
+  (s.come_from + (goal - s.come_from) * p, (goal - s.come_from) * slope)
 }
 
 ///|
@@ -678,9 +698,13 @@ pub fn come_tall_at(s : Style, natural : Double, at : Double) -> Double {
     s.come_ends
   } else {
     s.come_at +
-    (match come_style_turn(s, goal) {
-      Some(tr) => tr.t1 + tr.dur
-      None => come_way_ms(s.come_from, s.come_v, goal)
+    (match (s.come_spec, s.come_group) {
+      (Some((ms, _)), g) if !(g is Some(g) && g.set) => ms
+      _ =>
+        match come_style_turn(s, goal) {
+          Some(tr) => tr.t1 + tr.dur
+          None => come_way_ms(s.come_from, s.come_v, goal)
+        }
     })
   }
   let dur = ends - s.come_at
@@ -704,8 +728,9 @@ pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
   if dur <= 0.0 || t >= time_gone(dur, 0.0) {
     return Some((s.come_goal, 0.0))
   }
-  let (tall, v) = match s.come_group {
-    Some(g) if g.set => come_group_way(g, s, s.come_goal, t)
+  let (tall, v) = match (s.come_group, s.come_spec) {
+    (Some(g), _) if g.set => come_group_way(g, s, s.come_goal, t)
+    (_, Some(spec)) => come_spec_way(s, spec, s.come_goal, t)
     _ => {
       let plan = plan_of(s, s.come_goal)
       come_way_by(s.come_from, s.come_v, s.come_goal, plan, t, turn?=come_style_turn(s, plan))
