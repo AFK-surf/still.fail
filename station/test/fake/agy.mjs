@@ -9,7 +9,54 @@ import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 const dump = process.env.FAKE_DUMP;
 const args = process.argv.slice(2);
+const promptAt = args.indexOf('-p');
+if (promptAt >= 0 && args[promptAt + 1] === '/usage') await printUsage();
 if (args[0] !== 'acp') await signIn();
+async function printUsage() {
+  if (dump) appendFileSync(dump, JSON.stringify({ args, home: process.env.HOME ?? null, geminiDir: process.env.ANTIGRAVITY_GEMINI_DIR ?? null, cloudCodeUrl: process.env.CLOUD_CODE_URL ?? null, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null }) + '\n');
+  if (process.env.FAKE_AGY_SIGNED_OUT) {
+    process.stdout.write('Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth\n\nWaiting for authentication (timeout 60s)...\n');
+    await new Promise(() => {});
+  }
+  if (process.env.FAKE_AGY_USAGE_ERROR) {
+    const err = process.env.FAKE_AGY_USAGE_ERROR;
+    process.stderr.write(`error: ${err}\n`);
+    process.stdout.write(JSON.stringify({ conversation_id: '', status: 'ERROR', response: '', error: err }) + '\n');
+    process.exit(1);
+  }
+  const tokenPath = join(process.env.ANTIGRAVITY_GEMINI_DIR ?? join(process.env.HOME ?? '', '.gemini'), 'antigravity-cli', 'antigravity-oauth-token');
+  const keyringOk = Boolean(process.env.FAKE_AGY_KEYRING) && (!process.env.FAKE_KEYCHAIN_HOME || process.env.HOME === process.env.FAKE_KEYCHAIN_HOME);
+  if (!existsSync(tokenPath) && !keyringOk) {
+    process.stdout.write('Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth\n\nWaiting for authentication (timeout 60s)...\n');
+    await new Promise(() => {});
+  }
+  process.stdout.write(JSON.stringify({
+    conversation_id: '',
+    status: 'SUCCESS',
+    command: {
+      name: 'usage',
+      data: {
+        groups: [
+          {
+            name: 'Gemini Models',
+            buckets: [
+              { id: 'gemini-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remaining_fraction: 0.75, reset_time: '2026-11-19T09:14:38Z' },
+              { id: 'gemini-5h', name: 'Five Hour Limit Remaining', window: '5h', remaining_fraction: 0.9, reset_time: '2026-11-12T14:14:38Z' },
+            ],
+          },
+          {
+            name: 'Claude and GPT models',
+            buckets: [
+              { id: '3p-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remaining_fraction: 0.4, reset_time: '2026-11-19T09:14:38Z' },
+              { id: '3p-5h', name: 'Five Hour Limit Remaining', window: '5h', remaining_fraction: 0, reset_time: '2026-11-12T14:14:38Z' },
+            ],
+          },
+        ],
+      },
+    },
+  }) + '\n');
+  process.exit(0);
+}
 async function signIn() {
   if (dump) appendFileSync(dump, JSON.stringify({ args, home: process.env.HOME, remote: process.env.SSH_CONNECTION ?? null, key: process.env.GEMINI_API_KEY ?? null }) + '\n');
   if (!process.stdin.isTTY) { process.stderr.write('not a terminal\n'); process.exit(1); }

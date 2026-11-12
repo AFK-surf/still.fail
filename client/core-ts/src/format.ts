@@ -226,6 +226,22 @@ export function windowMark(label: string): [string, number] {
   return d !== null ? [`${d}D`, 1] : [label, 1];
 }
 
+/// When two windows share the same group suffix (5 小时 · Gemini and 每周 · Gemini), add the length mark so their chips
+/// do not both read "Gemini".
+export function windowMarks(labels: string[]): [string, number][] {
+  const raw = labels.map(windowMark);
+  const counts = new Map<string, number>();
+  for (const [m] of raw) counts.set(m, (counts.get(m) ?? 0) + 1);
+  return labels.map((label, i) => {
+    const [m, order] = raw[i]!;
+    if ((counts.get(m) ?? 0) <= 1) return [m, order];
+    const of = label.indexOf(" · ");
+    if (of < 0) return [m, order];
+    const [len] = windowMark(label.slice(0, of));
+    return [`${m} ${len}`, order];
+  });
+}
+
 /// Bytes in gigabytes, one decimal below 100.
 export function gb1(bytes: number): string {
   const g = bytes / 1024 ** 3;

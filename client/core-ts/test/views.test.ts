@@ -10,7 +10,7 @@ import { holdLanguage, t as words } from "../src/i18n.ts";
 import { merge } from "../src/entries.ts";
 import { topicKey, type Topic } from "../src/protocol.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
-import { attention, choices, models, runnableOn } from "../src/views/models.ts";
+import { attention, choices, models, quotaFor, runnableOn } from "../src/views/models.ts";
 import { OVERVIEW_FIT, answeredAt, betaOffered, blockedUnder, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
@@ -725,6 +725,20 @@ test("a_models_own_window_is_said_of_that_model_alone", () => {
   assert.deepEqual(spent, { "claude-fable-5-1": 9000, "claude-opus-5-5": null });
   assert.deepEqual(attention(ov, { profile: "a", model: "claude-opus-5-5" }, 0), []);
   assert.deepEqual(attention(ov, { profile: "a", model: "claude-fable-5-1" }, 0), [{ kind: "quota", text: "每周 · Fable剩余 0%", more: "即将刷新", quota: { left: 0, mark: "Fable", level: "red", until: 9000 } }]);
+  const agyWin = [
+    { label: "5 小时 · Gemini", usedPercent: 10, resetsAt: 9000, scope: "gemini" },
+    { label: "每周 · Gemini", usedPercent: 20, resetsAt: 9000, scope: "gemini" },
+    { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: 9000, scope: "3p" },
+    { label: "每周 · Claude / GPT", usedPercent: 40, resetsAt: 9000, scope: "3p" },
+  ];
+  const agyOv = { profiles: [{ id: "g", name: "G", runtimes: ["agy"], model: "gemini-4-carbon-medium", models: ["gemini-4-carbon-medium", "google/gemini-3.1-pro", "claude-opus-5-5-medium", "anthropic/claude-opus-4-6"], check: { state: "ok" }, quota: { state: "ok", windows: agyWin } }] };
+  const agyOn = (model: string | null) => runnableOn(agyOv, { runtime: "agy", profile: "g", model }, 0)[0];
+  assert.equal(agyOn("gemini-4-carbon-medium").spent, null);
+  assert.equal(agyOn("google/gemini-3.1-pro").spent, null);
+  assert.equal(agyOn("claude-opus-5-5-medium").spent.until, 9000);
+  assert.equal(agyOn("anthropic/claude-opus-4-6").spent.until, 9000);
+  assert.equal(agyOn(null).quota.windows.length, 2, "falls back to the profile's own default model");
+  assert.equal(quotaFor(agyOv.profiles[0]!.quota, null).windows.length, 4, "the account's own page keeps all four windows");
 });
 
 test("an_agent_can_be_moved_to_the_profiles_of_its_runtime", () => {

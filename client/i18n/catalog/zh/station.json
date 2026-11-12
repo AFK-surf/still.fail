@@ -576,6 +576,7 @@
   "station.profile.agySubscription": "Google 账号（Antigravity CLI）",
   "station.quota.devinUnsupported": "Devin 不向 station 提供套餐用量，请在 app.devin.ai 的 Usage 页查看",
   "station.quota.agyUnsupported": "Antigravity CLI 不向 station 提供套餐用量",
+  "station.quota.agyNoWindows": "Antigravity CLI 没有返回额度信息",
   "station.updates.devinElsewhere": "安装在 {path}，不是用 Devin 的安装脚本装的，需在该机器上手动更新",
   "station.login.devinNoTerminal": "Devin 登录需要终端，这台机器提供不了，请在别的 station 上登录",
   "station.login.agyNoTerminal": "Antigravity CLI 登录需要终端，这台机器提供不了，请在别的 station 上登录",
