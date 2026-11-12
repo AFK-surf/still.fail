@@ -81,10 +81,13 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
   let hidden = false;
   let onPost: (() => void) | null = null;
   let sessionWs: string | null = null;
+  // Who wrote in the session's chats, as creator references (`Store.participants`).
+  const people: string[] = [starter.toLowerCase()];
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: sessionWs, workspace: "/tmp", archivedAt: null } : null),
       starter: () => starter.toLowerCase(),
+      participants: (k: string) => new Map(k === "s1" ? [["s1", people]] : []),
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       withdrawCard: (_session: string, _thread: number, ts: string) => (withdrawn.push(ts), true),
@@ -107,7 +110,7 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
   };
   // (a database in a file: the use index's work on this connection, no reader's process beside it; ./vault-no-reader.ts)
   const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db: withoutUseReader(connection), vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
-  return { db, hub, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
+  return { db, hub, vaults, plain, notified, people, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
 }
 
 function requestWriteHook() {
@@ -302,6 +305,39 @@ test("a secret reask does not record a card decided during final old-card prepar
     await assert.rejects(reask, /no longer pending/);
     assert.equal(h.cards.length, 1, "a card for the decided request was not recorded");
   } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a secret kept for and used by the person the agent names, who wrote in the chat; left out, the chat's starter", async () => {
+  // A chat started in Slack (its starter no still.fail account), bob writing in it from the still.fail app.
+  const h = harness(() => null, "slack:c:u1");
+  h.people.push("bob@x.com");
+  try {
+    const tools = vaultTools(h.secrets, () => h.dir);
+    const list = tools.find((t) => t.name === "secret_list")!, use = tools.find((t) => t.name === "secret_use")!, save = tools.find((t) => t.name === "secret_save")!;
+    await assert.rejects(save.run("s1", { name: "Kimi key", kind: "token", reason: "keep it", value: "test-key", person: "carol@x.com" }), /carol@x\.com has not written in this chat: name one of the people who wrote in it from still\.fail: bob@x\.com/);
+    assert.equal(h.cards.length, 0);
+
+    await save.run("s1", { name: "Kimi key", kind: "token", reason: "keep it", value: "test-key", person: "Bob@x.com" });
+    const request = h.cards[0]!.card.vault.request;
+    assert.equal(h.cards[0]!.card.assignee, "bob@x.com", "the card is bob's to decide");
+    assert.match(h.secrets.savedPlain(WS, null, "alice@x.com", { request }) as string, /only the person it is kept for/);
+    assert.notEqual(typeof h.secrets.savedPlain(WS, null, "bob@x.com", { request }), "string");
+
+    // His, not the starter's: listed and asked for only by naming him.
+    // (kept, this chat holds its grant either way)
+    const listed = async (args: Record<string, unknown>) => JSON.parse(await list.run("s1", args) as string).secrets.map((x: { name: string }) => x.name);
+    assert.deepEqual(await listed({}), []);
+    assert.deepEqual(await listed({ person: "bob@x.com" }), ["Kimi key"]);
+    await assert.rejects(use.run("s1", { item: "Kimi key", reason: "use it" }), /No secret named "Kimi key"/);
+    await use.run("s1", { item: "Kimi key", reason: "use it", command: "true", person: "bob@x.com" });
+    assert.equal(h.cards[1]!.card.assignee, "bob@x.com");
+
+    // Left out, it is the starter's as before.
+    await save.run("s1", { name: "Other", kind: "token", reason: "keep it", value: "other" });
+    assert.equal(h.cards[2]!.card.assignee, "slack:c:u1");
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
 });
 
 test("a still-needed secret use can be asked again as the same request", async () => {
