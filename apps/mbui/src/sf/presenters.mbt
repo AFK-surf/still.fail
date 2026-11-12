@@ -1834,8 +1834,9 @@ fn done_with(p : Presented, f : () -> Unit) -> Unit {
   p.ended = true
   p.chosen = true
   match presented_now.search_by(fn(q) { q.serial == p.serial }) {
-    Some(i) => close_from(i)
-    None => ()
+    // (one closed already (the hand's, going): what was opened over it since is not its, as close_from_serial's)
+    Some(i) if presented_now[i].open => close_from(i)
+    _ => ()
   }
   // (on a sheet, what `f` presents comes in its place, a menu's menu as a level of it: present)
   f()
