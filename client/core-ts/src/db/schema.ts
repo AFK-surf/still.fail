@@ -336,6 +336,59 @@ export function ensureOverviewParts(sql: Sql): void {
   }
 }
 
+/// The triggers dropping a chat's list row kept beside it (`chat_row`) as its record is written or goes, whoever writes
+/// it: a record put (an INSERT OR REPLACE runs no DELETE trigger), changed in any column (its JSON, its `unread`, its
+/// place) or deleted. By name, as sqlite_master keeps them.
+const listRowTriggers = (): [string, string][] => [
+  ["chat_row_put", `CREATE TRIGGER chat_row_put AFTER INSERT ON chat
+      BEGIN
+        DELETE FROM chat_row WHERE station = new.station AND id = new.id;
+      END`],
+  ["chat_row_set", `CREATE TRIGGER chat_row_set AFTER UPDATE ON chat
+      BEGIN
+        DELETE FROM chat_row WHERE station = old.station AND id = old.id;
+        DELETE FROM chat_row WHERE station = new.station AND id = new.id;
+      END`],
+  ["chat_row_drop", `CREATE TRIGGER chat_row_drop AFTER DELETE ON chat
+      BEGIN
+        DELETE FROM chat_row WHERE station = old.station AND id = old.id;
+      END`],
+];
+
+/// Each listed chat's row as its list shows it (views.ts #listRow), kept beside its record: what the list reads of
+/// it whole (`whole`, what the core's own readers read too) and as it goes out (`sent`, ListedChat), what its stand-in
+/// says of it before it is made (`state`), and the key of what else it was made with (`key`: views.ts listKey, the
+/// language, the viewer, the workspace's members, its station, the prefs it reads, the maker and the shapes). A list
+/// reads a kept row whose key is the one in force, and no record. Kept by triggers on `chat` (listRowTriggers), as
+/// `station_fit` is on `station`: whoever writes a record (an older core too, which knows nothing of this table), its
+/// kept row goes with it, in the same statement; this core's writer puts the new one after it (account.ts #putChatRow).
+/// Made where missing at every open; where a trigger was missing or not this core's (an older core made the table
+/// `chat` again, its triggers with it), every kept row goes, nothing left that a record outlived.
+export function ensureListRows(sql: Sql): void {
+  sql.exec("BEGIN IMMEDIATE");
+  try {
+    sql.exec("CREATE TABLE IF NOT EXISTS chat_row (station TEXT NOT NULL, id TEXT NOT NULL, key TEXT NOT NULL, state TEXT, whole TEXT NOT NULL, sent TEXT NOT NULL, PRIMARY KEY (station, id))");
+    const had = new Map(sql.all("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'chat'").map((r) => [String(r[0]), String(r[1])]));
+    let remade = false;
+    for (const [name, statement] of listRowTriggers()) {
+      const was = had.get(name);
+      if (was !== undefined && spaced(was) === spaced(statement)) continue;
+      if (was !== undefined) sql.exec(`DROP TRIGGER ${name}`);
+      sql.exec(statement);
+      remade = true;
+    }
+    if (remade) sql.exec("DELETE FROM chat_row");
+    sql.exec("COMMIT");
+  } catch (e) {
+    try {
+      sql.exec("ROLLBACK");
+    } catch {
+      // Rolled back already.
+    }
+    throw e;
+  }
+}
+
 /// A thread's letters (what its agents and other chats' wrote each other), item by item: their own log beside its
 /// entries (the station's GET /threads/:id/letters, numbered from 1 in it). Made where missing at every open, as `said`.
 export function ensureLetters(sql: Sql): void {

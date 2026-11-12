@@ -107,6 +107,23 @@ function wentOut(v: unknown, ty: Ty): boolean {
 /// What a value a view shaped as one struct was made as another, by that one (`fit`): made once while it is the same.
 const reshaped = new WeakMap<object, Map<string, unknown>>();
 
+/// What `v` goes out as through struct `ty`, made beside it once and kept with it (`shapedBeside`), else undefined.
+export function keptShape(v: unknown, ty: Ty): unknown {
+  return v !== null && typeof v === "object" && typeof ty === "string" ? beside.get(v)?.get(ty) : undefined;
+}
+
+/// `out`, what `v` goes out as through struct `ty`, made beside it (views.ts: a chat list's row, as it was kept beside
+/// its record, db/account.ts `chat_row`): taken as it is where `v` goes out as `ty` (output.ts), neither shaped nor
+/// walked again, and marked as gone out. `v` itself is not marked: it goes out otherwise elsewhere (a search's ChatItem).
+export function shapedBeside(v: object, ty: string, out: object): void {
+  let by = beside.get(v);
+  if (by === undefined) beside.set(v, (by = new Map()));
+  by.set(ty, out);
+  shaped.add(out);
+  shapedAs.set(out, ty);
+}
+const beside = new WeakMap<object, Map<string, unknown>>();
+
 function walk(v: unknown, ty: Ty, path: string): unknown {
   if (typeof ty === "object" && "opt" in ty) return v === null || v === undefined ? null : walk(v, ty.opt, path);
   // What already went out through its shape (output.ts) is as it went.
@@ -209,7 +226,11 @@ export function shapeKey(ty: Ty): string {
     }
   };
   reach(ty);
-  const text = JSON.stringify([ty, [...reached]]);
+  return textKey(JSON.stringify([ty, [...reached]]));
+}
+
+/// A text as a short key: its length and two FNV-1a hashes of it.
+export function textKey(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193 ^ text.length;
   for (let i = 0; i < text.length; i++) {
@@ -298,6 +319,9 @@ function fit(v: unknown, ty: Ty): unknown {
     if (typeof tag !== "string" || !has.call(shape.variants, tag) || !(shape.content in obj)) throw MISFIT;
     return { [shape.tag]: tag, [shape.content]: fit(obj[shape.content], shape.variants[tag]) };
   }
+  // (one with what it goes out as made beside it: as it was made)
+  const made = beside.get(obj)?.get(ty);
+  if (made !== undefined) return made;
   // (one a view shaped as another struct: as this one once, kept as it went out)
   const other = shaped.has(obj);
   if (other) {

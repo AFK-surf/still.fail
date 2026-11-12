@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import { work } from "../work.ts";
 import type { Inner } from "../core.ts";
 import type { Data } from "../data.ts";
-import type { Derive } from "../db/account.ts";
+import type { Derive, HeadRow, ListRow } from "../db/account.ts";
 import type { Host } from "../host.ts";
 import type { Runner } from "../runtime.ts";
 import type { Store } from "../store.ts";
@@ -17,10 +17,10 @@ import { merge } from "../entries.ts";
 import { lowerBound } from "../ordered.ts";
 import { CoreError } from "../error.ts";
 import * as format from "../format.ts";
-import { t } from "../i18n.ts";
+import { current as lang, t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
-import { conformTy, shapeKey } from "../conform.ts";
+import { conformTy, shapedBeside, shapeKey, textKey } from "../conform.ts";
 import { LISTED_CHAT } from "../shapes/schema.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
@@ -248,6 +248,41 @@ export const LIST_ROW_KEYS: ReadonlySet<string> = new Set([...LISTED_CHAT, ...Ob
 /// Of those, what a row takes of its record as it is (its values shared, frozen), before what it works out of it is put.
 const LIST_ROW_TAKEN = [...LIST_ROW_KEYS].filter((k) => !["agents", "last", "people", "creator", "pinned", "opener", "station", "stationName"].includes(k));
 
+/// How #listRow makes a chat list's row of its record and what else it reads (listRowKey): another number whenever a
+/// row it makes of the same could differ, so that no row kept beside its record (db/account.ts `chat_row`) by the maker
+/// before is read as this one's. test/list-rows.test.ts holds it: the rows of the workspace of real size, in each
+/// language, made as their digest says (its MADE), which a change to how a row is made changes.
+export const LIST_ROW_MAKING = 1;
+let listRowShapes: string | null = null;
+
+/// What a chat list's row is made with besides its record (#listRow), as the key its row is kept by beside its record
+/// (db/account.ts `chat_row`): the maker (LIST_ROW_MAKING) and the shape it goes out as (`ListedChat` and every shape
+/// it reaches, conform.ts shapeKey), the language and the product it says itself in, its station (its address, its
+/// name, its mark where there are several), the viewer, the workspace's members, who the viewer is in Slack there (its
+/// overview's part, `slackUsers`) and the viewer's `archiveHint`. A row is taken as kept only under the key in force;
+/// test/list-rows.test.ts holds that a row made otherwise under another of any of these has another key.
+export function listRowKey(s: StationInfo, mark: { emoji: string | null; icon: string | null } | null, me: J, slackUsers: string[], members: J[], hint: ArchiveHint): string {
+  return textKey(JSON.stringify([LIST_ROW_MAKING, (listRowShapes ??= shapeKey("ListedChat")), lang(), brand.name(), s.address, s.name, mark, me, slackUsers, membersKey(members), hint]));
+}
+
+/// A workspace's members as a key (conform.ts textKey), once for each list of them (a workspace's is shared and never
+/// changed in place): its stations' keys say it, not each its whole list again.
+const membersKeys = new WeakMap<object, string>();
+function membersKey(members: J[]): string {
+  let k = membersKeys.get(members);
+  if (k === undefined) membersKeys.set(members, (k = textKey(JSON.stringify(members))));
+  return k;
+}
+
+/// A row read back from its column beside its record (`whole`, and as it goes out, `sent`), made what a row #listRow
+/// made is: frozen all through, what it goes out as beside it (conform.ts shapedBeside), so that it is neither made nor
+/// shaped again.
+export function listRowTaken(whole: J, sent: J): void {
+  deepFreeze(whole);
+  deepFreeze(sent);
+  shapedBeside(whole, "ListedChat", sent);
+}
+
 /// Where a row's chat came from, for one from a connect (`connect`): its mark's kind and its words (Slack · team ·
 /// #channel; 飞书 · tenant · group; Comma · Group). Null for one that came from none. (Both makers of a row: #chatRow,
 /// #listRow.)
@@ -295,6 +330,14 @@ function stateLineOf(line: ReturnType<typeof present.rowStateLine>): J {
   }
   return out;
 }
+
+/// What a station's list rows are made with besides their records (#listRow), and the key they are kept by.
+type Around = { s: StationInfo; mark: { emoji: string | null; icon: string | null } | null; me: J; slackUsers: string[]; members: J[]; hint: ArchiveHint; key: string };
+
+/// What a list read first (#head) that is a row kept beside its record, not its record: by itself (#chats `keptRow`).
+const headKept = new WeakMap<object, HeadRow>();
+/// Rows kept beside their records as a list read them (#head): what is shown of each is read of it.
+const keptWholes = new WeakSet<object>();
 
 /// A list's item as it goes out: its row, made now if it was not yet.
 const madeRow = (item: J): J => (isObject(item) ? unmade.get(item)?.() : undefined) ?? item;
@@ -798,6 +841,14 @@ export class Views implements Owner {
   /// The list rows made from each record (with what else they were made with), so a row whose record did not change
   /// is not made again (rule 7). Kept as long as the record is.
   readonly #rowsMade = new WeakMap<object, { sig: string; list: string; row: J }>();
+  /// The key each station's rows are kept by (listRowKey), with what it was made of: made again only as one of those is
+  /// another (the members, the station's part as read, the same objects while they are the same).
+  readonly #listKeys = new Map<string, { of: unknown[]; key: string }>();
+  /// What each station's rows are made with besides their records as they are written (#aroundOf), with what it was
+  /// made of.
+  readonly #arounds = new Map<string, { of: unknown[]; around: Around | null }>();
+  /// Rows a list made as it read them, to be kept beside their records once what pages wait for is out (#keepMade).
+  #toKeep: { station: string; record: J; key: string; whole: J | null }[] = [];
   /// Each record's whole row (`chatRow`, #wholeOf) as #rowsMade keeps its list's row; and a list's row given what only
   /// the whole one says (#wholeFor), by the list's row, while that whole row is the same.
   readonly #wholeMade = new WeakMap<object, { sig: string; row: J }>();
@@ -865,6 +916,12 @@ export class Views implements Owner {
     // `stations` reads the verdict, not the overview.
     // (its shapes' id made as it is first read, not at the start)
     core.data.judgeOverviews({ get shapes() { return OVERVIEW_FIT(); }, judge: (station, o) => this.#stationShownOf(station).judge(o) });
+    // A chat list's row made as its record is written and kept beside it (`chat_row`): a list reads it, not the record.
+    core.data.keepListRows({
+      key: (station) => untracked(() => this.#aroundOf(station)?.key ?? null),
+      make: (station, record) => untracked(() => this.#keptMade(station, record)),
+      taken: listRowTaken,
+    });
   }
 
   owns(topic: Topic): boolean {
@@ -1849,13 +1906,18 @@ export class Views implements Owner {
     // the watched, none of those being archived here) opens on its window of them, not on those of them among the
     // first of all.
     const shows = (station: string, raw: J): boolean => {
-      if (mine && get(raw, "mine") !== true) return false;
+      // (a row kept beside its record: the viewer's own, where only those were read)
+      if (mine && !keptWholes.has(raw) && get(raw, "mine") !== true) return false;
       if (this.local.beingArchived(station, raw)) return false;
       const shown = this.local.asChanging(station, raw);
       if (visibility !== "all" && (get(shown, "hidden") === true) !== (visibility === "hidden")) return false;
       return !watching || present.watches(arr(get(shown, "agents")));
     };
-    const head = unloaded.length > 0 && data.chatCount(unloaded) > heads ? this.#head(scope, known, heads, mine, shows) : null;
+    // (the key each station's rows are kept by beside their records, where they are read so: listRowKey)
+    const keyOf = (s: StationInfo): string => this.#listKeyOf(s, stations.length > 1, me, members_, hint);
+    const head = unloaded.length > 0 && data.chatCount(unloaded) > heads
+      ? this.#head(scope, known, heads, mine, shows, watching ? new Map() : new Map(stations.filter((s) => known.includes(s.address)).map((s) => [s.address, keyOf(s)])))
+      : null;
     for (const s of stations) {
       const read = head !== null && data.listed(s.address, "chats") ? ({ ok: head.get(s.address) ?? [] } as Value) : this.value({ topic: "chatRows", station: s.address });
       if (!(read && "ok" in read)) unread.push(s.address);
@@ -1884,8 +1946,35 @@ export class Views implements Owner {
         // (the base as it is and the members after a character JSON never leaves unescaped, U+0001: one signature for one
         // pair, as JSON.stringify([base, members]) was, without writing the base out again escaped for each row)
         const rowSig = (shown: J) => `${base}\u0001${JSON.stringify(present.rowMembers(shown, members_))}`;
+        // A row kept beside its record (#head): its stand-in, the row it stands for as it is; one changing or asked
+        // here, made of its record as it is read (what a row kept beside it is never made with: #keepable).
+        const keptRow = (h: HeadRow): J | null => {
+          work.listed++;
+          const whole = h.row!.whole;
+          if (this.local.beingArchived(s.address, whole)) return null;
+          const asked = typeof whole.clientKey !== "string" && typeof whole.session === "string" && this.local.pendingKey(s.address, whole.session) !== undefined;
+          if (asked || this.local.asChanging(s.address, whole) !== whole) {
+            const record = data.chat(s.address, h.id);
+            return record === undefined ? null : make(record);
+          }
+          if (visibility === "visible" && whole.hidden === true) return null;
+          if (visibility === "hidden" && whole.hidden !== true) return null;
+          const standIn: J = { lastActiveAt: whole.lastActiveAt, station: s.address, state: h.row!.state };
+          if (h.pinnedAt !== null) {
+            pinnedAt.set(standIn, h.pinnedAt);
+            pinnedAt.set(whole, h.pinnedAt);
+          }
+          Object.freeze(standIn);
+          let shownRow: J;
+          unmade.set(standIn, () => (shownRow ??= this.#unsentRow(s.address, whole, failed)));
+          return standIn;
+        };
+        // (the key its rows are kept by beside their records: none for a list of the watched, whose rows are made)
+        const key = watching ? null : keyOf(s);
         // One record's row, or null where the list does not show it.
         const make = (raw: J): J | null => {
+          const h = headKept.get(raw);
+          if (h !== undefined) return keptRow(h);
           work.listed++;
           if (mine && get(raw, "mine") !== true) return null;
           if (this.local.beingArchived(s.address, raw)) return null;
@@ -1910,11 +1999,17 @@ export class Views implements Owner {
           };
           if (kept !== undefined && holds(kept)) return kept.row === null ? null : this.#unsentRow(s.address, kept.row, failed);
           const row = (): J => {
-            const made = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
+            // (kept beside its record under the key in force, where it was read or kept this run; else made, and kept)
+            const keeps = key !== null && shown === raw && this.#keepable(s.address, raw);
+            const kept = keeps ? data.keptListRow(s.address, String(raw.id), key) : undefined;
+            const made = kept !== undefined ? kept.whole : this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is). What it took of
             // its record as it is was frozen all through with it (db/account.ts `frozen` freezes a part after all of
             // its own): deepFreeze stops there, and walks only what was made here.
-            if (made !== null) deepFreeze(made);
+            if (made !== null && kept === undefined) {
+              deepFreeze(made);
+              if (keeps) this.#keepMade(s.address, raw, key, made);
+            }
             if (keepable) this.#rowsMade.set(shown, { sig: own(), list: sig, row: made });
             return made;
           };
@@ -2078,21 +2173,133 @@ export class Views implements Owner {
     return out;
   }
 
+  /// The key the rows of station `s` are kept by beside their records (listRowKey), made again only as what it is made
+  /// of is another: one short string a station, not a row.
+  #listKeyOf(s: StationInfo, several: boolean, me: J, members: J[], hint: ArchiveHint): string {
+    const part = this.#core.data.overviewPart(s.address);
+    const of: unknown[] = [s.address, s.name, several ? s.emoji : null, several ? s.icon : null, several, get(me, "email"), members, part, hint, lang(), brand.name()];
+    const was = this.#listKeys.get(s.address);
+    if (was !== undefined && was.of.length === of.length && was.of.every((x, i) => x === of[i])) return was.key;
+    const slackUsers = arr(get(part, "slackUsers")).filter((u): u is string => typeof u === "string");
+    const key = listRowKey(s, several ? { emoji: s.emoji, icon: s.icon } : null, me, slackUsers, members, hint);
+    this.#listKeys.set(s.address, { of, key });
+    return key;
+  }
+
+  /// What a row of `station`'s list is made with besides its record, as a list makes it (#chats), and its key; null while
+  /// its workspace or the station in it is not read.
+  #aroundOf(station: string): Around | null {
+    // (as many times as records are written: made again only as what it is made of is another, the workspace's value,
+    // the station's part, the prefs, the language, the viewer)
+    const scope = ofAddress(station);
+    const ws = this.value({ topic: "workspace", workspace: scope });
+    const of: unknown[] = [ws === undefined ? undefined : "ok" in ws ? ws.ok : ws, this.#core.data.overviewPart(station), this.#core.store.select({ topic: "prefs" }, archiveHintIn), this.#core.emailOf(scope), lang(), brand.name()];
+    const was = this.#arounds.get(station);
+    if (was !== undefined && was.of.every((x, i) => x === of[i])) return was.around;
+    const around = this.#aroundMade(station);
+    this.#arounds.set(station, { of, around });
+    return around;
+  }
+
+  #aroundMade(station: string): Around | null {
+    const scope = ofAddress(station);
+    const stations = this.#stationsOr(scope);
+    if (stations === undefined || !Array.isArray(stations)) return null;
+    const s = stations.find((x) => x.address === station);
+    if (s === undefined) return null;
+    const me = this.me(scope);
+    const members = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const hint = this.#core.store.select({ topic: "prefs" }, archiveHintIn);
+    const slackUsers = arr(get(this.#core.data.overviewPart(station), "slackUsers")).filter((u): u is string => typeof u === "string");
+    const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
+    return { s, mark, me, slackUsers, members, hint, key: this.#listKeyOf(s, stations.length > 1, me, members, hint) };
+  }
+
+  /// Whether a record's list row is one kept beside it: made of it and of what the key says alone. Not one changing here
+  /// (an overlay: local.ts asChanging, being archived), asked here (pending, its key here: #placeOf), nor opened from
+  /// another chat (its opener's title and whether it is archived are that chat's record's: #opener), made as it is read.
+  #keepable(station: string, record: J): boolean {
+    if (!isObject(record) || !Object.isFrozen(record) || record.pending === true) return false;
+    if (str(get(get(record, "opener"), "session")) !== null) return false;
+    if (typeof record.clientKey !== "string" && typeof record.session === "string" && this.local.pendingKey(station, record.session) !== undefined) return false;
+    return !this.local.beingArchived(station, record) && this.local.asChanging(station, record) === record;
+  }
+
+  /// A record's list row as it is written (db/account.ts #keepListRow): what #chats makes of it (#listRow, frozen), as it
+  /// goes out (`ListedChat`, beside it), what its stand-in says; null where it is not kept (#keepable) or its station's
+  /// surroundings are not read.
+  #keptMade(station: string, record: J): { state: string | null; whole: J; sent: J } | null {
+    const a = this.#aroundOf(station);
+    if (a === null || !this.#keepable(station, record)) return null;
+    const whole = this.#listRow(a.s, record, a.me, a.slackUsers, a.members, a.mark, a.hint);
+    deepFreeze(whole);
+    const sent = conformTy("ListedChat", whole);
+    if (!("ok" in sent) || !isObject(sent.ok)) return null;
+    listRowTaken(whole, sent.ok);
+    return { state: present.rowState(arr(get(record, "agents"))), whole, sent: sent.ok };
+  }
+
+  /// A row a list made as it read it (`whole`), or one it read the record of and did not make (null: made then, as it
+  /// would have been), kept beside its record once what pages wait for is out (`answered`): what the next list reads
+  /// under the same key.
+  #keepMade(station: string, record: J, key: string, whole: J | null): void {
+    this.#toKeep.push({ station, record, key, whole });
+    if (this.#toKeep.length > 1) return;
+    const store = this.#core.store;
+    this.#core.runner.fork(
+      Effect.gen({ self: this }, function* () {
+        yield* store.answered();
+        // (those made first: one read and made too is not made again)
+        const kept = [...this.#toKeep.filter((k) => k.whole !== null), ...this.#toKeep.filter((k) => k.whole === null)];
+        this.#toKeep = [];
+        for (const k of kept) {
+          const id = String(k.record.id);
+          if (this.#core.data.keptListRow(k.station, id, k.key) !== undefined) continue;
+          if (k.whole === null) {
+            // (made as a list makes it, under the key in force then: where that is another, by the next list)
+            const made = untracked(() => (this.#aroundOf(k.station)?.key === k.key ? this.#keptMade(k.station, k.record) : null));
+            if (made !== null) this.#core.data.keepListRow(k.station, id, k.record, { key: k.key, ...made });
+            continue;
+          }
+          const sent = conformTy("ListedChat", k.whole);
+          if (!("ok" in sent) || !isObject(sent.ok)) continue;
+          deepFreeze(sent.ok);
+          shapedBeside(k.whole, "ListedChat", sent.ok);
+          this.#core.data.keepListRow(k.station, id, k.record, { key: k.key, state: present.rowState(arr(get(k.record, "agents"))), whole: k.whole, sent: sent.ok });
+        }
+      }),
+    );
+  }
+
   /// The rows a scope's list shows on top (`n` of them: its window and one more, to know it has more; 2026-11-11, 80
   /// whatever it showed, 9.5 ms of a list's 12.5 in Hermes making and putting out 50 rows of them on a first open), by
   /// station, while its stations' rows load: one is loaded after another, the list computed again after each. They are
   /// the first records the list shows (`shows`; `mine`, read of the viewer's own alone): where fewer than `n` of those
   /// read are, twice as many are read, until `n` show or there are no more.
-  #head(scope: string, stations: string[], n: number, mine: boolean, shows: (station: string, raw: J) => boolean): Map<string, J[]> {
+  /// Each read its row kept beside its record under its station's key (`keys`, listRowKey) where there is one: then its
+  /// record is not read (db/account.ts listHead), and the list takes the row as it is (#chats `keptRow`).
+  #head(scope: string, stations: string[], n: number, mine: boolean, shows: (station: string, raw: J) => boolean, keys: Map<string, string>): Map<string, J[]> {
     const data = this.#core.data;
     const out = new Map<string, J[]>();
     let limit = n;
-    let read = data.chatHead(stations, limit, mine);
-    while (read.length >= limit && read.reduce((k, [station, row]) => k + (shows(station, row) ? 1 : 0), 0) < n) {
+    const item = (h: HeadRow): J => {
+      if (h.row === null) {
+        // (one not kept under its key: kept after the list's first value, made then where the list did not make it)
+        const key = keys.get(h.station);
+        if (key !== undefined && this.#keepable(h.station, h.record)) this.#keepMade(h.station, h.record, key, null);
+        return h.record;
+      }
+      headKept.set(h, h);
+      keptWholes.add(h.row.whole);
+      return h;
+    };
+    const shown = (h: HeadRow): boolean => shows(h.station, h.row === null ? h.record : h.row.whole);
+    let read = data.listHead(stations, limit, mine, keys);
+    while (read.length >= limit && read.reduce((k, h) => k + (shown(h) ? 1 : 0), 0) < n) {
       limit *= 2;
-      read = data.chatHead(stations, limit, mine);
+      read = data.listHead(stations, limit, mine, keys);
     }
-    for (const [station, row] of read) out.set(station, [...(out.get(station) ?? []), row]);
+    for (const h of read) out.set(h.station, [...(out.get(h.station) ?? []), item(h)]);
     // (its stations' rows loaded behind the first screen: what shows them is made again then)
     this.#seen.read(`loaded ${scope}`);
     if (!this.#loading.has(scope)) {

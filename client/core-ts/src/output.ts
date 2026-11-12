@@ -9,7 +9,7 @@
 import type { Product } from "../../i18n/brand.ts";
 import * as brand from "./brand.ts";
 import { type Spec, specOf, textOf } from "./collections.ts";
-import { conformTy, type Ty } from "./conform.ts";
+import { conformTy, keptShape, type Ty } from "./conform.ts";
 import { current as lang } from "./i18n.ts";
 import * as present from "./present.ts";
 import type { Topic } from "./protocol.ts";
@@ -121,9 +121,15 @@ export class Output {
           const decorated = present.decorateItem(topic, inner, this.#c);
           let out = decorated;
           if (itemTy !== undefined) {
-            const shapedItem = conformTy(itemTy, decorated, here);
-            if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
-            out = shapedItem.ok;
+            // (as it was made beside it, where it was: a chat list's row kept beside its record, conform.ts shapedBeside)
+            const made = keptShape(decorated, itemTy);
+            if (made !== undefined) out = made;
+            else {
+              work.conformed++;
+              const shapedItem = conformTy(itemTy, decorated, here);
+              if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
+              out = shapedItem.ok;
+            }
           }
           // (what goes out is marked as gone out, which other values that hold it take it as, shaped: never the item
           // itself, where nothing was put in it nor shaped of it, no shape or one of `Value`: a copy of it, as before)
