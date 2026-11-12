@@ -108,12 +108,13 @@ const sorted = (xs: string[]) => [...xs].sort().join("; ");
 
 /// What the fourth round's comparison counted beside the chains: bodies offered and refused (by why), statements in
 /// force, entries lacking their bodies, lists and states compared, states off and not on, web devices counted, old
-/// chains compared, moved seen, entries after a moved refused, chains where votes by role would choose otherwise.
+/// chains compared, moved seen, entries after a moved refused, chains where votes by role would choose otherwise,
+/// devices of a state let in by `admit`.
 export type More = {
   bodies: number; refused: Record<string, number>; inForce: number; lacking: number; lists: number; states: number; off: number; notOn: number;
-  webs: number; old: number; moved: number; afterMoved: number; rolesOther: number;
+  webs: number; old: number; moved: number; afterMoved: number; rolesOther: number; admitted: number;
 };
-const more0 = (): More => ({ bodies: 0, refused: {}, inForce: 0, lacking: 0, lists: 0, states: 0, off: 0, notOn: 0, webs: 0, old: 0, moved: 0, afterMoved: 0, rolesOther: 0 });
+const more0 = (): More => ({ bodies: 0, refused: {}, inForce: 0, lacking: 0, lists: 0, states: 0, off: 0, notOn: 0, webs: 0, old: 0, moved: 0, afterMoved: 0, rolesOther: 0, admitted: 0 });
 
 /// The web devices on a log's active chain by id (the model's `websAt` before the clock).
 function websOn(k: Keeper<any>): string[] {
@@ -247,6 +248,16 @@ function sameState(o: Out, here: string, w: World4, h: Holder, ws: string, root:
   const diff = d4Diff(mine, want);
   if (diff.length > 0) o.differ.push(`${here}: state differs in ${diff.join(", ")}: the rules ${d4Said(mine)}; the model ${d4Said(want)}`);
   if (s.disabled !== false || s.genesis !== root || s.passkeys.length > 0 || s.gateways.length > 0) o.differ.push(`${here}: the state's own fields: disabled ${s.disabled}, genesis ${s.genesis.slice(0, 8)}`);
+  // Admission on it as on a folded chain (`admit`, by the device's id as an older client connects): each device of a
+  // member lets that member in with their role; under another's name, no one.
+  for (const [id, d] of s.devices as [string, any][]) {
+    o.more.admitted++;
+    const role = new Map(s.members as [string, any][]).get(d.sub)?.role;
+    const mine = rules.admit_one_js(got.rules, { sub: d.sub, endpoint: id }, now, crypto) as any;
+    if (mine.device !== id || mine.role !== role) o.differ.push(`${here}: ${d.sub}'s ${d.kind} device ${id.slice(0, 8)} is not let in on the state: ${JSON.stringify(mine)}`);
+    const other = rules.admit_one_js(got.rules, { sub: `${d.sub}-not`, endpoint: id }, now, crypto) as any;
+    if (!("refusal" in other)) o.differ.push(`${here}: ${d.sub}'s device ${id.slice(0, 8)} lets in another`);
+  }
 }
 
 /// The old chain at `h` (M7): its active chain by the rules (one vote a device, as the model's `OLD_V`), where it moved
