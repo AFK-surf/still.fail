@@ -141,6 +141,7 @@ export const NOTES: [number, string][] = [
   [134, "New tool chat_archive {chat}: archive another still.fail chat of this workspace by its link, here or on another station, as a person does in the app. Its messages remain; workspace files may later be cleaned up."],
   [135, "New tool relays {action: list|add|remove, url?}: the relays of your chat's workspace of its own (one in an office in mainland China, say), beside still.fail's. add reaches the URL from this station first and adds it only if it answers as a relay over https; nobody approves it, it is the workspace's at once and its members' devices measure and use it. Use it rather than asking a person to add a relay in the app."],
   [136, "secret_list, secret_use and secret_save take person: the email of someone who wrote in this chat from the still.fail app, whose vault it is and who approves the card; left out, whoever started the chat as before. Name them when someone other than the chat's starter asks for a secret, or when a chat started in Slack is now written in from still.fail (a card for a Slack starter cannot be approved in the app)."],
+  [137, "In Antigravity CLI the station's tools that do not fit what it declares to you are no longer missing: they are reached through the tool station_tool {name, arguments?} (only name: that tool's description and parameters; with arguments: it runs). chat_post and chat_state are always declared."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only

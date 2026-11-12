@@ -33,6 +33,13 @@ export function agyEmailIn(text: string): string | null {
     return null;
   }
 }
+/// How many bytes of the station's tools a session's model is declared (tools/mcp.ts `fitted`). `agy` 1.5.6 in ACP
+/// declares an MCP server's tools only while all of them together stay within about 57-60 KB, dropping the largest
+/// beyond that, and offers no call_mcp_tool for those it dropped: measured 2026-11-12 with the station's 42 tools
+/// (73 KB; chat_post, station_task and secret_save were dropped, so its sessions could not post) and with subsets of
+/// them (57 KB declared whole). Kept well under it, for its own tools' growth.
+export const AGY_TOOL_BUDGET = 45_000;
+
 /// Where the station keeps its sessions' transcripts.
 export const SESSIONS = "sessions";
 

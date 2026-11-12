@@ -1,7 +1,8 @@
 // The MCP endpoint, as the Rust station's mcp.rs's tests have it.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { McpEndpoint, OUTWARD, type Tool, UNBOUND_REFUSAL } from "../src/tools/mcp.ts";
+import { AGY_TOOL_BUDGET } from "../src/agents/agy.ts";
+import { CORE, fitted, INDIRECT, McpEndpoint, OUTWARD, type Tool, UNBOUND_REFUSAL, weight } from "../src/tools/mcp.ts";
 
 const echo: Tool = {
   name: "echo",
@@ -70,4 +71,49 @@ test("a parameter newer than the session's tool list, sent as text, is read as i
   await call({ done: "false" });
   await call({ done: true, seconds: "soon" });
   assert.deepEqual(seen, [{ reason: "true", done: true, seconds: 30 }, { done: false }, { done: true, seconds: "soon" }]);
+});
+
+// A tool of about `bytes` bytes declared, as the station's are (chat_post the largest).
+const sized = (name: string, bytes: number): Tool => ({ name, description: `${name}. ${"x".repeat(Math.max(0, bytes - 80))}`, inputSchema: { type: "object" }, run: async (_key, args) => `${name} ran ${JSON.stringify(args)}` });
+// The station's tools as Antigravity CLI dropped them on 2026-11-12: 42, 73 KB, chat_post 8 KB the largest.
+const station = (): Tool[] => [
+  sized("chat_post", 8000), sized("station_task", 5000), sized("secret_save", 4800), sized("computer", 4300), sized("login", 3400),
+  sized("chat_state", 2800), sized("job_start", 2750), ...Array.from({ length: 35 }, (_, i) => sized(`t${String(i).padStart(2, "0")}`, 400 + i * 30)),
+];
+
+test("a runtime that budgets its tools is declared the core ones and those that fit, and station_tool for the rest", async () => {
+  const all = station();
+  const total = all.reduce((n, t) => n + weight(t), 0);
+  assert.ok(total > AGY_TOOL_BUDGET, `the station's tools (${total} B) are more than the budget`);
+  const e = new McpEndpoint(() => "s", all, undefined, (session) => (session === "s" ? AGY_TOOL_BUDGET : undefined));
+  const list: any[] = ((await rpc(e, "t", { jsonrpc: "2.0", id: 1, method: "tools/list" })).body as any).result.tools;
+  const names = list.map((t) => t.name);
+  const bytes = list.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0);
+  assert.ok(bytes <= AGY_TOOL_BUDGET, `declared ${bytes} B`);
+  for (const name of CORE.filter((n) => all.some((t) => t.name === n))) assert.ok(names.includes(name), name);
+  assert.equal(names.at(-1), INDIRECT);
+  // Every tool is declared or named by station_tool, once.
+  const indirect: string[] = list.at(-1).inputSchema.properties.name.enum;
+  assert.deepEqual([...names.slice(0, -1), ...indirect].sort(), all.map((t) => t.name).sort());
+  assert.ok(indirect.includes("secret_save") && indirect.every((n) => !names.includes(n)));
+  // The same every time.
+  assert.deepEqual(fitted(all, AGY_TOOL_BUDGET).indirect.map((t) => t.name), indirect);
+  // Without a budget, every tool as before.
+  const plain = new McpEndpoint(() => "other", all, undefined, (session) => (session === "s" ? AGY_TOOL_BUDGET : undefined));
+  assert.equal(((await rpc(plain, "t", { jsonrpc: "2.0", id: 1, method: "tools/list" })).body as any).result.tools.length, all.length);
+});
+
+test("station_tool reads an undeclared tool's parameters, runs it as any call, and is refused as it is", async () => {
+  let out = false;
+  const all = [...station(), sized("slack_api", 3000)];
+  const e = new McpEndpoint(() => "s", all, () => (out ? UNBOUND_REFUSAL : undefined), () => AGY_TOOL_BUDGET);
+  const call = async (args: unknown) => ((await rpc(e, "t", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: INDIRECT, arguments: args } })).body as any).result;
+  const read = await call({ name: "secret_save" });
+  assert.deepEqual(JSON.parse(read.content[0].text), { name: "secret_save", description: all.find((t) => t.name === "secret_save")!.description, inputSchema: { type: "object" } });
+  assert.deepEqual((await call({ name: "secret_save", arguments: { a: "1" } })).content[0].text, 'secret_save ran {"a":"1"}');
+  assert.equal((await call({ name: "nothing" })).isError, true);
+  assert.equal((await call({ name: "secret_save", arguments: "x" })).isError, true);
+  // An outward one is refused through it as directly.
+  out = true;
+  assert.deepEqual([(await call({ name: "slack_api", arguments: {} })).content[0].text], [UNBOUND_REFUSAL]);
 });

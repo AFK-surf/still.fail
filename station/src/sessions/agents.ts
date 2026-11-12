@@ -15,7 +15,7 @@ import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { HermesDriver } from "../agents/hermes.ts";
-import { AgyDriver } from "../agents/agy.ts";
+import { AGY_TOOL_BUDGET, AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
@@ -542,7 +542,13 @@ export const AgentsLive = (control: Control) =>
         return ws === null || cloud.membership(ws) !== null;
       };
       // The agents' tools, and those the station's parts add as they are made (parts.ts).
-      const mcp = new McpEndpoint((token) => store.sessionKeyByToken(token) ?? undefined, () => [...tools, ...parts.allTools()], (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
+      // A runtime that declares only so many bytes of tools to its model is given those that fit (Antigravity CLI).
+      const mcp = new McpEndpoint(
+        (token) => store.sessionKeyByToken(token) ?? undefined,
+        () => [...tools, ...parts.allTools()],
+        (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL),
+        (session) => (store.getSession(session)?.runtime === "agy" ? AGY_TOOL_BUDGET : undefined),
+      );
 
       let taken = false;
 

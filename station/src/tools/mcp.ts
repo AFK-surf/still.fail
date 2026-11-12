@@ -29,6 +29,59 @@ export type Tool = {
 
 export type Reply = { status: number; body?: unknown };
 
+/// A tool as tools/list declares it.
+const declared = (t: Tool) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema });
+/// What a tool's declaration weighs: its bytes as JSON, as a runtime that budgets its tools measures them closely enough.
+export const weight = (t: Tool) => Buffer.byteLength(JSON.stringify(declared(t)));
+
+/// Declared first, whatever the budget: what every turn needs (posting, ending it, reading the chat) and the work
+/// sent elsewhere.
+export const CORE = ["chat_post", "chat_state", "chat_history", "chat_read", "job_start", "job_log", "job_list", "job_stop", "station_task", "station_file", "skill_read"];
+
+/// The tool that reaches those a budget left undeclared.
+export const INDIRECT = "station_tool";
+
+/// The tools to declare within `budget` bytes, and the rest, reached through INDIRECT. A runtime that budgets its tools
+/// drops the largest beyond it and gives the model no way to call them (Antigravity CLI 1.5.6 in ACP: chat_post,
+/// the largest, went first, and a session could no longer post). So the list is fitted here, deterministically: the
+/// CORE tools, then the others from the lightest while they fit, and INDIRECT naming the rest.
+export function fitted(tools: readonly Tool[], budget: number): { declared: Tool[]; indirect: Tool[] } {
+  const core = CORE.flatMap((name) => tools.filter((t) => t.name === name));
+  const others = tools.filter((t) => !CORE.includes(t.name)).sort((a, b) => weight(a) - weight(b) || (a.name < b.name ? -1 : 1));
+  const fits = (list: readonly Tool[], rest: readonly Tool[]) => list.reduce((n, t) => n + weight(t), 0) + (rest.length === 0 ? 0 : weight(indirectTool(rest)));
+  const out = [...core];
+  let i = 0;
+  while (i < others.length && fits([...out, others[i]!], others.slice(i + 1)) <= budget) out.push(others[i++]!);
+  const indirect = others.slice(i);
+  return { declared: tools.filter((t) => out.includes(t)), indirect };
+}
+
+/// The tool that calls one left undeclared by name: given only `name`, it answers that tool's description and
+/// parameters; given `arguments` too, it runs it (the endpoint runs it as it runs any call, refusals included).
+export function indirectTool(rest: readonly Tool[]): Tool {
+  const lines = rest.map((t) => `${t.name}: ${firstSentence(t.description)}`).join("\n");
+  return {
+    name: INDIRECT,
+    description: `Call a station tool not declared to you, by name. First call it with only name to read that tool's description and parameters, then with name and arguments to run it. The tools:\n${lines}`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", enum: rest.map((t) => t.name) },
+        arguments: { type: "object", description: "The tool's arguments, as its parameters say." },
+      },
+      required: ["name"],
+    },
+    run: async () => {
+      throw new Error("station_tool is run by the endpoint");
+    },
+  };
+}
+
+const firstSentence = (text: string) => {
+  const m = /^.*?[.:](?=\s|$)/s.exec(text);
+  return (m ? m[0] : text).replace(/\s+/g, " ").slice(0, 160);
+};
+
 /// The arguments as the tool's schema types them now. A session whose tool list is older than a parameter (it is told to
 /// pass new ones anyway) sends it untyped, as text: `done: "true"` (2026-11-03: phone_use {done: true} from such a
 /// session was read as not given). A boolean or number parameter given as its text is read as the value it says.
@@ -56,11 +109,23 @@ export class McpEndpoint {
   private resolve: (token: string) => string | undefined;
   /// Why the OUTWARD tools are refused now for a session, if they are.
   private gate?: (session: string) => string | undefined;
+  /// How many bytes of tools a session's runtime declares to its model, for one that drops those beyond (`fitted`).
+  private budget?: (session: string) => number | undefined;
 
-  constructor(resolve: (token: string) => string | undefined, tools: readonly Tool[] | (() => readonly Tool[]), gate?: (session: string) => string | undefined) {
+  constructor(resolve: (token: string) => string | undefined, tools: readonly Tool[] | (() => readonly Tool[]), gate?: (session: string) => string | undefined, budget?: (session: string) => number | undefined) {
     this.tools = typeof tools === "function" ? tools : () => tools;
     this.resolve = resolve;
     this.gate = gate;
+    this.budget = budget;
+  }
+
+  /// The tools a session is declared: all of them, or those within its runtime's budget and INDIRECT for the rest.
+  private listed(session: string): Tool[] {
+    const all = this.tools();
+    const budget = this.budget?.(session);
+    if (budget === undefined) return [...all];
+    const { declared, indirect } = fitted(all, budget);
+    return indirect.length === 0 ? declared : [...declared, indirectTool(indirect)];
   }
 
   async handle(method: string, authorization: string | undefined, body: Buffer | string, signal?: AbortSignal): Promise<Reply> {
@@ -89,9 +154,20 @@ export class McpEndpoint {
       case "ping":
         return reply({ result: {} });
       case "tools/list":
-        return reply({ result: { tools: this.tools().map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) } });
+        return reply({ result: { tools: this.listed(session).map(declared) } });
       case "tools/call": {
-        const name = typeof params?.name === "string" ? params.name : "";
+        let name = typeof params?.name === "string" ? params.name : "";
+        let given = params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {};
+        // One left undeclared, called through INDIRECT: its description and parameters, or its run as any call's.
+        if (name === INDIRECT && !this.tools().some((t) => t.name === INDIRECT)) {
+          const named = typeof given.name === "string" ? this.tools().find((t) => t.name === given.name) : undefined;
+          if (!named) return reply({ result: { content: [{ type: "text", text: `No station tool ${JSON.stringify(given.name)}: name one listed in station_tool's description.` }], isError: true } });
+          const args = given.arguments;
+          if (args === undefined || args === null) return reply({ result: { content: [{ type: "text", text: JSON.stringify(declared(named)) }] } });
+          if (typeof args !== "object" || Array.isArray(args)) return reply({ result: { content: [{ type: "text", text: "arguments must be an object." }], isError: true } });
+          name = named.name;
+          given = args;
+        }
         const tool = this.tools().find((t) => t.name === name);
         if (!tool) return reply({ error: { code: -32602, message: `unknown tool ${name}` } });
         if (OUTWARD.includes(name)) {
@@ -101,7 +177,6 @@ export class McpEndpoint {
             return reply({ result: { content: [{ type: "text", text: why }], isError: true } });
           }
         }
-        const given = params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {};
         const args = typed(given, tool.inputSchema);
         try {
           if (tool.content) {
