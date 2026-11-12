@@ -273,6 +273,18 @@ pub fn end_batch() -> Unit {
 }
 
 ///|
+/// The batch ended, as `end_batch`; but where a flush is under way, what it set is left to that flush, run in its turn
+/// after what was queued before it, not in a flush begun inside it. Not alien-signals': its endBatch flushes inside the
+/// effect that ends the batch, so a flush of N effects each ending a batch ran them each inside the one before, N deep
+/// (Tree::at_cause: a change marking 400 structures overflowed the stack, 2026-11-12).
+pub fn end_batch_in_turn() -> Unit {
+  run.batch_depth -= 1
+  if run.batch_depth == 0 && run.flushing == 0 {
+    flush()
+  }
+}
+
+///|
 /// A signal holding `initial`.
 pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
   let state : SignalState[T] = { current: initial, pending: initial, same }

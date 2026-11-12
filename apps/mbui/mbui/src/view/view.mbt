@@ -3155,9 +3155,22 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   // (one change, as an event is: what it writes told once all of it is written, never what follows it running
   // between two of its writes and seeing half of it)
   let changed = f()
-  @signals.end_batch()
-  // (a block given another key in it: told whole now, what that told made at once, key_taken.mbt)
-  key_taking.val = taking_was
+  // (committed inside another's commit, its flush under way: what this one told run by that flush in its turn, not in
+  // one nested in it, so that the structures one change marks are as deep on the stack at 400 as at 2; that one's end
+  // still comes once all of them are told, flush_nested_wbtest)
+  let in_turn = self.committing > 1
+  if in_turn {
+    @signals.end_batch_in_turn()
+  } else {
+    @signals.end_batch()
+  }
+  // (a block given another key in it: told whole now, what that told made at once, key_taken.mbt; told in turn, not
+  // yet: held till the flush telling it is over, as it was while that flush ran nested in this one)
+  if in_turn && key_taking.val && !taking_was {
+    @signals.after_flush(fn() { key_taking.val = false })
+  } else {
+    key_taking.val = taking_was
+  }
   self.committing -= 1
   self.modals_settled()
   self.cause_at = was
