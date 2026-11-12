@@ -963,6 +963,8 @@ test "Duo chat menu covers sidebar glass until its exit finishes" {
 
 ///|
 test "Duo screen panels toggle through native events, switch without stacking and light the active action" {
+  // (控制中心 and 按键, the screen's panels in the system's bar since 2026-11-12: the rest is 控制中心's; the mode's
+  // action lit while driving, apart from them)
   new_run()
   let src = fixture("screen-live")
   open_fixture_over("screen-live", src)
@@ -970,15 +972,15 @@ test "Duo screen panels toggle through native events, switch without stacking an
   t.set_nav_able(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)
-  for id in ["center", "stats", "people"] {
+  let lit_panels = fn() { @sf.native_over.active.filter(fn(a) { a != "over/screen-mode" }) }
+  for id in ["center", "keys"] {
     t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-\{id}\",\"at\":[879,480,48,48]}")
     t.run_for(@ui.move_most_ms)
     let panels = t.semantics().filter(fn(s) { !s.hidden && s.role == @ui.Role::Dialog })
     assert_eq(panels.length(), 1)
     let (x, _, w, _) = panels[0].rect
     assert_true(x + w <= 867.0, msg="\{id}: panel \{x} + \{w}")
-    // (the mode's action is lit too while it drives)
-    assert_eq(@sf.native_over.active.filter(fn(k) { k != "over/screen-mode" }), ["over/screen-\{id}"])
+    assert_eq(lit_panels(), ["over/screen-\{id}"])
     let bar = @json.parse(t.nav_said())
     let mut lit = false
     for group in items(Some(bar), "groups") {
@@ -988,10 +990,10 @@ test "Duo screen panels toggle through native events, switch without stacking an
     }
     assert_true(lit)
   }
-  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-people\",\"at\":[879,480,48,48]}")
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-keys\",\"at\":[879,480,48,48]}")
   t.run_for(@ui.move_most_ms)
   assert_false(@sf.presenter_visible())
-  assert_eq(@sf.native_over.active.filter(fn(k) { k != "over/screen-mode" }), [])
+  assert_eq(lit_panels(), [])
 }
 
 ///|
@@ -1204,9 +1206,9 @@ test "a picture looked at on an iPhone Duo over a page of its own actions there 
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None, msg="closed")
   assert_true(t.nav_said().contains("lead/over/screen-close"), msg="the screen's again: \{t.nav_said()}")
-  // (as it said it last, under the picture: the one come on it in its line)
-  // (the people's action is there only while someone else is on it: there, she came)
-  assert_true(nav_icon_of(t, "over/screen-people", field="title") is Some(_), msg="the screen's as it said it last")
+  // (as it said it last, under the picture: its panels' actions; who is on it is 控制中心's now)
+  assert_true(nav_icon_of(t, "over/screen-center") is Some(_), msg=t.nav_said())
+  assert_true(nav_icon_of(t, "over/screen-keys") is Some(_), msg=t.nav_said())
 }
 
 ///|
