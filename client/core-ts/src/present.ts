@@ -1616,7 +1616,9 @@ export function installView(runtime: string, updates: J[], manages: boolean): J 
   const name = str(v.name) ?? format.runtimeLabel(runtime);
   if (v.state === "updating") {
     const percent = u64(v.percent);
-    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== undefined ? { percent } : {}) };
+    // While its download is measured, how much of it is in, in words (正在下载 1.5.6：60/88 MB).
+    const step = percent !== undefined ? str(v.progress) : null;
+    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(step ? { note: step } : {}), ...(percent !== undefined ? { percent } : {}) };
   }
   if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
   const can = manages && v.updatable === true;

@@ -172,6 +172,12 @@ export type Platform = {
   /// How the Antigravity CLI is installed where it is not (its own installer: its binary into ~/.local/bin on macOS and
   /// Linux, %LOCALAPPDATA%\\agy\\bin on Windows; it writes no shell profile).
   agyInstall: How;
+  /// Which of the Antigravity CLI's builds that installer downloads here, as its manifests name it (darwin_arm64,
+  /// linux_amd64, windows_amd64…); null for one not measured here (a musl Linux's, Termux's, another architecture's).
+  agyBuild: () => Promise<string | null>;
+  /// Where that installer downloads build `url` before it checks it: ~/.cache/antigravity/staging (agy.tar.gz, or agy
+  /// where it is not a tarball), %LOCALAPPDATA%\antigravity\staging\agy.exe on Windows.
+  agyStaging: (env: Env, url: string) => string | null;
   /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
   installerExt: "sh" | "ps1";
   /// Starts `script` (the installer the running release carries, scripts/release-sign.ts) apart from the station, run

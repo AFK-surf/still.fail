@@ -52,6 +52,7 @@ import { forgetShellPaths, withShellCommand } from "../ops/shell-path.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
 import { holding, onLetGo } from "./holds.ts";
+import { AGY_MANIFESTS, watchAgyDownload } from "./agy-download.ts";
 import { applyApart, planUpdate, readFeed, takeDelta, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import { canSwitchCodex, captureCodex, codexBinary, hasCodexHost, missingCodexHost, restoreCodex, switchCodex, type CodexEntry } from "./codex-repair.ts";
@@ -127,6 +128,8 @@ export type UpdatesOptions = {
   devinManifest?: string;
   /// Where Claude Code's builds are said (its installer's downloads, for how much of one is in).
   claudeReleases?: string;
+  /// Where the Antigravity CLI's installer reads its builds (agy-download.ts AGY_MANIFESTS), for how much of one is in.
+  agyManifests?: string;
   /// Where Node's builds are (nodejs.org's), for npm where the machine has none (runtimes.ts OwnNode).
   nodeDist?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
@@ -233,6 +236,7 @@ export class Updates {
   private registry: string;
   private devinManifest: string;
   private claudeReleases: string;
+  private agyManifests: string;
   private nodeDist: string;
   /// Node being put in place for npm (installNode), while it is.
   private nodeInstalling: Promise<void> | null = null;
@@ -280,6 +284,7 @@ export class Updates {
     this.registry = o.registry ?? "https://registry.npmjs.org";
     this.devinManifest = o.devinManifest ?? DEVIN_MANIFEST;
     this.claudeReleases = o.claudeReleases ?? "https://downloads.claude.ai/claude-code-releases";
+    this.agyManifests = o.agyManifests ?? AGY_MANIFESTS;
     this.nodeDist = o.nodeDist ?? "https://nodejs.org/dist";
     this.timing = { ...TIMING, ...o.timing };
     this.trusted = o.trusted;
@@ -859,8 +864,8 @@ export class Updates {
   }
 
   /// Runs `how`, saying where it is as it goes: a download that can be measured, by how much of it is in (Codex's
-  /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
-  /// says it is at (Homebrew's, Claude Code's installer's).
+  /// build for this machine, fetched here first; Claude Code's and the Antigravity CLI's, as their installers write
+  /// them), else the step the command says it is at (Homebrew's, Claude Code's installer's).
   private async install(kind: Kind, how: How, givenEnv?: Env): Promise<[boolean, string, number | null]> {
     if (how.node) await this.installNode(kind, how.node);
     const runtimeEnv = givenEnv ?? await withShellCommand(kindCommand(kind), this.env);
@@ -875,7 +880,9 @@ export class Updates {
     const installing = { now: false };
     // Claude Code's own installer (not `claude update`, nor Homebrew).
     const own = how.program === "/bin/sh" || how === machine.claudeInstall;
-    const stop = kind === "claude" && own ? this.watchClaudeDownload(installing) : () => {};
+    const stop = kind === "claude" && own ? this.watchClaudeDownload(installing)
+      : kind === "agy" && how === machine.agyInstall ? this.watchAgyDownload(env)
+      : () => {};
     try {
       return await runLines(how.program, how.args, env, this.timing.runtimeLimit, (line) => {
         const step = stepOf(line);
@@ -1010,6 +1017,18 @@ export class Updates {
       stall();
       limit();
     }
+  }
+
+  /// Says how much of the Antigravity CLI's build its own installer has downloaded (agy-download.ts), then that it
+  /// installs it.
+  private watchAgyDownload(env: Env): () => void {
+    return watchAgyDownload({
+      manifests: this.agyManifests,
+      build: machine.agyBuild,
+      staging: (url) => machine.agyStaging(env, url),
+      after: (ms, f) => this.fibers.after(ms, f),
+      said: (version, got, total) => (got >= total ? this.say("agy", INSTALLING, null) : this.sayDownloading("agy", version, got, total)),
+    });
   }
 
   /// Says how much of Claude Code's build its installer has downloaded (into ~/.claude/downloads, its size in the

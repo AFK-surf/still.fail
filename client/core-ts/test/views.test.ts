@@ -308,6 +308,8 @@ test("a notice that a runtime is not installed offers installing it as the stati
   assert.deepEqual(installView("dsh", [dsh({ updatable: false, note: "未找到 npm" })], true), { runtime: "dsh", state: "missing", title: "此 station 尚未安装 DeepSeek Harness", note: "未找到 npm" });
   // Installing, how far; failed, why, with trying again; then installed: each said in place of the notice's words.
   assert.deepEqual(installView("dsh", [dsh({ state: "updating", percent: 42 })], true), { runtime: "dsh", state: "installing", title: "正在安装 DeepSeek Harness", percent: 42 });
+  assert.deepEqual(installView("dsh", [dsh({ state: "updating", percent: 42, progress: "正在下载 0.2.0：21/50 MB" })], true), { runtime: "dsh", state: "installing", title: "正在安装 DeepSeek Harness", note: "正在下载 0.2.0：21/50 MB", percent: 42 });
+  assert.deepEqual(installView("dsh", [dsh({ state: "updating", progress: "正在安装" })], true), { runtime: "dsh", state: "installing", title: "正在安装 DeepSeek Harness" });
   assert.deepEqual(installView("dsh", [dsh({ state: "failed", message: "EACCES" })], true), { runtime: "dsh", state: "failed", title: "无法安装 DeepSeek Harness", detail: "EACCES", action: "重试" });
   assert.deepEqual(installView("dsh", [dsh({ installed: true, version: "0.2.0" })], true), { runtime: "dsh", state: "installed", title: "已安装 DeepSeek Harness" });
   // A station older than its updates: nothing offered.

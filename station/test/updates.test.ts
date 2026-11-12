@@ -177,7 +177,7 @@ describe("updates", { concurrency: true }, () => {
     assert.deepEqual(stepOf("Setting up Claude Code..."), INSTALLING);
     assert.equal(stepOf("added 2 packages in 4s"), null);
     const [a, p] = downloading("0.159.3", 60_000_000, 133_847_481);
-    assert.deepEqual([say(a, "zh"), p], ["正在下载 0.159.3（134 MB）", 44]);
+    assert.deepEqual([say(a, "zh"), p], ["正在下载 0.159.3：60/134 MB", 44]);
     const [b, q] = downloading("0.159.3", 60_000_000, null);
     assert.deepEqual([say(b, "zh"), q], ["正在下载 0.159.3：已下载 60 MB", null]);
   });

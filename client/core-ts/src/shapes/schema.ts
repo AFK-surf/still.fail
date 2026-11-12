@@ -334,7 +334,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String", { doc: "missing | installing | failed | installed" }],
     ["title", "String", { doc: "How it stands, in a line: 此 station 尚未安装 X, 正在安装 X, 无法安装 X, 已安装 X." }],
     ["detail", opt("String"), { said: true, doc: "Why the install failed. Absent otherwise." }],
-    ["note", opt("String"), { said: true, doc: "Not installable by the viewer from here: who can, or why the station cannot." }],
+    ["note", opt("String"), { said: true, doc: "Not installable by the viewer from here: who can, or why the station cannot. While installing with `percent`,\nhow much of its download is in, in words (正在下载 1.5.6：60/88 MB)." }],
     ["action", opt("String"), { doc: "The button's label (安装, 重试) when the viewer can install it now. Absent otherwise." }],
     ["percent", opt("i64"), { client: opt("I54"), doc: "While installing, how much of its download is in, 0–100, when known." }],
   ], { doc: "A runtime the station does not have (a chat's notice says so, or a plan's sign-in needs it), and installing it there\n(core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent." }),
