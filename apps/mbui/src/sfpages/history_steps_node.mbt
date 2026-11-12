@@ -197,7 +197,8 @@ fn steps_list_node(
         fn() { rows.get().0 },
         est=steps_est,
         bar=@ui.tree_scroll_bar(),
-        foot_room=fn() { steps_foot_room },
+        // (the room under its last entry: its foot, drawing nothing)
+        foot=fn(f) { f.height(Is(Some(steps_foot_room))) |> ignore },
         // (its top, where it begins or the pages before come, stands over what comes in under it)
         holds=fn(k) { k != "edge" },
         // (followed at its newest; not once gone to an entry)

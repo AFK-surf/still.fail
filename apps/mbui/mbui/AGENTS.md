@@ -75,6 +75,10 @@ yet and you can add one, add it.
   what it reads lets go of it and reads it anew as it wakes, but a `View::at_moment` still comes due and a way read by
   the clock is where the clock has it on waking (`src/view/at_rest_today_wbtest.mbt`), and a bare `@signals.effect`
   rests not at all: what a kept part holds is held by watches (`View::reacts`, a binding), never by an effect.
+- A page's list holds its head (`View::scrolls_window`'s `head`: over its keys, in what scrolls, never the anchor, where
+  its keys start) and its foot (`foot`: pinned over the foot of what shows, as tall as it is laid out the room under
+  the last block, nothing to the hand but what it holds that takes it). A page puts no row of room among its keys and
+  hands no number for either (the coordinator of the migration, 2026-11-12).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.

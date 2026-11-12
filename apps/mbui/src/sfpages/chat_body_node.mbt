@@ -109,8 +109,14 @@ fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending
   }
   let list : Array[Entry] = []
   let at_keys : Array[String] = []
+  // (its Top and Foot no rows: the list's head and foot, View::scrolls_window's; the first row under its Top close
+  // under it, as under the room it was)
+  let mut top_first = false
   for i, e in all {
-    if e is Foot {
+    if e is Top && list.is_empty() {
+      top_first = true
+    }
+    if e is Foot || e is Top {
       continue
     }
     list.push(e)
@@ -145,7 +151,7 @@ fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending
       Out(o) => o.joined
       _ => false
     }
-    let gap = if e is Top || (i > 0 && list[i - 1] is Top) {
+    let gap = if (i == 0 && top_first) || (i > 0 && list[i - 1] is Top) {
       NoGap
     } else if joined {
       Joined
@@ -311,8 +317,17 @@ fn chat_body_node(
       fn() { keys.get() },
       est=chat_row_est,
       bar=@ui.tree_scroll_bar(),
-      foot_room=foot,
+      // (its Top, the chat's bar's room, the list's head; its Foot, the composer's room and the list's foot under its
+      // rows, the list's foot)
+      head=fn(h) {
+        h.height(By(fn() { Some(top()) })) |> ignore
+        made("top", h)
+      },
+      foot=fn(f) { f.height(By(fn() { Some(foot()) })) |> ignore },
       follows=fn() { true },
+      // (what shows held by what is read: not by the row saying the page before comes, which what comes in is put in
+      // under, going on down with what shows)
+      holds=fn(k) { k != "older" },
       from_end=true,
       place~,
       near_top=(1.0, wants_older, ask_older),
